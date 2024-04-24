@@ -1,0 +1,50 @@
+app:
+  env: 'local'
+  port: 9989
+  app_name: 'go-build-admin'
+  app_url: 'http://127.0.0.1'
+  time_zone: 'Asia/Shanghai'
+
+log:
+  level: 'info'
+  root_dir: 'storage/logs'
+  filename: 'app.log'
+  format: ''
+  show_line: true
+  max_backups: 3
+  max_size: 500
+  max_age: 28
+  compress: true
+
+mysql:
+  driver: 'mysql'
+  host: '127.0.0.1'
+  port: 3306
+  database: 'promotion'
+  username: 'root'
+  password: 'root'
+  charset: 'utf8mb4'
+  max_idle_conns: 10
+  max_open_conns: 100
+  log_mode: 'info'
+  enable_file_log_writer: true
+  log_filename: 'sql.log'
+
+jwt:
+  secret: '3Bde3BGEbYqtqyEUzW3ry8jKFcaPH17fRmTmqE7MDr05Lwj95uruRKrrkb44TJ4s'
+  jwt_ttl: 86400
+  jwt_blacklist_grace_period: 10
+  refresh_grace_period: 1800
+
+token:
+  default: 'mysql'
+  key: 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I'
+  algo: 'ripemd160'
+  expire: 2592000
+
+redis:
+  host: '192.168.56.104'
+  port: 6379
+  db: 5
+  password: ''
+
