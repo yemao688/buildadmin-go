@@ -111,7 +111,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 		if len(orderArr) == 2 && (orderArr[1] == "asc" || orderArr[1] == "desc") {
 			field := GetFullField(orderArr[0], table)
 			if IsValidFieldName(field, fieldTypeMap) {
-				err = cErr.ValidateErr("not found field:" + orderArr[0])
+				err = cErr.BadRequest("not found field:" + orderArr[0])
 				return
 			}
 		}
@@ -130,7 +130,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 
 		//验证字段合法性
 		if IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.ValidateErr("not found field:" + search[i].Field)
+			err = cErr.BadRequest("not found field:" + search[i].Field)
 			return
 		}
 		//判断是否是日期
@@ -242,7 +242,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 		case "NOT NULL":
 			whereS += " AND " + Backquote(field) + " IS " + operater
 		default:
-			err = cErr.ValidateErr("where express error:" + operater)
+			err = cErr.BadRequest("where express error:" + operater)
 			return
 		}
 	}
@@ -324,7 +324,7 @@ func GetOperatorByAlias(operator string) string {
 }
 
 // 数据权限控制-获取有权限访问的管理员Ids
-func GetDataLimitAdminIds(ctx *gin.Context) []int64 {
+func GetDataLimitAdminIds(ctx *gin.Context) []int32 {
 
-	return []int64{1}
+	return []int32{1}
 }

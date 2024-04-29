@@ -48,12 +48,27 @@ func NewAdminModel(sqlDB *gorm.DB) *AdminModel {
 	return &AdminModel{sqlDB: sqlDB}
 }
 
-func (s *AdminModel) List(ctx *gin.Context, id int32) (list []Admin, err error) {
+func (s *AdminModel) List(ctx *gin.Context) (list []Admin, total int64, err error) {
 	var admin Admin
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, admin, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	err = s.sqlDB.Table(TableNameAdmin).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(TableNameAdmin).Scopes(Total(whereS, whereP, &total)).Omit("login_failure,password,salt").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
+}
+
+func (s *AdminModel) Add(ctx *gin.Context, data Admin) error {
+	err := s.sqlDB.Table(TableNameAdmin).Create(&data).Error
+	return err
+}
+
+func (s *AdminModel) Edit(ctx *gin.Context, data Admin) error {
+	err := s.sqlDB.Table(TableNameAdmin).Omit("").Updates(&data).Error
+	return err
+}
+
+func (s *AdminModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(TableNameAdmin).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
 }

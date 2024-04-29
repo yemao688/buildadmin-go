@@ -54,16 +54,16 @@ func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, err error) {
 }
 
 func (s *TestBuildModel) Add(ctx *gin.Context, data TestBuild) error {
-	result := s.sqlDB.Create(&data)
-	return result.Error
+	err := s.sqlDB.Table(TableNameTestBuild).Create(&data).Error
+	return err
 }
 
-func (s *TestBuildModel) Edit(ctx *gin.Context, data map[string]interface{}) error {
-	result := s.sqlDB.Model(&TestBuild{}).Updates(data)
-	return result.Error
+func (s *TestBuildModel) Edit(ctx *gin.Context, data TestBuild) error {
+	err := s.sqlDB.Table(TableNameTestBuild).Omit("").Updates(&data).Error
+	return err
 }
 
-func (s *TestBuildModel) Del(ctx *gin.Context, id int64) error {
-	result := s.sqlDB.Delete(&TestBuild{}, id)
-	return result.Error
+func (s *TestBuildModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(TableNameTestBuild).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
 }

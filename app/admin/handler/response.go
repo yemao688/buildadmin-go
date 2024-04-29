@@ -4,7 +4,6 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,17 +13,6 @@ type Response struct {
 	Data interface{} `json:"data"`
 	Msg  string      `json:"msg"`
 	Time int         `json:"time"`
-}
-
-func ServerError(c *gin.Context, err interface{}) {
-	msg := "Internal Server Error"
-	if os.Getenv(gin.EnvGinMode) != gin.ReleaseMode {
-		if _, ok := err.(error); ok {
-			msg = err.(error).Error()
-		}
-	}
-	FailByErr(c, cErr.InternalServer(msg))
-	c.Abort()
 }
 
 // 成功返回
@@ -67,14 +55,13 @@ func FailByErrTemp(c *gin.Context, err error, templateData map[string]string) {
 			msg,
 			0,
 		})
-		return
+	} else {
+		msg := utils.Lange(c, err.Error(), templateData)
+		c.JSON(http.StatusBadRequest, Response{
+			cErr.DefaultError,
+			nil,
+			msg,
+			0,
+		})
 	}
-
-	msg := utils.Lange(c, err.Error(), templateData)
-	c.JSON(http.StatusBadRequest, Response{
-		cErr.DefaultError,
-		nil,
-		msg,
-		0,
-	})
 }

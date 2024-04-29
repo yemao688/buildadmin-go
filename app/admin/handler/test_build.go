@@ -6,6 +6,7 @@ import (
 	"go-build-admin/app/pkg/validator"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
@@ -61,14 +62,14 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 }
 
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
-	var param validate.TestBuild
-	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+	var params validate.TestBuild
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	data := map[string]interface{}{}
-
+	var data model.TestBuild
+	copier.Copy(&data, params)
 	err := h.testBuildM.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -78,12 +79,12 @@ func (h *TestBuildHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *TestBuildHandler) Del(ctx *gin.Context) {
-	var param validate.IDS
+	var param validate.Ids
 	if err := ctx.ShouldBindJSON(&param); err != nil {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
-	err := h.testBuildM.Del(ctx, param.ID)
+	err := h.testBuildM.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

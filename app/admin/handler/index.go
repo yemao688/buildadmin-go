@@ -25,7 +25,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 
 	menus, _ := h.authM.GetMenus(ctx, 1)
 	if len(menus) == 0 {
-		FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!"))
+		FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!", cErr.LOGIN_RESPONSE_CODE))
 		return
 	}
 	Success(ctx, map[string]interface{}{
@@ -46,6 +46,12 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 }
 
 func (h *IndexHandler) Login(ctx *gin.Context) {
+	// 检查登录态
+	if !h.authM.IsLogin(ctx) {
+		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", 303))
+	}
+
+	// 检查提交
 	result, err := h.authM.GetInfo(ctx, 1)
 	if err != nil {
 		FailByErr(ctx, err)

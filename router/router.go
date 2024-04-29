@@ -14,6 +14,7 @@ func InitRouter(
 	adminLogHandler *admin.AdminLogHandler,
 	testBuildHandler *admin.TestBuildHandler,
 	indexHandler *admin.IndexHandler,
+	dashboardHandler *admin.DashboardHandler,
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(
@@ -35,7 +36,7 @@ func InitRouter(
 	adminRouter.POST("Index/login", indexHandler.Login)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
-	// adminRouter.GET("Dashboard/index", dashboarHandler.Index)
+	adminRouter.GET("Dashboard/index", dashboardHandler.Index)
 
 	// adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
 	// adminRouter.POST("auth.Group/add", adminGroupHandler.Add)

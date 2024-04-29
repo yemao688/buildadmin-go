@@ -8,6 +8,7 @@ import (
 )
 
 type AdminLogHandler struct {
+	Base
 	log       *zap.Logger
 	adminLogM *model.AdminLogModel
 }
@@ -17,6 +18,10 @@ func NewAdminLogHandler(log *zap.Logger, adminLogM *model.AdminLogModel) *AdminL
 }
 
 func (h *AdminLogHandler) Index(ctx *gin.Context) {
+	if data, ok := h.Select(ctx); ok {
+		Success(ctx, data)
+	}
+
 	result, err := h.adminLogM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)

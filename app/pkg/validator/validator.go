@@ -21,13 +21,13 @@ func GetError(request interface{}, err error) *cErr.Error {
 			// 若 request 结构体实现 Validator 接口即可实现自定义错误信息
 			if isValidator {
 				if message, exist := request.(Validator).GetMessages()[v.Field()+"."+v.Tag()]; exist {
-					return cErr.ValidateErr(message)
+					return cErr.BadRequest(message)
 				}
 			}
-			return cErr.ValidateErr(v.Error())
+			return cErr.BadRequest(v.Error())
 		}
 	}
 
-	return cErr.ValidateErr(err.Error())
-	// return cErr.ValidateErr("参数错误")
+	return cErr.BadRequest(err.Error())
+	// return cErr.BadRequest("参数错误")
 }

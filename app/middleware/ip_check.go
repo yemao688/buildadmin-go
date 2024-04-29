@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"net/http"
 	"strings"
@@ -20,8 +19,8 @@ func IpCheck() gin.HandlerFunc {
 		store.Get("no_access_ip", noAccessIp)
 		if noAccessIp != "" && strings.Contains(noAccessIp, clientIP) {
 			msg := utils.Lange(c, "No permission request", nil)
-			c.JSON(http.StatusForbidden, map[string]interface{}{
-				"code": cErr.Forbidden,
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"code": http.StatusForbidden,
 				"data": nil,
 				"msg":  msg,
 				"time": 0,

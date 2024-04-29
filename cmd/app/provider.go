@@ -10,11 +10,13 @@ import (
 var ProviderSet = wire.NewSet(
 
 	adminModel.NewAdminModel,
+	adminModel.NewAdminRuleModel,
 	adminModel.NewAdminLogModel,
 	adminModel.NewTestBuildModel,
 	adminModel.NewAuthModel,
 
 	adminHandler.NewAdminHandler,
+	adminHandler.NewDashboardHandler,
 	adminHandler.NewAdminLogHandler,
 	adminHandler.NewTestBuildHandler,
 	adminHandler.NewIndexHandler,

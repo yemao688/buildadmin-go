@@ -12,11 +12,11 @@ type DashboardHandler struct {
 	adminRuleM *model.AdminRuleModel
 }
 
-func DewdashboardHandler(log *zap.Logger, adminRuleM *model.AdminRuleModel) *DashboardHandler {
+func NewDashboardHandler(log *zap.Logger, adminRuleM *model.AdminRuleModel) *DashboardHandler {
 	return &DashboardHandler{log: log, adminRuleM: adminRuleM}
 }
 
-func (h *DashboardHandler) Dashboard(ctx *gin.Context) {
+func (h *DashboardHandler) Index(ctx *gin.Context) {
 	remark := h.adminRuleM.GetRemark(ctx)
 	Success(ctx, map[string]string{
 		"remark": remark,
