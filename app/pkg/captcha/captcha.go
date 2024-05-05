@@ -1,4 +1,4 @@
-package ba
+package captcha
 
 import (
 	"crypto/md5"

@@ -12,5 +12,9 @@ func Lange(c *gin.Context, messageID string, templateData map[string]string) str
 		MessageID:    messageID,
 		TemplateData: templateData,
 	})
+
+	if msg == "" {
+		return messageID
+	}
 	return msg
 }

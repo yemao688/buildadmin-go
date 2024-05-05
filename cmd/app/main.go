@@ -103,6 +103,8 @@ func initConfig() {
 		fmt.Println(err)
 	}
 
+	fmt.Printf("%+v", config.ClickCaptcha)
+
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
 		fmt.Println("config file changed:", in.Name)

@@ -9,7 +9,9 @@ package main
 import (
 	"go-build-admin/app/admin/handler"
 	"go-build-admin/app/admin/model"
+	handler2 "go-build-admin/app/api/handler"
 	"go-build-admin/app/cron"
+	"go-build-admin/app/pkg/clickcaptcha"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/router"
@@ -25,18 +27,26 @@ import (
 func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*App, func(), error) {
 	gormDB := db.NewDB(configuration, zapLogger)
 	adminModel := model.NewAdminModel(gormDB)
-	adminHandler := handler.NewAdminHandler(zapLogger, adminModel)
+	client := rds.NewRedis(configuration, zapLogger)
+	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
+	authModel := model.NewAuthModel(gormDB, tokenHelper)
+	adminHandler := handler.NewAdminHandler(zapLogger, adminModel, authModel)
 	adminLogModel := model.NewAdminLogModel(gormDB)
 	adminLogHandler := handler.NewAdminLogHandler(zapLogger, adminLogModel)
 	testBuildModel := model.NewTestBuildModel(gormDB)
 	testBuildHandler := handler.NewTestBuildHandler(zapLogger, testBuildModel)
-	client := rds.NewRedis(configuration, zapLogger)
-	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
-	authModel := model.NewAuthModel(gormDB, tokenHelper)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel)
 	adminRuleModel := model.NewAdminRuleModel(gormDB)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleModel)
-	engine := router.InitRouter(adminHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler)
+	accountHandler := handler2.NewAccountHandler(zapLogger)
+	ajaxHandler := handler2.NewAjaxHandler(zapLogger)
+	clickCaptcha := clickcaptcha.NewCaptcha(configuration, gormDB)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha)
+	emsHandler := handler2.NewEmsHandler(zapLogger)
+	handlerIndexHandler := handler2.NewIndexHandler(zapLogger)
+	installHandler := handler2.NewInstallHandler(zapLogger)
+	userHandler := handler2.NewUserHandler(zapLogger)
+	engine := router.InitRouter(adminHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, accountHandler, ajaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, userHandler)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

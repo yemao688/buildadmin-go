@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	admin "go-build-admin/app/admin/handler"
+	api "go-build-admin/app/api/handler"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -15,6 +16,15 @@ func InitRouter(
 	testBuildHandler *admin.TestBuildHandler,
 	indexHandler *admin.IndexHandler,
 	dashboardHandler *admin.DashboardHandler,
+
+	apiAccountHandler *api.AccountHandler,
+	apiAjaxHandler *api.AjaxHandler,
+	apiCommonHandler *api.CommonHandler,
+	apiEmsHandler *api.EmsHandler,
+	apiIndexHandler *api.IndexHandler,
+	apiInstallHandler *api.InstallHandler,
+	apiUserHandler *api.UserHandler,
+
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(
@@ -114,7 +124,37 @@ func InitRouter(
 	adminRouter.POST("testBuild/del", testBuildHandler.Del)
 
 	// 引入api接口路由
-	// apiRouter := router.Group("/api/")
-	// apiRouter.POST("register", handler.GetAdminLogList)   // 注册
+	apiRouter := router.Group("/api/")
+	apiRouter.POST("account/overview", apiAccountHandler.Overview)
+	apiRouter.POST("account/Profile", apiAccountHandler.Profile)
+	apiRouter.POST("account/Verification", apiAccountHandler.Verification)
+	apiRouter.POST("account/ChangeBind", apiAccountHandler.ChangeBind)
+	apiRouter.POST("account/ChangePassword", apiAccountHandler.ChangePassword)
+	apiRouter.POST("account/Integral", apiAccountHandler.Integral)
+	apiRouter.POST("account/Balance", apiAccountHandler.Balance)
+	apiRouter.POST("account/RetrievePassword", apiAccountHandler.RetrievePassword)
+
+	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
+	apiRouter.POST("ajax/area", apiAjaxHandler.Area)
+	apiRouter.POST("ajax/buildSuffixSvg", apiAjaxHandler.BuildSuffixSvg)
+
+	apiRouter.GET("common/captcha", apiCommonHandler.Captcha)
+	apiRouter.GET("common/clickCaptcha", apiCommonHandler.ClickCaptcha)
+	apiRouter.POST("common/checkClickCaptcha", apiCommonHandler.CheckClickCaptcha)
+	apiRouter.POST("common/refreshToken", apiCommonHandler.RefreshToken)
+
+	apiRouter.POST("ems/send", apiEmsHandler.Send)
+	apiRouter.POST("index/index", apiIndexHandler.Index)
+	apiRouter.POST("install/changePackageManager", apiInstallHandler.ChangePackageManager)
+	apiRouter.POST("install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
+	apiRouter.POST("install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
+	apiRouter.POST("install/testDatabase", apiInstallHandler.TestDatabase)
+	apiRouter.POST("install/baseConfig", apiInstallHandler.BaseConfig)
+	apiRouter.POST("install/commandExecComplete", apiInstallHandler.CommandExecComplete)
+	apiRouter.POST("install/manualInstall", apiInstallHandler.ManualInstall)
+	apiRouter.POST("install/mvDist", apiInstallHandler.MvDist)
+
+	apiRouter.POST("user/checkIn", apiUserHandler.CheckIn)
+	apiRouter.POST("user/logout", apiUserHandler.Logout)
 	return router
 }

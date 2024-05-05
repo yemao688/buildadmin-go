@@ -74,7 +74,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 	)
 
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local&sessionVariables=sql_safe_updates=1",
+		"%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
 		dbConfig.UserName,
 		dbConfig.Password,
 		dbConfig.Host,

@@ -24,6 +24,8 @@ require (
 	gorm.io/gorm v1.25.9
 )
 
+require golang.org/x/image v0.15.0 // indirect
+
 require (
 	github.com/bradfitz/gomemcache v0.0.0-20220106215444-fb4bf637b56d // indirect
 	github.com/bytedance/sonic v1.11.3 // indirect
@@ -43,6 +45,7 @@ require (
 	github.com/go-redis/redis/extra/rediscmd v0.2.0 // indirect
 	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/gomodule/redigo v1.8.9 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

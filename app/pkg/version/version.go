@@ -84,8 +84,11 @@ func CheckDigitalVersion(version string) bool {
 
 func GetCnpmVersion(version string) bool {
 
+	return false
 }
 
-func GetCnpmVersion(version string) bool {
+// 获取依赖版本号
+func GetVersion(version string) bool {
 
+	return false
 }

@@ -5,6 +5,15 @@ app:
   app_url: 'http://127.0.0.1'
   time_zone: 'Asia/Shanghai'
 
+#点选验证码配置
+click_captcha: 
+  #模式:text=文字,icon=图标(若只有icon则适用于国际化站点)
+  mode: 'text,icon'
+  #长度
+  length: 2
+  #混淆点长度
+  confuse_length: 2
+
 log:
   level: 'info'
   root_dir: 'storage/logs'
@@ -47,4 +56,130 @@ redis:
   port: 6379
   db: 5
   password: ''
+
+
+terminal:
+  npm_package_manager: 'pnpm'
+  install_service_port: '8000'
+  commands:
+    migrate:
+      run: 
+        cwd: ''
+        command: 'php think migrate:run'
+      rollback: 
+        cwd: ''
+        command: 'php think migrate:rollback'
+      breakpoint: 
+        cwd: ''
+        command: 'php think migrate:breakpoint'
+    install:
+      yarn: 
+        cwd: ''
+        command: 'npm install -g yarn'
+      pnpm: 
+        cwd: ''
+        command: 'npm install -g pnpm'
+      ni: 
+        cwd: ''
+        command: 'npm install -g @antfu/ni'
+    version:
+      npm:
+        cwd: ''
+        command: 'npm -v'
+      cnpm: 
+        cwd: ''
+        command: 'cnpm -v'
+      yarn: 
+        cwd: ''
+        command: 'yarn -v'
+      pnpm: 
+        cwd: ''
+        command: 'pnpm -v'
+      node: 
+        cwd: ''
+        command: 'node -v'
+    test:
+      npm:
+        cwd: 'public/npm-install-test'
+        command: 'npm install'
+      cnpm:
+        cwd: 'public/npm-install-test'
+        command: 'cnpm install'
+      yarn:
+        cwd: 'public/npm-install-test'
+        command: yarn install
+      pnpm:
+        cwd: 'public/npm-install-test'
+        command: pnpm install
+      ni:
+        cwd: 'public/npm-install-test'
+        command: ni install
+    web-install:
+      npm:
+        cwd: 'web'
+        command: 'npm install'
+      cnpm:
+        cwd: 'web'
+        command: 'cnpm install'
+      yarn:
+        cwd: 'web'
+        command: 'yarn install'
+      pnpm:
+        cwd: 'web'
+        command: 'pnpm install'
+      ni:
+        cwd: 'web'
+        command: 'ni install'
+    nuxt-install:
+      npm:
+        cwd: 'web-nuxt'
+        command: 'npm install'
+      cnpm:
+        cwd: 'web-nuxt'
+        command: 'cnpm install'
+      yarn:
+        cwd: 'web-nuxt'
+        command: 'yarn install'
+      pnpm:
+        cwd: 'web-nuxt'
+        command: 'pnpm install'
+      ni:
+        cwd: 'web-nuxt'
+        command: 'ni install'
+    web-build:
+      npm:
+        cwd: 'web'
+        command: 'npm run build'
+      cnpm:
+        cwd: 'web'
+        command: 'cnpm run build'
+      yarn:
+        cwd: 'web'
+        command: 'yarn run build'
+      pnpm:
+        cwd: 'web'
+        command: 'pnpm run build'
+      ni:
+        cwd: 'web'
+        command: 'nr build'
+    set-registry:
+      npm: 
+        cwd: ''
+        command: 'npm config set registry https://registry.npmjs.org/ && npm config get registry'
+      taobao: 
+        cwd: ''
+        command: 'npm config set registry https://registry.npm.taobao.org/ && npm config get registry'
+      rednpm:
+        cwd: ''
+        command: 'npm config set registry http://registry.mirror.cqupt.edu.cn/ && npm config get registry'
+    ping:
+      baidu: 
+        cwd: ''
+        command: 'ping baidu.com'
+      localhost: 
+        cwd: ''
+        command: 'ping 127.0.0.1 -n 6'
+
+
+
 
