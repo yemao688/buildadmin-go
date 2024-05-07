@@ -4,13 +4,19 @@ import (
 	"encoding/json"
 	admin "go-build-admin/app/admin/handler"
 	api "go-build-admin/app/api/handler"
+	"go-build-admin/app/middleware"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/language"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func InitRouter(
+	loggerWriter *lumberjack.Logger,
+	authM *middleware.Auth,
+	permissionM *middleware.Permission,
+
 	adminHandler *admin.AdminHandler,
 	adminLogHandler *admin.AdminLogHandler,
 	testBuildHandler *admin.TestBuildHandler,
@@ -28,8 +34,8 @@ func InitRouter(
 ) *gin.Engine {
 	router := gin.New()
 	router.Use(
-		// gin.Logger(),
-		// middleware.CustomRecovery(loggerWriter),
+		gin.Logger(),
+		middleware.CustomRecovery(loggerWriter),
 		//开启多语言
 		ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 			RootPath:         "conf/localize",
@@ -41,8 +47,9 @@ func InitRouter(
 	)
 
 	// 引入admin路由
-	adminRouter := router.Group("/admin/")
+	adminRouter := router.Group("/admin/").Use(authM.Handler())
 	adminRouter.GET("Index/index", indexHandler.Index)
+	adminRouter.GET("Index/login", indexHandler.Login)
 	adminRouter.POST("Index/login", indexHandler.Login)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 

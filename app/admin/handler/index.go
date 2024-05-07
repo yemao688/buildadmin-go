@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 
@@ -51,20 +52,43 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", 303))
 	}
 
-	// 检查提交
-	result, err := h.authM.GetInfo(ctx, 1)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
+	if ctx.Request.Method == "POST" {
+		// 检查提交
+		result, err := h.authM.GetInfo(ctx, 1)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+		Success(ctx, result)
 	}
-	Success(ctx, result)
+
+	Success(ctx, map[string]any{
+		"captcha": h.config.App.AdminLoginCaptcha,
+	})
+
+}
+
+type Logout struct {
+	RefreshToken string `json:"refreshToken" binding:"required"`
+}
+
+func (v Logout) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"refreshToken.required": "not content",
+	}
 }
 
 func (h *IndexHandler) Logout(ctx *gin.Context) {
-	result, err := h.authM.GetInfo(ctx, 1)
+	var params Logout
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	err := h.authM.Logout(ctx, params.RefreshToken)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, result)
+	Success(ctx, "")
 }

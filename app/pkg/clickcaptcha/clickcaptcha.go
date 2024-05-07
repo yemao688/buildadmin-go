@@ -63,8 +63,8 @@ var iconDict map[string]string = map[string]string{
 
 // 配置
 type Config struct {
-	Alpha         int    // 透明度
-	ZhSet         string // 中文字符集
+	Alpha         float64 // 透明度
+	ZhSet         string  // 中文字符集
 	Mode          string
 	Length        int
 	ConfuseLength int
@@ -108,7 +108,7 @@ type Point struct {
 type Captcha struct {
 	Width    int //背景图宽
 	Height   int //背景图高
-	PointArr []Point
+	PointArr []*Point
 }
 
 /**
@@ -125,16 +125,14 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 		return nil, err
 	}
 	imgWidth, imgHeight := bgImg.Bounds().Dx(), bgImg.Bounds().Dy()
-	fmt.Printf("图片宽:%+v,图片高:%+v \n", imgWidth, imgHeight)
 
 	// 加载字体文件
 	fontPath := fontPaths[0]
 	fontBytes, err := os.ReadFile(utils.RootPath() + fontPath)
-	fmt.Printf("加载字体%+v \n", err)
 	if err != nil {
 		return nil, err
 	}
-	font, err := freetype.ParseFont(fontBytes)
+	fontData, err := freetype.ParseFont(fontBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -142,9 +140,8 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	currentLang := ctx.GetHeader("Accept-Language")
 
 	iconImgMap := map[string]image.Image{}
-	pointArr := []Point{}
+	pointArr := []*Point{}
 	randPoints := c.randPoints(c.config.Length + c.config.ConfuseLength)
-	fmt.Printf("randPoints%+v  \n", randPoints)
 	for _, v := range randPoints {
 		point := Point{
 			Size: rand.Intn(16) + 15,
@@ -174,35 +171,33 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 				return nil, err
 			}
 		}
-		pointArr = append(pointArr, point)
+		pointArr = append(pointArr, &point)
 	}
-	fmt.Printf("pointArr%+v  \n", pointArr)
 	texts := []string{}
 	// 随机生成验证点位置
 	for _, v := range pointArr {
-		v.X, v.Y = c.randPosition(pointArr, imgWidth, imgHeight, v.Width, v.Height, v.Icon)
+		v.X, v.Y = c.RandPosition(pointArr, imgWidth, imgHeight, v.Width, v.Height, v.Icon)
 		texts = append(texts, v.Text)
 	}
-	fmt.Printf("texts%+v  \n", texts)
-	fmt.Printf("texts%+v  \n", pointArr)
+
 	// 创建一个新画布复制原图，以便绘制
 	drawImg := image.NewRGBA(bgImg.Bounds())
 	draw.Draw(drawImg, drawImg.Bounds(), bgImg, image.Point{}, draw.Src)
 	for _, v := range pointArr {
 		if v.Icon {
-			draw.Draw(drawImg, drawImg.Bounds(), iconImgMap[v.Name], image.Point{v.X, v.Y}, draw.Over)
+			draw.Draw(drawImg, iconImgMap[v.Name].Bounds().Add(image.Point{v.X, v.Y}), iconImgMap[v.Name], image.Point{}, draw.Over)
 		} else {
 			// 设置颜色
-			color := color.RGBA{239, 239, 234, uint8(127 - c.config.Alpha*(127/100))} // 示例中alpha未直接映射，按需调整
-
-			point := freetype.Pt(int(v.X), int(v.Y))
+			// color := color.RGBA{239, 239, 234, uint8(127 - c.config.Alpha*(float64(127)/100))}
+			pt := freetype.Pt(int(v.X), int(v.Y))
 			fctx := freetype.NewContext()
-			fctx.SetFont(font)
+			fctx.SetFont(fontData)
 			fctx.SetFontSize(float64(v.Size))
 			fctx.SetClip(drawImg.Bounds())
 			fctx.SetDst(drawImg)
-			fctx.SetSrc(image.NewUniform(color))
-			fctx.DrawString(v.Text, point)
+			fctx.SetSrc(image.NewUniform(color.White))
+			fctx.DrawString(v.Text, pt)
+			fctx.SetHinting(font.HintingFull)
 		}
 	}
 
@@ -232,7 +227,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	return map[string]interface{}{
 		"id":     id,
 		"text":   texts,
-		"base64": fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(content)),
+		"base64": fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(content)),
 		"width":  imgWidth,
 		"height": imgHeight,
 	}, err
@@ -250,8 +245,8 @@ func getFontWidthAndHeight(text string, fontSize int, fontBytes []byte) (int, in
 
 	bounds, _ := font.BoundString(face, text)
 	// 输出文本尺寸
-	textWidth := bounds.Max.X - bounds.Min.X
-	textHeight := bounds.Max.Y - bounds.Min.Y
+	textWidth := bounds.Max.X.Ceil() - bounds.Min.X.Floor()
+	textHeight := bounds.Max.Y.Ceil() - bounds.Min.Y.Floor()
 	return int(textWidth), int(textHeight), nil
 }
 
@@ -278,7 +273,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	key := utils.Md5(id, "")
 
 	baCaptcha := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("key=?", key).Find(&baCaptcha).Error
+	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).First(&baCaptcha).Error
 	if err != nil {
 		return false
 	}
@@ -315,7 +310,6 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 			phStart = captcha.PointArr[k].Y
 			phEnd = captcha.PointArr[k].Y + captcha.PointArr[k].Height
 		}
-
 		if y/yPro < phStart || y/yPro > phEnd {
 			return false
 		}
@@ -356,13 +350,13 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 }
 
 // 随机生成位置布局
-func (c *ClickCaptcha) randPosition(poinArr []Point, imgW int, imgH int, fontW int, fontH int, isIcon bool) (x, y int) {
+func (c *ClickCaptcha) RandPosition(poinArr []*Point, imgW int, imgH int, w int, h int, isIcon bool) (x, y int) {
 	rand.Seed(time.Now().UnixNano())
-	x = rand.Intn(imgW - fontW)
-	y = rand.Intn(imgH-fontH) + fontH
+	x = rand.Intn(imgW - w)
+	y = rand.Intn(imgH-2*h) + h
 
-	if !c.CheckPosition(poinArr, x, y, fontW, fontH, isIcon) {
-		x, y = c.randPosition(poinArr, imgW, imgH, fontW, fontH, isIcon)
+	if !c.CheckPosition(poinArr, x, y, w, h, isIcon) {
+		x, y = c.RandPosition(poinArr, imgW, imgH, w, h, isIcon)
 	}
 	return x, y
 }
@@ -376,24 +370,24 @@ func (c *ClickCaptcha) randPosition(poinArr []Point, imgW int, imgH int, fontW i
  * h       验证点高度
  * isIcon  是否是图标
  */
-func (c *ClickCaptcha) CheckPosition(pointArr []Point, x int, y int, fontW int, fontH int, isIcon bool) bool {
+func (c *ClickCaptcha) CheckPosition(pointArr []*Point, x int, y int, w int, h int, isIcon bool) bool {
 
 	flag := true
 	for _, v := range pointArr {
 		if v.X > 0 && v.Y > 0 {
 			flagX := false
 			flagY := false
-			if (x+fontW) < v.X || x > v.X+v.Width {
+			if (x+w) < v.X || x > v.X+v.Width {
 				flagX = true
 			}
 
-			currentPhStart := y - fontH
+			currentPhStart := y - h
 			currentPhEnd := y
 			historyPhStart := v.Y - v.Height
 			historyPhEnd := v.Y
 			if isIcon {
 				currentPhStart = y
-				currentPhEnd = y + v.Height
+				currentPhEnd = y + h
 				historyPhStart = v.Y
 				historyPhEnd = v.Y + v.Height
 			}

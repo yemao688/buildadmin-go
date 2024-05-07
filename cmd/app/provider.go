@@ -4,6 +4,7 @@ import (
 	adminHandler "go-build-admin/app/admin/handler"
 	adminModel "go-build-admin/app/admin/model"
 	apiHandler "go-build-admin/app/api/handler"
+	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/clickcaptcha"
 
 	"github.com/google/wire"
@@ -11,6 +12,8 @@ import (
 
 var ProviderSet = wire.NewSet(
 	clickcaptcha.NewCaptcha,
+	middleware.NewAuth,
+	middleware.NewPermission,
 
 	adminHandler.NewAdminHandler,
 	adminHandler.NewDashboardHandler,

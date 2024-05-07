@@ -82,6 +82,17 @@ func (s *AuthModel) IsSuperAdmin(ctx *gin.Context, id int32) bool {
 	return false
 }
 
+func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
+	if err := s.tokenHelper.Delete(refreshToken); err != nil {
+		return err
+	}
+
+	if err := s.tokenHelper.Delete(ctx.Keys["token"].(string)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // 获取菜单规则列表
 func (s *AuthModel) GetMenus(ctx *gin.Context, id int32) (rules []Rule, err error) {
 	if _, ok := AuthRuleList[id]; !ok {

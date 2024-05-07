@@ -1,44 +1,64 @@
 package middleware
 
 import (
+	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
+	"go-build-admin/utils"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type Auth struct {
-	config *conf.Configuration
+	config      *conf.Configuration
+	tokenHelper *token.TokenHelper
 }
 
-func NewAuth(config *conf.Configuration) *Auth {
+func NewAuth(config *conf.Configuration, tokenHelper *token.TokenHelper) *Auth {
 	return &Auth{
-		config: config,
+		config:      config,
+		tokenHelper: tokenHelper,
 	}
 }
 
-// func (m *Auth) Handler(guardName string) gin.HandlerFunc {
-// 	return func(c *gin.Context) {
-// 		tokenStr := c.Request.Header.Get("Authorization")
-// 		if tokenStr == "" {
-// 			response.FailByErr(c, cErr.Unauthorized("missing Authorization header"))
-// 			c.Abort()
-// 			return
-// 		}
-// 		tokenStr = tokenStr[len(jwtS.TokenType)+1:]
+func (m *Auth) Handler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tokenStr := c.Request.Header.Get("Authorization")
+		if tokenStr == "" {
+			msg := utils.Lange(c, "missing Authorization header", nil)
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"code": http.StatusUnauthorized,
+				"data": nil,
+				"msg":  msg,
+				"time": 0,
+			})
+			c.Abort()
+			return
+		}
 
-// 		token, err := jwt.ParseWithClaims(tokenStr, &jwtS.CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-// 			return []byte(m.config.Jwt.Secret), nil
-// 		})
-// 		if err != nil || m.jwtS.IsInBlacklist(c, tokenStr) {
-// 			response.FailByErr(c, cErr.Unauthorized("登录授权已失效"))
-// 			c.Abort()
-// 			return
-// 		}
-// 		claims := token.Claims.(*jwtS.CustomClaims)
-// 		if claims.Issuer != guardName && claims.Valid() != nil {
-// 			response.FailByErr(c, cErr.Unauthorized("登录授权已失效"))
-// 			c.Abort()
-// 			return
-// 		}
-// 		c.Set("token", token)
-// 		c.Set("id", claims.Id)
-// 	}
-// }
+		tokenData, err := m.tokenHelper.Get(tokenStr, true)
+		if err != nil {
+			msg := utils.Lange(c, err.Error(), nil)
+			c.JSON(http.StatusOK, map[string]interface{}{
+				"code": http.StatusUnauthorized,
+				"data": nil,
+				"msg":  msg,
+				"time": 0,
+			})
+			c.Abort()
+			return
+		}
+		language := c.GetHeader("Accept-Language")
+		authParam := header.AdminAuth{
+			Version:   "",
+			Language:  language,
+			IsLogin:   true,
+			Id:        tokenData.UserID,
+			Token:     tokenStr,
+			Timestamp: time.Now().Unix(),
+		}
+		c.Set("auth", authParam)
+	}
+}

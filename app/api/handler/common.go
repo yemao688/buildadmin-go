@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/pkg/clickcaptcha"
+	cErr "go-build-admin/app/pkg/error"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -25,7 +26,7 @@ func (h *CommonHandler) Captcha(ctx *gin.Context) {
 // 点选验证码
 func (h *CommonHandler) ClickCaptcha(ctx *gin.Context) {
 	var params struct {
-		Id string `form:"id" json:"id"`
+		Id string `form:"id" json:"id" binding:"required"`
 	}
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, err)
@@ -41,7 +42,19 @@ func (h *CommonHandler) ClickCaptcha(ctx *gin.Context) {
 
 // 点选验证码检查
 func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
-
+	var params struct {
+		Id    string `json:"id" binding:"required"`
+		Info  string `json:"info" binding:"required"`
+		Unset bool   `json:"unset"`
+	}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if !h.clickCaptcha.Check(params.Id, params.Info, params.Unset) {
+		FailByErr(ctx, cErr.BadRequest("validate fail"))
+		return
+	}
 	Success(ctx, "")
 }
 

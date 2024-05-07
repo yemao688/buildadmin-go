@@ -11,6 +11,7 @@ import (
 	"go-build-admin/app/admin/model"
 	handler2 "go-build-admin/app/api/handler"
 	"go-build-admin/app/cron"
+	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/clickcaptcha"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -26,9 +27,11 @@ import (
 // wireApp init application.
 func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*App, func(), error) {
 	gormDB := db.NewDB(configuration, zapLogger)
-	adminModel := model.NewAdminModel(gormDB)
 	client := rds.NewRedis(configuration, zapLogger)
 	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
+	auth := middleware.NewAuth(configuration, tokenHelper)
+	permission := middleware.NewPermission(configuration)
+	adminModel := model.NewAdminModel(gormDB)
 	authModel := model.NewAuthModel(gormDB, tokenHelper)
 	adminHandler := handler.NewAdminHandler(zapLogger, adminModel, authModel)
 	adminLogModel := model.NewAdminLogModel(gormDB)
@@ -46,7 +49,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger)
 	installHandler := handler2.NewInstallHandler(zapLogger)
 	userHandler := handler2.NewUserHandler(zapLogger)
-	engine := router.InitRouter(adminHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, accountHandler, ajaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, userHandler)
+	engine := router.InitRouter(lumberjackLogger, auth, permission, adminHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, accountHandler, ajaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, userHandler)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)
