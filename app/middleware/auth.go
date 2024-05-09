@@ -6,7 +6,6 @@ import (
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,7 +26,7 @@ func (m *Auth) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.Request.Header.Get("Authorization")
 		if tokenStr == "" {
-			msg := utils.Lange(c, "missing Authorization header", nil)
+			msg := utils.Lang(c, "missing Authorization header", nil)
 			c.JSON(http.StatusOK, map[string]interface{}{
 				"code": http.StatusUnauthorized,
 				"data": nil,
@@ -40,7 +39,7 @@ func (m *Auth) Handler() gin.HandlerFunc {
 
 		tokenData, err := m.tokenHelper.Get(tokenStr, true)
 		if err != nil {
-			msg := utils.Lange(c, err.Error(), nil)
+			msg := utils.Lang(c, err.Error(), nil)
 			c.JSON(http.StatusOK, map[string]interface{}{
 				"code": http.StatusUnauthorized,
 				"data": nil,
@@ -52,13 +51,12 @@ func (m *Auth) Handler() gin.HandlerFunc {
 		}
 		language := c.GetHeader("Accept-Language")
 		authParam := header.AdminAuth{
-			Version:   "",
-			Language:  language,
-			IsLogin:   true,
-			Id:        tokenData.UserID,
-			Token:     tokenStr,
-			Timestamp: time.Now().Unix(),
+			Version:  "",
+			Language: language,
+			IsLogin:  true,
+			Id:       tokenData.UserID,
+			Token:    tokenStr,
 		}
-		c.Set("auth", authParam)
+		c.Set("AdminAuth", authParam)
 	}
 }

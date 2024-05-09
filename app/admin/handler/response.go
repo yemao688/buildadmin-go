@@ -27,7 +27,7 @@ func Success(c *gin.Context, data interface{}) {
 
 // 失败返回
 func Fail(c *gin.Context, httpCode int, code int, msg string) {
-	msg = utils.Lange(c, msg, nil)
+	msg = utils.Lang(c, msg, nil)
 	c.JSON(httpCode, Response{
 		code,
 		nil,
@@ -48,7 +48,7 @@ func FailByErr(c *gin.Context, err error) {
 func FailByErrTemp(c *gin.Context, err error, templateData map[string]string) {
 	v, ok := err.(*cErr.Error)
 	if ok {
-		msg := utils.Lange(c, v.Error(), templateData)
+		msg := utils.Lang(c, v.Error(), templateData)
 		c.JSON(v.HttpCode(), Response{
 			v.ErrorCode(),
 			nil,
@@ -56,7 +56,7 @@ func FailByErrTemp(c *gin.Context, err error, templateData map[string]string) {
 			0,
 		})
 	} else {
-		msg := utils.Lange(c, err.Error(), templateData)
+		msg := utils.Lang(c, err.Error(), templateData)
 		c.JSON(http.StatusBadRequest, Response{
 			cErr.DefaultError,
 			nil,

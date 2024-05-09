@@ -41,9 +41,9 @@ func NewTokenHelper(config *conf.Configuration, log *zap.Logger, sqlDB *gorm.DB,
 	//通过配置判断
 	var driver Driver
 	if config.Token.Default == "redis" {
-		driver = NewMysqlDriver(sqlDB, config.Token)
+		driver = NewMysqlDriver(sqlDB, config)
 	} else {
-		driver = NewRedisDriver(rdb, config.Token)
+		driver = NewRedisDriver(rdb, config)
 	}
 	return &TokenHelper{Driver: driver}
 }

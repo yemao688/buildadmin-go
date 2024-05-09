@@ -9,4 +9,5 @@ type Configuration struct {
 	Token        Token        `mapstructure:"token" json:"token" yaml:"token"`
 	Terminal     Terminal     `mapstructure:"terminal" json:"terminal" yaml:"terminal"`
 	ClickCaptcha ClickCaptcha `mapstructure:"click_captcha" json:"click_captcha" yaml:"click_captcha"`
+	Upload       Upload       `mapstructure:"upload" json:"upload" yaml:"upload"`
 }

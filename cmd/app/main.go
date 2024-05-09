@@ -9,10 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -103,8 +107,6 @@ func initConfig() {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("%+v", config.ClickCaptcha)
-
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
 		fmt.Println("config file changed:", in.Name)
@@ -184,17 +186,18 @@ func initLogger() {
 }
 
 func initValidator() {
-	// if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-	// 	// 注册自定义验证器
-	// 	_ = v.RegisterValidation("phone", utils.ValidatePhone)
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		// 注册自定义验证器
+		_ = v.RegisterValidation("phone", utils.ValidatePhone)
+		_ = v.RegisterValidation("password", utils.ValidatePassword)
 
-	// 	// 注册自定义 json tag 函数
-	// 	v.RegisterTagNameFunc(func(fld reflect.StructField) string {
-	// 		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-	// 		if name == "-" {
-	// 			return ""
-	// 		}
-	// 		return name
-	// 	})
-	// }
+		// 注册自定义 json tag 函数
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
+	}
 }

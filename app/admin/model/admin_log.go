@@ -1,6 +1,11 @@
 package model
 
 import (
+	"encoding/json"
+	"go-build-admin/app/pkg/header"
+	"regexp"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -49,9 +54,52 @@ func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, err error) {
 	return
 }
 
-func (s *AdminLogModel) Add(ctx *gin.Context, data AdminLog) error {
-	err := s.sqlDB.Table(TableNameAdminLog).Create(&data).Error
-	return err
+func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
+	url := ctx.Request.URL.Path
+	//排除一些链接
+	if ok, _ := regexp.MatchString(`/^(.*)\/(select|index|logout)$/i`, url); !ok {
+		return
+	}
+
+	info := header.GetAdminAuth(ctx)
+	username := ""
+	if info.Id != 0 {
+		admin := Admin{}
+		s.sqlDB.Table(TableNameAdmin).Where("id=?", info.Id).First(&admin)
+		username = admin.Username
+	}
+	title := ctx.GetString("log_title")
+	if title == "" {
+		name := strings.Trim(url, "/")
+		actionRule := AdminRule{}
+		s.sqlDB.Table(TableNameAdminRule).Where("name=?", name).First(&actionRule)
+
+		slashIndex := strings.LastIndex(name, "/")
+		if slashIndex != -1 {
+			name := name[:slashIndex]
+			handerRule := AdminRule{}
+			s.sqlDB.Table(TableNameAdminRule).Where("name=?", name).First(&handerRule)
+			title = handerRule.Name + "-" + actionRule.Name
+		}
+	}
+
+	// 对params进行脱敏处理，比如隐藏密码等敏感信息
+	for key := range params {
+		if ok, _ := regexp.MatchString(`/(password|salt|token)/i`, key); ok {
+			params[key] = "****"
+		}
+	}
+	data, _ := json.Marshal(params)
+	adminLog := AdminLog{
+		AdminID:   info.Id,
+		Username:  username,
+		URL:       url,
+		Title:     title,
+		Data:      string(data),
+		IP:        ctx.ClientIP(),
+		Useragent: ctx.Request.UserAgent(),
+	}
+	s.sqlDB.Table(TableNameAdminLog).Create(&adminLog)
 }
 
 func (s *AdminLogModel) Del(ctx *gin.Context, id interface{}) error {

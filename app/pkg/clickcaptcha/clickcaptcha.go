@@ -217,8 +217,8 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	captchaStr, _ := json.Marshal(captcha)
 
 	err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
-		"key":         utils.Md5(id, ""),
-		"code":        utils.Md5(strings.Join(texts, ","), ""),
+		"key":         utils.Md5(id),
+		"code":        utils.Md5(strings.Join(texts, ",")),
 		"captcha":     captchaStr,
 		"create_time": time.Now().Unix(),
 		"expire_time": time.Now().Unix() + 600,
@@ -270,7 +270,7 @@ func loadImage(filePath string) (image.Image, error) {
  * unset 验证成功是否删除验证码
  */
 func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
-	key := utils.Md5(id, "")
+	key := utils.Md5(id)
 
 	baCaptcha := BaCaptcha{}
 	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).First(&baCaptcha).Error

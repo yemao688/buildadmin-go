@@ -1,8 +1,12 @@
 package model
 
 import (
+	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/random"
+	"go-build-admin/conf"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -43,31 +47,39 @@ type Rule struct {
 	Children  []Rule
 }
 
-type AuthInfo struct {
-	ID            int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
-	Username      string `gorm:"column:username;not null;comment:用户名" json:"username"`         // 用户名
-	Nickname      string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`          // 昵称
-	Avatar        string `gorm:"column:avatar;not null;comment:头像" json:"avatar"`              // 头像
-	LastLoginTime int64  `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"` // 上次登录时间
+type BaseAdminInfo struct {
+	ID            int32  `json:"id"`
+	Username      string `json:"username"`
+	Nickname      string `json:"nickname"`
+	Avatar        string `json:"avatar"`
+	LastLoginTime int64  `json:"last_login_time"`
 }
 
 type AuthModel struct {
 	sqlDB       *gorm.DB
 	tokenHelper *token.TokenHelper
+	config      *conf.Configuration
 }
 
-func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper) *AuthModel {
-	return &AuthModel{sqlDB: sqlDB, tokenHelper: tokenHelper}
+func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *AuthModel {
+	return &AuthModel{sqlDB: sqlDB, tokenHelper: tokenHelper, config: config}
 }
 
-func (s *AuthModel) IsLogin(ctx *gin.Context) bool {
-
-	return true
+func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
+	tokenStr := ctx.Request.Header.Get("Authorization")
+	if tokenStr != "" {
+		tokenData, err := s.tokenHelper.Get(tokenStr, true)
+		if err != nil {
+			return tokenData, true
+		}
+	}
+	return nil, false
 }
 
-func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (list []Admin, err error) {
-
-	return
+func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (BaseAdminInfo, error) {
+	baseAdminInfo := BaseAdminInfo{}
+	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Scan(&baseAdminInfo).Error
+	return baseAdminInfo, err
 }
 
 func (s *AuthModel) IsSuperAdmin(ctx *gin.Context, id int32) bool {
@@ -75,18 +87,66 @@ func (s *AuthModel) IsSuperAdmin(ctx *gin.Context, id int32) bool {
 	if err != nil {
 		return false
 	}
-
 	if utils.ContainsString(rules, "*") {
 		return true
 	}
 	return false
 }
 
+func (s *AuthModel) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
+	admin := Admin{}
+	err := s.sqlDB.Table(TableNameAdmin).Where("username=?", username).Scan(&admin).Error
+	if err != nil {
+		return nil, cErr.BadRequest("incorrect user name or password!")
+	}
+
+	if admin.Status == "0" {
+		return nil, cErr.BadRequest("username is incorrect")
+	}
+
+	retry := s.config.App.AdminLoginRetry
+	if retry > 0 && admin.LoginFailure >= int32(retry) && (time.Now().Unix()-admin.LastLoginTime < 86400) {
+		return nil, cErr.BadRequest("please try again after 1 day")
+	}
+
+	if admin.Password != utils.EncryptPassword(password, admin.Salt) {
+		return nil, cErr.BadRequest("password is incorrect")
+	}
+
+	if s.config.App.AdminSso {
+		s.tokenHelper.Clear("admin", admin.ID)
+		s.tokenHelper.Clear("admin-refresh", admin.ID)
+	}
+
+	refreshToken := ""
+	if keep {
+		refreshToken = random.Uuid()
+		s.tokenHelper.Set(refreshToken, "admin-refresh", admin.ID, 2592000) //30天
+	}
+	token := random.Uuid()
+	s.tokenHelper.Set(token, "admin", admin.ID, 86400)
+
+	err = s.sqlDB.Table(TableNameAdmin).Where("id=?", admin.ID).Updates(map[string]interface{}{
+		"login_failure":   0,
+		"last_login_time": time.Now().Unix(),
+		"last_login_ip":   ctx.ClientIP(),
+	}).Error
+
+	return map[string]interface{}{
+		"id":              admin.ID,
+		"username":        admin.Username,
+		"nickname":        admin.Nickname,
+		"avatar":          admin.Avatar,
+		"last_login_time": time.Now().Unix(),
+		"token":           token,
+		"refresh_token":   refreshToken,
+	}, err
+}
+
 func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 	if err := s.tokenHelper.Delete(refreshToken); err != nil {
 		return err
 	}
-
 	if err := s.tokenHelper.Delete(ctx.Keys["token"].(string)); err != nil {
 		return err
 	}

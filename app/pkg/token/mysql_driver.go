@@ -11,23 +11,23 @@ import (
 
 type MysqlDriver struct {
 	sqlDB  *gorm.DB
-	config conf.Token
+	config *conf.Configuration
 }
 
-func NewMysqlDriver(sqlDB *gorm.DB, config conf.Token) *MysqlDriver {
+func NewMysqlDriver(sqlDB *gorm.DB, config *conf.Configuration) *MysqlDriver {
 	return &MysqlDriver{sqlDB: sqlDB, config: config}
 }
 
 func (d MysqlDriver) Set(token string, t string, user_id int32, expire int64) error {
 	if expire < 0 {
-		expire = d.config.Expire
+		expire = d.config.Token.Expire
 	}
 
 	if expire != 0 {
 		expire = time.Now().Unix() + expire
 	}
 
-	token, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	token, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (d MysqlDriver) Set(token string, t string, user_id int32, expire int64) er
 }
 
 func (d MysqlDriver) Get(token string, expirationException bool) (*Token, error) {
-	encryptToken, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (d MysqlDriver) Check(token string, t string, user_id int32, expirationExce
 }
 
 func (d MysqlDriver) Delete(token string) error {
-	token, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	token, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return err
 	}

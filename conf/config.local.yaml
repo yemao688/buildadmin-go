@@ -73,6 +73,12 @@ redis:
   db: 5
   password: ''
 
+upload:
+  maxsize: '10mb'
+  savename: '/storage/{topic}/{year}{mon}{day}/{filename}{filesha1}{.suffix}'
+  mimetype: 'jpg,png,bmp,jpeg,gif,webp,zip,rar,xls,xlsx,doc,docx,wav,mp4,mp3,txt'
+  mode: 'local'
+
 
 terminal:
   npm_package_manager: 'pnpm'

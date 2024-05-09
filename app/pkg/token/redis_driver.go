@@ -12,24 +12,24 @@ import (
 )
 
 type RedisDriver struct {
-	config conf.Token
+	config *conf.Configuration
 	rdb    *redis.Client
 }
 
-func NewRedisDriver(rdb *redis.Client, config conf.Token) *RedisDriver {
+func NewRedisDriver(rdb *redis.Client, config *conf.Configuration) *RedisDriver {
 	return &RedisDriver{rdb: rdb, config: config}
 }
 
 func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) error {
 	if expire < 0 {
-		expire = d.config.Expire
+		expire = d.config.Token.Expire
 	}
 
 	if expire != 0 {
 		expire = time.Now().Unix() + expire
 	}
 
-	encryptToken, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) er
 }
 
 func (d RedisDriver) Get(token string, expirationException bool) (*Token, error) {
-	encryptToken, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (d RedisDriver) Delete(token string) error {
 		return err
 	}
 
-	encryptToken, err := GetEncryptedToken(token, d.config.Algo, d.config.Key)
+	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return err
 	}

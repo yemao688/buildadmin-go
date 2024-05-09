@@ -27,6 +27,7 @@ func NewAdminHandler(log *zap.Logger, adminM *model.AdminModel, authM *model.Aut
 func (h *AdminHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
+		return
 	}
 
 	result, total, err := h.adminM.List(ctx)
@@ -41,8 +42,24 @@ func (h *AdminHandler) Index(ctx *gin.Context) {
 	})
 }
 
+type Admin struct {
+	Username string `json:"username" binding:"required"`
+	Nickname string `json:"nickname" binding:"required"`
+	Avatar   string `json:"avatar" binding:""`
+	Email    string `json:"email" binding:"required"`
+	Mobile   string `json:"mobile" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Motto    string `json:"motto" binding:""`
+	Status   string `json:"status" binding:""`
+	GroupArr string `json:"group_arr" binding:"required"`
+}
+
+func (v Admin) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{}
+}
+
 func (h *AdminHandler) Add(ctx *gin.Context) {
-	var params validate.Admin
+	var params Admin
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
@@ -90,11 +107,16 @@ func (h *AdminHandler) Del(ctx *gin.Context) {
 }
 
 // 检查分组权限
-// func (h *AdminHandler) CheckGroupAuth(ctx *gin.Context) {
-// 	result, err := h.authM.IsSuperAdmin(ctx, 1)
-// 	if err != nil {
-// 		FailByErr(ctx, err)
-// 		return
+// func (h *AdminHandler) CheckGroupAuth(ctx *gin.Context,groups []) error {
+// 	adminAuth := header.GetAdminAuth(ctx)
+// 	if ok := h.authM.IsSuperAdmin(ctx, adminAuth.Id); ok {
+// 		return nil
 // 	}
-// 	Success(ctx, result)
+
+// 	authGroups := h.authM.GetAllAuthGroups("allAuthAndOthers")
+// 	for _, v := range authGroups {
+// 		if
+
+// 	}
+
 // }
