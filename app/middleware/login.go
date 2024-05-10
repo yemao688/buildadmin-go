@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -10,19 +11,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Auth struct {
+type Login struct {
 	config      *conf.Configuration
 	tokenHelper *token.TokenHelper
+	authM       *model.AuthModel
 }
 
-func NewAuth(config *conf.Configuration, tokenHelper *token.TokenHelper) *Auth {
-	return &Auth{
+func NewLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM *model.AuthModel) *Login {
+	return &Login{
 		config:      config,
 		tokenHelper: tokenHelper,
+		authM:       authM,
 	}
 }
 
-func (m *Auth) Handler() gin.HandlerFunc {
+func (m *Login) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.Request.Header.Get("Authorization")
 		if tokenStr == "" {
@@ -51,11 +54,12 @@ func (m *Auth) Handler() gin.HandlerFunc {
 		}
 		language := c.GetHeader("Accept-Language")
 		authParam := header.AdminAuth{
-			Version:  "",
-			Language: language,
-			IsLogin:  true,
-			Id:       tokenData.UserID,
-			Token:    tokenStr,
+			Version:      "",
+			Language:     language,
+			IsLogin:      true,
+			Id:           tokenData.UserID,
+			Token:        tokenStr,
+			IsSuperAdmin: m.authM.IsSuperAdmin(tokenData.UserID),
 		}
 		c.Set("AdminAuth", authParam)
 	}

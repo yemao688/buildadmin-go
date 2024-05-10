@@ -247,11 +247,12 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 		}
 	}
 	//数据权限
-	// dataLimitAdminIds := GetDataLimitAdminIds(ctx)
-	// if len(dataLimitAdminIds) > 0 {
-	// 	whereS += " AND " + Backquote(table.TableName()+".admin_id") + " IN ? "
-	// 	whereP = append(whereP, dataLimitAdminIds)
-	// }
+	value, _ := ctx.Get("dataLimitAdminIds")
+	if value != nil {
+		dataLimitAdminIds := value.([]string)
+		whereS += " AND " + Backquote(table.TableName()+".admin_id") + " IN ? "
+		whereP = append(whereP, dataLimitAdminIds)
+	}
 	if len(whereS) >= 5 {
 		whereS = whereS[5:]
 	}
@@ -321,10 +322,4 @@ func GetOperatorByAlias(operator string) string {
 		return value
 	}
 	return operator
-}
-
-// 数据权限控制-获取有权限访问的管理员Ids
-func GetDataLimitAdminIds(ctx *gin.Context) []int32 {
-
-	return []int32{1}
 }

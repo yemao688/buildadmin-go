@@ -4,6 +4,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -82,8 +83,8 @@ func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (BaseAdminInfo, error) {
 	return baseAdminInfo, err
 }
 
-func (s *AuthModel) IsSuperAdmin(ctx *gin.Context, id int32) bool {
-	rules, err := s.GetRuleIds(ctx, id)
+func (s *AuthModel) IsSuperAdmin(id int32) bool {
+	rules, err := s.GetRuleIds(id)
 	if err != nil {
 		return false
 	}
@@ -218,7 +219,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
 	if val, ok := AuthRuleNameList[id]; ok {
 		return val, nil
 	}
-	ids, err := s.GetRuleIds(ctx, id)
+	ids, err := s.GetRuleIds(id)
 	if err != nil {
 		return nil, err
 	}
@@ -249,8 +250,8 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
 }
 
 // 获取权限规则ids
-func (s *AuthModel) GetRuleIds(ctx *gin.Context, id int32) ([]string, error) {
-	groups, err := s.GetGroups(ctx, id)
+func (s *AuthModel) GetRuleIds(id int32) ([]string, error) {
+	groups, err := s.GetGroups(id)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +271,7 @@ func (s *AuthModel) GetRuleIds(ctx *gin.Context, id int32) ([]string, error) {
 }
 
 // 获取用户所有分组和对应权限规则
-func (s *AuthModel) GetGroups(ctx *gin.Context, id int32) ([]AuthGroup, error) {
+func (s *AuthModel) GetGroups(id int32) ([]AuthGroup, error) {
 	muGroup.Lock()
 	defer muGroup.Unlock()
 
@@ -278,11 +279,75 @@ func (s *AuthModel) GetGroups(ctx *gin.Context, id int32) ([]AuthGroup, error) {
 		return val, nil
 	}
 	var authGroups []AuthGroup
-	err := s.sqlDB.Table("ba_admin_group_access").
+	err := s.sqlDB.Table(TableNameAdminGroupAccess).
 		Joins("left join ba_admin_group on ba_admin_group.id=ba_admin_group_access.group_id").
 		Where("ba_admin_group_access.uid=? and ba_admin_group.status='1'", id).
 		Find(&authGroups).Error
 
 	AuthGroupList[id] = authGroups
 	return authGroups, err
+}
+
+// 获取管理员所在分组的所有子级分组
+func (s *AuthModel) GetAdminChildGroups(id int32) []int32 {
+	accessList := []AdminGroupAccess{}
+	s.sqlDB.Table(TableNameAdminGroupAccess).Where("id=?", id).Find(&accessList)
+	children := []int32{}
+	for _, v := range accessList {
+		children = append(children, s.GetGroupChildGroups(v.GroupID)...)
+	}
+	return children
+}
+
+// 获取一个分组下的子分组
+func (s *AuthModel) GetGroupChildGroups(groupId int32) []int32 {
+	adminGroups := []AdminGroup{}
+	s.sqlDB.Table(TableNameAdminGroup).Where("pid=? and status=?", groupId, 1).Find(&adminGroups)
+	children := []int32{}
+	for _, v := range adminGroups {
+		children = append(children, v.ID)
+		subIds := s.GetGroupChildGroups(v.ID)
+		children = append(children, subIds...)
+	}
+	return children
+}
+
+// 获取分组内的管理员
+func (s *AuthModel) GetGroupAdmins(ids interface{}) []int32 {
+	adminIds := []int32{}
+	s.sqlDB.Table(TableNameAdminGroupAccess).Where("group_id in ?", ids).Pluck("uid", &adminIds)
+	return adminIds
+}
+
+// 获取拥有"所有权限"的分组
+func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, error) {
+	rules, err := s.GetRuleIds(id)
+	if err != nil {
+		return nil, err
+	}
+
+	rulesStr := "," + strings.Join(rules, ",") + ","
+	allAuthGroups := []string{}
+	groups := []AdminGroup{}
+	s.sqlDB.Table(TableNameAdminGroup).Where("status=1").Find(&groups)
+	for _, v := range groups {
+		if v.Rules == "*" {
+			continue
+		}
+
+		groupRules := strings.Split(v.Rules, ",")
+		all := true
+		for _, r := range groupRules {
+			if !strings.Contains(rulesStr, ","+r+",") {
+				all = false
+				break
+			}
+		}
+		if all {
+			if dataLimit == "allAuth" || (dataLimit == "allAuthAndOthers" && len(rules) > len(groupRules)) {
+				allAuthGroups = append(allAuthGroups, strconv.Itoa(int(v.ID)))
+			}
+		}
+	}
+	return allAuthGroups, nil
 }

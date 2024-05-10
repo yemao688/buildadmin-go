@@ -61,8 +61,11 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
+type TestBuild struct {
+}
+
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
-	var params validate.TestBuild
+	var params TestBuild
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return

@@ -1,6 +1,9 @@
 package model
 
 import (
+	"go-build-admin/app/pkg/random"
+	"go-build-admin/utils"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -40,6 +43,16 @@ func (Admin) QuickSearchField() string {
 	return "id"
 }
 
+func (Admin) DataLimit() string {
+	return ""
+}
+
+type AdminExpand struct {
+	Admin
+	GroupArr     []int32  `json:"group_arr"`
+	GroupNameArr []string `json:"group_name_arr"`
+}
+
 type AdminModel struct {
 	sqlDB *gorm.DB
 }
@@ -48,23 +61,104 @@ func NewAdminModel(sqlDB *gorm.DB) *AdminModel {
 	return &AdminModel{sqlDB: sqlDB}
 }
 
+func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (admin Admin, err error) {
+	err = s.sqlDB.Table(TableNameAdmin).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&admin).Error
+	return
+}
+
+func (s *AdminModel) GetGroupArr(ctx *gin.Context, id int32) (groupIds []int32, err error) {
+	err = s.sqlDB.Table(TableNameAdminGroupAccess).Where("uid=?", id).Pluck("group_id", &groupIds).Error
+	return
+}
+
+func (s *AdminModel) GetGroupNameArr(ctx *gin.Context, id int32) (groupNames []string, err error) {
+	err = s.sqlDB.Table(TableNameAdminGroupAccess).
+		Joins("left join ba_admin_group on ba_admin_group_access.group_id = ba_admin_group.id").Where("uid=?", id).Pluck("name", &groupNames).Error
+	return
+}
+
 func (s *AdminModel) List(ctx *gin.Context) (list []Admin, total int64, err error) {
 	var admin Admin
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, admin, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(TableNameAdmin).Scopes(Total(whereS, whereP, &total)).Omit("login_failure,password,salt").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(TableNameAdmin).Scopes(Total(whereS, whereP, &total)).Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
-func (s *AdminModel) Add(ctx *gin.Context, data Admin) error {
-	err := s.sqlDB.Table(TableNameAdmin).Create(&data).Error
-	return err
+func (s *AdminModel) Sortable(ctx *gin.Context) (list []Admin, total int64, err error) {
+	return nil, 0, nil
 }
 
-func (s *AdminModel) Edit(ctx *gin.Context, data Admin) error {
-	err := s.sqlDB.Table(TableNameAdmin).Omit("").Updates(&data).Error
+func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(TableNameAdmin).Create(&admin).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+
+	access := []map[string]interface{}{}
+	for _, v := range groups {
+		access = append(access, map[string]interface{}{
+			"uid": admin.ID, "group_id": v,
+		})
+	}
+
+	if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, groups []string) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(TableNameAdmin).Omit("password, salt, login_failure, last_login_time, last_login_ip").Save(&admin).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+
+	if err := tx.Table(TableNameAdminGroupAccess).Where("uid=?", admin.ID).Delete(nil).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	access := []map[string]interface{}{}
+	for _, v := range groups {
+		access = append(access, map[string]interface{}{
+			"uid": admin.ID, "group_id": v,
+		})
+	}
+
+	if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
+	salt := random.Build("alnum", 16)
+	password = utils.EncryptPassword(password, salt)
+	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Updates(map[string]interface{}{
+		"salt":     salt,
+		"password": password,
+	}).Error
 	return err
 }
 

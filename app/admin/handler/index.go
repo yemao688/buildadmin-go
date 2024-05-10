@@ -40,7 +40,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"nickname":        adminInfo.Nickname,
 			"avatar":          adminInfo.Avatar,
 			"last_login_time": adminInfo.LastLoginTime,
-			"super":           h.authM.IsSuperAdmin(ctx, info.Id),
+			"super":           h.authM.IsSuperAdmin(info.Id),
 		},
 		"menus": menus,
 		"siteConfig": map[string]interface{}{
@@ -67,11 +67,9 @@ type Login struct {
 
 func (v Login) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"username.required": "username required",
-		"username.min":      "username min>10",
-		"username.max":      "username max<30",
-		"password.required": "password required",
-		"password.regex":    "password invalid",
+		"username.min":   "username min>10",
+		"username.max":   "username max<30",
+		"password.regex": "password invalid",
 	}
 }
 

@@ -8,7 +8,7 @@ type AdminAuth struct {
 	IsLogin      bool   `form:"is_login"`
 	Id           int32  `form:"id"`
 	Token        string `form:"token"`
-	RefreshToken string `form:"refresh_token"`
+	IsSuperAdmin bool   `form:"is_super_admin"`
 }
 
 func GetAdminAuth(c *gin.Context) (adminAuth AdminAuth) {
