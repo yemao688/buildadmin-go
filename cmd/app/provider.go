@@ -12,7 +12,8 @@ import (
 
 var ProviderSet = wire.NewSet(
 	clickcaptcha.NewCaptcha,
-	middleware.NewAuth,
+	middleware.NewLogin,
+	middleware.NewDataLimit,
 	middleware.NewPermission,
 
 	adminHandler.NewAdminHandler,

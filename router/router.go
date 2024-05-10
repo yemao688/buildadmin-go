@@ -14,8 +14,9 @@ import (
 
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
-	authM *middleware.Auth,
+	loginM *middleware.Login,
 	permissionM *middleware.Permission,
+	dataLimitM *middleware.DataLimit,
 
 	adminHandler *admin.AdminHandler,
 	adminLogHandler *admin.AdminLogHandler,
@@ -47,7 +48,7 @@ func InitRouter(
 	)
 
 	// 引入admin路由
-	adminRouter := router.Group("/admin/").Use(authM.Handler())
+	adminRouter := router.Group("/admin/").Use(loginM.Handler())
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.GET("Index/login", indexHandler.Login)
 	adminRouter.POST("Index/login", indexHandler.Login)
@@ -58,39 +59,39 @@ func InitRouter(
 	// adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
 	// adminRouter.POST("auth.Group/add", adminGroupHandler.Add)
 	// adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
-	// adminRouter.POST("auth.Group/del", adminGroupHandler.Del)
+	// adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
 
-	adminRouter.GET("auth.Admin/index", adminHandler.Index)
+	adminRouter.GET("auth.Admin/index", dataLimitM.Handler(""), adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
 	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)
-	adminRouter.POST("auth.Admin/del", adminHandler.Del)
+	adminRouter.DELETE("auth.Admin/del", adminHandler.Del)
 
 	// adminRouter.GET("auth.Rule/index", adminRuleHandler.Index)
 	// adminRouter.POST("auth.Rule/add", adminRuleHandler.Add)
 	// adminRouter.POST("auth.Rule/edit", adminRuleHandler.Edit)
-	// adminRouter.POST("auth.Rule/del", adminRuleHandler.Del)
+	// adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
 
 	adminRouter.GET("auth.AdminLog/index", adminLogHandler.Index)
 
 	// adminRouter.GET("user.User/index", userHandler.Index)
 	// adminRouter.POST("user.User/add", userHandler.Add)
 	// adminRouter.POST("user.User/edit", userHandler.Edit)
-	// adminRouter.POST("user.User/del", userHandler.Del)
+	// adminRouter.DELETE("user.User/del", userHandler.Del)
 
 	// adminRouter.GET("user.Group/index", userGroupHandler.Index)
 	// adminRouter.POST("user.Group/add", userGroupHandler.Add)
 	// adminRouter.POST("user.Group/edit", userGroupHandler.Edit)
-	// adminRouter.POST("user.Group/del", userGroupHandler.Del)
+	// adminRouter.DELETE("user.Group/del", userGroupHandler.Del)
 
 	// adminRouter.GET("user.Rule/index", userRuleHandler.Index)
 	// adminRouter.POST("user.Rule/add", userRuleHandler.Add)
 	// adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
-	// adminRouter.POST("user.Rule/del", userRuleHandler.Del)
+	// adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
 
-	// adminRouter.GET("user.MoneyLog/del", userMoneyLogHandler.Index)
+	// adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
 	// adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
 
-	// adminRouter.GET("user.ScoreLog/del", userScoreLogHandler.Index)
+	// adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
 	// adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
 
 	// adminRouter.POST("routine.Config/index", configHandler.Index)
@@ -98,7 +99,7 @@ func InitRouter(
 	// adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
 	// adminRouter.POST("routine.Attachment/add", attachmentHandler.Add)
 	// adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
-	// adminRouter.POST("routine.Attachment/del", attachmentHandler.Del)
+	// adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
 
 	// adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
 	// adminRouter.POST("routine.AdminInfo/add", adminInfoHandler.Add)
@@ -106,29 +107,29 @@ func InitRouter(
 	// adminRouter.GET("security.DataRecycleLog/index", dataRecycleLogHandler.Index)
 	// adminRouter.POST("security.DataRecycleLog/add", dataRecycleLogHandler.Add)
 	// adminRouter.POST("security.DataRecycleLog/edit", dataRecycleLogHandler.Edit)
-	// adminRouter.POST("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
+	// adminRouter.DELETE("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
 
 	// adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
 	// adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
 	// adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
-	// adminRouter.POST("security.DataRecycle/del", dataRecycleHandler.Del)
+	// adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
 
 	// adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
 	// adminRouter.POST("security.SensitiveDataLog/add", sensitiveDataLogHandler.Add)
 	// adminRouter.POST("security.SensitiveDataLog/edit", sensitiveDataLogHandler.Edit)
-	// adminRouter.POST("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
+	// adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
 
 	// adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
 	// adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
 	// adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
-	// adminRouter.POST("security.SensitiveData/del", sensitiveDataHandler.Del)
+	// adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
 	// adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)
 	adminRouter.POST("testBuild/edit", testBuildHandler.Edit)
-	adminRouter.POST("testBuild/del", testBuildHandler.Del)
+	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
 
 	// 引入api接口路由
 	apiRouter := router.Group("/api/")

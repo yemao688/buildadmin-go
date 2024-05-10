@@ -16,7 +16,7 @@ func NewPermission(config *conf.Configuration) *Permission {
 	}
 }
 
-func (m *Permission) Handler(guardName string) gin.HandlerFunc {
+func (m *Permission) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 	}
