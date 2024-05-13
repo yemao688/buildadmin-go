@@ -24,28 +24,24 @@ type TestBuild struct {
 	BannerIds string  `gorm:"column:banner_ids;not null;comment:远程下拉" json:"banner_ids"`                                // 远程下拉
 }
 
-func (TestBuild) TableName() string {
-	return TableNameTestBuild
-}
-
-func (TestBuild) Key() string {
-	return "id"
-}
-
-func (TestBuild) QuickSearchField() string {
-	return "id"
-}
-
 type TestBuildModel struct {
+	BaseModel
 	sqlDB *gorm.DB
 }
 
 func NewTestBuildModel(sqlDB *gorm.DB) *TestBuildModel {
-	return &TestBuildModel{sqlDB: sqlDB}
+	return &TestBuildModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameTestBuild,
+			Key:              "id",
+			QuickSearchField: "id",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
 }
 
 func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, TestBuild{}, nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}

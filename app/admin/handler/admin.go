@@ -26,6 +26,7 @@ type AdminHandler struct {
 
 func NewAdminHandler(log *zap.Logger, adminM *model.AdminModel, authM *model.AuthModel) *AdminHandler {
 	return &AdminHandler{
+		Base:   Base{currentM: adminM},
 		log:    log,
 		adminM: adminM,
 		authM:  authM,
@@ -104,10 +105,6 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
-}
-
-type IDS struct {
-	ID int32 `json:"id" binding:"required"`
 }
 
 func (h *AdminHandler) Edit(ctx *gin.Context) {

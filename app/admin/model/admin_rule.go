@@ -1,6 +1,8 @@
 package model
 
 import (
+	cErr "go-build-admin/app/pkg/error"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -27,33 +29,28 @@ type AdminRule struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                               // 创建时间
 }
 
-func (AdminRule) TableName() string {
-	return TableNameAdminRule
-}
-
-func (AdminRule) Key() string {
-	return "id"
-}
-
-func (AdminRule) QuickSearchField() string {
-	return "id"
-}
-
 type AdminRuleModel struct {
+	BaseModel
 	sqlDB *gorm.DB
 }
 
 func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
-	return &AdminRuleModel{sqlDB: sqlDB}
+	return &AdminRuleModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameAdminRule,
+			Key:              "id",
+			QuickSearchField: "title",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
 }
 
 func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
-	var adminRule AdminRule
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, adminRule, nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(TableNameAdminRule).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -67,12 +64,26 @@ func (s *AdminRuleModel) GetRemark(ctx *gin.Context) string {
 	return adminRule.Remark
 }
 
-func (s *AdminRuleModel) Add(ctx *gin.Context) (list []AdminRule, err error) {
-	var adminRule AdminRule
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, adminRule, nil)
-	if err != nil {
-		return nil, err
+func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int64) error {
+	var subIds []int64
+	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+		return err
 	}
-	err = s.sqlDB.Table(TableNameAdminRule).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return
+
+	for _, v := range subIds {
+		flag := false
+		for _, v1 := range ids {
+			if v == v1 {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			return cErr.BadRequest("please delete the child element first, or use batch deletion")
+		}
+	}
+
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
+
 }

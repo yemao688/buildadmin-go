@@ -16,7 +16,7 @@ func Total(whereS string, whereP []interface{}, total *int64) func(db *gorm.DB) 
 func IsSuperAdmin(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		authAdmin := header.GetAdminAuth(ctx)
-		if authAdmin.IsSuperAdmin {
+		if !authAdmin.IsSuperAdmin {
 			db.Where(" admin_id = ? ", 1)
 		}
 		return db

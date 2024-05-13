@@ -8,16 +8,16 @@ import (
 )
 
 type DashboardHandler struct {
-	log        *zap.Logger
-	adminRuleM *model.AdminRuleModel
+	log      *zap.Logger
+	currentM *model.AdminRuleModel
 }
 
-func NewDashboardHandler(log *zap.Logger, adminRuleM *model.AdminRuleModel) *DashboardHandler {
-	return &DashboardHandler{log: log, adminRuleM: adminRuleM}
+func NewDashboardHandler(log *zap.Logger, currentM *model.AdminRuleModel) *DashboardHandler {
+	return &DashboardHandler{log: log, currentM: currentM}
 }
 
 func (h *DashboardHandler) Index(ctx *gin.Context) {
-	remark := h.adminRuleM.GetRemark(ctx)
+	remark := h.currentM.GetRemark(ctx)
 	Success(ctx, map[string]string{
 		"remark": remark,
 	})

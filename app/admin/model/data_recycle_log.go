@@ -15,8 +15,3 @@ type SecurityDataRecycleLog struct {
 	Useragent  string `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`      // User-Agent
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                 // 创建时间
 }
-
-// TableName SecurityDataRecycleLog's table name
-func (*SecurityDataRecycleLog) TableName() string {
-	return TableNameSecurityDataRecycleLog
-}

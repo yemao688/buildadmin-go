@@ -1,1 +1,229 @@
 package handler
+
+import (
+	"go-build-admin/app/admin/model"
+	"go-build-admin/app/admin/validate"
+	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/tree"
+	"net/http"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
+	"github.com/unknwon/com"
+	"go.uber.org/zap"
+)
+
+type AdminRuleHandler struct {
+	Base
+	log        *zap.Logger
+	adminRuleM *model.AdminRuleModel
+	authM      *model.AuthModel
+}
+
+func NewAdminRuleHandler(log *zap.Logger, adminRuleM *model.AdminRuleModel, authM *model.AuthModel) *AdminRuleHandler {
+	return &AdminRuleHandler{
+		Base:       Base{currentM: adminRuleM},
+		log:        log,
+		adminRuleM: adminRuleM,
+		authM:      authM,
+	}
+}
+
+func (h *AdminRuleHandler) Index(ctx *gin.Context) {
+	if data, ok := h.Select(ctx); ok {
+		Success(ctx, data)
+		return
+	}
+	whereP := []any{}
+	list, err := h.GetMenus(ctx, "", whereP)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	isTree := ctx.Request.FormValue("isTree")
+	if isTree == "true" {
+		Success(ctx, map[string]interface{}{
+			"list":   h.AssembleChild(list),
+			"remark": "",
+		})
+		return
+	}
+
+	Success(ctx, map[string]interface{}{
+		"list":   list,
+		"remark": "",
+	})
+
+}
+
+type AdminRule struct {
+}
+
+func (v AdminRule) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"username.min":      "username>2 and username<15",
+		"username.max":      "username>2 and username<15",
+		"email.email":       "email error",
+		"mobile.phone":      "mobile error",
+		"password.password": "password invalid",
+	}
+}
+
+func (h *AdminRuleHandler) Add(ctx *gin.Context) {
+	var params AdminRule
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	err := h.adminRuleM.Add(ctx, admin, params.GroupArr)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	admin, err := h.adminRuleM.GetOne(ctx, int32(id))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	//校验数据权限
+	if !h.CheckDataLimit(ctx, admin.ID) {
+		FailByErr(ctx, cErr.BadRequest("you have no permission"))
+		return
+	}
+
+	if ctx.Request.Method == http.MethodGet {
+		Success(ctx, map[string]interface{}{
+			"row": admin,
+		})
+		return
+	}
+
+	type AdminEdit struct {
+		IDS
+		Admin
+	}
+	var params AdminEdit
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	authAdmin := header.GetAdminAuth(ctx)
+	if authAdmin.Id == admin.ID && params.Status == "0" {
+		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
+		return
+	}
+
+	if params.Password != "" {
+		if err := h.adminRuleM.ResetPassword(ctx, admin.ID, params.Password); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	}
+
+	copier.Copy(&admin, params)
+	err = h.adminRuleM.Edit(ctx, admin, params.GroupArr)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *AdminRuleHandler) Del(ctx *gin.Context) {
+	var params validate.Ids
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	err := h.adminRuleM.Del(ctx, params.Ids)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
+	whereS := " type in ? AND status=? "
+	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
+	list, err := h.GetMenus(ctx, whereS, whereP)
+	if err != nil {
+		FailByErr(ctx, err)
+		return nil, false
+	}
+
+	isTree := ctx.Request.FormValue("isTree")
+	if isTree == "true" {
+		data := tree.AssembleTree(h.AssembleChild(list).([]*AdminRuleExpend))
+		return map[string]interface{}{
+			"options": data,
+		}, true
+	}
+	return nil, false
+}
+
+// 获取菜单列表
+func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS string, whereP []interface{}) ([]model.AdminRule, error) {
+	keyword := ctx.Request.FormValue("quickSearch")
+	ids, _ := h.authM.GetRuleIds(0)
+	flag := false
+	for _, v := range ids {
+		if strings.Contains(v, "*") {
+			flag = true
+			break
+		}
+	}
+
+	if !flag {
+		whereS += " id in ? "
+		whereP = append(whereP, ids)
+	}
+
+	if keyword != "" {
+		keywordArr := strings.Split(keyword, " ")
+		for _, v := range keywordArr {
+			whereS += " AND " + h.adminRuleM.QuickSearchField + " LIKE ? "
+			whereP = append(whereP, "%"+strings.Replace(v, "%", "\\%", -1)+"%")
+		}
+	}
+
+	list := []model.AdminRule{}
+	err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(whereS, whereP...).Order("weigh desc,id asc").Find(&list).Error
+	return list, err
+}
+
+type AdminRuleExpend struct {
+	model.AdminRule
+	Children []*AdminRuleExpend
+}
+
+func (l *AdminRuleExpend) GetId() int               { return int(l.ID) }
+func (l *AdminRuleExpend) GetPid() int              { return int(l.Pid) }
+func (l *AdminRuleExpend) GetTitle() string         { return l.Title }
+func (l *AdminRuleExpend) GetChildren() interface{} { return l.Children }
+func (l *AdminRuleExpend) SetTitle(title string)    { l.Title = title }
+func (l *AdminRuleExpend) SetChildren(children interface{}) {
+	l.Children = children.([]*AdminRuleExpend)
+}
+
+func (h *AdminRuleHandler) AssembleChild(list []model.AdminRule) interface{} {
+	expendList := []*AdminRuleExpend{}
+	for _, v := range list {
+		temp := AdminRuleExpend{}
+		copier.Copy(&temp, v)
+		expendList = append(expendList, &temp)
+	}
+	return tree.AssembleChild(expendList)
+}

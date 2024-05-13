@@ -12,8 +12,3 @@ type UserScoreLog struct {
 	Memo       string `gorm:"column:memo;not null;comment:备注" json:"memo"`                  // 备注
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`           // 创建时间
 }
-
-// TableName UserScoreLog's table name
-func (*UserScoreLog) TableName() string {
-	return TableNameUserScoreLog
-}

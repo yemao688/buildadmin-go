@@ -22,19 +22,8 @@ type Config struct {
 	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
 }
 
-func (Config) TableName() string {
-	return TableNameConfig
-}
-
-func (Config) Key() string {
-	return "id"
-}
-
-func (Config) QuickSearchField() string {
-	return "id"
-}
-
 type ConfigModel struct {
+	BaseModel
 	sqlDB *gorm.DB
 }
 
@@ -43,8 +32,7 @@ func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
-	var config Config
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, config, nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}

@@ -31,22 +31,6 @@ type Admin struct {
 	CreateTime    int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
-func (Admin) TableName() string {
-	return TableNameAdmin
-}
-
-func (Admin) Key() string {
-	return "id"
-}
-
-func (Admin) QuickSearchField() string {
-	return "id"
-}
-
-func (Admin) DataLimit() string {
-	return ""
-}
-
 type AdminExpand struct {
 	Admin
 	GroupArr     []int32  `json:"group_arr"`
@@ -54,15 +38,24 @@ type AdminExpand struct {
 }
 
 type AdminModel struct {
+	BaseModel
 	sqlDB *gorm.DB
 }
 
 func NewAdminModel(sqlDB *gorm.DB) *AdminModel {
-	return &AdminModel{sqlDB: sqlDB}
+	return &AdminModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameAdmin,
+			Key:              "id",
+			QuickSearchField: "id",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB,
+	}
 }
 
 func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (admin Admin, err error) {
-	err = s.sqlDB.Table(TableNameAdmin).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&admin).Error
+	err = s.sqlDB.Table(s.TableName).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&admin).Error
 	return
 }
 
@@ -78,12 +71,11 @@ func (s *AdminModel) GetGroupNameArr(ctx *gin.Context, id int32) (groupNames []s
 }
 
 func (s *AdminModel) List(ctx *gin.Context) (list []Admin, total int64, err error) {
-	var admin Admin
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, admin, nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(TableNameAdmin).Scopes(Total(whereS, whereP, &total)).Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -99,7 +91,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		}
 	}()
 
-	if err := tx.Table(TableNameAdmin).Create(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Create(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -127,7 +119,7 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, groups []string) error 
 		}
 	}()
 
-	if err := tx.Table(TableNameAdmin).Omit("password, salt, login_failure, last_login_time, last_login_ip").Save(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("password, salt, login_failure, last_login_time, last_login_ip").Save(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -155,7 +147,7 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, groups []string) error 
 func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
 	salt := random.Build("alnum", 16)
 	password = utils.EncryptPassword(password, salt)
-	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Updates(map[string]interface{}{
+	err := s.sqlDB.Table(s.TableName).Where("id=?", id).Updates(map[string]interface{}{
 		"salt":     salt,
 		"password": password,
 	}).Error
@@ -163,6 +155,6 @@ func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) 
 }
 
 func (s *AdminModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(TableNameAdmin).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

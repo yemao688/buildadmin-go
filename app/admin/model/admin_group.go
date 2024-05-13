@@ -1,5 +1,7 @@
 package model
 
+import "gorm.io/gorm"
+
 const TableNameAdminGroup = "ba_admin_group"
 
 type AdminGroup struct {
@@ -12,6 +14,19 @@ type AdminGroup struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
-func (*AdminGroup) TableName() string {
-	return TableNameAdminGroup
+type AdminGroupModel struct {
+	BaseModel
+	sqlDB *gorm.DB
+}
+
+func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
+	return &AdminGroupModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameAdminGroup,
+			Key:              "id",
+			QuickSearchField: "name",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB,
+	}
 }

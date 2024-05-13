@@ -9,12 +9,15 @@ import (
 )
 
 type ConfigHandler struct {
+	Base
 	log     *zap.Logger
 	configM *model.ConfigModel
 }
 
 func NewConfigHandler(log *zap.Logger, configM *model.ConfigModel) *ConfigHandler {
-	return &ConfigHandler{log: log, configM: configM}
+	return &ConfigHandler{
+		Base: Base{currentM: configM},
+		log:  log, configM: configM}
 }
 
 func (h *ConfigHandler) Index(ctx *gin.Context) {

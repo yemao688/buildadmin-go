@@ -24,33 +24,29 @@ type AdminLog struct {
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime;comment:创建时间" json:"create_time"` // 创建时间
 }
 
-func (AdminLog) TableName() string {
-	return TableNameAdminLog
-}
-
-func (AdminLog) Key() string {
-	return "id"
-}
-
-func (AdminLog) QuickSearchField() string {
-	return "id"
-}
-
 type AdminLogModel struct {
+	BaseModel
 	sqlDB *gorm.DB
 }
 
 func NewAdminLogModel(sqlDB *gorm.DB) *AdminLogModel {
-	return &AdminLogModel{sqlDB: sqlDB}
+	return &AdminLogModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameAdminLog,
+			Key:              "id",
+			QuickSearchField: "title",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB,
+	}
 }
 
 func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, err error) {
-	var adminLog AdminLog
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, adminLog, nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(TableNameAdminLog).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -99,10 +95,10 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 		IP:        ctx.ClientIP(),
 		Useragent: ctx.Request.UserAgent(),
 	}
-	s.sqlDB.Table(TableNameAdminLog).Create(&adminLog)
+	s.sqlDB.Table(s.TableName).Create(&adminLog)
 }
 
 func (s *AdminLogModel) Del(ctx *gin.Context, id interface{}) error {
-	err := s.sqlDB.Table(TableNameAdminLog).Where(" id=? ", id).Delete(nil).Error
+	err := s.sqlDB.Table(s.TableName).Where(" id=? ", id).Delete(nil).Error
 	return err
 }

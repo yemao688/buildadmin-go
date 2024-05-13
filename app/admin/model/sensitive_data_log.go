@@ -19,8 +19,3 @@ type SecuritySensitiveDataLog struct {
 	IsRollback  int32  `gorm:"column:is_rollback;not null;comment:是否已回滚:0=否,1=是" json:"is_rollback"` // 是否已回滚:0=否,1=是
 	CreateTime  int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                   // 创建时间
 }
-
-// TableName SecuritySensitiveDataLog's table name
-func (*SecuritySensitiveDataLog) TableName() string {
-	return TableNameSecuritySensitiveDataLog
-}

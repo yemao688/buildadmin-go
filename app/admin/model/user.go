@@ -34,8 +34,3 @@ type User struct {
 	UpdateTime    int64     `gorm:"column:update_time;comment:更新时间" json:"update_time"`                    // 更新时间
 	CreateTime    int64     `gorm:"column:create_time;comment:创建时间" json:"create_time"`                    // 创建时间
 }
-
-// TableName User's table name
-func (*User) TableName() string {
-	return TableNameUser
-}

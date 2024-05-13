@@ -11,8 +11,3 @@ type CrudLog struct {
 	Status     string `gorm:"column:status;not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                     // 创建时间
 }
-
-// TableName CrudLog's table name
-func (*CrudLog) TableName() string {
-	return TableNameCrudLog
-}

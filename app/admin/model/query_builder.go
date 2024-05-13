@@ -36,11 +36,11 @@ func (v QueryParameter) GetMessages() validator.ValidatorMessages {
 	return validator.ValidatorMessages{}
 }
 
-// 表接口
-type Table interface {
-	TableName() string
-	Key() string
-	QuickSearchField() string
+// 表
+type TableInfo struct {
+	TableName        string
+	Key              string
+	QuickSearchField string
 }
 
 func GetQueryParameter(ctx *gin.Context) (*QueryParameter, error) {
@@ -74,7 +74,8 @@ func GetQueryParameter(ctx *gin.Context) (*QueryParameter, error) {
 	return &queryParameter, nil
 }
 
-func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS string, whereP []interface{}, orderS string, limit int, offset int, err error) {
+// 构建sql 查询条件
+func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (whereS string, whereP []interface{}, orderS string, limit int, offset int, err error) {
 	whereS = ""
 	whereP = []interface{}{}
 	orderS = ""
@@ -90,7 +91,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 	fmt.Println(1111111)
 	// 快速搜索
 	quickSearch := queryParameter.QuickSearch
-	quickSearchField := table.QuickSearchField()
+	quickSearchField := table.QuickSearchField
 	if quickSearch != "" && quickSearchField != "" {
 		if ok := strings.Contains(quickSearchField, ","); ok {
 			quickSearchFieldArr := strings.Split(quickSearchField, ",")
@@ -116,7 +117,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 			}
 		}
 	} else {
-		orderS = table.TableName() + "." + table.Key() + " desc"
+		orderS = table.TableName + "." + table.Key + " desc"
 	}
 	fmt.Println(33333)
 	search := queryParameter.Search
@@ -250,7 +251,7 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 	value, _ := ctx.Get("dataLimitAdminIds")
 	if value != nil {
 		dataLimitAdminIds := value.([]string)
-		whereS += " AND " + Backquote(table.TableName()+".admin_id") + " IN ? "
+		whereS += " AND " + Backquote(table.TableName+".admin_id") + " IN ? "
 		whereP = append(whereP, dataLimitAdminIds)
 	}
 	if len(whereS) >= 5 {
@@ -260,22 +261,22 @@ func QueryBuilder(ctx *gin.Context, table Table, withTables []Table) (whereS str
 }
 
 // 获取结构体所有字段类型
-func GetFieldTypeMap(table Table, args ...Table) map[string]string {
+func GetFieldTypeMap(table TableInfo, args ...TableInfo) map[string]string {
 	args = append(args, table)
 	fieldTypeMap := map[string]string{}
 	for _, table := range args {
 		tableType := reflect.TypeOf(table)
 		for i := 0; i < tableType.NumField(); i++ {
 			field := tableType.Field(i)
-			fieldTypeMap[table.TableName()+"."+strings.ToLower(field.Name)] = field.Type.String()
+			fieldTypeMap[table.TableName+"."+strings.ToLower(field.Name)] = field.Type.String()
 		}
 	}
 	return fieldTypeMap
 }
 
 // 获取字段类型
-func GetFieldType(fieldName string, fieldTypeMap map[string]string, table Table) string {
-	fieldName = table.TableName() + "." + strings.Replace(fieldName, "_", "", -1)
+func GetFieldType(fieldName string, fieldTypeMap map[string]string, table TableInfo) string {
+	fieldName = table.TableName + "." + strings.Replace(fieldName, "_", "", -1)
 	return fieldTypeMap[fieldName]
 }
 
@@ -292,11 +293,11 @@ func IsValidFieldName(fieldName string, fieldTypeMap map[string]string) bool {
 }
 
 // 获取表名加字段名
-func GetFullField(field string, table Table) string {
+func GetFullField(field string, table TableInfo) string {
 	if ok := strings.Contains(field, "."); ok {
 		return field
 	}
-	return table.TableName() + "." + field
+	return table.TableName + "." + field
 }
 
 // 为字段添加反引号

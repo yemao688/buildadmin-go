@@ -11,12 +11,13 @@ import (
 )
 
 type TestBuildHandler struct {
+	Base
 	log        *zap.Logger
 	testBuildM *model.TestBuildModel
 }
 
 func NewTestBuildHandler(log *zap.Logger, testBuildM *model.TestBuildModel) *TestBuildHandler {
-	return &TestBuildHandler{log: log, testBuildM: testBuildM}
+	return &TestBuildHandler{Base: Base{currentM: testBuildM}, log: log, testBuildM: testBuildM}
 }
 
 func (h *TestBuildHandler) Index(ctx *gin.Context) {
