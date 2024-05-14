@@ -4,7 +4,6 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/tree"
 	"net/http"
 	"strings"
@@ -37,7 +36,7 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 		return
 	}
 	whereP := []any{}
-	list, err := h.GetMenus(ctx, "", whereP)
+	list, err := h.GetMenus(ctx, []string{}, whereP)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -60,15 +59,25 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 }
 
 type AdminRule struct {
+	Pid       int32  `json:"pid"`
+	Type      string `json:"type"`
+	Title     string `json:"title"  binding:"required"`
+	Name      string `json:"name"`
+	Path      string `json:"path"`
+	Icon      string `json:"icon"`
+	MenuType  string `json:"menu_type"`
+	URL       string `json:"url"`
+	Component string `json:"component"`
+	Keepalive int32  `json:"keepalive"`
+	Extend    string `json:"extend"`
+	Remark    string `json:"remark"`
+	Weigh     int32  `json:"weigh"`
+	Status    string `json:"status"`
 }
 
 func (v AdminRule) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"username.min":      "username>2 and username<15",
-		"username.max":      "username>2 and username<15",
-		"email.email":       "email error",
-		"mobile.phone":      "mobile error",
-		"password.password": "password invalid",
+		"title.required": "title required",
 	}
 }
 
@@ -79,7 +88,10 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	err := h.adminRuleM.Add(ctx, admin, params.GroupArr)
+	var adminRule model.AdminRule
+	copier.Copy(&adminRule, params)
+
+	err := h.adminRuleM.Add(ctx, adminRule)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -89,50 +101,37 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 
 func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	admin, err := h.adminRuleM.GetOne(ctx, int32(id))
+	adminRule, err := h.adminRuleM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	//校验数据权限
-	if !h.CheckDataLimit(ctx, admin.ID) {
+	if !h.CheckDataLimit(ctx, adminRule.ID) {
 		FailByErr(ctx, cErr.BadRequest("you have no permission"))
 		return
 	}
 
 	if ctx.Request.Method == http.MethodGet {
 		Success(ctx, map[string]interface{}{
-			"row": admin,
+			"row": adminRule,
 		})
 		return
 	}
 
-	type AdminEdit struct {
+	type AdminRuleEdit struct {
 		IDS
-		Admin
+		AdminRule
 	}
-	var params AdminEdit
+	var params AdminRuleEdit
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	authAdmin := header.GetAdminAuth(ctx)
-	if authAdmin.Id == admin.ID && params.Status == "0" {
-		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
-		return
-	}
-
-	if params.Password != "" {
-		if err := h.adminRuleM.ResetPassword(ctx, admin.ID, params.Password); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	copier.Copy(&admin, params)
-	err = h.adminRuleM.Edit(ctx, admin, params.GroupArr)
+	copier.Copy(&adminRule, params)
+	err = h.adminRuleM.Edit(ctx, adminRule)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -156,7 +155,7 @@ func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 }
 
 func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
-	whereS := " type in ? AND status=? "
+	whereS := []string{" type in ? ", " status=? "}
 	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
 	list, err := h.GetMenus(ctx, whereS, whereP)
 	if err != nil {
@@ -175,7 +174,7 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取菜单列表
-func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS string, whereP []interface{}) ([]model.AdminRule, error) {
+func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.AdminRule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
 	ids, _ := h.authM.GetRuleIds(0)
 	flag := false
@@ -187,20 +186,20 @@ func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS string, whereP []in
 	}
 
 	if !flag {
-		whereS += " id in ? "
+		whereS = append(whereS, " id in ? ")
 		whereP = append(whereP, ids)
 	}
 
 	if keyword != "" {
 		keywordArr := strings.Split(keyword, " ")
 		for _, v := range keywordArr {
-			whereS += " AND " + h.adminRuleM.QuickSearchField + " LIKE ? "
+			whereS = append(whereS, h.adminRuleM.QuickSearchField+" LIKE ? ")
 			whereP = append(whereP, "%"+strings.Replace(v, "%", "\\%", -1)+"%")
 		}
 	}
 
 	list := []model.AdminRule{}
-	err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(whereS, whereP...).Order("weigh desc,id asc").Find(&list).Error
+	err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Order("weigh desc,id asc").Find(&list).Error
 	return list, err
 }
 

@@ -32,8 +32,8 @@ func NewDataLimit(config *conf.Configuration, authM *model.AuthModel) *DataLimit
  */
 func (m *DataLimit) Handler(limitType string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authAdmin := header.GetAdminAuth(c)
-		if limitType == "" || authAdmin.IsSuperAdmin {
+		adminAuth := header.GetAdminAuth(c)
+		if limitType == "" || adminAuth.IsSuperAdmin {
 			c.Set("dataLimitAdminIds", []int32{})
 			return
 		}
@@ -41,16 +41,16 @@ func (m *DataLimit) Handler(limitType string) gin.HandlerFunc {
 		adminIds := []int32{}
 		if limitType == "parent" {
 			// 取得当前管理员的下级分组
-			parentGroups := m.authM.GetAdminChildGroups(authAdmin.Id)
+			parentGroups := m.authM.GetAdminChildGroups(adminAuth.Id)
 			if len(parentGroups) > 0 {
 				// 取得分组内的所有管理员
 				adminIds = m.authM.GetGroupAdmins(parentGroups)
 			}
 		} else if limitType == "personal" {
-			adminIds = append(adminIds, authAdmin.Id)
+			adminIds = append(adminIds, adminAuth.Id)
 		} else if limitType == "allAuth" || limitType == "allAuthAndOthers" {
 			// 取得拥有他所有权限的分组
-			allAuthGroups, _ := m.authM.GetAllAuthGroups(limitType, authAdmin.Id)
+			allAuthGroups, _ := m.authM.GetAllAuthGroups(limitType, adminAuth.Id)
 			// 取得分组内的所有管理员
 			adminIds = m.authM.GetGroupAdmins(allAuthGroups)
 		} else {
@@ -59,13 +59,13 @@ func (m *DataLimit) Handler(limitType string) gin.HandlerFunc {
 				adminIds = m.authM.GetGroupAdmins([]string{limitType})
 				ok := false
 				for _, v := range adminIds {
-					if v == authAdmin.Id {
+					if v == adminAuth.Id {
 						ok = true
 						break
 					}
 				}
 				if !ok {
-					adminIds = append(adminIds, authAdmin.Id)
+					adminIds = append(adminIds, adminAuth.Id)
 				}
 			}
 		}

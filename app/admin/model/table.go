@@ -1,0 +1,64 @@
+package model
+
+import (
+	"go-build-admin/conf"
+	"strings"
+
+	"gorm.io/gorm"
+)
+
+type TableModel struct {
+	config *conf.Configuration
+	sqlDB  *gorm.DB
+}
+
+func NewTableModel(config *conf.Configuration, sqlDB *gorm.DB) *TableModel {
+	return &TableModel{
+		sqlDB:  sqlDB,
+		config: config,
+	}
+}
+
+func (s *TableModel) GetTableList() map[string]string {
+	type Table struct {
+		TABLE_NAME    string
+		TABLE_COMMENT string
+	}
+	var tableList []Table
+	s.sqlDB.Raw("SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = ? ", s.config.Database.Database).Scan(&tableList)
+	data := map[string]string{}
+	for _, v := range tableList {
+		if v.TABLE_COMMENT != "" {
+			data[v.TABLE_NAME] = v.TABLE_NAME + " - " + v.TABLE_COMMENT
+		} else {
+			data[v.TABLE_NAME] = v.TABLE_NAME
+		}
+	}
+	return data
+}
+
+func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map[string]any {
+	if tableName == "" {
+		return nil
+	}
+
+	type Column struct {
+		COLUMN_NAME    string
+		COLUMN_COMMENT string
+	}
+	var columnList []Column
+	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, tableName).Scan(&columnList)
+	data := map[string]any{}
+	for _, v := range columnList {
+		if onlyCleanComment {
+			data[v.COLUMN_NAME] = ""
+			if v.COLUMN_COMMENT != "" {
+				comment := strings.Split(v.COLUMN_COMMENT, ":")
+				data[v.COLUMN_NAME] = comment[0]
+			}
+			continue
+		}
+		data[v.COLUMN_NAME] = v
+	}
+	return data
+}

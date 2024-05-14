@@ -1,5 +1,7 @@
 package model
 
+import "gorm.io/gorm"
+
 const TableNameCrudLog = "ba_crud_log"
 
 // CrudLog CRUD记录表
@@ -10,4 +12,20 @@ type CrudLog struct {
 	Fields     string `gorm:"column:fields;comment:字段数据" json:"fields"`                                                               // 字段数据
 	Status     string `gorm:"column:status;not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                     // 创建时间
+}
+
+type CrudLogModel struct {
+	BaseModel
+	sqlDB *gorm.DB
+}
+
+func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
+	return &CrudLogModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameCrudLog,
+			Key:              "id",
+			QuickSearchField: "table_name",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
 }

@@ -45,6 +45,11 @@ func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
 		sqlDB: sqlDB}
 }
 
+func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&adminRule).Error
+	return
+}
+
 func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
@@ -62,6 +67,49 @@ func (s *AdminRuleModel) GetRemark(ctx *gin.Context) string {
 		return ""
 	}
 	return adminRule.Remark
+}
+
+func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Create(&adminRule).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
+}
+
+func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
+	parent := AdminRule{}
+	if err := s.sqlDB.Table(s.TableName).Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
+		return err
+	}
+
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if parent.Pid == adminRule.ID {
+		if err := tx.Table(s.TableName).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	if err := tx.Table(s.TableName).Save(&adminRule).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
 }
 
 func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int64) error {
@@ -85,5 +133,10 @@ func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int64) error {
 
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
+}
 
+func (s *AdminRuleModel) GetRulePIds(ids []string) ([]int32, error) {
+	pids := []int32{}
+	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
+	return pids, err
 }

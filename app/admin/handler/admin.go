@@ -85,9 +85,9 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	authAdmin := header.GetAdminAuth(ctx)
+	adminAuth := header.GetAdminAuth(ctx)
 	if len(params.GroupArr) > 0 {
-		if err := h.CheckGroupAuth(ctx, params.GroupArr, authAdmin.Id); err != nil {
+		if err := h.CheckGroupAuth(ctx, params.GroupArr, adminAuth.Id); err != nil {
 			FailByErr(ctx, err)
 			return
 		}
@@ -138,8 +138,8 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	authAdmin := header.GetAdminAuth(ctx)
-	if authAdmin.Id == admin.ID && params.Status == "0" {
+	adminAuth := header.GetAdminAuth(ctx)
+	if adminAuth.Id == admin.ID && params.Status == "0" {
 		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
 		return
 	}
@@ -152,7 +152,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	}
 
 	checkGroups := []string{}
-	groupIds, _ := h.adminM.GetGroupArr(ctx, authAdmin.Id)
+	groupIds, _ := h.adminM.GetGroupArr(ctx, adminAuth.Id)
 	for _, v := range params.GroupArr {
 		for _, i := range groupIds {
 			if v != strconv.Itoa(int(i)) {
@@ -161,7 +161,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		}
 	}
 	if len(checkGroups) > 0 {
-		if err := h.CheckGroupAuth(ctx, checkGroups, authAdmin.Id); err != nil {
+		if err := h.CheckGroupAuth(ctx, checkGroups, adminAuth.Id); err != nil {
 			FailByErr(ctx, err)
 			return
 		}

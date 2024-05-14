@@ -5,7 +5,11 @@ import (
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/tree"
+	"go-build-admin/utils"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -17,14 +21,16 @@ type AdminGroupHandler struct {
 	Base
 	log         *zap.Logger
 	adminGroupM *model.AdminGroupModel
+	adminRuleM  *model.AdminRuleModel
 	authM       *model.AuthModel
 }
 
-func NewAdminGroupHandler(log *zap.Logger, adminGroupM *model.AdminGroupModel, authM *model.AuthModel) *AdminGroupHandler {
+func NewAdminGroupHandler(log *zap.Logger, adminGroupM *model.AdminGroupModel, adminRuleM *model.AdminRuleModel, authM *model.AuthModel) *AdminGroupHandler {
 	return &AdminGroupHandler{
 		Base:        Base{currentM: adminGroupM},
 		log:         log,
 		adminGroupM: adminGroupM,
+		adminRuleM:  adminRuleM,
 		authM:       authM,
 	}
 }
@@ -35,39 +41,47 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	result, total, err := h.adminGroupM.List(ctx)
+	whereS := []string{}
+	whereP := []interface{}{}
+	result, err := h.GetGroups(ctx, whereS, whereP)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+
+	adminAuth := header.GetAdminAuth(ctx)
 	Success(ctx, map[string]interface{}{
 		"list":   result,
-		"total":  total,
+		"group":  h.authM.GetGroupIds(adminAuth.Id),
 		"remark": "",
 	})
 }
 
 type AdminGroup struct {
+	Pid    int32  `json:"pid"`
+	Name   string `json:"name" binding:"required"`
+	Rules  string `json:"rules"`
+	Status string `json:"status"`
 }
 
 func (v AdminGroup) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"username.min":      "username>2 and username<15",
-		"username.max":      "username>2 and username<15",
-		"email.email":       "email error",
-		"mobile.phone":      "mobile error",
-		"password.password": "password invalid",
+		"name.required": "name required",
 	}
 }
 
 func (h *AdminGroupHandler) Add(ctx *gin.Context) {
-	var params AdminRule
+	var params AdminGroup
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	err := h.adminGroupM.Add(ctx, admin, params.GroupArr)
+	adminGroup := model.AdminGroup{}
+	copier.Copy(&adminGroup, params)
+	h.HandleRules(ctx, &adminGroup)
+
+	err := h.adminGroupM.Add(ctx, adminGroup)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -77,21 +91,43 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	admin, err := h.adminGroupM.GetOne(ctx, int32(id))
+	adminGroup, err := h.adminGroupM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, admin.ID) {
-		FailByErr(ctx, cErr.BadRequest("you have no permission"))
+	if err := h.CheckAuth(ctx, int32(id)); err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
 	if ctx.Request.Method == http.MethodGet {
+		// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
+		ruleIds := strings.Split(adminGroup.Rules, ",")
+		pids, err := h.adminRuleM.GetRulePIds(ruleIds)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+
+		childRuleIds := []string{}
+		for _, v := range ruleIds {
+			flag := false
+			for _, v1 := range pids {
+				if strconv.Itoa(int(v1)) == v {
+					flag = true
+					break
+				}
+			}
+			if !flag {
+				childRuleIds = append(childRuleIds, v)
+			}
+		}
+
+		adminGroup.Rules = strings.Join(childRuleIds, ",")
 		Success(ctx, map[string]interface{}{
-			"row": admin,
+			"row": adminGroup,
 		})
 		return
 	}
@@ -106,21 +142,25 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	authAdmin := header.GetAdminAuth(ctx)
-	if authAdmin.Id == admin.ID && params.Status == "0" {
-		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
-		return
-	}
-
-	if params.Password != "" {
-		if err := h.adminGroupM.ResetPassword(ctx, admin.ID, params.Password); err != nil {
-			FailByErr(ctx, err)
-			return
+	adminAuth := header.GetAdminAuth(ctx)
+	groupIds := h.authM.GetGroupIds(adminAuth.Id)
+	flag := false
+	for _, v := range groupIds {
+		if int32(id) == v {
+			flag = true
+			break
 		}
 	}
 
-	copier.Copy(&admin, params)
-	err = h.adminGroupM.Edit(ctx, admin, params.GroupArr)
+	if !flag {
+		FailByErr(ctx, cErr.BadRequest("you cannot modify your own management group!"))
+		return
+	}
+
+	copier.Copy(&adminGroup, params)
+	h.HandleRules(ctx, &adminGroup)
+
+	err = h.adminGroupM.Edit(ctx, adminGroup)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -135,6 +175,13 @@ func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 		return
 	}
 
+	for _, v := range params.Ids {
+		if err := h.CheckAuth(ctx, int32(v)); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	}
+
 	err := h.adminGroupM.Del(ctx, params.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -143,8 +190,131 @@ func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// 获取菜单列表
-func (h *AdminGroupHandler) GetMenus(ctx *gin.Context, groups []string, id int32) {
+// 权限节点入库前处理
+func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, adminGroup *model.AdminGroup) {
+	// if adminGroup.Rules != "" {
+	// TODO:
+	// }
+}
 
+func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
+	whereS := []string{" status=? "}
+	whereP := []any{"1"}
+	list, err := h.GetGroups(ctx, whereS, whereP)
+	if err != nil {
+		FailByErr(ctx, err)
+		return nil, false
+	}
+
+	isTree := ctx.Request.FormValue("isTree")
+	if isTree == "true" {
+		data := tree.AssembleTree(h.AssembleChild(list).([]*AdminGroupExpend))
+		return map[string]interface{}{
+			"options": data,
+		}, true
+	}
+	return nil, false
+}
+
+// 获取分组
+func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.AdminGroup, error) {
+	absoluteAuth := ctx.Request.FormValue("absoluteAuth")
+	keyword := ctx.Request.FormValue("quickSearch")
+
+	if keyword != "" {
+		keywordArr := strings.Split(keyword, " ")
+		for _, v := range keywordArr {
+			whereS = append(whereS, h.adminGroupM.QuickSearchField+" LIKE ? ")
+			whereP = append(whereP, "%"+strings.Replace(v, "%", "\\%", -1)+"%")
+		}
+	}
+
+	adminAuth := header.GetAdminAuth(ctx)
+	if !adminAuth.IsSuperAdmin {
+		authGroups, err := h.authM.GetAllAuthGroups("allAuthAndOthers", adminAuth.Id)
+		if err != nil {
+			groupIds := h.authM.GetGroupIds(adminAuth.Id)
+			for _, v := range groupIds {
+				authGroups = append(authGroups, strconv.Itoa(int(v)))
+			}
+			return nil, err
+		}
+		authGroups = utils.RemoveStrDuplicates(authGroups)
+		if absoluteAuth == "true" {
+			whereS = append(whereS, " id in ? ")
+			whereP = append(whereP, authGroups)
+		}
+	}
+
+	list := []model.AdminGroup{}
+	err := h.adminGroupM.DB().Table(h.adminGroupM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Find(&list).Error
+
+	// 获取第一个权限的名称供列表显示-s
+	for _, v := range list {
+		if v.Rules != "" {
+			if strings.Contains(v.Rules, "*") {
+				v.Rules = utils.Lang(ctx, "super administrator", nil)
+			} else {
+				ruleIds := strings.Split(v.Rules, ",")
+				if len(ruleIds) > 0 {
+					rule := model.AdminRule{}
+					if err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(" id=? ", ruleIds[0]).First(&rule).Error; err != nil {
+						return nil, err
+					}
+					v.Rules = rule.Title
+				}
+			}
+		} else {
+			v.Rules = utils.Lang(ctx, "no permission", nil)
+		}
+	}
+	return list, err
+}
+
+// 检查权限
+func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
+	adminAuth := header.GetAdminAuth(ctx)
+	authGroups, err := h.authM.GetAllAuthGroups("allAuthAndOthers", adminAuth.Id)
+	if err != nil {
+		return err
+	}
+
+	if !adminAuth.IsLogin {
+		flag := false
+		for _, v := range authGroups {
+			if v == strconv.Itoa(int(groupId)) {
+				flag = true
+				break
+			}
+		}
+
+		if !flag {
+			return cErr.BadRequest("you need to have all the permissions of the group and have additional permissions before you can operate the group~")
+		}
+	}
 	return nil
+}
+
+type AdminGroupExpend struct {
+	model.AdminGroup
+	Children []*AdminGroupExpend
+}
+
+func (l *AdminGroupExpend) GetId() int               { return int(l.ID) }
+func (l *AdminGroupExpend) GetPid() int              { return int(l.Pid) }
+func (l *AdminGroupExpend) GetTitle() string         { return l.Name }
+func (l *AdminGroupExpend) GetChildren() interface{} { return l.Children }
+func (l *AdminGroupExpend) SetTitle(title string)    { l.Name = title }
+func (l *AdminGroupExpend) SetChildren(children interface{}) {
+	l.Children = children.([]*AdminGroupExpend)
+}
+
+func (h *AdminGroupHandler) AssembleChild(list []model.AdminGroup) interface{} {
+	expendList := []*AdminGroupExpend{}
+	for _, v := range list {
+		temp := AdminGroupExpend{}
+		copier.Copy(&temp, v)
+		expendList = append(expendList, &temp)
+	}
+	return tree.AssembleChild(expendList)
 }

@@ -13,6 +13,19 @@ func RemoveDuplicates(arr []int32) []int32 {
 	return result
 }
 
+func RemoveStrDuplicates(arr []string) []string {
+	seen := make(map[string]bool)
+	result := []string{}
+
+	for _, value := range arr {
+		if _, ok := seen[value]; !ok {
+			seen[value] = true
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
 func ContainsString(slice []string, str string) bool {
 	for _, item := range slice {
 		if item == str {

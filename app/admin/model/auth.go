@@ -351,3 +351,10 @@ func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, erro
 	}
 	return allAuthGroups, nil
 }
+
+// 获取管理员的所在分组id
+func (s *AuthModel) GetGroupIds(id int32) []int32 {
+	groupIds := []int32{}
+	s.sqlDB.Table(TableNameAdminGroupAccess).Where("uid=?", id).Pluck("group_id", &groupIds)
+	return groupIds
+}
