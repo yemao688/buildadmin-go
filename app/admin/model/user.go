@@ -1,6 +1,13 @@
 package model
 
-import "time"
+import (
+	"go-build-admin/app/pkg/random"
+	"go-build-admin/utils"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
 
 const TableNameUser = "ba_user"
 
@@ -33,4 +40,59 @@ type User struct {
 	Status        string    `gorm:"column:status;not null;comment:状态" json:"status"`                       // 状态
 	UpdateTime    int64     `gorm:"column:update_time;comment:更新时间" json:"update_time"`                    // 更新时间
 	CreateTime    int64     `gorm:"column:create_time;comment:创建时间" json:"create_time"`                    // 创建时间
+}
+
+type UserModel struct {
+	BaseModel
+	sqlDB *gorm.DB
+}
+
+func NewUserModel(sqlDB *gorm.DB) *UserModel {
+	return &UserModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameUser,
+			Key:              "id",
+			QuickSearchField: "title",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
+}
+
+func (s *UserModel) GetOne(ctx *gin.Context, id int32) (data User, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&data).Error
+	return
+}
+
+func (s *UserModel) List(ctx *gin.Context) (list []User, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
+}
+
+func (s *UserModel) Add(ctx *gin.Context, data User) error {
+	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	return err
+}
+
+func (s *UserModel) Edit(ctx *gin.Context, omit string, data User) error {
+	err := s.sqlDB.Table(s.TableName).Omit(omit).Updates(&data).Error
+	return err
+}
+
+func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
+}
+
+func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
+	salt := random.Build("alnum", 16)
+	password = utils.EncryptPassword(password, salt)
+	err := s.sqlDB.Table(s.TableName).Where("id=?", id).Updates(map[string]interface{}{
+		"salt":     salt,
+		"password": password,
+	}).Error
+	return err
 }

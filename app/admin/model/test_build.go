@@ -45,21 +45,21 @@ func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(TableNameTestBuild).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
 func (s *TestBuildModel) Add(ctx *gin.Context, data TestBuild) error {
-	err := s.sqlDB.Table(TableNameTestBuild).Create(&data).Error
+	err := s.sqlDB.Table(s.TableName).Create(&data).Error
 	return err
 }
 
 func (s *TestBuildModel) Edit(ctx *gin.Context, data TestBuild) error {
-	err := s.sqlDB.Table(TableNameTestBuild).Omit("").Updates(&data).Error
+	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
 	return err
 }
 
 func (s *TestBuildModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(TableNameTestBuild).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

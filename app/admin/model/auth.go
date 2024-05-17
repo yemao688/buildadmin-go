@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
@@ -16,9 +17,9 @@ import (
 	"go-build-admin/utils"
 )
 
-var AuthGroupList map[int32][]AuthGroup
-var AuthRuleList map[int32][]Rule
-var AuthRuleNameList map[int32][]string
+var AuthGroupList map[int32][]AuthGroup = make(map[int32][]AuthGroup)
+var AuthRuleList map[int32][]Rule = make(map[int32][]Rule)
+var AuthRuleNameList map[int32][]string = make(map[int32][]string)
 
 var muGroup sync.Mutex
 var muRule sync.Mutex
@@ -45,15 +46,7 @@ type Rule struct {
 	Component string `json:"component"` // 组件路径
 	Keepalive string `json:"keepalive"` // 缓存:0=关闭,1=开启
 	Extend    string `json:"extend"`    // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
-	Children  []Rule
-}
-
-type BaseAdminInfo struct {
-	ID            int32  `json:"id"`
-	Username      string `json:"username"`
-	Nickname      string `json:"nickname"`
-	Avatar        string `json:"avatar"`
-	LastLoginTime int64  `json:"last_login_time"`
+	Children  []Rule `json:"children"`
 }
 
 type AuthModel struct {
@@ -77,10 +70,10 @@ func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	return nil, false
 }
 
-func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (BaseAdminInfo, error) {
-	baseAdminInfo := BaseAdminInfo{}
-	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Scan(&baseAdminInfo).Error
-	return baseAdminInfo, err
+func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (Admin, error) {
+	admin := Admin{}
+	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Scan(&admin).Error
+	return admin, err
 }
 
 func (s *AuthModel) IsSuperAdmin(id int32) bool {
@@ -125,7 +118,9 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		s.tokenHelper.Set(refreshToken, "admin-refresh", admin.ID, 2592000) //30天
 	}
 	token := random.Uuid()
-	s.tokenHelper.Set(token, "admin", admin.ID, 86400)
+	if err := s.tokenHelper.Set(token, "admin", admin.ID, 86400); err != nil {
+		return nil, err
+	}
 
 	err = s.sqlDB.Table(TableNameAdmin).Where("id=?", admin.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
@@ -156,14 +151,18 @@ func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 
 // 获取菜单规则列表
 func (s *AuthModel) GetMenus(ctx *gin.Context, id int32) (rules []Rule, err error) {
+	fmt.Printf("%+v \n", 1111)
 	if _, ok := AuthRuleList[id]; !ok {
-		s.GetRuleList(ctx, id)
+		if _, err = s.GetRuleList(ctx, id); err != nil {
+			return
+		}
 	}
-
+	fmt.Printf("%+v \n", 222)
 	if len(AuthRuleList[id]) == 0 {
+		rules = []Rule{}
 		return
 	}
-
+	fmt.Printf("%+v \n", 333)
 	children := map[int32][]Rule{}
 	for _, v := range AuthRuleList[id] {
 		children[v.Pid] = append(children[v.Pid], v)
@@ -216,16 +215,20 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
 	muRule.Lock()
 	defer muRule.Unlock()
 
-	if val, ok := AuthRuleNameList[id]; ok {
-		return val, nil
-	}
 	ids, err := s.GetRuleIds(id)
+
+	fmt.Printf("%+v\n", ids)
 	if err != nil {
 		return nil, err
 	}
 
-	tx := s.sqlDB.Table("ba_admin_rule").Where("status=1")
-	if ok := utils.ContainsString(ids, "*"); ok {
+	if len(ids) == 0 {
+		AuthRuleList[id] = []Rule{}
+		return []string{}, nil
+	}
+
+	tx := s.sqlDB.Table("ba_admin_rule").Where("status=?", "1")
+	if ok := utils.ContainsString(ids, "*"); !ok {
 		tx.Where("id in ?", ids)
 	}
 	var ruleList []Rule
@@ -245,6 +248,8 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
 	}
 	AuthRuleList[id] = ruleList
 	AuthRuleNameList[id] = ruleNameList
+
+	fmt.Printf("%+v \n", AuthRuleNameList)
 	return ruleNameList, nil
 
 }
@@ -274,15 +279,15 @@ func (s *AuthModel) GetRuleIds(id int32) ([]string, error) {
 func (s *AuthModel) GetGroups(id int32) ([]AuthGroup, error) {
 	muGroup.Lock()
 	defer muGroup.Unlock()
-
 	if val, ok := AuthGroupList[id]; ok {
 		return val, nil
 	}
+
 	var authGroups []AuthGroup
 	err := s.sqlDB.Table(TableNameAdminGroupAccess).
 		Joins("left join ba_admin_group on ba_admin_group.id=ba_admin_group_access.group_id").
 		Where("ba_admin_group_access.uid=? and ba_admin_group.status='1'", id).
-		Find(&authGroups).Error
+		Scan(&authGroups).Error
 
 	AuthGroupList[id] = authGroups
 	return authGroups, err

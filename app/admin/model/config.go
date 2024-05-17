@@ -1,6 +1,9 @@
 package model
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -22,13 +25,98 @@ type Config struct {
 	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
 }
 
+func (s *Config) SetValueAttr(value any, t string) string {
+	if t == "checkbox" || t == "array" || t == "selects" {
+		if v, err := json.Marshal(value); err != nil {
+			return string(v)
+		}
+	} else if t == "switch" {
+		if value == "false" {
+			return "0"
+		} else {
+			return "1"
+		}
+	} else if t == "time" {
+		//TODO:
+		// if value != "" {
+		// }
+	} else if _, ok := value.([]string); ok {
+		return strings.Join(value.([]string), ",")
+	}
+	return ""
+}
+
+func (s *Config) GetValueAttr() any {
+	if s.Type == "checkbox" || s.Type == "array" || s.Type == "selects" {
+		result := map[string]any{}
+		if err := json.Unmarshal([]byte(s.Value), &result); err != nil {
+			return result
+		}
+	} else if s.Type == "switch" {
+		if s.Value == "0" {
+			return false
+		} else {
+			return true
+		}
+	} else if s.Type == "editor" {
+		return "" //TODO:
+	} else if s.Type == "city" || s.Type == "remoteSelects" {
+		if s.Value == "" {
+			return []any{}
+		}
+		return strings.Split(s.Value, ",")
+	}
+	return ""
+}
+
+func (s *Config) GetContentAttr() any {
+	if s.Type == "radio" || s.Type == "checkbox" || s.Type == "select" || s.Type == "selects" {
+		content := map[string]any{}
+		if err := json.Unmarshal([]byte(s.Content), &content); err != nil {
+			return content
+		}
+	}
+	return ""
+}
+
+func (s *Config) GetExtendAttr() any {
+	extend := map[string]interface{}{}
+	if s.Extend != "" {
+		err := json.Unmarshal([]byte(s.Extend), &extend)
+		if err == nil {
+			delete(extend, "baInputExtend")
+		}
+	}
+	return extend
+}
+
+func (s *Config) GetInputExtendAttr() any {
+	extend := map[string]interface{}{}
+	if s.Extend != "" {
+		err := json.Unmarshal([]byte(s.Extend), &extend)
+		if err == nil {
+			if _, ok := extend["baInputExtend"]; ok {
+				return extend["baInputExtend"]
+			}
+		}
+	}
+	return extend
+}
+
 type ConfigModel struct {
 	BaseModel
 	sqlDB *gorm.DB
 }
 
 func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
-	return &ConfigModel{sqlDB: sqlDB}
+	return &ConfigModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameConfig,
+			Key:              "id",
+			QuickSearchField: "name",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
@@ -36,25 +124,31 @@ func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(TableNameConfig).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
+}
+
+func (s *ConfigModel) Add(ctx *gin.Context, data Config) error {
+	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	return err
 }
 
 func (s *ConfigModel) GetOneByName(ctx *gin.Context, name string) (Config, error) {
 	var config Config
-	err := s.sqlDB.Where("name = ? ", name).Find(&config).Error
+	err := s.sqlDB.Table(s.TableName).Where("name = ? ", name).Take(&config).Error
 	return config, err
 }
 
 func (s *ConfigModel) GetValueByName(ctx *gin.Context, name string) (string, error) {
 	var config Config
-	err := s.sqlDB.Where("name = ? ", name).Find(&config).Error
+	err := s.sqlDB.Table(s.TableName).Where("name = ? ", name).Take(&config).Error
 	return config.Value, err
 }
 
-func (s *ConfigModel) GetByGroup(ctx *gin.Context, group string) (map[string]string, error) {
+// 获取键值对模式
+func (s *ConfigModel) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
 	var configList []Config
-	err := s.sqlDB.Where("group=?", group).Find(&configList).Error
+	err := s.sqlDB.Table(s.TableName).Where("group=?", group).Find(&configList).Error
 	if err != nil {
 		return nil, err
 	}

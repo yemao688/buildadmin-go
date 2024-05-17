@@ -5,6 +5,8 @@ import (
 	admin "go-build-admin/app/admin/handler"
 	api "go-build-admin/app/api/handler"
 	"go-build-admin/app/middleware"
+	"go-build-admin/utils"
+	"path/filepath"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -15,10 +17,11 @@ import (
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	loginM *middleware.Login,
-	permissionM *middleware.Permission,
 	dataLimitM *middleware.DataLimit,
+	recordM *middleware.Record,
 
 	adminHandler *admin.AdminHandler,
+	adminGroupHandler *admin.AdminGroupHandler,
 	adminLogHandler *admin.AdminLogHandler,
 	testBuildHandler *admin.TestBuildHandler,
 	indexHandler *admin.IndexHandler,
@@ -34,6 +37,8 @@ func InitRouter(
 
 ) *gin.Engine {
 	router := gin.New()
+	// 跨域处理
+	router.Use(middleware.Cors(), recordM.Handler())
 	router.Use(
 		gin.Logger(),
 		middleware.CustomRecovery(loggerWriter),
@@ -47,19 +52,22 @@ func InitRouter(
 		})),
 	)
 
+	rootDir := utils.RootPath()
+	router.Static("/static", filepath.Join(rootDir, "static"))
+	router.GET("/admin/Index/login", indexHandler.Login)
+	router.POST("/admin/Index/login", indexHandler.Login)
+
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler())
 	adminRouter.GET("Index/index", indexHandler.Index)
-	adminRouter.GET("Index/login", indexHandler.Login)
-	adminRouter.POST("Index/login", indexHandler.Login)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
 	adminRouter.GET("Dashboard/index", dashboardHandler.Index)
 
-	// adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
-	// adminRouter.POST("auth.Group/add", adminGroupHandler.Add)
-	// adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
-	// adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
+	adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
+	adminRouter.POST("auth.Group/add", adminGroupHandler.Add)
+	adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
+	adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
 
 	adminRouter.GET("auth.Admin/index", dataLimitM.Handler(""), adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
@@ -164,5 +172,7 @@ func InitRouter(
 
 	apiRouter.POST("user/checkIn", apiUserHandler.CheckIn)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
+
+	admin.CollectRoutes(router)
 	return router
 }

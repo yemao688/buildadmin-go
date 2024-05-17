@@ -3,11 +3,7 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/header"
-	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
-	"go-build-admin/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -53,6 +49,14 @@ func (h *DataRecycleHandler) Index(ctx *gin.Context) {
 }
 
 type DataRecycle struct {
+	Name         string `json:"name"`
+	Controller   string `json:"controller"`
+	ControllerAs string `json:"controller_as"`
+	DataTable    string `json:"data_table"`
+	PrimaryKey   string `json:"primary_key"`
+	Status       string `json:"status"`
+	UpdateTime   int64  `json:"update_time"`
+	CreateTime   int64  `json:"create_time"`
 }
 
 func (v DataRecycle) GetMessages() validate.ValidatorMessages {
@@ -60,32 +64,23 @@ func (v DataRecycle) GetMessages() validate.ValidatorMessages {
 }
 
 func (h *DataRecycleHandler) Add(ctx *gin.Context) {
-	var params Admin
+	if ctx.Request.Method == http.MethodGet {
+		Success(ctx, map[string]interface{}{
+			"tables":      h.getTableList(ctx),
+			"controllers": h.getRouteList(ctx),
+		})
+		return
+	}
+
+	var params DataRecycle
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("password required"))
-		return
-	}
-
-	adminAuth := header.GetAdminAuth(ctx)
-	if len(params.GroupArr) > 0 {
-		if err := h.CheckGroupAuth(ctx, params.GroupArr, adminAuth.Id); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	var admin model.Admin
-	copier.Copy(&admin, params)
-
-	admin.Salt = random.Build("alnum", 16)
-	admin.Password = utils.EncryptPassword(params.Password, admin.Salt)
-
-	err := h.dataRecycleM.Add(ctx, admin, params.GroupArr)
+	var data model.SecurityDataRecycle
+	copier.Copy(&data, params)
+	err := h.dataRecycleM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -95,43 +90,31 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 
 func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	admin, err := h.dataRecycleM.GetOne(ctx, int32(id))
+	data, err := h.dataRecycleM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, admin.ID) {
-		FailByErr(ctx, cErr.BadRequest("you have no permission"))
-		return
-	}
-
 	if ctx.Request.Method == http.MethodGet {
 		Success(ctx, map[string]interface{}{
-			"row": admin,
+			"row": data,
 		})
 		return
 	}
 
-	type AdminEdit struct {
+	type DataRecycleEdit struct {
 		IDS
-		Admin
+		DataRecycle
 	}
-	var params AdminEdit
+	var params DataRecycleEdit
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	adminAuth := header.GetAdminAuth(ctx)
-	if adminAuth.Id == admin.ID && params.Status == "0" {
-		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
-		return
-	}
-
-	copier.Copy(&admin, params)
-	err = h.dataRecycleM.Edit(ctx, admin, params.GroupArr)
+	copier.Copy(&data, params)
+	err = h.dataRecycleM.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -154,9 +137,9 @@ func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *DataRecycleHandler) getControllerList(ctx *gin.Context) any {
+func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 	//TODO:
-	outExcludeController := []string{
+	outExcludeRoute := []string{
 		"Addon.php",
 		"Ajax.php",
 		"Module.php",
@@ -167,7 +150,23 @@ func (h *DataRecycleHandler) getControllerList(ctx *gin.Context) any {
 		"user/MoneyLog.php",
 		"user/ScoreLog.php",
 	}
-	return outExcludeController
+
+	outRoutes := map[string]string{}
+	routes := GetAllRoutes()
+	for _, r := range routes {
+		flag := false
+		for _, v := range outExcludeRoute {
+			if v == r.Method {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			outRoutes[r.Method] = r.Method
+		}
+	}
+	return outRoutes
+
 }
 
 func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {

@@ -17,11 +17,12 @@ type IndexHandler struct {
 	config       *conf.Configuration
 	log          *zap.Logger
 	authM        *model.AuthModel
+	configM      *model.ConfigModel
 	clickCaptcha *clickcaptcha.ClickCaptcha
 }
 
-func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
-	return &IndexHandler{config: config, log: log, authM: authM, clickCaptcha: clickCaptcha}
+func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel, configM *model.ConfigModel, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
+	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, clickCaptcha: clickCaptcha}
 }
 
 func (h *IndexHandler) Index(ctx *gin.Context) {
@@ -33,24 +34,31 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!"))
 		return
 	}
-	Success(ctx, map[string]interface{}{
-		"adminInfo": map[string]interface{}{
+
+	version, err := h.configM.GetValueByName(ctx, "version")
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	Success(ctx, map[string]any{
+		"adminInfo": map[string]any{
 			"id":              adminInfo.ID,
 			"username":        adminInfo.Username,
 			"nickname":        adminInfo.Nickname,
-			"avatar":          adminInfo.Avatar,
-			"last_login_time": adminInfo.LastLoginTime,
+			"avatar":          utils.DefaultUrl(adminInfo.Avatar, h.config.App.DefaultAvatar),
+			"last_login_time": utils.FormatFromUnixTime(adminInfo.LastLoginTime),
 			"super":           h.authM.IsSuperAdmin(info.Id),
 		},
 		"menus": menus,
-		"siteConfig": map[string]interface{}{
+		"siteConfig": map[string]any{
 			"siteName": h.config.App.AppName,
-			"version":  h.config.App.Version,
-			"cdnUrl":   h.config.App.CdnUrl,
-			"apiUrl":   h.config.App.AppUrl,
+			"version":  version,
+			"cdnUrl":   utils.FullUrl("", h.config.App.CdnUrl, ctx.Request.Host, ""),
+			"apiUrl":   h.config.App.ApiUrl,
 			"upload":   h.config.Upload,
 		},
-		"terminal": map[string]interface{}{
+		"terminal": map[string]any{
 			"installServicePort": h.config.Terminal.InstallServicePort,
 			"npmPackageManager":  h.config.Terminal.NpmPackageManager,
 		},
@@ -109,6 +117,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			"userInfo":  result,
 			"routePath": "/admin",
 		})
+		return
 	}
 
 	Success(ctx, map[string]any{

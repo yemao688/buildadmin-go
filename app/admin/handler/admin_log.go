@@ -23,10 +23,14 @@ func (h *AdminLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 	}
-	result, err := h.adminLogM.List(ctx)
+	result, total, err := h.adminLogM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, result)
+	Success(ctx, map[string]any{
+		"list":   result,
+		"total":  total,
+		"remark": "",
+	})
 }

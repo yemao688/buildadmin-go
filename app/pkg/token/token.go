@@ -30,7 +30,7 @@ type Token struct {
 	UserID     int32  `gorm:"column:user_id;not null;comment:用户ID" json:"user_id"` // 用户ID
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`  // 创建时间
 	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"`  // 过期时间
-	ExpiresIn  int64  `json:"expires_in"`                                          // 返回剩余有效时间
+	ExpiresIn  int64  `gorm:"-" json:"expires_in"`                                 // 返回剩余有效时间
 }
 
 type TokenHelper struct {
@@ -41,9 +41,9 @@ func NewTokenHelper(config *conf.Configuration, log *zap.Logger, sqlDB *gorm.DB,
 	//通过配置判断
 	var driver Driver
 	if config.Token.Default == "redis" {
-		driver = NewMysqlDriver(sqlDB, config)
-	} else {
 		driver = NewRedisDriver(rdb, config)
+	} else {
+		driver = NewMysqlDriver(sqlDB, config)
 	}
 	return &TokenHelper{Driver: driver}
 }

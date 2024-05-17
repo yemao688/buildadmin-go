@@ -41,13 +41,16 @@ func NewAdminLogModel(sqlDB *gorm.DB) *AdminLogModel {
 	}
 }
 
-func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, err error) {
+func (s *AdminLogModel) List(ctx *gin.Context) ([]AdminLog, int64, error) {
+	list := []AdminLog{}
+	var total int64 = 0
+	var err error
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return
+	err = s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx), Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return list, total, err
 }
 
 func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
@@ -80,8 +83,10 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 	}
 
 	// 对params进行脱敏处理，比如隐藏密码等敏感信息
+	pattern := `/(password|salt|token)/i`
+	compiledRegex := regexp.MustCompile(pattern)
 	for key := range params {
-		if ok, _ := regexp.MatchString(`/(password|salt|token)/i`, key); ok {
+		if compiledRegex.MatchString(key) {
 			params[key] = "****"
 		}
 	}

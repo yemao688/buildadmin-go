@@ -82,13 +82,11 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	limit = 10
 	offset = 0
 	fieldTypeMap := GetFieldTypeMap(table, withTables...)
-	fmt.Printf("%+v \n", fieldTypeMap)
 	//获取搜索字段
 	queryParameter, err := GetQueryParameter(ctx)
 	if err != nil {
 		return
 	}
-	fmt.Println(1111111)
 	// 快速搜索
 	quickSearch := queryParameter.QuickSearch
 	quickSearchField := table.QuickSearchField
@@ -104,7 +102,6 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
 		}
 	}
-	fmt.Println(2222)
 	// 排序
 	orderS = queryParameter.Order
 	if orderS != "" {
@@ -119,7 +116,6 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	} else {
 		orderS = table.TableName + "." + table.Key + " desc"
 	}
-	fmt.Println(33333)
 	search := queryParameter.Search
 	// 通用搜索组装
 	for i := 0; i < len(search); i++ {

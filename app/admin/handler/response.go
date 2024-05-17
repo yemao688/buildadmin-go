@@ -12,16 +12,17 @@ type Response struct {
 	Code int         `json:"code"`
 	Data interface{} `json:"data"`
 	Msg  string      `json:"msg"`
-	Time int         `json:"time"`
+	Time int64       `json:"time"`
 }
 
 // 成功返回
 func Success(c *gin.Context, data interface{}) {
+	timestamp, _ := c.Get("Timestamp")
 	c.JSON(http.StatusOK, Response{
-		0,
+		1,
 		data,
 		"ok",
-		0,
+		timestamp.(int64),
 	})
 }
 

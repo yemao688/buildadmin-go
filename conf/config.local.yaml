@@ -2,7 +2,6 @@ app:
   env: 'local'
   port: 9989
   app_name: 'go-build-admin'
-  app_url: 'http://127.0.0.1'
   time_zone: 'Asia/Shanghai'
   cors_request_domain:  'localhost,127.0.0.1' #允许跨域访问的域名
   admin_login_captcha: true #是否开启管理员登录验证码
@@ -45,7 +44,7 @@ mysql:
   driver: 'mysql'
   host: '127.0.0.1'
   port: 3306
-  database: 'promotion'
+  database: 'buildadmin'
   username: 'root'
   password: 'root'
   charset: 'utf8mb4'
@@ -64,7 +63,7 @@ jwt:
 token:
   default: 'mysql'
   key: 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I'
-  algo: 'ripemd160'
+  algo: 'sha256'
   expire: 2592000
 
 redis:
@@ -74,14 +73,14 @@ redis:
   password: ''
 
 upload:
-  maxsize: '10mb'
+  maxsize: 10485760 #单位byte
   savename: '/storage/{topic}/{year}{mon}{day}/{filename}{filesha1}{.suffix}'
   mimetype: 'jpg,png,bmp,jpeg,gif,webp,zip,rar,xls,xlsx,doc,docx,wav,mp4,mp3,txt'
   mode: 'local'
 
 
 terminal:
-  npm_package_manager: 'pnpm'
+  npm_package_manager: 'npm'
   install_service_port: '8000'
   commands:
     migrate:

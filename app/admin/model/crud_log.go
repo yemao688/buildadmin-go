@@ -1,6 +1,9 @@
 package model
 
-import "gorm.io/gorm"
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
 
 const TableNameCrudLog = "ba_crud_log"
 
@@ -28,4 +31,13 @@ func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
 			DataLimit:        "",
 		},
 		sqlDB: sqlDB}
+}
+
+func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
 }

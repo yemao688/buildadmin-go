@@ -1,7 +1,9 @@
 package model
 
 import (
+	"fmt"
 	cErr "go-build-admin/app/pkg/error"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -62,7 +64,13 @@ func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
 func (s *AdminRuleModel) GetRemark(ctx *gin.Context) string {
 	var adminRule AdminRule
 	name := ctx.Request.URL.Path
-	err := s.sqlDB.Where("name = ?", name).First(&adminRule).Error
+	name = strings.Replace(name, ".", "/", -1)
+	name = strings.Replace(name, "/admin/", "", 1)
+	slashIndex := strings.LastIndex(name, "/")
+
+	nameArr := []string{name[:slashIndex], name[slashIndex+1:]}
+	fmt.Println(nameArr)
+	err := s.sqlDB.Table(s.TableName).Where("name in ?", nameArr).First(&adminRule).Error
 	if err != nil {
 		return ""
 	}

@@ -1,6 +1,7 @@
 package token
 
 import (
+	"fmt"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 	"time"
@@ -31,8 +32,8 @@ func (d MysqlDriver) Set(token string, t string, user_id int32, expire int64) er
 	if err != nil {
 		return err
 	}
-
-	err = d.sqlDB.Create(&Token{
+	fmt.Println("保存:" + token)
+	err = d.sqlDB.Table("ba_token").Create(&Token{
 		Token:      token,
 		Type:       t,
 		UserID:     user_id,
@@ -49,18 +50,19 @@ func (d MysqlDriver) Set(token string, t string, user_id int32, expire int64) er
 	err = store.Get("last_cache_cleanup_time", lastCacheCleanupTime)
 	if err != nil || lastCacheCleanupTime < stamp-172800 {
 		store.Set("", stamp, 172800)
-		d.sqlDB.Where("expire_time < ? AND expire_time > 0 ", stamp).Delete(&Token{})
+		d.sqlDB.Table("ba_token").Where("expire_time < ? AND expire_time > 0 ", stamp).Delete(&Token{})
 	}
 	return nil
 }
 
 func (d MysqlDriver) Get(token string, expirationException bool) (*Token, error) {
 	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
+
 	if err != nil {
 		return nil, err
 	}
 	var data Token
-	err = d.sqlDB.Where("token = ? ", encryptToken).First(&data).Error
+	err = d.sqlDB.Table("ba_token").Where("token = ? ", encryptToken).First(&data).Error
 	if err != nil {
 		return nil, err
 	}
@@ -91,11 +93,11 @@ func (d MysqlDriver) Delete(token string) error {
 	if err != nil {
 		return err
 	}
-	d.sqlDB.Where("token = ? ", token).Delete(&Token{})
+	d.sqlDB.Table("ba_token").Where("token = ? ", token).Delete(&Token{})
 	return nil
 }
 
 func (d MysqlDriver) Clear(t string, user_id int32) error {
-	d.sqlDB.Where("type = ? AND user_id = ? ", t, user_id).Delete(&Token{})
+	d.sqlDB.Table("ba_token").Where("type = ? AND user_id = ? ", t, user_id).Delete(&Token{})
 	return nil
 }

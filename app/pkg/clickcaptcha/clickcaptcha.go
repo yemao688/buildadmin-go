@@ -137,7 +137,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 		return nil, err
 	}
 
-	currentLang := ctx.GetHeader("Accept-Language")
+	currentLang := ctx.GetHeader("think-lang")
 
 	iconImgMap := map[string]image.Image{}
 	pointArr := []*Point{}
@@ -152,7 +152,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 			point.Icon = true
 			point.Name = v
 			point.Text = "<" + v + ">"
-			if currentLang == "zh" {
+			if currentLang == "zh-cn" {
 				point.Text = "<" + iconDict[v] + ">"
 			}
 
@@ -216,13 +216,26 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	}
 	captchaStr, _ := json.Marshal(captcha)
 
-	err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
-		"key":         utils.Md5(id),
-		"code":        utils.Md5(strings.Join(texts, ",")),
-		"captcha":     captchaStr,
-		"create_time": time.Now().Unix(),
-		"expire_time": time.Now().Unix() + 600,
-	}).Error
+	key := utils.Md5(id)
+	var result map[string]interface{}
+	c.sqlDB.Table("ba_captcha").Where(" `key` = ? ", key).Scan(&result)
+
+	if _, ok := result["key"]; ok {
+		err = c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Updates(map[string]interface{}{
+			"code":        utils.Md5(strings.Join(texts, ",")),
+			"captcha":     captchaStr,
+			"create_time": time.Now().Unix(),
+			"expire_time": time.Now().Unix() + 600,
+		}).Error
+	} else {
+		err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
+			"key":         key,
+			"code":        utils.Md5(strings.Join(texts, ",")),
+			"captcha":     captchaStr,
+			"create_time": time.Now().Unix(),
+			"expire_time": time.Now().Unix() + 600,
+		}).Error
+	}
 
 	return map[string]interface{}{
 		"id":     id,
@@ -279,7 +292,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	if baCaptcha.ExpireTime < time.Now().Unix() {
-		c.sqlDB.Table("ba_captcha").Where("key=?", key).Delete(nil)
+		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
 		return false
 	}
 
@@ -316,7 +329,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	if unset {
-		c.sqlDB.Table("ba_captcha").Where("key=?", key).Delete(nil)
+		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
 	}
 	return true
 }

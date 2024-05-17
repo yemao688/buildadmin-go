@@ -14,18 +14,22 @@ var ProviderSet = wire.NewSet(
 	clickcaptcha.NewCaptcha,
 	middleware.NewLogin,
 	middleware.NewDataLimit,
-	middleware.NewPermission,
+	middleware.NewRecord,
 
 	adminHandler.NewAdminHandler,
+	adminHandler.NewAdminGroupHandler,
 	adminHandler.NewDashboardHandler,
 	adminHandler.NewAdminLogHandler,
 	adminHandler.NewTestBuildHandler,
+	adminHandler.NewConfigHandler,
 	adminHandler.NewIndexHandler,
 
 	adminModel.NewAdminModel,
+	adminModel.NewAdminGroupModel,
 	adminModel.NewAdminRuleModel,
 	adminModel.NewAdminLogModel,
 	adminModel.NewTestBuildModel,
+	adminModel.NewConfigModel,
 	adminModel.NewAuthModel,
 
 	apiHandler.NewAccountHandler,

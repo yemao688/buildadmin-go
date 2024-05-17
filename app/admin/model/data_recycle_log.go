@@ -1,5 +1,12 @@
 package model
 
+import (
+	"encoding/json"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
 const TableNameSecurityDataRecycleLog = "ba_security_data_recycle_log"
 
 // SecurityDataRecycleLog 数据回收记录表
@@ -14,4 +21,58 @@ type SecurityDataRecycleLog struct {
 	IP         string `gorm:"column:ip;not null;comment:操作者IP" json:"ip"`                         // 操作者IP
 	Useragent  string `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`      // User-Agent
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                 // 创建时间
+}
+
+type DataRecycleLogModel struct {
+	BaseModel
+	sqlDB *gorm.DB
+}
+
+func NewDataRecycleLogModel(sqlDB *gorm.DB) *DataRecycleLogModel {
+	return &DataRecycleLogModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameSecurityDataRecycleLog,
+			Key:              "id",
+			QuickSearchField: "title",
+			DataLimit:        "",
+		},
+		sqlDB: sqlDB}
+}
+
+func (s *DataRecycleLogModel) GetOne(ctx *gin.Context, id int32) (dataRecycle SecurityDataRecycleLog, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&dataRecycle).Error
+	return
+}
+
+func (s *DataRecycleLogModel) List(ctx *gin.Context) (list []SecurityDataRecycleLog, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
+}
+
+func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
+	list := []SecurityDataRecycleLog{}
+	err := s.sqlDB.Table(s.TableName).Where(" id in ? ", ids).Find(&list).Error
+	if err != nil {
+		return err
+	}
+	for _, v := range list {
+		data := map[string]any{}
+		if err := json.Unmarshal([]byte(v.Data), &data); err != nil {
+			return err
+		}
+
+		if err := s.sqlDB.Table(v.DataTable).Where(" id in ? ", ids).Updates(data).Error; err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+func (s *DataRecycleLogModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
 }

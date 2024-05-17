@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/admin/model"
+	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -19,6 +20,6 @@ func NewDashboardHandler(log *zap.Logger, currentM *model.AdminRuleModel) *Dashb
 func (h *DashboardHandler) Index(ctx *gin.Context) {
 	remark := h.currentM.GetRemark(ctx)
 	Success(ctx, map[string]string{
-		"remark": remark,
+		"remark": utils.Lang(ctx, remark, nil),
 	})
 }

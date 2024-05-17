@@ -27,7 +27,7 @@ func NewLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM 
 
 func (m *Login) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := c.Request.Header.Get("Authorization")
+		tokenStr := c.Request.Header.Get("batoken")
 		if tokenStr == "" {
 			msg := utils.Lang(c, "missing Authorization header", nil)
 			c.JSON(http.StatusOK, map[string]interface{}{

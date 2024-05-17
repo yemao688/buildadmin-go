@@ -79,10 +79,6 @@ func (s *AdminModel) List(ctx *gin.Context) (list []Admin, total int64, err erro
 	return
 }
 
-func (s *AdminModel) Sortable(ctx *gin.Context) (list []Admin, total int64, err error) {
-	return nil, 0, nil
-}
-
 func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	tx := s.sqlDB.Begin()
 	defer func() {
@@ -91,7 +87,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("login_failure, last_login_time, last_login_ip").Create(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -111,7 +107,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	return tx.Commit().Error
 }
 
-func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, groups []string) error {
+func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit string, groups []string) error {
 	tx := s.sqlDB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -119,28 +115,30 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, groups []string) error 
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("password, salt, login_failure, last_login_time, last_login_ip").Save(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit(omit).Save(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
 	}
 
-	if err := tx.Table(TableNameAdminGroupAccess).Where("uid=?", admin.ID).Delete(nil).Error; err != nil {
-		tx.Rollback()
-		return err
+	if len(groups) > 0 {
+		if err := tx.Table(TableNameAdminGroupAccess).Where("uid=?", admin.ID).Delete(nil).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		access := []map[string]interface{}{}
+		for _, v := range groups {
+			access = append(access, map[string]interface{}{
+				"uid": admin.ID, "group_id": v,
+			})
+		}
+
+		if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
 	}
 
-	access := []map[string]interface{}{}
-	for _, v := range groups {
-		access = append(access, map[string]interface{}{
-			"uid": admin.ID, "group_id": v,
-		})
-	}
-
-	if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
 	return tx.Commit().Error
 }
 
@@ -157,4 +155,8 @@ func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) 
 func (s *AdminModel) Del(ctx *gin.Context, ids interface{}) error {
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
+}
+
+func (s *AdminModel) Sortable(ctx *gin.Context) (list []Admin, total int64, err error) {
+	return nil, 0, nil
 }

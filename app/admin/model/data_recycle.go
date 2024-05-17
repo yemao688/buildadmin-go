@@ -1,8 +1,6 @@
 package model
 
 import (
-	cErr "go-build-admin/app/pkg/error"
-
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -38,98 +36,31 @@ func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
 		sqlDB: sqlDB}
 }
 
-func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (dataRecycle SecurityDataRecycle, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&dataRecycle).Error
+func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data SecurityDataRecycle, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&data).Error
 	return
 }
 
-func (s *DataRecycleModel) List(ctx *gin.Context) (list []SecurityDataRecycle, err error) {
+func (s *DataRecycleModel) List(ctx *gin.Context) (list []SecurityDataRecycle, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
-func (s *DataRecycleModel) GetRemark(ctx *gin.Context) string {
-	var dataRecycle SecurityDataRecycle
-	name := ctx.Request.URL.Path
-	err := s.sqlDB.Where("name = ?", name).First(&dataRecycle).Error
-	if err != nil {
-		return ""
-	}
-	return dataRecycle.Remark
-}
-
-func (s *DataRecycleModel) Add(ctx *gin.Context, dataRecycle SecurityDataRecycle) error {
-	tx := s.sqlDB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Table(s.TableName).Create(&dataRecycle).Error; err != nil {
-		tx.Rollback()
-		return err
-
-	}
-	return tx.Commit().Error
-}
-
-func (s *DataRecycleModel) Edit(ctx *gin.Context, dataRecycle SecurityDataRecycle) error {
-	parent := SecurityDataRecycle{}
-	if err := s.sqlDB.Table(s.TableName).Where("id=?", dataRecycle.Pid).First(&parent).Error; err != nil {
-		return err
-	}
-
-	tx := s.sqlDB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if parent.Pid == dataRecycle.ID {
-		if err := tx.Table(s.TableName).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
-			tx.Rollback()
-			return err
-		}
-	}
-
-	if err := tx.Table(s.TableName).Save(&dataRecycle).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit().Error
-}
-
-func (s *DataRecycleModel) Del(ctx *gin.Context, ids []int64) error {
-	var subIds []int64
-	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
-		return err
-	}
-
-	for _, v := range subIds {
-		flag := false
-		for _, v1 := range ids {
-			if v == v1 {
-				flag = true
-				break
-			}
-		}
-		if !flag {
-			return cErr.BadRequest("please delete the child element first, or use batch deletion")
-		}
-	}
-
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error {
+	err := s.sqlDB.Table(s.TableName).Create(&data).Error
 	return err
 }
 
-func (s *DataRecycleModel) GetRulePIds(ids []string) ([]int32, error) {
-	pids := []int32{}
-	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
-	return pids, err
+func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) error {
+	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
+	return err
+}
+
+func (s *DataRecycleModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
 }

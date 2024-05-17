@@ -74,19 +74,19 @@ func (c *Captcha) check(code, id string) bool {
 	}
 	key := c.authCode(c.config.SeKey, id)
 	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("key=?", key).Scan(&seCode).Error
+	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
 	if err != nil {
 		return false
 	}
 
 	if time.Now().Unix() > seCode.ExpireTime {
-		c.sqlDB.Table("ba_captcha").Where("key=?", key).Delete(nil)
+		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
 		return false
 	}
 
 	if c.authCode(strings.ToUpper(code), id) == seCode.Code {
 		if c.config.Reset {
-			c.sqlDB.Table("ba_captcha").Where("key=?", key).Delete(nil)
+			c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
 		}
 		return true
 	}
@@ -97,9 +97,9 @@ func (c *Captcha) check(code, id string) bool {
 func (c *Captcha) Create(id string) (string, error) {
 	key := c.authCode(c.config.SeKey, id)
 	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("key=?", key).Scan(&seCode).Error
+	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
 	if err == nil {
-		c.sqlDB.Table("ba_captcha").Where("key=?", key).Delete(nil)
+		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
 	}
 
 	captcha := c.generate()
@@ -119,7 +119,7 @@ func (c *Captcha) Create(id string) (string, error) {
 func (c *Captcha) GetCaptchaData(id string) (BaCaptcha, error) {
 	key := c.authCode(c.config.SeKey, id)
 	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("key=?", key).Scan(&seCode).Error
+	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
 	return seCode, err
 }
 
