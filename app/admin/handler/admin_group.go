@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
@@ -8,6 +9,7 @@ import (
 	"go-build-admin/app/pkg/tree"
 	"go-build-admin/utils"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -65,10 +67,10 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 }
 
 type AdminGroup struct {
-	Pid    int32  `json:"pid"`
-	Name   string `json:"name" binding:"required"`
-	Rules  string `json:"rules"`
-	Status string `json:"status"`
+	Pid    int32   `form:"pid" json:"pid"`
+	Name   string  `form:"name" json:"name" binding:"required"`
+	Rules  []int32 `form:"rules" json:"rules"`
+	Status string  `form:"status" json:"status"`
 }
 
 func (v AdminGroup) GetMessages() validate.ValidatorMessages {
@@ -80,15 +82,21 @@ func (v AdminGroup) GetMessages() validate.ValidatorMessages {
 func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	var params AdminGroup
 	if err := ctx.ShouldBindJSON(&params); err != nil {
+		fmt.Println(err)
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
 	adminGroup := model.AdminGroup{}
 	copier.Copy(&adminGroup, params)
-	h.HandleRules(ctx, &adminGroup)
+	rules, err := h.HandleRules(ctx, params.Rules)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	adminGroup.Rules = rules
 
-	err := h.adminGroupM.Add(ctx, adminGroup)
+	err = h.adminGroupM.Add(ctx, adminGroup)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -97,7 +105,7 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 }
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	id := com.StrTo(ctx.Request.FormValue("name")).MustInt()
 	adminGroup, err := h.adminGroupM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
@@ -132,18 +140,22 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 			}
 		}
 
-		adminGroup.Rules = strings.Join(childRuleIds, ",")
 		Success(ctx, map[string]interface{}{
-			"row": adminGroup,
+			"row": map[string]any{
+				"id":     adminGroup.ID,
+				"name":   adminGroup.Name,
+				"pid":    adminGroup.Pid,
+				"status": adminGroup.Status,
+				"rules":  childRuleIds,
+			},
 		})
 		return
 	}
 
-	type AdminEdit struct {
+	var params = struct {
 		IDS
-		Admin
-	}
-	var params AdminEdit
+		AdminGroup
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
@@ -165,7 +177,12 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	}
 
 	copier.Copy(&adminGroup, params)
-	h.HandleRules(ctx, &adminGroup)
+	rules, err := h.HandleRules(ctx, params.Rules)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	adminGroup.Rules = rules
 
 	err = h.adminGroupM.Edit(ctx, adminGroup)
 	if err != nil {
@@ -198,10 +215,52 @@ func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 }
 
 // 权限节点入库前处理
-func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, adminGroup *model.AdminGroup) {
-	// if adminGroup.Rules != "" {
-	// TODO:
-	// }
+func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string, error) {
+	if len(rules) > 0 {
+		list, err := h.adminRuleM.List(ctx)
+		if err != nil {
+			return "", err
+		}
+		//判断是否超级管理员
+		superAdmin := true
+		for _, r := range list {
+			flag := false
+			for _, v := range rules {
+				if r.ID == v {
+					flag = true
+				}
+			}
+			if !flag {
+				superAdmin = false
+				break
+			}
+		}
+		if superAdmin {
+			return "*", nil
+		}
+
+		stringRules := []string{}
+		for _, v := range rules {
+			stringRules = append(stringRules, strconv.Itoa(int(v)))
+		}
+		//禁止添加`拥有自己全部权限`的分组
+		adminAuth := header.GetAdminAuth(ctx)
+		hasRules, err := h.authM.GetRuleIds(adminAuth.Id)
+		if err != nil {
+			return "", err
+		}
+		isAll := true
+		for _, v := range hasRules {
+			if !slices.Contains(stringRules, v) {
+				isAll = false
+			}
+		}
+		if isAll {
+			return "", cErr.BadRequest("Role group has all your rights, please contact the upper administrator to add or do not need to add!")
+		}
+		return strings.Join(stringRules, ","), nil
+	}
+	return "", nil
 }
 
 func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
@@ -219,7 +278,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 
 	isTree := ctx.Request.FormValue("isTree")
 	if isTree == "" || isTree == "true" {
-		data := tree.AssembleTree(h.AssembleChild(list).([]*AdminGroupExpend))
+		data := tree.AssembleTree(tree.GetTreeArray(h.AssembleChild(list), 0, false))
 		return map[string]interface{}{
 			"options": data,
 		}, true
@@ -326,7 +385,7 @@ func (l *AdminGroupExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*AdminGroupExpend)
 }
 
-func (h *AdminGroupHandler) AssembleChild(list []*model.AdminGroup) interface{} {
+func (h *AdminGroupHandler) AssembleChild(list []*model.AdminGroup) []*AdminGroupExpend {
 	expendList := []*AdminGroupExpend{}
 	for _, v := range list {
 		temp := AdminGroupExpend{}

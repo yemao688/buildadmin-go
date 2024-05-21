@@ -42,7 +42,7 @@ func GetTreeArray[T TreeNode](data []T, level int, superiorEnd bool) []T {
 			data[key].SetTitle(strings.Repeat(" ", 4) + prefix + v.GetTitle())
 		} else if level >= 3 {
 			str := ""
-			if superiorEnd {
+			if !superiorEnd {
 				str = icon[0]
 			}
 			data[key].SetTitle(strings.Repeat(" ", 4) + str + strings.Repeat(" ", (level-2)*4) + prefix + v.GetTitle())
@@ -64,7 +64,7 @@ func AssembleTree[T TreeNode](data []T) []T {
 		v.SetChildren([]T{})
 		result = append(result, v)
 		if len(children) > 0 {
-			result = append(result, AssembleChild(children)...)
+			result = append(result, AssembleTree(children)...)
 		}
 	}
 	return result

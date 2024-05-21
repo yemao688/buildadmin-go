@@ -120,11 +120,10 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type UserRuleEdit struct {
+	var params = struct {
 		IDS
 		UserRule
-	}
-	var params UserRuleEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

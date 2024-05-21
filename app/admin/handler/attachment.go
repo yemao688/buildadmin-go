@@ -87,11 +87,10 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type AttachmentEdit struct {
+	var params = struct {
 		IDS
 		Attachment
-	}
-	var params AttachmentEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

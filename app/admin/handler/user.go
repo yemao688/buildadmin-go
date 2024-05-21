@@ -117,11 +117,10 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type UserEdit struct {
+	var params = struct {
 		IDS
 		User
-	}
-	var params UserEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

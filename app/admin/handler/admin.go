@@ -8,8 +8,8 @@ import (
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
 	"net/http"
+	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -128,11 +128,10 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type AdminEdit struct {
+	var params = struct {
 		IDS
 		Admin
-	}
-	var params AdminEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
@@ -201,9 +200,8 @@ func (h *AdminHandler) CheckGroupAuth(ctx *gin.Context, groups []string, id int3
 	if err != nil {
 		return err
 	}
-	authGroupsStr := "," + strings.Join(authGroups, ",") + ","
 	for _, v := range groups {
-		if !strings.Contains(authGroupsStr, ","+v+",") {
+		if !slices.Contains(authGroups, v) {
 			return cErr.BadRequest("You have no permission to add an administrator to this group!")
 		}
 	}

@@ -1,11 +1,11 @@
 package model
 
 import (
-	"fmt"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -82,7 +82,7 @@ func (s *AuthModel) IsSuperAdmin(id int32) bool {
 	if err != nil {
 		return false
 	}
-	if utils.ContainsString(rules, "*") {
+	if slices.Contains(rules, "*") {
 		return true
 	}
 	return false
@@ -152,21 +152,18 @@ func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 }
 
 // 获取菜单规则列表
-func (s *AuthModel) GetMenus(ctx *gin.Context, id int32) (rules []Rule, err error) {
-	fmt.Printf("%+v \n", 1111)
-	if _, ok := AuthRuleList[id]; !ok {
-		if _, err = s.GetRuleList(ctx, id); err != nil {
+func (s *AuthModel) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err error) {
+	if _, ok := AuthRuleList[uid]; !ok {
+		if _, err = s.GetRuleList(ctx, uid); err != nil {
 			return
 		}
 	}
-	fmt.Printf("%+v \n", 222)
-	if len(AuthRuleList[id]) == 0 {
+	if len(AuthRuleList[uid]) == 0 {
 		rules = []Rule{}
 		return
 	}
-	fmt.Printf("%+v \n", 333)
 	children := map[int32][]Rule{}
-	for _, v := range AuthRuleList[id] {
+	for _, v := range AuthRuleList[uid] {
 		children[v.Pid] = append(children[v.Pid], v)
 	}
 
@@ -190,14 +187,14 @@ func (s *AuthModel) getChildren(children map[int32][]Rule, rules []Rule) []Rule 
 // 检查是否有某权限
 func (s *AuthModel) Check(name string, id int32, relation string) bool {
 	ruleNameList := AuthRuleNameList[id]
-	if utils.ContainsString(ruleNameList, "*") {
+	if slices.Contains(ruleNameList, "*") {
 		return true
 	}
 
 	result := false
 	checkNameArr := strings.Split(strings.ToLower(name), ",")
 	for _, v := range ruleNameList {
-		if utils.ContainsString(checkNameArr, v) {
+		if slices.Contains(checkNameArr, v) {
 			result = true
 		}
 
@@ -213,31 +210,30 @@ func (s *AuthModel) Check(name string, id int32, relation string) bool {
 }
 
 // 获得权限规则列表
-func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
+func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 	muRule.Lock()
 	defer muRule.Unlock()
 
-	ids, err := s.GetRuleIds(id)
+	ids, err := s.GetRuleIds(uid)
 
-	fmt.Printf("%+v\n", ids)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(ids) == 0 {
-		AuthRuleList[id] = []Rule{}
+		AuthRuleList[uid] = []Rule{}
 		return []string{}, nil
 	}
 
 	tx := s.sqlDB.Table("ba_admin_rule").Where("status=?", "1")
-	if ok := utils.ContainsString(ids, "*"); !ok {
+	if !slices.Contains(ids, "*") {
 		tx.Where("id in ?", ids)
 	}
 	var ruleList []Rule
 	tx.Order("weigh desc,id asc").Scan(&ruleList)
 
 	ruleNameList := []string{}
-	if ok := utils.ContainsString(ids, "*"); ok {
+	if slices.Contains(ids, "*") {
 		ruleNameList = append(ruleNameList, "*")
 	}
 
@@ -248,17 +244,16 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, id int32) ([]string, error) {
 			ruleNameList = append(ruleNameList, v.Name)
 		}
 	}
-	AuthRuleList[id] = ruleList
-	AuthRuleNameList[id] = ruleNameList
+	AuthRuleList[uid] = ruleList
+	AuthRuleNameList[uid] = ruleNameList
 
-	fmt.Printf("%+v \n", AuthRuleNameList)
 	return ruleNameList, nil
 
 }
 
 // 获取权限规则ids
-func (s *AuthModel) GetRuleIds(id int32) ([]string, error) {
-	groups, err := s.GetGroups(id)
+func (s *AuthModel) GetRuleIds(uid int32) ([]string, error) {
+	groups, err := s.GetGroups(uid)
 	if err != nil {
 		return nil, err
 	}
@@ -278,20 +273,20 @@ func (s *AuthModel) GetRuleIds(id int32) ([]string, error) {
 }
 
 // 获取用户所有分组和对应权限规则
-func (s *AuthModel) GetGroups(id int32) ([]AuthGroup, error) {
+func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 	muGroup.Lock()
 	defer muGroup.Unlock()
-	if val, ok := AuthGroupList[id]; ok {
+	if val, ok := AuthGroupList[uid]; ok {
 		return val, nil
 	}
 
 	var authGroups []AuthGroup
 	err := s.sqlDB.Table(TableNameAdminGroupAccess).
 		Joins("left join ba_admin_group on ba_admin_group.id=ba_admin_group_access.group_id").
-		Where("ba_admin_group_access.uid=? and ba_admin_group.status='1'", id).
+		Where("ba_admin_group_access.uid=? and ba_admin_group.status='1'", uid).
 		Scan(&authGroups).Error
 
-	AuthGroupList[id] = authGroups
+	AuthGroupList[uid] = authGroups
 	return authGroups, err
 }
 
@@ -333,7 +328,6 @@ func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, erro
 		return nil, err
 	}
 
-	rulesStr := "," + strings.Join(rules, ",") + ","
 	allAuthGroups := []string{}
 	groups := []AdminGroup{}
 	s.sqlDB.Table(TableNameAdminGroup).Where("status=1").Find(&groups)
@@ -345,7 +339,7 @@ func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, erro
 		groupRules := strings.Split(v.Rules, ",")
 		all := true
 		for _, r := range groupRules {
-			if !strings.Contains(rulesStr, ","+r+",") {
+			if !slices.Contains(rules, r) {
 				all = false
 				break
 			}

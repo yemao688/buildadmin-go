@@ -14,7 +14,7 @@ type CrudLog struct {
 	Table      string `gorm:"column:table;comment:数据表数据" json:"table"`                                                                // 数据表数据
 	Fields     string `gorm:"column:fields;comment:字段数据" json:"fields"`                                                               // 字段数据
 	Status     string `gorm:"column:status;not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                     // 创建时间
+	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                      // 创建时间
 }
 
 type CrudLogModel struct {

@@ -103,11 +103,10 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type DataRecycleEdit struct {
+	var params = struct {
 		IDS
 		DataRecycle
-	}
-	var params DataRecycleEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

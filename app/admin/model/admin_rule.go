@@ -25,8 +25,8 @@ type AdminRule struct {
 	Remark     string `gorm:"column:remark;not null;comment:备注" json:"remark"`                                                                  // 备注
 	Weigh      int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                                                                    // 权重
 	Status     string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                              // 状态:0=禁用,1=启用
-	UpdateTime int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                                                               // 更新时间
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                               // 创建时间
+	UpdateTime int64  `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                                // 更新时间
+	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                                // 创建时间
 }
 
 func (*AdminRule) TableName() string {
@@ -55,11 +55,7 @@ func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule
 }
 
 func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
-	if err != nil {
-		return nil, err
-	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Order("weigh desc,id desc").Find(&list).Error
 	return
 }
 

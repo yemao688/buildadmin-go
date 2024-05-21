@@ -119,11 +119,10 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type AdminEdit struct {
+	var params = struct {
 		IDS
-		Admin
-	}
-	var params AdminEdit
+		UserGroup
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

@@ -120,11 +120,10 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type AdminRuleEdit struct {
+	var params = struct {
 		IDS
 		AdminRule
-	}
-	var params AdminRuleEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

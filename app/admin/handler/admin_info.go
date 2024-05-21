@@ -77,11 +77,10 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type AdminEdit struct {
+	var params = struct {
 		IDS
 		Admin
-	}
-	var params AdminEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

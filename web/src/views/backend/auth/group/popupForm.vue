@@ -29,7 +29,7 @@
                 >
                     <FormItem
                         :label="t('auth.group.Parent group')"
-                        v-model="baTable.form.items!.pid"
+                        v-model.number="baTable.form.items!.pid"
                         type="remoteSelect"
                         prop="pid"
                         :input-attr="{

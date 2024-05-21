@@ -90,11 +90,10 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	type SensitiveDataEdit struct {
+	var params = struct {
 		IDS
 		SensitiveData
-	}
-	var params SensitiveDataEdit
+	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
