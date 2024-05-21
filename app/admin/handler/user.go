@@ -82,7 +82,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	}
 
 	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("password required"))
+		FailByErr(ctx, cErr.BadRequest("Password required"))
 		return
 	}
 
@@ -136,6 +136,21 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 
 	copier.Copy(&user, params)
 	err = h.userM.Edit(ctx, "create_time, update_time, password, salt, login_failure, last_login_time", user)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *UserHandler) Del(ctx *gin.Context) {
+	var params validate.Ids
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	err := h.userM.Del(ctx, params.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

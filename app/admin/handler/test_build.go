@@ -21,12 +21,16 @@ func NewTestBuildHandler(log *zap.Logger, testBuildM *model.TestBuildModel) *Tes
 }
 
 func (h *TestBuildHandler) Index(ctx *gin.Context) {
-	result, err := h.testBuildM.List(ctx)
+	list, total, err := h.testBuildM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, result)
+	Success(ctx, map[string]any{
+		"list":   list,
+		"total":  total,
+		"remark": "",
+	})
 }
 
 type ParamTestBuild struct {

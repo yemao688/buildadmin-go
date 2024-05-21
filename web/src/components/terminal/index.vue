@@ -188,7 +188,7 @@ const state = reactive({
 
 const startCommand = computed(() => {
     let tempPort = terminal.state.port == '' ? '80' : terminal.state.port
-    return tempPort == '8000' ? 'php think run' : 'php think run -p ' + tempPort
+    return tempPort == '9989' ? 'php think run' : 'php think run -p ' + tempPort
 })
 const serviceURL = computed(() => {
     let tempPort = terminal.state.port == '' ? '' : ':' + terminal.state.port

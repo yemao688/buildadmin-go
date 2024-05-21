@@ -60,12 +60,12 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 	all, _ := h.configM.List(ctx)
 	for _, v := range all {
 		if _, ok := list[v.Group]; ok {
-			v.Title = utils.Lang(ctx, v.Title, nil)
+			title := utils.Lang(ctx, v.Title, nil)
 			list[v.Group].List = append(list[v.Group].List, map[string]any{
 				"id":           v.ID,
 				"name":         v.Name,
 				"group":        v.Group,
-				"title":        v.Title,
+				"title":        title,
 				"tip":          v.Tip,
 				"type":         v.Type,
 				"value":        v.GetValueAttr(),

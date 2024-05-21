@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"go-build-admin/app/admin/model"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -42,13 +43,18 @@ func (m *Login) Handler() gin.HandlerFunc {
 
 		tokenData, err := m.tokenHelper.Get(tokenStr, true)
 		if err != nil {
-			msg := utils.Lang(c, err.Error(), nil)
-			c.JSON(http.StatusOK, map[string]interface{}{
-				"code": http.StatusUnauthorized,
-				"data": nil,
-				"msg":  msg,
-				"time": 0,
-			})
+			if v, ok := err.(*cErr.Error); ok {
+				msg := utils.Lang(c, v.Error(), nil)
+				c.JSON(http.StatusOK, map[string]interface{}{
+					"code": v.ErrorCode(),
+					"data": map[string]any{
+						"type": "need login",
+					},
+					"msg":  msg,
+					"time": 0,
+				})
+			}
+
 			c.Abort()
 			return
 		}

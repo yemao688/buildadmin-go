@@ -43,7 +43,7 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 	}
 
 	isTree := ctx.Request.FormValue("isTree")
-	if isTree == "true" {
+	if isTree == "" || isTree == "true" {
 		Success(ctx, map[string]interface{}{
 			"list":   h.AssembleChild(list),
 			"remark": "",
@@ -109,7 +109,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 
 	//校验数据权限
 	if !h.CheckDataLimit(ctx, adminRule.ID) {
-		FailByErr(ctx, cErr.BadRequest("you have no permission"))
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
 		return
 	}
 
@@ -155,6 +155,10 @@ func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 }
 
 func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
+	if s := ctx.Request.FormValue("select"); s == "" {
+		return nil, false
+	}
+
 	whereS := []string{" type in ? ", " status=? "}
 	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
 	list, err := h.GetMenus(ctx, whereS, whereP)
@@ -185,7 +189,7 @@ func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []
 		}
 	}
 
-	if !flag {
+	if !flag && len(ids) > 0 {
 		whereS = append(whereS, " id in ? ")
 		whereP = append(whereP, ids)
 	}
@@ -205,7 +209,7 @@ func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []
 
 type AdminRuleExpend struct {
 	model.AdminRule
-	Children []*AdminRuleExpend
+	Children []*AdminRuleExpend `json:"children"`
 }
 
 func (l *AdminRuleExpend) GetId() int               { return int(l.ID) }

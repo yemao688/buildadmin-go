@@ -9,8 +9,8 @@ import (
 
 const TableNameSecurityDataRecycleLog = "ba_security_data_recycle_log"
 
-// SecurityDataRecycleLog 数据回收记录表
-type SecurityDataRecycleLog struct {
+// DataRecycleLog 数据回收记录表
+type DataRecycleLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`       // ID
 	AdminID    int32  `gorm:"column:admin_id;not null;comment:操作管理员" json:"admin_id"`             // 操作管理员
 	RecycleID  int32  `gorm:"column:recycle_id;not null;comment:回收规则ID" json:"recycle_id"`        // 回收规则ID
@@ -23,9 +23,12 @@ type SecurityDataRecycleLog struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                 // 创建时间
 }
 
+func (*DataRecycleLog) TableName() string {
+	return TableNameSecurityDataRecycleLog
+}
+
 type DataRecycleLogModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewDataRecycleLogModel(sqlDB *gorm.DB) *DataRecycleLogModel {
@@ -35,26 +38,31 @@ func NewDataRecycleLogModel(sqlDB *gorm.DB) *DataRecycleLogModel {
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
-func (s *DataRecycleLogModel) GetOne(ctx *gin.Context, id int32) (dataRecycle SecurityDataRecycleLog, err error) {
+func (s *DataRecycleLogModel) GetOne(ctx *gin.Context, id int32) (dataRecycle DataRecycleLog, err error) {
 	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&dataRecycle).Error
 	return
 }
 
-func (s *DataRecycleLogModel) List(ctx *gin.Context) (list []SecurityDataRecycleLog, total int64, err error) {
+func (s *DataRecycleLogModel) List(ctx *gin.Context) (list []DataRecycleLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
 func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
-	list := []SecurityDataRecycleLog{}
+	list := []DataRecycleLog{}
 	err := s.sqlDB.Table(s.TableName).Where(" id in ? ", ids).Find(&list).Error
 	if err != nil {
 		return err

@@ -42,9 +42,22 @@ type User struct {
 	CreateTime    int64     `gorm:"column:create_time;comment:创建时间" json:"create_time"`                    // 创建时间
 }
 
+func (*User) TableName() string {
+	return TableNameUser
+}
+
+type SimpleUser struct {
+	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
+	Username string `gorm:"column:username;not null;comment:用户名" json:"username"`
+	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
+}
+
+func (*SimpleUser) TableName() string {
+	return TableNameUser
+}
+
 type UserModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewUserModel(sqlDB *gorm.DB) *UserModel {
@@ -54,8 +67,9 @@ func NewUserModel(sqlDB *gorm.DB) *UserModel {
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
 func (s *UserModel) GetOne(ctx *gin.Context, id int32) (data User, err error) {
@@ -68,7 +82,11 @@ func (s *UserModel) List(ctx *gin.Context) (list []User, total int64, err error)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 

@@ -43,18 +43,25 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 
 	whereS := []string{}
 	whereP := []interface{}{}
-	result, err := h.GetGroups(ctx, whereS, whereP)
+	groups, err := h.GetGroups(ctx, whereS, whereP)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	adminAuth := header.GetAdminAuth(ctx)
-	Success(ctx, map[string]interface{}{
-		"list":   result,
+	result := map[string]interface{}{
+		"list":   groups,
 		"group":  h.authM.GetGroupIds(adminAuth.Id),
-		"remark": "",
-	})
+		"remark": h.GetRemark(ctx),
+	}
+
+	isTree := ctx.Request.FormValue("isTree")
+	if isTree == "" || isTree == "true" {
+		result["list"] = h.AssembleChild(groups)
+	}
+
+	Success(ctx, result)
 }
 
 type AdminGroup struct {
@@ -153,7 +160,7 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	}
 
 	if !flag {
-		FailByErr(ctx, cErr.BadRequest("you cannot modify your own management group!"))
+		FailByErr(ctx, cErr.BadRequest("You cannot modify your own management group!"))
 		return
 	}
 
@@ -198,6 +205,10 @@ func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, adminGroup *model.Admi
 }
 
 func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
+	if s := ctx.Request.FormValue("select"); s == "" {
+		return nil, false
+	}
+
 	whereS := []string{" status=? "}
 	whereP := []any{"1"}
 	list, err := h.GetGroups(ctx, whereS, whereP)
@@ -207,7 +218,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	}
 
 	isTree := ctx.Request.FormValue("isTree")
-	if isTree == "true" {
+	if isTree == "" || isTree == "true" {
 		data := tree.AssembleTree(h.AssembleChild(list).([]*AdminGroupExpend))
 		return map[string]interface{}{
 			"options": data,
@@ -217,7 +228,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取分组
-func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.AdminGroup, error) {
+func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]*model.AdminGroup, error) {
 	absoluteAuth := ctx.Request.FormValue("absoluteAuth")
 	keyword := ctx.Request.FormValue("quickSearch")
 
@@ -245,30 +256,36 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 			whereP = append(whereP, authGroups)
 		}
 	}
-
-	list := []model.AdminGroup{}
-	err := h.adminGroupM.DB().Table(h.adminGroupM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Find(&list).Error
+	list := []*model.AdminGroup{}
+	if err := h.adminGroupM.DB().Table(h.adminGroupM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Find(&list).Error; err != nil {
+		return list, err
+	}
 
 	// 获取第一个权限的名称供列表显示-s
 	for _, v := range list {
 		if v.Rules != "" {
 			if strings.Contains(v.Rules, "*") {
-				v.Rules = utils.Lang(ctx, "super administrator", nil)
+				v.Rules = utils.Lang(ctx, "Super administrator", nil)
 			} else {
 				ruleIds := strings.Split(v.Rules, ",")
-				if len(ruleIds) > 0 {
+				num := len(ruleIds)
+				if num > 0 {
 					rule := model.AdminRule{}
 					if err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(" id=? ", ruleIds[0]).First(&rule).Error; err != nil {
 						return nil, err
 					}
-					v.Rules = rule.Title
+					if num == 1 {
+						v.Rules = rule.Title
+					} else {
+						v.Rules = rule.Title + "等 " + strconv.Itoa(num) + " 项"
+					}
 				}
 			}
 		} else {
 			v.Rules = utils.Lang(ctx, "no permission", nil)
 		}
 	}
-	return list, err
+	return list, nil
 }
 
 // 检查权限
@@ -289,7 +306,7 @@ func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
 		}
 
 		if !flag {
-			return cErr.BadRequest("you need to have all the permissions of the group and have additional permissions before you can operate the group~")
+			return cErr.BadRequest("You need to have all the permissions of the group and have additional permissions before you can operate the group~")
 		}
 	}
 	return nil
@@ -297,7 +314,7 @@ func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
 
 type AdminGroupExpend struct {
 	model.AdminGroup
-	Children []*AdminGroupExpend
+	Children []*AdminGroupExpend `json:"children"`
 }
 
 func (l *AdminGroupExpend) GetId() int               { return int(l.ID) }
@@ -309,7 +326,7 @@ func (l *AdminGroupExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*AdminGroupExpend)
 }
 
-func (h *AdminGroupHandler) AssembleChild(list []model.AdminGroup) interface{} {
+func (h *AdminGroupHandler) AssembleChild(list []*model.AdminGroup) interface{} {
 	expendList := []*AdminGroupExpend{}
 	for _, v := range list {
 		temp := AdminGroupExpend{}

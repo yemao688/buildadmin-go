@@ -8,20 +8,18 @@ const TableNameBaTestBuild = "ba_test_build"
 
 // BaTestBuild 知识库表
 type BaTestBuild struct {
-	ID        int64   `gorm:"column:id;primaryKey;comment:ID" json:"id"`                                                // ID
-	Image     string  `gorm:"column:image;not null;comment:图片" json:"image"`                                            // 图片
-	File      string  `gorm:"column:file;not null;comment:文件" json:"file"`                                              // 文件
-	Radio     string  `gorm:"column:radio;not null;default:opt0;comment:单选框:opt0=选项一,opt1=选项二" json:"radio"`            // 单选框:opt0=选项一,opt1=选项二
-	Checkbox  string  `gorm:"column:checkbox;not null;default:opt0,opt1;comment:复选框:opt0=选项一,opt1=选项二" json:"checkbox"` // 复选框:opt0=选项一,opt1=选项二
-	Select    string  `gorm:"column:select;not null;default:opt0;comment:下拉框:opt0=选项一,opt1=选项二" json:"select"`          // 下拉框:opt0=选项一,opt1=选项二
-	Switch    bool    `gorm:"column:switch;not null;default:1;comment:开关:0=关,1=开" json:"switch"`                        // 开关:0=关,1=开
-	Editor    string  `gorm:"column:editor;comment:富文本" json:"editor"`                                                  // 富文本
-	Textarea  string  `gorm:"column:textarea;not null;comment:多行文本框" json:"textarea"`                                   // 多行文本框
-	Float     float64 `gorm:"column:float;not null;default:0.00;comment:浮点数" json:"float"`                              // 浮点数
-	Password  string  `gorm:"column:password;not null;comment:密码" json:"password"`                                      // 密码
-	Array     string  `gorm:"column:array;not null;comment:数组" json:"array"`                                            // 数组
-	Icon      string  `gorm:"column:icon;not null;comment:图标选择" json:"icon"`                                            // 图标选择
-	BannerIds string  `gorm:"column:banner_ids;not null;comment:远程下拉" json:"banner_ids"`                                // 远程下拉
+	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
+	Title        string `gorm:"column:title;not null;comment:标题" json:"title"`                       // 标题
+	KeywordRows  string `gorm:"column:keyword_rows;not null;comment:关键词" json:"keyword_rows"`        // 关键词
+	Content      string `gorm:"column:content;comment:内容" json:"content"`                            // 内容
+	Views        int32  `gorm:"column:views;not null;comment:浏览量" json:"views"`                      // 浏览量
+	Likes        int32  `gorm:"column:likes;not null;comment:有帮助数" json:"likes"`                     // 有帮助数
+	Dislikes     int32  `gorm:"column:dislikes;not null;comment:无帮助数" json:"dislikes"`               // 无帮助数
+	NoteTextarea string `gorm:"column:note_textarea;not null;comment:备注" json:"note_textarea"`       // 备注
+	Status       string `gorm:"column:status;not null;default:1;comment:状态:0=隐藏,1=正常" json:"status"` // 状态:0=隐藏,1=正常
+	Weigh        int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                       // 权重
+	UpdateTime   int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                  // 更新时间
+	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
 // TableName BaTestBuild's table name

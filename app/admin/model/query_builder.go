@@ -109,7 +109,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		if len(orderArr) == 2 && (orderArr[1] == "asc" || orderArr[1] == "desc") {
 			field := GetFullField(orderArr[0], table)
 			if IsValidFieldName(field, fieldTypeMap) {
-				err = cErr.BadRequest("not found field:" + orderArr[0])
+				err = cErr.BadRequest("Not found field:" + orderArr[0])
 				return
 			}
 		}
@@ -127,7 +127,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 
 		//验证字段合法性
 		if IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest("not found field:" + search[i].Field)
+			err = cErr.BadRequest("Not found field:" + search[i].Field)
 			return
 		}
 		//判断是否是日期
@@ -239,14 +239,14 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		case "NOT NULL":
 			whereS += " AND " + Backquote(field) + " IS " + operater
 		default:
-			err = cErr.BadRequest("where express error:" + operater)
+			err = cErr.BadRequest("Where express error:" + operater)
 			return
 		}
 	}
 	//数据权限
-	value, _ := ctx.Get("dataLimitAdminIds")
-	if value != nil {
-		dataLimitAdminIds := value.([]string)
+	value, exists := ctx.Get("dataLimitAdminIds")
+	if exists && len(value.([]int32)) > 0 {
+		dataLimitAdminIds := value.([]int32)
 		whereS += " AND " + Backquote(table.TableName+".admin_id") + " IN ? "
 		whereP = append(whereP, dataLimitAdminIds)
 	}

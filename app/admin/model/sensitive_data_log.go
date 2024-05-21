@@ -1,9 +1,14 @@
 package model
 
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
 const TableNameSecuritySensitiveDataLog = "ba_security_sensitive_data_log"
 
-// SecuritySensitiveDataLog 敏感数据修改记录
-type SecuritySensitiveDataLog struct {
+// SensitiveDataLog 敏感数据修改记录
+type SensitiveDataLog struct {
 	ID          int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`         // ID
 	AdminID     int32  `gorm:"column:admin_id;not null;comment:操作管理员" json:"admin_id"`               // 操作管理员
 	SensitiveID int32  `gorm:"column:sensitive_id;not null;comment:敏感数据规则ID" json:"sensitive_id"`    // 敏感数据规则ID
@@ -18,4 +23,42 @@ type SecuritySensitiveDataLog struct {
 	Useragent   string `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`        // User-Agent
 	IsRollback  int32  `gorm:"column:is_rollback;not null;comment:是否已回滚:0=否,1=是" json:"is_rollback"` // 是否已回滚:0=否,1=是
 	CreateTime  int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                   // 创建时间
+}
+
+func (*SensitiveDataLog) TableName() string {
+	return TableNameSecuritySensitiveDataLog
+}
+
+type SensitiveDataLogModel struct {
+	BaseModel
+}
+
+func NewSensitiveDataLogModel(sqlDB *gorm.DB) *SensitiveDataLogModel {
+	return &SensitiveDataLogModel{
+		BaseModel: BaseModel{
+			TableName:        TableNameSecuritySensitiveDataLog,
+			Key:              "id",
+			QuickSearchField: "id",
+			DataLimit:        "",
+			sqlDB:            sqlDB,
+		},
+	}
+}
+
+func (s *SensitiveDataLogModel) List(ctx *gin.Context) (list []SensitiveDataLog, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	db := s.sqlDB.Model(&SensitiveDataLog{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
+}
+
+func (s *SensitiveDataLogModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
 }

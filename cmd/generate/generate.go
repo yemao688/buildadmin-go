@@ -33,7 +33,7 @@ func main() {
 		// WithUnitTest: true,
 	})
 
-	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/promotion?charset=utf8mb4&parseTime=True&loc=Local"))
+	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
 	g.UseDB(db)
 
 	onlyModel := true

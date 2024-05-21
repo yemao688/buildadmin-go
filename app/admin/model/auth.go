@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
 	"strconv"
@@ -91,20 +92,20 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	admin := Admin{}
 	err := s.sqlDB.Table(TableNameAdmin).Where("username=?", username).Scan(&admin).Error
 	if err != nil {
-		return nil, cErr.BadRequest("incorrect user name or password!")
+		return nil, cErr.BadRequest("Incorrect user name or password!")
 	}
 
 	if admin.Status == "0" {
-		return nil, cErr.BadRequest("username is incorrect")
+		return nil, cErr.BadRequest("Username is incorrect")
 	}
 
 	retry := s.config.App.AdminLoginRetry
 	if retry > 0 && admin.LoginFailure >= int32(retry) && (time.Now().Unix()-admin.LastLoginTime < 86400) {
-		return nil, cErr.BadRequest("please try again after 1 day")
+		return nil, cErr.BadRequest("Please try again after 1 day")
 	}
 
 	if admin.Password != utils.EncryptPassword(password, admin.Salt) {
-		return nil, cErr.BadRequest("password is incorrect")
+		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
 	if s.config.App.AdminSso {
@@ -143,7 +144,8 @@ func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 	if err := s.tokenHelper.Delete(refreshToken); err != nil {
 		return err
 	}
-	if err := s.tokenHelper.Delete(ctx.Keys["token"].(string)); err != nil {
+	adminAuth := header.GetAdminAuth(ctx)
+	if err := s.tokenHelper.Delete(adminAuth.Token); err != nil {
 		return err
 	}
 	return nil

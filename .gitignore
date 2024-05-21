@@ -23,6 +23,7 @@ dist-ssr
 Desktop.ini
 
 
+
 # Log files
 *.log
 npm-debug.log*
@@ -45,3 +46,6 @@ pnpm-debug.log*
 *.local
 !.gitkeep
 .svn
+*.exe
+/cmd/model
+tmp

@@ -25,6 +25,10 @@ type Config struct {
 	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
 }
 
+func (*Config) TableName() string {
+	return TableNameConfig
+}
+
 func (s *Config) SetValueAttr(value any, t string) string {
 	if t == "checkbox" || t == "array" || t == "selects" {
 		if v, err := json.Marshal(value); err != nil {
@@ -48,8 +52,8 @@ func (s *Config) SetValueAttr(value any, t string) string {
 
 func (s *Config) GetValueAttr() any {
 	if s.Type == "checkbox" || s.Type == "array" || s.Type == "selects" {
-		result := map[string]any{}
-		if err := json.Unmarshal([]byte(s.Value), &result); err != nil {
+		result := []map[string]any{}
+		if err := json.Unmarshal([]byte(s.Value), &result); err == nil {
 			return result
 		}
 	} else if s.Type == "switch" {
@@ -72,7 +76,7 @@ func (s *Config) GetValueAttr() any {
 func (s *Config) GetContentAttr() any {
 	if s.Type == "radio" || s.Type == "checkbox" || s.Type == "select" || s.Type == "selects" {
 		content := map[string]any{}
-		if err := json.Unmarshal([]byte(s.Content), &content); err != nil {
+		if err := json.Unmarshal([]byte(s.Content), &content); err == nil {
 			return content
 		}
 	}
@@ -105,7 +109,6 @@ func (s *Config) GetInputExtendAttr() any {
 
 type ConfigModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
@@ -115,16 +118,13 @@ func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
-	if err != nil {
-		return nil, err
-	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Order("id desc").Find(&list).Error
 	return
 }
 

@@ -6,11 +6,17 @@ package main
 import (
 	"go-build-admin/conf"
 
+	adminHandler "go-build-admin/app/admin/handler"
+	adminModel "go-build-admin/app/admin/model"
+	apiHandler "go-build-admin/app/api/handler"
+	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
+	"go-build-admin/app/middleware"
 	"go-build-admin/router"
 	"go-build-admin/service/db"
 	"go-build-admin/service/rds"
 
+	"go-build-admin/app/pkg/clickcaptcha"
 	"go-build-admin/app/pkg/token"
 
 	"github.com/google/wire"
@@ -24,8 +30,14 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		db.NewDB,
 		rds.NewRedis,
 		token.NewTokenHelper,
-		ProviderSet,
-		// middleware.ProviderSet,
+		clickcaptcha.NewCaptcha,
+
+		middleware.ProviderSet,
+		adminHandler.ProviderSet,
+		adminModel.ProviderSet,
+		commonModel.ProviderSet,
+		apiHandler.ProviderSet,
+
 		router.InitRouter,
 		cron.ProviderSet,
 		newHttpServer,

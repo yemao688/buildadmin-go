@@ -20,9 +20,12 @@ type AdminGroup struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
+func (*AdminGroup) TableName() string {
+	return TableNameAdminGroup
+}
+
 type AdminGroupModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
@@ -32,8 +35,8 @@ func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB,
 	}
 }
 
@@ -88,7 +91,7 @@ func (s *AdminGroupModel) Del(ctx *gin.Context, ids []int64) error {
 			}
 		}
 		if !flag {
-			return cErr.BadRequest("please delete the child element first, or use batch deletion")
+			return cErr.BadRequest("Please delete the child element first, or use batch deletion")
 		}
 	}
 

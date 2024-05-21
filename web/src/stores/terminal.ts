@@ -28,7 +28,7 @@ export const useTerminal = defineStore(
             // 开始任务时自动清理已完成任务
             automaticCleanupTask: '1',
             // 安装服务端口
-            port: '8000',
+            port: '9989',
         })
 
         function init() {

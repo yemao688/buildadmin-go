@@ -7,8 +7,8 @@ import (
 
 const TableNameSecurityDataRecycle = "ba_security_data_recycle"
 
-// SecurityDataRecycle 回收规则表
-type SecurityDataRecycle struct {
+// DataRecycle 回收规则表
+type DataRecycle struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                       // 规则名称
 	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`            // 控制器
@@ -20,9 +20,12 @@ type SecurityDataRecycle struct {
 	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
+func (*DataRecycle) TableName() string {
+	return TableNameSecurityDataRecycle
+}
+
 type DataRecycleModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
@@ -32,30 +35,35 @@ func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
-func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data SecurityDataRecycle, err error) {
+func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data DataRecycle, err error) {
 	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&data).Error
 	return
 }
 
-func (s *DataRecycleModel) List(ctx *gin.Context) (list []SecurityDataRecycle, total int64, err error) {
+func (s *DataRecycleModel) List(ctx *gin.Context) (list []DataRecycle, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
-func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error {
+func (s *DataRecycleModel) Add(ctx *gin.Context, data DataRecycle) error {
 	err := s.sqlDB.Table(s.TableName).Create(&data).Error
 	return err
 }
 
-func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) error {
+func (s *DataRecycleModel) Edit(ctx *gin.Context, data DataRecycle) error {
 	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
 	return err
 }

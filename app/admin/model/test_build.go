@@ -26,7 +26,6 @@ type TestBuild struct {
 
 type TestBuildModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewTestBuildModel(sqlDB *gorm.DB) *TestBuildModel {
@@ -36,16 +35,21 @@ func NewTestBuildModel(sqlDB *gorm.DB) *TestBuildModel {
 			Key:              "id",
 			QuickSearchField: "id",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
-func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, err error) {
+func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 

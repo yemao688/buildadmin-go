@@ -65,7 +65,7 @@ func (d RedisDriver) Get(token string, expirationException bool) (*Token, error)
 	}
 	dataStr, err := d.rdb.Get(context.Background(), encryptToken).Result()
 	if err != nil {
-		return nil, err
+		return nil, cErr.BadRequest("Please login first", 303)
 	}
 
 	var data Token
@@ -80,7 +80,7 @@ func (d RedisDriver) Get(token string, expirationException bool) (*Token, error)
 	data.ExpiresIn = GetExpiredIn(data.ExpireTime)
 	if data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() && expirationException {
 		// token过期-触发前端刷新token
-		return nil, cErr.Unauthorized("Token expiration:", 409)
+		return nil, cErr.Unauthorized("Token expiration", 409)
 	}
 	return &data, nil
 }

@@ -54,7 +54,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		"siteConfig": map[string]any{
 			"siteName": h.config.App.AppName,
 			"version":  version,
-			"cdnUrl":   utils.FullUrl("", h.config.App.CdnUrl, ctx.Request.Host, ""),
+			"cdnUrl":   utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
 			"apiUrl":   h.config.App.ApiUrl,
 			"upload":   h.config.Upload,
 		},
@@ -84,7 +84,7 @@ func (v Login) GetMessages() validate.ValidatorMessages {
 func (h *IndexHandler) Login(ctx *gin.Context) {
 	// 检查登录态
 	if _, ok := h.authM.IsLogin(ctx); ok {
-		FailByErr(ctx, cErr.BadRequest("you have already logged in. There is no need to log in again~", cErr.LOGIN_RESPONSE_CODE))
+		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LOGIN_RESPONSE_CODE))
 	}
 
 	needCaptcha := h.config.App.AdminLoginCaptcha
@@ -97,12 +97,12 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 
 		if needCaptcha {
 			if params.CaptchaId == "" || params.CaptchaInfo == "" {
-				FailByErr(ctx, cErr.BadRequest("need captcha"))
+				FailByErr(ctx, cErr.BadRequest("Need captcha"))
 				return
 			}
 
 			if !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
-				FailByErr(ctx, cErr.BadRequest("captcha error"))
+				FailByErr(ctx, cErr.BadRequest("Captcha error"))
 				return
 			}
 		}
@@ -127,13 +127,11 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 }
 
 type Logout struct {
-	RefreshToken string `json:"refreshToken" binding:"required"`
+	RefreshToken string `json:"refreshToken"`
 }
 
 func (v Logout) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
-		"refreshToken.required": "not content",
-	}
+	return validate.ValidatorMessages{}
 }
 
 func (h *IndexHandler) Logout(ctx *gin.Context) {

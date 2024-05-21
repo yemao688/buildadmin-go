@@ -24,9 +24,12 @@ type AdminLog struct {
 	CreateTime int64  `gorm:"column:create_time;autoCreateTime;comment:创建时间" json:"create_time"` // 创建时间
 }
 
+func (*AdminLog) TableName() string {
+	return TableNameAdminLog
+}
+
 type AdminLogModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewAdminLogModel(sqlDB *gorm.DB) *AdminLogModel {
@@ -36,21 +39,22 @@ func NewAdminLogModel(sqlDB *gorm.DB) *AdminLogModel {
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB,
 	}
 }
 
-func (s *AdminLogModel) List(ctx *gin.Context) ([]AdminLog, int64, error) {
-	list := []AdminLog{}
-	var total int64 = 0
-	var err error
+func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx), Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return list, total, err
+	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
 }
 
 func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {

@@ -1,9 +1,7 @@
 package model
 
 import (
-	"fmt"
 	cErr "go-build-admin/app/pkg/error"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -31,9 +29,12 @@ type AdminRule struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                               // 创建时间
 }
 
+func (*AdminRule) TableName() string {
+	return TableNameAdminRule
+}
+
 type AdminRuleModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
@@ -43,8 +44,9 @@ func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
 func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule, err error) {
@@ -59,22 +61,6 @@ func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
 	}
 	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
-}
-
-func (s *AdminRuleModel) GetRemark(ctx *gin.Context) string {
-	var adminRule AdminRule
-	name := ctx.Request.URL.Path
-	name = strings.Replace(name, ".", "/", -1)
-	name = strings.Replace(name, "/admin/", "", 1)
-	slashIndex := strings.LastIndex(name, "/")
-
-	nameArr := []string{name[:slashIndex], name[slashIndex+1:]}
-	fmt.Println(nameArr)
-	err := s.sqlDB.Table(s.TableName).Where("name in ?", nameArr).First(&adminRule).Error
-	if err != nil {
-		return ""
-	}
-	return adminRule.Remark
 }
 
 func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
@@ -135,7 +121,7 @@ func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int64) error {
 			}
 		}
 		if !flag {
-			return cErr.BadRequest("please delete the child element first, or use batch deletion")
+			return cErr.BadRequest("Please delete the child element first, or use batch deletion")
 		}
 	}
 

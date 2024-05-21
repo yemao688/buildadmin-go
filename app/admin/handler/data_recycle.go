@@ -78,7 +78,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var data model.SecurityDataRecycle
+	var data model.DataRecycle
 	copier.Copy(&data, params)
 	err := h.dataRecycleM.Add(ctx, data)
 	if err != nil {

@@ -59,7 +59,10 @@ func (h TokenHelper) Check(token string, t string, user_id int32, expirationExce
 	return h.Driver.Check(token, t, user_id, expirationException)
 }
 func (h TokenHelper) Delete(token string) error {
-	return h.Driver.Delete(token)
+	if token != "" {
+		return h.Driver.Delete(token)
+	}
+	return nil
 }
 func (h TokenHelper) Clear(t string, user_id int32) error {
 	return h.Driver.Clear(t, user_id)

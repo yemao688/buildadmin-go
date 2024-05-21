@@ -21,11 +21,26 @@ func InitRouter(
 	recordM *middleware.Record,
 
 	adminHandler *admin.AdminHandler,
+	adminInfoHandler *admin.AdminInfoHandler,
 	adminGroupHandler *admin.AdminGroupHandler,
+	adminRuleHandler *admin.AdminRuleHandler,
 	adminLogHandler *admin.AdminLogHandler,
 	testBuildHandler *admin.TestBuildHandler,
 	indexHandler *admin.IndexHandler,
 	dashboardHandler *admin.DashboardHandler,
+	userHandler *admin.UserHandler,
+	userGroupHandler *admin.UserGroupHandler,
+	userRuleHandler *admin.UserRuleHandler,
+	userMoneyLogHandler *admin.UserMoneyLogHandler,
+	userScoreLogHandler *admin.UserScoreLogHandler,
+	attachmentHandler *admin.AttachmentHandler,
+	crudHandler *admin.CrudHandler,
+	configHandler *admin.ConfigHandler,
+
+	dataRecycleHandler *admin.DataRecycleHandler,
+	dataRecycleLogHandler *admin.DataRecycleLogHandler,
+	sensitiveDataHandler *admin.SensitiveDataHandler,
+	sensitiveDataLogHandler *admin.SensitiveDataLogHandler,
 
 	apiAccountHandler *api.AccountHandler,
 	apiAjaxHandler *api.AjaxHandler,
@@ -49,11 +64,20 @@ func InitRouter(
 			DefaultLanguage:  language.Chinese,
 			UnmarshalFunc:    json.Unmarshal,
 			FormatBundleFile: "json",
-		})),
+		}), ginI18n.WithGetLngHandle(
+			func(context *gin.Context, defaultLng string) string {
+				lng := context.Request.Header.Get("think-lang")
+				if lng == "" {
+					return defaultLng
+				}
+				return lng
+			},
+		)),
 	)
 
 	rootDir := utils.RootPath()
 	router.Static("/static", filepath.Join(rootDir, "static"))
+	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
 	router.GET("/admin/Index/login", indexHandler.Login)
 	router.POST("/admin/Index/login", indexHandler.Login)
 
@@ -69,70 +93,68 @@ func InitRouter(
 	adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
 	adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
 
-	adminRouter.GET("auth.Admin/index", dataLimitM.Handler(""), adminHandler.Index)
+	adminRouter.GET("auth.Admin/index", dataLimitM.Handler("allAuthAndOthers"), adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
 	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)
 	adminRouter.DELETE("auth.Admin/del", adminHandler.Del)
 
-	// adminRouter.GET("auth.Rule/index", adminRuleHandler.Index)
-	// adminRouter.POST("auth.Rule/add", adminRuleHandler.Add)
-	// adminRouter.POST("auth.Rule/edit", adminRuleHandler.Edit)
-	// adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
+	adminRouter.GET("auth.Rule/index", adminRuleHandler.Index)
+	adminRouter.POST("auth.Rule/add", adminRuleHandler.Add)
+	adminRouter.POST("auth.Rule/edit", adminRuleHandler.Edit)
+	adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
 
 	adminRouter.GET("auth.AdminLog/index", adminLogHandler.Index)
 
-	// adminRouter.GET("user.User/index", userHandler.Index)
-	// adminRouter.POST("user.User/add", userHandler.Add)
-	// adminRouter.POST("user.User/edit", userHandler.Edit)
-	// adminRouter.DELETE("user.User/del", userHandler.Del)
+	adminRouter.GET("user.User/index", userHandler.Index)
+	adminRouter.POST("user.User/add", userHandler.Add)
+	adminRouter.POST("user.User/edit", userHandler.Edit)
+	adminRouter.DELETE("user.User/del", userHandler.Del)
 
-	// adminRouter.GET("user.Group/index", userGroupHandler.Index)
-	// adminRouter.POST("user.Group/add", userGroupHandler.Add)
-	// adminRouter.POST("user.Group/edit", userGroupHandler.Edit)
-	// adminRouter.DELETE("user.Group/del", userGroupHandler.Del)
+	adminRouter.GET("user.Group/index", userGroupHandler.Index)
+	adminRouter.POST("user.Group/add", userGroupHandler.Add)
+	adminRouter.POST("user.Group/edit", userGroupHandler.Edit)
+	adminRouter.DELETE("user.Group/del", userGroupHandler.Del)
 
-	// adminRouter.GET("user.Rule/index", userRuleHandler.Index)
-	// adminRouter.POST("user.Rule/add", userRuleHandler.Add)
-	// adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
-	// adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
+	adminRouter.GET("user.Rule/index", userRuleHandler.Index)
+	adminRouter.POST("user.Rule/add", userRuleHandler.Add)
+	adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
+	adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
 
-	// adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
-	// adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
+	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
+	adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
 
-	// adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
-	// adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
+	adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
+	adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
 
-	// adminRouter.POST("routine.Config/index", configHandler.Index)
+	adminRouter.GET("routine.Config/index", configHandler.Index)
 
-	// adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
-	// adminRouter.POST("routine.Attachment/add", attachmentHandler.Add)
-	// adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
-	// adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
+	adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
+	adminRouter.POST("routine.Attachment/add", attachmentHandler.Add)
+	adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
+	adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
 
-	// adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
-	// adminRouter.POST("routine.AdminInfo/add", adminInfoHandler.Add)
+	adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
+	adminRouter.POST("routine.AdminInfo/edit", adminInfoHandler.Edit)
 
-	// adminRouter.GET("security.DataRecycleLog/index", dataRecycleLogHandler.Index)
-	// adminRouter.POST("security.DataRecycleLog/add", dataRecycleLogHandler.Add)
-	// adminRouter.POST("security.DataRecycleLog/edit", dataRecycleLogHandler.Edit)
-	// adminRouter.DELETE("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
+	adminRouter.GET("security.DataRecycleLog/index", dataRecycleLogHandler.Index)
+	adminRouter.POST("security.DataRecycleLog/restore", dataRecycleLogHandler.Restore)
+	adminRouter.POST("security.DataRecycleLog/info", dataRecycleLogHandler.Info)
+	adminRouter.DELETE("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
 
-	// adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
-	// adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
-	// adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
-	// adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
+	adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
+	adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
+	adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
+	adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
 
-	// adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
-	// adminRouter.POST("security.SensitiveDataLog/add", sensitiveDataLogHandler.Add)
-	// adminRouter.POST("security.SensitiveDataLog/edit", sensitiveDataLogHandler.Edit)
-	// adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
+	adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
+	adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
 
-	// adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
-	// adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
-	// adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
-	// adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
+	adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
+	adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
+	adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
+	adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
-	// adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
+	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)

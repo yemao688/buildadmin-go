@@ -26,6 +26,10 @@ type Attachment struct {
 	LastUploadTime int64  `gorm:"column:last_upload_time;comment:最后上传时间" json:"last_upload_time"` // 最后上传时间
 }
 
+func (*Attachment) TableName() string {
+	return TableNameAttachment
+}
+
 type AttachmentModel struct {
 	BaseModel
 	sqlDB *gorm.DB
@@ -40,6 +44,34 @@ func NewAttachmentModel(sqlDB *gorm.DB) *AttachmentModel {
 			DataLimit:        "",
 		},
 		sqlDB: sqlDB}
+}
+
+func (s *AttachmentModel) GetOne(ctx *gin.Context, id int32) (attachment Attachment, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&attachment).Error
+	return
+}
+
+func (s *AttachmentModel) List(ctx *gin.Context) (list []Attachment, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	db := s.sqlDB.Model(&Attachment{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
+}
+
+func (s *AttachmentModel) Add(ctx *gin.Context, data Attachment) error {
+	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	return err
+}
+
+func (s *AttachmentModel) Edit(ctx *gin.Context, data Attachment) error {
+	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
+	return err
 }
 
 func (s *AttachmentModel) Del(ctx *gin.Context, ids interface{}) error {

@@ -52,7 +52,7 @@ func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
 		return
 	}
 	if !h.clickCaptcha.Check(params.Id, params.Info, params.Unset) {
-		FailByErr(ctx, cErr.BadRequest("validate fail"))
+		FailByErr(ctx, cErr.BadRequest("Validate fail"))
 		return
 	}
 	Success(ctx, "")

@@ -81,7 +81,7 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 	}
 
 	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("password required"))
+		FailByErr(ctx, cErr.BadRequest("Password required"))
 		return
 	}
 
@@ -117,7 +117,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 
 	//校验数据权限
 	if !h.CheckDataLimit(ctx, admin.ID) {
-		FailByErr(ctx, cErr.BadRequest("you have no permission"))
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
 		return
 	}
 
@@ -140,7 +140,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 
 	adminAuth := header.GetAdminAuth(ctx)
 	if adminAuth.Id == admin.ID && params.Status == "0" {
-		FailByErr(ctx, cErr.BadRequest("please use another administrator account to disable the current account!"))
+		FailByErr(ctx, cErr.BadRequest("Please use another administrator account to disable the current account!"))
 		return
 	}
 
@@ -204,7 +204,7 @@ func (h *AdminHandler) CheckGroupAuth(ctx *gin.Context, groups []string, id int3
 	authGroupsStr := "," + strings.Join(authGroups, ",") + ","
 	for _, v := range groups {
 		if !strings.Contains(authGroupsStr, ","+v+",") {
-			return cErr.BadRequest("you have no permission to add an administrator to this group!")
+			return cErr.BadRequest("You have no permission to add an administrator to this group!")
 		}
 	}
 	return nil

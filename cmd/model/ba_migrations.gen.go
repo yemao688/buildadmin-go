@@ -14,8 +14,8 @@ const TableNameBaMigration = "ba_migrations"
 type BaMigration struct {
 	Version       int64     `gorm:"column:version;primaryKey" json:"version"`
 	MigrationName string    `gorm:"column:migration_name" json:"migration_name"`
-	StartTime     time.Time `gorm:"column:start_time;not null;default:CURRENT_TIMESTAMP" json:"start_time"`
-	EndTime       time.Time `gorm:"column:end_time;not null;default:CURRENT_TIMESTAMP" json:"end_time"`
+	StartTime     time.Time `gorm:"column:start_time" json:"start_time"`
+	EndTime       time.Time `gorm:"column:end_time" json:"end_time"`
 	Breakpoint    bool      `gorm:"column:breakpoint;not null" json:"breakpoint"`
 }
 

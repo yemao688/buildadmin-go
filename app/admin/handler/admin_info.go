@@ -60,7 +60,7 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 	//校验数据权限
 	adminAuth := header.GetAdminAuth(ctx)
 	if adminAuth.Id != int32(id) {
-		FailByErr(ctx, cErr.BadRequest("you have no permission"))
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
 		return
 	}
 

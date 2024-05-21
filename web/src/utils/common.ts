@@ -219,8 +219,10 @@ export function auth(node: string | { name: string; subNodeName?: string }) {
 export const fullUrl = (relativeUrl: string, domain = '') => {
     const siteConfig = useSiteConfig()
     if (!domain) {
+        console.log(siteConfig.cdnUrl)
         domain = siteConfig.cdnUrl ? siteConfig.cdnUrl : getUrl()
     }
+    console.log(relativeUrl,domain)
     if (!relativeUrl) return domain
 
     const regUrl = new RegExp(/^http(s)?:\/\//)

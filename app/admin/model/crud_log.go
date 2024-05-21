@@ -19,7 +19,6 @@ type CrudLog struct {
 
 type CrudLogModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
@@ -29,8 +28,9 @@ func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
 			Key:              "id",
 			QuickSearchField: "table_name",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
 func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err error) {
@@ -38,6 +38,10 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	if err != nil {
 		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }

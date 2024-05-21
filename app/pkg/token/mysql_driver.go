@@ -64,7 +64,7 @@ func (d MysqlDriver) Get(token string, expirationException bool) (*Token, error)
 	var data Token
 	err = d.sqlDB.Table("ba_token").Where("token = ? ", encryptToken).First(&data).Error
 	if err != nil {
-		return nil, err
+		return nil, cErr.BadRequest("Please login first", 303)
 	}
 	// 返回未加密的token给客户端使用
 	data.Token = token
@@ -72,7 +72,7 @@ func (d MysqlDriver) Get(token string, expirationException bool) (*Token, error)
 	data.ExpiresIn = GetExpiredIn(data.ExpireTime)
 	if data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() && expirationException {
 		// token过期-触发前端刷新token
-		return nil, cErr.Unauthorized("Token expiration:", 409)
+		return nil, cErr.Unauthorized("Token expiration", 409)
 	}
 	return &data, nil
 }

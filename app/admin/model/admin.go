@@ -2,6 +2,7 @@ package model
 
 import (
 	"go-build-admin/app/pkg/random"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
@@ -11,52 +12,78 @@ import (
 const TableNameAdmin = "ba_admin"
 
 type Admin struct {
-	ID            int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
-	Username      string `gorm:"column:username;not null;comment:用户名" json:"username"`              // 用户名
-	Nickname      string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`               // 昵称
-	Avatar        string `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                   // 头像
-	Email         string `gorm:"column:email;not null;comment:邮箱" json:"email"`                     // 邮箱
-	Mobile        string `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                   // 手机
-	LoginFailure  int32  `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"` // 登录失败次数
-	LastLoginTime int64  `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`      // 上次登录时间
-	LastLoginIP   string `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"` // 上次登录IP
-	Password      string `gorm:"column:password;not null;comment:密码" json:"password"`               // 密码
-	Salt          string `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                      // 密码盐
-	Motto         string `gorm:"column:motto;not null;comment:签名" json:"motto"`                     // 签名
-	RongToken     string `gorm:"column:rong_token" json:"rong_token"`
-	TeamID        int32  `gorm:"column:team_id;comment:团队id" json:"team_id"`                          // 团队id
-	Online        int32  `gorm:"column:online;comment:0:下线,1:在线,2:离线" json:"online"`                  // 0:下线,1:在线,2:离线
-	Status        string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"` // 状态:0=禁用,1=启用
-	UpdateTime    int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                  // 更新时间
-	CreateTime    int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
+	ID            int32    `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
+	Username      string   `gorm:"column:username;not null;comment:用户名" json:"username"`                // 用户名
+	Nickname      string   `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                 // 昵称
+	Avatar        string   `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                     // 头像
+	Email         string   `gorm:"column:email;not null;comment:邮箱" json:"email"`                       // 邮箱
+	Mobile        string   `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                     // 手机
+	LoginFailure  int32    `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`   // 登录失败次数
+	LastLoginTime int64    `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`        // 上次登录时间
+	LastLoginIP   string   `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`   // 上次登录IP
+	Password      string   `gorm:"column:password;not null;comment:密码" json:"password"`                 // 密码
+	Salt          string   `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                        // 密码盐
+	Motto         string   `gorm:"column:motto;not null;comment:签名" json:"motto"`                       // 签名
+	Status        string   `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"` // 状态:0=禁用,1=启用
+	UpdateTime    int64    `gorm:"column:update_time;comment:更新时间" json:"update_time"`                  // 更新时间
+	CreateTime    int64    `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
+	GroupArr      []int32  `gorm:"-" json:"group_arr"`
+	GroupNameArr  []string `gorm:"-" json:"group_name_arr"`
 }
 
-type AdminExpand struct {
-	Admin
-	GroupArr     []int32  `json:"group_arr"`
-	GroupNameArr []string `json:"group_name_arr"`
+func (*Admin) TableName() string {
+	return TableNameAdmin
 }
 
 type AdminModel struct {
 	BaseModel
-	sqlDB *gorm.DB
+	config *conf.Configuration
 }
 
-func NewAdminModel(sqlDB *gorm.DB) *AdminModel {
+func NewAdminModel(config *conf.Configuration, sqlDB *gorm.DB) *AdminModel {
 	return &AdminModel{
 		BaseModel: BaseModel{
 			TableName:        TableNameAdmin,
 			Key:              "id",
 			QuickSearchField: "id",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB,
+		config: config,
 	}
 }
 
-func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (admin Admin, err error) {
-	err = s.sqlDB.Table(s.TableName).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&admin).Error
-	return
+func (s *AdminModel) Append(ctx *gin.Context, data *Admin) error {
+	data.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+
+	groups := []struct {
+		Id   int32
+		Name string
+	}{}
+	err := s.sqlDB.Table("ba_admin_group_access").
+		Joins("left join ba_admin_group g on g.id=ba_admin_group_access.group_id").
+		Select("g.id as id,g.name as name").
+		Where("ba_admin_group_access.uid=?", data.ID).Scan(&groups).Error
+
+	if err != nil {
+		return err
+	}
+	for _, v := range groups {
+		data.GroupArr = append(data.GroupArr, v.Id)
+		data.GroupNameArr = append(data.GroupNameArr, v.Name)
+	}
+	return nil
+}
+
+func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
+	data := Admin{}
+	if err := s.sqlDB.Table(s.TableName).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
+		return data, err
+	}
+	if err := s.Append(ctx, &data); err != nil {
+		return data, err
+	}
+	return data, nil
 }
 
 func (s *AdminModel) GetGroupArr(ctx *gin.Context, id int32) (groupIds []int32, err error) {
@@ -70,12 +97,21 @@ func (s *AdminModel) GetGroupNameArr(ctx *gin.Context, id int32) (groupNames []s
 	return
 }
 
-func (s *AdminModel) List(ctx *gin.Context) (list []Admin, total int64, err error) {
+func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
-		return nil, 0, err
+		return
 	}
-	err = s.sqlDB.Table(s.TableName).Scopes(Total(whereS, whereP, &total)).Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName)
+	if err = db.Count(&total).Error; err != nil {
+		return
+	}
+	err = db.Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	for _, v := range list {
+		if err = s.Append(ctx, v); err != nil {
+			return
+		}
+	}
 	return
 }
 

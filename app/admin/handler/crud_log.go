@@ -7,29 +7,29 @@ import (
 	"go.uber.org/zap"
 )
 
-type CurdLogHandler struct {
+type CrudLogHandler struct {
 	Base
 	log     *zap.Logger
-	curdLog *model.CrudLogModel
+	crudLog *model.CrudLogModel
 	authM   *model.AuthModel
 }
 
-func NewCurdLogHandler(log *zap.Logger, curdLog *model.CrudLogModel, authM *model.AuthModel) *CurdLogHandler {
-	return &CurdLogHandler{
-		Base:    Base{currentM: curdLog},
+func NewCrudLogHandler(log *zap.Logger, crudLog *model.CrudLogModel, authM *model.AuthModel) *CrudLogHandler {
+	return &CrudLogHandler{
+		Base:    Base{currentM: crudLog},
 		log:     log,
-		curdLog: curdLog,
+		crudLog: crudLog,
 		authM:   authM,
 	}
 }
 
-func (h *CurdLogHandler) Index(ctx *gin.Context) {
+func (h *CrudLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 		return
 	}
 
-	result, total, err := h.curdLog.List(ctx)
+	result, total, err := h.crudLog.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
