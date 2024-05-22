@@ -31,7 +31,7 @@
                         type="remoteSelect"
                         prop="pid"
                         :label="t('auth.rule.Superior menu rule')"
-                        v-model="baTable.form.items!.pid"
+                        v-model.number="baTable.form.items!.pid"
                         :placeholder="t('Click select')"
                         :input-attr="{
                             params: { isTree: true },
@@ -141,7 +141,7 @@
                     </el-form-item>
                     <el-form-item :label="t('auth.rule.Rule weight')">
                         <el-input
-                            v-model="baTable.form.items!.weigh"
+                            v-model.number="baTable.form.items!.weigh"
                             type="number"
                             :placeholder="t('auth.rule.Please enter the weight of menu rule (sort by)')"
                         ></el-input>

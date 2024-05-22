@@ -5,13 +5,11 @@ import (
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
-	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -101,26 +99,6 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	adminRule, err := h.adminRuleM.GetOne(ctx, int32(id))
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, adminRule.ID) {
-		FailByErr(ctx, cErr.BadRequest("You have no permission"))
-		return
-	}
-
-	if ctx.Request.Method == http.MethodGet {
-		Success(ctx, map[string]interface{}{
-			"row": adminRule,
-		})
-		return
-	}
-
 	var params = struct {
 		IDS
 		AdminRule
@@ -129,7 +107,16 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
-
+	adminRule, err := h.adminRuleM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	//校验数据权限
+	if !h.CheckDataLimit(ctx, adminRule.ID) {
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
+		return
+	}
 	copier.Copy(&adminRule, params)
 	err = h.adminRuleM.Edit(ctx, adminRule)
 	if err != nil {
@@ -141,7 +128,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 
 func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
-	if err := ctx.ShouldBindJSON(&params); err != nil {
+	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}

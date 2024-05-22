@@ -51,7 +51,7 @@ func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
 }
 
 func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&adminRule).Error
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).Take(&adminRule).Error
 	return
 }
 
@@ -78,8 +78,10 @@ func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
 
 func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
 	parent := AdminRule{}
-	if err := s.sqlDB.Table(s.TableName).Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
-		return err
+	if adminRule.Pid > 0 {
+		if err := s.sqlDB.Table(s.TableName).Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
+			return err
+		}
 	}
 
 	tx := s.sqlDB.Begin()

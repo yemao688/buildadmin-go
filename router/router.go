@@ -96,33 +96,34 @@ func InitRouter(
 
 	adminRouter.GET("auth.Admin/index", dataLimitM.Handler("allAuthAndOthers"), adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
-	adminRouter.GET("auth.Admin/edit", adminHandler.Edit)
+	adminRouter.GET("auth.Admin/edit", adminHandler.One)
 	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)
 	adminRouter.DELETE("auth.Admin/del", adminHandler.Del)
 
 	adminRouter.GET("auth.Rule/index", adminRuleHandler.Index)
 	adminRouter.POST("auth.Rule/add", adminRuleHandler.Add)
-	adminRouter.GET("auth.Rule/edit", adminRuleHandler.Edit)
+	adminRouter.GET("auth.Rule/edit", adminRuleHandler.One)
 	adminRouter.POST("auth.Rule/edit", adminRuleHandler.Edit)
 	adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
+	adminRouter.POST("auth.Rule/sortable", adminRuleHandler.Sortable)
 
 	adminRouter.GET("auth.AdminLog/index", adminLogHandler.Index)
 
 	adminRouter.GET("user.User/index", userHandler.Index)
 	adminRouter.POST("user.User/add", userHandler.Add)
-	adminRouter.GET("user.User/edit", userHandler.Edit)
+	adminRouter.GET("user.User/edit", userHandler.One)
 	adminRouter.POST("user.User/edit", userHandler.Edit)
 	adminRouter.DELETE("user.User/del", userHandler.Del)
 
 	adminRouter.GET("user.Group/index", userGroupHandler.Index)
 	adminRouter.POST("user.Group/add", userGroupHandler.Add)
-	adminRouter.GET("user.Group/edit", userGroupHandler.Edit)
+	adminRouter.GET("user.Group/edit", userGroupHandler.One)
 	adminRouter.POST("user.Group/edit", userGroupHandler.Edit)
 	adminRouter.DELETE("user.Group/del", userGroupHandler.Del)
 
 	adminRouter.GET("user.Rule/index", userRuleHandler.Index)
 	adminRouter.POST("user.Rule/add", userRuleHandler.Add)
-	adminRouter.GET("user.Rule/edit", userRuleHandler.Edit)
+	adminRouter.GET("user.Rule/edit", userRuleHandler.One)
 	adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
 	adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
 
@@ -136,7 +137,7 @@ func InitRouter(
 
 	adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
 	adminRouter.POST("routine.Attachment/add", attachmentHandler.Add)
-	adminRouter.GET("routine.Attachment/edit", attachmentHandler.Edit)
+	adminRouter.GET("routine.Attachment/edit", attachmentHandler.One)
 	adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
 	adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
 
@@ -150,7 +151,7 @@ func InitRouter(
 
 	adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
 	adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
-	adminRouter.GET("security.DataRecycle/edit", dataRecycleHandler.Edit)
+	adminRouter.GET("security.DataRecycle/edit", dataRecycleHandler.One)
 	adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
 	adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
 
@@ -159,7 +160,7 @@ func InitRouter(
 
 	adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
 	adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
-	adminRouter.GET("security.SensitiveData/edit", sensitiveDataHandler.Edit)
+	adminRouter.GET("security.SensitiveData/edit", sensitiveDataHandler.One)
 	adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
 	adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
@@ -167,7 +168,7 @@ func InitRouter(
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)
-	adminRouter.GET("testBuild/edit", testBuildHandler.Edit)
+	adminRouter.GET("testBuild/edit", testBuildHandler.One)
 	adminRouter.POST("testBuild/edit", testBuildHandler.Edit)
 	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
 

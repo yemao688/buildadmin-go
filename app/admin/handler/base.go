@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
@@ -40,12 +41,15 @@ func (h *Base) CheckDataLimit(ctx *gin.Context, id int32) bool {
 
 func (h *Base) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	fmt.Println(id)
 	result := map[string]interface{}{}
 	err := h.currentM.DB().Table(h.currentM.Table()).Where("id=?", id).Take(&result).Error
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+
+	fmt.Println(result)
 
 	//校验数据权限
 	if !h.CheckDataLimit(ctx, int32(id)) {

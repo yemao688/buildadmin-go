@@ -107,7 +107,7 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 
 func (h *AttachmentHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
-	if err := ctx.ShouldBindJSON(&params); err != nil {
+	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}

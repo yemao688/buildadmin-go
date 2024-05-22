@@ -53,7 +53,7 @@ func NewAdminModel(config *conf.Configuration, sqlDB *gorm.DB) *AdminModel {
 	}
 }
 
-func (s *AdminModel) Append(ctx *gin.Context, data *Admin) error {
+func (s *AdminModel) DealData(ctx *gin.Context, data *Admin) error {
 	data.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 
 	groups := []struct {
@@ -80,7 +80,7 @@ func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 	if err := s.sqlDB.Table(s.TableName).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
 		return data, err
 	}
-	if err := s.Append(ctx, &data); err != nil {
+	if err := s.DealData(ctx, &data); err != nil {
 		return data, err
 	}
 	return data, nil
@@ -108,7 +108,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 	}
 	err = db.Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	for _, v := range list {
-		if err = s.Append(ctx, v); err != nil {
+		if err = s.DealData(ctx, v); err != nil {
 			return
 		}
 	}

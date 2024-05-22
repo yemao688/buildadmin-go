@@ -88,7 +88,7 @@ func (h *TestBuildHandler) Edit(ctx *gin.Context) {
 
 func (h *TestBuildHandler) Del(ctx *gin.Context) {
 	var param validate.Ids
-	if err := ctx.ShouldBindJSON(&param); err != nil {
+	if err := ctx.ShouldBindQuery(&param); err != nil {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
