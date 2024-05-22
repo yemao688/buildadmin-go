@@ -5,6 +5,7 @@ import (
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -153,14 +154,7 @@ func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 	outRoutes := map[string]string{}
 	routes := GetAllRoutes()
 	for _, r := range routes {
-		flag := false
-		for _, v := range outExcludeRoute {
-			if v == r.Method {
-				flag = true
-				break
-			}
-		}
-		if !flag {
+		if !slices.Contains(outExcludeRoute, r.Method) {
 			outRoutes[r.Method] = r.Method
 		}
 	}
@@ -183,14 +177,7 @@ func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
 	for name, comment := range tables {
-		flag := false
-		for _, v := range outExcludeTable {
-			if v == name {
-				flag = true
-				break
-			}
-		}
-		if !flag {
+		if !slices.Contains(outExcludeTable, name) {
 			outTables[name] = comment
 		}
 	}

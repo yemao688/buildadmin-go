@@ -5,8 +5,9 @@ import (
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/utils"
 	"net/http"
-	"strconv"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -50,10 +51,10 @@ func (h *UserGroupHandler) Index(ctx *gin.Context) {
 }
 
 type UserGroup struct {
-	Pid    int32  `json:"pid"`
-	Name   string `json:"name" binding:"required"`
-	Rules  string `json:"rules"`
-	Status string `json:"status"`
+	Pid    int32   `json:"pid"`
+	Name   string  `json:"name" binding:"required"`
+	Rules  []int32 `json:"rules"`
+	Status string  `json:"status"`
 }
 
 func (v UserGroup) GetMessages() validate.ValidatorMessages {
@@ -98,23 +99,26 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 			return
 		}
 
-		childRuleIds := []string{}
-		for _, v := range ruleIds {
-			flag := false
-			for _, v1 := range pids {
-				if strconv.Itoa(int(v1)) == v {
-					flag = true
-					break
-				}
-			}
-			if !flag {
+		rulesId32s, err := utils.AtoiArr(ruleIds)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+
+		childRuleIds := []int32{}
+		for _, v := range rulesId32s {
+			if !slices.Contains(pids, v) {
 				childRuleIds = append(childRuleIds, v)
 			}
 		}
 
-		userGroup.Rules = strings.Join(childRuleIds, ",")
 		Success(ctx, map[string]interface{}{
-			"row": userGroup,
+			"row": map[string]any{
+				"id":     userGroup.ID,
+				"name":   userGroup.Name,
+				"status": userGroup.Status,
+				"rules":  childRuleIds,
+			},
 		})
 		return
 	}
@@ -130,15 +134,7 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 
 	adminAuth := header.GetAdminAuth(ctx)
 	groupIds := h.authM.GetGroupIds(adminAuth.Id)
-	flag := false
-	for _, v := range groupIds {
-		if int32(id) == v {
-			flag = true
-			break
-		}
-	}
-
-	if !flag {
+	if slices.Contains(groupIds, int32(id)) {
 		FailByErr(ctx, cErr.BadRequest("You cannot modify your own management group!"))
 		return
 	}

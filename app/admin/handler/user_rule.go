@@ -6,6 +6,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -180,15 +181,9 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 func (h *UserRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.UserRule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
 	ids, _ := h.authM.GetRuleIds(0)
-	flag := false
-	for _, v := range ids {
-		if strings.Contains(v, "*") {
-			flag = true
-			break
-		}
-	}
+	isSuper := slices.Contains(ids, "*")
 
-	if !flag && len(ids) > 0 {
+	if !isSuper && len(ids) > 0 {
 		whereS = append(whereS, " id in ? ")
 		whereP = append(whereP, ids)
 	}

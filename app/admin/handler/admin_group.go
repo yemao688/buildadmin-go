@@ -1,14 +1,12 @@
 package handler
 
 import (
-	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/tree"
 	"go-build-admin/utils"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -62,7 +60,6 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 	if isTree == "" || isTree == "true" {
 		result["list"] = h.AssembleChild(groups)
 	}
-
 	Success(ctx, result)
 }
 
@@ -82,7 +79,6 @@ func (v AdminGroup) GetMessages() validate.ValidatorMessages {
 func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	var params AdminGroup
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		fmt.Println(err)
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
@@ -104,8 +100,8 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("name")).MustInt()
+func (h *AdminGroupHandler) One(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	adminGroup, err := h.adminGroupM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
@@ -117,41 +113,38 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if ctx.Request.Method == http.MethodGet {
-		// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
-		ruleIds := strings.Split(adminGroup.Rules, ",")
-		pids, err := h.adminRuleM.GetRulePIds(ruleIds)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-
-		childRuleIds := []string{}
-		for _, v := range ruleIds {
-			flag := false
-			for _, v1 := range pids {
-				if strconv.Itoa(int(v1)) == v {
-					flag = true
-					break
-				}
-			}
-			if !flag {
-				childRuleIds = append(childRuleIds, v)
-			}
-		}
-
-		Success(ctx, map[string]interface{}{
-			"row": map[string]any{
-				"id":     adminGroup.ID,
-				"name":   adminGroup.Name,
-				"pid":    adminGroup.Pid,
-				"status": adminGroup.Status,
-				"rules":  childRuleIds,
-			},
-		})
+	// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
+	ruleIds := strings.Split(adminGroup.Rules, ",")
+	pids, err := h.adminRuleM.GetRulePIds(ruleIds)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
+	rulesId32s, err := utils.AtoiArr(ruleIds)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	childRuleIds := []int32{}
+	for _, v := range rulesId32s {
+		if !slices.Contains(pids, v) {
+			childRuleIds = append(childRuleIds, v)
+		}
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": map[string]any{
+			"id":     adminGroup.ID,
+			"name":   adminGroup.Name,
+			"pid":    adminGroup.Pid,
+			"status": adminGroup.Status,
+			"rules":  childRuleIds,
+		},
+	})
+}
+
+func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	var params = struct {
 		IDS
 		AdminGroup
@@ -161,17 +154,20 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	adminAuth := header.GetAdminAuth(ctx)
-	groupIds := h.authM.GetGroupIds(adminAuth.Id)
-	flag := false
-	for _, v := range groupIds {
-		if int32(id) == v {
-			flag = true
-			break
-		}
+	adminGroup, err := h.adminGroupM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
 	}
 
-	if !flag {
+	if err := h.CheckAuth(ctx, params.ID); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	adminAuth := header.GetAdminAuth(ctx)
+	groupIds := h.authM.GetGroupIds(adminAuth.Id)
+	if slices.Contains(groupIds, params.ID) {
 		FailByErr(ctx, cErr.BadRequest("You cannot modify your own management group!"))
 		return
 	}
@@ -194,13 +190,13 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 
 func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
-	if err := ctx.ShouldBindJSON(&params); err != nil {
+	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
 	for _, v := range params.Ids {
-		if err := h.CheckAuth(ctx, int32(v)); err != nil {
+		if err := h.CheckAuth(ctx, v); err != nil {
 			FailByErr(ctx, err)
 			return
 		}
@@ -224,13 +220,7 @@ func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string
 		//判断是否超级管理员
 		superAdmin := true
 		for _, r := range list {
-			flag := false
-			for _, v := range rules {
-				if r.ID == v {
-					flag = true
-				}
-			}
-			if !flag {
+			if !slices.Contains(rules, r.ID) {
 				superAdmin = false
 				break
 			}
@@ -355,16 +345,9 @@ func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
 		return err
 	}
 
-	if !adminAuth.IsLogin {
-		flag := false
-		for _, v := range authGroups {
-			if v == strconv.Itoa(int(groupId)) {
-				flag = true
-				break
-			}
-		}
-
-		if !flag {
+	if !adminAuth.IsSuperAdmin {
+		idStr := strconv.Itoa(int(groupId))
+		if !slices.Contains(authGroups, idStr) {
 			return cErr.BadRequest("You need to have all the permissions of the group and have additional permissions before you can operate the group~")
 		}
 	}

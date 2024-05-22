@@ -2,6 +2,7 @@ package model
 
 import (
 	cErr "go-build-admin/app/pkg/error"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -107,21 +108,14 @@ func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 	return tx.Commit().Error
 }
 
-func (s *UserRuleModel) Del(ctx *gin.Context, ids []int64) error {
-	var subIds []int64
+func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
+	var subIds []int32
 	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
 	for _, v := range subIds {
-		flag := false
-		for _, v1 := range ids {
-			if v == v1 {
-				flag = true
-				break
-			}
-		}
-		if !flag {
+		if !slices.Contains(ids, v) {
 			return cErr.BadRequest("Please delete the child element first, or use batch deletion")
 		}
 	}

@@ -184,17 +184,21 @@ func (s *AuthModel) getChildren(children map[int32][]Rule, rules []Rule) []Rule 
 	return rules
 }
 
-// 检查是否有某权限
+/**
+ *检查是否有某权限
+ *name  菜单规则的 name，可以传递两个，以','号隔开
+ *uid   用户ID
+ *relation 如果出现两个 name,是两个都通过(and)还是一个通过即可(or)
+ */
 func (s *AuthModel) Check(name string, id int32, relation string) bool {
 	ruleNameList := AuthRuleNameList[id]
 	if slices.Contains(ruleNameList, "*") {
 		return true
 	}
-
 	result := false
 	checkNameArr := strings.Split(strings.ToLower(name), ",")
-	for _, v := range ruleNameList {
-		if slices.Contains(checkNameArr, v) {
+	for _, v := range checkNameArr {
+		if slices.Contains(ruleNameList, v) {
 			result = true
 		}
 

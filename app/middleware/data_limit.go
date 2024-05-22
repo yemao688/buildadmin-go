@@ -4,6 +4,7 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/conf"
+	"slices"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -57,14 +58,7 @@ func (m *DataLimit) Handler(limitType string) gin.HandlerFunc {
 			// 在组内，可查看所有，不在组内，可查看自己的
 			if v, err := strconv.Atoi(limitType); err == nil && v > 0 {
 				adminIds = m.authM.GetGroupAdmins([]string{limitType})
-				ok := false
-				for _, v := range adminIds {
-					if v == adminAuth.Id {
-						ok = true
-						break
-					}
-				}
-				if !ok {
+				if !slices.Contains(adminIds, adminAuth.Id) {
 					adminIds = append(adminIds, adminAuth.Id)
 				}
 			}

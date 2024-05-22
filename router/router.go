@@ -90,7 +90,7 @@ func InitRouter(
 
 	adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
 	adminRouter.POST("auth.Group/add", adminGroupHandler.Add)
-	adminRouter.GET("auth.Group/edit", adminGroupHandler.Edit)
+	adminRouter.GET("auth.Group/edit", adminGroupHandler.One)
 	adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
 	adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
 

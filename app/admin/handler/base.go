@@ -5,9 +5,11 @@ import (
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/unknwon/com"
 	"gorm.io/gorm"
 )
 
@@ -25,23 +27,35 @@ func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 func (h *Base) CheckDataLimit(ctx *gin.Context, id int32) bool {
-	value, _ := ctx.Get("dataLimitAdminIds")
-	if value != nil {
+	value, exists := ctx.Get("dataLimitAdminIds")
+	if exists && value != nil {
 		dataLimitAdminIds := value.([]int32)
 		if len(dataLimitAdminIds) == 0 {
 			return true
 		}
-
-		ok := false
-		for _, v := range dataLimitAdminIds {
-			if v == id {
-				ok = true
-				break
-			}
-		}
-		return ok
+		return slices.Contains(dataLimitAdminIds, id)
 	}
 	return true
+}
+
+func (h *Base) One(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	result := map[string]interface{}{}
+	err := h.currentM.DB().Table(h.currentM.Table()).Where("id=?", id).Take(&result).Error
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	//校验数据权限
+	if !h.CheckDataLimit(ctx, int32(id)) {
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
+		return
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
 }
 
 func (h *Base) Sortable(ctx *gin.Context) {

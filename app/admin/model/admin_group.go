@@ -3,6 +3,7 @@ package model
 import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -41,7 +42,7 @@ func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
 }
 
 func (s *AdminGroupModel) GetOne(ctx *gin.Context, id int32) (adminGroup AdminGroup, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&adminGroup).Error
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).Take(&adminGroup).Error
 	return
 }
 
@@ -76,21 +77,14 @@ func (s *AdminGroupModel) Edit(ctx *gin.Context, adminGroup AdminGroup) error {
 	return tx.Commit().Error
 }
 
-func (s *AdminGroupModel) Del(ctx *gin.Context, ids []int64) error {
-	var subIds []int64
+func (s *AdminGroupModel) Del(ctx *gin.Context, ids []int32) error {
+	var subIds []int32
 	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
 	for _, v := range subIds {
-		flag := false
-		for _, v1 := range ids {
-			if v == v1 {
-				flag = true
-				break
-			}
-		}
-		if !flag {
+		if !slices.Contains(ids, v) {
 			return cErr.BadRequest("Please delete the child element first, or use batch deletion")
 		}
 	}

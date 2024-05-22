@@ -1,7 +1,7 @@
 package validate
 
 type Ids struct {
-	Ids []int64 `json:"ids" binding:"required"`
+	Ids []int32 `form:"ids[]" binding:"required"`
 }
 
 func (v Ids) GetMessages() ValidatorMessages {

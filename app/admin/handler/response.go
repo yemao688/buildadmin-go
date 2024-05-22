@@ -21,7 +21,7 @@ func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, Response{
 		1,
 		data,
-		"ok",
+		"",
 		timestamp.(int64),
 	})
 }
