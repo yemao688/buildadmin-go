@@ -17,8 +17,8 @@ type SensitiveData struct {
 	PrimaryKey   string `gorm:"column:primary_key;not null;comment:数据表主键" json:"primary_key"`        // 数据表主键
 	DataFields   string `gorm:"column:data_fields;comment:敏感数据字段" json:"data_fields"`                // 敏感数据字段
 	Status       string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"` // 状态:0=禁用,1=启用
-	UpdateTime   int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                  // 更新时间
-	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
+	UpdateTime   int64  `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`   // 更新时间
+	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
 func (*SensitiveData) TableName() string {
@@ -51,7 +51,7 @@ func (s *SensitiveDataModel) List(ctx *gin.Context) (list []SensitiveData, total
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&SensitiveData{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

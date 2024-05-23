@@ -88,7 +88,10 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 	}
 
 	var adminRule model.AdminRule
-	copier.Copy(&adminRule, params)
+	if err := copier.Copy(&adminRule, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	err := h.adminRuleM.Add(ctx, adminRule)
 	if err != nil {
@@ -117,7 +120,10 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("You have no permission"))
 		return
 	}
-	copier.Copy(&adminRule, params)
+	if err := copier.Copy(&adminRule, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	err = h.adminRuleM.Edit(ctx, adminRule)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -156,7 +162,7 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 
 	isTree := ctx.Request.FormValue("isTree")
 	if isTree == "true" {
-		data := tree.AssembleTree(h.AssembleChild(list).([]*AdminRuleExpend))
+		data := tree.AssembleTree(tree.GetTreeArray(h.AssembleChild(list), 0, false))
 		return map[string]interface{}{
 			"options": data,
 		}, true
@@ -202,7 +208,7 @@ func (l *AdminRuleExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*AdminRuleExpend)
 }
 
-func (h *AdminRuleHandler) AssembleChild(list []model.AdminRule) interface{} {
+func (h *AdminRuleHandler) AssembleChild(list []model.AdminRule) []*AdminRuleExpend {
 	expendList := []*AdminRuleExpend{}
 	for _, v := range list {
 		temp := AdminRuleExpend{}

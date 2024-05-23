@@ -2,8 +2,10 @@ package handler
 
 import (
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/admin/validate"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
@@ -37,19 +39,37 @@ func (h *UserScoreLogHandler) Index(ctx *gin.Context) {
 	})
 }
 
-func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
-	// if ctx.Request.Method == http.MethodGet {
-	// 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	// 	user, err := h.userScoreLogM.GetOne(ctx, int32(id))
-	// 	if err != nil {
-	// 		FailByErr(ctx, err)
-	// 		return
-	// 	}
+type Score struct {
+	UserID int32  `json:"user_id"  binding:"required"`
+	Score  int32  `json:"score"  binding:"required"`
+	Memo   string `json:"memo"  binding:"required"`
+}
 
-	// 	Success(ctx, map[string]interface{}{
-	// 		"user": user,
-	// 	})
-	// 	return
-	// }
+func (v Score) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"user_id.required": "user_id required",
+		"score.required":   "score required",
+		"memo.required":    "memo required",
+	}
+}
+
+func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
+	var params Money
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	userScoreLog := model.UserScoreLog{}
+	if err := copier.Copy(&userScoreLog, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	err := h.userScoreLogM.Add(ctx, userScoreLog)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	Success(ctx, "")
 }

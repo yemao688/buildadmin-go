@@ -27,8 +27,8 @@ type UserRule struct {
 	Remark       string `gorm:"column:remark;not null;comment:备注" json:"remark"`                                                                                        // 备注
 	Weigh        int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                                                                                          // 权重
 	Status       string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                                                    // 状态:0=禁用,1=启用
-	UpdateTime   int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                                                                                     // 更新时间
-	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                                                     // 创建时间
+	UpdateTime   int64  `gorm:"autoCreateTime;column:update_time;comment:更新时间" json:"update_time"`                                                                      // 更新时间
+	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                                                      // 创建时间
 }
 
 func (*UserRule) TableName() string {
@@ -83,8 +83,10 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 
 func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 	parent := UserRule{}
-	if err := s.sqlDB.Table(s.TableName).Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
-		return err
+	if userRule.Pid > 0 {
+		if err := s.sqlDB.Table(s.TableName).Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
+			return err
+		}
 	}
 
 	tx := s.sqlDB.Begin()
@@ -122,4 +124,10 @@ func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
+}
+
+func (s *UserRuleModel) GetRulePIds(ids []string) ([]int32, error) {
+	pids := []int32{}
+	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
+	return pids, err
 }

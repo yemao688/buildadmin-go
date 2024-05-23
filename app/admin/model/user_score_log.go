@@ -51,3 +51,33 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
+
+func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog UserScoreLog) error {
+	user := User{}
+	if err := s.sqlDB.Table(TableNameUser).Where("id=?", userScoreLog.UserID).Take(&user).Error; err != nil {
+		return err
+	}
+
+	userScoreLog.Before = user.Score
+	userScoreLog.After = user.Score + userScoreLog.Score
+
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(TableNameUser).Where("id=?", userScoreLog.UserID).UpdateColumn("score", gorm.Expr("score + ?", userScoreLog.Score)).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+
+	if err := tx.Table(s.TableName).Create(&userScoreLog).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
+}

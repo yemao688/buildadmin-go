@@ -64,10 +64,10 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 }
 
 type AdminGroup struct {
-	Pid    int32   `form:"pid" json:"pid"`
-	Name   string  `form:"name" json:"name" binding:"required"`
-	Rules  []int32 `form:"rules" json:"rules"`
-	Status string  `form:"status" json:"status"`
+	Pid    int32   `json:"pid"`
+	Name   string  `json:"name" binding:"required"`
+	Rules  []int32 `json:"rules"`
+	Status string  `json:"status"`
 }
 
 func (v AdminGroup) GetMessages() validate.ValidatorMessages {
@@ -84,7 +84,10 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	}
 
 	adminGroup := model.AdminGroup{}
-	copier.Copy(&adminGroup, params)
+	if err := copier.Copy(&adminGroup, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	rules, err := h.HandleRules(ctx, params.Rules)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -172,13 +175,15 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&adminGroup, params)
-	rules, err := h.HandleRules(ctx, params.Rules)
+	if err := copier.Copy(&adminGroup, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	adminGroup.Rules, err = h.HandleRules(ctx, params.Rules)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	adminGroup.Rules = rules
 
 	err = h.adminGroupM.Edit(ctx, adminGroup)
 	if err != nil {
@@ -218,14 +223,14 @@ func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string
 			return "", err
 		}
 		//判断是否超级管理员
-		superAdmin := true
+		super := true
 		for _, r := range list {
 			if !slices.Contains(rules, r.ID) {
-				superAdmin = false
+				super = false
 				break
 			}
 		}
-		if superAdmin {
+		if super {
 			return "*", nil
 		}
 

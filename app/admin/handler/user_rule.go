@@ -5,13 +5,10 @@ import (
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
-	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -37,7 +34,7 @@ func (h *UserRuleHandler) Index(ctx *gin.Context) {
 		return
 	}
 	whereP := []any{}
-	list, err := h.GetMenus(ctx, []string{}, whereP)
+	list, err := h.GetRules(ctx, []string{}, whereP)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -90,7 +87,10 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 	}
 
 	var userRule model.UserRule
-	copier.Copy(&userRule, params)
+	if err := copier.Copy(&userRule, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	err := h.userRuleM.Add(ctx, userRule)
 	if err != nil {
@@ -101,8 +101,15 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *UserRuleHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	userRule, err := h.userRuleM.GetOne(ctx, int32(id))
+	var params = struct {
+		IDS
+		UserRule
+	}{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+	userRule, err := h.userRuleM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -114,23 +121,10 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if ctx.Request.Method == http.MethodGet {
-		Success(ctx, map[string]interface{}{
-			"row": userRule,
-		})
+	if err := copier.Copy(&userRule, params); err != nil {
+		FailByErr(ctx, err)
 		return
 	}
-
-	var params = struct {
-		IDS
-		UserRule
-	}{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
-		return
-	}
-
-	copier.Copy(&userRule, params)
 	err = h.userRuleM.Edit(ctx, userRule)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -161,7 +155,7 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 
 	whereS := []string{" type in ? ", " status=? "}
 	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
-	list, err := h.GetMenus(ctx, whereS, whereP)
+	list, err := h.GetRules(ctx, whereS, whereP)
 	if err != nil {
 		FailByErr(ctx, err)
 		return nil, false
@@ -169,7 +163,7 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 
 	isTree := ctx.Request.FormValue("isTree")
 	if isTree == "true" {
-		data := tree.AssembleTree(h.AssembleChild(list).([]*UserRuleExpend))
+		data := tree.AssembleTree(tree.GetTreeArray(h.AssembleChild(list), 0, false))
 		return map[string]interface{}{
 			"options": data,
 		}, true
@@ -178,16 +172,8 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取菜单列表
-func (h *UserRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.UserRule, error) {
+func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.UserRule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
-	ids, _ := h.authM.GetRuleIds(0)
-	isSuper := slices.Contains(ids, "*")
-
-	if !isSuper && len(ids) > 0 {
-		whereS = append(whereS, " id in ? ")
-		whereP = append(whereP, ids)
-	}
-
 	if keyword != "" {
 		keywordArr := strings.Split(keyword, " ")
 		for _, v := range keywordArr {
@@ -215,7 +201,7 @@ func (l *UserRuleExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*UserRuleExpend)
 }
 
-func (h *UserRuleHandler) AssembleChild(list []model.UserRule) interface{} {
+func (h *UserRuleHandler) AssembleChild(list []model.UserRule) []*UserRuleExpend {
 	expendList := []*UserRuleExpend{}
 	for _, v := range list {
 		temp := UserRuleExpend{}

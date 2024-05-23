@@ -42,22 +42,7 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
-	data := model.TestBuild{
-		ID:        0,
-		Image:     "",
-		File:      "",
-		Radio:     "",
-		Checkbox:  "",
-		Select:    "",
-		Switch:    false,
-		Editor:    "",
-		Textarea:  "",
-		Float:     0,
-		Password:  "",
-		Array:     "",
-		Icon:      "",
-		BannerIds: "",
-	}
+	data := model.TestBuild{}
 	err := h.testBuildM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)

@@ -3,11 +3,9 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/header"
 	"go-build-admin/utils"
-	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -71,10 +69,18 @@ func (h *UserGroupHandler) Add(ctx *gin.Context) {
 	}
 
 	userGroup := model.UserGroup{}
-	copier.Copy(&userGroup, params)
-	h.HandleRules(ctx, &userGroup)
+	if err := copier.Copy(&userGroup, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	rules, err := h.HandleRules(ctx, params.Rules)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	userGroup.Rules = rules
 
-	err := h.userGroupM.Add(ctx, userGroup)
+	err = h.userGroupM.Add(ctx, userGroup)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -82,7 +88,7 @@ func (h *UserGroupHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *UserGroupHandler) Edit(ctx *gin.Context) {
+func (h *UserGroupHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	userGroup, err := h.userGroupM.GetOne(ctx, int32(id))
 	if err != nil {
@@ -90,39 +96,37 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if ctx.Request.Method == http.MethodGet {
-		// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
-		ruleIds := strings.Split(userGroup.Rules, ",")
-		pids, err := h.userRuleM.GetRulePIds(ruleIds)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-
-		rulesId32s, err := utils.AtoiArr(ruleIds)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-
-		childRuleIds := []int32{}
-		for _, v := range rulesId32s {
-			if !slices.Contains(pids, v) {
-				childRuleIds = append(childRuleIds, v)
-			}
-		}
-
-		Success(ctx, map[string]interface{}{
-			"row": map[string]any{
-				"id":     userGroup.ID,
-				"name":   userGroup.Name,
-				"status": userGroup.Status,
-				"rules":  childRuleIds,
-			},
-		})
+	// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
+	ruleIds := strings.Split(userGroup.Rules, ",")
+	pids, err := h.userRuleM.GetRulePIds(ruleIds)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
+	rulesId32s, err := utils.AtoiArr(ruleIds)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	childRuleIds := []int32{}
+	for _, v := range rulesId32s {
+		if !slices.Contains(pids, v) {
+			childRuleIds = append(childRuleIds, v)
+		}
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": map[string]any{
+			"id":     userGroup.ID,
+			"name":   userGroup.Name,
+			"rules":  childRuleIds,
+			"status": userGroup.Status,
+		},
+	})
+}
+
+func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 	var params = struct {
 		IDS
 		UserGroup
@@ -131,16 +135,21 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
-
-	adminAuth := header.GetAdminAuth(ctx)
-	groupIds := h.authM.GetGroupIds(adminAuth.Id)
-	if slices.Contains(groupIds, int32(id)) {
-		FailByErr(ctx, cErr.BadRequest("You cannot modify your own management group!"))
+	userGroup, err := h.userGroupM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
-	copier.Copy(&userGroup, params)
-	h.HandleRules(ctx, &userGroup)
+	if err := copier.Copy(&userGroup, params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	userGroup.Rules, err = h.HandleRules(ctx, params.Rules)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	err = h.userGroupM.Edit(ctx, userGroup)
 	if err != nil {
@@ -166,8 +175,29 @@ func (h *UserGroupHandler) Del(ctx *gin.Context) {
 }
 
 // 权限节点入库前处理
-func (h *UserGroupHandler) HandleRules(ctx *gin.Context, userGroup *model.UserGroup) {
-	// if userGroup.Rules != "" {
-	// TODO:
-	// }
+func (h *UserGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string, error) {
+	if len(rules) > 0 {
+		list, err := h.userRuleM.List(ctx)
+		if err != nil {
+			return "", err
+		}
+		//判断是否超级管理员
+		super := true
+		for _, r := range list {
+			if !slices.Contains(rules, r.ID) {
+				super = false
+				break
+			}
+		}
+		if super {
+			return "*", nil
+		}
+
+		stringRules := []string{}
+		for _, v := range rules {
+			stringRules = append(stringRules, strconv.Itoa(int(v)))
+		}
+		return strings.Join(stringRules, ","), nil
+	}
+	return "", nil
 }

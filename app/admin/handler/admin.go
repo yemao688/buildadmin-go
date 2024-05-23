@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
+	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -53,8 +54,8 @@ type Admin struct {
 	Username string   `json:"username" binding:"required,alphanum,min=2,max=15"`
 	Nickname string   `json:"nickname" binding:"required"`
 	Avatar   string   `json:"avatar" binding:""`
-	Email    string   `json:"email" binding:"required,email"`
-	Mobile   string   `json:"mobile" binding:"required,phone"`
+	Email    string   `json:"email" binding:"omitempty,email"`
+	Mobile   string   `json:"mobile" binding:"omitempty,phone"`
 	Password string   `json:"password" binding:"omitempty,password"`
 	Motto    string   `json:"motto"`
 	Status   string   `json:"status" binding:"oneof=0 1"`
@@ -105,6 +106,25 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
+func (h *AdminHandler) One(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	result, err := h.adminM.GetOne(ctx, int32(id))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	//校验数据权限
+	if !h.CheckDataLimit(ctx, int32(id)) {
+		FailByErr(ctx, cErr.BadRequest("You have no permission"))
+		return
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
+}
+
 func (h *AdminHandler) Edit(ctx *gin.Context) {
 	var params = struct {
 		IDS
@@ -151,7 +171,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	}
 
 	copier.Copy(&admin, params)
-	err = h.adminM.Edit(ctx, admin, "create_time, update_time, password, salt, login_failure, last_login_time, last_login_ip", params.GroupArr)
+	err = h.adminM.Edit(ctx, admin, "password, salt, login_failure, last_login_time, last_login_ip", params.GroupArr)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

@@ -128,9 +128,11 @@ func InitRouter(
 	adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
 
 	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
+	adminRouter.GET("user.MoneyLog/add", userHandler.One)
 	adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
 
 	adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
+	adminRouter.GET("user.ScoreLog/add", userHandler.One)
 	adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
 
 	adminRouter.GET("routine.Config/index", configHandler.Index)

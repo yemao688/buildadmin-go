@@ -67,7 +67,7 @@ token:
   expire: 2592000
 
 redis:
-  host: '192.168.56.104'
+  host: '192.168.56.105'
   port: 6379
   db: 5
   password: ''

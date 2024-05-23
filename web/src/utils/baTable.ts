@@ -195,7 +195,8 @@ export default class baTable {
         if (this.runBefore('onSubmit', { formEl: formEl, operate: operate, items: this.form.items! }) === false) return
 
         Object.keys(this.form.items!).forEach((item) => {
-            if (this.form.items![item] === null) delete this.form.items![item]
+            //删除null与空字符串,接口就取相应字段的默认值
+            if (this.form.items![item] === null || this.form.items![item] === '' ) delete this.form.items![item]
         })
 
         // 表单验证通过后执行的api请求操作
@@ -300,14 +301,35 @@ export default class baTable {
                     if (data.field.render == 'switch') {
                         if (!data.field || !data.field.prop) return
                         data.row.loading = true
+                        //防止后台验证不通过,先获取编辑数据然后替换相应字段
                         this.api
-                            .postData('edit', { [this.table.pk!]: data.row[this.table.pk!], [data.field.prop]: data.value })
-                            .then(() => {
-                                data.row.loading = false
-                                data.row[data.field.prop] = data.value
+                            .edit({
+                                [this.table.pk!]: data.row[this.table.pk!],
                             })
-                            .catch(() => {
-                                data.row.loading = false
+                            .then((res) => {
+                                const typeA = typeof res.data.row[data.field.prop];
+                                const typeB = typeof data.value;
+                                if (typeA !== typeB) {
+                                    if (typeA === 'number') {
+                                        res.data.row[data.field.prop] = Number(data.value);
+                                    } else if (typeA === 'string') {
+                                        res.data.row[data.field.prop] = String(data.value);
+                                    } else if (typeA === 'boolean') {
+                                        res.data.row[data.field.prop] = Boolean(data.value);
+                                    } else {
+                                        console.warn(`Unsupported type conversion for type: ${typeA}`);
+                                        return;
+                                    }
+                                }
+                                this.api
+                                    .postData('edit', res.data.row)
+                                    .then(() => {
+                                        data.row.loading = false
+                                        data.row[data.field.prop] = data.value
+                                    })
+                                    .catch(() => {
+                                        data.row.loading = false
+                                    })
                             })
                     }
                 },

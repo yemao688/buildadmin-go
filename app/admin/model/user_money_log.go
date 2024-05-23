@@ -33,7 +33,7 @@ func NewUserMoneyLogModel(sqlDB *gorm.DB) *UserMoneyLogModel {
 			TableName:        TableNameUserMoneyLog,
 			Key:              "id",
 			QuickSearchField: "id",
-			DataLimit:        "",
+			DataLimit:        TableNameUser + ".username," + TableNameUser + ".nickname",
 			sqlDB:            sqlDB,
 		},
 	}
@@ -44,11 +44,41 @@ func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total i
 	if err != nil {
 		return nil, 0, err
 	}
-
+	//预加载需要使用Model
 	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
+}
+
+func (s *UserMoneyLogModel) Add(ctx *gin.Context, userMoneyLog UserMoneyLog) error {
+	user := User{}
+	if err := s.sqlDB.Table(TableNameUser).Where("id=?", userMoneyLog.UserID).Take(&user).Error; err != nil {
+		return err
+	}
+
+	userMoneyLog.Before = user.Money
+	userMoneyLog.After = user.Money + userMoneyLog.Money*100
+
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(TableNameUser).Where("id=?", userMoneyLog.UserID).UpdateColumn("money", gorm.Expr("money + ?", userMoneyLog.Money*100)).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+
+	if err := tx.Table(s.TableName).Create(&userMoneyLog).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
 }

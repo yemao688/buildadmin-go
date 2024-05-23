@@ -65,12 +65,6 @@ type User struct {
 	JoinTime      int64     `json:"join_time"`
 	Motto         string    `json:"motto"`
 	Password      string    `json:"password"`
-	Salt          string    `json:"salt"`
-	RongToken     string    `json:"rong_token"`
-	Openid        string    `json:"openid"`
-	OpenType      string    `json:"open_type"`
-	Online        int32     `json:"online"`
-	Intention     int32     `json:"intention"`
 	Status        string    `json:"status"`
 }
 

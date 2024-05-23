@@ -56,7 +56,7 @@ func (s *AttachmentModel) List(ctx *gin.Context) (list []Attachment, total int64
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&Attachment{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

@@ -22,7 +22,7 @@ type SensitiveDataLog struct {
 	IP          string `gorm:"column:ip;not null;comment:操作者IP" json:"ip"`                           // 操作者IP
 	Useragent   string `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`        // User-Agent
 	IsRollback  int32  `gorm:"column:is_rollback;not null;comment:是否已回滚:0=否,1=是" json:"is_rollback"` // 是否已回滚:0=否,1=是
-	CreateTime  int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                   // 创建时间
+	CreateTime  int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`    // 创建时间
 }
 
 func (*SensitiveDataLog) TableName() string {
@@ -50,7 +50,7 @@ func (s *SensitiveDataLogModel) List(ctx *gin.Context) (list []SensitiveDataLog,
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&SensitiveDataLog{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
