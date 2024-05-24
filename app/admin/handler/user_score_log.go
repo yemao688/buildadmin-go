@@ -54,7 +54,7 @@ func (v Score) GetMessages() validate.ValidatorMessages {
 }
 
 func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
-	var params Money
+	var params Score
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return

@@ -65,7 +65,6 @@ token:
   default: 'mysql'
   key: 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I'
   algo: 'sha256'
-  expire: 2592000
 
 redis:
   host: '192.168.105'

@@ -40,7 +40,7 @@ func NewAttachmentModel(sqlDB *gorm.DB) *AttachmentModel {
 		BaseModel: BaseModel{
 			TableName:        TableNameAttachment,
 			Key:              "id",
-			QuickSearchField: "id",
+			QuickSearchField: "name",
 			DataLimit:        "",
 		},
 		sqlDB: sqlDB}

@@ -38,10 +38,10 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName)
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }

@@ -3,6 +3,8 @@ package handler
 import (
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/random"
+	"go-build-admin/app/pkg/token"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -11,10 +13,11 @@ import (
 type CommonHandler struct {
 	log          *zap.Logger
 	clickCaptcha *clickcaptcha.ClickCaptcha
+	tokenHelper  *token.TokenHelper
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha) *CommonHandler {
-	return &CommonHandler{log: log, clickCaptcha: clickCaptcha}
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, tokenHelper *token.TokenHelper) *CommonHandler {
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, tokenHelper: tokenHelper}
 }
 
 // 图形验证码
@@ -59,6 +62,45 @@ func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
 }
 
 func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
+	var params struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if params.RefreshToken == "" {
+		FailByErr(ctx, cErr.BadRequest("Login expired, please login again."))
+		return
+	}
+	result, err := h.tokenHelper.Get(params.RefreshToken)
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest("Login expired, please login again."))
+		return
+	}
 
-	Success(ctx, "")
+	newToken := random.Uuid()
+	if result.Type == "admin-refresh" {
+		batoken := ctx.GetHeader("batoken")
+		if batoken == "" {
+			FailByErr(ctx, cErr.BadRequest("Invalid token"))
+			return
+		}
+		h.tokenHelper.Delete(batoken)
+		h.tokenHelper.Set(newToken, "admin", result.UserID, 86400)
+
+	} else if result.Type == "user-refresh" {
+		baUserToken := ctx.GetHeader("ba-user-token")
+		if baUserToken == "" {
+			FailByErr(ctx, cErr.BadRequest("Invalid token"))
+			return
+		}
+		h.tokenHelper.Delete(baUserToken)
+		h.tokenHelper.Set(newToken, "user", result.UserID, 86400)
+	}
+
+	Success(ctx, map[string]any{
+		"type":  result.Type,
+		"token": newToken,
+	})
 }

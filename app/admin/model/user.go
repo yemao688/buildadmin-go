@@ -1,11 +1,16 @@
 package model
 
 import (
+	"errors"
+	"fmt"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
 )
 
@@ -35,6 +40,7 @@ type User struct {
 	Status        string    `gorm:"column:status;not null;comment:状态" json:"status"`                   // 状态
 	UpdateTime    int64     `gorm:"autoCreateTime;column:update_time;comment:更新时间" json:"update_time"` // 更新时间
 	CreateTime    int64     `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
+	Group         UserGroup `gorm:"foreignKey:GroupID" json:"group"`
 }
 
 func (*User) TableName() string {
@@ -51,53 +57,114 @@ func (*SimpleUser) TableName() string {
 	return TableNameUser
 }
 
-type UserModel struct {
-	BaseModel
+type OutUser struct {
+	User
+	Birthday string `json:"birthday"`
+	Money    string `json:"money"`
 }
 
-func NewUserModel(sqlDB *gorm.DB) *UserModel {
+type UserModel struct {
+	BaseModel
+	config *conf.Configuration
+}
+
+func NewUserModel(sqlDB *gorm.DB, config *conf.Configuration) *UserModel {
 	return &UserModel{
 		BaseModel: BaseModel{
 			TableName:        TableNameUser,
 			Key:              "id",
-			QuickSearchField: "title",
+			QuickSearchField: "username,nickname",
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
+		config: config,
 	}
 }
 
-func (s *UserModel) GetOne(ctx *gin.Context, id int32) (data User, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&data).Error
-	return
+func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
+	outUser := OutUser{}
+	if err := copier.Copy(&outUser, data); err != nil {
+		return nil, err
+	}
+	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+	outUser.Money = fmt.Sprintf("%.2f", float64(data.Money)/100)
+	outUser.Birthday = data.Birthday.Format("2006-01-02")
+	return &outUser, nil
 }
 
-func (s *UserModel) List(ctx *gin.Context) (list []User, total int64, err error) {
+func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
+	data := User{}
+	err := s.sqlDB.Table(s.TableName).Omit("password,salt").Where("id=?", id).First(&data).Error
+	return data, err
+}
+
+func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName)
+	var total int64 = 0
+	list := []*User{}
+
+	db := s.sqlDB.Model(&User{}).Joins("Group").Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return
+
+	result := []*OutUser{}
+	if err := db.Omit("password,salt").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+	for _, v := range list {
+		outUser, err := s.DealData(ctx, v)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, outUser)
+	}
+	return result, total, nil
 }
 
-func (s *UserModel) Add(ctx *gin.Context, data User) error {
-	err := s.sqlDB.Table(s.TableName).Create(&data).Error
-	return err
+func (s *UserModel) Add(ctx *gin.Context, user User) error {
+	//判断是否有重名的账号
+	if err := s.sqlDB.Table(s.TableName).Where("username=?", user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		return cErr.BadRequest("Account not exist")
+	}
+
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Omit("login_failure, last_login_time, last_login_ip").Create(&user).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
 }
 
-func (s *UserModel) Edit(ctx *gin.Context, omit string, data User) error {
-	err := s.sqlDB.Table(s.TableName).Omit(omit).Updates(&data).Error
-	return err
-}
+func (s *UserModel) Edit(ctx *gin.Context, user User) error {
+	//判断是否有重名的账号
+	if err := s.sqlDB.Table(s.TableName).Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		return cErr.BadRequest("Account not exist")
+	}
 
-func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
-	return err
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Omit("password, salt, login_failure, last_login_time").Save(&user).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
 }
 
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
@@ -107,5 +174,10 @@ func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) e
 		"salt":     salt,
 		"password": password,
 	}).Error
+	return err
+}
+
+func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

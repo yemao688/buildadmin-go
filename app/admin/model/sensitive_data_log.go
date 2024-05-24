@@ -38,7 +38,7 @@ func NewSensitiveDataLogModel(sqlDB *gorm.DB) *SensitiveDataLogModel {
 		BaseModel: BaseModel{
 			TableName:        TableNameSecuritySensitiveDataLog,
 			Key:              "id",
-			QuickSearchField: "id",
+			QuickSearchField: "sensitive.name",
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},

@@ -3,12 +3,11 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -44,23 +43,26 @@ func (h *AdminInfoHandler) Index(ctx *gin.Context) {
 			"email":           admin.Email,
 			"mobile":          admin.Mobile,
 			"motto":           admin.Motto,
-			"last_login_time": admin.LastLoginTime,
+			"last_login_time": utils.FormatFromUnixTime(admin.LastLoginTime),
+			"token":           adminAuth.Token,
+			"refresh_token":   "",
 		},
 	})
 }
 
 func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	admin, err := h.adminM.GetOne(ctx, int32(id))
-	if err != nil {
-		FailByErr(ctx, err)
+	var params = struct {
+		IDS
+		Admin
+	}{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	//校验数据权限
-	adminAuth := header.GetAdminAuth(ctx)
-	if adminAuth.Id != int32(id) {
-		FailByErr(ctx, cErr.BadRequest("You have no permission"))
+	admin, err := h.adminM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
@@ -74,15 +76,6 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 			return
 		}
 		Success(ctx, "")
-		return
-	}
-
-	var params = struct {
-		IDS
-		Admin
-	}{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 

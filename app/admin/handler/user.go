@@ -6,8 +6,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
-	"net/http"
-	"time"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -48,24 +47,27 @@ func (h *UserHandler) Index(ctx *gin.Context) {
 }
 
 type User struct {
-	GroupID       int32     `json:"group_id"`
-	Username      string    `json:"username"`
-	Nickname      string    `json:"nickname"`
-	Email         string    `json:"email"`
-	Mobile        string    `json:"mobile"`
-	Avatar        string    `json:"avatar"`
-	Gender        int32     `json:"gender"`
-	Birthday      time.Time `json:"birthday"`
-	Money         int32     `json:"money"`
-	Score         int32     `json:"score"`
-	LastLoginTime int64     `json:"last_login_time"`
-	LastLoginIP   string    `json:"last_login_ip"`
-	LoginFailure  int32     `json:"login_failure"`
-	JoinIP        string    `json:"join_ip"`
-	JoinTime      int64     `json:"join_time"`
-	Motto         string    `json:"motto"`
-	Password      string    `json:"password"`
-	Status        string    `json:"status"`
+	GroupID  int32  `json:"group_id"`
+	Username string `json:"username" binding:"required"`
+	Nickname string `json:"nickname" binding:"required"`
+	Email    string `json:"email"`
+	Mobile   string `json:"mobile"`
+	Avatar   string `json:"avatar"`
+	Gender   int32  `json:"gender"`
+	Birthday string `json:"birthday" binding:"omitempty,datetime=2006-01-02"`
+	JoinIP   string `json:"join_ip"`
+	JoinTime int64  `json:"join_time"`
+	Motto    string `json:"motto"`
+	Password string `json:"password"`
+	Status   string `json:"status"`
+}
+
+func (v User) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"username.min":      "username>2 and username<15",
+		"username.max":      "username>2 and username<15",
+		"password.password": "password invalid",
+	}
 }
 
 func (h *UserHandler) Add(ctx *gin.Context) {
@@ -74,7 +76,6 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
-
 	if params.Password == "" {
 		FailByErr(ctx, cErr.BadRequest("Password required"))
 		return
@@ -82,7 +83,8 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 
 	var user model.User
 	copier.Copy(&user, params)
-
+	birthday, _ := utils.ParseTimeShort(params.Birthday)
+	user.Birthday = birthday
 	user.Salt = random.Build("alnum", 16)
 	user.Password = utils.EncryptPassword(params.Password, user.Salt)
 
@@ -94,29 +96,48 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *UserHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+func (h *UserHandler) One(ctx *gin.Context) {
+	value := ctx.Request.FormValue("id")
+	userId := ctx.Request.FormValue("userId")
+	if value == "" {
+		value = userId
+	}
+	id := com.StrTo(value).MustInt()
 	user, err := h.userM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	if ctx.Request.Method == http.MethodGet {
-		user.Password = ""
-		user.Salt = ""
-		Success(ctx, map[string]interface{}{
-			"row": user,
-		})
+	result, err := h.userM.DealData(ctx, &user)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
+	if userId != "" {
+		Success(ctx, map[string]interface{}{
+			"user": result,
+		})
+		return
+	}
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
+}
+
+func (h *UserHandler) Edit(ctx *gin.Context) {
 	var params = struct {
 		IDS
 		User
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+	user, err := h.userM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
@@ -128,7 +149,10 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 	}
 
 	copier.Copy(&user, params)
-	err = h.userM.Edit(ctx, "create_time, update_time, password, salt, login_failure, last_login_time", user)
+	birthday, _ := utils.ParseTimeShort(params.Birthday)
+	user.Birthday = birthday
+
+	err = h.userM.Edit(ctx, user)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -149,4 +173,30 @@ func (h *UserHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+}
+
+func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {
+	if s := ctx.Request.FormValue("select"); s == "" {
+		return nil, false
+	}
+
+	result, total, err := h.userM.List(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return nil, false
+	}
+
+	list := []map[string]any{}
+	for _, v := range result {
+		list = append(list, map[string]any{
+			"id":            v.ID,
+			"nickname_text": v.Username + "(ID:+" + strconv.Itoa(int(v.ID)) + ")",
+		})
+	}
+
+	return map[string]any{
+		"list":   list,
+		"total":  total,
+		"remark": h.GetRemark(ctx),
+	}, true
 }

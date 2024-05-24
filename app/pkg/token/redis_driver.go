@@ -21,10 +21,6 @@ func NewRedisDriver(rdb *redis.Client, config *conf.Configuration) *RedisDriver 
 }
 
 func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) error {
-	if expire < 0 {
-		expire = d.config.Token.Expire
-	}
-
 	if expire != 0 {
 		expire = time.Now().Unix() + expire
 	}
@@ -58,7 +54,7 @@ func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) er
 	return nil
 }
 
-func (d RedisDriver) Get(token string, expirationException bool) (*Token, error) {
+func (d RedisDriver) Get(token string) (*Token, error) {
 	encryptToken, err := GetEncryptedToken(token, d.config.Token.Algo, d.config.Token.Key)
 	if err != nil {
 		return nil, err
@@ -78,25 +74,25 @@ func (d RedisDriver) Get(token string, expirationException bool) (*Token, error)
 	data.Token = token
 	// 返回剩余有效时间
 	data.ExpiresIn = GetExpiredIn(data.ExpireTime)
-	if data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() && expirationException {
+	if data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() {
 		// token过期-触发前端刷新token
 		return nil, cErr.Unauthorized("Token expiration", 409)
 	}
 	return &data, nil
 }
 
-func (d RedisDriver) Check(token string, t string, user_id int32, expirationException bool) bool {
-	data, err := d.Get(token, expirationException)
+func (d RedisDriver) Check(token string, t string, user_id int32) bool {
+	data, err := d.Get(token)
 	if err != nil {
 		return false
 	}
-	if !expirationException && data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() {
+	if data.ExpireTime > 0 && data.ExpireTime < time.Now().Unix() {
 		return false
 	}
 	return data.Type == t && data.UserID == user_id
 }
 func (d RedisDriver) Delete(token string) error {
-	data, err := d.Get(token, false)
+	data, err := d.Get(token)
 	if err != nil {
 		return err
 	}

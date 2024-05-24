@@ -33,7 +33,7 @@ func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
 		BaseModel: BaseModel{
 			TableName:        TableNameSecurityDataRecycle,
 			Key:              "id",
-			QuickSearchField: "title",
+			QuickSearchField: "name",
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
@@ -50,11 +50,11 @@ func (s *DataRecycleModel) List(ctx *gin.Context) (list []DataRecycle, total int
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName)
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 

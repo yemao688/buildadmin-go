@@ -309,6 +309,7 @@ export default class baTable {
                             .then((res) => {
                                 const typeA = typeof res.data.row[data.field.prop];
                                 const typeB = typeof data.value;
+                                res.data.row[data.field.prop] = data.value;
                                 if (typeA !== typeB) {
                                     if (typeA === 'number') {
                                         res.data.row[data.field.prop] = Number(data.value);

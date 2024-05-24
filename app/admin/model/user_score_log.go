@@ -32,7 +32,7 @@ func NewUserScoreLogModel(sqlDB *gorm.DB) *UserScoreLogModel {
 		BaseModel: BaseModel{
 			TableName:        TableNameUserScoreLog,
 			Key:              "id",
-			QuickSearchField: "id",
+			QuickSearchField: "user.username,user.nickname",
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
@@ -44,7 +44,7 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&UserScoreLog{}).Preload("User").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&UserScoreLog{}).Preload("User").Joins("User").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

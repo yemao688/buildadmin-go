@@ -32,8 +32,8 @@ func NewUserMoneyLogModel(sqlDB *gorm.DB) *UserMoneyLogModel {
 		BaseModel: BaseModel{
 			TableName:        TableNameUserMoneyLog,
 			Key:              "id",
-			QuickSearchField: "id",
-			DataLimit:        TableNameUser + ".username," + TableNameUser + ".nickname",
+			QuickSearchField: "user.username,user.nickname",
+			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}
@@ -45,7 +45,7 @@ func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total i
 		return nil, 0, err
 	}
 	//预加载需要使用Model
-	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Joins("left join ba_user user on user.id = ba_user_money_log.user_id").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -60,7 +60,8 @@ func (s *UserMoneyLogModel) Add(ctx *gin.Context, userMoneyLog UserMoneyLog) err
 	}
 
 	userMoneyLog.Before = user.Money
-	userMoneyLog.After = user.Money + userMoneyLog.Money*100
+	userMoneyLog.Money = userMoneyLog.Money * 100
+	userMoneyLog.After = user.Money + userMoneyLog.Money
 
 	tx := s.sqlDB.Begin()
 	defer func() {

@@ -44,7 +44,7 @@
                     <FormItem
                         type="remoteSelect"
                         :label="t('user.user.grouping')"
-                        v-model="baTable.form.items!.group_id"
+                        v-model.number="baTable.form.items!.group_id"
                         :placeholder="t('user.user.grouping')"
                         :input-attr="{
                             params: { isTree: true, search: [{ field: 'status', val: '1', operator: 'eq' }] },
@@ -69,7 +69,7 @@
                     </el-form-item>
                     <FormItem
                         :label="t('user.user.Gender')"
-                        v-model="baTable.form.items!.gender"
+                        v-model.number="baTable.form.items!.gender"
                         type="radio"
                         :data="{
                             content: { 0: t('Unknown'), 1: t('user.user.male'), 2: t('user.user.female') },

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"errors"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -102,11 +104,11 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 	if err != nil {
 		return
 	}
-	db := s.sqlDB.Table(s.TableName)
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return
 	}
-	err = db.Omit("password,salt,login_failure").Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Omit("password,salt,login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	for _, v := range list {
 		if err = s.DealData(ctx, v); err != nil {
 			return
@@ -116,6 +118,11 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 }
 
 func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
+	//判断是否有重名的账号
+	if err := s.sqlDB.Table(s.TableName).Where("username=?", admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		return cErr.BadRequest("Account not exist")
+	}
+
 	tx := s.sqlDB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -144,6 +151,11 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 }
 
 func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit string, groups []string) error {
+	//判断是否有重名的账号
+	if err := s.sqlDB.Table(s.TableName).Where("id<>? and username=?", admin.ID, admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+		return cErr.BadRequest("Account not exist")
+	}
+
 	tx := s.sqlDB.Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -191,8 +203,4 @@ func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) 
 func (s *AdminModel) Del(ctx *gin.Context, ids interface{}) error {
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
-}
-
-func (s *AdminModel) Sortable(ctx *gin.Context) (list []Admin, total int64, err error) {
-	return nil, 0, nil
 }

@@ -63,7 +63,7 @@ func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.C
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	tokenStr := ctx.Request.Header.Get("Authorization")
 	if tokenStr != "" {
-		tokenData, err := s.tokenHelper.Get(tokenStr, true)
+		tokenData, err := s.tokenHelper.Get(tokenStr)
 		if err != nil {
 			return tokenData, true
 		}
@@ -119,7 +119,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		s.tokenHelper.Set(refreshToken, "admin-refresh", admin.ID, 2592000) //30天
 	}
 	token := random.Uuid()
-	if err := s.tokenHelper.Set(token, "admin", admin.ID, 86400); err != nil {
+	if err := s.tokenHelper.Set(token, "admin", admin.ID, s.config.App.AdminTokenKeepTime); err != nil {
 		return nil, err
 	}
 

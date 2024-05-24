@@ -30,7 +30,7 @@
                         type="remoteSelect"
                         prop="user_id"
                         :label="t('user.moneyLog.User ID')"
-                        v-model="baTable.form.items!.user_id"
+                        v-model.number="baTable.form.items!.user_id"
                         :placeholder="t('Click select')"
                         :input-attr="{
                             pk: 'user.id',
@@ -51,7 +51,7 @@
                     <el-form-item prop="money" :label="t('user.moneyLog.Change amount')">
                         <el-input
                             @input="changeMoney"
-                            v-model="baTable.form.items!.money"
+                            v-model.number="baTable.form.items!.money"
                             type="number"
                             :placeholder="t('user.moneyLog.Please enter the balance change amount')"
                         ></el-input>

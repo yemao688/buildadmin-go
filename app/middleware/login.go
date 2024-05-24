@@ -41,7 +41,7 @@ func (m *Login) Handler() gin.HandlerFunc {
 			return
 		}
 
-		tokenData, err := m.tokenHelper.Get(tokenStr, true)
+		tokenData, err := m.tokenHelper.Get(tokenStr)
 		if err != nil {
 			if v, ok := err.(*cErr.Error); ok {
 				msg := utils.Lang(c, v.Error(), nil)

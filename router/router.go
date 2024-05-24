@@ -126,6 +126,7 @@ func InitRouter(
 	adminRouter.GET("user.Rule/edit", userRuleHandler.One)
 	adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
 	adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
+	adminRouter.POST("user.Rule/sortable", userRuleHandler.Sortable)
 
 	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
 	adminRouter.GET("user.MoneyLog/add", userHandler.One)

@@ -10,8 +10,8 @@ type App struct {
 	AdminLoginRetry    int    `mapstructure:"admin_login_retry" json:"admin_login_retry" yaml:"admin_login_retry"`
 	AdminSso           bool   `mapstructure:"admin_sso" json:"admin_sso" yaml:"admin_sso"`
 	UserSso            bool   `mapstructure:"user_sso" json:"user_sso" yaml:"user_sso"`
-	UserTokenKeepTime  int    `mapstructure:"user_token_keep_time" json:"user_token_keep_time" yaml:"user_token_keep_time"`
-	AdminTokenKeepTime int    `mapstructure:"admin_token_keep_time" json:"admin_token_keep_time" yaml:"admin_token_keep_time"`
+	UserTokenKeepTime  int64  `mapstructure:"user_token_keep_time" json:"user_token_keep_time" yaml:"user_token_keep_time"`
+	AdminTokenKeepTime int64  `mapstructure:"admin_token_keep_time" json:"admin_token_keep_time" yaml:"admin_token_keep_time"`
 	AutoSortEqWeight   bool   `mapstructure:"auto_sort_eq_weight" json:"auto_sort_eq_weight" yaml:"auto_sort_eq_weight"`
 	OpenMemberCenter   bool   `mapstructure:"open_member_center" json:"open_member_center" yaml:"open_member_center"`
 	ModulePureInstall  bool   `mapstructure:"module_pure_install" json:"module_pure_install" yaml:"module_pure_install"`

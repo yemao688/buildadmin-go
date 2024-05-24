@@ -18,8 +18,8 @@ import (
 
 type Driver interface {
 	Set(token string, t string, user_id int32, expire int64) error
-	Get(token string, expirationException bool) (*Token, error)
-	Check(token string, t string, user_id int32, expirationException bool) bool
+	Get(token string) (*Token, error)
+	Check(token string, t string, user_id int32) bool
 	Delete(token string) error
 	Clear(t string, user_id int32) error
 }
@@ -52,11 +52,11 @@ func (h TokenHelper) Set(token string, t string, user_id int32, expire int64) er
 
 	return h.Driver.Set(token, t, user_id, expire)
 }
-func (h TokenHelper) Get(token string, expirationException bool) (*Token, error) {
-	return h.Driver.Get(token, expirationException)
+func (h TokenHelper) Get(token string) (*Token, error) {
+	return h.Driver.Get(token)
 }
-func (h TokenHelper) Check(token string, t string, user_id int32, expirationException bool) bool {
-	return h.Driver.Check(token, t, user_id, expirationException)
+func (h TokenHelper) Check(token string, t string, user_id int32) bool {
+	return h.Driver.Check(token, t, user_id)
 }
 func (h TokenHelper) Delete(token string) error {
 	if token != "" {

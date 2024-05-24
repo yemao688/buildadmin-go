@@ -115,6 +115,7 @@ type Captcha struct {
  * 创建图形验证码
  * id 验证码ID，开发者自定义
  * 返回验证码图片的base64编码和验证码文字信息
+ * TODO:解决重叠,重复
  */
 func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface{}, error) {
 	rand.Seed(time.Now().UnixNano())
