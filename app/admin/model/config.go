@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -29,21 +30,22 @@ func (*Config) TableName() string {
 	return TableNameConfig
 }
 
+var jsonDecodeType = []string{"checkbox", "array", "selects"}
+var needContent = []string{"radio", "checkbox", "select", "selects"}
+
 func (s *Config) SetValueAttr(value any, t string) string {
-	if t == "checkbox" || t == "array" || t == "selects" {
+	if slices.Contains(jsonDecodeType, s.Type) {
 		if v, err := json.Marshal(value); err != nil {
 			return string(v)
 		}
 	} else if t == "switch" {
-		if value == "false" {
-			return "0"
-		} else {
+		if v, ok := value.(bool); ok && v {
 			return "1"
+		} else {
+			return "0"
 		}
 	} else if t == "time" {
-		//TODO:
-		// if value != "" {
-		// }
+		return value.(string)
 	} else if _, ok := value.([]string); ok {
 		return strings.Join(value.([]string), ",")
 	}
@@ -51,7 +53,7 @@ func (s *Config) SetValueAttr(value any, t string) string {
 }
 
 func (s *Config) GetValueAttr() any {
-	if s.Type == "checkbox" || s.Type == "array" || s.Type == "selects" {
+	if slices.Contains(jsonDecodeType, s.Type) {
 		result := []map[string]any{}
 		if err := json.Unmarshal([]byte(s.Value), &result); err == nil {
 			return result
@@ -63,28 +65,28 @@ func (s *Config) GetValueAttr() any {
 			return true
 		}
 	} else if s.Type == "editor" {
-		return "" //TODO:
+		//TODO:
 	} else if s.Type == "city" || s.Type == "remoteSelects" {
 		if s.Value == "" {
 			return []any{}
 		}
 		return strings.Split(s.Value, ",")
 	}
-	return ""
+	return s.Value
 }
 
 func (s *Config) GetContentAttr() any {
-	if s.Type == "radio" || s.Type == "checkbox" || s.Type == "select" || s.Type == "selects" {
+	if slices.Contains(needContent, s.Type) {
 		content := map[string]any{}
 		if err := json.Unmarshal([]byte(s.Content), &content); err == nil {
 			return content
 		}
 	}
-	return ""
+	return map[string]any{}
 }
 
 func (s *Config) GetExtendAttr() any {
-	extend := map[string]interface{}{}
+	extend := map[string]any{}
 	if s.Extend != "" {
 		err := json.Unmarshal([]byte(s.Extend), &extend)
 		if err == nil {
@@ -95,7 +97,7 @@ func (s *Config) GetExtendAttr() any {
 }
 
 func (s *Config) GetInputExtendAttr() any {
-	extend := map[string]interface{}{}
+	extend := map[string]any{}
 	if s.Extend != "" {
 		err := json.Unmarshal([]byte(s.Extend), &extend)
 		if err == nil {
@@ -124,7 +126,7 @@ func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
-	err = s.sqlDB.Table(s.TableName).Order("id desc").Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Order("weigh desc").Find(&list).Error
 	return
 }
 

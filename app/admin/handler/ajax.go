@@ -1,16 +1,21 @@
 package handler
 
 import (
+	adminModel "go-build-admin/app/admin/model"
+	"go-build-admin/app/common/model"
+
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type AjaxHandler struct {
-	log *zap.Logger
+	log    *zap.Logger
+	areaM  *model.AreaModel
+	tableM *adminModel.TableModel
 }
 
-func NewAjaxHandler(log *zap.Logger) *AjaxHandler {
-	return &AjaxHandler{log: log}
+func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel) *AjaxHandler {
+	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM}
 }
 
 func (h *AjaxHandler) Upload(ctx *gin.Context) {
@@ -20,8 +25,12 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 
 // 省份地区数据
 func (h *AjaxHandler) Area(ctx *gin.Context) {
-
-	Success(ctx, "")
+	result, err := h.areaM.List(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, result)
 }
 
 func (h *AjaxHandler) BuildSuffixSvg(ctx *gin.Context) {
@@ -30,13 +39,21 @@ func (h *AjaxHandler) BuildSuffixSvg(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) GetTablePk(ctx *gin.Context) {
-
-	Success(ctx, "")
+	table := ctx.Request.FormValue("table")
+	pk := h.tableM.GetTablePk(table)
+	Success(ctx, map[string]string{
+		"pk": pk,
+	})
 }
 
 func (h *AjaxHandler) GetTableFieldList(ctx *gin.Context) {
+	table := ctx.Request.FormValue("table")
+	pk := h.tableM.GetTablePk(table)
 
-	Success(ctx, "")
+	Success(ctx, map[string]any{
+		"pk":        pk,
+		"fieldList": h.tableM.GetTableFields(table, true),
+	})
 }
 
 func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {

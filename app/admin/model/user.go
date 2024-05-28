@@ -111,10 +111,11 @@ func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 		return nil, 0, err
 	}
 
-	result := []*OutUser{}
 	if err := db.Omit("password,salt").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
+
+	result := []*OutUser{}
 	for _, v := range list {
 		outUser, err := s.DealData(ctx, v)
 		if err != nil {

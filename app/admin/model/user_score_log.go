@@ -44,7 +44,7 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&UserScoreLog{}).Preload("User").Joins("User").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&UserScoreLog{}).Preload("User").Joins("User").Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

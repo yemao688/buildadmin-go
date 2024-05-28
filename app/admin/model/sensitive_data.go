@@ -1,7 +1,10 @@
 package model
 
 import (
+	"encoding/json"
+
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
 )
 
@@ -25,6 +28,11 @@ func (*SensitiveData) TableName() string {
 	return TableNameSecuritySensitiveData
 }
 
+type OutSensitiveData struct {
+	SensitiveData
+	DataFields []string `json:"data_fields"`
+}
+
 type SensitiveDataModel struct {
 	BaseModel
 }
@@ -41,22 +49,53 @@ func NewSensitiveDataModel(sqlDB *gorm.DB) *SensitiveDataModel {
 	}
 }
 
+func (s *SensitiveDataModel) DealData(ctx *gin.Context, data *SensitiveData) (*OutSensitiveData, error) {
+	outSensitiveData := OutSensitiveData{}
+	if err := copier.Copy(&outSensitiveData, data); err != nil {
+		return nil, err
+	}
+	fieldData := []string{}
+	result := map[string]string{}
+	if err := json.Unmarshal([]byte(data.DataFields), &result); err != nil {
+		return nil, err
+	}
+	for _, v := range result {
+		fieldData = append(fieldData, v)
+	}
+	outSensitiveData.DataFields = fieldData
+	return &outSensitiveData, nil
+}
+
 func (s *SensitiveDataModel) GetOne(ctx *gin.Context, id int32) (sensitiveData SensitiveData, err error) {
 	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&sensitiveData).Error
 	return
 }
 
-func (s *SensitiveDataModel) List(ctx *gin.Context) (list []SensitiveData, total int64, err error) {
+func (s *SensitiveDataModel) List(ctx *gin.Context) ([]*OutSensitiveData, int64, error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	var total int64 = 0
+	list := []*SensitiveData{}
+
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return
+	if err := db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := []*OutSensitiveData{}
+	for _, v := range list {
+		outSensitiveData, err := s.DealData(ctx, v)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, outSensitiveData)
+	}
+	return result, total, err
 }
 
 func (s *SensitiveDataModel) Add(ctx *gin.Context, data SensitiveData) error {

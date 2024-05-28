@@ -6,6 +6,7 @@ import (
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
+	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +42,19 @@ func (h *SensitiveDataLogHandler) Index(ctx *gin.Context) {
 	})
 }
 
+func (h *SensitiveDataLogHandler) Info(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	result, err := h.sensitiveDataLogM.GetOne(ctx, int32(id))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
+}
+
 func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
@@ -53,4 +67,19 @@ func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+}
+
+// 回滚 TODO:
+func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
+	var params validate.Ids
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	err := h.sensitiveDataLogM.Rollback(ctx, params.Ids)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 }

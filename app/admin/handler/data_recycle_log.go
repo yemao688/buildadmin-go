@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"encoding/json"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
+	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +44,33 @@ func (h *DataRecycleLogHandler) Index(ctx *gin.Context) {
 	})
 }
 
+// 详情
+func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	dataRecycleLog, err := h.dataRecycleLogM.GetOne(ctx, int32(id))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	type Result struct {
+		model.DataRecycleLog
+		Data map[string]any `json:"data"`
+	}
+
+	result := Result{}
+	copier.Copy(&result, dataRecycleLog)
+	err = json.Unmarshal([]byte(dataRecycleLog.Data), &result.Data)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
+}
+
 func (h *DataRecycleLogHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
@@ -55,7 +85,7 @@ func (h *DataRecycleLogHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// 还原
+// 还原 TODO:
 func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -68,14 +98,4 @@ func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-}
-
-// 详情
-func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
-
-	Success(ctx, "")
-}
-
-func (h *DataRecycleLogHandler) jsonToArray(ctx *gin.Context) {
-	Success(ctx, "")
 }

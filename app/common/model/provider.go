@@ -5,5 +5,6 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
+	NewAreaModel,
 	NewAttachmentModel,
 )

@@ -45,7 +45,7 @@ func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total i
 		return nil, 0, err
 	}
 	//预加载需要使用Model
-	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Joins("left join ba_user user on user.id = ba_user_money_log.user_id").Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Joins("left join ba_user user on user.id = ba_user_money_log.user_id").Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

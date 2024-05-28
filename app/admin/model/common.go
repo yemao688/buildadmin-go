@@ -35,12 +35,13 @@ func LimitAdminIds(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-type JoinIds []int32
+// 多个id
+type MulIds []int32
 
-func (j *JoinIds) Scan(value interface{}) error {
+func (j *MulIds) Scan(value interface{}) error {
 	content, ok := value.(string)
 	if !ok {
-		return errors.New(fmt.Sprint("Failed JoinIds value:", value))
+		return errors.New(fmt.Sprint("Failed MulIds value:", value))
 	}
 
 	ids := strings.Split(content, ",")
@@ -52,11 +53,11 @@ func (j *JoinIds) Scan(value interface{}) error {
 		}
 		result = append(result, int32(num))
 	}
-	*j = JoinIds(result)
+	*j = MulIds(result)
 	return nil
 }
 
-func (j JoinIds) Value() (driver.Value, error) {
+func (j MulIds) Value() (driver.Value, error) {
 	if len(j) == 0 {
 		return nil, nil
 	}
@@ -64,5 +65,5 @@ func (j JoinIds) Value() (driver.Value, error) {
 	for _, v := range j {
 		result = append(result, strconv.Itoa(int(v)))
 	}
-	return strings.Join(result, ","),nil
+	return strings.Join(result, ","), nil
 }

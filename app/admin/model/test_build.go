@@ -43,7 +43,7 @@ func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, total int64, 
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}

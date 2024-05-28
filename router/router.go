@@ -41,6 +41,7 @@ func InitRouter(
 	dataRecycleLogHandler *admin.DataRecycleLogHandler,
 	sensitiveDataHandler *admin.SensitiveDataHandler,
 	sensitiveDataLogHandler *admin.SensitiveDataLogHandler,
+	ajaxHandler *admin.AjaxHandler,
 
 	apiAccountHandler *api.AccountHandler,
 	apiAjaxHandler *api.AjaxHandler,
@@ -148,26 +149,34 @@ func InitRouter(
 	adminRouter.POST("routine.AdminInfo/edit", adminInfoHandler.Edit)
 
 	adminRouter.GET("security.DataRecycleLog/index", dataRecycleLogHandler.Index)
+	adminRouter.GET("security.DataRecycleLog/info", dataRecycleLogHandler.Info)
 	adminRouter.POST("security.DataRecycleLog/restore", dataRecycleLogHandler.Restore)
-	adminRouter.POST("security.DataRecycleLog/info", dataRecycleLogHandler.Info)
 	adminRouter.DELETE("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
 
 	adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
+	adminRouter.GET("security.DataRecycle/add", dataRecycleHandler.Add)
 	adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
 	adminRouter.GET("security.DataRecycle/edit", dataRecycleHandler.One)
 	adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
 	adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
 
 	adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
+	adminRouter.GET("security.SensitiveDataLog/info", sensitiveDataLogHandler.Info)
+	adminRouter.GET("security.SensitiveDataLog/rollback", sensitiveDataLogHandler.Rollback)
 	adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
 
 	adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
+	adminRouter.GET("security.SensitiveData/add", sensitiveDataHandler.Add)
 	adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
 	adminRouter.GET("security.SensitiveData/edit", sensitiveDataHandler.One)
 	adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
 	adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
 	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
+
+	adminRouter.GET("ajax/area", ajaxHandler.Area)
+	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
+	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)

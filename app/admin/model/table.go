@@ -37,6 +37,17 @@ func (s *TableModel) GetTableList() map[string]string {
 	return data
 }
 
+// 获取表主键字段
+func (s *TableModel) GetTablePk(tableName string) string {
+	if tableName == "" {
+		return ""
+	}
+
+	var columnName string
+	s.sqlDB.Raw("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY'", tableName).Scan(&columnName)
+	return columnName
+}
+
 func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map[string]any {
 	if tableName == "" {
 		return nil

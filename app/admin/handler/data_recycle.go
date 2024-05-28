@@ -6,10 +6,10 @@ import (
 	"go-build-admin/conf"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -45,7 +45,7 @@ func (h *DataRecycleHandler) Index(ctx *gin.Context) {
 	Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
-		"remark": "",
+		"remark": h.GetRemark(ctx),
 	})
 }
 
@@ -56,8 +56,6 @@ type DataRecycle struct {
 	DataTable    string `json:"data_table"`
 	PrimaryKey   string `json:"primary_key"`
 	Status       string `json:"status"`
-	UpdateTime   int64  `json:"update_time"`
-	CreateTime   int64  `json:"create_time"`
 }
 
 func (v DataRecycle) GetMessages() validate.ValidatorMessages {
@@ -90,26 +88,18 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	data, err := h.dataRecycleM.GetOne(ctx, int32(id))
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	if ctx.Request.Method == http.MethodGet {
-		Success(ctx, map[string]interface{}{
-			"row": data,
-		})
-		return
-	}
-
 	var params = struct {
 		IDS
 		DataRecycle
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	data, err := h.dataRecycleM.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
@@ -138,24 +128,32 @@ func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
-	//TODO:
 	outExcludeRoute := []string{
-		"Addon.php",
-		"Ajax.php",
-		"Module.php",
-		"Terminal.php",
-		"Dashboard.php",
-		"Index.php",
-		"routine/AdminInfo.php",
-		"user/MoneyLog.php",
-		"user/ScoreLog.php",
+		"admin/addon",
+		"admin/ajax",
+		"admin/module",
+		"admin/terminal",
+		"admin/Dashboard",
+		"admin/Index",
+		"admin/routine.AdminInfo",
+		"admin/user.MoneyLog",
+		"admin/user.ScoreLog",
 	}
 
 	outRoutes := map[string]string{}
 	routes := GetAllRoutes()
 	for _, r := range routes {
-		if !slices.Contains(outExcludeRoute, r.Method) {
-			outRoutes[r.Method] = r.Method
+		for _, v := range outExcludeRoute {
+			if !strings.HasPrefix(r.Path, "/admin") {
+				continue
+			}
+			segments := strings.Split(r.Path, "/")
+			if len(segments) >= 3 {
+				path := segments[1] + "/" + segments[2]
+				if path != v {
+					outRoutes[path] = path
+				}
+			}
 		}
 	}
 	return outRoutes
