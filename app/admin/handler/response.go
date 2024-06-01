@@ -45,24 +45,3 @@ func FailByErr(c *gin.Context, err error) {
 		Fail(c, http.StatusBadRequest, cErr.DefaultError, err.Error())
 	}
 }
-
-func FailByErrTemp(c *gin.Context, err error, templateData map[string]string) {
-	v, ok := err.(*cErr.Error)
-	if ok {
-		msg := utils.Lang(c, v.Error(), templateData)
-		c.JSON(v.HttpCode(), Response{
-			v.ErrorCode(),
-			nil,
-			msg,
-			0,
-		})
-	} else {
-		msg := utils.Lang(c, err.Error(), templateData)
-		c.JSON(http.StatusBadRequest, Response{
-			cErr.DefaultError,
-			nil,
-			msg,
-			0,
-		})
-	}
-}

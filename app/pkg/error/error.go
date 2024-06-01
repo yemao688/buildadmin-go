@@ -65,15 +65,3 @@ func NotFound(errorMsg string) *Error {
 func InternalServer(errorMsg string) *Error {
 	return New(http.StatusInternalServerError, ServerError, errorMsg)
 }
-
-func E(errorMsg string, errorCode ...int) *Error {
-	errCode := DefaultError
-	if len(errorCode) > 0 {
-		errCode = errorCode[0]
-	}
-	httpCode := http.StatusOK
-	if len(errorCode) > 1 {
-		httpCode = errorCode[1]
-	}
-	return New(httpCode, errCode, errorMsg)
-}

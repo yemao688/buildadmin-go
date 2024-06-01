@@ -175,6 +175,8 @@ func InitRouter(
 	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
 
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
+	adminRouter.GET("ajax/upload", ajaxHandler.Upload)
+	adminRouter.GET("ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
 

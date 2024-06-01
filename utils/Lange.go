@@ -7,7 +7,7 @@ import (
 )
 
 // 翻译内容
-func Lang(c *gin.Context, messageID string, templateData map[string]string) string {
+func Lang(c *gin.Context, messageID string, templateData map[string]interface{}) string {
 	msg := ginI18n.MustGetMessage(c, &i18n.LocalizeConfig{
 		MessageID:    messageID,
 		TemplateData: templateData,

@@ -3,24 +3,41 @@ package handler
 import (
 	adminModel "go-build-admin/app/admin/model"
 	"go-build-admin/app/common/model"
+	"go-build-admin/app/pkg/header"
+	"go-build-admin/utils"
+	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type AjaxHandler struct {
-	log    *zap.Logger
-	areaM  *model.AreaModel
-	tableM *adminModel.TableModel
+	log          *zap.Logger
+	areaM        *model.AreaModel
+	tableM       *adminModel.TableModel
+	uploadHelper *model.UploadHelper
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel) *AjaxHandler {
-	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM}
+func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper) *AjaxHandler {
+	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper}
 }
 
 func (h *AjaxHandler) Upload(ctx *gin.Context) {
+	file, err := ctx.FormFile("file")
+	if err != nil {
+		FailByErr(ctx, err)
+	}
+	adminAuth := header.GetAdminAuth(ctx)
 
-	Success(ctx, "")
+	h.uploadHelper.SetFile(file)
+	result, err := h.uploadHelper.Upload("", adminAuth.Id, 0)
+	if err != nil {
+		FailByErr(ctx, err)
+	}
+	Success(ctx, map[string]any{
+		"file": result,
+	})
 }
 
 // 省份地区数据
@@ -34,8 +51,16 @@ func (h *AjaxHandler) Area(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) BuildSuffixSvg(ctx *gin.Context) {
+	suffix := ctx.Request.FormValue("suffix")
+	if suffix == "" {
+		suffix = "file"
+	}
+	background := ctx.Request.FormValue("background")
 
-	Success(ctx, "")
+	svgBytes := []byte(utils.BuildSuffixSvg(suffix, background))
+	ctx.Header("Content-Length", strconv.Itoa(len(svgBytes)))
+	ctx.Header("Content-Type", "image/svg+xml")
+	ctx.Data(http.StatusOK, "image/jpeg", svgBytes)
 }
 
 func (h *AjaxHandler) GetTablePk(ctx *gin.Context) {

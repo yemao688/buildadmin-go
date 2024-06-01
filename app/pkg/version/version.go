@@ -87,7 +87,7 @@ func GetCnpmVersion(version string) bool {
 	return false
 }
 
-// 获取依赖版本号
+// 获取依赖版本号TODO:
 func GetVersion(version string) bool {
 
 	return false

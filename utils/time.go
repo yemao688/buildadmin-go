@@ -77,3 +77,8 @@ func GetWeekStart(t time.Time) time.Time {
 func GetWeekEnd(t time.Time) time.Time {
 	return GetWeekStart(t).AddDate(0, 0, 7)
 }
+
+//格式化 UNIX 时间戳为人易读的字符串 TODO:
+func HumanTime(t time.Time) string {
+	return ""
+}
