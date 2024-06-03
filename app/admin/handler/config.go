@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-mail/mail"
+	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
@@ -118,9 +119,12 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 	}
 
 	var config = model.Config{}
+	copier.Copy(&config, params)
 	if params.Type == "radio" || params.Type == "checkbox" || params.Type == "select" || params.Type == "selects" {
 		contentBytes, _ := json.Marshal(utils.StrAttrToArray(params.Content))
 		config.Content = string(contentBytes)
+	} else {
+		config.Content = ""
 	}
 	config.Rule = strings.Join(params.Rule, ",")
 
@@ -147,8 +151,8 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 
 func (h *ConfigHandler) Edit(ctx *gin.Context) {
 	var params map[string]interface{}
-	if err := ctx.ShouldBindJSON(&params); err == nil {
-		FailByErr(ctx, validate.GetError(params, err))
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 
@@ -168,14 +172,20 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *ConfigHandler) Del(ctx *gin.Context) {
-	result, err := h.configM.List(ctx)
+	var param validate.Ids
+	if err := ctx.ShouldBindQuery(&param); err != nil {
+		FailByErr(ctx, validate.GetError(param, err))
+		return
+	}
+	err := h.configM.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, result)
+	Success(ctx, "")
 }
 
+// TODO:
 func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 
 	from := "sender@example.com"

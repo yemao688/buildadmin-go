@@ -112,6 +112,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 				err = cErr.BadRequest("Not found field:" + orderArr[0])
 				return
 			}
+			orderS = field + " " + orderArr[1]
 		}
 	} else {
 		orderS = table.TableName + "." + table.Key + " desc"

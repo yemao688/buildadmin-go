@@ -3,8 +3,6 @@ package handler
 import (
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/common/model"
-	cErr "go-build-admin/app/pkg/error"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -38,55 +36,41 @@ func (h *AttachmentHandler) Index(ctx *gin.Context) {
 	Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
-		"remark": "",
+		"remark": h.GetRemark(ctx),
 	})
 }
 
 type Attachment struct {
+	Topic    string `gorm:"column:topic;not null;comment:细目" json:"topic"`           // 细目
+	URL      string `gorm:"column:url;not null;comment:物理路径" json:"url"`             // 物理路径
+	Width    int32  `gorm:"column:width;not null;comment:宽度" json:"width"`           // 宽度
+	Height   int32  `gorm:"column:height;not null;comment:高度" json:"height"`         // 高度
+	Name     string `gorm:"column:name;not null;comment:原始名称" json:"name"`           // 原始名称
+	Size     int32  `gorm:"column:size;not null;comment:大小" json:"size"`             // 大小
+	Mimetype string `gorm:"column:mimetype;not null;comment:mime类型" json:"mimetype"` // mime类型
+	Quote    int32  `gorm:"column:quote;not null;comment:上传(引用)次数" json:"quote"`     // 上传(引用)次数
+	Storage  string `gorm:"column:storage;not null;comment:存储方式" json:"storage"`     // 存储方式
+	Sha1     string `gorm:"column:sha1;not null;comment:sha1编码" json:"sha1"`         // sha1编码
 }
 
 func (v Attachment) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{}
 }
 
-func (h *AttachmentHandler) Add(ctx *gin.Context) {
-	var params SensitiveData
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
-		return
-	}
-
-	var sensitiveData model.Attachment
-	copier.Copy(&sensitiveData, params)
-	err := h.attachmentM.Add(ctx, sensitiveData)
+func (h *AttachmentHandler) One(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	result, err := h.attachmentM.GetOne(ctx, int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+
+	Success(ctx, map[string]interface{}{
+		"row": result,
+	})
 }
 
 func (h *AttachmentHandler) Edit(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	admin, err := h.attachmentM.GetOne(ctx, int32(id))
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, admin.ID) {
-		FailByErr(ctx, cErr.BadRequest("You have no permission"))
-		return
-	}
-
-	if ctx.Request.Method == http.MethodGet {
-		Success(ctx, map[string]interface{}{
-			"row": admin,
-		})
-		return
-	}
-
 	var params = struct {
 		IDS
 		Attachment
@@ -96,8 +80,14 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&admin, params)
-	err = h.attachmentM.Edit(ctx, admin)
+	attachment, err := h.attachmentM.GetOne(ctx, int32(params.ID))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	copier.Copy(&attachment, params)
+	err = h.attachmentM.Edit(ctx, attachment)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -117,8 +107,5 @@ func (h *AttachmentHandler) Del(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-
-	//删除文件TODO:
-
 	Success(ctx, "")
 }

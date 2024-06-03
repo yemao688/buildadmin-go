@@ -29,13 +29,13 @@ func RootPath() string {
 	return rootDir
 }
 
-func PathExists(path string) (bool, error) {
+func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	if err == nil {
-		return true, nil
+		return true
 	}
 	if os.IsNotExist(err) {
-		return false, nil
+		return false
 	}
-	return false, err
+	return false
 }

@@ -57,7 +57,7 @@ func (s *TestBuildModel) Add(ctx *gin.Context, data TestBuild) error {
 }
 
 func (s *TestBuildModel) Edit(ctx *gin.Context, data TestBuild) error {
-	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
+	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
 	return err
 }
 

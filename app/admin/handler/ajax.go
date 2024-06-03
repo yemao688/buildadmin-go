@@ -27,13 +27,15 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 	file, err := ctx.FormFile("file")
 	if err != nil {
 		FailByErr(ctx, err)
+		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 
 	h.uploadHelper.SetFile(file)
-	result, err := h.uploadHelper.Upload("", adminAuth.Id, 0)
+	result, err := h.uploadHelper.Upload(ctx, adminAuth.Id, 0)
 	if err != nil {
 		FailByErr(ctx, err)
+		return
 	}
 	Success(ctx, map[string]any{
 		"file": result,

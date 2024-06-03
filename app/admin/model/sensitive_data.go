@@ -104,7 +104,7 @@ func (s *SensitiveDataModel) Add(ctx *gin.Context, data SensitiveData) error {
 }
 
 func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SensitiveData) error {
-	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
+	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
 	return err
 }
 

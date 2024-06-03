@@ -50,27 +50,43 @@ func (h *AdminInfoHandler) Index(ctx *gin.Context) {
 	})
 }
 
+type SelfAdmin struct {
+	Nickname *string `json:"nickname" binding:"omitempty,required"`
+	Avatar   *string `json:"avatar" binding:""`
+	Email    string  `json:"email" binding:"omitempty,email"`
+	Mobile   string  `json:"mobile" binding:"omitempty,phone"`
+	Password string  `json:"password" binding:"omitempty,password"`
+	Motto    string  `json:"motto"`
+}
+
+func (v SelfAdmin) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"email.email":       "email error",
+		"mobile.phone":      "mobile error",
+		"password.password": "password invalid",
+	}
+}
+
 func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 	var params = struct {
-		IDS
-		Admin
+		SelfAdmin
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	admin, err := h.adminM.GetOne(ctx, params.ID)
+	adminAuth := header.GetAdminAuth(ctx)
+	admin, err := h.adminM.GetOne(ctx, adminAuth.Id)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	avatar := ctx.Request.FormValue("avatar")
-	if avatar != "" {
-		admin.Avatar = avatar
-		groupArr := []string{}
-		err = h.adminM.Edit(ctx, admin, "username, last_login_time, password, salt, status", groupArr)
+	//判读是否 只更新头像
+	if params.Avatar != nil {
+		admin.Avatar = *params.Avatar
+		err = h.adminM.SelfEdit(ctx, admin, []string{"avatar"})
 		if err != nil {
 			FailByErr(ctx, err)
 			return
@@ -87,7 +103,7 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 	}
 
 	copier.Copy(&admin, params)
-	err = h.adminM.Edit(ctx, admin, "username, last_login_time, password, salt, status", params.GroupArr)
+	err = h.adminM.SelfEdit(ctx, admin, []string{"nickname", "email", "mobile", "motto"})
 	if err != nil {
 		FailByErr(ctx, err)
 		return

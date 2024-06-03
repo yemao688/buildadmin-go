@@ -82,6 +82,7 @@ func CheckDigitalVersion(version string) bool {
 	return rule2.MatchString(version) // 直接返回规则2的匹配结果
 }
 
+// TODO:
 func GetCnpmVersion(version string) bool {
 
 	return false

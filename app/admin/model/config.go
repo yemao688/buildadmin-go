@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -34,8 +35,8 @@ var jsonDecodeType = []string{"checkbox", "array", "selects"}
 var needContent = []string{"radio", "checkbox", "select", "selects"}
 
 func (s *Config) SetValueAttr(value any, t string) string {
-	if slices.Contains(jsonDecodeType, s.Type) {
-		if v, err := json.Marshal(value); err != nil {
+	if slices.Contains(jsonDecodeType, t) {
+		if v, err := json.Marshal(value); err == nil {
 			return string(v)
 		}
 	} else if t == "switch" {
@@ -46,18 +47,32 @@ func (s *Config) SetValueAttr(value any, t string) string {
 		}
 	} else if t == "time" {
 		return value.(string)
-	} else if _, ok := value.([]string); ok {
-		return strings.Join(value.([]string), ",")
+	} else if t == "city" || t == "remoteSelects" {
+		cityIds := []string{}
+		for _, v := range value.([]interface{}) {
+			cityIds = append(cityIds, fmt.Sprintf("%v", v))
+		}
+		return strings.Join(cityIds, ",")
 	}
-	return ""
+	return fmt.Sprintf("%v", value)
 }
 
 func (s *Config) GetValueAttr() any {
 	if slices.Contains(jsonDecodeType, s.Type) {
-		result := []map[string]any{}
-		if err := json.Unmarshal([]byte(s.Value), &result); err == nil {
-			return result
+		resultArr := []any{}
+		if len(s.Value) > 0 {
+			if s.Type == "checkbox" || s.Type == "selects" {
+				if err := json.Unmarshal([]byte(s.Value), &resultArr); err == nil {
+					return resultArr
+				}
+			} else {
+				result := []map[string]any{}
+				if err := json.Unmarshal([]byte(s.Value), &result); err == nil {
+					return result
+				}
+			}
 		}
+		return resultArr
 	} else if s.Type == "switch" {
 		if s.Value == "0" {
 			return false
@@ -65,7 +80,7 @@ func (s *Config) GetValueAttr() any {
 			return true
 		}
 	} else if s.Type == "editor" {
-		//TODO:
+		return s.Value
 	} else if s.Type == "city" || s.Type == "remoteSelects" {
 		if s.Value == "" {
 			return []any{}
@@ -132,6 +147,16 @@ func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
 
 func (s *ConfigModel) Add(ctx *gin.Context, data Config) error {
 	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	return err
+}
+
+func (s *ConfigModel) Edit(ctx *gin.Context, data Config) error {
+	err := s.sqlDB.Table(s.TableName).Save(&data).Error
+	return err
+}
+
+func (s *ConfigModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 

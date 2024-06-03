@@ -171,7 +171,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	}
 
 	copier.Copy(&admin, params)
-	err = h.adminM.Edit(ctx, admin, "password, salt, login_failure, last_login_time, last_login_ip", params.GroupArr)
+	err = h.adminM.Edit(ctx, admin, []string{"password", "salt", "login_failure", "last_login_time", "last_login_ip"}, params.GroupArr)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

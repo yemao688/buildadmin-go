@@ -59,7 +59,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	userMoneyLogHandler := handler.NewUserMoneyLogHandler(zapLogger, userMoneyLogModel)
 	userScoreLogModel := model.NewUserScoreLogModel(gormDB)
 	userScoreLogHandler := handler.NewUserScoreLogHandler(zapLogger, userScoreLogModel)
-	attachmentModel := model2.NewAttachmentModel(gormDB)
+	attachmentModel := model2.NewAttachmentModel(gormDB, configuration)
 	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentModel)
 	crudHandler := handler.NewCrudHandler(zapLogger, authModel)
 	configHandler := handler.NewConfigHandler(zapLogger, configuration, configModel)

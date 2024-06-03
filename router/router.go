@@ -81,6 +81,7 @@ func InitRouter(
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
 	router.GET("/admin/Index/login", indexHandler.Login)
 	router.POST("/admin/Index/login", indexHandler.Login)
+	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler())
@@ -138,9 +139,11 @@ func InitRouter(
 	adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
 
 	adminRouter.GET("routine.Config/index", configHandler.Index)
+	adminRouter.POST("routine.Config/add", configHandler.Add)
+	adminRouter.POST("routine.Config/edit", configHandler.Edit)
+	adminRouter.DELETE("routine.Config/del", configHandler.Del)
 
 	adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
-	adminRouter.POST("routine.Attachment/add", attachmentHandler.Add)
 	adminRouter.GET("routine.Attachment/edit", attachmentHandler.One)
 	adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
 	adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
@@ -175,8 +178,7 @@ func InitRouter(
 	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
 
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
-	adminRouter.GET("ajax/upload", ajaxHandler.Upload)
-	adminRouter.GET("ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
+	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
 

@@ -64,7 +64,7 @@ func (s *DataRecycleModel) Add(ctx *gin.Context, data DataRecycle) error {
 }
 
 func (s *DataRecycleModel) Edit(ctx *gin.Context, data DataRecycle) error {
-	err := s.sqlDB.Table(s.TableName).Omit("").Updates(&data).Error
+	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
 	return err
 }
 

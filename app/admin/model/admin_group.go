@@ -42,7 +42,7 @@ func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
 }
 
 func (s *AdminGroupModel) GetOne(ctx *gin.Context, id int32) (adminGroup AdminGroup, err error) {
-	err = s.sqlDB.Table(s.TableName).Omit("update_time,create_time").Where("id=?", id).Take(&adminGroup).Error
+	err = s.sqlDB.Table(s.TableName).Omit("update_time", "create_time").Where("id=?", id).Take(&adminGroup).Error
 	return
 }
 

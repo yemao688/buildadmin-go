@@ -41,11 +41,7 @@ func StrAttrToArray(attr string) map[string]interface{} {
 
 			attrKeyParts := strings.Split(parts[0], ".")
 			if len(attrKeyParts) == 2 {
-				if nestedMap, ok := attrTemp[attrKeyParts[0]].(map[string]interface{}); ok {
-					nestedMap[attrKeyParts[1]] = attrVal
-				} else {
-					attrTemp[attrKeyParts[0]] = map[string]interface{}{attrKeyParts[1]: attrVal}
-				}
+				attrTemp[attrKeyParts[0]] = map[string]interface{}{attrKeyParts[1]: attrVal}
 			} else {
 				attrTemp[parts[0]] = attrVal
 			}

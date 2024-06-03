@@ -29,7 +29,6 @@ func (*Area) TableName() string {
 
 type AreaModel struct {
 	BaseModel
-	sqlDB *gorm.DB
 }
 
 func NewAreaModel(sqlDB *gorm.DB) *AreaModel {
@@ -39,8 +38,9 @@ func NewAreaModel(sqlDB *gorm.DB) *AreaModel {
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
+			sqlDB:            sqlDB,
 		},
-		sqlDB: sqlDB}
+	}
 }
 
 func (s *AreaModel) List(ctx *gin.Context) (any, error) {
@@ -62,6 +62,6 @@ func (s *AreaModel) List(ctx *gin.Context) (any, error) {
 		Value int32  `json:"value"`
 		Label string `json:"label"`
 	}{}
-	err := s.sqlDB.Table(s.TableName).Select("id as value,name as label").Where(whereS, pid, level).Find(&list).Error
+	err := s.sqlDB.Table(s.TableName).Select("id as value,name as label").Where(whereS, pid, level).Scan(&list).Error
 	return list, err
 }

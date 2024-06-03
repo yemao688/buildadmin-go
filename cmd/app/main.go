@@ -131,7 +131,7 @@ func initLogger() {
 		logFileDir = filepath.Join(rootPath, logFileDir)
 	}
 
-	if ok, _ := utils.PathExists(logFileDir); !ok {
+	if !utils.PathExists(logFileDir) {
 		_ = os.Mkdir(config.Log.RootDir, os.ModePerm)
 	}
 

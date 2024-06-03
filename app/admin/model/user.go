@@ -94,7 +94,7 @@ func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
 
 func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	data := User{}
-	err := s.sqlDB.Table(s.TableName).Omit("password,salt").Where("id=?", id).First(&data).Error
+	err := s.sqlDB.Table(s.TableName).Omit("password", "salt").Where("id=?", id).First(&data).Error
 	return data, err
 }
 
@@ -111,7 +111,7 @@ func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 		return nil, 0, err
 	}
 
-	if err := db.Omit("password,salt").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+	if err := db.Omit("password", "salt").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -139,7 +139,7 @@ func (s *UserModel) Add(ctx *gin.Context, user User) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("login_failure, last_login_time, last_login_ip").Create(&user).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("login_failure", "last_login_time", "last_login_ip").Create(&user).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -160,7 +160,7 @@ func (s *UserModel) Edit(ctx *gin.Context, user User) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("password, salt, login_failure, last_login_time").Save(&user).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("password", "salt", "login_failure", "last_login_time").Save(&user).Error; err != nil {
 		tx.Rollback()
 		return err
 

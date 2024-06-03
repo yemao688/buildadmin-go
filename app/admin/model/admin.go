@@ -89,7 +89,7 @@ func (s *AdminModel) DealData(ctx *gin.Context, data *Admin) error {
 
 func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 	data := Admin{}
-	if err := s.sqlDB.Table(s.TableName).Omit("password,salt,login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
+	if err := s.sqlDB.Table(s.TableName).Omit("password", "salt", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
 		return data, err
 	}
 	if err := s.DealData(ctx, &data); err != nil {
@@ -118,7 +118,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 	if err = db.Count(&total).Error; err != nil {
 		return
 	}
-	err = db.Omit("password,salt,login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Omit("password", "salt", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	for _, v := range list {
 		if err = s.DealData(ctx, v); err != nil {
 			return
@@ -130,7 +130,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	//判断是否有重名的账号
 	if err := s.sqlDB.Table(s.TableName).Where("username=?", admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-		return cErr.BadRequest("Account not exist")
+		return cErr.BadRequest("Account exist")
 	}
 
 	tx := s.sqlDB.Begin()
@@ -140,7 +140,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("login_failure, last_login_time, last_login_ip").Create(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("login_failure", "last_login_time", "last_login_ip").Create(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -160,10 +160,10 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	return tx.Commit().Error
 }
 
-func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit string, groups []string) error {
+func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit []string, groups []string) error {
 	//判断是否有重名的账号
 	if err := s.sqlDB.Table(s.TableName).Where("id<>? and username=?", admin.ID, admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-		return cErr.BadRequest("Account not exist")
+		return cErr.BadRequest("Account exist")
 	}
 
 	tx := s.sqlDB.Begin()
@@ -173,7 +173,7 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit string, groups []s
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit(omit).Save(&admin).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit(omit...).Save(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -197,6 +197,22 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit string, groups []s
 		}
 	}
 
+	return tx.Commit().Error
+}
+
+func (s *AdminModel) SelfEdit(ctx *gin.Context, admin Admin, selectField []string) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Select(selectField).Save(&admin).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
 	return tx.Commit().Error
 }
 

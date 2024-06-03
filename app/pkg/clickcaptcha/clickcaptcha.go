@@ -344,6 +344,7 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 		for i := 0; i < length; i++ {
 			randomIndex := rand.Intn(len(runes))
 			arr = append(arr, string(runes[randomIndex]))
+			runes = append(runes[:randomIndex], runes[randomIndex+1:]...)
 		}
 	}
 	if strings.Contains(c.config.Mode, "icon") {
@@ -354,6 +355,7 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 		for i := 0; i < length; i++ {
 			randomIndex := rand.Intn(len(icons))
 			arr = append(arr, string(icons[randomIndex]))
+			icons = append(icons[:randomIndex], icons[randomIndex+1:]...)
 		}
 	}
 	for i := len(arr) - 1; i > 0; i-- {

@@ -12,8 +12,25 @@ func TestDirIsEmpty(t *testing.T) {
 	fmt.Println(DirIsEmpty(dirPath))
 }
 
-func TestZip(t *testing.T) {
+func TestDelDir(t *testing.T) {
+	dirPath := filepath.Join(utils.RootPath(), "app/pkg/filesystem/test")
+	fmt.Println(DelDir(dirPath))
+}
 
+func TestDelEmptyDir(t *testing.T) {
+	dirPath := filepath.Join(utils.RootPath(), "app/pkg/filesystem/test")
+	fmt.Println(DelEmptyDir(dirPath))
+}
+
+func TestUnzip(t *testing.T) {
+	dirPath := filepath.Join(utils.RootPath(), "app/pkg/filesystem/Desktop.zip")
+	dest := filepath.Join(utils.RootPath(), "app/pkg/filesystem/test")
+	fmt.Println(Unzip(dirPath, dest))
+}
+
+func TestZip(t *testing.T) {
+	dirPath := filepath.Join(utils.RootPath(), "app/pkg/filesystem/test")
+	fmt.Println(DelDir(dirPath))
 }
 
 func TestMkdir(t *testing.T) {
