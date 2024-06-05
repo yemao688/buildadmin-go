@@ -1,6 +1,8 @@
 package crud
 
 import (
+	"go-build-admin/app/admin/model"
+
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -13,14 +15,11 @@ var reservedKeywords = []string{
 	"final", "for", "foreach", "function", "global", "goto", "if", "implements", "include", "include_once",
 	"instanceof", "insteadof", "interface", "isset", "list", "namespace", "new", "or", "print", "private",
 	"protected", "public", "require", "require_once", "return", "static", "switch", "throw", "trait", "try",
-	"unset", "use", "var", "while", "xor", "yield", "match", "readonly", "fn",
+	"unset", "use", "var", "while", "xor", "yield", "match", "readonly", "fn", "type",
 }
 
 //预设控制器和模型文件位置
 // var parseNamePresets = []string{}
-
-//预设WEB端文件位置
-// var parseWebDirPresets = []string{}
 
 type Menu struct {
 	Type   string
@@ -184,21 +183,14 @@ var inputTypeRule = []InputRule{
 	},
 }
 
+//预设WEB端文件位置
+// var parseWebDirPresets = []string{}
+
 var createTimeField = "create_time"
 var updateTimeField = "update_time"
 
+// 属性的类型对照表
 var attrType = []string{}
-
-const TableNameCrudLog = "ba_crud_log"
-
-type CrudLog struct {
-	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                           // ID
-	Tablename  string `gorm:"column:table_name;not null;comment:数据表名" json:"table_name"`                                              // 数据表名
-	Table      string `gorm:"column:table;comment:数据表数据" json:"table"`                                                                // 数据表数据
-	Fields     string `gorm:"column:fields;comment:字段数据" json:"fields"`                                                               // 字段数据
-	Status     string `gorm:"column:status;not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                     // 创建时间
-}
 
 type Helper struct {
 	log   *zap.Logger
@@ -213,18 +205,17 @@ func NewHelper(log *zap.Logger, sqlDB *gorm.DB) *Helper {
 }
 
 // 获取字段字典数据
-func (h *Helper) getDictData() {
+func (h *Helper) getDictData(dict map[string]any) {
 
 }
 
 // 记录CRUD状态
-func (h *Helper) recordCrudStatus(data CrudLog) int32 {
+func (h *Helper) RecordCrudStatus(data model.CrudLog) int32 {
 	if data.ID != 0 {
-		h.sqlDB.Table(TableNameCrudLog).Where("id=?", data.ID).Update("status", data.Status)
+		h.sqlDB.Table(model.TableNameCrudLog).Where("id=?", data.ID).Update("status", data.Status)
 		return data.ID
 	}
-
-	h.sqlDB.Table(TableNameCrudLog).Where("id=?", data.ID).Update("status", data.Status)
+	h.sqlDB.Table(model.TableNameCrudLog).Create(&data)
 	return data.ID
 }
 
@@ -256,16 +247,48 @@ func (h *Helper) updateFieldOrder() {
 
 }
 
-func (h *Helper) handleTableDesign() {
+func (h *Helper) HandleTableDesign(table model.JSON_TABLE, fields []model.Field) {
 
 }
 
-func (h *Helper) parseNameData() {
-
+type NameInfo struct {
+	LastName         string
+	OriginalLastName string
+	Path             []string
+	Namespace        string
+	ParseFile        string
+	RootFileName     string
 }
 
-func (h *Helper) parseWebDirNameData() {
+func (h *Helper) ParseNameData(app string, tableName string, t string, value string) NameInfo {
+	info := NameInfo{
+		LastName:         "",
+		OriginalLastName: "",
+		Path:             []string{},
+		Namespace:        "",
+		ParseFile:        "",
+		RootFileName:     "",
+	}
+	return info
+}
 
+type WebDir struct {
+	Path             string
+	LastName         string
+	OriginalLastName string
+	Lang             string
+	Views            string
+}
+
+func (h *Helper) ParseWebDirNameData(tableName string, t string, value string) WebDir {
+	webDir := WebDir{
+		Path:             "",
+		LastName:         "",
+		OriginalLastName: "",
+		Lang:             "",
+		Views:            "",
+	}
+	return webDir
 }
 
 func (h *Helper) getMenuName() {
@@ -288,7 +311,7 @@ func (h *Helper) tab() {
 
 }
 
-func (h *Helper) delTable() {
+func (h *Helper) DelTable(tableName string) {
 
 }
 

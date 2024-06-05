@@ -24,11 +24,6 @@ func NewCrudLogHandler(log *zap.Logger, crudLog *model.CrudLogModel, authM *mode
 }
 
 func (h *CrudLogHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
-		return
-	}
-
 	result, total, err := h.crudLog.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)

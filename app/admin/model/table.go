@@ -73,3 +73,34 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 	}
 	return data
 }
+
+func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
+	result := []map[string]string{}
+	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, tableName).Scan(&result).Error
+	if err != nil {
+		return result, err
+	}
+
+	if len(result) == 0 {
+		return result, nil
+	}
+	return result, nil
+}
+
+func (s *TableModel) IsHasData(tableName string) (bool, error) {
+	result := []map[string]any{}
+	err := s.sqlDB.Raw("select * from `?` LIMIT 1", tableName).Scan(&result).Error
+	if err != nil {
+		return false, err
+	}
+
+	if len(result) == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *TableModel) ChangeComment(tableName string, comment string) error {
+	err := s.sqlDB.Exec("ALTER TABLE `?` COMMENT = `?`", tableName, comment).Error
+	return err
+}

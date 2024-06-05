@@ -14,6 +14,7 @@ import (
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/clickcaptcha"
+	"go-build-admin/app/pkg/crud"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/router"
@@ -61,10 +62,13 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	userScoreLogHandler := handler.NewUserScoreLogHandler(zapLogger, userScoreLogModel)
 	attachmentModel := model2.NewAttachmentModel(gormDB, configuration)
 	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentModel)
-	crudHandler := handler.NewCrudHandler(zapLogger, authModel)
+	tableModel := model.NewTableModel(configuration, gormDB)
+	crudLogModel := model.NewCrudLogModel(gormDB)
+	helper := crud.NewHelper(zapLogger, gormDB)
+	crudHandler := handler.NewCrudHandler(zapLogger, authModel, tableModel, crudLogModel, helper)
+	crudLogHandler := handler.NewCrudLogHandler(zapLogger, crudLogModel, authModel)
 	configHandler := handler.NewConfigHandler(zapLogger, configuration, configModel)
 	dataRecycleModel := model.NewDataRecycleModel(gormDB)
-	tableModel := model.NewTableModel(configuration, gormDB)
 	dataRecycleHandler := handler.NewDataRecycleHandler(zapLogger, configuration, dataRecycleModel, tableModel)
 	dataRecycleLogModel := model.NewDataRecycleLogModel(gormDB)
 	dataRecycleLogHandler := handler.NewDataRecycleLogHandler(zapLogger, configuration, dataRecycleLogModel)
@@ -82,7 +86,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger)
 	installHandler := handler2.NewInstallHandler(zapLogger)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger)
-	engine := router.InitRouter(lumberjackLogger, login, dataLimit, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, configHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler)
+	engine := router.InitRouter(lumberjackLogger, login, dataLimit, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

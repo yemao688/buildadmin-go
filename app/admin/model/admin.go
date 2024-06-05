@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// TODO: 增加表前缀
 const TableNameAdmin = "ba_admin"
 
 type Admin struct {

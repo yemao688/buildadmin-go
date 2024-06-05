@@ -35,6 +35,7 @@ func InitRouter(
 	userScoreLogHandler *admin.UserScoreLogHandler,
 	attachmentHandler *admin.AttachmentHandler,
 	crudHandler *admin.CrudHandler,
+	crudLogHandler *admin.CrudLogHandler,
 	configHandler *admin.ConfigHandler,
 
 	dataRecycleHandler *admin.DataRecycleHandler,
@@ -176,6 +177,15 @@ func InitRouter(
 	adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
 	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
+	adminRouter.GET("crud.Crud/checkCrudLog", crudHandler.CheckCrudLog)
+	adminRouter.POST("crud.Crud/parseFieldData", crudHandler.ParseFieldData)
+	adminRouter.GET("crud.Crud/getFileData", crudHandler.GetFileData)
+	adminRouter.POST("crud.Crud/generateCheck", crudHandler.GenerateCheck)
+	adminRouter.POST("crud.Crud/generate", crudHandler.Generate)
+	adminRouter.POST("crud.Crud/logStart", crudHandler.LogStart)
+	adminRouter.DELETE("crud.Crud/delete", crudHandler.Delete)
+
+	adminRouter.GET("crud.Log/index", crudLogHandler.Index)
 
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
