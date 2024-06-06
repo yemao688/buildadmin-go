@@ -2,9 +2,6 @@ package crud
 
 import (
 	"go-build-admin/app/admin/model"
-
-	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 // 内部保留词
@@ -192,62 +189,40 @@ var updateTimeField = "update_time"
 // 属性的类型对照表
 var attrType = []string{}
 
-type Helper struct {
-	log   *zap.Logger
-	sqlDB *gorm.DB
-}
-
-func NewHelper(log *zap.Logger, sqlDB *gorm.DB) *Helper {
-	return &Helper{
-		log:   log,
-		sqlDB: sqlDB,
-	}
-}
-
 // 获取字段字典数据
-func (h *Helper) getDictData(dict map[string]any) {
+func GetDictData(dict map[string]any) {
 
 }
 
-// 记录CRUD状态
-func (h *Helper) RecordCrudStatus(data model.CrudLog) int32 {
-	if data.ID != 0 {
-		h.sqlDB.Table(model.TableNameCrudLog).Where("id=?", data.ID).Update("status", data.Status)
-		return data.ID
-	}
-	h.sqlDB.Table(model.TableNameCrudLog).Create(&data)
-	return data.ID
-}
-
-func (h *Helper) getPhinxFieldType() {
+func getPhinxFieldType() {
 
 }
 
-func (h *Helper) analyseFieldLimit() {
+func analyseFieldLimit() {
 
 }
 
-func (h *Helper) dataTypeLimit() {
+func dataTypeLimit() {
 
 }
 
-func (h *Helper) analyseFieldDefault() {
+func analyseFieldDefault() {
 
 }
 
-func (h *Helper) searchArray() {
+func searchArray() {
 
 }
 
-func (h *Helper) getPhinxFieldData() {
+func getPhinxFieldData() {
 
 }
 
-func (h *Helper) updateFieldOrder() {
+func updateFieldOrder() {
 
 }
 
-func (h *Helper) HandleTableDesign(table model.JSON_TABLE, fields []model.Field) {
+func HandleTableDesign(table model.JSON_TABLE, fields []model.Field) {
 
 }
 
@@ -260,7 +235,7 @@ type NameInfo struct {
 	RootFileName     string
 }
 
-func (h *Helper) ParseNameData(app string, tableName string, t string, value string) NameInfo {
+func ParseNameData(app string, tableName string, t string, value string) NameInfo {
 	info := NameInfo{
 		LastName:         "",
 		OriginalLastName: "",
@@ -280,7 +255,7 @@ type WebDir struct {
 	Views            string
 }
 
-func (h *Helper) ParseWebDirNameData(tableName string, t string, value string) WebDir {
+func ParseWebDirNameData(tableName string, t string, value string) WebDir {
 	webDir := WebDir{
 		Path:             "",
 		LastName:         "",
@@ -291,126 +266,122 @@ func (h *Helper) ParseWebDirNameData(tableName string, t string, value string) W
 	return webDir
 }
 
-func (h *Helper) getMenuName() {
+func getMenuName() {
 
 }
 
-func (h *Helper) getStubFilePath() {
+func getStubFilePath() {
 
 }
 
-func (h *Helper) assembleStub() {
+func assembleStub() {
 
 }
 
-func (h *Helper) escape() {
+func escape() {
 
 }
 
-func (h *Helper) tab() {
+func tab() {
 
 }
 
-func (h *Helper) DelTable(tableName string) {
+func parseTableColumns() {
 
 }
 
-func (h *Helper) parseTableColumns() {
+func handleTableColumn() {
 
 }
 
-func (h *Helper) handleTableColumn() {
+func analyseFieldType() {
 
 }
 
-func (h *Helper) analyseFieldType() {
+func analyseFieldDataType() {
 
 }
 
-func (h *Helper) analyseFieldDataType() {
+func analyseField() {
 
 }
 
-func (h *Helper) analyseField() {
+func getTableColumnsDataType() {
 
 }
 
-func (h *Helper) getTableColumnsDataType() {
+func isMatchSuffix() {
 
 }
 
-func (h *Helper) isMatchSuffix() {
+func createMenu() {
 
 }
 
-func (h *Helper) createMenu() {
+func writeWebLangFile() {
 
 }
 
-func (h *Helper) writeWebLangFile() {
+func writeFile() {
 
 }
 
-func (h *Helper) writeFile() {
+func buildModelAppend() {
 
 }
 
-func (h *Helper) buildModelAppend() {
+func buildModelFieldType() {
 
 }
 
-func (h *Helper) buildModelFieldType() {
+func writeModelFile() {
 
 }
 
-func (h *Helper) writeModelFile() {
+func writeControllerFile() {
 
 }
 
-func (h *Helper) writeControllerFile() {
+func writeFormFile() {
 
 }
 
-func (h *Helper) writeFormFile() {
+func buildFormValidatorRules() {
 
 }
 
-func (h *Helper) buildFormValidatorRules() {
+func writeIndexFile() {
 
 }
 
-func (h *Helper) writeIndexFile() {
+func buildTableColumn() {
 
 }
 
-func (h *Helper) buildTableColumn() {
+func buildTableColumnKey() {
 
 }
 
-func (h *Helper) buildTableColumnKey() {
+func formatObjectKey() {
 
 }
 
-func (h *Helper) formatObjectKey() {
+func getQuote() {
 
 }
 
-func (h *Helper) getQuote() {
+func buildFormatSimpleArray() {
 
 }
 
-func (h *Helper) buildFormatSimpleArray() {
+func buildSimpleArray() {
 
 }
 
-func (h *Helper) buildSimpleArray() {
+func buildDefaultOrder() {
 
 }
 
-func (h *Helper) buildDefaultOrder() {
-
-}
-
-func (h *Helper) getJsonFromArray() {
+func getJsonFromArray() {
 
 }

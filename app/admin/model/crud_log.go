@@ -141,3 +141,13 @@ func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
+
+// 记录CRUD状态
+func (s *CrudLogModel) RecordCrudStatus(data CrudLog) int32 {
+	if data.ID != 0 {
+		s.sqlDB.Table(s.TableName).Where("id=?", data.ID).Update("status", data.Status)
+		return data.ID
+	}
+	s.sqlDB.Table(s.TableName).Create(&data)
+	return data.ID
+}

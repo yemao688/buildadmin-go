@@ -19,6 +19,15 @@ func NewTableModel(config *conf.Configuration, sqlDB *gorm.DB) *TableModel {
 	}
 }
 
+func (s *TableModel) Name(tableName string, fullName bool) string {
+	prefix := ""
+	if fullName {
+		prefix = s.config.Database.Prefix
+	}
+	tableName = strings.TrimLeft(s.config.Database.Prefix, tableName)
+	return prefix + tableName
+}
+
 func (s *TableModel) GetTableList() map[string]string {
 	type Table struct {
 		TABLE_NAME    string
@@ -56,6 +65,12 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 	type Column struct {
 		COLUMN_NAME    string
 		COLUMN_COMMENT string
+		IS_NULLABLE    string
+		COLUMN_TYPE    string
+		DATA_TYPE      string
+		COLUMN_DEFAULT string
+		COLUMN_KEY     string
+		EXTRA          string
 	}
 	var columnList []Column
 	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, tableName).Scan(&columnList)
@@ -102,5 +117,11 @@ func (s *TableModel) IsHasData(tableName string) (bool, error) {
 
 func (s *TableModel) ChangeComment(tableName string, comment string) error {
 	err := s.sqlDB.Exec("ALTER TABLE `?` COMMENT = `?`", tableName, comment).Error
+	return err
+}
+
+func (s *TableModel) DelTable(tableName string) error {
+	tableName = s.Name(tableName, true)
+	err := s.sqlDB.Exec("DROP TABLE IF EXISTS `?`", tableName).Error
 	return err
 }

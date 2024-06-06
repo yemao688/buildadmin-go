@@ -16,26 +16,18 @@ import (
 )
 
 type CrudHandler struct {
-	log            *zap.Logger
-	tableM         *model.TableModel
-	crudLogM       *model.CrudLogModel
-	crudHelper     *crud.Helper
-	modelData      ModelData
-	controllerData ControllerData
-	indexVueData   IndexVueData
-	formVueData    FormVueData
+	log       *zap.Logger
+	tableM    *model.TableModel
+	crudLogM  *model.CrudLogModel
+	modelData ModelData
 }
 
-func NewCrudHandler(log *zap.Logger, authM *model.AuthModel, tableM *model.TableModel, crudLogM *model.CrudLogModel, crudHelper *crud.Helper) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, authM *model.AuthModel, tableM *model.TableModel, crudLogM *model.CrudLogModel) *CrudHandler {
 	return &CrudHandler{
-		log:            log,
-		tableM:         tableM,
-		crudLogM:       crudLogM,
-		crudHelper:     crudHelper,
-		modelData:      ModelData{},
-		controllerData: ControllerData{},
-		indexVueData:   IndexVueData{},
-		formVueData:    FormVueData{},
+		log:       log,
+		tableM:    tableM,
+		crudLogM:  crudLogM,
+		modelData: ModelData{},
 	}
 }
 
@@ -92,21 +84,27 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+
+	controllerData := ControllerData{}
+	indexVueData := IndexVueData{}
+	formVueData := FormVueData{}
+	crudHelper := crud.NewCrudHandler(h.log)
+
 	//记录日志
 	record := model.CrudLog{}
 	copier.Copy(&record, params)
 	record.Tablename = params.Table.Name
 	record.Status = "start"
-	h.crudHelper.RecordCrudStatus(record)
+	h.crudLogM.RecordCrudStatus(record)
 
 	if params.Type == "create" || params.Table.Rebuild == "Yes" {
 		//数据表存在则删除
-		h.crudHelper.DelTable(record.Tablename)
+		h.tableM.DelTable(record.Tablename)
 	}
 
 	// 处理表设计
 	tablePk := "id"
-	h.crudHelper.HandleTableDesign(record.Table, record.Fields)
+	crudHelper.HandleTableDesign(record.Table, record.Fields)
 
 	// 表名称
 	tableName := record.Tablename
@@ -122,11 +120,11 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	if params.Table.IsCommonModel == 1 {
 		modelApp = "common"
 	}
-	modelFile := h.crudHelper.ParseNameData(modelApp, tableName, "model", params.Table.ModelFile)
-	validateFile := h.crudHelper.ParseNameData("admin", tableName, "validate", params.Table.ValidateFile)
-	controllerFile := h.crudHelper.ParseNameData("admin", tableName, "controller", params.Table.ControllerFile)
-	webViewsDir := h.crudHelper.ParseWebDirNameData(tableName, "views", params.Table.WebViewsDir)
-	webLangDir := h.crudHelper.ParseWebDirNameData(tableName, "lang", params.Table.WebViewsDir)
+	modelFile := crudHelper.ParseNameData(modelApp, tableName, "model", params.Table.ModelFile)
+	validateFile := crudHelper.ParseNameData("admin", tableName, "validate", params.Table.ValidateFile)
+	controllerFile := crudHelper.ParseNameData("admin", tableName, "controller", params.Table.ControllerFile)
+	webViewsDir := crudHelper.ParseWebDirNameData(tableName, "views", params.Table.WebViewsDir)
+	webLangDir := crudHelper.ParseWebDirNameData(tableName, "lang", params.Table.WebViewsDir)
 
 	// 语言翻译前缀
 

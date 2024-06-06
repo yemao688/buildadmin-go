@@ -32,7 +32,6 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		rds.NewRedis,
 		token.NewTokenHelper,
 		clickcaptcha.NewCaptcha,
-		crud.NewHelper,
 
 		middleware.ProviderSet,
 		adminHandler.ProviderSet,
