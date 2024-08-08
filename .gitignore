@@ -49,3 +49,4 @@ pnpm-debug.log*
 *.exe
 /cmd/model
 tmp
+todo.txt

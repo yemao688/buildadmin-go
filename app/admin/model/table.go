@@ -19,6 +19,7 @@ func NewTableModel(config *conf.Configuration, sqlDB *gorm.DB) *TableModel {
 	}
 }
 
+// 获取数据表的名称,包含数据表前缀
 func (s *TableModel) Name(tableName string, fullName bool) string {
 	prefix := ""
 	if fullName {
@@ -28,6 +29,7 @@ func (s *TableModel) Name(tableName string, fullName bool) string {
 	return prefix + tableName
 }
 
+// 获取数据库的所有数据表
 func (s *TableModel) GetTableList() map[string]string {
 	type Table struct {
 		TABLE_NAME    string
@@ -57,6 +59,7 @@ func (s *TableModel) GetTablePk(tableName string) string {
 	return columnName
 }
 
+// 获取数据表的所有字段
 func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map[string]any {
 	if tableName == "" {
 		return nil
@@ -89,6 +92,7 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 	return data
 }
 
+// 获取表信息
 func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
 	result := []map[string]string{}
 	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, tableName).Scan(&result).Error
@@ -102,6 +106,7 @@ func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
 	return result, nil
 }
 
+// 数据表是否有数据
 func (s *TableModel) IsHasData(tableName string) (bool, error) {
 	result := []map[string]any{}
 	err := s.sqlDB.Raw("select * from `?` LIMIT 1", tableName).Scan(&result).Error
@@ -115,13 +120,22 @@ func (s *TableModel) IsHasData(tableName string) (bool, error) {
 	return true, nil
 }
 
+// 修改数据表字段备注
 func (s *TableModel) ChangeComment(tableName string, comment string) error {
 	err := s.sqlDB.Exec("ALTER TABLE `?` COMMENT = `?`", tableName, comment).Error
 	return err
 }
 
+// 删除数据表
 func (s *TableModel) DelTable(tableName string) error {
 	tableName = s.Name(tableName, true)
 	err := s.sqlDB.Exec("DROP TABLE IF EXISTS `?`", tableName).Error
 	return err
+}
+
+// 数据表是否存在
+func (s *TableModel) IsExist(tableName string) bool {
+	result := map[string]int{}
+	s.sqlDB.Raw("SELECT COUNT(*) AS num FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ", tableName).Scan(&result)
+	return result["num"] == 1
 }

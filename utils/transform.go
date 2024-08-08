@@ -1,20 +1,32 @@
 package utils
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
 
-func SnakeToCamel(snakeCase string) string {
-	words := strings.Split(snakeCase, "_")
-	for i, word := range words {
-		if i == 0 {
-			continue // Skip the first word (no need to capitalize it)
-		}
-		// Capitalize the first letter of the word
-		words[i] = strings.Title(word)
+func CamelToSnake(input string) string {
+	// 使用正则表达式匹配大写字母
+	re := regexp.MustCompile(`([A-Z])`)
+	// 替换所有匹配的大写字母，在它们之前加上下划线，并将它们转换为小写
+	return re.ReplaceAllStringFunc(input, func(s string) string {
+		return "_" + strings.ToLower(s)
+	})
+}
+
+func SnakeToCamel(input string, ucfirst bool) string {
+	// 使用正则表达式匹配下划线后面跟的小写字母
+	re := regexp.MustCompile(`_([a-z])`)
+	// 替换所有匹配的下划线+字母，在它们之后将字母转换为大写
+	name := re.ReplaceAllStringFunc(input, func(s string) string {
+		return strings.ToUpper(s[1:])
+	})
+
+	if ucfirst {
+		return strings.ToUpper(name[:1]) + name[1:]
 	}
-	return strings.Join(words, "") // Merge the words back into a single string
+	return strings.ToLower(name[:1]) + name[1:]
 }
 
 // StrAttrToArray 将字符串属性列表转为map

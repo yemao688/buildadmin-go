@@ -1,0 +1,866 @@
+{
+    "type": "log",
+    "table": {
+        "name": "test1",
+        "comment": "测试表",
+        "quickSearchField": [
+            "id"
+        ],
+        "defaultSortField": "weigh",
+        "formFields": [
+            "weigh",
+            "status",
+            "remark11",
+            "banner_id",
+            "string",
+            "image",
+            "file",
+            "radio",
+            "checkbox",
+            "select",
+            "switch",
+            "editor",
+            "textarea",
+            "number",
+            "float",
+            "password",
+            "date",
+            "time",
+            "datetime",
+            "year",
+            "timestamp",
+            "array",
+            "city",
+            "icon",
+            "color",
+            "images",
+            "files",
+            "selects",
+            "team_ids"
+        ],
+        "columnFields": [
+            "id",
+            "weigh",
+            "status",
+            "update_time",
+            "create_time",
+            "string",
+            "image",
+            "radio",
+            "checkbox",
+            "select",
+            "switch",
+            "number",
+            "float",
+            "date",
+            "time",
+            "datetime",
+            "year",
+            "timestamp",
+            "city",
+            "icon",
+            "color",
+            "images",
+            "selects"
+        ],
+        "defaultSortType": "desc",
+        "generateRelativePath": "test1",
+        "isCommonModel": 0,
+        "modelFile": "app\\admin\\model\\Test1.php",
+        "controllerFile": "app\\admin\\controller\\Test1.php",
+        "validateFile": "app\\admin\\validate\\Test1.php",
+        "webViewsDir": "web\\src\\views\\backend\\test1",
+        "designChange": [
+            {
+                "type": "change-field-name",
+                "index": 3,
+                "oldName": "remark",
+                "newName": "remark11",
+                "sync": true
+            }
+        ],
+        "rebuild": "No",
+        "empty": true
+    },
+    "fields": [
+        {
+            "title": "主键",
+            "name": "id",
+            "comment": "ID",
+            "designType": "pk",
+            "formBuildExclude": "1",
+            "table": {
+                "width": "70",
+                "operator": "eq",
+                "sortable": "custom"
+            },
+            "form": {},
+            "type": "int",
+            "length": "10",
+            "precision": "0",
+            "default": "none",
+            "null": "",
+            "primaryKey": "1",
+            "unsigned": "1",
+            "autoIncrement": "1"
+        },
+        {
+            "title": "权重（拖拽排序）",
+            "name": "weigh",
+            "comment": "权重",
+            "designType": "weigh",
+            "table": {
+                "operator": "eq",
+                "sortable": "custom"
+            },
+            "form": {
+                "validator": [
+                    "number",
+                    "required"
+                ],
+                "validatorMsg": "请输入数字"
+            },
+            "type": "int",
+            "length": "8",
+            "precision": "0",
+            "default": "0",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "状态",
+            "name": "status",
+            "comment": "状态:0=禁用,1=启用",
+            "designType": "switch",
+            "table": {
+                "render": "switch",
+                "operator": "eq",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "tinyint",
+            "length": "1",
+            "precision": "0",
+            "default": "1",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "备注",
+            "name": "remark11",
+            "comment": "备注",
+            "designType": "textarea",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [
+                    "required"
+                ],
+                "validatorMsg": "",
+                "rows": "3"
+            },
+            "type": "varchar",
+            "length": "255",
+            "precision": "0",
+            "default": "empty string",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "修改时间",
+            "name": "update_time",
+            "comment": "修改时间",
+            "designType": "timestamp",
+            "formBuildExclude": "1",
+            "table": {
+                "render": "datetime",
+                "operator": "RANGE",
+                "sortable": "custom",
+                "width": "160",
+                "timeFormat": "yyyy-mm-dd hh:MM:ss"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "bigint",
+            "length": "16",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "创建时间",
+            "name": "create_time",
+            "comment": "创建时间",
+            "designType": "timestamp",
+            "formBuildExclude": "1",
+            "table": {
+                "render": "datetime",
+                "operator": "RANGE",
+                "sortable": "custom",
+                "width": "160",
+                "timeFormat": "yyyy-mm-dd hh:MM:ss"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "bigint",
+            "length": "16",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "远程下拉（关联表）",
+            "name": "banner_id",
+            "comment": "远程下拉",
+            "designType": "remoteSelect",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "eq"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "select-multi": "",
+                "remote-pk": "id",
+                "remote-field": "name",
+                "remote-table": "banner",
+                "remote-controller": "app\\admin\\controller\\Banner.php",
+                "remote-model": "app\\admin\\model\\Banner.php",
+                "relation-fields": "name",
+                "remote-url": ""
+            },
+            "type": "int",
+            "length": "10",
+            "precision": "0",
+            "default": "0",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "字符串",
+            "name": "string",
+            "comment": "字符串",
+            "designType": "string",
+            "table": {
+                "render": "none",
+                "operator": "LIKE",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "200",
+            "precision": "0",
+            "default": "empty string",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "图片",
+            "name": "image",
+            "comment": "图片",
+            "designType": "image",
+            "table": {
+                "render": "image",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "image-multi": ""
+            },
+            "type": "varchar",
+            "length": "200",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "文件",
+            "name": "file",
+            "comment": "文件",
+            "designType": "file",
+            "tableBuildExclude": "1",
+            "table": {
+                "render": "none",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "file-multi": ""
+            },
+            "type": "varchar",
+            "length": "200",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "单选框",
+            "name": "radio",
+            "dataType": "enum('opt0','opt1')",
+            "comment": "单选框:opt0=选项一,opt1=选项二",
+            "designType": "radio",
+            "table": {
+                "render": "tag",
+                "operator": "eq",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "enum",
+            "length": "0",
+            "precision": "0",
+            "default": "opt0",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "数字",
+            "name": "number",
+            "comment": "数字",
+            "designType": "number",
+            "table": {
+                "render": "none",
+                "operator": "RANGE",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [
+                    "number"
+                ],
+                "validatorMsg": "",
+                "step": "1"
+            },
+            "type": "int",
+            "length": "10",
+            "precision": "0",
+            "default": "0",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "日期",
+            "name": "date",
+            "comment": "日期",
+            "designType": "date",
+            "table": {
+                "operator": "eq",
+                "sortable": "custom"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "date",
+            "length": "0",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "时间日期（时间戳存储）",
+            "name": "timestamp",
+            "comment": "时间日期",
+            "designType": "timestamp",
+            "table": {
+                "render": "datetime",
+                "operator": "RANGE",
+                "sortable": "custom",
+                "width": "160",
+                "timeFormat": "yyyy-mm-dd hh:MM:ss"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "bigint",
+            "length": "16",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "年份",
+            "name": "year",
+            "comment": "年份",
+            "designType": "year",
+            "table": {
+                "operator": "RANGE",
+                "sortable": "custom"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "year",
+            "length": "4",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "时间日期",
+            "name": "datetime",
+            "type": "datetime",
+            "length": "0",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": "",
+            "comment": "时间日期",
+            "designType": "datetime",
+            "table": {
+                "operator": "eq",
+                "sortable": "custom",
+                "width": "160"
+            },
+            "form": {
+                "validator": [
+                    "date"
+                ],
+                "validatorMsg": ""
+            }
+        },
+        {
+            "title": "时间",
+            "name": "time",
+            "comment": "时间",
+            "designType": "time",
+            "table": {
+                "operator": "eq",
+                "sortable": "custom"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "time",
+            "length": "0",
+            "precision": "0",
+            "default": "null",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "密码",
+            "name": "password",
+            "comment": "密码",
+            "designType": "password",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [
+                    "password"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "32",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "浮点数",
+            "name": "float",
+            "type": "decimal",
+            "length": "5",
+            "precision": "2",
+            "default": "0",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": "",
+            "comment": "浮点数",
+            "designType": "float",
+            "table": {
+                "render": "none",
+                "operator": "RANGE",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [
+                    "float"
+                ],
+                "validatorMsg": "",
+                "step": "1"
+            }
+        },
+        {
+            "title": "复选框",
+            "name": "checkbox",
+            "dataType": "set('opt0','opt1')",
+            "comment": "复选框:opt0=选项一,opt1=选项二",
+            "designType": "checkbox",
+            "table": {
+                "render": "tags",
+                "operator": "FIND_IN_SET",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "set",
+            "length": "0",
+            "precision": "0",
+            "default": "opt0,opt1",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "多行文本框",
+            "name": "textarea",
+            "comment": "多行文本框",
+            "designType": "textarea",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "rows": "3"
+            },
+            "type": "varchar",
+            "length": "255",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "富文本",
+            "name": "editor",
+            "comment": "富文本",
+            "designType": "editor",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [
+                    "editorRequired"
+                ],
+                "validatorMsg": ""
+            },
+            "type": "text",
+            "length": "0",
+            "precision": "0",
+            "default": "empty string",
+            "null": "1",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "下拉框",
+            "name": "select",
+            "dataType": "enum('opt0','opt1')",
+            "comment": "下拉框:opt0=选项一,opt1=选项二",
+            "designType": "select",
+            "table": {
+                "render": "tag",
+                "operator": "eq",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "select-multi": ""
+            },
+            "type": "enum",
+            "length": "0",
+            "precision": "0",
+            "default": "opt0",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "城市选择",
+            "name": "city",
+            "comment": "城市选择",
+            "designType": "city",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "100",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "数组",
+            "name": "array",
+            "comment": "数组",
+            "designType": "array",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "255",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "下拉框（多选）",
+            "name": "selects",
+            "comment": "下拉框:opt0=选项一,opt1=选项二",
+            "designType": "selects",
+            "table": {
+                "render": "tags",
+                "operator": "FIND_IN_SET",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "select-multi": "1"
+            },
+            "type": "varchar",
+            "length": "100",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "远程下拉（关联多选）",
+            "name": "team_ids",
+            "comment": "远程下拉",
+            "designType": "remoteSelects",
+            "tableBuildExclude": "1",
+            "table": {
+                "operator": "LIKE"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "select-multi": "1",
+                "remote-pk": "id",
+                "remote-field": "name",
+                "remote-table": "team",
+                "remote-controller": "app\\admin\\controller\\Team.php",
+                "remote-model": "app\\admin\\model\\Team.php",
+                "relation-fields": "name",
+                "remote-url": ""
+            },
+            "type": "varchar",
+            "length": "100",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "文件（多选）",
+            "name": "files",
+            "comment": "文件",
+            "designType": "files",
+            "tableBuildExclude": "1",
+            "table": {
+                "render": "none",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "file-multi": "1"
+            },
+            "type": "varchar",
+            "length": "255",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "图片（多选）",
+            "name": "images",
+            "comment": "图片",
+            "designType": "images",
+            "table": {
+                "render": "images",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": "",
+                "image-multi": "1"
+            },
+            "type": "varchar",
+            "length": "255",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "颜色选择器",
+            "name": "color",
+            "comment": "颜色选择器",
+            "designType": "color",
+            "table": {
+                "render": "color",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "30",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        },
+        {
+            "title": "开关",
+            "name": "switch",
+            "comment": "开关:0=关,1=开",
+            "designType": "switch",
+            "table": {
+                "render": "switch",
+                "operator": "eq",
+                "sortable": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "tinyint",
+            "length": "1",
+            "precision": "0",
+            "default": "1",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "1",
+            "autoIncrement": ""
+        },
+        {
+            "title": "图标选择",
+            "name": "icon",
+            "comment": "图标选择",
+            "designType": "icon",
+            "table": {
+                "render": "icon",
+                "operator": "false"
+            },
+            "form": {
+                "validator": [],
+                "validatorMsg": ""
+            },
+            "type": "varchar",
+            "length": "50",
+            "precision": "0",
+            "default": "empty string",
+            "null": "",
+            "primaryKey": "",
+            "unsigned": "",
+            "autoIncrement": ""
+        }
+    ]
+}

@@ -17,7 +17,6 @@ import (
 	"go-build-admin/service/rds"
 
 	"go-build-admin/app/pkg/clickcaptcha"
-	"go-build-admin/app/pkg/crud"
 	"go-build-admin/app/pkg/token"
 
 	"github.com/google/wire"
@@ -34,9 +33,9 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		clickcaptcha.NewCaptcha,
 
 		middleware.ProviderSet,
+		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
 		adminModel.ProviderSet,
-		commonModel.ProviderSet,
 		apiHandler.ProviderSet,
 
 		router.InitRouter,

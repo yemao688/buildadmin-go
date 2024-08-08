@@ -1,8 +1,4 @@
-package crud
-
-import (
-	"go-build-admin/app/admin/model"
-)
+package crud_helper
 
 // 内部保留词
 var reservedKeywords = []string{
@@ -12,11 +8,8 @@ var reservedKeywords = []string{
 	"final", "for", "foreach", "function", "global", "goto", "if", "implements", "include", "include_once",
 	"instanceof", "insteadof", "interface", "isset", "list", "namespace", "new", "or", "print", "private",
 	"protected", "public", "require", "require_once", "return", "static", "switch", "throw", "trait", "try",
-	"unset", "use", "var", "while", "xor", "yield", "match", "readonly", "fn", "type",
+	"unset", "use", "var", "while", "xor", "yield", "match", "readonly", "fn", "type", "go",
 }
-
-//预设控制器和模型文件位置
-// var parseNamePresets = []string{}
 
 type Menu struct {
 	Type   string
@@ -180,50 +173,79 @@ var inputTypeRule = []InputRule{
 	},
 }
 
-//预设WEB端文件位置
-// var parseWebDirPresets = []string{}
+// 预设控制器和模型文件位置
+var parseNamePresets = map[string][]string{
+	"handler/user":        {"user"},
+	"handler/admin":       {"admin"},
+	"handler/admin_group": {"admin_group"},
+	"handler/attachment":  {"attachment"},
+	"handler/admin_rule":  {"admin_rule"},
+}
+
+// 预设WEB端文件位置
+var parseWebDirPresets = map[string][]string{
+	"views/user":        {"user", "user"},
+	"views/admin":       {"auth", "admin"},
+	"views/admin_group": {"auth", "group"},
+	"views/attachment":  {"routine", "attachment"},
+	"views/admin_rule":  {"auth", "rule"},
+}
+
+// 属性的类型对照表
+var attrType = map[string]string{
+	"controller/preExcludeFields": "string",
+	"controller/quickSearchField": "string",
+	"controller/withJoinTable":    "array",
+	"controller/defaultSortField": "string",
+}
 
 var createTimeField = "create_time"
 var updateTimeField = "update_time"
 
-// 属性的类型对照表
-var attrType = []string{}
+type ModelData struct {
+	Append             []string
+	Methods            []string
+	FieldType          map[string]string
+	CreateTime         string
+	UpdateTime         string
+	BeforeInsertMixins map[string]string
+	BeforeInsert       string
+	AfterInsert        string
+	Name               string
+	ClassName          string
+	Namespace          string
+	RelationMethodList []string
 
-// 获取字段字典数据
-func GetDictData(dict map[string]any) {
-
+	Pk                 string
+	AutoWriteTimestamp string
 }
 
-func getPhinxFieldType() {
-
+type ControllerData struct {
+	Use            []string
+	Attr           map[string]string
+	Methods        []string
+	FilterRule     string
+	ClassName      string
+	Namespace      string
+	TableComment   string
+	ModelName      string
+	ModelNamespace string
 }
 
-func analyseFieldLimit() {
-
+type IndexVueData struct {
+	EnableDragSort        bool
+	DefaultItems          []string
+	TableColumn           []map[string]string
+	DblClickNotEditColumn []string
+	OptButtons            []string
+	DefaultOrder          string
+	TablePk               string
+	WebTranslate          string
 }
 
-func dataTypeLimit() {
-
-}
-
-func analyseFieldDefault() {
-
-}
-
-func searchArray() {
-
-}
-
-func getPhinxFieldData() {
-
-}
-
-func updateFieldOrder() {
-
-}
-
-func HandleTableDesign(table model.JSON_TABLE, fields []model.Field) {
-
+type FormVueData struct {
+	BigDialog  string
+	FormFields []string
 }
 
 type NameInfo struct {
@@ -235,153 +257,15 @@ type NameInfo struct {
 	RootFileName     string
 }
 
-func ParseNameData(app string, tableName string, t string, value string) NameInfo {
-	info := NameInfo{
-		LastName:         "",
-		OriginalLastName: "",
-		Path:             []string{},
-		Namespace:        "",
-		ParseFile:        "",
-		RootFileName:     "",
-	}
-	return info
-}
-
 type WebDir struct {
-	Path             string
-	LastName         string
 	OriginalLastName string
-	Lang             string
+	LastName         string
+	Path             []string
 	Views            string
+	Lang             []string
+	En               string
+	Zh               string
 }
 
-func ParseWebDirNameData(tableName string, t string, value string) WebDir {
-	webDir := WebDir{
-		Path:             "",
-		LastName:         "",
-		OriginalLastName: "",
-		Lang:             "",
-		Views:            "",
-	}
-	return webDir
-}
-
-func getMenuName() {
-
-}
-
-func getStubFilePath() {
-
-}
-
-func assembleStub() {
-
-}
-
-func escape() {
-
-}
-
-func tab() {
-
-}
-
-func parseTableColumns() {
-
-}
-
-func handleTableColumn() {
-
-}
-
-func analyseFieldType() {
-
-}
-
-func analyseFieldDataType() {
-
-}
-
-func analyseField() {
-
-}
-
-func getTableColumnsDataType() {
-
-}
-
-func isMatchSuffix() {
-
-}
-
-func createMenu() {
-
-}
-
-func writeWebLangFile() {
-
-}
-
-func writeFile() {
-
-}
-
-func buildModelAppend() {
-
-}
-
-func buildModelFieldType() {
-
-}
-
-func writeModelFile() {
-
-}
-
-func writeControllerFile() {
-
-}
-
-func writeFormFile() {
-
-}
-
-func buildFormValidatorRules() {
-
-}
-
-func writeIndexFile() {
-
-}
-
-func buildTableColumn() {
-
-}
-
-func buildTableColumnKey() {
-
-}
-
-func formatObjectKey() {
-
-}
-
-func getQuote() {
-
-}
-
-func buildFormatSimpleArray() {
-
-}
-
-func buildSimpleArray() {
-
-}
-
-func buildDefaultOrder() {
-
-}
-
-func getJsonFromArray() {
-
-}
+// 当designType为以下值时: 1. 出入库字符串到数组转换,2. 默认值转数组
+var dtStringToArray = []string{"checkbox", "selects", "remoteSelects", "city", "images", "files"}

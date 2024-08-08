@@ -126,3 +126,26 @@ func (s *AdminRuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }
+
+// crud 创建菜单
+func (s *AdminRuleModel) Create(ids []string) {
+
+}
+
+// crud 删除菜单
+func (s *AdminRuleModel) Delete(path string, recursion bool) error {
+	adminRule := AdminRule{}
+	s.sqlDB.Table(s.TableName).Where(" name = ? ", path).Take(&adminRule)
+
+	list := []AdminRule{}
+	s.sqlDB.Table(s.TableName).Where(" pid = ? ", adminRule.ID).Find(&list)
+
+	if recursion && len(list) > 0 {
+		for _, v := range list {
+			s.Delete(v.Name, true)
+		}
+	}
+
+	s.sqlDB.Table(s.TableName).Where(" name = ? ", path).Delete(nil)
+	return nil
+}

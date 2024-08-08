@@ -14,7 +14,6 @@ import (
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/clickcaptcha"
-	"go-build-admin/app/pkg/crud"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/router"
@@ -64,8 +63,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentModel)
 	tableModel := model.NewTableModel(configuration, gormDB)
 	crudLogModel := model.NewCrudLogModel(gormDB)
-	helper := crud.NewHelper(zapLogger, gormDB)
-	crudHandler := handler.NewCrudHandler(zapLogger, authModel, tableModel, crudLogModel, helper)
+	crudHandler := handler.NewCrudHandler(zapLogger, tableModel, crudLogModel, adminRuleModel)
 	crudLogHandler := handler.NewCrudLogHandler(zapLogger, crudLogModel, authModel)
 	configHandler := handler.NewConfigHandler(zapLogger, configuration, configModel)
 	dataRecycleModel := model.NewDataRecycleModel(gormDB)

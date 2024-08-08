@@ -3,11 +3,13 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/pkg/crud"
+	helper "go-build-admin/app/pkg/crud_helper"
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/utils"
+	"os"
+	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -16,60 +18,19 @@ import (
 )
 
 type CrudHandler struct {
-	log       *zap.Logger
-	tableM    *model.TableModel
-	crudLogM  *model.CrudLogModel
-	modelData ModelData
+	log        *zap.Logger
+	tableM     *model.TableModel
+	crudLogM   *model.CrudLogModel
+	adminRuleM *model.AdminRuleModel
 }
 
-func NewCrudHandler(log *zap.Logger, authM *model.AuthModel, tableM *model.TableModel, crudLogM *model.CrudLogModel) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *model.AdminRuleModel) *CrudHandler {
 	return &CrudHandler{
-		log:       log,
-		tableM:    tableM,
-		crudLogM:  crudLogM,
-		modelData: ModelData{},
+		log:        log,
+		tableM:     tableM,
+		crudLogM:   crudLogM,
+		adminRuleM: adminRuleM,
 	}
-}
-
-type ModelData struct {
-	Append             string
-	Methods            string
-	FieldType          string
-	CreateTime         string
-	UpdateTime         string
-	BeforeInsertMixins string
-	BeforeInsert       string
-	AfterInsert        string
-	Name               string
-	ClassName          string
-	Namespace          string
-	RelationMethodList string
-}
-
-type ControllerData struct {
-	Use            string
-	Attr           string
-	Methods        string
-	FilterRule     string
-	ClassName      string
-	Namespace      string
-	TableComment   string
-	ModelName      string
-	ModelNamespace string
-}
-
-type IndexVueData struct {
-	EnableDragSort        bool
-	DefaultItems          string
-	TableColumn           string
-	DblClickNotEditColumn string
-	OptButtons            string
-	DefaultOrder          string
-}
-
-type FormVueData struct {
-	bigDialog  bool
-	formFields string
 }
 
 // 开始生成
@@ -85,94 +46,41 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		return
 	}
 
-	controllerData := ControllerData{}
-	indexVueData := IndexVueData{}
-	formVueData := FormVueData{}
-	crudHelper := crud.NewCrudHandler(h.log)
-
 	//记录日志
 	record := model.CrudLog{}
 	copier.Copy(&record, params)
 	record.Tablename = params.Table.Name
 	record.Status = "start"
-	h.crudLogM.RecordCrudStatus(record)
+	crudLogId := h.crudLogM.RecordCrudStatus(record)
 
-	if params.Type == "create" || params.Table.Rebuild == "Yes" {
-		//数据表存在则删除
-		h.tableM.DelTable(record.Tablename)
-	}
+	tableName := h.tableM.Name(params.Table.Name, false)
+	fullTableName := h.tableM.Name(params.Table.Name, true)
 
 	// 处理表设计
-	tablePk := "id"
-	crudHelper.HandleTableDesign(record.Table, record.Fields)
-
-	// 表名称
-	tableName := record.Tablename
-
-	// 表注释
-	tableComment := record.Table.Comment
-	if strings.Contains(tableComment, "表") {
-		tableComment = strings.TrimRight(tableComment, "表") + "管理"
+	if params.Type == "create" || record.Table.Rebuild == "Yes" {
+		//数据表存在则删除
+		h.tableM.DelTable(record.Table.Name)
 	}
+	helper.HandleTableDesign(record.Table, record.Fields)
 
-	// 生成文件信息解析
-	modelApp := "admin"
-	if params.Table.IsCommonModel == 1 {
-		modelApp = "common"
+	//生成文件
+	webViewsDir, tableComment, err := helper.GenerateFile(params.Type, params.Table, params.Fields, tableName, fullTableName)
+	if err != nil {
+		record.ID = crudLogId
+		record.Status = "error"
+		h.crudLogM.RecordCrudStatus(record)
+		FailByErr(ctx, err)
+		return
 	}
-	modelFile := crudHelper.ParseNameData(modelApp, tableName, "model", params.Table.ModelFile)
-	validateFile := crudHelper.ParseNameData("admin", tableName, "validate", params.Table.ValidateFile)
-	controllerFile := crudHelper.ParseNameData("admin", tableName, "controller", params.Table.ControllerFile)
-	webViewsDir := crudHelper.ParseWebDirNameData(tableName, "views", params.Table.WebViewsDir)
-	webLangDir := crudHelper.ParseWebDirNameData(tableName, "lang", params.Table.WebViewsDir)
-
-	// 语言翻译前缀
-
-	// 快速搜索字段
-	if !slices.Contains(params.Table.QuickSearchField, tablePk) {
-		params.Table.QuickSearchField = append(params.Table.QuickSearchField, tablePk)
-	}
-	quickSearchFieldZhCnTitle := []string{}
-
-	// 模型数据
-	h.modelData.Name = tableName
-	h.modelData.ClassName = modelFile.LastName
-	h.modelData.Namespace = modelFile.Namespace
-
-	// 控制器数据
-	h.controllerData.ClassName = controllerFile.LastName
-	h.controllerData.Namespace = modelFile.Namespace
-	h.controllerData.TableComment = tableComment
-	h.controllerData.ModelName = modelFile.LastName
-	h.controllerData.ModelNamespace = modelFile.Namespace
-
-	// index.vue数据
-
-	// form.vue数据
-
-	// 语言包数据
-
-	// 简化的字段数据
-
-	// 快速搜索提示
-
-	// 开启字段排序
-
-	// 表格的操作列
-
-	// 写入语言包代码
-
-	// 写入模型代码
-
-	// 写入控制器代码
-
-	// 写入验证器代码
-
-	// 写入index.vue代码
-
-	// 写入form.vue代码
 
 	// 生成菜单
+	helper.CreateMenu(h.adminRuleM, webViewsDir, tableComment)
+
+	record.ID = crudLogId
+	record.Status = "success"
+	h.crudLogM.RecordCrudStatus(record)
+
+	Success(ctx, map[string]interface{}{})
 }
 
 // 从log开始
@@ -182,6 +90,14 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 	if err != nil {
 		FailByErr(ctx, err)
 		return
+	}
+
+	// 数据表是否有数据
+	if h.tableM.IsExist(crudLog.Table.Name) {
+		flag, _ := h.tableM.IsHasData(crudLog.Table.Name)
+		crudLog.Table.Empty = flag
+	} else {
+		crudLog.Table.Empty = true
 	}
 
 	Success(ctx, map[string]interface{}{
@@ -198,6 +114,43 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+
+	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
+	files := []string{
+		webLangDir.En + ".ts",
+		webLangDir.Zh + ".ts",
+		crudLog.Table.WebViewsDir + "/index.vue",
+		crudLog.Table.WebViewsDir + "/popupForm.vue",
+		crudLog.Table.ControllerFile,
+		crudLog.Table.ModelFile,
+		crudLog.Table.ValidateFile,
+	}
+
+	for _, v := range files {
+		_, err := os.Stat(v)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+		err = os.Remove(v)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+
+		dir := filepath.Dir(v)
+		filesystem.DelEmptyDir(dir)
+	}
+
+	// 删除菜单
+	path := helper.GetMenuName(webLangDir)
+	h.adminRuleM.Delete(path, true)
+
+	record := model.CrudLog{
+		ID:     int32(id),
+		Status: "delete",
+	}
+	h.crudLogM.RecordCrudStatus(record)
 
 	Success(ctx, map[string]interface{}{})
 }
@@ -283,7 +236,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 
 	tableExist := false
 	tableList := h.tableM.GetTableList()
-	for name, _ := range tableList {
+	for name := range tableList {
 		if name == params.TableName {
 			tableExist = true
 		}
@@ -304,6 +257,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	Success(ctx, nil)
 }
 
+// 数据表
 func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 	outExcludeTable := []string{
 		// 功能表
@@ -328,35 +282,4 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 	Success(ctx, map[string]interface{}{
 		"dbs": outTables,
 	})
-}
-
-// 关联表数据解析
-func (h *CrudHandler) parseJoinData(ctx *gin.Context) {
-
-}
-
-// 解析模型方法（设置器、获取器等）
-func (h *CrudHandler) parseModelMethods(ctx *gin.Context) {
-
-}
-
-// 控制器/模型等文件的一些杂项属性解析
-func (h *CrudHandler) parseSundryData(ctx *gin.Context) {
-
-}
-
-func (h *CrudHandler) getFormField(ctx *gin.Context) {
-
-}
-
-func (h *CrudHandler) getRemoteSelectUrl(ctx *gin.Context) {
-
-}
-
-func (h *CrudHandler) getTableColumn(ctx *gin.Context) {
-
-}
-
-func (h *CrudHandler) getColumnDict(ctx *gin.Context) {
-
 }
