@@ -19,6 +19,10 @@ func NewTableModel(config *conf.Configuration, sqlDB *gorm.DB) *TableModel {
 	}
 }
 
+func (s *TableModel) DB() *gorm.DB {
+	return s.sqlDB
+}
+
 // 获取数据表的名称,包含数据表前缀
 func (s *TableModel) Name(tableName string, fullName bool) string {
 	prefix := ""

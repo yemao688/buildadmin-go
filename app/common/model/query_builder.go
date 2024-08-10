@@ -218,11 +218,11 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		case "FIND_IN_SET":
 			if sets, ok := search[i].Val.([]string); ok {
 				for _, v := range sets {
-					whereS += " AND " + operater + "( ? ," + Backquote(field) + ")"
+					whereS += " AND " + operater + "( ? ," + Backquote(field) + ")>0 "
 					whereP = append(whereP, v)
 				}
 			} else {
-				whereS += " AND " + operater + "( ? ," + Backquote(field) + ")"
+				whereS += " AND " + operater + "( ? ," + Backquote(field) + ")>0 "
 				whereP = append(whereP, search[i].Val)
 			}
 		case "IN":

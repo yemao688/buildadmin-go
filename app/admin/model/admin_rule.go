@@ -127,11 +127,6 @@ func (s *AdminRuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	return pids, err
 }
 
-// crud 创建菜单
-func (s *AdminRuleModel) Create(ids []string) {
-
-}
-
 // crud 删除菜单
 func (s *AdminRuleModel) Delete(path string, recursion bool) error {
 	adminRule := AdminRule{}

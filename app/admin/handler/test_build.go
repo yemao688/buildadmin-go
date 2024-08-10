@@ -33,16 +33,17 @@ func (h *TestBuildHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type ParamTestBuild struct {
+type TestBuildParam struct {
 }
 
 func (h *TestBuildHandler) Add(ctx *gin.Context) {
-	var param ParamTestBuild
-	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+	var params TestBuildParam
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	data := model.TestBuild{}
+	var data model.TestBuild
+	copier.Copy(&data, params)
 	err := h.testBuildM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -51,11 +52,8 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-type TestBuild struct {
-}
-
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
-	var params TestBuild
+	var params TestBuildParam
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
