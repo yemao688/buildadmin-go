@@ -49,4 +49,5 @@ pnpm-debug.log*
 *.exe
 /cmd/model
 tmp
+storage
 todo.txt

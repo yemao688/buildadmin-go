@@ -193,10 +193,10 @@ var parseWebDirPresets = map[string][]string{
 
 // 属性的类型对照表
 var attrType = map[string]string{
-	"controller/preExcludeFields": "string",
-	"controller/quickSearchField": "string",
-	"controller/withJoinTable":    "array",
-	"controller/defaultSortField": "string",
+	"handler/preExcludeFields": "string",
+	"handler/quickSearchField": "string",
+	"handler/withJoinTable":    "array",
+	"handler/defaultSortField": "string",
 }
 
 var createTimeField = "create_time"
@@ -220,22 +220,23 @@ type ModelData struct {
 	AutoWriteTimestamp string
 }
 
-type ControllerData struct {
-	Use            []string
-	Attr           map[string]string
-	Methods        []string
-	FilterRule     string
-	ClassName      string
-	Namespace      string
-	TableComment   string
-	ModelName      string
-	ModelNamespace string
+type HandlerData struct {
+	Use                      []string
+	Attr                     map[string]string
+	Methods                  []string
+	FilterRule               string
+	ClassName                string
+	Namespace                string
+	TableComment             string
+	ModelName                string
+	ModelNamespace           string
+	RelationVisibleFieldList map[string]string
 }
 
 type IndexVueData struct {
-	EnableDragSort        bool
+	EnableDragSort        string
 	DefaultItems          []string
-	TableColumn           []map[string]string
+	TableColumn           []string
 	DblClickNotEditColumn []string
 	OptButtons            []string
 	DefaultOrder          string
@@ -263,8 +264,7 @@ type WebDir struct {
 	Path             []string
 	Views            string
 	Lang             []string
-	En               string
-	Zh               string
+	LangDir          string
 }
 
 // 当designType为以下值时: 1. 出入库字符串到数组转换,2. 默认值转数组

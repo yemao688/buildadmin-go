@@ -29,7 +29,7 @@ func (s *TableModel) Name(tableName string, fullName bool) string {
 	if fullName {
 		prefix = s.config.Database.Prefix
 	}
-	tableName = strings.TrimLeft(s.config.Database.Prefix, tableName)
+	tableName = strings.TrimPrefix(s.config.Database.Prefix, tableName)
 	return prefix + tableName
 }
 

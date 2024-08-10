@@ -61,6 +61,7 @@ type ChangeField struct {
 	OldName string `json:"oldName"` //旧名称
 	NewName string `json:"newName"` //新名称
 	Sync    bool   `json:"sync"`    //是否同步到数据表
+	After   string `json:"after"`   //在什么后
 }
 
 type Table struct {

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/magiconair/properties/assert"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 func TestGetPk(t *testing.T) {
@@ -33,8 +35,8 @@ func TestParseNameData(t *testing.T) {
 	fmt.Println(string(content))
 	fmt.Println(err)
 
-	controllerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
-	content, _ = json.MarshalIndent(controllerFile, "", " ")
+	handlerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
+	content, _ = json.MarshalIndent(handlerFile, "", " ")
 	fmt.Println(string(content))
 	fmt.Println(err)
 }
@@ -67,7 +69,7 @@ func TestFieldsMap(t *testing.T) {
 func TestAnalyseField(t *testing.T) {
 	fields := getTestFieldData()
 	for _, field := range fields {
-		analyseField(&field)
+		field = analyseField(field)
 		content, _ := json.MarshalIndent(field, "", "  ")
 		fmt.Println(string(content))
 	}
@@ -82,7 +84,7 @@ func TestGetDictData(t *testing.T) {
 	quickSearchFieldZhCnTitle := []string{}
 
 	for _, field := range fields {
-		analyseField(&field)
+		field = analyseField(field)
 
 		langEnData = getDictData(langEnData, field, "en", "")
 		langZhData = getDictData(langZhData, field, "zh-cn", "")
@@ -111,4 +113,25 @@ func TestGenerate(t *testing.T) {
 	tableName := "test1"
 	fullTableName := "ba_test1"
 	GenerateFile("log", table, fields, tableName, fullTableName)
+}
+
+func TestGetQuote(t *testing.T) {
+	data := "sort"
+	content := getQuote(data)
+	fmt.Println(content)
+}
+
+func TestBuildSimpleArray(t *testing.T) {
+	data := []string{"sort", "id", "book"}
+	content := buildSimpleArray(data)
+	fmt.Println(content)
+}
+
+func TestHandleTableDesign(t *testing.T) {
+	table := getTestTableData()
+	fields := getTestFieldData()
+	fullTableName := "test555"
+
+	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
+	HandleTableDesign(db, fullTableName, table, fields)
 }

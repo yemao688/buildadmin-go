@@ -41,7 +41,7 @@ const optButtons: OptButton[] = defaultOptButtons({%optButtons%})
  * baTable 内包含了表格的所有数据且数据具备响应性，然后通过 provide 注入给了后代组件
  */
 const baTable = new baTableClass(
-    new baTableApi({%controllerUrl%}),
+    new baTableApi({%apiUrl%}),
     {
         pk: '{%tablePk%}',
         column: [

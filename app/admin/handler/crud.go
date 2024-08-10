@@ -61,7 +61,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		//数据表存在则删除
 		h.tableM.DelTable(record.Table.Name)
 	}
-	helper.HandleTableDesign(record.Table, record.Fields)
+	helper.HandleTableDesign(h.tableM.DB(), fullTableName, params.Table, params.Fields)
 
 	//生成文件
 	webViewsDir, tableComment, err := helper.GenerateFile(params.Type, params.Table, params.Fields, tableName, fullTableName)
@@ -117,8 +117,8 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 
 	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
 	files := []string{
-		webLangDir.En + ".ts",
-		webLangDir.Zh + ".ts",
+		webLangDir.LangDir + "/en/" + webLangDir.LastName + ".ts",
+		webLangDir.LangDir + "/zh-cn/" + webLangDir.LastName + ".ts",
 		crudLog.Table.WebViewsDir + "/index.vue",
 		crudLog.Table.WebViewsDir + "/popupForm.vue",
 		crudLog.Table.ControllerFile,

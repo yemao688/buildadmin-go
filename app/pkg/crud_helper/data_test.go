@@ -604,7 +604,7 @@ func getTestFieldData() []model.Field {
 		Type:               "decimal",
 		Length:             "6",
 		Precision:          "2",
-		Default:            "",
+		Default:            "0",
 		Null:               "",
 		PrimaryKey:         "",
 		Unsigned:           "",

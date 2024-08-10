@@ -29,11 +29,10 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	if err != nil {
 		return WebDir{}, "", err
 	}
-	controllerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
+	handlerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}
-	// validateFile, err := parseNameData("admin", tableName, "validate", table.ValidateFile)
 
 	webViewsDir := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
 	webLangDir := ParseWebDirNameData(tableName, "lang", table.WebViewsDir)
@@ -59,28 +58,21 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	modelData.RelationMethodList = []string{}
 
 	// 控制器数据
-	controllerData := ControllerData{}
-	controllerData.ClassName = controllerFile.LastName + "Handler"
-	controllerData.Namespace = controllerFile.Namespace
-	controllerData.TableComment = tableComment
-	controllerData.ModelName = modelData.ClassName
-	controllerData.ModelNamespace = modelData.Namespace
-	controllerData.Use = []string{}
-	controllerData.Attr = map[string]string{}
-	controllerData.Methods = []string{}
+	handlerData := HandlerData{}
+	handlerData.ClassName = handlerFile.LastName + "Handler"
+	handlerData.Namespace = handlerFile.Namespace
+	handlerData.TableComment = tableComment
+	handlerData.ModelName = modelData.ClassName
+	handlerData.ModelNamespace = modelData.Namespace
+	handlerData.Use = []string{}
+	handlerData.Attr = map[string]string{}
+	handlerData.Methods = []string{}
 
 	// index.vue数据
 	indexVueData := IndexVueData{}
-	indexVueData.EnableDragSort = false
+	indexVueData.EnableDragSort = "false"
 	indexVueData.DefaultItems = []string{}
-	indexVueData.TableColumn = []map[string]string{
-		{
-			"type":     "selection",
-			"align":    "center",
-			"operator": "false",
-		},
-	}
-
+	indexVueData.TableColumn = []string{" type: 'selection', align: 'center', operator: false"}
 	indexVueData.DblClickNotEditColumn = []string{"undefined"}
 	indexVueData.OptButtons = []string{"edit", "delete"}
 	indexVueData.DefaultOrder = ""
@@ -100,7 +92,7 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 		fieldsMap[field.Name] = field.DesignType
 
 		//分析字段
-		analyseField(&field)
+		field = analyseField(field)
 
 		langEnData = getDictData(langEnData, field, "en", "")
 		langZhData = getDictData(langZhData, field, "zh-cn", "")
@@ -124,14 +116,18 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 
 		// 表单项
 		if slices.Contains(table.FormFields, field.Name) {
+			fieldDefault := getFieldDefault(field)
+			if fieldDefault != "" {
+				indexVueData.DefaultItems = append(indexVueData.DefaultItems, fieldDefault)
+			}
+
 			formFieldHtml := getFormField(field, columnDict, webTranslate, fullTableName)
 			formVueData.FormFields = append(formVueData.FormFields, formFieldHtml)
 		}
 
 		// 表格列
-		indexVueData.DefaultItems = append(indexVueData.DefaultItems, getFieldDefault(field))
 		if slices.Contains(table.ColumnFields, field.Name) {
-			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", ""))
+			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", webTranslate))
 		}
 
 		// 关联表数据解析
@@ -143,21 +139,21 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 		parseModelMethods(field, &modelData)
 
 		// 控制器/模型等文件的一些杂项属性解析
-		parseSundryData(&controllerData, &indexVueData, &formVueData, field, table)
+		parseSundryData(&handlerData, &indexVueData, &formVueData, field, table)
 
 		if !slices.Contains(table.FormFields, field.Name) {
-			controllerData.Attr["preExcludeFields"] = field.Name
+			handlerData.Attr["preExcludeFields"] = field.Name
 		}
 	}
 
 	// 快速搜索提示
 	langEnData["quick Search Fields"] = strings.Join(table.QuickSearchField, ",")
 	langZhData["quick Search Fields"] = strings.Join(quickSearchFieldZhCnTitle, "、")
-	controllerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
+	handlerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
 
 	// 开启字段排序
 	if _, ok := fieldsMap["weigh"]; ok {
-		indexVueData.EnableDragSort = true
+		indexVueData.EnableDragSort = "true"
 		modelData.AfterInsert = assembleStub("mixins/model/afterInsert", map[string]string{
 			"field": "weight",
 		}, false)
@@ -165,18 +161,12 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 
 	// 表格的操作列
 	width := "100"
-	if indexVueData.EnableDragSort {
+	if indexVueData.EnableDragSort == "true" {
 		width = "140"
 	}
-	indexVueData.TableColumn = append(indexVueData.TableColumn, map[string]string{
-		"label":    "t('Operate')",
-		"align":    "center",
-		"width":    width,
-		"render":   "buttons",
-		"buttons":  "optButtons",
-		"operator": "false",
-	})
-	if indexVueData.EnableDragSort {
+	operateColumn := " label: t('Operate'), align: 'center', width: " + width + ", render: 'buttons', buttons: optButtons, operator: false"
+	indexVueData.TableColumn = append(indexVueData.TableColumn, operateColumn)
+	if indexVueData.EnableDragSort == "true" {
 		indexVueData.OptButtons = append([]string{"weigh-sort"}, indexVueData.OptButtons...)
 	}
 
@@ -186,26 +176,22 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	// }
 
 	// 写入控制器代码
-	// if err := writeControllerFile(controllerData, controllerFile); err != nil {
-	// 	return WebDir{}, "", err
-	// }
-
-	// 写入验证器代码
-	// validateContent := assembleStub("mixins/validate/validate", map[string]string{
-	// 	"namespace": validateFile.Namespace,
-	// 	"className": validateFile.LastName,
-	// })
-	// writeFile(validateFile.ParseFile, validateContent)
+	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
+		return WebDir{}, "", err
+	}
 
 	// 写入语言包代码
-	if err := writeWebLangFile(langEnData, langZhData, webLangDir); err != nil {
+	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
+		return WebDir{}, "", err
+	}
+	if err := writeWebLangFile(langZhData, "zh-cn", webLangDir); err != nil {
 		return WebDir{}, "", err
 	}
 
 	// 写入index.vue代码
 	indexVueData.TablePk = tablePk
 	indexVueData.WebTranslate = webTranslate
-	if err := writeIndexFile(indexVueData, webViewsDir, controllerFile); err != nil {
+	if err := writeIndexFile(indexVueData, webViewsDir, handlerFile); err != nil {
 		return WebDir{}, "", err
 	}
 
@@ -213,7 +199,6 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	if err := writeFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
 		return WebDir{}, "", err
 	}
-
 	return webViewsDir, tableComment, err
 }
 
@@ -242,7 +227,7 @@ func getCommnet(comment string) string {
 func parseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
 	pathArr := []string{}
 	if file != "" {
-		file = strings.TrimRight(file, ".go")
+		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
 		file = strings.ReplaceAll(file, "/", "/")
 		file = strings.ReplaceAll(file, "\\", "/")
@@ -316,7 +301,7 @@ func TrimPrefix(slice1, slice2 []string) ([]string, []string) {
 func ParseWebDirNameData(tableName string, moduleType string, file string) WebDir {
 	pathArr := []string{}
 	if file != "" {
-		file = strings.TrimRight(file, ".go")
+		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
 		file = strings.ReplaceAll(file, "/", "/")
 		file = strings.ReplaceAll(file, "\\", "/")
@@ -338,36 +323,30 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 		}
 	}
 
-	originalLastName := ""
-	lastName := ""
-	newPathArr := []string{}
+	originalLastName := pathArr[len(pathArr)-1]
+	lastName := strings.ToLower(originalLastName)
+	pathArr = pathArr[:len(pathArr)-1]
 	for k, v := range pathArr {
-		if len(pathArr)-1 == k {
-			originalLastName = v
-			lastName = strings.ToLower(v)
-		} else {
-			newPathArr = append(newPathArr, strings.ToLower(v))
-		}
+		pathArr[k] = strings.ToLower(v)
 	}
 
 	webDir := WebDir{
-		Path:             newPathArr,
+		Path:             pathArr,
 		LastName:         lastName,
 		OriginalLastName: originalLastName,
 	}
 
 	if moduleType == "views" {
-		webDir.Views = filepath.Join("web/src/views/backend", strings.Join(newPathArr, "/"), lastName)
+		webDir.Views = filepath.Join("web/src/views/backend", strings.Join(pathArr, "/"), lastName)
 	} else if moduleType == "lang" {
-		webDir.Lang = append(webDir.Lang, newPathArr...)
+		webDir.Lang = append(webDir.Lang, pathArr...)
 		webDir.Lang = append(webDir.Lang, lastName)
-		webDir.En = filepath.Join("web/src/lang/backend/en", strings.Join(newPathArr, "/"), lastName)
-		webDir.Zh = filepath.Join("web/src/lang/backend/zh-cn/", strings.Join(newPathArr, "/"), lastName)
+		webDir.LangDir = filepath.Join("web/src/lang/backend", strings.Join(pathArr, "/"))
 	}
 	return webDir
 }
 
-func analyseField(field *model.Field) {
+func analyseField(field model.Field) model.Field {
 	field.Type = analyseFieldType(field)
 	field.OriginalDesignType = field.DesignType
 
@@ -395,10 +374,11 @@ func analyseField(field *model.Field) {
 	if field.DesignType == "file" && field.Form.FileMulti != "" {
 		field.DesignType = field.DesignType + "s"
 	}
+	return field
 }
 
 // 分析字段数据类型
-func analyseFieldType(field *model.Field) string {
+func analyseFieldType(field model.Field) string {
 	dataType := field.Type
 	if field.DataType != "" {
 		dataType = field.DataType
@@ -409,85 +389,6 @@ func analyseFieldType(field *model.Field) string {
 		return strings.TrimSpace(typeName[0])
 	}
 	return strings.TrimSpace(dataType)
-}
-
-// 分析字段的完整数据类型定义
-func analyseFieldDataType(field *model.Field) string {
-	if field.DataType != "" {
-		return field.DataType
-	}
-
-	conciseType := analyseFieldType(field)
-	limitType, data := analyseFieldLimit(conciseType, field)
-
-	if limitType == "decimalType" {
-		return conciseType + "(" + data[0] + "," + data[1] + ")"
-	} else if limitType == "valuesType" {
-		return conciseType + "(" + strings.Join(data, ",") + ")"
-	}
-	return conciseType + "(" + data[0] + ")"
-
-}
-
-// 分析字段limit和精度
-func analyseFieldLimit(conciseType string, field *model.Field) (string, []string) {
-	decimalType := []string{"decimal", "double", "float"}
-	valuesType := []string{"enum", "set"}
-
-	dataTL := dataTypeLimit(field.DataType)
-	if slices.Contains(decimalType, conciseType) {
-		if len(dataTL) == 1 {
-			return "decimalType", []string{dataTL[0], "0"}
-		}
-		if len(dataTL) == 2 {
-			return "decimalType", []string{dataTL[0], dataTL[1]}
-		}
-		precision := "10"
-		if field.Length != "" {
-			precision = field.Length
-		}
-		scale := "0"
-		if field.Precision != "" {
-			scale = field.Precision
-		}
-		return "decimalType", []string{precision, scale}
-	}
-
-	if slices.Contains(valuesType, conciseType) {
-		values := []string{}
-		for _, v := range dataTL {
-			v = strings.ReplaceAll(v, "\"", "")
-			v = strings.ReplaceAll(v, "'", "")
-			values = append(values, v)
-		}
-		return "valuesType", values
-	}
-
-	if len(dataTL) > 0 {
-		return "limitType", []string{dataTL[0]}
-	}
-
-	if field.Length != "" {
-		return "limitType", []string{field.Length}
-	}
-	return "", nil
-}
-
-func dataTypeLimit(dataType string) []string {
-	content := []string{}
-
-	re := regexp.MustCompile(`\((.*?)\)`)
-	matches := re.FindStringSubmatch(dataType)
-
-	// 检查是否有匹配项
-	if len(matches) > 1 {
-		// 分割匹配到的内容
-		group := matches[1]
-		group = strings.Trim(group, ",")
-		content = strings.Split(group, ",")
-	}
-	return content
-
 }
 
 // 获取字段字典数据
@@ -571,7 +472,7 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 
 	// 不同输入框的属性处理
 	if len(columnDict) > 0 || slices.Contains([]string{"radio", "checkbox", "select", "selects"}, field.DesignType) {
-		fieldHtml += " :data=\"{ content: " + getJsonFromArray(columnDict) + " }\" "
+		fieldHtml += " :data=\"{ content: " + getJsonFromArray(columnDict) + " }\""
 
 	} else if field.DesignType == "textarea" {
 		rows := 3
@@ -579,9 +480,9 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 			rows, _ = strconv.Atoi(field.Form.Rows)
 		}
 
-		fieldHtml += " :input-attr=\"{ rows: " + strconv.Itoa(rows) + "}\" "
-		fieldHtml += " @keyup.enter.stop=\"\" "
-		fieldHtml += " @keyup.ctrl.enter=\"baTable.onSubmit(formRef)\" "
+		fieldHtml += " :input-attr=\"{ rows: " + strconv.Itoa(rows) + " }\""
+		fieldHtml += " @keyup.enter.stop=\"\""
+		fieldHtml += " @keyup.ctrl.enter=\"baTable.onSubmit(formRef)\""
 
 	} else if field.DesignType == "remoteSelect" || field.DesignType == "remoteSelects" {
 		fName := "name"
@@ -593,14 +494,14 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 			"field":      fName,
 			"remote-url": GetRemoteSelectUrl(field),
 		}
-		fieldHtml += " :input-attr=\"" + getJsonFromArray(attr) + "\" "
+		fieldHtml += " :input-attr=\"" + getJsonFromArray(attr) + "\""
 
 	} else if field.DesignType == "number" {
 		step := 1
-		if field.Form.Step != "0" {
+		if field.Form.Step != "" && field.Form.Step != "0" {
 			step, _ = strconv.Atoi(field.Form.Step)
 		}
-		fieldHtml += " :input-attr=\"{ step:" + strconv.Itoa(step) + "}\" "
+		fieldHtml += " :input-attr=\"{ step: " + strconv.Itoa(step) + " }\""
 
 	} else if field.DesignType == "icon" {
 		fieldHtml += " :input-attr=\"" + getJsonFromArray(map[string]string{"placement": "top"}) + "\""
@@ -642,31 +543,13 @@ func getFieldDefault(field model.Field) string {
 	}
 
 	if slices.Contains(dtStringToArray, field.DesignType) && field.Default != "" && strings.Contains(field.Default, ",") {
-		defaultValue = field.Name + ":[" + field.Default + "]"
+		defaultValue = field.Name + ":" + buildSimpleArray(strings.Split(field.Default, ","))
 	}
 
 	if slices.Contains([]string{"weigh", "number", "float"}, field.DesignType) {
 		defaultValue = field.Name + ":" + field.Default
 	}
 	return defaultValue
-}
-
-func buildSimpleArray(data []string) string {
-	if len(data) == 0 {
-		return "[]"
-	}
-
-	str := ""
-	for _, v := range data {
-		_, err := strconv.Atoi(v)
-		if v == "undefined" || v == "false" || err != nil {
-			str += v + ", "
-		} else {
-			quote := getQuote(v)
-			str += quote + v + quote + ", "
-		}
-	}
-	return "[" + strings.TrimRight(str, ", ") + "]"
 }
 
 func GetRemotePk(fullTableName string, field model.Field) string {
@@ -700,38 +583,37 @@ func GetRemoteSelectUrl(field model.Field) string {
 	return url
 }
 
-func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePrefix string, translationPrefix string, webTranslate string) map[string]string {
+func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePrefix string, translationPrefix string, webTranslate string) string {
 	prop := ""
 	if field.DesignType == "city" {
 		prop = "_text"
 	}
 
-	column := map[string]string{
-		"label": "t('" + webTranslate + translationPrefix + field.Name + "')",
-		"prop":  fieldNamePrefix + field.Name + prop,
-		"align": "center",
-	}
+	columnStr := ""
+	columnStr += buildTableColumnKey("label", "t('"+webTranslate+translationPrefix+field.Name+"')")
+	columnStr += buildTableColumnKey("prop", fieldNamePrefix+field.Name+prop)
+	columnStr += buildTableColumnKey("align", "center")
 
 	// 模糊搜索增加一个placeholder
 	if field.Table.Operator != "" && field.Table.Operator == "LIKE" {
-		column["operatorPlaceholder"] = "t('Fuzzy query')"
+		columnStr += buildTableColumnKey("operatorPlaceholder", "t('Fuzzy query')")
 	}
 
 	// 合并前端预设的字段表格属性
-	if field.Table.Width != "" {
-		column["width"] = field.Table.Width
+	if field.Table.Render != "" && field.Table.Render != "none" {
+		columnStr += buildTableColumnKey("render", field.Table.Render)
 	}
 	if field.Table.Operator != "" {
-		column["operator"] = field.Table.Operator
+		columnStr += buildTableColumnKey("operator", field.Table.Operator)
 	}
 	if field.Table.Sortable != "" {
-		column["sortable"] = field.Table.Sortable
+		columnStr += buildTableColumnKey("sortable", field.Table.Sortable)
 	}
-	if field.Table.Render != "" {
-		column["render"] = field.Table.Render
+	if field.Table.Width != "" {
+		columnStr += buildTableColumnKey("width", field.Table.Width)
 	}
 	if field.Table.TimeFormat != "" {
-		column["timeFormat"] = field.Table.TimeFormat
+		columnStr += buildTableColumnKey("timeFormat", field.Table.TimeFormat)
 	}
 
 	// 需要值替换的渲染类型
@@ -741,13 +623,9 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 		for k, v := range columnDict {
 			itemJson += buildTableColumnKey(k, v)
 		}
-		column["replaceValue"] = buildTableColumnKey("replaceValue", itemJson)
+		columnStr += " replaceValue: {" + strings.TrimRight(itemJson, ",") + "},"
 	}
-
-	if field.Table.Render == "none" {
-		delete(column, "render")
-	}
-	return column
+	return columnStr
 }
 
 // 关联表数据解析
@@ -814,29 +692,29 @@ func parseModelMethods(field model.Field, modelData *ModelData) {
 }
 
 // 控制器/模型等文件的一些杂项属性解析
-func parseSundryData(controllerData *ControllerData, indexVueData *IndexVueData, formVueData *FormVueData, field model.Field, table model.Table) {
+func parseSundryData(handlerData *HandlerData, indexVueData *IndexVueData, formVueData *FormVueData, field model.Field, table model.Table) {
 	if field.DesignType == "editor" {
 		formVueData.BigDialog = "true"
-		controllerData.FilterRule = "\n" + Tab(2) + "$this->request->filter('clean_xss')"
+		handlerData.FilterRule = "\n" + Tab(2) + "$this->request->filter('clean_xss')"
 	}
 
 	//默认排序字段
 	if table.DefaultSortField != "" && table.DefaultSortType != "" {
 		defaultSortField := table.DefaultSortField + "," + table.DefaultSortType
 		if defaultSortField == "id,desc" {
-			controllerData.Attr["defaultSortField"] = ""
+			handlerData.Attr["defaultSortField"] = ""
 		} else {
-			controllerData.Attr["defaultSortField"] = defaultSortField
+			handlerData.Attr["defaultSortField"] = defaultSortField
 			indexVueData.DefaultOrder = buildDefaultOrder(table.DefaultSortField, table.DefaultSortType)
 		}
 	}
 }
 
-func buildDefaultOrder(field string, t string) string {
-	if field != "" && t != "" {
+func buildDefaultOrder(field string, sortType string) string {
+	if field != "" && sortType != "" {
 		defaultOrderStub := map[string]string{
 			"prop":  field,
-			"order": t,
+			"order": sortType,
 		}
 		defaultOrder := getJsonFromArray(defaultOrderStub)
 		if defaultOrder != "" {
@@ -875,19 +753,6 @@ func escape(value string) string {
 
 func Tab(num int) string {
 	return strings.Repeat(" ", 4*num)
-}
-
-func buildTableColumn(tableColumnList []map[string]string) string {
-	columnJson := ""
-	for _, column := range tableColumnList {
-		columnJson := Tab(3) + "{"
-		for k, v := range column {
-			columnJson += buildTableColumnKey(k, v)
-		}
-		columnJson = strings.TrimRight(columnJson, ",")
-		columnJson += " }" + ",\n"
-	}
-	return strings.TrimRight(columnJson, "\n")
 }
 
 func buildTableColumnKey(key string, val string) string {
@@ -934,7 +799,7 @@ func getJsonFromArray(data map[string]string) string {
 			jsonStr += keyStr + v + ","
 		} else {
 			quote := getQuote(v)
-			jsonStr += keyStr + quote + v + quote
+			jsonStr += keyStr + quote + v + quote + ","
 		}
 	}
 
