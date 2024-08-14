@@ -2,7 +2,6 @@ package crud_helper
 
 import (
 	"bytes"
-	"fmt"
 	"go-build-admin/app/admin/model"
 	cErr "go-build-admin/app/pkg/error"
 	"regexp"
@@ -152,7 +151,6 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 			return err
 		}
 
-		fmt.Print(buf.String())
 		err = db.Exec(buf.String()).Error
 		return err
 	}
@@ -343,23 +341,98 @@ func dataTypeLimit(dataType string) []string {
 }
 
 // 根据数据表解析字段数据
-func parseTableColumns(db *gorm.DB, tableModel *model.TableModel, tableName string, analyseField bool) error {
-	//从数据库中获取表字段信息
-	sql := "SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION"
-	if err := db.Exec(sql).Error; err != nil {
-		return err
+func ParseTableColumns(columns []map[string]string, analyseField bool) []model.Field {
+
+	fields := []model.Field{}
+	for _, v := range columns {
+		field := model.Field{}
+		field.Name = v["COLUMN_NAME"]
+		field.Type = v["DATA_TYPE"]
+
+		dataType := ""
+		if strings.Contains(v["COLUMN_TYPE"], "(") {
+			position := strings.Index(v["COLUMN_TYPE"], "(")
+			dataType = v["COLUMN_TYPE"][:position]
+		} else {
+			dataType = strings.ReplaceAll(v["COLUMN_TYPE"], " unsigned", "")
+		}
+		field.DataType = dataType
+
+		isNullAble := "0"
+		if v["IS_NULLABLE"] == "YES" {
+			isNullAble = "1"
+		}
+		field.Null = isNullAble
+		if isNullAble == "1" {
+			field.Default = "null"
+		} else {
+			field.Default = v["COLUMN_DEFAULT"]
+		}
+
+		primaryKey := "0"
+		if v["COLUMN_KEY"] == "PRI" {
+			primaryKey = "1"
+		}
+		field.PrimaryKey = primaryKey
+
+		unsigned := "0"
+		if strings.Contains(v["COLUMN_TYPE"], "unsigned") {
+			unsigned = "1"
+		}
+		field.Unsigned = unsigned
+
+		autoIncrement := "0"
+		if strings.Contains(v["EXTRA"], "auto_increment") {
+			autoIncrement = "1"
+		}
+		field.AutoIncrement = autoIncrement
+		field.Comment = v["COLUMN_COMMENT"]
+		field.DesignType = getTableColumnsDataType(v)
+
+		fields = append(fields, field)
+	}
+	return fields
+}
+
+func getTableColumnsDataType(column map[string]string) string {
+	if strings.Contains(column["COLUMN_NAME"], "id") && strings.Contains(column["EXTRA"], "auto_increment") {
+		return "pk"
+	} else if column["COLUMN_NAME"] == "weigh" {
+		return "weigh"
+	} else if slices.Contains([]string{"createtime", "updatetime", "create_time", "update_time"}, column["COLUMN_NAME"]) {
+		return "timestamp"
 	}
 
-	return nil
+	for _, v := range inputTypeRule {
+		typeBool := true
+		suffixBool := true
+		columnTypeBool := true
+		if v.Type != nil && len(v.Type) > 0 && !slices.Contains(v.Type, column["DATA_TYPE"]) {
+			typeBool = false
+		}
+
+		if v.Suffix != nil && len(v.Suffix) > 0 {
+			suffixBool = isMatchSuffix(column["COLUMN_NAME"], v.Suffix)
+		}
+
+		if v.ColumnType != nil && len(v.ColumnType) > 0 && !slices.Contains(v.ColumnType, column["COLUMN_TYPE"]) {
+			columnTypeBool = false
+		}
+
+		if typeBool && suffixBool && columnTypeBool {
+			return v.Value
+		}
+	}
+	return "string"
 }
 
-func getTableColumnsDataType(field model.Field) string {
-
-	return ""
-}
-
-func isMatchSuffix() {
-
+func isMatchSuffix(name string, suffixArr []string) bool {
+	for _, v := range suffixArr {
+		if strings.HasSuffix(name, v) {
+			return true
+		}
+	}
+	return false
 }
 
 // 解析到的表字段的额外处理

@@ -173,15 +173,6 @@ var inputTypeRule = []InputRule{
 	},
 }
 
-// 预设控制器和模型文件位置
-var parseNamePresets = map[string][]string{
-	"handler/user":        {"user"},
-	"handler/admin":       {"admin"},
-	"handler/admin_group": {"admin_group"},
-	"handler/attachment":  {"attachment"},
-	"handler/admin_rule":  {"admin_rule"},
-}
-
 // 预设WEB端文件位置
 var parseWebDirPresets = map[string][]string{
 	"views/user":        {"user", "user"},
@@ -189,48 +180,6 @@ var parseWebDirPresets = map[string][]string{
 	"views/admin_group": {"auth", "group"},
 	"views/attachment":  {"routine", "attachment"},
 	"views/admin_rule":  {"auth", "rule"},
-}
-
-// 属性的类型对照表
-var attrType = map[string]string{
-	"handler/preExcludeFields": "string",
-	"handler/quickSearchField": "string",
-	"handler/withJoinTable":    "array",
-	"handler/defaultSortField": "string",
-}
-
-var createTimeField = "create_time"
-var updateTimeField = "update_time"
-
-type ModelData struct {
-	Append             []string
-	Methods            []string
-	FieldType          map[string]string
-	CreateTime         string
-	UpdateTime         string
-	BeforeInsertMixins map[string]string
-	BeforeInsert       string
-	AfterInsert        string
-	Name               string
-	ClassName          string
-	Namespace          string
-	RelationMethodList []string
-
-	Pk                 string
-	AutoWriteTimestamp string
-}
-
-type HandlerData struct {
-	Use                      []string
-	Attr                     map[string]string
-	Methods                  []string
-	FilterRule               string
-	ClassName                string
-	Namespace                string
-	TableComment             string
-	ModelName                string
-	ModelNamespace           string
-	RelationVisibleFieldList map[string]string
 }
 
 type IndexVueData struct {
@@ -249,15 +198,6 @@ type FormVueData struct {
 	FormFields []string
 }
 
-type NameInfo struct {
-	LastName         string
-	OriginalLastName string
-	Path             []string
-	Namespace        string
-	ParseFile        string
-	RootFileName     string
-}
-
 type WebDir struct {
 	OriginalLastName string
 	LastName         string
@@ -269,3 +209,243 @@ type WebDir struct {
 
 // 当designType为以下值时: 1. 出入库字符串到数组转换,2. 默认值转数组
 var dtStringToArray = []string{"checkbox", "selects", "remoteSelects", "city", "images", "files"}
+
+type GetTableName func(string, bool) string
+type GetColumns func(string) ([]map[string]string, error)
+
+// 预设控制器和模型文件位置
+var parseNamePresets = map[string][]string{
+	"handler/user":        {"user"},
+	"handler/admin":       {"admin"},
+	"handler/admin_group": {"admin_group"},
+	"handler/attachment":  {"attachment"},
+	"handler/admin_rule":  {"admin_rule"},
+}
+
+type NameInfo struct {
+	LastName         string
+	OriginalLastName string
+	Path             []string
+	Namespace        string
+	ParseFile        string
+	RootFileName     string
+}
+
+// 属性的类型对照表
+var attrType = map[string]string{
+	"handler/preExcludeFields": "string",
+	"handler/quickSearchField": "string",
+	"handler/withJoinTable":    "array",
+	"handler/defaultSortField": "string",
+}
+
+var createTimeField = "create_time"
+var updateTimeField = "update_time"
+
+type HandlerData struct {
+	Namespace      string //包名
+	ClassName      string //类名
+	ModelNamespace string //模型包名
+	ModelName      string //模型类名
+	ModelVar       string //模型变量名
+	TableComment   string //表备注
+
+	Import     []string //需要引入的包名
+	FilterRule []string //对前端数据进行过滤方法
+
+	Attr                     map[string]string // preExcludeFields quickSearchField withJoinTable defaultSortField
+	Methods                  []string
+	RelationVisibleFieldList map[string][]string
+}
+
+const handlerTemp = `
+package {{.Namespace}}
+
+import (
+	"go-build-admin/app/admin/{{.ModelNamespace}}"
+	"go-build-admin/app/admin/validate"
+	"go-build-admin/app/pkg/validator"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
+	"go.uber.org/zap"
+)
+
+type {{.ClassName}}Handler struct {
+	Base
+	log        *zap.Logger
+	{{.ModelVar}} *model.{{.ModelName}}Model
+}
+
+func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}} *model.{{.ModelName}}Model) *{{.ClassName}}Handler {
+	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}}, log: log, {{.ModelVar}}: {{.ModelVar}}}
+}
+
+func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
+	list, total, err := h.{{.ModelVar}}.List(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, map[string]any{
+		"list":   list,
+		"total":  total,
+		"remark": "",
+	})
+}
+
+type {{.ClassName}}Param struct {
+}
+
+func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
+	var params {{.ClassName}}Param
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, validator.GetError(params, err))
+		return
+	}
+	var data model.{{.ClassName}}
+	copier.Copy(&data, params)
+	err := h.{{.ModelVar}}.Add(ctx, data)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
+	var params {{.ClassName}}Param
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, validator.GetError(params, err))
+		return
+	}
+
+	var data model.{{.ClassName}}
+	copier.Copy(&data, params)
+	err := h.{{.ModelVar}}.Edit(ctx, data)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
+	var param validate.Ids
+	if err := ctx.ShouldBindQuery(&param); err != nil {
+		FailByErr(ctx, validate.GetError(param, err))
+		return
+	}
+	err := h.{{.ModelVar}}.Del(ctx, param.Ids)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
+}
+`
+
+type ModelData struct {
+	Namespace    string //包名
+	Name         string //表名
+	ClassName    string //类名
+	TableComment string //表备注
+	StructTemp   string //结构体
+	Pk           string //主键
+	ModelVar     string //结构体变量
+
+	Append             []string
+	Methods            []string
+	FieldType          map[string]string
+	CreateTime         string
+	UpdateTime         string
+	AutoWriteTimestamp string
+	BeforeInsertMixins map[string]string
+	BeforeInsert       string
+	AfterInsert        string
+	RelationMethodList map[string]string
+}
+
+const modelTemp = `
+package {{.Namespace}}
+
+import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+const TableName{{.ClassName}} = "{{.Name}}"
+
+// {{.ClassName}} {{.TableComment}}
+{{.StructTemp}}
+
+func (*{{.ClassName}}) TableName() string {
+	return TableName{{.ClassName}}
+}
+
+type {{.ClassName}}Model struct {
+	BaseModel
+}
+
+func New{{.ClassName}}Model(sqlDB *gorm.DB) *{{.ClassName}}Model {
+	return &{{.ClassName}}Model{
+		BaseModel: BaseModel{
+			TableName:        TableName{{.ClassName}},
+			Key:              {{.Pk}},
+			QuickSearchField: "name",
+			DataLimit:        "",
+			sqlDB:            sqlDB,
+		},
+	}
+}
+
+func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
+	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&{{.ModelVar}}).Error
+	return
+}
+
+func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, err error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, err
+	}
+	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	return
+}
+
+func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+		tx.Rollback()
+		return err
+
+	}
+	return tx.Commit().Error
+}
+
+func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
+	tx := s.sqlDB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Table(s.TableName).Save(&{{.ModelVar}}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit().Error
+}
+
+func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	return err
+}
+`

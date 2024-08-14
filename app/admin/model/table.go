@@ -99,13 +99,18 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 // 获取表信息
 func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
 	result := []map[string]string{}
-	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, tableName).Scan(&result).Error
+	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
 	if err != nil {
 		return result, err
 	}
+	return result, nil
+}
 
-	if len(result) == 0 {
-		return result, nil
+func (s *TableModel) GetColumns(tableName string) ([]map[string]string, error) {
+	result := []map[string]string{}
+	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
+	if err != nil {
+		return result, err
 	}
 	return result, nil
 }

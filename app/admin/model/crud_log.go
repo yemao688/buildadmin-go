@@ -89,14 +89,22 @@ type TableAttr struct {
 	Sortable   string `json:"sortable"`   //字段排序
 	Render     string `json:"render"`     //渲染方案
 	TimeFormat string `json:"timeFormat"` //格式化方式
+
+	Label           string `json:"label"`           //关联表格列属性
+	Show            string `json:"show"`            //关联表格列属性
+	ComSearchRender string `json:"comSearchRender"` //关联表格列属性
+	Remote          string `json:"remote"`          //关联表格列属性
 }
 
 type FormAttr struct {
 	Validator    []string `json:"validator"`    //验证规则
 	ValidatorMsg string   `json:"validatorMsg"` //验证错误提示
-	Rows         string   `json:"rows"`         //富文本行数
 
+	Rows        string `json:"rows"`         //富文本行数
 	SelectMulti string `json:"select-multi"` //下拉框多选
+	ImageMulti  string `json:"image-multi"`  //图片多选上传
+	FileMulti   string `json:"file-multi"`   //文件多选上传
+	Step        string `json:"step"`         //步进值
 
 	RemotePk         string `json:"remote-pk"`         //远程下拉value字段
 	RemoteField      string `json:"remote-field"`      //远程下拉label字段
@@ -105,10 +113,6 @@ type FormAttr struct {
 	RemoteModel      string `json:"remote-model"`      //关联表的模型
 	RemoteUrl        string `json:"remote-url"`        //远程下拉URL
 	RelationFields   string `json:"relation-fields"`   //关联表显示字段
-
-	ImageMulti string `json:"image-multi"` //图片多选上传
-	FileMulti  string `json:"file-multi"`  //文件多选上传
-	Step       string `json:"step"`        //步进值
 }
 
 type Field struct {

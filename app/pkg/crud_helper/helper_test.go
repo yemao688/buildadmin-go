@@ -86,8 +86,8 @@ func TestGetDictData(t *testing.T) {
 	for _, field := range fields {
 		field = analyseField(field)
 
-		langEnData = getDictData(langEnData, field, "en", "")
-		langZhData = getDictData(langZhData, field, "zh-cn", "")
+		getDictData(&langEnData, field, "en", "")
+		getDictData(&langZhData, field, "zh-cn", "")
 
 		if slices.Contains(table.QuickSearchField, field.Name) {
 			if n, ok := langZhData[field.Name]; ok {
@@ -110,9 +110,28 @@ func TestGenerate(t *testing.T) {
 	table := getTestTableData()
 	fields := getTestFieldData()
 
-	tableName := "test1"
-	fullTableName := "ba_test1"
-	GenerateFile("log", table, fields, tableName, fullTableName)
+	getTableName := func(tableName string, fullName bool) string {
+		prefix := ""
+		if fullName {
+			prefix = "ba_"
+		}
+		tableName = strings.TrimPrefix("ba_", tableName)
+		return prefix + tableName
+	}
+
+	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
+	getColumns := func(tableName string) ([]map[string]string, error) {
+		result := []map[string]string{}
+		err := db.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", "buildadmin", getTableName(tableName, true)).Scan(&result).Error
+		if err != nil {
+			return result, err
+		}
+		return result, nil
+	}
+	webDir, lang, err := GenerateFile(table, fields, getTableName, getColumns)
+	fmt.Println(webDir)
+	fmt.Println(lang)
+	fmt.Println(err)
 }
 
 func TestGetQuote(t *testing.T) {

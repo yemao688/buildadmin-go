@@ -53,18 +53,23 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	record.Status = "start"
 	crudLogId := h.crudLogM.RecordCrudStatus(record)
 
-	tableName := h.tableM.Name(params.Table.Name, false)
-	fullTableName := h.tableM.Name(params.Table.Name, true)
+	getTableName := func(tableName string, fullName bool) string {
+		return h.tableM.Name(tableName, fullName)
+	}
+	getColumns := func(tableName string) ([]map[string]string, error) {
+		columns, err := h.tableM.GetColumns(record.Table.Name)
+		return columns, err
+	}
 
 	// 处理表设计
 	if params.Type == "create" || record.Table.Rebuild == "Yes" {
 		//数据表存在则删除
 		h.tableM.DelTable(record.Table.Name)
 	}
-	helper.HandleTableDesign(h.tableM.DB(), fullTableName, params.Table, params.Fields)
+	helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
 
 	//生成文件
-	webViewsDir, tableComment, err := helper.GenerateFile(params.Type, params.Table, params.Fields, tableName, fullTableName)
+	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns)
 	if err != nil {
 		record.ID = crudLogId
 		record.Status = "error"
@@ -208,8 +213,9 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 		}
 		empty, _ := h.tableM.IsHasData(params.TableName)
 
+		columns, _ := h.tableM.GetColumns(params.TableName)
 		Success(ctx, map[string]interface{}{
-			"columns": "",
+			"columns": helper.ParseTableColumns(columns, false), //TODO: 数据类型可能需要转换
 			"comment": comment,
 			"empty":   empty,
 		})

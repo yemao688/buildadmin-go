@@ -14,7 +14,9 @@ import (
 )
 
 // 生成表
-func GenerateFile(requestType string, table model.Table, fields []model.Field, tableName, fullTableName string) (WebDir, string, error) {
+func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns) (WebDir, string, error) {
+	tableName := getTableName(table.Name, false)
+	fullTableName := getTableName(table.Name, true)
 	//主键
 	tablePk := getPk(fields)
 	//表注释
@@ -48,25 +50,30 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 
 	// 模型数据
 	modelData := ModelData{}
+	modelData.Namespace = modelFile.Namespace
 	modelData.Name = tableName
 	modelData.ClassName = modelFile.LastName + "Model"
-	modelData.Namespace = modelFile.Namespace
+	modelData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+
 	modelData.Append = []string{}
 	modelData.Methods = []string{}
 	modelData.FieldType = map[string]string{}
 	modelData.BeforeInsertMixins = map[string]string{}
-	modelData.RelationMethodList = []string{}
+	modelData.RelationMethodList = map[string]string{}
 
 	// 控制器数据
 	handlerData := HandlerData{}
-	handlerData.ClassName = handlerFile.LastName + "Handler"
 	handlerData.Namespace = handlerFile.Namespace
-	handlerData.TableComment = tableComment
-	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelNamespace = modelData.Namespace
-	handlerData.Use = []string{}
+	handlerData.ClassName = handlerFile.LastName + "Handler"
+	handlerData.ModelName = modelData.ClassName
+	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	handlerData.TableComment = tableComment
+
+	handlerData.Import = []string{}
 	handlerData.Attr = map[string]string{}
 	handlerData.Methods = []string{}
+	handlerData.RelationVisibleFieldList = map[string][]string{}
 
 	// index.vue数据
 	indexVueData := IndexVueData{}
@@ -94,8 +101,8 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 		//分析字段
 		field = analyseField(field)
 
-		langEnData = getDictData(langEnData, field, "en", "")
-		langZhData = getDictData(langZhData, field, "zh-cn", "")
+		getDictData(&langEnData, field, "en", "")
+		getDictData(&langZhData, field, "zh-cn", "")
 
 		// 快速搜索字段
 		if slices.Contains(table.QuickSearchField, field.Name) {
@@ -132,7 +139,10 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 
 		// 关联表数据解析
 		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
-			parseJoinData(field, &langEnData, &langZhData, fullTableName)
+			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
+				columns, _ := getColumns(field.Form.RemoteTable)
+				parseJoinData(columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate)
+			}
 		}
 
 		// 模型方法
@@ -171,9 +181,9 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	}
 
 	// 写入模型代码
-	// if err := writeModelFile(tablePk, fieldsMap, modelData, modelFile); err != nil {
-	// 	return WebDir{}, "", err
-	// }
+	if err := writeModelFile(tablePk, fieldsMap, modelData, modelFile); err != nil {
+		return WebDir{}, "", err
+	}
 
 	// 写入控制器代码
 	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
@@ -199,6 +209,9 @@ func GenerateFile(requestType string, table model.Table, fields []model.Field, t
 	if err := writeFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
 		return WebDir{}, "", err
 	}
+
+	// 写入路由,和wire注入
+
 	return webViewsDir, tableComment, err
 }
 
@@ -246,16 +259,11 @@ func parseNameData(module string, tableName string, moduleType string, file stri
 		}
 	}
 
-	originalLastName := ""
-	lastName := ""
-	newPathArr := []string{}
+	originalLastName := pathArr[len(pathArr)-1]
+	lastName := strings.ToLower(originalLastName)
+	pathArr = pathArr[:len(pathArr)-1]
 	for k, v := range pathArr {
-		if len(pathArr)-1 == k {
-			originalLastName = v
-			lastName = strings.ToLower(v)
-		} else {
-			newPathArr = append(newPathArr, strings.ToLower(v))
-		}
+		pathArr[k] = strings.ToLower(v)
 	}
 
 	// 类名不能为内部关键字
@@ -264,16 +272,16 @@ func parseNameData(module string, tableName string, moduleType string, file stri
 	}
 
 	namespace := moduleType
-	if len(newPathArr) > 0 {
-		namespace = newPathArr[len(newPathArr)-1]
+	if len(pathArr) > 0 {
+		namespace = pathArr[len(pathArr)-1]
 	}
-	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(newPathArr...), lastName+".go")
-	rootFileName := filepath.Join("go-build-admin/app", module, moduleType, filepath.Join(newPathArr...))
+	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(pathArr...), lastName+".go")
+	rootFileName := filepath.Join("go-build-admin/app", module, moduleType, filepath.Join(pathArr...))
 
 	info := NameInfo{
 		LastName:         utils.SnakeToCamel(lastName, true),
 		OriginalLastName: originalLastName,
-		Path:             newPathArr,
+		Path:             pathArr,
 		Namespace:        namespace,
 		ParseFile:        parseFile,
 		RootFileName:     rootFileName,
@@ -392,18 +400,18 @@ func analyseFieldType(field model.Field) string {
 }
 
 // 获取字段字典数据
-func getDictData(dict map[string]string, field model.Field, lang string, translationPrefix string) map[string]string {
+func getDictData(dict *map[string]string, field model.Field, lang string, translationPrefix string) {
 	if field.Comment == "" {
-		return dict
+		return
 	}
 	comment := strings.ReplaceAll(field.Comment, "，", ",")
 	comment = strings.ReplaceAll(comment, "：", ":")
 	if strings.Contains(comment, ":") && strings.Contains(comment, ",") && strings.Contains(comment, "=") {
 		commentArr := strings.Split(comment, ":")
 		if lang == "en" {
-			dict[translationPrefix+field.Name] = field.Name
+			(*dict)[translationPrefix+field.Name] = field.Name
 		} else {
-			dict[translationPrefix+field.Name] = commentArr[0]
+			(*dict)[translationPrefix+field.Name] = commentArr[0]
 		}
 
 		items := strings.Split(commentArr[1], ",")
@@ -411,20 +419,19 @@ func getDictData(dict map[string]string, field model.Field, lang string, transla
 			valArr := strings.Split(v, "=")
 			if len(valArr) == 2 {
 				if lang == "en" {
-					dict[translationPrefix+field.Name+" "+valArr[0]] = field.Name + " " + valArr[0]
+					(*dict)[translationPrefix+field.Name+" "+valArr[0]] = field.Name + " " + valArr[0]
 				} else {
-					dict[translationPrefix+field.Name+" "+valArr[0]] = valArr[1]
+					(*dict)[translationPrefix+field.Name+" "+valArr[0]] = valArr[1]
 				}
 			}
 		}
 	} else {
 		if lang == "en" {
-			dict[translationPrefix+field.Name] = field.Name
+			(*dict)[translationPrefix+field.Name] = field.Name
 		} else {
-			dict[translationPrefix+field.Name] = comment
+			(*dict)[translationPrefix+field.Name] = comment
 		}
 	}
-	return dict
 }
 
 func getColumnDict(column model.Field, translationPrefix string, webTranslate string) map[string]string {
@@ -444,7 +451,7 @@ func getColumnDict(column model.Field, translationPrefix string, webTranslate st
 	}
 
 	dictData := map[string]string{}
-	dictData = getDictData(dictData, column, "zh-cn", translationPrefix)
+	getDictData(&dictData, column, "zh-cn", translationPrefix)
 	if len(dictData) > 0 {
 		for k := range dictData {
 			if translationPrefix+column.Name != k {
@@ -590,7 +597,11 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 	}
 
 	columnStr := ""
-	columnStr += buildTableColumnKey("label", "t('"+webTranslate+translationPrefix+field.Name+"')")
+	if field.Table.Label == "" {
+		columnStr += buildTableColumnKey("label", "t('"+webTranslate+translationPrefix+field.Name+"')")
+	} else {
+		columnStr += buildTableColumnKey("label", field.Table.Label)
+	}
 	columnStr += buildTableColumnKey("prop", fieldNamePrefix+field.Name+prop)
 	columnStr += buildTableColumnKey("align", "center")
 
@@ -616,6 +627,16 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 		columnStr += buildTableColumnKey("timeFormat", field.Table.TimeFormat)
 	}
 
+	if field.Table.Show != "" {
+		columnStr += buildTableColumnKey("show", field.Table.Show)
+	}
+	if field.Table.ComSearchRender != "" {
+		columnStr += buildTableColumnKey("comSearchRender", field.Table.ComSearchRender)
+	}
+	if field.Table.Remote != "" {
+		columnStr += buildTableColumnKey("remote", field.Table.Remote)
+	}
+
 	// 需要值替换的渲染类型
 	columnReplaceValue := []string{"tag", "tags", "switch"}
 	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) && (len(columnDict) > 0 || slices.Contains(columnReplaceValue, field.Table.Render)) {
@@ -629,15 +650,185 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 }
 
 // 关联表数据解析
-func parseJoinData(field model.Field, langEnData, langZhData *map[string]string, fullTableName string) {
-	// dictEn := map[string]string{}
-	// dictZhCn := map[string]string{}
+func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
+	joinFields := ParseTableColumns(columns, true)
+	tableName := getTableName(field.Form.RemoteTable, false)
+	//检查关联模型代码文件
+	rootFileName, err := checkJoinMoel(joinFields, field, tableName)
+	if err != nil {
+		return err
+	}
+	if rootFileName != "" {
+		field.Form.RemoteModel = rootFileName
+	}
 
-	// if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
-	// 	relationFields := strings.Split(field.Form.RelationFields, ",")
-	// 	tableName :=
-	// }
+	relationFields := strings.Split(field.Form.RelationFields, ",")
+	relationName := ""
+	if strings.HasSuffix(relationName, "_ids") || strings.HasSuffix(relationName, "id") {
+		relationName = strings.ReplaceAll(relationName, "_ids", "")
+		relationName = strings.ReplaceAll(relationName, "_id", "")
+	} else {
+		relationName = field.Name + "_table"
+	}
+	relationName = utils.SnakeToCamel(relationName, false)
 
+	if field.DesignType == "remoteSelect" {
+		// 关联预载入方法
+		handlerData.Attr[relationName] = relationName
+
+		// 模型方法代码
+		relationPrimaryKey := "id"
+		if field.Form.RemotePk != "" {
+			relationPrimaryKey = field.Form.RemotePk
+		}
+		relationData := map[string]string{
+			"relationMethod":     relationName,
+			"relationMode":       "belongsTo",
+			"relationPrimaryKey": relationPrimaryKey,
+			"relationForeignKey": field.Name,
+			"relationClassName":  "",
+		}
+		modelData.RelationMethodList[relationName] = assembleStub("mixins/model/belongsTo", relationData, false)
+
+		if len(relationFields) > 0 {
+			handlerData.RelationVisibleFieldList[relationData["relationMethod"]] = relationFields
+		}
+	} else if field.DesignType == "remoteSelects" {
+		modelData.Append = append(modelData.Append, relationName)
+
+		primaryKey := "id"
+		if field.Form.RemotePk != "" {
+			primaryKey = field.Form.RemotePk
+		}
+		labelFieldName := "name"
+		if field.Form.RemoteField != "" {
+			labelFieldName = field.Form.RemoteField
+		}
+		methodContent := assembleStub("mixins/model/getters/remoteSelectLabels", map[string]string{
+			"field":          utils.SnakeToCamel(relationName, false),
+			"className":      "",
+			"primaryKey":     primaryKey,
+			"foreignKey":     field.Name,
+			"labelFieldName": labelFieldName,
+		}, false)
+		modelData.Methods = append(modelData.Methods, methodContent)
+	}
+
+	for _, v := range relationFields {
+		joinField := searchField(joinFields, v)
+		if field.Name == "" {
+			continue
+		}
+
+		relationFieldPrefix := relationName + "."
+		relationFieldLangPrefix := strings.ToLower(relationName) + "__"
+		getDictData(dictEn, field, "en", "")
+		getDictData(dictZhCn, field, "zh-cn", "")
+
+		//不允许双击编辑的字段
+		if joinField.DesignType == "switch" {
+			indexVueData.DblClickNotEditColumn = append(indexVueData.DblClickNotEditColumn, field.Name)
+		}
+
+		// 列字典数据
+		columnDict := getColumnDict(joinField, relationFieldLangPrefix, "")
+
+		//表格列
+		joinField.DesignType = field.DesignType
+		joinField.Table.Render = "tags"
+		if field.DesignType == "remoteSelects" {
+			joinField.Table.Operator = "false"
+			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
+			// 额外生成一个公共搜索，渲染为远程下拉的列
+			joinField.Name = field.Name
+			joinField.Table.Render = ""
+			joinField.Table.Label = "t('" + webTranslate + relationFieldLangPrefix + joinField.Name + "')"
+			joinField.Table.Show = "false"
+			joinField.Table.Operator = "FIND_IN_SET"
+			joinField.Table.ComSearchRender = "remoteSelect"
+
+			primaryKey := "id"
+			if field.Form.RemotePk != "" {
+				primaryKey = field.Form.RemotePk
+			}
+			remoteTableName := getTableName(field.Form.RemoteTable, false)
+
+			labelFieldName := "name"
+			if field.Form.RemoteField != "" {
+				labelFieldName = field.Form.RemoteField
+			}
+			itemJson := "{ "
+			itemJson += buildTableColumnKey("pk", remoteTableName+"."+primaryKey)
+			itemJson += buildTableColumnKey("field", labelFieldName)
+			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(joinField))
+			itemJson += buildTableColumnKey("multiple", "true")
+			itemJson += " } "
+
+			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, "", relationFieldLangPrefix, webTranslate))
+		} else {
+			joinField.Table.Operator = "LIKE"
+			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
+		}
+
+	}
+	return nil
+}
+
+// 关联表是否存在，不存在创建
+func checkJoinMoel(fields []model.Field, field model.Field, tableName string) (string, error) {
+	rootFileName := ""
+
+	path := filepath.Join(utils.RootPath(), field.Form.RemoteModel)
+	_, err := os.Stat(path)
+	if field.Form.RemoteModel == "" || os.IsNotExist(err) {
+		joinModelFile, err := parseNameData("admin", tableName, "model", field.Form.RemoteModel)
+		if err != nil {
+			return "", err
+		}
+		rootFileName = joinModelFile.RootFileName
+
+		_, err = os.Stat(filepath.Join(utils.RootPath(), joinModelFile.RootFileName))
+		if os.IsNotExist(err) {
+			joinModelData := ModelData{}
+
+			joinModelData.Namespace = joinModelFile.Namespace
+			joinModelData.Name = tableName
+			joinModelData.ClassName = joinModelFile.LastName + "Model"
+			joinModelData.ModelVar = strings.ToLower(string(joinModelFile.LastName[0])) + joinModelFile.LastName[1:]
+
+			joinModelData.Append = []string{}
+			joinModelData.Methods = []string{}
+			joinModelData.FieldType = map[string]string{}
+			joinModelData.BeforeInsertMixins = map[string]string{}
+			joinModelData.RelationMethodList = map[string]string{}
+
+			joinTablePk := "id"
+			joinFieldsMap := map[string]string{}
+			for _, v := range fields {
+				joinFieldsMap[v.Name] = v.DesignType
+				if v.PrimaryKey == "1" {
+					joinTablePk = v.Name
+				}
+				parseModelMethods(field, &joinModelData)
+			}
+
+			weighKey := ""
+			for k, v := range joinFieldsMap {
+				if v == "weigh" {
+					weighKey = k
+					break
+				}
+			}
+
+			if weighKey != "" {
+				joinModelData.AfterInsert = assembleStub("mixins/model/afterInsert", map[string]string{
+					"field": joinFieldsMap[weighKey],
+				}, false)
+			}
+			writeModelFile(joinTablePk, joinFieldsMap, joinModelData, joinModelFile)
+		}
+	}
+	return rootFileName, nil
 }
 
 // 解析模型方法（设置器、获取器等）
@@ -695,7 +886,7 @@ func parseModelMethods(field model.Field, modelData *ModelData) {
 func parseSundryData(handlerData *HandlerData, indexVueData *IndexVueData, formVueData *FormVueData, field model.Field, table model.Table) {
 	if field.DesignType == "editor" {
 		formVueData.BigDialog = "true"
-		handlerData.FilterRule = "\n" + Tab(2) + "$this->request->filter('clean_xss')"
+		handlerData.FilterRule = append(handlerData.FilterRule, "clean_xss")
 	}
 
 	//默认排序字段

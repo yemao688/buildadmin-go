@@ -1,43 +1,26 @@
 package crud_helper
 
 import (
+	"bytes"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"text/template"
 )
 
 func writeModelFile(tablePk string, fieldsMap map[string]string, modelData ModelData, modelFile NameInfo) error {
-	data := map[string]string{}
-	modelData.Pk = ""
-	if tablePk != "id" {
-		modelData.Pk = "\n" + Tab(1) + "// 表主键\n" + Tab(1) + "protected $pk =\"" + tablePk + "\"\n" + Tab(1)
+	var buf bytes.Buffer
+	tpl, err := template.New(modelTemp).Parse(modelTemp)
+	if err != nil {
+		return err
 	}
-
-	modelData.AutoWriteTimestamp = "false"
-	_, ok1 := fieldsMap[createTimeField]
-	_, ok2 := fieldsMap[updateTimeField]
-	if ok1 || ok2 {
-		modelData.AutoWriteTimestamp = "true"
+	if err := tpl.Execute(&buf, modelData); err != nil {
+		return err
 	}
-
-	if modelData.AutoWriteTimestamp == "true" {
-		modelData.CreateTime = ""
-		if !ok1 {
-			modelData.CreateTime = "\n" + Tab(1) + "protected createTime = false"
-		}
-		modelData.UpdateTime = ""
-		if !ok2 {
-			modelData.CreateTime = "\n" + Tab(1) + "protected updateTime = false"
-		}
-	}
-
-	//TODO:
-
-	modelFileContent := assembleStub("mixins/model/model", data, false)
-	return writeFile(modelFile.ParseFile, modelFileContent)
+	return writeFile(modelFile.ParseFile, buf.String())
 }
 
 func buildModelAppend() {
@@ -66,14 +49,15 @@ func buildModelFieldType() {
 }
 
 func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
-	data := map[string]string{}
-
-	data["modelNamespace"] = handlerData.Namespace
-	data["modelName"] = handlerData.ModelName
-	data["filterRule"] = handlerData.FilterRule
-
-	content := assembleStub("mixins/handler", data, false)
-	return writeFile(handlerFile.ParseFile, content)
+	var buf bytes.Buffer
+	tpl, err := template.New(handlerTemp).Parse(handlerTemp)
+	if err != nil {
+		return err
+	}
+	if err := tpl.Execute(&buf, handlerData); err != nil {
+		return err
+	}
+	return writeFile(handlerFile.ParseFile, buf.String())
 }
 
 func writeFile(path string, content string) error {
