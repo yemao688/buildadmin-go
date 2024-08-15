@@ -85,6 +85,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 	if db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		//NamingStrategy: schema.NamingStrategy{
 		//SingularTable: true,
+		//TablePrefix: "tbl_", // 表前缀
 		//},
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger

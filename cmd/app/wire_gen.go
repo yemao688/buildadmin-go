@@ -82,7 +82,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, tokenHelper)
 	emsHandler := handler2.NewEmsHandler(zapLogger)
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger)
-	installHandler := handler2.NewInstallHandler(zapLogger)
+	installHandler := handler2.NewInstallHandler(zapLogger, configuration)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger)
 	engine := router.InitRouter(lumberjackLogger, login, dataLimit, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler)
 	server := newHttpServer(configuration, engine)
