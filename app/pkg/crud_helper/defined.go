@@ -1,5 +1,7 @@
 package crud_helper
 
+import "go-build-admin/app/admin/model"
+
 // 内部保留词
 var reservedKeywords = []string{
 	"abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
@@ -211,7 +213,7 @@ type WebDir struct {
 var dtStringToArray = []string{"checkbox", "selects", "remoteSelects", "city", "images", "files"}
 
 type GetTableName func(string, bool) string
-type GetColumns func(string) ([]map[string]string, error)
+type GetColumns func(string) ([]model.Column, error)
 
 // 预设控制器和模型文件位置
 var parseNamePresets = map[string][]string{
@@ -274,15 +276,15 @@ import (
 type {{.ClassName}}Handler struct {
 	Base
 	log        *zap.Logger
-	{{.ModelVar}} *model.{{.ModelName}}Model
+	{{.ModelVar}}M *model.{{.ModelName}}Model
 }
 
-func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}} *model.{{.ModelName}}Model) *{{.ClassName}}Handler {
-	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}}, log: log, {{.ModelVar}}: {{.ModelVar}}}
+func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *model.{{.ModelName}}Model) *{{.ClassName}}Handler {
+	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}
 }
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
-	list, total, err := h.{{.ModelVar}}.List(ctx)
+	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -305,7 +307,7 @@ func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	}
 	var data model.{{.ClassName}}
 	copier.Copy(&data, params)
-	err := h.{{.ModelVar}}.Add(ctx, data)
+	err := h.{{.ModelVar}}M.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -322,7 +324,7 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 
 	var data model.{{.ClassName}}
 	copier.Copy(&data, params)
-	err := h.{{.ModelVar}}.Edit(ctx, data)
+	err := h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -336,7 +338,7 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
-	err := h.{{.ModelVar}}.Del(ctx, param.Ids)
+	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -346,13 +348,12 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 `
 
 type ModelData struct {
-	Namespace    string //包名
-	Name         string //表名
-	ClassName    string //类名
-	TableComment string //表备注
-	StructTemp   string //结构体
-	Pk           string //主键
-	ModelVar     string //结构体变量
+	Namespace  string //包名
+	Name       string //表名
+	ClassName  string //类名
+	Pk         string //主键
+	ModelVar   string //结构体变量
+	StructTemp string //结构体
 
 	Append             []string
 	Methods            []string
@@ -366,22 +367,9 @@ type ModelData struct {
 	RelationMethodList map[string]string
 }
 
-const modelTemp = `
-package {{.Namespace}}
+const modelTemp = `package {{.Namespace}}
 
-import (
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-)
-
-const TableName{{.ClassName}} = "{{.Name}}"
-
-// {{.ClassName}} {{.TableComment}}
 {{.StructTemp}}
-
-func (*{{.ClassName}}) TableName() string {
-	return TableName{{.ClassName}}
-}
 
 type {{.ClassName}}Model struct {
 	BaseModel
@@ -391,7 +379,7 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
 		BaseModel: BaseModel{
 			TableName:        TableName{{.ClassName}},
-			Key:              {{.Pk}},
+			Key:              "{{.Pk}}",
 			QuickSearchField: "name",
 			DataLimit:        "",
 			sqlDB:            sqlDB,
@@ -404,12 +392,16 @@ func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} 
 	return
 }
 
-func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, err error) {
+func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -447,5 +439,27 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
 	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
+}
+`
+
+const StructTmpl = `import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	{{range .ImportPkgPaths}}{{.}} ` + "\n" + `{{end}}
+)
+
+{{if .TableName -}}const TableName{{.ModelStructName}} = "{{.TableName}}"{{- end}}
+
+// {{.ModelStructName}} {{.StructComment}}
+type {{.ModelStructName}} struct {
+    {{range .Fields}}
+    {{if .MultilineComment -}}
+	/*
+{{.ColumnComment}}
+    */
+	{{end -}}
+    {{.Name}} {{.Type}} ` + "`{{.Tags}}` " +
+	"{{if not .MultilineComment}}{{if .ColumnComment}}// {{.ColumnComment}}{{end}}{{end}}" +
+	`{{end}}
 }
 `

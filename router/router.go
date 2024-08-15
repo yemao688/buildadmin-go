@@ -52,6 +52,8 @@ func InitRouter(
 	apiInstallHandler *api.InstallHandler,
 	apiUserHandler *api.UserHandler,
 
+	////////  crud 生成路由 区域 请勿删除  /////////
+
 ) *gin.Engine {
 	router := gin.New()
 	// 跨域处理
@@ -197,6 +199,8 @@ func InitRouter(
 	adminRouter.GET("testBuild/edit", testBuildHandler.One)
 	adminRouter.POST("testBuild/edit", testBuildHandler.Edit)
 	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
+
+	////////  crud 生成路由 区域 请勿删除  /////////
 
 	// 引入api接口路由
 	apiRouter := router.Group("/api/")

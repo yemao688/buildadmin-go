@@ -21,7 +21,6 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	tablePk := getPk(fields)
 	//表注释
 	tableComment := getCommnet(table.Comment)
-
 	// 生成文件信息解析
 	module := "admin"
 	if table.IsCommonModel != 0 {
@@ -52,7 +51,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	modelData := ModelData{}
 	modelData.Namespace = modelFile.Namespace
 	modelData.Name = tableName
-	modelData.ClassName = modelFile.LastName + "Model"
+	modelData.ClassName = modelFile.LastName
 	modelData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
 
 	modelData.Append = []string{}
@@ -65,7 +64,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	handlerData := HandlerData{}
 	handlerData.Namespace = handlerFile.Namespace
 	handlerData.ModelNamespace = modelData.Namespace
-	handlerData.ClassName = handlerFile.LastName + "Handler"
+	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
 	handlerData.TableComment = tableComment
@@ -128,7 +127,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 				indexVueData.DefaultItems = append(indexVueData.DefaultItems, fieldDefault)
 			}
 
-			formFieldHtml := getFormField(field, columnDict, webTranslate, fullTableName)
+			formFieldHtml := getFormField(field, columnDict, webTranslate, getTableName)
 			formVueData.FormFields = append(formVueData.FormFields, formFieldHtml)
 		}
 
@@ -181,11 +180,11 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	}
 
 	// 写入模型代码
-	if err := writeModelFile(tablePk, fieldsMap, modelData, modelFile); err != nil {
+	if err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile); err != nil {
 		return WebDir{}, "", err
 	}
 
-	// 写入控制器代码
+	//写入控制器代码
 	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
 		return WebDir{}, "", err
 	}
@@ -464,7 +463,7 @@ func getColumnDict(column model.Field, translationPrefix string, webTranslate st
 
 }
 
-func getFormField(field model.Field, columnDict map[string]string, webTranslate string, fullTableName string) string {
+func getFormField(field model.Field, columnDict map[string]string, webTranslate string, getTableName GetTableName) string {
 
 	fieldHtml := Tab(5) + "<FormItem"
 	// 表单项属性
@@ -497,7 +496,7 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 			fName = field.Form.RemoteField
 		}
 		attr := map[string]string{
-			"pk":         GetRemotePk(fullTableName, field),
+			"pk":         GetRemotePk(getTableName(field.Form.RemoteTable, true), field),
 			"field":      fName,
 			"remote-url": GetRemoteSelectUrl(field),
 		}
@@ -634,7 +633,7 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 		columnStr += buildTableColumnKey("comSearchRender", field.Table.ComSearchRender)
 	}
 	if field.Table.Remote != "" {
-		columnStr += buildTableColumnKey("remote", field.Table.Remote)
+		columnStr += " remote: {" + field.Table.Remote + "},"
 	}
 
 	// 需要值替换的渲染类型
@@ -650,11 +649,12 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 }
 
 // 关联表数据解析
-func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
+func parseJoinData(columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
 	joinFields := ParseTableColumns(columns, true)
 	tableName := getTableName(field.Form.RemoteTable, false)
+	fullTableName := getTableName(field.Form.RemoteTable, true)
 	//检查关联模型代码文件
-	rootFileName, err := checkJoinMoel(joinFields, field, tableName)
+	rootFileName, err := checkJoinMoel(joinFields, field, tableName, fullTableName)
 	if err != nil {
 		return err
 	}
@@ -664,8 +664,8 @@ func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZ
 
 	relationFields := strings.Split(field.Form.RelationFields, ",")
 	relationName := ""
-	if strings.HasSuffix(relationName, "_ids") || strings.HasSuffix(relationName, "id") {
-		relationName = strings.ReplaceAll(relationName, "_ids", "")
+	if strings.HasSuffix(field.Name, "_ids") || strings.HasSuffix(field.Name, "id") {
+		relationName = strings.ReplaceAll(field.Name, "_ids", "")
 		relationName = strings.ReplaceAll(relationName, "_id", "")
 	} else {
 		relationName = field.Name + "_table"
@@ -722,8 +722,8 @@ func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZ
 
 		relationFieldPrefix := relationName + "."
 		relationFieldLangPrefix := strings.ToLower(relationName) + "__"
-		getDictData(dictEn, field, "en", "")
-		getDictData(dictZhCn, field, "zh-cn", "")
+		getDictData(dictEn, joinField, "en", relationFieldLangPrefix)
+		getDictData(dictZhCn, joinField, "zh-cn", relationFieldLangPrefix)
 
 		//不允许双击编辑的字段
 		if joinField.DesignType == "switch" {
@@ -740,9 +740,9 @@ func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZ
 			joinField.Table.Operator = "false"
 			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
 			// 额外生成一个公共搜索，渲染为远程下拉的列
+			joinField.Table.Label = "t('" + webTranslate + relationFieldLangPrefix + joinField.Name + "')"
 			joinField.Name = field.Name
 			joinField.Table.Render = ""
-			joinField.Table.Label = "t('" + webTranslate + relationFieldLangPrefix + joinField.Name + "')"
 			joinField.Table.Show = "false"
 			joinField.Table.Operator = "FIND_IN_SET"
 			joinField.Table.ComSearchRender = "remoteSelect"
@@ -751,18 +751,17 @@ func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZ
 			if field.Form.RemotePk != "" {
 				primaryKey = field.Form.RemotePk
 			}
-			remoteTableName := getTableName(field.Form.RemoteTable, false)
+			remoteTableName := getTableName(field.Form.RemoteTable, true)
 
 			labelFieldName := "name"
 			if field.Form.RemoteField != "" {
 				labelFieldName = field.Form.RemoteField
 			}
-			itemJson := "{ "
-			itemJson += buildTableColumnKey("pk", remoteTableName+"."+primaryKey)
+			itemJson := buildTableColumnKey("pk", remoteTableName+"."+primaryKey)
 			itemJson += buildTableColumnKey("field", labelFieldName)
 			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(joinField))
 			itemJson += buildTableColumnKey("multiple", "true")
-			itemJson += " } "
+			joinField.Table.Remote = itemJson
 
 			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, "", relationFieldLangPrefix, webTranslate))
 		} else {
@@ -775,7 +774,7 @@ func parseJoinData(columns []map[string]string, dictEn *map[string]string, dictZ
 }
 
 // 关联表是否存在，不存在创建
-func checkJoinMoel(fields []model.Field, field model.Field, tableName string) (string, error) {
+func checkJoinMoel(fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
 	rootFileName := ""
 
 	path := filepath.Join(utils.RootPath(), field.Form.RemoteModel)
@@ -793,7 +792,7 @@ func checkJoinMoel(fields []model.Field, field model.Field, tableName string) (s
 
 			joinModelData.Namespace = joinModelFile.Namespace
 			joinModelData.Name = tableName
-			joinModelData.ClassName = joinModelFile.LastName + "Model"
+			joinModelData.ClassName = joinModelFile.LastName
 			joinModelData.ModelVar = strings.ToLower(string(joinModelFile.LastName[0])) + joinModelFile.LastName[1:]
 
 			joinModelData.Append = []string{}
@@ -825,7 +824,7 @@ func checkJoinMoel(fields []model.Field, field model.Field, tableName string) (s
 					"field": joinFieldsMap[weighKey],
 				}, false)
 			}
-			writeModelFile(joinTablePk, joinFieldsMap, joinModelData, joinModelFile)
+			writeModelFile(joinTablePk, fullTableName, tableName, joinModelData, joinModelFile)
 		}
 	}
 	return rootFileName, nil

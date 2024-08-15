@@ -341,52 +341,52 @@ func dataTypeLimit(dataType string) []string {
 }
 
 // 根据数据表解析字段数据
-func ParseTableColumns(columns []map[string]string, analyseField bool) []model.Field {
+func ParseTableColumns(columns []model.Column, analyseField bool) []model.Field {
 
 	fields := []model.Field{}
 	for _, v := range columns {
 		field := model.Field{}
-		field.Name = v["COLUMN_NAME"]
-		field.Type = v["DATA_TYPE"]
+		field.Name = v.COLUMN_NAME
+		field.Type = v.DATA_TYPE
 
 		dataType := ""
-		if strings.Contains(v["COLUMN_TYPE"], "(") {
-			position := strings.Index(v["COLUMN_TYPE"], "(")
-			dataType = v["COLUMN_TYPE"][:position]
+		if strings.Contains(v.COLUMN_TYPE, "(") {
+			position := strings.Index(v.COLUMN_TYPE, "(")
+			dataType = v.COLUMN_TYPE[:position]
 		} else {
-			dataType = strings.ReplaceAll(v["COLUMN_TYPE"], " unsigned", "")
+			dataType = strings.ReplaceAll(v.COLUMN_TYPE, " unsigned", "")
 		}
 		field.DataType = dataType
 
 		isNullAble := "0"
-		if v["IS_NULLABLE"] == "YES" {
+		if v.IS_NULLABLE == "YES" {
 			isNullAble = "1"
 		}
 		field.Null = isNullAble
 		if isNullAble == "1" {
 			field.Default = "null"
 		} else {
-			field.Default = v["COLUMN_DEFAULT"]
+			field.Default = v.COLUMN_DEFAULT
 		}
 
 		primaryKey := "0"
-		if v["COLUMN_KEY"] == "PRI" {
+		if v.COLUMN_KEY == "PRI" {
 			primaryKey = "1"
 		}
 		field.PrimaryKey = primaryKey
 
 		unsigned := "0"
-		if strings.Contains(v["COLUMN_TYPE"], "unsigned") {
+		if strings.Contains(v.COLUMN_TYPE, "unsigned") {
 			unsigned = "1"
 		}
 		field.Unsigned = unsigned
 
 		autoIncrement := "0"
-		if strings.Contains(v["EXTRA"], "auto_increment") {
+		if strings.Contains(v.EXTRA, "auto_increment") {
 			autoIncrement = "1"
 		}
 		field.AutoIncrement = autoIncrement
-		field.Comment = v["COLUMN_COMMENT"]
+		field.Comment = v.COLUMN_COMMENT
 		field.DesignType = getTableColumnsDataType(v)
 
 		fields = append(fields, field)
@@ -394,12 +394,12 @@ func ParseTableColumns(columns []map[string]string, analyseField bool) []model.F
 	return fields
 }
 
-func getTableColumnsDataType(column map[string]string) string {
-	if strings.Contains(column["COLUMN_NAME"], "id") && strings.Contains(column["EXTRA"], "auto_increment") {
+func getTableColumnsDataType(column model.Column) string {
+	if strings.Contains(column.COLUMN_NAME, "id") && strings.Contains(column.EXTRA, "auto_increment") {
 		return "pk"
-	} else if column["COLUMN_NAME"] == "weigh" {
+	} else if column.COLUMN_NAME == "weigh" {
 		return "weigh"
-	} else if slices.Contains([]string{"createtime", "updatetime", "create_time", "update_time"}, column["COLUMN_NAME"]) {
+	} else if slices.Contains([]string{"createtime", "updatetime", "create_time", "update_time"}, column.COLUMN_NAME) {
 		return "timestamp"
 	}
 
@@ -407,15 +407,15 @@ func getTableColumnsDataType(column map[string]string) string {
 		typeBool := true
 		suffixBool := true
 		columnTypeBool := true
-		if v.Type != nil && len(v.Type) > 0 && !slices.Contains(v.Type, column["DATA_TYPE"]) {
+		if v.Type != nil && len(v.Type) > 0 && !slices.Contains(v.Type, column.DATA_TYPE) {
 			typeBool = false
 		}
 
 		if v.Suffix != nil && len(v.Suffix) > 0 {
-			suffixBool = isMatchSuffix(column["COLUMN_NAME"], v.Suffix)
+			suffixBool = isMatchSuffix(column.COLUMN_NAME, v.Suffix)
 		}
 
-		if v.ColumnType != nil && len(v.ColumnType) > 0 && !slices.Contains(v.ColumnType, column["COLUMN_TYPE"]) {
+		if v.ColumnType != nil && len(v.ColumnType) > 0 && !slices.Contains(v.ColumnType, column.COLUMN_TYPE) {
 			columnTypeBool = false
 		}
 

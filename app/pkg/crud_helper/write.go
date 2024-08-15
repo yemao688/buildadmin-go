@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"bytes"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
@@ -9,9 +10,25 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"golang.org/x/tools/imports"
+	"gorm.io/driver/mysql"
+	"gorm.io/gen"
+	"gorm.io/gorm"
 )
 
-func writeModelFile(tablePk string, fieldsMap map[string]string, modelData ModelData, modelFile NameInfo) error {
+func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) error {
+	if tablePk != "" {
+		modelData.Pk = tablePk
+	}
+
+	structContent, err := getGenerateStruct(fullTableName, tableName)
+	if err != nil {
+		return err
+	}
+	fmt.Println(structContent)
+	modelData.StructTemp = structContent
+
 	var buf bytes.Buffer
 	tpl, err := template.New(modelTemp).Parse(modelTemp)
 	if err != nil {
@@ -20,7 +37,43 @@ func writeModelFile(tablePk string, fieldsMap map[string]string, modelData Model
 	if err := tpl.Execute(&buf, modelData); err != nil {
 		return err
 	}
-	return writeFile(modelFile.ParseFile, buf.String())
+	modelContent, err := imports.Process(modelFile.ParseFile, []byte(buf.String()), nil)
+	if err != nil {
+		return err
+	}
+	return writeFile(modelFile.ParseFile, string(modelContent))
+}
+
+func getGenerateStruct(fullTableName string, tableName string) (string, error) {
+	g := gen.NewGenerator(gen.Config{
+		OutPath: "./",
+		Mode:    gen.WithoutContext | gen.WithDefaultQuery,
+		//if you want the nullable field generation property to be pointer type, set FieldNullable true
+		// FieldNullable: true,
+		//if you want to assign field which has default value in Create API, set FieldCoverable true, reference: https://gorm.io/docs/create.html#Default-Values
+		/* FieldCoverable: true,*/
+		// if you want generate field with unsigned integer type, set FieldSignable true
+		/* FieldSignable: true,*/
+		//if you want to generate index tags from database, set FieldWithIndexTag true
+		/* FieldWithIndexTag: true,*/
+		//if you want to generate type tags from database, set FieldWithTypeTag true
+		/* FieldWithTypeTag: true,*/
+		//if you need unit tests for query code, set WithUnitTest true
+		// WithUnitTest: true,
+	})
+	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
+	g.UseDB(db)
+	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true))
+
+	var buf bytes.Buffer
+	tpl, err := template.New(StructTmpl).Parse(StructTmpl)
+	if err != nil {
+		return "", err
+	}
+	if err := tpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func buildModelAppend() {
@@ -57,7 +110,11 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
 	if err := tpl.Execute(&buf, handlerData); err != nil {
 		return err
 	}
-	return writeFile(handlerFile.ParseFile, buf.String())
+	handlerContent, err := imports.Process(handlerFile.ParseFile, []byte(buf.String()), nil)
+	if err != nil {
+		return err
+	}
+	return writeFile(handlerFile.ParseFile, string(handlerContent))
 }
 
 func writeFile(path string, content string) error {

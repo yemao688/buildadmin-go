@@ -29,7 +29,7 @@ func (s *TableModel) Name(tableName string, fullName bool) string {
 	if fullName {
 		prefix = s.config.Database.Prefix
 	}
-	tableName = strings.TrimPrefix(s.config.Database.Prefix, tableName)
+	tableName = strings.TrimPrefix(tableName, s.config.Database.Prefix)
 	return prefix + tableName
 }
 
@@ -63,22 +63,23 @@ func (s *TableModel) GetTablePk(tableName string) string {
 	return columnName
 }
 
+type Column struct {
+	COLUMN_NAME    string
+	COLUMN_COMMENT string
+	IS_NULLABLE    string
+	COLUMN_TYPE    string
+	DATA_TYPE      string
+	COLUMN_DEFAULT string
+	COLUMN_KEY     string
+	EXTRA          string
+}
+
 // 获取数据表的所有字段
 func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map[string]any {
 	if tableName == "" {
 		return nil
 	}
 
-	type Column struct {
-		COLUMN_NAME    string
-		COLUMN_COMMENT string
-		IS_NULLABLE    string
-		COLUMN_TYPE    string
-		DATA_TYPE      string
-		COLUMN_DEFAULT string
-		COLUMN_KEY     string
-		EXTRA          string
-	}
 	var columnList []Column
 	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, tableName).Scan(&columnList)
 	data := map[string]any{}
@@ -97,8 +98,8 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 }
 
 // 获取表信息
-func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
-	result := []map[string]string{}
+func (s *TableModel) GetInfo(tableName string) ([]map[string]any, error) {
+	result := []map[string]any{}
 	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
 	if err != nil {
 		return result, err
@@ -106,8 +107,8 @@ func (s *TableModel) GetInfo(tableName string) ([]map[string]string, error) {
 	return result, nil
 }
 
-func (s *TableModel) GetColumns(tableName string) ([]map[string]string, error) {
-	result := []map[string]string{}
+func (s *TableModel) GetColumns(tableName string) ([]Column, error) {
+	result := []Column{}
 	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
 	if err != nil {
 		return result, err

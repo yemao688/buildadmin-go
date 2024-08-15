@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"encoding/json"
 	"fmt"
+	"go-build-admin/app/admin/model"
 	"slices"
 	"strings"
 	"testing"
@@ -115,22 +116,22 @@ func TestGenerate(t *testing.T) {
 		if fullName {
 			prefix = "ba_"
 		}
-		tableName = strings.TrimPrefix("ba_", tableName)
+		tableName = strings.TrimPrefix(tableName, prefix)
 		return prefix + tableName
 	}
 
 	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
-	getColumns := func(tableName string) ([]map[string]string, error) {
-		result := []map[string]string{}
+	getColumns := func(tableName string) ([]model.Column, error) {
+		result := []model.Column{}
 		err := db.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", "buildadmin", getTableName(tableName, true)).Scan(&result).Error
 		if err != nil {
 			return result, err
 		}
 		return result, nil
 	}
-	webDir, lang, err := GenerateFile(table, fields, getTableName, getColumns)
-	fmt.Println(webDir)
-	fmt.Println(lang)
+	_, _, err := GenerateFile(table, fields, getTableName, getColumns)
+	// fmt.Println(webDir)
+	// fmt.Println(lang)
 	fmt.Println(err)
 }
 
@@ -149,7 +150,7 @@ func TestBuildSimpleArray(t *testing.T) {
 func TestHandleTableDesign(t *testing.T) {
 	table := getTestTableData()
 	fields := getTestFieldData()
-	fullTableName := "test555"
+	fullTableName := "ba_test1"
 
 	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
 	HandleTableDesign(db, fullTableName, table, fields)

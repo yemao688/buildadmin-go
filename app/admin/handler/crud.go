@@ -56,7 +56,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	getTableName := func(tableName string, fullName bool) string {
 		return h.tableM.Name(tableName, fullName)
 	}
-	getColumns := func(tableName string) ([]map[string]string, error) {
+	getColumns := func(tableName string) ([]model.Column, error) {
 		columns, err := h.tableM.GetColumns(record.Table.Name)
 		return columns, err
 	}
@@ -209,7 +209,7 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 			FailByErr(ctx, cErr.BadRequest("Record not found"))
 			return
 		} else {
-			comment = info[0]["TABLE_COMMENT"]
+			comment = info[0]["TABLE_COMMENT"].(string)
 		}
 		empty, _ := h.tableM.IsHasData(params.TableName)
 
