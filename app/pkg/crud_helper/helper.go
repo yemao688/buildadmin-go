@@ -179,16 +179,6 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 		indexVueData.OptButtons = append([]string{"weigh-sort"}, indexVueData.OptButtons...)
 	}
 
-	// 写入模型代码
-	if err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile); err != nil {
-		return WebDir{}, "", err
-	}
-
-	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
-		return WebDir{}, "", err
-	}
-
 	// 写入语言包代码
 	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
 		return WebDir{}, "", err
@@ -209,8 +199,15 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 		return WebDir{}, "", err
 	}
 
-	// 写入路由,和wire注入
+	// 写入模型代码
+	if err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile); err != nil {
+		return WebDir{}, "", err
+	}
 
+	//写入控制器代码
+	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
+		return WebDir{}, "", err
+	}
 	return webViewsDir, tableComment, err
 }
 
@@ -275,7 +272,7 @@ func parseNameData(module string, tableName string, moduleType string, file stri
 		namespace = pathArr[len(pathArr)-1]
 	}
 	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(pathArr...), lastName+".go")
-	rootFileName := filepath.Join("go-build-admin/app", module, moduleType, filepath.Join(pathArr...))
+	rootFileName := filepath.Join("app", module, moduleType, filepath.Join(pathArr...))
 
 	info := NameInfo{
 		LastName:         utils.SnakeToCamel(lastName, true),

@@ -157,6 +157,8 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	}
 	h.crudLogM.RecordCrudStatus(record)
 
+	//TODO: 删除provider和路由
+
 	Success(ctx, map[string]interface{}{})
 }
 

@@ -2,10 +2,10 @@ package crud_helper
 
 import (
 	"bytes"
-	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,27 +21,21 @@ func writeModelFile(tablePk string, fullTableName string, tableName string, mode
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
-
 	structContent, err := getGenerateStruct(fullTableName, tableName)
 	if err != nil {
 		return err
 	}
-	fmt.Println(structContent)
 	modelData.StructTemp = structContent
 
-	var buf bytes.Buffer
-	tpl, err := template.New(modelTemp).Parse(modelTemp)
+	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
 		return err
 	}
-	if err := tpl.Execute(&buf, modelData); err != nil {
+	if err := writeFile(modelFile.ParseFile, modelContent); err != nil {
 		return err
 	}
-	modelContent, err := imports.Process(modelFile.ParseFile, []byte(buf.String()), nil)
-	if err != nil {
-		return err
-	}
-	return writeFile(modelFile.ParseFile, string(modelContent))
+	//写入provider
+	return writeProvider(modelFile.RootFileName, modelData.ClassName+"Model")
 }
 
 func getGenerateStruct(fullTableName string, tableName string) (string, error) {
@@ -102,19 +96,95 @@ func buildModelFieldType() {
 }
 
 func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
+	//渲染文件内容
+	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
+	if err != nil {
+		return err
+	}
+	//写入文件
+	if err := writeFile(handlerFile.ParseFile, handlerContent); err != nil {
+		return err
+	}
+	//写入provider
+	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
+		return err
+	}
+	//写入路由
+	if err := writeRouter(handlerData.ClassName); err != nil {
+		return err
+	}
+
+	// 构造wire命令
+	cmd := exec.Command("wire")
+	// 设置工作目录
+	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
+	// 执行命令
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func render(file string, temp string, data any) (string, error) {
 	var buf bytes.Buffer
-	tpl, err := template.New(handlerTemp).Parse(handlerTemp)
+	tpl, err := template.New(temp).Parse(temp)
+	if err != nil {
+		return "", err
+	}
+	if err := tpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	text, err := imports.Process(file, buf.Bytes(), nil)
+	if err != nil {
+		return "", err
+	}
+	return string(text), nil
+}
+
+func writeRouter(name string) error {
+	content, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
 	if err != nil {
 		return err
 	}
-	if err := tpl.Execute(&buf, handlerData); err != nil {
-		return err
+	//判断是否已经生成过
+	if strings.Contains(string(content), "*admin."+name+"Handler") {
+		return nil
 	}
-	handlerContent, err := imports.Process(handlerFile.ParseFile, []byte(buf.String()), nil)
+
+	nameVar := utils.SnakeToCamel(name, false)
+	paramContent := "	" + nameVar + "Handler *admin." + name + "Handler,\n) *gin.Engine {"
+
+	newStr := strings.Replace(string(content), ") *gin.Engine {", paramContent, -1)
+
+	routerContent := "admin.CollectRoutes(router)\n\n"
+	routerContent += `
+	adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)
+	adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)
+	adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)
+	adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)
+	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)` + "\n"
+
+	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
+	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
+}
+
+func writeProvider(dir string, name string) error {
+	content, err := os.ReadFile(filepath.Join(utils.RootPath(), dir, "provider.go"))
 	if err != nil {
 		return err
 	}
-	return writeFile(handlerFile.ParseFile, string(handlerContent))
+	//判断是否已经生成过
+	if strings.Contains(string(content), "New"+name) {
+		return nil
+	}
+
+	lastIndex := strings.LastIndex(string(content), ")")
+	content = []byte(string(content)[:lastIndex] + "\n	New" + name + ",\n)")
+	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(content), 0644)
 }
 
 func writeFile(path string, content string) error {
