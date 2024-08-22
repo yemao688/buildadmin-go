@@ -160,7 +160,7 @@ func (s *UserModel) Edit(ctx *gin.Context, user User) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("password", "salt", "login_failure", "last_login_time").Save(&user).Error; err != nil {
+	if err := tx.Table(s.TableName).Omit("password", "salt", "login_failure", "last_login_time", "money", "score").Save(&user).Error; err != nil {
 		tx.Rollback()
 		return err
 

@@ -18,3 +18,19 @@ func GetAdminAuth(c *gin.Context) (adminAuth AdminAuth) {
 	}
 	return adminAuth
 }
+
+type UserAuth struct {
+	Version  string `form:"version"`
+	Language string `form:"language"`
+	IsLogin  bool   `form:"is_login"`
+	Id       int32  `form:"id"`
+	Token    string `form:"token"`
+}
+
+func GetUserAuth(c *gin.Context) (userAuth UserAuth) {
+	v, _ := c.Get("UserAuth")
+	if v != nil {
+		userAuth = v.(UserAuth)
+	}
+	return userAuth
+}

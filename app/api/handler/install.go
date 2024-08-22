@@ -114,7 +114,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 				"type": "text",
 			})
 			pmVersionLink = append(pmVersionLink, map[string]string{
-				"name": utils.Lang(ctx, "Please upgrade %s version", nil),
+				"name": utils.Lang(ctx, "Please upgrade %s version", map[string]interface{}{}),
 				"type": "text",
 			})
 		}
@@ -262,12 +262,18 @@ func (h *InstallHandler) commandExecutionCheck() bool {
 
 // 安装指引
 func (h *InstallHandler) ManualInstall(ctx *gin.Context) {
-
-	Success(ctx, "")
+	Success(ctx, map[string]string{
+		"webPath": filepath.Join(utils.RootPath(), "web"),
+	})
 }
 
 // 安装指引
 func (h *InstallHandler) MvDist(ctx *gin.Context) {
+	_, err := os.Stat(filepath.Join(utils.RootPath(), "web", "index.html"))
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest("No built front-end file found, please rebuild manually!"))
+		return
+	}
 
 	Success(ctx, "")
 }

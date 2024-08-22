@@ -55,3 +55,68 @@ func (t *Terminal) GetCommand(key string) conf.Command {
 func (t *Terminal) Exec(authentication bool) {
 
 }
+
+// 获取执行状态
+func (t *Terminal) GetProcStatus() {
+
+}
+
+// 输出 EventSource 数据
+func (t *Terminal) Output() {
+
+}
+
+// 输出状态标记
+func (t *Terminal) OutputFlag() {
+
+}
+
+// 输出后回调
+func (t *Terminal) OutputCallback() {
+
+}
+
+// 成功后回调
+func (t *Terminal) SuccessCallback() {
+
+}
+
+// 执行前埋点
+func (t *Terminal) BeforeExecution() {
+
+}
+
+// 输出过滤
+func (t *Terminal) OutputFilter() string {
+
+	return ""
+}
+
+// 执行错误
+func (t *Terminal) ExecError() bool {
+
+	return true
+}
+
+// 退出执行
+func (t *Terminal) Break() bool {
+
+	return true
+}
+
+/**
+ * 执行一个命令并以字符串的方式返回执行输出
+ */
+func (t *Terminal) GetOutputFromProc() bool {
+
+	return true
+}
+
+func (t *Terminal) MvDist() bool {
+
+	return true
+}
+
+func (t *Terminal) ChangeTerminalConfig(config map[string]string) {
+
+}

@@ -13,6 +13,7 @@ import (
 	model2 "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
+	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -46,7 +47,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	testBuildModel := model.NewTestBuildModel(gormDB)
 	testBuildHandler := handler.NewTestBuildHandler(zapLogger, testBuildModel)
 	configModel := model.NewConfigModel(gormDB)
-	clickCaptcha := clickcaptcha.NewCaptcha(configuration, gormDB)
+	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, clickCaptcha)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleModel)
 	userModel := model.NewUserModel(gormDB, configuration)
@@ -77,13 +78,18 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	areaModel := model2.NewAreaModel(gormDB)
 	uploadHelper := model2.NewUploadHelper(gormDB, configuration)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableModel, uploadHelper)
-	accountHandler := handler2.NewAccountHandler(zapLogger)
-	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, tokenHelper)
-	emsHandler := handler2.NewEmsHandler(zapLogger)
-	handlerIndexHandler := handler2.NewIndexHandler(zapLogger)
+	modelAuthModel := model2.NewAuthModel(gormDB, tokenHelper, configuration)
+	modelUserModel := model2.NewUserModel(gormDB, configuration)
+	modelUserScoreLogModel := model2.NewUserScoreLogModel(gormDB)
+	modelUserMoneyLogModel := model2.NewUserMoneyLogModel(gormDB)
+	captchaCaptcha := captcha.NewCaptcha(gormDB)
+	accountHandler := handler2.NewAccountHandler(zapLogger, modelAuthModel, modelUserModel, modelUserScoreLogModel, modelUserMoneyLogModel, captchaCaptcha)
+	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger, areaModel, uploadHelper)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper)
+	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, modelUserModel, modelAuthModel)
+	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration)
-	handlerUserHandler := handler2.NewUserHandler(zapLogger)
+	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, modelAuthModel, clickCaptcha, captchaCaptcha)
 	engine := router.InitRouter(lumberjackLogger, login, dataLimit, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)

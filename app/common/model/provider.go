@@ -8,4 +8,8 @@ var ProviderSet = wire.NewSet(
 	NewAreaModel,
 	NewAttachmentModel,
 	NewUploadHelper,
+	NewUserMoneyLogModel,
+	NewUserScoreLogModel,
+	NewUserModel,
+	NewAuthModel,
 )

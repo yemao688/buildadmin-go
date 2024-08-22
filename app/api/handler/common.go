@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/token"
+	"image/png"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -13,17 +16,37 @@ import (
 type CommonHandler struct {
 	log          *zap.Logger
 	clickCaptcha *clickcaptcha.ClickCaptcha
+	captcha      *captcha.Captcha
 	tokenHelper  *token.TokenHelper
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, tokenHelper *token.TokenHelper) *CommonHandler {
-	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, tokenHelper: tokenHelper}
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper) *CommonHandler {
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper}
 }
 
 // 图形验证码
 func (h *CommonHandler) Captcha(ctx *gin.Context) {
+	var params struct {
+		Id string `form:"id" json:"id" binding:"required"`
+	}
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
-	Success(ctx, "")
+	img, err := h.captcha.Entry(params.Id)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	// 将图像写入 HTTP 响应
+	ctx.Writer.Header().Set("Content-Type", "image/png")
+	err = png.Encode(ctx.Writer, img)
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
 }
 
 // 点选验证码

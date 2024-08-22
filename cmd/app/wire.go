@@ -16,8 +16,7 @@ import (
 	"go-build-admin/service/db"
 	"go-build-admin/service/rds"
 
-	"go-build-admin/app/pkg/clickcaptcha"
-	"go-build-admin/app/pkg/token"
+	"go-build-admin/app/pkg"
 
 	"github.com/google/wire"
 	"go.uber.org/zap"
@@ -29,9 +28,8 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 	panic(wire.Build(
 		db.NewDB,
 		rds.NewRedis,
-		token.NewTokenHelper,
-		clickcaptcha.NewCaptcha,
 
+		pkg.ProviderSet,
 		middleware.ProviderSet,
 		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
