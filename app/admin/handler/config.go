@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
@@ -185,23 +186,44 @@ func (h *ConfigHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// TODO:
-func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
+type MailParam struct {
+	SmtpServer       string `json:"smtp_server" binding:"required"`
+	SmtpPort         int    `json:"smtp_port" binding:"required"`
+	SmtpUser         string `json:"smtp_user" binding:"required"`
+	SmtpPass         string `json:"smtp_pass" binding:"required"`
+	SmtpVerification string `json:"smtp_verification" binding:"required"`
+	SmtpSenderMail   string `json:"smtp_sender_mail" binding:"required"`
+	TestMail         string `json:"testMail" binding:"required"`
+}
 
-	from := "sender@example.com"
-	to := "sender@example.com"
-	password := "your_password"
-	smtpHost := "smtp.example.com"
-	smtpPort := 587
+func (v MailParam) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{}
+}
+
+func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
+	params := MailParam{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
 
 	message := mail.NewMessage()
-	message.SetHeader("From", from)
-	message.SetHeader("To", to)
+	message.SetHeader("From", params.SmtpSenderMail)
+	message.SetHeader("To", params.TestMail)
 	message.SetHeader("Subject", "This is a test email-"+h.config.App.AppName)
 	message.SetBody("text/plain", "congratulations, receiving this email means that your email service has been configured correctly")
 
-	dialer := mail.NewDialer(smtpHost, smtpPort, from, password)
+	// 根据提供的加密类型设置 Dialer 的 TLSConfig
+	dialer := mail.NewDialer(params.SmtpServer, params.SmtpPort, params.SmtpUser, params.SmtpPass)
+	if strings.EqualFold(params.SmtpVerification, "SSL") {
+		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+	} else {
+		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: params.SmtpServer}
+	}
 
-	dialer.DialAndSend(message)
+	if err := dialer.DialAndSend(message); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	Success(ctx, "test mail sent successfully~")
 }

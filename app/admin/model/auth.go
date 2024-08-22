@@ -105,6 +105,11 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	if admin.Password != utils.EncryptPassword(password, admin.Salt) {
+		s.sqlDB.Table(TableNameAdmin).Where("id=?", admin.ID).Updates(map[string]interface{}{
+			"login_failure":   admin.LoginFailure + 1,
+			"last_login_time": time.Now().Unix(),
+			"last_login_ip":   ctx.ClientIP(),
+		})
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
@@ -141,8 +146,10 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 }
 
 func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
-	if err := s.tokenHelper.Delete(refreshToken); err != nil {
-		return err
+	if refreshToken != "" {
+		if err := s.tokenHelper.Delete(refreshToken); err != nil {
+			return err
+		}
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := s.tokenHelper.Delete(adminAuth.Token); err != nil {

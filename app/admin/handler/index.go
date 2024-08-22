@@ -8,6 +8,7 @@ import (
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -35,7 +36,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	version, err := h.configM.GetValueByName(ctx, "version")
+	basicConfig, err := h.configM.GetKVByGroup(ctx, "basic")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -52,8 +53,8 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		},
 		"menus": menus,
 		"siteConfig": map[string]any{
-			"siteName": h.config.App.AppName,
-			"version":  version,
+			"siteName": basicConfig["site_name"],
+			"version":  basicConfig["version"],
 			"cdnUrl":   utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
 			"apiUrl":   h.config.App.ApiUrl,
 			"upload":   h.config.Upload,
@@ -88,7 +89,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 	}
 
 	needCaptcha := h.config.App.AdminLoginCaptcha
-	if ctx.Request.Method == "POST" {
+	if ctx.Request.Method == http.MethodPost {
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
 			FailByErr(ctx, validate.GetError(params, err))

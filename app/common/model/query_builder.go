@@ -87,6 +87,14 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	if err != nil {
 		return
 	}
+	//分页
+	if queryParameter.Page != 0 {
+		offset = queryParameter.Page * limit
+	}
+	if queryParameter.Limit != 0 {
+		limit = queryParameter.Limit
+	}
+
 	// 快速搜索
 	quickSearch := queryParameter.QuickSearch
 	quickSearchField := table.QuickSearchField
@@ -320,4 +328,22 @@ func GetOperatorByAlias(operator string) string {
 		return value
 	}
 	return operator
+}
+
+func LimitAddOffset(ctx *gin.Context) (int, int) {
+	limit := 10
+	offset := 0
+
+	l := ctx.Query("limit")
+	if l != "" {
+		num, _ := strconv.Atoi(l)
+		limit = num
+	}
+
+	p := ctx.Query("page")
+	if p != "" {
+		num, _ := strconv.Atoi(p)
+		offset = limit * num
+	}
+	return limit, offset
 }

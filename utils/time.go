@@ -64,6 +64,18 @@ func TodayEndUnix() int64 {
 	return next.Unix()
 }
 
+func DayStartUnix(t time.Time) int64 {
+	year, month, day := t.In(SysTimeLocation).Date()
+	next := time.Date(year, month, day, 0, 0, 0, 0, SysTimeLocation)
+	return next.Unix()
+}
+
+func DayEndUnix(t time.Time) int64 {
+	year, month, day := t.In(SysTimeLocation).Date()
+	next := time.Date(year, month, day, 23, 59, 59, 0, SysTimeLocation)
+	return next.Unix()
+}
+
 //获取周一时间戳
 func GetWeekStart(t time.Time) time.Time {
 	offset := time.Monday - t.Weekday()

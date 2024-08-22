@@ -75,7 +75,7 @@ type ClickCaptcha struct {
 	config Config
 }
 
-func NewCaptcha(config *conf.Configuration, sqlDB *gorm.DB) *ClickCaptcha {
+func NewClickCaptcha(config *conf.Configuration, sqlDB *gorm.DB) *ClickCaptcha {
 	defaultConfig := Config{
 		Mode:          config.ClickCaptcha.Mode,
 		Length:        config.ClickCaptcha.Length,
@@ -186,19 +186,20 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	draw.Draw(drawImg, drawImg.Bounds(), bgImg, image.Point{}, draw.Src)
 	for _, v := range pointArr {
 		if v.Icon {
-			draw.Draw(drawImg, iconImgMap[v.Name].Bounds().Add(image.Point{v.X, v.Y}), iconImgMap[v.Name], image.Point{}, draw.Over)
+			// draw.Draw(drawImg, iconImgMap[v.Name].Bounds().Add(image.Point{v.X, v.Y}), iconImgMap[v.Name], image.Point{}, draw.Over)
+			draw.DrawMask(drawImg, iconImgMap[v.Name].Bounds().Add(image.Point{v.X, v.Y}), iconImgMap[v.Name], image.Point{}, &image.Uniform{color.RGBA{128, 128, 128, 128}}, image.Point{}, draw.Over)
 		} else {
 			// 设置颜色
-			// color := color.RGBA{239, 239, 234, uint8(127 - c.config.Alpha*(float64(127)/100))}
 			pt := freetype.Pt(int(v.X), int(v.Y))
 			fctx := freetype.NewContext()
 			fctx.SetFont(fontData)
 			fctx.SetFontSize(float64(v.Size))
 			fctx.SetClip(drawImg.Bounds())
 			fctx.SetDst(drawImg)
-			fctx.SetSrc(image.NewUniform(color.White))
-			fctx.DrawString(v.Text, pt)
+			// fctx.SetSrc(image.NewUniform(color.White))
+			fctx.SetSrc(image.NewUniform(color.RGBA{128, 128, 128, 128}))
 			fctx.SetHinting(font.HintingFull)
+			fctx.DrawString(v.Text, pt)
 		}
 	}
 
@@ -399,11 +400,13 @@ func (c *ClickCaptcha) CheckPosition(pointArr []*Point, x int, y int, w int, h i
 
 			currentPhStart := y - h
 			currentPhEnd := y
-			historyPhStart := v.Y - v.Height
-			historyPhEnd := v.Y
 			if isIcon {
 				currentPhStart = y
 				currentPhEnd = y + h
+			}
+			historyPhStart := v.Y - v.Height
+			historyPhEnd := v.Y
+			if v.Icon {
 				historyPhStart = v.Y
 				historyPhEnd = v.Y + v.Height
 			}

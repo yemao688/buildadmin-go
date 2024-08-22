@@ -251,7 +251,7 @@ func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string
 			}
 		}
 		if isAll {
-			return "", cErr.BadRequest("Role group has all your rights, please contact the upper administrator to add or do not need to add!")
+			return "", cErr.BadRequest(utils.Lang(ctx, "Role group has all your rights, please contact the upper administrator to add or do not need to add!", nil))
 		}
 		return strings.Join(stringRules, ","), nil
 	}

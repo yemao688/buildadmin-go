@@ -1,17 +1,27 @@
 package captcha
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
+	"go-build-admin/utils"
 	"image"
 	"image/color"
 	"image/draw"
+	"math"
 	"math/rand"
-	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/disintegration/imaging"
+	"github.com/golang/freetype/truetype"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 	"gorm.io/gorm"
 )
 
@@ -53,10 +63,28 @@ func NewCaptcha(sqlDB *gorm.DB) *Captcha {
 		ImageW:   0,
 		Length:   4,
 		FontTTF:  "",
-		Bg:       []int{},
+		Bg:       []int{243, 251, 254},
 		Reset:    true,
 	}
 	return &Captcha{config: defaultConfig, sqlDB: sqlDB}
+}
+
+func (c *Captcha) SetConfig(config CaptchaConfig) {
+	if config.CodeSet != "" {
+		c.config.CodeSet = config.CodeSet
+	}
+
+	if config.FontSize != 0 {
+		c.config.FontSize = config.FontSize
+	}
+
+	if config.Length != 0 {
+		c.config.Length = config.Length
+	}
+
+	c.config.UseCurve = config.UseCurve
+	c.config.CodeSet = config.CodeSet
+
 }
 
 type BaCaptcha struct {
@@ -68,7 +96,7 @@ type BaCaptcha struct {
 }
 
 // 验证验证码是否正确
-func (c *Captcha) check(code, id string) bool {
+func (c *Captcha) Check(code, id string) bool {
 	if code == "" {
 		return false
 	}
@@ -104,6 +132,7 @@ func (c *Captcha) Create(id string) (string, error) {
 
 	captcha := c.generate()
 	code := c.authCode(captcha, id)
+	// 实现数据库插入操作
 	err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
 		"key":         key,
 		"code":        code,
@@ -111,7 +140,6 @@ func (c *Captcha) Create(id string) (string, error) {
 		"create_time": time.Now().Unix(),
 		"expire_time": time.Now().Unix() + int64(c.config.Expire),
 	}).Error
-	// 实现数据库插入操作
 	return captcha, err
 }
 
@@ -124,7 +152,7 @@ func (c *Captcha) GetCaptchaData(id string) (BaCaptcha, error) {
 }
 
 // 输出图形验证码并把验证码的值保存的Mysql中
-func (c *Captcha) entry(id string, w http.ResponseWriter, r *http.Request) {
+func (c *Captcha) Entry(id string) (*image.RGBA, error) {
 	imageW := c.config.ImageW
 	imageH := c.config.ImageH
 	if imageW == 0 {
@@ -134,14 +162,233 @@ func (c *Captcha) entry(id string, w http.ResponseWriter, r *http.Request) {
 	if imageH == 0 {
 		imageH = int(float64(c.config.FontSize) * 2.5)
 	}
+	// 建立一幅
+	img := image.NewRGBA(image.Rect(0, 0, imageW, imageH))
+	// 设置背景
+	backgroundColor := color.RGBA{uint8(c.config.Bg[0]), uint8(c.config.Bg[1]), uint8(c.config.Bg[2]), 255}
+	draw.Draw(img, img.Bounds(), &image.Uniform{backgroundColor}, image.Point{}, draw.Src)
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// 验证码字体随机颜色
+	textColor := color.RGBA{uint8(r.Intn(255)), uint8(r.Intn(255)), uint8(r.Intn(255)), 255}
+
+	if c.config.UseImgBg {
+		bgPath := background()
+		bgImg, err := loadImage(filepath.Join(utils.RootPath(), bgPath))
+		if err != nil {
+			return nil, err
+		}
+		draw.Draw(img, bgImg.Bounds(), bgImg, image.Point{}, draw.Src)
+	}
+
+	if c.config.UseNoise {
+		writeNoise(img)
+	}
+
+	if c.config.UseCurve {
+		writeCurve(img, c.config.FontSize, c.config.ImageW, c.config.ImageH, textColor)
+	}
+
+	key := c.authCode(c.config.SeKey, id)
+	seCode := BaCaptcha{}
+	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
+
+	// 绘验证码
+	if err == nil && time.Now().Unix() <= seCode.ExpireTime {
+		if _, err = writeText(img, c.config, seCode.Captcha, textColor); err != nil {
+			return nil, err
+		}
+	} else {
+		captcha, err := writeText(img, c.config, "", textColor)
+		code := c.authCode(captcha, id)
+
+		if err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Create(&BaCaptcha{
+			Key:        key,
+			Code:       code,
+			Captcha:    captcha,
+			CreateTime: time.Now().Unix(),
+			ExpireTime: time.Now().Unix() + int64(c.config.Expire),
+		}).Error; err != nil {
+			return nil, err
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	return img, nil
 }
 
-func (c *Captcha) generateImage(id string) image.Image {
-	// 省略具体的图像生成逻辑，包括绘制噪声、曲线等
-	// 参考Go的image和image/draw包实现
-	img := image.NewRGBA(image.Rect(0, 0, 200, 100))
-	draw.Draw(img, img.Bounds(), &image.Uniform{color.White}, image.ZP, draw.Src)
-	return img
+// 绘验证码
+func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor color.RGBA) (string, error) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	code := []string{}
+	runes := []rune{}
+	if captcha != "" {
+		runes = []rune(captcha)
+	} else {
+		if config.UseZh {
+			runes = []rune(config.ZhSet)
+		} else {
+			runes = []rune(config.CodeSet)
+		}
+	}
+
+	// 验证码使用随机字体
+	fontTtf := config.FontTTF
+	if fontTtf == "" {
+		if config.UseZh {
+			name := strconv.Itoa(r.Intn(2) + 1)
+			fontTtf = filepath.Join(utils.RootPath(), "/static/fonts/zhttfs", name+".ttf")
+		} else {
+			name := strconv.Itoa(r.Intn(6) + 1)
+			fontTtf = filepath.Join(utils.RootPath(), "/static/fonts/ttfs", name+".ttf")
+		}
+	}
+
+	fontBytes, err := os.ReadFile(fontTtf)
+	if err != nil {
+		return "", err
+	}
+	fontData, err := truetype.Parse(fontBytes)
+	if err != nil {
+		return "", err
+	}
+	fontFace := truetype.NewFace(fontData, &truetype.Options{Size: float64(config.FontSize)})
+
+	for i := 0; i < config.Length; i++ {
+		randomIndex := r.Intn(len(runes))
+		code = append(code, string(runes[randomIndex]))
+		runes = append(runes[:randomIndex], runes[randomIndex+1:]...)
+
+		textAngle := float64(r.Intn(30)+1) - 15
+
+		pt := image.Point{int(float64(config.FontSize) * (float64(i) + 1) * 1.3), int(config.FontSize + 15)}
+		drawRotatedText(img, code[i], pt, textAngle, fontFace, textColor)
+	}
+	return strings.ToUpper(strings.Join(code, "")), nil
+}
+
+// 画一条由两条连在一起构成的随机正弦函数曲线作干扰线
+func writeCurve(img *image.RGBA, fontSize int, imageW int, imageH int, textColor color.RGBA) {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	py := 0
+
+	// 曲线部分
+	A := r.Intn(int(imageH/2)) + 1          // 振幅
+	b := r.Intn(int(imageH/2)+1) - imageH/4 // Y轴方向偏移量
+	f := r.Intn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T := r.Intn(imageW*2-imageH+1) + imageH // 周期
+	w := 2 * math.Pi / float64(T)           // 角频率
+
+	px := 0                                                       // 曲线横坐标起始位置
+	px2 := r.Intn(int(float64(imageW)*0.8)-imageW/2+1) + imageW/2 // 曲线横坐标结束位置
+
+	for px < px2 {
+		if w != 0 {
+			py = int(float64(A)*math.Sin(w*float64(px)+float64(f)) + float64(b) + float64(imageH)/2)
+			i := int(fontSize / 5)
+			for i >= 0 {
+				// 画像素点
+				img.Set(px+i, py+i, textColor)
+				i--
+			}
+		}
+		px = px + 1
+	}
+
+	// 曲线后部分
+	A = r.Intn(int(imageH/2)) + 1          // 振幅
+	f = r.Intn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T = r.Intn(imageW*2-imageH+1) + imageH // 周期
+	w = (2 * math.Pi) / float64(T)
+	b = py - A*int(math.Sin(w*float64(px+f))) - int(imageH/2) // Y轴方向偏移量
+	px = px2
+	px2 = imageW
+
+	for px < px2 {
+		if w != 0 {
+			py = int(float64(A)*math.Sin(w*float64(px)+float64(f)) + float64(b) + float64(imageH)/2)
+			i := int(fontSize / 5)
+			for i >= 0 {
+				// 画像素点
+				img.Set(px+i, py+i, textColor)
+				i--
+			}
+		}
+		px = px + 1
+	}
+}
+
+// 绘杂点，往图片上写不同颜色的字母或数字
+func writeNoise(img *image.RGBA) {
+	codeSet := "2345678abcdefhijkmnpqrstuvwxyz"
+	fontFace := basicfont.Face7x13
+
+	// 设置随机数种子
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < 10; i++ {
+		// 杂点颜色
+		noiseColor := color.RGBA{
+			R: uint8(r.Intn(76) + 150),
+			G: uint8(r.Intn(76) + 150),
+			B: uint8(r.Intn(76) + 150),
+			A: 255,
+		}
+
+		for j := 0; j < 5; j++ {
+			textPoint := image.Pt(r.Intn(img.Bounds().Dx()), r.Intn(img.Bounds().Dy()))
+			textAngle := float64(r.Intn(90) + 1) // 45度角
+
+			charIndex := rand.Intn(len(codeSet))
+			char := codeSet[charIndex]
+			// 绘制旋转后的文本水印
+			drawRotatedText(img, string(char), textPoint, textAngle, fontFace, noiseColor)
+		}
+	}
+}
+
+func drawRotatedText(img *image.RGBA, text string, point image.Point, angle float64, fontFace font.Face, textColor color.Color) {
+	// 创建一个临时的图像用于绘制旋转后的文本
+	textImg := image.NewRGBA(image.Rect(0, 0, img.Bounds().Dx(), img.Bounds().Dy()))
+
+	// 创建一个基于原图像的绘图上下文
+	d := &font.Drawer{
+		Dst:  textImg,
+		Src:  image.NewUniform(textColor),
+		Face: fontFace,
+		Dot:  fixed.P(point.X, point.Y),
+	}
+	d.DrawString(text)
+	rotated := imaging.Rotate(textImg, angle, color.NRGBA{0, 0, 0, 0})
+	// 将临时图像的内容合并到原始图像中
+	draw.Draw(img, img.Bounds(), rotated, image.Point{}, draw.Over)
+}
+
+// 背景图片路径
+func background() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	bgs := []string{}
+	for i := 1; i <= 8; i++ {
+		bgs = append(bgs, filepath.Join("static/images/captcha/image/", strconv.Itoa(i)+".jpg"))
+	}
+	randIndex := r.Intn(len(bgs) - 1)
+	imagePath := bgs[randIndex]
+	return imagePath
+}
+
+func loadImage(filePath string) (image.Image, error) {
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	reader := bytes.NewReader(fileData)
+	img, _, err := image.Decode(reader)
+	if err != nil {
+		return nil, err
+	}
+	return img, nil
 }
 
 // 加密验证码
@@ -153,16 +400,17 @@ func (c *Captcha) authCode(str, id string) string {
 
 // 生成验证码随机字符
 func (c *Captcha) generate() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	code := []string{}
-	zhSet := []rune(c.config.ZhSet)
 	if c.config.UseZh {
+		zhSet := []rune(c.config.ZhSet)
 		for i := 0; i < c.config.Length; i++ {
-			randIndex := rand.Intn(utf8.RuneCountInString(c.config.ZhSet))
+			randIndex := r.Intn(utf8.RuneCountInString(c.config.ZhSet))
 			code = append(code, string(zhSet[randIndex]))
 		}
 	} else {
 		for i := 0; i < c.config.Length; i++ {
-			randIndex := rand.Intn(len(c.config.CodeSet))
+			randIndex := r.Intn(len(c.config.CodeSet))
 			code = append(code, string(c.config.CodeSet[randIndex]))
 		}
 	}

@@ -87,6 +87,14 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	if err != nil {
 		return
 	}
+	//分页
+	if queryParameter.Page != 0 {
+		offset = queryParameter.Page * limit
+	}
+	if queryParameter.Limit != 0 {
+		limit = queryParameter.Limit
+	}
+
 	// 快速搜索
 	quickSearch := queryParameter.QuickSearch
 	quickSearchField := table.QuickSearchField

@@ -3,6 +3,8 @@ package utils
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"regexp"
+	"strings"
 )
 
 func EncryptPassword(content, salt string) string {
@@ -26,4 +28,15 @@ func Md5(content string) string {
 	// 将散列值转换为十六进制字符串，便于显示和比较
 	md5Hex := hex.EncodeToString(hashBytes)
 	return md5Hex
+}
+
+func MaskPhone(content string) string {
+	matched, _ := regexp.MatchString("^1[3-9]\\d{9}$", content)
+	// 根据匹配结果进行处理
+	if matched {
+		maskedUsername := strings.Replace(content, content[3:7], "****", 1)
+		return maskedUsername
+
+	}
+	return content
 }
