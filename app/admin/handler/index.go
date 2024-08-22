@@ -98,7 +98,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 
 		if needCaptcha {
 			if params.CaptchaId == "" || params.CaptchaInfo == "" {
-				FailByErr(ctx, cErr.BadRequest("Need captcha"))
+				FailByErr(ctx, cErr.BadRequest("Captcha error"))
 				return
 			}
 

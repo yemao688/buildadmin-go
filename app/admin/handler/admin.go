@@ -80,7 +80,7 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 	}
 
 	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("Password required"))
+		FailByErr(ctx, cErr.BadRequest("Please input correct password"))
 		return
 	}
 

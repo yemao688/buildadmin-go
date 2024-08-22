@@ -118,7 +118,7 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 
 		// 验证账户密码
 		if user.Password != utils.EncryptPassword(params.Password, user.Salt) {
-			FailByErr(ctx, cErr.BadRequest("Password error"))
+			FailByErr(ctx, cErr.BadRequest("Password is incorrect"))
 			return
 		}
 	}

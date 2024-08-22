@@ -323,7 +323,7 @@ func (h *AccountHandler) RetrievePassword(ctx *gin.Context) {
 	}
 
 	if err != nil {
-		FailByErr(ctx, cErr.NotFound("Account does not exist~"))
+		FailByErr(ctx, cErr.NotFound("Account not exist"))
 		return
 	}
 

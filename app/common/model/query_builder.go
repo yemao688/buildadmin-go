@@ -117,7 +117,9 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		if len(orderArr) == 2 && (orderArr[1] == "asc" || orderArr[1] == "desc") {
 			field := GetFullField(orderArr[0], table)
 			if IsValidFieldName(field, fieldTypeMap) {
-				err = cErr.BadRequest("Not found field:" + orderArr[0])
+				err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]any{
+					"name": orderArr[0],
+				}))
 				return
 			}
 			orderS = field + " " + orderArr[1]
@@ -136,7 +138,9 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 
 		//验证字段合法性
 		if IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest("Not found field:" + search[i].Field)
+			err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]any{
+				"name": search[i].Field,
+			}))
 			return
 		}
 		//判断是否是日期
@@ -248,7 +252,9 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		case "NOT NULL":
 			whereS += " AND " + Backquote(field) + " IS " + operater
 		default:
-			err = cErr.BadRequest("Where express error:" + operater)
+			err = cErr.BadRequest(utils.Lang(ctx, "Where express error:{name}", map[string]any{
+				"name": operater,
+			}))
 			return
 		}
 	}

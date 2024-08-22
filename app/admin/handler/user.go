@@ -77,7 +77,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		return
 	}
 	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("Password required"))
+		FailByErr(ctx, cErr.BadRequest("Please input correct password"))
 		return
 	}
 

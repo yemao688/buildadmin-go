@@ -179,21 +179,21 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 	if username != "" {
 		err := s.sqlDB.Table(TableNameUser).Where("username=?", username).Scan(&existUser).Error
 		if err != nil {
-			return nil, cErr.BadRequest("username is exist!")
+			return nil, cErr.BadRequest("Username is exist!")
 		}
 	}
 
 	if email != "" {
 		err := s.sqlDB.Table(TableNameUser).Where("email=?", email).Scan(&existUser).Error
 		if err != nil {
-			return nil, cErr.BadRequest("email is exist!")
+			return nil, cErr.BadRequest("Email is exist!")
 		}
 	}
 
 	if mobile != "" {
 		err := s.sqlDB.Table(TableNameUser).Where("mobile=?", mobile).Scan(&existUser).Error
 		if err != nil {
-			return nil, cErr.BadRequest("mobile is exist!")
+			return nil, cErr.BadRequest("Mobile is exist!")
 		}
 	}
 
