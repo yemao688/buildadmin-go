@@ -141,7 +141,7 @@ func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
-	err = s.sqlDB.Table(s.TableName).Order("weigh desc").Find(&list).Error
+	err = s.sqlDB.Table(s.TableName).Order("`weigh` desc").Find(&list).Error
 	return
 }
 
@@ -156,26 +156,26 @@ func (s *ConfigModel) Edit(ctx *gin.Context, data Config) error {
 }
 
 func (s *ConfigModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Table(s.TableName).Where("`id` in ? ", ids).Delete(nil).Error
 	return err
 }
 
 func (s *ConfigModel) GetOneByName(ctx *gin.Context, name string) (Config, error) {
 	var config Config
-	err := s.sqlDB.Table(s.TableName).Where("name = ? ", name).Take(&config).Error
+	err := s.sqlDB.Table(s.TableName).Where("`name`= ? ", name).Take(&config).Error
 	return config, err
 }
 
 func (s *ConfigModel) GetValueByName(ctx *gin.Context, name string) (string, error) {
 	var config Config
-	err := s.sqlDB.Table(s.TableName).Where("name = ? ", name).Take(&config).Error
+	err := s.sqlDB.Table(s.TableName).Where("`name`= ? ", name).Take(&config).Error
 	return config.Value, err
 }
 
 // 获取键值对模式
 func (s *ConfigModel) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
 	var configList []Config
-	err := s.sqlDB.Table(s.TableName).Where("group=?", group).Find(&configList).Error
+	err := s.sqlDB.Table(s.TableName).Where("`group`=?", group).Find(&configList).Error
 	if err != nil {
 		return nil, err
 	}

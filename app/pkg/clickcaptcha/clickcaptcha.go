@@ -34,7 +34,7 @@ var bgPaths []string = []string{
 
 // 可以使用的字体文件路径
 var fontPaths []string = []string{
-	"/static/fonts/zhttfs/SourceHanSansCN-Normal.ttf",
+	"/static/fonts/zhttfs/2.ttf",
 }
 
 // 验证点 Icon 映射表
