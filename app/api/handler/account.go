@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
@@ -28,16 +29,18 @@ func NewAccountHandler(log *zap.Logger, authM *model.AuthModel, userM *model.Use
 }
 
 func (h *AccountHandler) Overview(ctx *gin.Context) {
-	days, score, money := []string{}, []int{}, []int{}
-	sevenDays := time.Now().AddDate(0, 0, -7)
+	days, score, money := []string{}, []int{}, []string{}
+
+	userAuth := header.GetUserAuth(ctx)
+	sevenDays := time.Now().AddDate(0, 0, -6)
 	for i := 0; i < 7; i++ {
-		days[i] = sevenDays.AddDate(0, 0, 1).Format("2006-01-02")
+		days = append(days, sevenDays.AddDate(0, 0, i).Format("2006-01-02"))
 
-		num, _ := h.userScoreLogM.GetDayScore(ctx, sevenDays.AddDate(0, 0, 1), 0)
-		score[i] = num
+		scoreNum, _ := h.userScoreLogM.GetDayScore(ctx, sevenDays.AddDate(0, 0, i), userAuth.Id)
+		score = append(score, scoreNum)
 
-		num, _ = h.userMoneyLogM.GetDayMoney(ctx, sevenDays.AddDate(0, 0, 1), 0)
-		money[i] = num
+		moneyNum, _ := h.userMoneyLogM.GetDayMoney(ctx, sevenDays.AddDate(0, 0, i), userAuth.Id)
+		money = append(money, fmt.Sprintf("%.2f", float64(moneyNum/100)))
 	}
 
 	Success(ctx, map[string]any{
@@ -48,12 +51,12 @@ func (h *AccountHandler) Overview(ctx *gin.Context) {
 }
 
 type ProfileParam struct {
-	Avatar   *string `json:"avatar" binding:"required"`
-	Username *string `json:"username" binding:"required"`
-	Nickname *string `json:"nickname" binding:"required"`
-	Gender   *string `json:"gender" binding:"required"`
-	Birthday *string `json:"birthday" binding:"required"`
-	Motto    *string `json:"motto" binding:"required"`
+	Avatar   string `json:"avatar"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Gender   int    `json:"gender"`
+	Birthday string `json:"birthday"`
+	Motto    string `json:"motto"`
 }
 
 func (v ProfileParam) GetMessages() validate.ValidatorMessages {
@@ -73,24 +76,22 @@ func (h *AccountHandler) Profile(ctx *gin.Context) {
 			FailByErr(ctx, validate.GetError(params, err))
 			return
 		}
-		data := map[string]any{}
-		if params.Avatar != nil {
-			data["avatar"] = params.Avatar
-		}
-		if params.Username != nil {
-			data["username"] = params.Username
-		}
-		if params.Nickname != nil {
-			data["nickname"] = params.Nickname
-		}
-		if params.Gender != nil {
-			data["gender"] = params.Gender
-		}
-		if params.Birthday != nil {
-			data["birthday"] = params.Birthday
-		}
 
 		userAuth := header.GetUserAuth(ctx)
+		_, err := h.userM.UsernameIsExist(ctx, params.Username, userAuth.Id)
+		if err == nil {
+			FailByErr(ctx, cErr.BadRequest("Account exist"))
+			return
+		}
+
+		data := map[string]any{}
+		data["avatar"] = params.Avatar
+		data["username"] = params.Username
+		data["nickname"] = params.Nickname
+		data["gender"] = params.Gender
+		data["birthday"] = (params.Birthday)[:10]
+		data["motto"] = params.Motto
+
 		if err := h.userM.Update(ctx, userAuth.Id, data); err != nil {
 			FailByErr(ctx, err)
 			return
@@ -244,13 +245,7 @@ func (h *AccountHandler) ChangePassword(ctx *gin.Context) {
 	}
 
 	userAuth := header.GetUserAuth(ctx)
-	user, err := h.userM.GetOne(ctx, userAuth.Id)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	if user.Password != utils.EncryptPassword(params.OldPassword, user.Salt) {
+	if !h.userM.ValidatePassword(ctx, userAuth.Id, params.OldPassword) {
 		FailByErr(ctx, cErr.BadRequest("Old password error"))
 		return
 	}
@@ -265,8 +260,9 @@ func (h *AccountHandler) ChangePassword(ctx *gin.Context) {
 
 // 积分日志
 func (h *AccountHandler) Integral(ctx *gin.Context) {
-	userId := 0
-	result, total, err := h.userScoreLogM.List(ctx, userId)
+	fmt.Println(ctx.ClientIP())
+	userAuth := header.GetUserAuth(ctx)
+	result, total, err := h.userScoreLogM.List(ctx, userAuth.Id)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -279,8 +275,8 @@ func (h *AccountHandler) Integral(ctx *gin.Context) {
 
 // 余额日志
 func (h *AccountHandler) Balance(ctx *gin.Context) {
-	userId := 0
-	result, total, err := h.userMoneyLogM.List(ctx, userId)
+	userAuth := header.GetUserAuth(ctx)
+	result, total, err := h.userMoneyLogM.List(ctx, userAuth.Id)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

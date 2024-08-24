@@ -35,7 +35,7 @@ func NewUserScoreLogModel(sqlDB *gorm.DB) *UserScoreLogModel {
 	}
 }
 
-func (s *UserScoreLogModel) GetDayScore(ctx *gin.Context, t time.Time, userId int) (int, error) {
+func (s *UserScoreLogModel) GetDayScore(ctx *gin.Context, t time.Time, userId int32) (int, error) {
 	type Result struct {
 		Total int
 	}
@@ -45,13 +45,13 @@ func (s *UserScoreLogModel) GetDayScore(ctx *gin.Context, t time.Time, userId in
 	err := s.sqlDB.Model(&UserScoreLog{}).
 		Select("sum(score) as total").
 		Where("user_id=?", userId).
-		Where("created_at BETWEEN ? AND ?", startUnix, endUnix).
+		Where("create_time BETWEEN ? AND ?", startUnix, endUnix).
 		First(&result).Error
 
 	return result.Total, err
 }
 
-func (s *UserScoreLogModel) List(ctx *gin.Context, userId int) (list []UserScoreLog, total int64, err error) {
+func (s *UserScoreLogModel) List(ctx *gin.Context, userId int32) (list []*UserScoreLog, total int64, err error) {
 	limit, offset := LimitAddOffset(ctx)
 	db := s.sqlDB.Model(&UserScoreLog{}).Where("user_id=?", userId)
 	if err = db.Count(&total).Error; err != nil {

@@ -88,7 +88,10 @@ func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
 	}
 	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 	outUser.Money = fmt.Sprintf("%.2f", float64(data.Money)/100)
-	outUser.Birthday = data.Birthday.Format("2006-01-02")
+	outUser.Birthday = ""
+	if data.Birthday.Unix() > 100 {
+		outUser.Birthday = data.Birthday.Format("2006-01-02")
+	}
 	return &outUser, nil
 }
 

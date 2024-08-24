@@ -61,10 +61,10 @@ func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.C
 }
 
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
-	tokenStr := ctx.Request.Header.Get("Authorization")
+	tokenStr := ctx.Request.Header.Get("batoken")
 	if tokenStr != "" {
 		tokenData, err := s.tokenHelper.Get(tokenStr)
-		if err != nil {
+		if err == nil {
 			return tokenData, true
 		}
 	}

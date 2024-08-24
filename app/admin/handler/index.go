@@ -36,7 +36,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	basicConfig, err := h.configM.GetKVByGroup(ctx, "basic")
+	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
 	if err != nil {
 		FailByErr(ctx, err)
 		return

@@ -17,6 +17,7 @@ import (
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	loginM *middleware.Login,
+	userLoginM *middleware.UserLogin,
 	dataLimitM *middleware.DataLimit,
 	recordM *middleware.Record,
 
@@ -198,28 +199,33 @@ func InitRouter(
 	adminRouter.POST("testBuild/edit", testBuildHandler.Edit)
 	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
 
+	//-----------------------api 接口部分--------------------//
+	router.POST("/api/account/RetrievePassword", apiAccountHandler.RetrievePassword)
+	router.POST("/api/ajax/area", apiAjaxHandler.Area)
+	router.POST("/api/ajax/buildSuffixSvg", apiAjaxHandler.BuildSuffixSvg)
+	router.POST("/api/Ems/send", apiEmsHandler.Send)
+	router.GET("/api/index/index", apiIndexHandler.Index)
+	router.GET("/api/user/checkIn", apiUserHandler.CheckIn)
+	router.POST("/api/user/checkIn", apiUserHandler.CheckIn)
+
+	router.GET("/api/common/captcha", apiCommonHandler.Captcha)
+	router.GET("/api/common/clickCaptcha", apiCommonHandler.ClickCaptcha)
+	router.POST("/api/common/checkClickCaptcha", apiCommonHandler.CheckClickCaptcha)
+	router.POST("/api/common/refreshToken", apiCommonHandler.RefreshToken)
+
 	// 引入api接口路由
-	apiRouter := router.Group("/api/")
-	apiRouter.POST("account/overview", apiAccountHandler.Overview)
-	apiRouter.POST("account/Profile", apiAccountHandler.Profile)
-	apiRouter.POST("account/Verification", apiAccountHandler.Verification)
-	apiRouter.POST("account/ChangeBind", apiAccountHandler.ChangeBind)
-	apiRouter.POST("account/ChangePassword", apiAccountHandler.ChangePassword)
-	apiRouter.POST("account/Integral", apiAccountHandler.Integral)
-	apiRouter.POST("account/Balance", apiAccountHandler.Balance)
-	apiRouter.POST("account/RetrievePassword", apiAccountHandler.RetrievePassword)
+	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
+	apiRouter.GET("account/overview", apiAccountHandler.Overview)
+	apiRouter.GET("account/profile", apiAccountHandler.Profile)
+	apiRouter.POST("account/profile", apiAccountHandler.Profile)
+	apiRouter.POST("account/verification", apiAccountHandler.Verification)
+	apiRouter.POST("account/changeBind", apiAccountHandler.ChangeBind)
+	apiRouter.POST("account/changePassword", apiAccountHandler.ChangePassword)
+	apiRouter.GET("account/integral", apiAccountHandler.Integral)
+	apiRouter.GET("account/balance", apiAccountHandler.Balance)
 
 	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
-	apiRouter.POST("ajax/area", apiAjaxHandler.Area)
-	apiRouter.POST("ajax/buildSuffixSvg", apiAjaxHandler.BuildSuffixSvg)
 
-	apiRouter.GET("common/captcha", apiCommonHandler.Captcha)
-	apiRouter.GET("common/clickCaptcha", apiCommonHandler.ClickCaptcha)
-	apiRouter.POST("common/checkClickCaptcha", apiCommonHandler.CheckClickCaptcha)
-	apiRouter.POST("common/refreshToken", apiCommonHandler.RefreshToken)
-
-	apiRouter.POST("ems/send", apiEmsHandler.Send)
-	apiRouter.POST("index/index", apiIndexHandler.Index)
 	apiRouter.POST("install/changePackageManager", apiInstallHandler.ChangePackageManager)
 	apiRouter.POST("install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
 	apiRouter.POST("install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
@@ -229,10 +235,8 @@ func InitRouter(
 	apiRouter.POST("install/manualInstall", apiInstallHandler.ManualInstall)
 	apiRouter.POST("install/mvDist", apiInstallHandler.MvDist)
 
-	apiRouter.POST("user/checkIn", apiUserHandler.CheckIn)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	admin.CollectRoutes(router)
-
 	return router
 }

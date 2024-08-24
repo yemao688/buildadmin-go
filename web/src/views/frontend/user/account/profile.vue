@@ -62,7 +62,7 @@
                     <FormItem
                         :label="$t('user.account.profile.Gender')"
                         type="radio"
-                        v-model="state.form.gender"
+                        v-model.number="state.form.gender"
                         :data="{
                             childrenAttr: { border: true },
                             content: {

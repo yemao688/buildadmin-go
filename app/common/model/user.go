@@ -76,6 +76,16 @@ func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	return data, err
 }
 
+func (s *UserModel) UsernameIsExist(ctx *gin.Context, username string, id int32) (User, error) {
+	data := User{}
+	err := s.sqlDB.Table(TableNameUser).
+		Omit("password", "salt").
+		Where("username=?", username).
+		Where("id<>?", id).
+		First(&data).Error
+	return data, err
+}
+
 func (s *UserModel) GetOneByEmail(ctx *gin.Context, email string) (User, error) {
 	data := User{}
 	err := s.sqlDB.Table(TableNameUser).Omit("password", "salt").Where("email=?", email).First(&data).Error
@@ -86,6 +96,15 @@ func (s *UserModel) GetOneByMobile(ctx *gin.Context, mobile string) (User, error
 	data := User{}
 	err := s.sqlDB.Table(TableNameUser).Omit("password", "salt").Where("mobile=?", mobile).First(&data).Error
 	return data, err
+}
+
+func (s *UserModel) ValidatePassword(ctx *gin.Context, id int32, oldPassword string) bool {
+	user := User{}
+	s.sqlDB.Table(TableNameUser).Where("id=?", id).First(&user)
+	if user.Password != utils.EncryptPassword(oldPassword, user.Salt) {
+		return false
+	}
+	return true
 }
 
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {

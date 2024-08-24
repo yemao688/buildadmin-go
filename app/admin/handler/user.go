@@ -82,6 +82,9 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	}
 
 	var user model.User
+	if params.Birthday == "" {
+		params.Birthday = "0000-00-00"
+	}
 	copier.Copy(&user, params)
 	birthday, _ := utils.ParseTimeShort(params.Birthday)
 	user.Birthday = birthday

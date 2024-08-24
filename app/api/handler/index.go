@@ -28,9 +28,14 @@ func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Confi
 func (h *IndexHandler) Index(ctx *gin.Context) {
 	rules := []model.Rule{}
 	menus := []model.Rule{}
+	userInfo := map[string]any{}
 	token, isLogin := h.authM.IsLogin(ctx)
 	if isLogin {
-		userMenus, _ := h.authM.GetMenus(ctx, token.UserID)
+		userMenus, err := h.authM.GetMenus(ctx, token.UserID)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 		for _, v := range userMenus {
 			if v.Type == "menu_dir" {
 				menus = append(menus, v)
@@ -38,6 +43,15 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 				rules = append(rules, v)
 			}
 		}
+
+		user, err := h.authM.GetInfo(ctx, token.UserID)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+		userInfo = h.authM.FilterData(user)
+		userInfo["token"] = token.Token
+		userInfo["refresh_token"] = ""
 	} else {
 		// 若是从前台会员中心内发出的请求，要求必须登录，否则会员中心异常
 		requiredLogin := ctx.Query("requiredLogin")
@@ -47,7 +61,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		}
 		//TODO:
 	}
-	basicConfig, err := h.configM.GetKVByGroup(ctx, "basic")
+	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -62,7 +76,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"upload":       h.config.Upload,
 		},
 		"openMemberCenter": true,
-		"userInfo":         map[string]any{},
+		"userInfo":         userInfo,
 		"rules":            rules,
 		"menus":            menus,
 	})

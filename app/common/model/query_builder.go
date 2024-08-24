@@ -349,7 +349,7 @@ func LimitAddOffset(ctx *gin.Context) (int, int) {
 	p := ctx.Query("page")
 	if p != "" {
 		num, _ := strconv.Atoi(p)
-		offset = limit * num
+		offset = limit * (num - 1)
 	}
 	return limit, offset
 }

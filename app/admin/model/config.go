@@ -174,11 +174,12 @@ func (s *ConfigModel) GetValueByName(ctx *gin.Context, name string) (string, err
 
 // 获取键值对模式
 func (s *ConfigModel) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
-	var configList []Config
+	var configList []*Config
 	err := s.sqlDB.Table(s.TableName).Where("`group`=?", group).Find(&configList).Error
 	if err != nil {
 		return nil, err
 	}
+
 	data := map[string]string{}
 	for _, v := range configList {
 		data[v.Name] = v.Value

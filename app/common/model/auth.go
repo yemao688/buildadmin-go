@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/random"
@@ -60,10 +61,10 @@ func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.C
 }
 
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
-	tokenStr := ctx.Request.Header.Get("Authorization")
+	tokenStr := ctx.Request.Header.Get("ba-user-token")
 	if tokenStr != "" {
 		tokenData, err := s.tokenHelper.Get(tokenStr)
-		if err != nil {
+		if err == nil {
 			return tokenData, true
 		}
 	}
@@ -154,7 +155,14 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		"last_login_ip":   ctx.ClientIP(),
 	}).Error
 
-	return map[string]interface{}{
+	userInfo := s.FilterData(user)
+	userInfo["token"] = token
+	userInfo["refresh_token"] = refreshToken
+	return userInfo, err
+}
+
+func (s *AuthModel) FilterData(user User) map[string]any {
+	return map[string]any{
 		"id":              user.ID,
 		"username":        user.Username,
 		"nickname":        user.Nickname,
@@ -163,15 +171,13 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		"avatar":          user.Avatar,
 		"gender":          user.Gender,
 		"birthday":        user.Birthday,
-		"money":           user.Money,
+		"money":           fmt.Sprintf("%.2f", float64(user.Money/100)),
 		"score":           user.Score,
 		"join_time":       user.JoinTime,
 		"motto":           user.Motto,
 		"last_login_time": time.Now().Unix(),
 		"last_login_ip":   user.LastLoginIP,
-		"token":           token,
-		"refresh_token":   refreshToken,
-	}, err
+	}
 }
 
 func (s *AuthModel) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
@@ -229,24 +235,10 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 		return nil, err
 	}
 
-	return map[string]interface{}{
-		"id":              user.ID,
-		"username":        user.Username,
-		"nickname":        user.Nickname,
-		"email":           user.Email,
-		"mobile":          user.Mobile,
-		"avatar":          user.Avatar,
-		"gender":          user.Gender,
-		"birthday":        user.Birthday,
-		"money":           user.Money,
-		"score":           user.Score,
-		"join_time":       user.JoinTime,
-		"motto":           user.Motto,
-		"last_login_time": time.Now().Unix(),
-		"last_login_ip":   user.LastLoginIP,
-		"token":           token,
-		"refresh_token":   "",
-	}, nil
+	userInfo := s.FilterData(user)
+	userInfo["token"] = token
+	userInfo["refresh_token"] = ""
+	return userInfo, nil
 }
 
 func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {

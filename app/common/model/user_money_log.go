@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"go-build-admin/utils"
 	"time"
 
@@ -35,7 +36,7 @@ func NewUserMoneyLogModel(sqlDB *gorm.DB) *UserMoneyLogModel {
 	}
 }
 
-func (s *UserMoneyLogModel) GetDayMoney(ctx *gin.Context, t time.Time, userId int) (int, error) {
+func (s *UserMoneyLogModel) GetDayMoney(ctx *gin.Context, t time.Time, userId int32) (int, error) {
 	type Result struct {
 		Total int
 	}
@@ -45,18 +46,31 @@ func (s *UserMoneyLogModel) GetDayMoney(ctx *gin.Context, t time.Time, userId in
 	err := s.sqlDB.Model(&UserMoneyLog{}).
 		Select("sum(money) as total").
 		Where("user_id=?", userId).
-		Where("created_at BETWEEN ? AND ?", startUnix, endUnix).
+		Where("create_time BETWEEN ? AND ?", startUnix, endUnix).
 		First(&result).Error
 
 	return result.Total, err
 }
 
-func (s *UserMoneyLogModel) List(ctx *gin.Context, userId int) (list []UserMoneyLog, total int64, err error) {
+func (s *UserMoneyLogModel) List(ctx *gin.Context, userId int32) (result []map[string]any, total int64, err error) {
 	limit, offset := LimitAddOffset(ctx)
 	db := s.sqlDB.Model(&UserMoneyLog{}).Where("user_id=?", userId)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+	list := []*UserMoneyLog{}
 	err = db.Limit(limit).Offset(offset).Find(&list).Error
+
+	for _, v := range list {
+		result = append(result, map[string]any{
+			"user_id":     v.UserID,
+			"money":       fmt.Sprintf("%.2f", float64(v.Money/100)),
+			"before":      fmt.Sprintf("%.2f", float64(v.Before/100)),
+			"after":       fmt.Sprintf("%.2f", float64(v.After/100)),
+			"memo":        v.Memo,
+			"create_time": v.CreateTime,
+		})
+	}
+
 	return
 }
