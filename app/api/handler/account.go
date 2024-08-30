@@ -51,23 +51,25 @@ func (h *AccountHandler) Overview(ctx *gin.Context) {
 }
 
 type ProfileParam struct {
-	Avatar   string `json:"avatar"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Gender   int    `json:"gender"`
-	Birthday string `json:"birthday"`
-	Motto    string `json:"motto"`
+	Avatar   string `json:"avatar" binding:"omitempty"`
+	Username string `json:"username" binding:"required,alphanum,min=2,max=15"`
+	Nickname string `json:"nickname" binding:"required,alphanum"`
+	Gender   int    `json:"gender" binding:"oneof=0 1 2"`
+	Birthday string `json:"birthday" binding:"omitempty,datetime=2006-01-02"`
+	Motto    string `json:"motto" binding:"max=255"`
 }
 
 func (v ProfileParam) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"type.required":    "type required",
-		"captcha.required": "captcha required",
+		"username.required": "username required",
+		"username.alphanum": "username can only be letters and numbers",
+		"username.min":      "username > 2 and username < 15",
+		"username.max":      "username > 2 and username < 15",
 	}
 }
 
 /**
- * 会员资料 TODO: 参数验证
+ * 会员资料
  */
 func (h *AccountHandler) Profile(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodPost {
@@ -78,7 +80,7 @@ func (h *AccountHandler) Profile(ctx *gin.Context) {
 		}
 
 		userAuth := header.GetUserAuth(ctx)
-		_, err := h.userM.UsernameIsExist(ctx, params.Username, userAuth.Id)
+		_, err := h.userM.IsExist(ctx, "username", params.Username, userAuth.Id)
 		if err == nil {
 			FailByErr(ctx, cErr.BadRequest("Account exist"))
 			return
@@ -156,20 +158,23 @@ func (h *AccountHandler) Verification(ctx *gin.Context) {
 }
 
 type ChangeBindParam struct {
-	Type                     string `json:"type"`
-	Captcha                  string `json:"captcha"`
-	Email                    string `json:"email"`
-	Mobile                   string `json:"mobile"`
+	Type                     string `json:"type" binding:"required"`
+	Captcha                  string `json:"captcha" binding:"required"`
+	Email                    string `json:"email" binding:"required_if=Type email,omitempty,email"`
+	Mobile                   string `json:"mobile" binding:"required_if=Type mobile,omitempty,phone"`
 	AccountVerificationToken string `json:"accountVerificationToken"`
 	Password                 string `json:"password"`
 }
 
 func (v ChangeBindParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+	return validate.ValidatorMessages{
+		"type.required": "type required",
+		"email.email":   "email invalid",
+	}
 }
 
 /**
- * 修改绑定信息（手机号、邮箱） TODO: 参数验证
+ * 修改绑定信息（手机号、邮箱）
  * 通过 pass Token来确定用户已经通过了账户验证，也就是以上的 verification 方法，同时用户未绑定邮箱/手机时通过账户密码验证
  */
 func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
@@ -186,21 +191,23 @@ func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 		return
 	}
 
-	id := ""
-	if params.Type == "email" && params.Email != "" {
-		id = params.Email
+	verType := ""
+	if params.Type == "email" && user.Email != "" {
+		verType = params.Email
 		if !h.authM.VerificationToken(params.AccountVerificationToken, params.Type+"-pass", userAuth.Id) {
 			FailByErr(ctx, cErr.BadRequest("You need to verify your account before modifying the binding information"))
 			return
 		}
-	} else if params.Type == "mobile" && params.Mobile != "" {
-		id = params.Mobile
+
+	} else if params.Type == "mobile" && user.Mobile != "" {
+		verType = params.Mobile
 		if !h.authM.VerificationToken(params.AccountVerificationToken, params.Type+"-pass", userAuth.Id) {
 			FailByErr(ctx, cErr.BadRequest("You need to verify your account before modifying the binding information"))
 			return
 		}
+
 	} else {
-		id = params.Password
+		verType = params.Password
 		if user.Password != utils.EncryptPassword(params.Password, user.Salt) {
 			FailByErr(ctx, cErr.BadRequest("Old password error"))
 			return
@@ -208,20 +215,31 @@ func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 	}
 
 	// 检查验证码
-	if !h.captcha.Check(params.Captcha, id+"user_change_"+params.Type) {
+	if !h.captcha.Check(params.Captcha, verType+"user_change_"+params.Type) {
 		FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))
 		return
 	}
 
 	if params.Type == "email" {
+		_, err := h.userM.IsExist(ctx, "email", params.Email, userAuth.Id)
+		if err != nil {
+			FailByErr(ctx, cErr.BadRequest("The email phone has been bound to another account"))
+			return
+		}
 		h.userM.Update(ctx, user.ID, map[string]any{
 			"email": params.Email,
 		})
 	} else if params.Type == "mobile" {
+		_, err := h.userM.IsExist(ctx, "mobile", params.Mobile, userAuth.Id)
+		if err != nil {
+			FailByErr(ctx, cErr.BadRequest("The mobile phone has been bound to another account"))
+			return
+		}
 		h.userM.Update(ctx, user.ID, map[string]any{
 			"mobile": params.Mobile,
 		})
 	}
+	h.authM.DelVerificationToken(params.AccountVerificationToken)
 	Success(ctx, "")
 }
 

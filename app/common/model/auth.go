@@ -79,8 +79,11 @@ func (s *AuthModel) SetVerificationToken(t string, id int32) string {
 
 func (s *AuthModel) VerificationToken(token string, t string, user_id int32) bool {
 	result := s.tokenHelper.Check(token, t, user_id)
-	s.tokenHelper.Delete(token)
 	return result
+}
+
+func (s *AuthModel) DelVerificationToken(token string) {
+	s.tokenHelper.Delete(token)
 }
 
 func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (User, error) {

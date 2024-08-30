@@ -121,19 +121,19 @@ terminal:
         command: 'node -v'
     test:
       npm:
-        cwd: 'public/npm-install-test'
+        cwd: 'static/npm-install-test'
         command: 'npm install'
       cnpm:
-        cwd: 'public/npm-install-test'
+        cwd: 'static/npm-install-test'
         command: 'cnpm install'
       yarn:
-        cwd: 'public/npm-install-test'
+        cwd: 'static/npm-install-test'
         command: yarn install
       pnpm:
-        cwd: 'public/npm-install-test'
+        cwd: 'static/npm-install-test'
         command: pnpm install
       ni:
-        cwd: 'public/npm-install-test'
+        cwd: 'static/npm-install-test'
         command: ni install
     web-install:
       npm:

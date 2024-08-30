@@ -14,18 +14,23 @@ type ValidatorMessages map[string]string
 
 // GetError 获取验证错误
 func GetError(data interface{}, err error) *cErr.Error {
-	if _, ok := err.(validator.ValidationErrors); ok {
-		if len(err.(validator.ValidationErrors)) >= 1 {
-			v := err.(validator.ValidationErrors)[0]
-			if _, isValidator := data.(Validator); isValidator {
-				// 若 data 结构体实现 Validator 接口即可实现自定义错误信息
-				if message, exist := data.(Validator).GetMessages()[v.Field()+"."+v.Tag()]; exist {
-					return cErr.BadRequest(message)
-				}
-			}
-			return cErr.BadRequest(v.Error())
-		}
+	validErrs, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return cErr.BadRequest(err.Error())
 	}
+
+	if len(validErrs) == 0 {
+		return cErr.BadRequest(err.Error())
+	}
+
+	if _, ok := data.(Validator); !ok {
+		return cErr.BadRequest(validErrs[0].Error())
+	}
+
+	// 若 data 结构体实现 Validator 接口即可实现自定义错误信息
+	if message, exist := data.(Validator).GetMessages()[validErrs[0].Field()+"."+validErrs[0].Tag()]; exist {
+		return cErr.BadRequest(message)
+	}
+
 	return cErr.BadRequest(err.Error())
-	// return cErr.ValidateErr("参数错误")
 }

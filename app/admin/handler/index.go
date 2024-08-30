@@ -76,9 +76,9 @@ type Login struct {
 
 func (v Login) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"username.min":   "username min>10",
-		"username.max":   "username max<30",
-		"password.regex": "password invalid",
+		"username.min":      "username min>10",
+		"username.max":      "username max<30",
+		"password.required": "password invalid",
 	}
 }
 

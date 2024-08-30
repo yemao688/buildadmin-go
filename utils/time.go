@@ -1,6 +1,9 @@
 package utils
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 const SysTimeform = "2006-01-02 15:04:05"
 const SysTimeformShort = "2006-01-02"
@@ -76,7 +79,7 @@ func DayEndUnix(t time.Time) int64 {
 	return next.Unix()
 }
 
-//获取周一时间戳
+// 获取周一时间戳
 func GetWeekStart(t time.Time) time.Time {
 	offset := time.Monday - t.Weekday()
 	if offset > 0 {
@@ -85,12 +88,57 @@ func GetWeekStart(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location()).AddDate(0, 0, int(offset))
 }
 
-//获取本周日
+// 获取本周日
 func GetWeekEnd(t time.Time) time.Time {
 	return GetWeekStart(t).AddDate(0, 0, 7)
 }
 
-//格式化 UNIX 时间戳为人易读的字符串 TODO:
-func HumanTime(t time.Time) string {
-	return ""
+// 格式化 UNIX 时间戳成易读的字符串
+func HumanTime(t time.Time, lang string) string {
+	timeDiff := t.Unix() - NowUnix()
+
+	// 定义时间间隔和单位
+	chunks := []struct {
+		Seconds int64
+		Name    string
+	}{
+		{60 * 60 * 24 * 365, "year"},
+		{60 * 60 * 24 * 30, "month"},
+		{60 * 60 * 24 * 7, "week"},
+		{60 * 60 * 24, "day"},
+		{60 * 60, "hour"},
+		{60, "minute"},
+		{1, "second"},
+	}
+
+	// 计算时间差
+	count := 0
+	name := ""
+	for _, chunk := range chunks {
+		count = int(timeDiff / chunk.Seconds)
+		if count != 0 {
+			break
+		}
+		name = chunk.Name
+	}
+
+	pluralize := ""
+	if count > 1 {
+		pluralize = "s"
+	}
+
+	if lang == "" {
+		return fmt.Sprintf("%d %s%s ago", count, name, pluralize)
+	}
+
+	zhMap := map[string]string{
+		"second": "秒前",
+		"minute": "分钟前",
+		"hour":   "小时前",
+		"day":    "天前",
+		"week":   "周前",
+		"month":  "月前",
+		"year":   "年前",
+	}
+	return fmt.Sprintf("%d %s", count, zhMap[name])
 }

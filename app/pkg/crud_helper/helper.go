@@ -934,7 +934,7 @@ func assembleStub(name string, data map[string]string, escapeStr bool) string {
 
 // 获取转义编码后的值
 func escape(value string) string {
-	//TODO: 获取转义编码后的值
+	//获取转义编码后的值
 	return value
 }
 

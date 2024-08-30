@@ -44,6 +44,7 @@ require (
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-mail/mail v2.3.1+incompatible // indirect
+	github.com/go-playground/assert/v2 v2.2.0
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-redis/redis/extra/rediscmd v0.2.0 // indirect

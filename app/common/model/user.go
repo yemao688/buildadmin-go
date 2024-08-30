@@ -4,6 +4,7 @@ import (
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
+	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -76,13 +77,16 @@ func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	return data, err
 }
 
-func (s *UserModel) UsernameIsExist(ctx *gin.Context, username string, id int32) (User, error) {
+func (s *UserModel) IsExist(ctx *gin.Context, fieldName string, fieldValue any, id int32) (User, error) {
+	var err error
 	data := User{}
-	err := s.sqlDB.Table(TableNameUser).
-		Omit("password", "salt").
-		Where("username=?", username).
-		Where("id<>?", id).
-		First(&data).Error
+	if slices.Contains([]string{"username", "mobile", "email"}, fieldName) {
+		err = s.sqlDB.Table(TableNameUser).
+			Omit("password", "salt").
+			Where(fieldName+"=?", fieldValue).
+			Where("id<>?", id).
+			First(&data).Error
+	}
 	return data, err
 }
 

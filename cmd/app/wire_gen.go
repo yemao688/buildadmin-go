@@ -15,6 +15,7 @@ import (
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
+	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/router"
@@ -89,7 +90,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper)
 	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, modelUserModel, modelAuthModel)
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel)
-	installHandler := handler2.NewInstallHandler(zapLogger, configuration)
+	terminalTerminal := terminal.NewTerminal(configuration, zapLogger)
+	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, modelAuthModel, clickCaptcha, captchaCaptcha)
 	engine := router.InitRouter(lumberjackLogger, login, userLogin, dataLimit, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler)
 	server := newHttpServer(configuration, engine)

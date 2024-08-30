@@ -59,7 +59,6 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			FailByErr(ctx, cErr.BadRequest("Please login first", 303))
 			return
 		}
-		//TODO:
 	}
 	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
 	if err != nil {

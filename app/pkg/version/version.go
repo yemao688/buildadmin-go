@@ -1,7 +1,9 @@
 package version
 
 import (
+	"go-build-admin/app/pkg/terminal"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -82,14 +84,55 @@ func CheckDigitalVersion(version string) bool {
 	return rule2.MatchString(version) // 直接返回规则2的匹配结果
 }
 
-// TODO:
-func GetCnpmVersion(version string) bool {
+// 获取依赖版本号
+func GetVersion(terminalHelper *terminal.Terminal, name string) string {
+	if name == "cnpm" {
+		execOut, ok := terminalHelper.GetCommandOutput("version.cnpm")
+		if ok && execOut != "" {
+			pattern := regexp.MustCompile(`cnpm@(.+?) \(`)
+			result := pattern.FindStringSubmatch(execOut)
+			if len(result) > 1 {
+				return result[1]
+			}
+		}
+		return ""
+	}
 
-	return false
+	if slices.Contains([]string{"npm", "yarn", "pnpm", "node"}, name) {
+		execOut, ok := terminalHelper.GetCommandOutput("version." + name)
+		if ok && execOut != "" {
+			if strings.Contains(execOut, "npm WARN") {
+				pattern := regexp.MustCompile(`\d+(\.\d+){0,2}`)
+				result := pattern.FindStringSubmatch(execOut)
+				if len(result) > 0 && CheckDigitalVersion(result[0]) {
+					return result[0]
+				}
+			}
+
+			lines := strings.Split(execOut, "\r\n")
+			lines = append(lines, strings.Split(execOut, "\r")...)
+			lines = append(lines, strings.Split(execOut, "\n")...)
+			uniqueLines := unique(lines)
+
+			// 检测两行，第一行可能会是个警告消息
+			for i := 0; i < 2; i++ {
+				if len(uniqueLines) > i && CheckDigitalVersion(uniqueLines[i]) {
+					return uniqueLines[i]
+				}
+			}
+		}
+	}
+	return ""
 }
 
-// 获取依赖版本号TODO:
-func GetVersion(version string) string {
-
-	return ""
+func unique(slice []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range slice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }

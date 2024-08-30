@@ -29,8 +29,10 @@ func TestUnzip(t *testing.T) {
 }
 
 func TestZip(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "app/pkg/filesystem/test")
-	fmt.Println(DelDir(dirPath))
+	files := []string{"app/pkg/filesystem/test/ff.txt"}
+	zipfile := "app/pkg/filesystem/test/ff.zip"
+	err := Zip(files, zipfile, "app/pkg/filesystem/")
+	fmt.Println(err)
 }
 
 func TestMkdir(t *testing.T) {

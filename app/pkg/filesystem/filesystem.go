@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
+	"go-build-admin/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -83,18 +84,18 @@ func DelEmptyDir(dir string) error {
 }
 
 // 检查目录/文件是否可写
-func PathIsWritable(path string) (bool, error) {
+func PathIsWritable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {
-		return false, err
+		return false
 	}
 
 	// 检查文件权限，ModePerm提供所有权限位
 	if info.Mode().Perm()&0200 != 0 {
 		// 0200 对应于用户写权限，如果文件或目录至少对用户可写，则认为是可写的
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 // 解压Zip
@@ -141,46 +142,46 @@ func Unzip(src string, dest string) error {
 	return nil
 }
 
-// 创建ZIP TODO:
-func Zip(files []string, fileName string) error {
-	// zipFile, err := os.Create(fileName)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer zipFile.Close()
+// 创建ZIP
+func Zip(files []string, zipfileName string, erasePre string) error {
+	zipFile, err := os.Create(filepath.Join(utils.RootPath(), zipfileName))
+	if err != nil {
+		return err
+	}
+	defer zipFile.Close()
 
-	// zipWriter := zip.NewWriter(zipFile)
-	// defer zipWriter.Close()
+	zipWriter := zip.NewWriter(zipFile)
+	defer zipWriter.Close()
 
-	// rootPath := utils.RootPath()
-	// for _, filePath := range files {
-	// 	// 处理路径
-	// 	fullFilePath := filepath.Join(rootPath, filePath)
-	// 	// 检查文件是否存在
-	// 	if fileInfo, err := os.Stat(fullFilePath); os.IsNotExist(err) {
-	// 		return fmt.Errorf("文件不存在: %s", fullFilePath)
-	// 	} else if fileInfo.IsDir() {
-	// 		// 目录处理逻辑，此处简化处理，仅作示例
-	// 		return fmt.Errorf("目录暂未处理: %s", fullFilePath)
-	// 	}
+	rootPath := utils.RootPath()
+	for _, filePath := range files {
+		// 处理路径
+		fullFilePath := filepath.Join(rootPath, filePath)
+		// 检查文件是否存在
+		if fileInfo, err := os.Stat(fullFilePath); os.IsNotExist(err) {
+			return fmt.Errorf("文件不存在: %s", fullFilePath)
+		} else if fileInfo.IsDir() {
+			// 目录处理逻辑，此处简化处理，仅作示例
+			return fmt.Errorf("目录暂未处理: %s", fullFilePath)
+		}
 
-	// 	// 添加文件到ZIP
-	// 	zipEntry, err := zipWriter.Create(fullFilePath)
-	// 	if err != nil {
-	// 		return err
-	// 	}
+		// 添加文件到ZIP
+		zipEntry, err := zipWriter.Create(strings.ReplaceAll(filePath, erasePre, ""))
+		if err != nil {
+			return err
+		}
+		fmt.Println(fullFilePath)
+		file, err := os.Open(fullFilePath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
 
-	// 	file, err := os.Open(fullFilePath)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	defer file.Close()
-
-	// 	_, err = io.Copy(zipEntry, file)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+		_, err = io.Copy(zipEntry, file)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
