@@ -21,7 +21,7 @@ type Outer struct {
 }
 
 func TestBase(t *testing.T) {
-	// 创建一个Outer 实例
+	// 创建一个Outer实例
 	outer := Outer{
 		Inner: Inner{Value: 10},
 		Value: "Hello, World!",
