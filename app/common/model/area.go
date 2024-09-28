@@ -1,11 +1,11 @@
 package model
 
 import (
+	"go-build-admin/conf"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameArea = "ba_area"
 
 // BaArea 省份地区表
 type Area struct {
@@ -23,18 +23,14 @@ type Area struct {
 	Lat       string `gorm:"column:lat;comment:纬度" json:"lat"`                             // 纬度
 }
 
-func (*Area) TableName() string {
-	return TableNameArea
-}
-
 type AreaModel struct {
 	BaseModel
 }
 
-func NewAreaModel(sqlDB *gorm.DB) *AreaModel {
+func NewAreaModel(sqlDB *gorm.DB, config *conf.Configuration) *AreaModel {
 	return &AreaModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameArea,
+			TableName:        config.Database.Prefix + "area",
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -62,6 +58,6 @@ func (s *AreaModel) List(ctx *gin.Context) (any, error) {
 		Value int32  `json:"value"`
 		Label string `json:"label"`
 	}{}
-	err := s.sqlDB.Table(s.TableName).Select("id as value,name as label").Where(whereS, pid, level).Scan(&list).Error
+	err := s.sqlDB.Model(&Area{}).Select("id as value,name as label").Where(whereS, pid, level).Scan(&list).Error
 	return list, err
 }

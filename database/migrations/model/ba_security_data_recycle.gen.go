@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaSecurityDataRecycle = "ba_security_data_recycle"
 
-// BaSecurityDataRecycle 回收规则表
-type BaSecurityDataRecycle struct {
+// SecurityDataRecycle 回收规则表
+type SecurityDataRecycle struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                       // 规则名称
 	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`            // 控制器
@@ -19,7 +18,3 @@ type BaSecurityDataRecycle struct {
 	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
-// TableName BaSecurityDataRecycle's table name
-func (*BaSecurityDataRecycle) TableName() string {
-	return TableNameBaSecurityDataRecycle
-}

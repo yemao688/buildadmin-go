@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaSecuritySensitiveDataLog = "ba_security_sensitive_data_log"
 
-// BaSecuritySensitiveDataLog 敏感数据修改记录
-type BaSecuritySensitiveDataLog struct {
+// SecuritySensitiveDataLog 敏感数据修改记录
+type SecuritySensitiveDataLog struct {
 	ID          int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`         // ID
 	AdminID     int32  `gorm:"column:admin_id;not null;comment:操作管理员" json:"admin_id"`               // 操作管理员
 	SensitiveID int32  `gorm:"column:sensitive_id;not null;comment:敏感数据规则ID" json:"sensitive_id"`    // 敏感数据规则ID
@@ -24,7 +23,3 @@ type BaSecuritySensitiveDataLog struct {
 	CreateTime  int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                   // 创建时间
 }
 
-// TableName BaSecuritySensitiveDataLog's table name
-func (*BaSecuritySensitiveDataLog) TableName() string {
-	return TableNameBaSecuritySensitiveDataLog
-}

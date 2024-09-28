@@ -1,11 +1,11 @@
 package model
 
 import (
+	"go-build-admin/conf"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameTestBuild = "ba_test_build"
 
 type TestBuild struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
@@ -26,10 +26,10 @@ type TestBuildModel struct {
 	BaseModel
 }
 
-func NewTestBuildModel(sqlDB *gorm.DB) *TestBuildModel {
+func NewTestBuildModel(sqlDB *gorm.DB, config *conf.Configuration) *TestBuildModel {
 	return &TestBuildModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameTestBuild,
+			TableName:        config.Database.Prefix + "test_build",
 			Key:              "id",
 			QuickSearchField: "id",
 			DataLimit:        "",
@@ -43,7 +43,7 @@ func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, total int64, 
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&TestBuild{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -52,16 +52,16 @@ func (s *TestBuildModel) List(ctx *gin.Context) (list []TestBuild, total int64, 
 }
 
 func (s *TestBuildModel) Add(ctx *gin.Context, data TestBuild) error {
-	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	err := s.sqlDB.Create(&data).Error
 	return err
 }
 
 func (s *TestBuildModel) Edit(ctx *gin.Context, data TestBuild) error {
-	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
+	err := s.sqlDB.Updates(&data).Error
 	return err
 }
 
 func (s *TestBuildModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&TestBuild{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

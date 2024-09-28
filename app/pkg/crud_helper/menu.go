@@ -17,12 +17,12 @@ func GetMenuName(webDir WebDir) string {
 func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComment string) error {
 	menuName := GetMenuName(webViewsDir)
 	adminRule := model.AdminRule{}
-	result := adminRuleM.DB().Table("ba_admin_rule").Where("name=?", menuName).First(&adminRule)
+	result := adminRuleM.DB().Where("name=?", menuName).First(&adminRule)
 	if result.RowsAffected == 0 {
 		var pid int32
 		for _, v := range webViewsDir.Path {
 			parentRule := model.AdminRule{}
-			result = adminRuleM.DB().Table("ba_admin_rule").Where("name=?", v).First(&parentRule)
+			result = adminRuleM.DB().Where("name=?", v).First(&parentRule)
 			if result.RowsAffected == 1 {
 				pid = parentRule.ID
 				continue
@@ -35,7 +35,7 @@ func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComme
 				Name:  v,
 				Path:  v,
 			}
-			if err := adminRuleM.DB().Table("ba_admin_rule").Create(&newRule).Error; err != nil {
+			if err := adminRuleM.DB().Create(&newRule).Error; err != nil {
 				return err
 			}
 			pid = newRule.ID
@@ -59,23 +59,23 @@ func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComme
 			Component: component,
 			Status:    "1",
 		}
-		if err := adminRuleM.DB().Table("ba_admin_rule").Create(&menuRule).Error; err != nil {
+		if err := adminRuleM.DB().Create(&menuRule).Error; err != nil {
 			return err
 		}
 
 		for _, v := range menuChildren {
 			rule := model.AdminRule{}
 			name := menuName + v.Name
-			result = adminRuleM.DB().Table("ba_admin_rule").Where("name=?", name).First(&rule)
+			result = adminRuleM.DB().Where("name=?", name).First(&rule)
 			if result.RowsAffected == 1 {
-				adminRuleM.DB().Table("ba_admin_rule").Where("id=?", rule.ID).Updates(map[string]any{
+				adminRuleM.DB().Model(&model.AdminRule{}).Where("id=?", rule.ID).Updates(map[string]any{
 					"pid":    menuRule.ID,
 					"Type":   v.Type,
 					"Title":  v.Title,
 					"Status": v.Status,
 				})
 			} else {
-				adminRuleM.DB().Table("ba_admin_rule").Create(&model.AdminRule{
+				adminRuleM.DB().Create(&model.AdminRule{
 					Pid:    menuRule.ID,
 					Type:   v.Type,
 					Title:  v.Title,

@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaTestBuild = "ba_test_build"
 
-// BaTestBuild 知识库表
-type BaTestBuild struct {
+// TestBuild 知识库表
+type TestBuild struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Title        string `gorm:"column:title;not null;comment:标题" json:"title"`                       // 标题
 	KeywordRows  string `gorm:"column:keyword_rows;not null;comment:关键词" json:"keyword_rows"`        // 关键词
@@ -22,7 +21,4 @@ type BaTestBuild struct {
 	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
-// TableName BaTestBuild's table name
-func (*BaTestBuild) TableName() string {
-	return TableNameBaTestBuild
-}
+

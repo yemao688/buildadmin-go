@@ -2,13 +2,12 @@ package model
 
 import (
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/conf"
 	"slices"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameUserRule = "ba_user_rule"
 
 // UserRule 会员菜单权限规则表
 type UserRule struct {
@@ -31,18 +30,14 @@ type UserRule struct {
 	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                                                      // 创建时间
 }
 
-func (*UserRule) TableName() string {
-	return TableNameUserRule
-}
-
 type UserRuleModel struct {
 	BaseModel
 }
 
-func NewUserRuleModel(sqlDB *gorm.DB) *UserRuleModel {
+func NewUserRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *UserRuleModel {
 	return &UserRuleModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameUserRule,
+			TableName:        config.Database.Prefix + "user_rule",
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
@@ -52,7 +47,7 @@ func NewUserRuleModel(sqlDB *gorm.DB) *UserRuleModel {
 }
 
 func (s *UserRuleModel) GetOne(ctx *gin.Context, id int32) (userRule UserRule, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&userRule).Error
+	err = s.sqlDB.Where("id=?", id).First(&userRule).Error
 	return
 }
 
@@ -61,7 +56,7 @@ func (s *UserRuleModel) List(ctx *gin.Context) (list []UserRule, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Model(&UserRule{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -73,7 +68,7 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&userRule).Error; err != nil {
+	if err := tx.Create(&userRule).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -84,7 +79,7 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 	parent := UserRule{}
 	if userRule.Pid > 0 {
-		if err := s.sqlDB.Table(s.TableName).Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
+		if err := s.sqlDB.Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
 			return err
 		}
 	}
@@ -97,13 +92,13 @@ func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 	}()
 
 	if parent.Pid == userRule.ID {
-		if err := tx.Table(s.TableName).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
+		if err := tx.Model(&UserRule{}).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
-	if err := tx.Table(s.TableName).Save(&userRule).Error; err != nil {
+	if err := tx.Save(&userRule).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -112,7 +107,7 @@ func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 
 func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 	var subIds []int32
-	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+	if err := s.sqlDB.Model(&UserRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
@@ -122,12 +117,12 @@ func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 		}
 	}
 
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&UserRule{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 
 func (s *UserRuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	pids := []int32{}
-	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
+	err := s.sqlDB.Model(&UserRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }

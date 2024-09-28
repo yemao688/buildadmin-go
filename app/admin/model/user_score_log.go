@@ -1,11 +1,12 @@
 package model
 
 import (
+	"go-build-admin/app/admin/model/simple"
+	"go-build-admin/conf"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameUserScoreLog = "ba_user_score_log"
 
 // UserScoreLog 会员积分变动表
 type UserScoreLog struct {
@@ -16,21 +17,17 @@ type UserScoreLog struct {
 	After      int32      `gorm:"column:after;not null;comment:变更后积分" json:"after"`                  // 变更后积分
 	Memo       string     `gorm:"column:memo;not null;comment:备注" json:"memo"`                       // 备注
 	CreateTime int64      `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-	User       SimpleUser `json:"user"`
-}
-
-func (*UserScoreLog) TableName() string {
-	return TableNameUserScoreLog
+	User       simple.User `json:"user"`
 }
 
 type UserScoreLogModel struct {
 	BaseModel
 }
 
-func NewUserScoreLogModel(sqlDB *gorm.DB) *UserScoreLogModel {
+func NewUserScoreLogModel(sqlDB *gorm.DB, config *conf.Configuration) *UserScoreLogModel {
 	return &UserScoreLogModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameUserScoreLog,
+			TableName:        config.Database.Prefix + "user_score_log",
 			Key:              "id",
 			QuickSearchField: "user.username,user.nickname",
 			DataLimit:        "",
@@ -54,7 +51,7 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 
 func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog UserScoreLog) error {
 	user := User{}
-	if err := s.sqlDB.Table(TableNameUser).Where("id=?", userScoreLog.UserID).Take(&user).Error; err != nil {
+	if err := s.sqlDB.Where("id=?", userScoreLog.UserID).Take(&user).Error; err != nil {
 		return err
 	}
 
@@ -68,13 +65,13 @@ func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog UserScoreLog) err
 		}
 	}()
 
-	if err := tx.Table(TableNameUser).Where("id=?", userScoreLog.UserID).UpdateColumn("score", gorm.Expr("score + ?", userScoreLog.Score)).Error; err != nil {
+	if err := tx.Model(&User{}).Where("id=?", userScoreLog.UserID).UpdateColumn("score", gorm.Expr("score + ?", userScoreLog.Score)).Error; err != nil {
 		tx.Rollback()
 		return err
 
 	}
 
-	if err := tx.Table(s.TableName).Create(&userScoreLog).Error; err != nil {
+	if err := tx.Create(&userScoreLog).Error; err != nil {
 		tx.Rollback()
 		return err
 

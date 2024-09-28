@@ -43,11 +43,11 @@ func (s Install) CreateTable() {
 }
 
 func (s Install) AdminGroupAccess() {
-	table := model.BaAdminGroupAccess{}
+	table := model.AdminGroupAccess{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaAdminGroupAccess{
+		dataList := []*model.AdminGroupAccess{
 			{
 				UID:     1,
 				GroupID: 1,
@@ -58,11 +58,11 @@ func (s Install) AdminGroupAccess() {
 }
 
 func (s Install) AdminGroup() {
-	table := model.BaAdminGroup{}
+	table := model.AdminGroup{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaAdminGroup{
+		dataList := []*model.AdminGroup{
 			{
 				ID:         1,
 				Pid:        0,
@@ -102,18 +102,18 @@ func (s Install) AdminGroup() {
 }
 
 func (s Install) AdminLog() {
-	table := model.BaAdminLog{}
+	table := model.AdminLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) AdminRule() {
-	table := model.BaAdminRule{}
+	table := model.AdminRule{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaAdminRule{
+		dataList := []*model.AdminRule{
 			{
 				ID:         1,
 				Type:       "menu",
@@ -1040,11 +1040,11 @@ func (s Install) AdminRule() {
 }
 
 func (s Install) Admin() {
-	table := model.BaAdmin{}
+	table := model.Admin{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaAdmin{
+		dataList := []*model.Admin{
 			{
 				ID:         1,
 				Username:   "admin",
@@ -1061,32 +1061,32 @@ func (s Install) Admin() {
 }
 
 func (s Install) Area() {
-	table := model.BaArea{}
+	table := model.Area{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) Attachment() {
-	table := model.BaAttachment{}
+	table := model.Attachment{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) Captcha() {
-	table := model.BaCaptcha{}
+	table := model.Captcha{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) Config() {
-	table := model.BaConfig{}
+	table := model.Config{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaConfig{
+		dataList := []*model.Config{
 			{
 				ID:      1,
 				Name:    "config_group",
@@ -1213,32 +1213,32 @@ func (s Install) Config() {
 }
 
 func (s Install) CrudLog() {
-	table := model.BaCrudLog{}
+	table := model.CrudLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) Migration() {
-	table := model.BaMigration{}
+	table := model.Migration{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) SecurityDataRecycleLog() {
-	table := model.BaSecurityDataRecycleLog{}
+	table := model.SecurityDataRecycleLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) SecurityDataRecycle() {
-	table := model.BaSecurityDataRecycle{}
+	table := model.SecurityDataRecycle{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaSecurityDataRecycle{
+		dataList := []*model.SecurityDataRecycle{
 			{
 				ID:           1,
 				Name:         "管理员",
@@ -1305,18 +1305,18 @@ func (s Install) SecurityDataRecycle() {
 }
 
 func (s Install) SecuritySensitiveDataLog() {
-	table := model.BaSecuritySensitiveDataLog{}
+	table := model.SecuritySensitiveDataLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) SecuritySensitiveData() {
-	table := model.BaSecuritySensitiveData{}
+	table := model.SecuritySensitiveData{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaSecuritySensitiveData{
+		dataList := []*model.SecuritySensitiveData{
 			{
 				ID:           1,
 				Name:         "管理员数据",
@@ -1359,25 +1359,25 @@ func (s Install) SecuritySensitiveData() {
 }
 
 func (s Install) TestBuild() {
-	table := model.BaTestBuild{}
+	table := model.TestBuild{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) Token() {
-	table := model.BaToken{}
+	table := model.Token{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) UserGroup() {
-	table := model.BaUserGroup{}
+	table := model.UserGroup{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaUserGroup{
+		dataList := []*model.UserGroup{
 			{
 				ID:         1,
 				Name:       "默认分组",
@@ -1392,18 +1392,18 @@ func (s Install) UserGroup() {
 }
 
 func (s Install) UserMoneyLog() {
-	table := model.BaUserMoneyLog{}
+	table := model.UserMoneyLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) UserRule() {
-	table := model.BaUserRule{}
+	table := model.UserRule{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaUserRule{
+		dataList := []*model.UserRule{
 			{
 				ID:         1,
 				Pid:        0,
@@ -1493,18 +1493,18 @@ func (s Install) UserRule() {
 }
 
 func (s Install) UserScoreLog() {
-	table := model.BaUserScoreLog{}
+	table := model.UserScoreLog{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 	}
 }
 
 func (s Install) User() {
-	table := model.BaUser{}
+	table := model.User{}
 	if !s.sqlDB.Migrator().HasTable(&table) {
 		s.sqlDB.Migrator().CreateTable(&table)
 
-		dataList := []*model.BaUser{
+		dataList := []*model.User{
 			{
 				ID:         1,
 				GroupID:    1,

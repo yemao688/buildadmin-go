@@ -14,8 +14,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const TableNameUser = "ba_user"
-
 // User 会员表
 type User struct {
 	ID            int32     `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
@@ -43,20 +41,6 @@ type User struct {
 	Group         UserGroup `gorm:"foreignKey:GroupID" json:"group"`
 }
 
-func (*User) TableName() string {
-	return TableNameUser
-}
-
-type SimpleUser struct {
-	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	Username string `gorm:"column:username;not null;comment:用户名" json:"username"`
-	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
-}
-
-func (*SimpleUser) TableName() string {
-	return TableNameUser
-}
-
 type OutUser struct {
 	User
 	Birthday string `json:"birthday"`
@@ -71,7 +55,7 @@ type UserModel struct {
 func NewUserModel(sqlDB *gorm.DB, config *conf.Configuration) *UserModel {
 	return &UserModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameUser,
+			TableName:        config.Database.Prefix + "user",
 			Key:              "id",
 			QuickSearchField: "username,nickname",
 			DataLimit:        "",
@@ -97,7 +81,7 @@ func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
 
 func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	data := User{}
-	err := s.sqlDB.Table(s.TableName).Omit("password", "salt").Where("id=?", id).First(&data).Error
+	err := s.sqlDB.Omit("password", "salt").Where("id=?", id).First(&data).Error
 	return data, err
 }
 
@@ -131,7 +115,7 @@ func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 
 func (s *UserModel) Add(ctx *gin.Context, user User) error {
 	//判断是否有重名的账号
-	if err := s.sqlDB.Table(s.TableName).Where("username=?", user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.sqlDB.Where("username=?", user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		return cErr.BadRequest("Account not exist")
 	}
 
@@ -142,7 +126,7 @@ func (s *UserModel) Add(ctx *gin.Context, user User) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("login_failure", "last_login_time", "last_login_ip").Create(&user).Error; err != nil {
+	if err := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(&user).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -152,7 +136,7 @@ func (s *UserModel) Add(ctx *gin.Context, user User) error {
 
 func (s *UserModel) Edit(ctx *gin.Context, user User) error {
 	//判断是否有重名的账号
-	if err := s.sqlDB.Table(s.TableName).Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.sqlDB.Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		return cErr.BadRequest("Account not exist")
 	}
 
@@ -163,7 +147,7 @@ func (s *UserModel) Edit(ctx *gin.Context, user User) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("password", "salt", "login_failure", "last_login_time", "money", "score").Save(&user).Error; err != nil {
+	if err := tx.Omit("password", "salt", "login_failure", "last_login_time", "money", "score").Save(&user).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -174,7 +158,7 @@ func (s *UserModel) Edit(ctx *gin.Context, user User) error {
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
 	salt := random.Build("alnum", 16)
 	password = utils.EncryptPassword(password, salt)
-	err := s.sqlDB.Table(s.TableName).Where("id=?", id).Updates(map[string]interface{}{
+	err := s.sqlDB.Model(&User{}).Where("id=?", id).Updates(map[string]interface{}{
 		"salt":     salt,
 		"password": password,
 	}).Error
@@ -182,6 +166,6 @@ func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) e
 }
 
 func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&User{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

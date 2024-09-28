@@ -6,10 +6,12 @@ import (
 	helper "go-build-admin/app/pkg/crud_helper"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -22,14 +24,16 @@ type CrudHandler struct {
 	tableM     *model.TableModel
 	crudLogM   *model.CrudLogModel
 	adminRuleM *model.AdminRuleModel
+	config     *conf.Configuration
 }
 
-func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *model.AdminRuleModel) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *model.AdminRuleModel, config *conf.Configuration) *CrudHandler {
 	return &CrudHandler{
 		log:        log,
 		tableM:     tableM,
 		crudLogM:   crudLogM,
 		adminRuleM: adminRuleM,
+		config:     config,
 	}
 }
 
@@ -269,20 +273,20 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 	outExcludeTable := []string{
 		// 功能表
-		"ba_area",
-		"ba_token",
-		"ba_captcha",
-		"ba_admin_group_access",
-		"ba_config",
-		"ba_admin_log",
-		"ba_user_money_log",
-		"ba_user_score_log",
+		"area",
+		"token",
+		"captcha",
+		"admin_group_access",
+		"config",
+		"admin_log",
+		"user_money_log",
+		"user_score_log",
 	}
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
 	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, name) {
+		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
 			outTables[name] = comment
 		}
 	}

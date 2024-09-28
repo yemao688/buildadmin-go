@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaUserScoreLog = "ba_user_score_log"
 
-// BaUserScoreLog 会员积分变动表
-type BaUserScoreLog struct {
+// UserScoreLog 会员积分变动表
+type UserScoreLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
 	UserID     int32  `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`          // 会员ID
 	Score      int32  `gorm:"column:score;not null;comment:变更积分" json:"score"`              // 变更积分
@@ -15,9 +14,4 @@ type BaUserScoreLog struct {
 	After      int32  `gorm:"column:after;not null;comment:变更后积分" json:"after"`             // 变更后积分
 	Memo       string `gorm:"column:memo;not null;comment:备注" json:"memo"`                  // 备注
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`           // 创建时间
-}
-
-// TableName BaUserScoreLog's table name
-func (*BaUserScoreLog) TableName() string {
-	return TableNameBaUserScoreLog
 }

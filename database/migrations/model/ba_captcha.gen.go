@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaCaptcha = "ba_captcha"
 
-// BaCaptcha 验证码表
-type BaCaptcha struct {
+// Captcha 验证码表
+type Captcha struct {
 	Key        string `gorm:"column:key;primaryKey;comment:验证码Key" json:"key"`    // 验证码Key
 	Code       string `gorm:"column:code;not null;comment:验证码(加密后)" json:"code"`  // 验证码(加密后)
 	Captcha    string `gorm:"column:captcha;comment:验证码数据" json:"captcha"`        // 验证码数据
@@ -15,7 +14,3 @@ type BaCaptcha struct {
 	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"` // 过期时间
 }
 
-// TableName BaCaptcha's table name
-func (*BaCaptcha) TableName() string {
-	return TableNameBaCaptcha
-}

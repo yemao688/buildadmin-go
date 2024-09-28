@@ -77,7 +77,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var data model.DataRecycle
+	var data model.SecurityDataRecycle
 	copier.Copy(&data, params)
 	err := h.dataRecycleM.Add(ctx, data)
 	if err != nil {
@@ -163,19 +163,19 @@ func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {
 	outExcludeTable := []string{
 		// 功能表
-		"ba_area",
-		"ba_token",
-		"ba_captcha",
-		"ba_admin_group_access",
+		"area",
+		"token",
+		"captcha",
+		"admin_group_access",
 		// 无删除功能
-		"ba_user_money_log",
-		"ba_user_score_log",
+		"user_money_log",
+		"user_score_log",
 	}
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
 	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, name) {
+		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
 			outTables[name] = comment
 		}
 	}

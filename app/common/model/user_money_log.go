@@ -9,8 +9,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const TableNameUserMoneyLog = "ba_user_money_log"
-
 // UserMoneyLog 余额变动表
 type UserMoneyLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
@@ -20,10 +18,6 @@ type UserMoneyLog struct {
 	After      int32  `gorm:"column:after;not null;comment:变更后余额" json:"after"`                  // 变更后余额
 	Memo       string `gorm:"column:memo;not null;comment:备注" json:"memo"`                       // 备注
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-}
-
-func (*UserMoneyLog) TableName() string {
-	return TableNameUserMoneyLog
 }
 
 type UserMoneyLogModel struct {

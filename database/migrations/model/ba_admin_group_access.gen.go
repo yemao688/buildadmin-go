@@ -4,15 +4,9 @@
 
 package model
 
-const TableNameBaAdminGroupAccess = "ba_admin_group_access"
-
-// BaAdminGroupAccess 管理分组映射表
-type BaAdminGroupAccess struct {
+//AdminGroupAccess 管理分组映射表
+type AdminGroupAccess struct {
 	UID     int32 `gorm:"column:uid;not null;comment:管理员ID" json:"uid"`          // 管理员ID
 	GroupID int32 `gorm:"column:group_id;not null;comment:分组ID" json:"group_id"` // 分组ID
 }
 
-// TableName BaAdminGroupAccess's table name
-func (*BaAdminGroupAccess) TableName() string {
-	return TableNameBaAdminGroupAccess
-}

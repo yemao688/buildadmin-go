@@ -3,14 +3,13 @@ package model
 import (
 	"encoding/json"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/conf"
 	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameAdminLog = "ba_admin_log"
 
 type AdminLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                     // ID
@@ -24,18 +23,14 @@ type AdminLog struct {
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;autoCreateTime;comment:创建时间" json:"create_time"` // 创建时间
 }
 
-func (*AdminLog) TableName() string {
-	return TableNameAdminLog
-}
-
 type AdminLogModel struct {
 	BaseModel
 }
 
-func NewAdminLogModel(sqlDB *gorm.DB) *AdminLogModel {
+func NewAdminLogModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminLogModel {
 	return &AdminLogModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameAdminLog,
+			TableName:        config.Database.Prefix + "admin_log",
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
@@ -49,7 +44,7 @@ func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, total int64, er
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&AdminLog{}).Scopes(IsSuperAdmin(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -68,20 +63,20 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 	username := ""
 	if info.Id != 0 {
 		admin := Admin{}
-		s.sqlDB.Table(TableNameAdmin).Where("id=?", info.Id).First(&admin)
+		s.sqlDB.Where("id=?", info.Id).First(&admin)
 		username = admin.Username
 	}
 	title := ctx.GetString("log_title")
 	if title == "" {
 		name := strings.Trim(url, "/")
 		actionRule := AdminRule{}
-		s.sqlDB.Table(TableNameAdminRule).Where("name=?", name).First(&actionRule)
+		s.sqlDB.Where("name=?", name).First(&actionRule)
 
 		slashIndex := strings.LastIndex(name, "/")
 		if slashIndex != -1 {
 			name := name[:slashIndex]
 			handerRule := AdminRule{}
-			s.sqlDB.Table(TableNameAdminRule).Where("name=?", name).First(&handerRule)
+			s.sqlDB.Where("name=?", name).First(&handerRule)
 			title = handerRule.Name + "-" + actionRule.Name
 		}
 	}
@@ -104,10 +99,10 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 		IP:        ctx.ClientIP(),
 		Useragent: ctx.Request.UserAgent(),
 	}
-	s.sqlDB.Table(s.TableName).Create(&adminLog)
+	s.sqlDB.Create(&adminLog)
 }
 
 func (s *AdminLogModel) Del(ctx *gin.Context, id interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Where(" id=? ", id).Delete(nil).Error
+	err := s.sqlDB.Model(&AdminLog{}).Where(" id=? ", id).Delete(nil).Error
 	return err
 }

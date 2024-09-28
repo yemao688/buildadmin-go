@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-const TableNameBaMigration = "ba_migrations"
 
-// BaMigration mapped from table <ba_migrations>
-type BaMigration struct {
+// Migration mapped from table <migrations>
+type Migration struct {
 	Version       int64     `gorm:"column:version;primaryKey" json:"version"`
 	MigrationName string    `gorm:"column:migration_name" json:"migration_name"`
 	StartTime     time.Time `gorm:"column:start_time" json:"start_time"`
@@ -19,7 +18,3 @@ type BaMigration struct {
 	Breakpoint    bool      `gorm:"column:breakpoint;not null" json:"breakpoint"`
 }
 
-// TableName BaMigration's table name
-func (*BaMigration) TableName() string {
-	return TableNameBaMigration
-}

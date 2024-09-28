@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaAdminRule = "ba_admin_rule"
 
-// BaAdminRule 菜单和权限规则表
-type BaAdminRule struct {
+// AdminRule 菜单和权限规则表
+type AdminRule struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                     // ID
 	Pid        int32  `gorm:"column:pid;not null;comment:上级菜单" json:"pid"`                                                                      // 上级菜单
 	Type       string `gorm:"column:type;not null;default:menu;comment:类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮" json:"type"`                      // 类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮
@@ -27,7 +26,3 @@ type BaAdminRule struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                               // 创建时间
 }
 
-// TableName BaAdminRule's table name
-func (*BaAdminRule) TableName() string {
-	return TableNameBaAdminRule
-}

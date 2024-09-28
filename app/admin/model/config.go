@@ -3,14 +3,13 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+	"go-build-admin/conf"
 	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameConfig = "ba_config"
 
 type Config struct {
 	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`    // ID
@@ -25,10 +24,6 @@ type Config struct {
 	Extend   string `gorm:"column:extend;not null;comment:扩展属性" json:"extend"`               // 扩展属性
 	AllowDel int32  `gorm:"column:allow_del;not null;comment:允许删除:0=否,1=是" json:"allow_del"` // 允许删除:0=否,1=是
 	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
-}
-
-func (*Config) TableName() string {
-	return TableNameConfig
 }
 
 var jsonDecodeType = []string{"checkbox", "array", "selects"}
@@ -128,10 +123,10 @@ type ConfigModel struct {
 	BaseModel
 }
 
-func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
+func NewConfigModel(sqlDB *gorm.DB, config *conf.Configuration) *ConfigModel {
 	return &ConfigModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameConfig,
+			TableName:        config.Database.Prefix + "config",
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -141,41 +136,41 @@ func NewConfigModel(sqlDB *gorm.DB) *ConfigModel {
 }
 
 func (s *ConfigModel) List(ctx *gin.Context) (list []Config, err error) {
-	err = s.sqlDB.Table(s.TableName).Order("`weigh` desc").Find(&list).Error
+	err = s.sqlDB.Model(&Config{}).Order("`weigh` desc").Find(&list).Error
 	return
 }
 
 func (s *ConfigModel) Add(ctx *gin.Context, data Config) error {
-	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+	err := s.sqlDB.Create(&data).Error
 	return err
 }
 
 func (s *ConfigModel) Edit(ctx *gin.Context, data Config) error {
-	err := s.sqlDB.Table(s.TableName).Save(&data).Error
+	err := s.sqlDB.Save(&data).Error
 	return err
 }
 
 func (s *ConfigModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Where("`id` in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&Config{}).Where("`id` in ? ", ids).Delete(nil).Error
 	return err
 }
 
 func (s *ConfigModel) GetOneByName(ctx *gin.Context, name string) (Config, error) {
 	var config Config
-	err := s.sqlDB.Table(s.TableName).Where("`name`= ? ", name).Take(&config).Error
+	err := s.sqlDB.Where("`name`= ? ", name).Take(&config).Error
 	return config, err
 }
 
 func (s *ConfigModel) GetValueByName(ctx *gin.Context, name string) (string, error) {
 	var config Config
-	err := s.sqlDB.Table(s.TableName).Where("`name`= ? ", name).Take(&config).Error
+	err := s.sqlDB.Where("`name`= ? ", name).Take(&config).Error
 	return config.Value, err
 }
 
 // 获取键值对模式
 func (s *ConfigModel) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
 	var configList []*Config
-	err := s.sqlDB.Table(s.TableName).Where("`group`=?", group).Find(&configList).Error
+	err := s.sqlDB.Where("`group`=?", group).Find(&configList).Error
 	if err != nil {
 		return nil, err
 	}

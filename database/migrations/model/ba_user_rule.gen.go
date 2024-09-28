@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaUserRule = "ba_user_rule"
 
-// BaUserRule 会员菜单权限规则表
-type BaUserRule struct {
+// UserRule 会员菜单权限规则表
+type UserRule struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                                           // ID
 	Pid          int32  `gorm:"column:pid;not null;comment:上级菜单" json:"pid"`                                                                                            // 上级菜单
 	Type         string `gorm:"column:type;not null;default:menu;comment:类型:route=路由,menu_dir=菜单目录,menu=菜单项,nav_user_menu=顶栏会员菜单下拉项,nav=顶栏菜单项,button=页面按钮" json:"type"` // 类型:route=路由,menu_dir=菜单目录,menu=菜单项,nav_user_menu=顶栏会员菜单下拉项,nav=顶栏菜单项,button=页面按钮
@@ -27,7 +26,4 @@ type BaUserRule struct {
 	CreateTime   int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                                                     // 创建时间
 }
 
-// TableName BaUserRule's table name
-func (*BaUserRule) TableName() string {
-	return TableNameBaUserRule
-}
+

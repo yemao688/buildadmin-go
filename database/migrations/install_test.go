@@ -37,7 +37,7 @@ func TestParseWebDirNameData(t *testing.T) {
 
 func TestAddColumn(t *testing.T) {
 	db := getDB()
-	admin := model.BaAdmin{}
+	admin := model.Admin{}
 
 	err := db.Migrator().RenameColumn(&admin, "salt", "test")
 	fmt.Println(err)

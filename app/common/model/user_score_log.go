@@ -8,8 +8,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const TableNameUserScoreLog = "ba_user_score_log"
-
 // UserScoreLog 会员积分变动表
 type UserScoreLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
@@ -19,10 +17,6 @@ type UserScoreLog struct {
 	After      int32  `gorm:"column:after;not null;comment:变更后积分" json:"after"`                  // 变更后积分
 	Memo       string `gorm:"column:memo;not null;comment:备注" json:"memo"`                       // 备注
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-}
-
-func (*UserScoreLog) TableName() string {
-	return TableNameUserScoreLog
 }
 
 type UserScoreLogModel struct {

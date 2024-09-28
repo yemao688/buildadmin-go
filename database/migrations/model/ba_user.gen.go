@@ -8,10 +8,8 @@ import (
 	"time"
 )
 
-const TableNameBaUser = "ba_user"
-
-// BaUser 会员表
-type BaUser struct {
+// User 会员表
+type User struct {
 	ID            int32     `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
 	GroupID       int32     `gorm:"column:group_id;not null;comment:分组ID" json:"group_id"`             // 分组ID
 	Username      string    `gorm:"column:username;not null;comment:用户名" json:"username"`              // 用户名
@@ -36,7 +34,4 @@ type BaUser struct {
 	CreateTime    int64     `gorm:"column:create_time;comment:创建时间" json:"create_time"`                // 创建时间
 }
 
-// TableName BaUser's table name
-func (*BaUser) TableName() string {
-	return TableNameBaUser
-}
+

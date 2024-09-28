@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaToken = "ba_token"
 
-// BaToken 用户Token表
-type BaToken struct {
+// Token 用户Token表
+type Token struct {
 	Token      string `gorm:"column:token;primaryKey;comment:Token" json:"token"`  // Token
 	Type       string `gorm:"column:type;not null;comment:类型" json:"type"`         // 类型
 	UserID     int32  `gorm:"column:user_id;not null;comment:用户ID" json:"user_id"` // 用户ID
@@ -15,7 +14,4 @@ type BaToken struct {
 	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"`  // 过期时间
 }
 
-// TableName BaToken's table name
-func (*BaToken) TableName() string {
-	return TableNameBaToken
-}
+

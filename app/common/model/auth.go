@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"go-build-admin/app/admin/model"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/random"
@@ -88,7 +89,7 @@ func (s *AuthModel) DelVerificationToken(token string) {
 
 func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (User, error) {
 	user := User{}
-	err := s.sqlDB.Table(TableNameUser).Where("id=?", id).Scan(&user).Error
+	err := s.sqlDB.Model(&User{}).Where("id=?", id).Scan(&user).Error
 	return user, err
 }
 
@@ -114,7 +115,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	user := User{}
-	err := s.sqlDB.Table(TableNameUser).Where(accountType+"=?", username).Scan(&user).Error
+	err := s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user).Error
 	if err != nil {
 		return nil, cErr.BadRequest("Account not exist")
 	}
@@ -129,7 +130,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	if user.Password != utils.EncryptPassword(password, user.Salt) {
-		s.sqlDB.Table(TableNameUser).Where("id=?", user.ID).Updates(map[string]interface{}{
+		s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 			"login_failure":   user.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),
 			"last_login_ip":   ctx.ClientIP(),
@@ -152,7 +153,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, err
 	}
 
-	err = s.sqlDB.Table(TableNameUser).Where("id=?", user.ID).Updates(map[string]interface{}{
+	err = s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": time.Now().Unix(),
 		"last_login_ip":   ctx.ClientIP(),
@@ -165,6 +166,11 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 }
 
 func (s *AuthModel) FilterData(user User) map[string]any {
+
+	birthday := ""
+	if user.Birthday.Unix() > 100 {
+		birthday = user.Birthday.Format("2006-01-02")
+	}
 	return map[string]any{
 		"id":              user.ID,
 		"username":        user.Username,
@@ -173,7 +179,7 @@ func (s *AuthModel) FilterData(user User) map[string]any {
 		"mobile":          user.Mobile,
 		"avatar":          user.Avatar,
 		"gender":          user.Gender,
-		"birthday":        user.Birthday,
+		"birthday":        birthday,
 		"money":           fmt.Sprintf("%.2f", float64(user.Money/100)),
 		"score":           user.Score,
 		"join_time":       user.JoinTime,
@@ -186,21 +192,21 @@ func (s *AuthModel) FilterData(user User) map[string]any {
 func (s *AuthModel) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
 	existUser := User{}
 	if username != "" {
-		err := s.sqlDB.Table(TableNameUser).Where("username=?", username).Scan(&existUser).Error
+		err := s.sqlDB.Model(&User{}).Where("username=?", username).Scan(&existUser).Error
 		if err != nil {
 			return nil, cErr.BadRequest("Username is exist!")
 		}
 	}
 
 	if email != "" {
-		err := s.sqlDB.Table(TableNameUser).Where("email=?", email).Scan(&existUser).Error
+		err := s.sqlDB.Model(&User{}).Where("email=?", email).Scan(&existUser).Error
 		if err != nil {
 			return nil, cErr.BadRequest("Email is exist!")
 		}
 	}
 
 	if mobile != "" {
-		err := s.sqlDB.Table(TableNameUser).Where("mobile=?", mobile).Scan(&existUser).Error
+		err := s.sqlDB.Model(&User{}).Where("mobile=?", mobile).Scan(&existUser).Error
 		if err != nil {
 			return nil, cErr.BadRequest("Mobile is exist!")
 		}
@@ -229,7 +235,7 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 		Status:        "enable",
 	}
 
-	if err := s.sqlDB.Table(TableNameUser).Create(&user).Error; err != nil {
+	if err := s.sqlDB.Create(&user).Error; err != nil {
 		return nil, err
 	}
 
@@ -335,7 +341,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 		return []string{}, nil
 	}
 
-	tx := s.sqlDB.Table("ba_user_rule").Where("status=?", "1")
+	tx := s.sqlDB.Model(&model.UserRule{}).Where("status=?", "1")
 	if !slices.Contains(ids, "*") {
 		tx.Where("id in ?", ids)
 	}
@@ -390,10 +396,11 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 		return val, nil
 	}
 
+	prefix := s.config.Database.Prefix
 	var authGroups []AuthGroup
-	err := s.sqlDB.Table(TableNameUser).
-		Joins("left join ba_user_group on ba_user_group.id=ba_user.group_id").
-		Where("ba_user.id=? and ba_user_group.status='1'", uid).
+	err := s.sqlDB.Table(prefix+"user").
+		Joins("left join "+prefix+"user_group on "+prefix+"user_group.id="+prefix+"user.group_id").
+		Where(prefix+"user.id=? and "+prefix+"user_group.status='1'", uid).
 		Scan(&authGroups).Error
 
 	AuthGroupList[uid] = authGroups

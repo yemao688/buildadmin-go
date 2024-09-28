@@ -1,14 +1,14 @@
 package model
 
 import (
+	"go-build-admin/conf"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-const TableNameSecurityDataRecycle = "ba_security_data_recycle"
-
-// DataRecycle 回收规则表
-type DataRecycle struct {
+// SecurityDataRecycle 回收规则表
+type SecurityDataRecycle struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                       // 规则名称
 	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`            // 控制器
@@ -20,18 +20,14 @@ type DataRecycle struct {
 	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
-func (*DataRecycle) TableName() string {
-	return TableNameSecurityDataRecycle
-}
-
 type DataRecycleModel struct {
 	BaseModel
 }
 
-func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
+func NewDataRecycleModel(sqlDB *gorm.DB, config *conf.Configuration) *DataRecycleModel {
 	return &DataRecycleModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameSecurityDataRecycle,
+			TableName:        config.Database.Prefix + "security_data_recycle",
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -40,17 +36,17 @@ func NewDataRecycleModel(sqlDB *gorm.DB) *DataRecycleModel {
 	}
 }
 
-func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data DataRecycle, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&data).Error
+func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data SecurityDataRecycle, err error) {
+	err = s.sqlDB.Where("id=?", id).First(&data).Error
 	return
 }
 
-func (s *DataRecycleModel) List(ctx *gin.Context) (list []DataRecycle, total int64, err error) {
+func (s *DataRecycleModel) List(ctx *gin.Context) (list []SecurityDataRecycle, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&SecurityDataRecycle{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -58,17 +54,17 @@ func (s *DataRecycleModel) List(ctx *gin.Context) (list []DataRecycle, total int
 	return
 }
 
-func (s *DataRecycleModel) Add(ctx *gin.Context, data DataRecycle) error {
-	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error {
+	err := s.sqlDB.Create(&data).Error
 	return err
 }
 
-func (s *DataRecycleModel) Edit(ctx *gin.Context, data DataRecycle) error {
-	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
+func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) error {
+	err := s.sqlDB.Updates(&data).Error
 	return err
 }
 
 func (s *DataRecycleModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&SecurityDataRecycle{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

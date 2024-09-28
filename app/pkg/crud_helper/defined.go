@@ -375,10 +375,10 @@ type {{.ClassName}}Model struct {
 	BaseModel
 }
 
-func New{{.ClassName}}Model(sqlDB *gorm.DB) *{{.ClassName}}Model {
+func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
 		BaseModel: BaseModel{
-			TableName:        TableName{{.ClassName}},
+			TableName:        config.Database.Prefix + "{{.ModelVar}}",
 			Key:              "{{.Pk}}",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -388,7 +388,7 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB) *{{.ClassName}}Model {
 }
 
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&{{.ModelVar}}).Error
+	err = s.sqlDB.Where("id=?", id).First(&{{.ModelVar}}).Error
 	return
 }
 
@@ -397,7 +397,7 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&{{.ClassName}}{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -413,7 +413,7 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+	if err := tx.Create(&{{.ModelVar}}).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -429,7 +429,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Save(&{{.ModelVar}}).Error; err != nil {
+	if err := tx.Save(&{{.ModelVar}}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -437,7 +437,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 }
 
 func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&{{.ClassName}}{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 `
@@ -447,8 +447,6 @@ const StructTmpl = `import (
 	"gorm.io/gorm"
 	{{range .ImportPkgPaths}}{{.}} ` + "\n" + `{{end}}
 )
-
-{{if .TableName -}}const TableName{{.ModelStructName}} = "{{.TableName}}"{{- end}}
 
 // {{.ModelStructName}} {{.StructComment}}
 type {{.ModelStructName}} struct {

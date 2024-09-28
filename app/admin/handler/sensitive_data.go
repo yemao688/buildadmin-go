@@ -83,7 +83,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var sensitiveData model.SensitiveData
+	var sensitiveData model.SecuritySensitiveData
 	copier.Copy(&sensitiveData, params)
 
 	dateField := map[string]string{}
@@ -110,7 +110,7 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 	}
 
 	type Result struct {
-		model.SensitiveData
+		model.SecuritySensitiveData
 		DataFields map[string]string `json:"data_fields"`
 	}
 
@@ -212,21 +212,21 @@ func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
 func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string {
 	outExcludeTable := []string{
 		// 功能表
-		"ba_area",
-		"ba_token",
-		"ba_captcha",
-		"ba_admin_group_access",
-		"ba_config",
+		"area",
+		"token",
+		"captcha",
+		"admin_group_access",
+		"config",
 		// 无删除功能
-		"ba_admin_log",
-		"ba_user_money_log",
-		"ba_user_score_log",
+		"admin_log",
+		"user_money_log",
+		"user_score_log",
 	}
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
 	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, name) {
+		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
 			outTables[name] = comment
 		}
 	}

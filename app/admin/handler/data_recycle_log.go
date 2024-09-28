@@ -54,7 +54,7 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	}
 
 	type Result struct {
-		model.DataRecycleLog
+		model.SecurityDataRecycleLog
 		Data map[string]any `json:"data"`
 	}
 

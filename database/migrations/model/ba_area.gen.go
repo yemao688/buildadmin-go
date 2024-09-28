@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaArea = "ba_area"
 
-// BaArea 省份地区表
-type BaArea struct {
+// Area 省份地区表
+type Area struct {
 	ID        int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
 	Pid       int32  `gorm:"column:pid;comment:父id" json:"pid"`                            // 父id
 	Shortname string `gorm:"column:shortname;comment:简称" json:"shortname"`                 // 简称
@@ -22,7 +21,3 @@ type BaArea struct {
 	Lat       string `gorm:"column:lat;comment:纬度" json:"lat"`                             // 纬度
 }
 
-// TableName BaArea's table name
-func (*BaArea) TableName() string {
-	return TableNameBaArea
-}

@@ -4,10 +4,8 @@
 
 package model
 
-const TableNameBaAdminLog = "ba_admin_log"
-
-// BaAdminLog 管理员日志表
-type BaAdminLog struct {
+// AdminLog 管理员日志表
+type AdminLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`  // ID
 	AdminID    int32  `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`        // 管理员ID
 	Username   string `gorm:"column:username;not null;comment:管理员用户名" json:"username"`       // 管理员用户名
@@ -17,9 +15,4 @@ type BaAdminLog struct {
 	IP         string `gorm:"column:ip;not null;comment:IP" json:"ip"`                       // IP
 	Useragent  string `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"` // User-Agent
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`            // 创建时间
-}
-
-// TableName BaAdminLog's table name
-func (*BaAdminLog) TableName() string {
-	return TableNameBaAdminLog
 }

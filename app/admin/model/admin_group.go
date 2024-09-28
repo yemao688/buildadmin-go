@@ -3,13 +3,12 @@ package model
 import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/conf"
 	"slices"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameAdminGroup = "ba_admin_group"
 
 type AdminGroup struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
@@ -21,18 +20,14 @@ type AdminGroup struct {
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
-func (*AdminGroup) TableName() string {
-	return TableNameAdminGroup
-}
-
 type AdminGroupModel struct {
 	BaseModel
 }
 
-func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
+func NewAdminGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminGroupModel {
 	return &AdminGroupModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameAdminGroup,
+			TableName:        config.Database.Prefix + "admin_group",
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -42,7 +37,7 @@ func NewAdminGroupModel(sqlDB *gorm.DB) *AdminGroupModel {
 }
 
 func (s *AdminGroupModel) GetOne(ctx *gin.Context, id int32) (adminGroup AdminGroup, err error) {
-	err = s.sqlDB.Table(s.TableName).Omit("update_time", "create_time").Where("id=?", id).Take(&adminGroup).Error
+	err = s.sqlDB.Omit("update_time").Where("id=?", id).Take(&adminGroup).Error
 	return
 }
 
@@ -54,7 +49,7 @@ func (s *AdminGroupModel) Add(ctx *gin.Context, adminGroup AdminGroup) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&adminGroup).Error; err != nil {
+	if err := tx.Create(&adminGroup).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -70,7 +65,7 @@ func (s *AdminGroupModel) Edit(ctx *gin.Context, adminGroup AdminGroup) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Save(&adminGroup).Error; err != nil {
+	if err := tx.Save(&adminGroup).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -79,7 +74,7 @@ func (s *AdminGroupModel) Edit(ctx *gin.Context, adminGroup AdminGroup) error {
 
 func (s *AdminGroupModel) Del(ctx *gin.Context, ids []int32) error {
 	var subIds []int32
-	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+	if err := s.sqlDB.Model(&AdminGroup{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
@@ -91,10 +86,10 @@ func (s *AdminGroupModel) Del(ctx *gin.Context, ids []int32) error {
 
 	adminAuth := header.GetAdminAuth(ctx)
 	groupIds := []int32{}
-	if err := s.sqlDB.Table(TableNameAdminGroupAccess).Where("uid=?", adminAuth.Id).Pluck("group_id", &groupIds).Error; err != nil {
+	if err := s.sqlDB.Model(&AdminGroupAccess{}).Where("uid=?", adminAuth.Id).Pluck("group_id", &groupIds).Error; err != nil {
 		return err
 	}
-	err := s.sqlDB.Table(s.TableName).Where(" id in ? AND id not in ?  ", ids, groupIds).Delete(nil).Error
+	err := s.sqlDB.Model(&AdminGroup{}).Where(" id in ? AND id not in ?  ", ids, groupIds).Delete(nil).Error
 	return err
 
 }

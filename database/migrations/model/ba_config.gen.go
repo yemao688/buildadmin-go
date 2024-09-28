@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaConfig = "ba_config"
 
-// BaConfig 系统配置
-type BaConfig struct {
+// Config 系统配置
+type Config struct {
 	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`    // ID
 	Name     string `gorm:"column:name;not null;comment:变量名" json:"name"`                    // 变量名
 	Group    string `gorm:"column:group;not null;comment:分组" json:"group"`                   // 分组
@@ -22,7 +21,4 @@ type BaConfig struct {
 	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
 }
 
-// TableName BaConfig's table name
-func (*BaConfig) TableName() string {
-	return TableNameBaConfig
-}
+

@@ -17,6 +17,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
@@ -83,10 +84,10 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		dbConfig.Charset,
 	)
 	if db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		//NamingStrategy: schema.NamingStrategy{
-		//SingularTable: true,
-		//TablePrefix: "tbl_", // 表前缀
-		//},
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true,
+			TablePrefix:   dbConfig.Prefix, // 表前缀
+		},
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger
 	}); err != nil {

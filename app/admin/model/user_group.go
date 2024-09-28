@@ -1,11 +1,11 @@
 package model
 
 import (
+	"go-build-admin/conf"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameUserGroup = "ba_user_group"
 
 // UserGroup 会员组表
 type UserGroup struct {
@@ -17,18 +17,14 @@ type UserGroup struct {
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
-func (*UserGroup) TableName() string {
-	return TableNameUserGroup
-}
-
 type UserGroupModel struct {
 	BaseModel
 }
 
-func NewUserGroupModel(sqlDB *gorm.DB) *UserGroupModel {
+func NewUserGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *UserGroupModel {
 	return &UserGroupModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameUserGroup,
+			TableName:        config.Database.Prefix + "user_group",
 			Key:              "id",
 			QuickSearchField: "name",
 			DataLimit:        "",
@@ -38,7 +34,7 @@ func NewUserGroupModel(sqlDB *gorm.DB) *UserGroupModel {
 }
 
 func (s *UserGroupModel) GetOne(ctx *gin.Context, id int32) (userGroup UserGroup, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&userGroup).Error
+	err = s.sqlDB.Where("id=?", id).First(&userGroup).Error
 	return
 }
 
@@ -47,7 +43,7 @@ func (s *UserGroupModel) List(ctx *gin.Context) (list []UserGroup, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Table(s.TableName).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.sqlDB.Model(&UserGroup{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -59,7 +55,7 @@ func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&userGroup).Error; err != nil {
+	if err := tx.Create(&userGroup).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -75,7 +71,7 @@ func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Save(&userGroup).Error; err != nil {
+	if err := tx.Save(&userGroup).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -83,6 +79,6 @@ func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
 }
 
 func (s *UserGroupModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&UserGroup{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

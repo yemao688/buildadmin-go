@@ -192,12 +192,12 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	}
 
 	attach := Attachment{}
-	if err := s.sqlDB.Table(TableNameAttachment).Where("sha1=? and topic=? and storage=?", sha1String, s.topic, "local").Take(&attach).Error; err == nil {
+	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, s.topic, "local").Take(&attach).Error; err == nil {
 		//判断文件是否存在
 		if attach.Storage == "local" && !utils.PathExists(utils.RootPath()+attach.URL) {
-			s.sqlDB.Table(TableNameAttachment).Where("id=?", attach.ID).Delete(nil)
+			s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Delete(nil)
 		} else {
-			s.sqlDB.Table(TableNameAttachment).Where("id=?", attach.ID).Updates(map[string]any{
+			s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
 				"quote":            attach.Quote + 1,
 				"last_upload_time": time.Now().Unix(),
 			})
@@ -222,7 +222,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 		Quote:          1,
 		LastUploadTime: time.Now().Unix(),
 	}
-	if err := s.sqlDB.Table(TableNameAttachment).Create(&attachment).Error; err != nil {
+	if err := s.sqlDB.Create(&attachment).Error; err != nil {
 		return nil, err
 	}
 	attachment.Suffix = s.getSuffix()

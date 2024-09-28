@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaUserMoneyLog = "ba_user_money_log"
 
-// BaUserMoneyLog 会员余额变动表
-type BaUserMoneyLog struct {
+// UserMoneyLog 会员余额变动表
+type UserMoneyLog struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
 	UserID     int32  `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`          // 会员ID
 	Money      int32  `gorm:"column:money;not null;comment:变更余额" json:"money"`              // 变更余额
@@ -17,7 +16,4 @@ type BaUserMoneyLog struct {
 	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`           // 创建时间
 }
 
-// TableName BaUserMoneyLog's table name
-func (*BaUserMoneyLog) TableName() string {
-	return TableNameBaUserMoneyLog
-}
+

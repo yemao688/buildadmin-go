@@ -73,7 +73,7 @@ func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 
 func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (Admin, error) {
 	admin := Admin{}
-	err := s.sqlDB.Table(TableNameAdmin).Where("id=?", id).Scan(&admin).Error
+	err := s.sqlDB.Model(&Admin{}).Where("id=?", id).Scan(&admin).Error
 	return admin, err
 }
 
@@ -90,7 +90,7 @@ func (s *AuthModel) IsSuperAdmin(id int32) bool {
 
 func (s *AuthModel) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
 	admin := Admin{}
-	err := s.sqlDB.Table(TableNameAdmin).Where("username=?", username).Scan(&admin).Error
+	err := s.sqlDB.Model(&Admin{}).Where("username=?", username).Scan(&admin).Error
 	if err != nil {
 		return nil, cErr.BadRequest("Incorrect user name or password!")
 	}
@@ -105,7 +105,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	if admin.Password != utils.EncryptPassword(password, admin.Salt) {
-		s.sqlDB.Table(TableNameAdmin).Where("id=?", admin.ID).Updates(map[string]interface{}{
+		s.sqlDB.Model(&Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
 			"login_failure":   admin.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),
 			"last_login_ip":   ctx.ClientIP(),
@@ -128,7 +128,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, err
 	}
 
-	err = s.sqlDB.Table(TableNameAdmin).Where("id=?", admin.ID).Updates(map[string]interface{}{
+	err = s.sqlDB.Model(&Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": time.Now().Unix(),
 		"last_login_ip":   ctx.ClientIP(),
@@ -236,7 +236,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 		return []string{}, nil
 	}
 
-	tx := s.sqlDB.Table("ba_admin_rule").Where("status=?", "1")
+	tx := s.sqlDB.Model(&AdminRule{}).Where("status=?", "1")
 	if !slices.Contains(ids, "*") {
 		tx.Where("id in ?", ids)
 	}
@@ -290,11 +290,11 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 	if val, ok := AuthGroupList[uid]; ok {
 		return val, nil
 	}
-
+	prefix := s.config.Database.Prefix
 	var authGroups []AuthGroup
-	err := s.sqlDB.Table(TableNameAdminGroupAccess).
-		Joins("left join ba_admin_group on ba_admin_group.id=ba_admin_group_access.group_id").
-		Where("ba_admin_group_access.uid=? and ba_admin_group.status='1'", uid).
+	err := s.sqlDB.Table(prefix+"admin_group_access").
+		Joins("left join "+prefix+"admin_group on "+prefix+"admin_group.id="+prefix+"admin_group_access.group_id").
+		Where(prefix+"admin_group_access.uid=? and "+prefix+"admin_group.status='1'", uid).
 		Scan(&authGroups).Error
 
 	AuthGroupList[uid] = authGroups
@@ -304,7 +304,7 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 // 获取管理员所在分组的所有子级分组
 func (s *AuthModel) GetAdminChildGroups(id int32) []int32 {
 	accessList := []AdminGroupAccess{}
-	s.sqlDB.Table(TableNameAdminGroupAccess).Where("id=?", id).Find(&accessList)
+	s.sqlDB.Model(&AdminGroupAccess{}).Where("id=?", id).Find(&accessList)
 	children := []int32{}
 	for _, v := range accessList {
 		children = append(children, s.GetGroupChildGroups(v.GroupID)...)
@@ -315,7 +315,7 @@ func (s *AuthModel) GetAdminChildGroups(id int32) []int32 {
 // 获取一个分组下的子分组
 func (s *AuthModel) GetGroupChildGroups(groupId int32) []int32 {
 	adminGroups := []AdminGroup{}
-	s.sqlDB.Table(TableNameAdminGroup).Where("pid=? and status=?", groupId, 1).Find(&adminGroups)
+	s.sqlDB.Model(&AdminGroup{}).Where("pid=? and status=?", groupId, 1).Find(&adminGroups)
 	children := []int32{}
 	for _, v := range adminGroups {
 		children = append(children, v.ID)
@@ -328,7 +328,7 @@ func (s *AuthModel) GetGroupChildGroups(groupId int32) []int32 {
 // 获取分组内的管理员
 func (s *AuthModel) GetGroupAdmins(ids interface{}) []int32 {
 	adminIds := []int32{}
-	s.sqlDB.Table(TableNameAdminGroupAccess).Where("group_id in ?", ids).Pluck("uid", &adminIds)
+	s.sqlDB.Model(&AdminGroupAccess{}).Where("group_id in ?", ids).Pluck("uid", &adminIds)
 	return adminIds
 }
 
@@ -341,7 +341,7 @@ func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, erro
 
 	allAuthGroups := []string{}
 	groups := []AdminGroup{}
-	s.sqlDB.Table(TableNameAdminGroup).Where("status=1").Find(&groups)
+	s.sqlDB.Model(&AdminGroup{}).Where("status=1").Find(&groups)
 	for _, v := range groups {
 		if v.Rules == "*" {
 			continue
@@ -367,6 +367,6 @@ func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, erro
 // 获取管理员的所在分组id
 func (s *AuthModel) GetGroupIds(id int32) []int32 {
 	groupIds := []int32{}
-	s.sqlDB.Table(TableNameAdminGroupAccess).Where("uid=?", id).Pluck("group_id", &groupIds)
+	s.sqlDB.Model(&AdminGroupAccess{}).Where("uid=?", id).Pluck("group_id", &groupIds)
 	return groupIds
 }

@@ -39,10 +39,6 @@ func main() {
 	onlyModel := true
 	// tables := []string{
 	// 	"ba_admin",
-	// 	"ba_admin_group",
-	// 	"ba_admin_group_access",
-	// 	"ba_admin_log",
-	// 	"ba_test_build",
 	// }
 	tables := []string{}
 	models, err := genModels(g, db, tables)

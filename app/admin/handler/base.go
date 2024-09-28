@@ -125,7 +125,7 @@ func (h *Base) GetRemark(ctx *gin.Context) string {
 	slashIndex := strings.LastIndex(name, "/")
 
 	nameArr := []string{name[:slashIndex], name[slashIndex+1:]}
-	err := h.currentM.DB().Table(model.TableNameAdminRule).Where("name in ?", nameArr).Take(&rule).Error
+	err := h.currentM.DB().Model(&model.AdminRule{}).Where("name in ?", nameArr).Take(&rule).Error
 	if err != nil {
 		return ""
 	}

@@ -2,16 +2,15 @@ package model
 
 import (
 	"encoding/json"
+	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
 )
 
-const TableNameSecuritySensitiveData = "ba_security_sensitive_data"
-
 // SensitiveDatum 敏感数据规则表
-type SensitiveData struct {
+type SecuritySensitiveData struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                       // 规则名称
 	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`            // 控制器
@@ -24,12 +23,8 @@ type SensitiveData struct {
 	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
-func (*SensitiveData) TableName() string {
-	return TableNameSecuritySensitiveData
-}
-
 type OutSensitiveData struct {
-	SensitiveData
+	SecuritySensitiveData
 	DataFields []string `json:"data_fields"`
 }
 
@@ -37,10 +32,10 @@ type SensitiveDataModel struct {
 	BaseModel
 }
 
-func NewSensitiveDataModel(sqlDB *gorm.DB) *SensitiveDataModel {
+func NewSensitiveDataModel(sqlDB *gorm.DB, config *conf.Configuration) *SensitiveDataModel {
 	return &SensitiveDataModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameSecuritySensitiveData,
+			TableName:        config.Database.Prefix + "security_sensitive_data",
 			Key:              "id",
 			QuickSearchField: "controller",
 			DataLimit:        "",
@@ -49,7 +44,7 @@ func NewSensitiveDataModel(sqlDB *gorm.DB) *SensitiveDataModel {
 	}
 }
 
-func (s *SensitiveDataModel) DealData(ctx *gin.Context, data *SensitiveData) (*OutSensitiveData, error) {
+func (s *SensitiveDataModel) DealData(ctx *gin.Context, data *SecuritySensitiveData) (*OutSensitiveData, error) {
 	outSensitiveData := OutSensitiveData{}
 	if err := copier.Copy(&outSensitiveData, data); err != nil {
 		return nil, err
@@ -66,8 +61,8 @@ func (s *SensitiveDataModel) DealData(ctx *gin.Context, data *SensitiveData) (*O
 	return &outSensitiveData, nil
 }
 
-func (s *SensitiveDataModel) GetOne(ctx *gin.Context, id int32) (sensitiveData SensitiveData, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&sensitiveData).Error
+func (s *SensitiveDataModel) GetOne(ctx *gin.Context, id int32) (sensitiveData SecuritySensitiveData, err error) {
+	err = s.sqlDB.Where("id=?", id).First(&sensitiveData).Error
 	return
 }
 
@@ -77,9 +72,9 @@ func (s *SensitiveDataModel) List(ctx *gin.Context) ([]*OutSensitiveData, int64,
 		return nil, 0, err
 	}
 	var total int64 = 0
-	list := []*SensitiveData{}
+	list := []*SecuritySensitiveData{}
 
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&SecuritySensitiveData{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -98,17 +93,17 @@ func (s *SensitiveDataModel) List(ctx *gin.Context) ([]*OutSensitiveData, int64,
 	return result, total, err
 }
 
-func (s *SensitiveDataModel) Add(ctx *gin.Context, data SensitiveData) error {
-	err := s.sqlDB.Table(s.TableName).Create(&data).Error
+func (s *SensitiveDataModel) Add(ctx *gin.Context, data SecuritySensitiveData) error {
+	err := s.sqlDB.Create(&data).Error
 	return err
 }
 
-func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SensitiveData) error {
-	err := s.sqlDB.Table(s.TableName).Updates(&data).Error
+func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SecuritySensitiveData) error {
+	err := s.sqlDB.Updates(&data).Error
 	return err
 }
 
 func (s *SensitiveDataModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&SecuritySensitiveData{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

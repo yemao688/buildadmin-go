@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"fmt"
+	"go-build-admin/database/migrations/model"
 	"go-build-admin/utils"
 	"image"
 	"image/color"
@@ -87,34 +88,26 @@ func (c *Captcha) SetConfig(config CaptchaConfig) {
 
 }
 
-type BaCaptcha struct {
-	Key        string `gorm:"column:key;primaryKey;comment:验证码Key" json:"key"`    // 验证码Key
-	Code       string `gorm:"column:code;not null;comment:验证码(加密后)" json:"code"`  // 验证码(加密后)
-	Captcha    string `gorm:"column:captcha;comment:验证码数据" json:"captcha"`        // 验证码数据
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"` // 过期时间
-}
-
 // 验证验证码是否正确
 func (c *Captcha) Check(code, id string) bool {
 	if code == "" {
 		return false
 	}
 	key := c.authCode(c.config.SeKey, id)
-	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
+	seCode := model.Captcha{}
+	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	if err != nil {
 		return false
 	}
 
 	if time.Now().Unix() > seCode.ExpireTime {
-		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
+		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 		return false
 	}
 
 	if c.authCode(strings.ToUpper(code), id) == seCode.Code {
 		if c.config.Reset {
-			c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
+			c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 		}
 		return true
 	}
@@ -124,16 +117,16 @@ func (c *Captcha) Check(code, id string) bool {
 // 创建一个逻辑验证码可供后续验证（非图形）
 func (c *Captcha) Create(id string) (string, error) {
 	key := c.authCode(c.config.SeKey, id)
-	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
+	seCode := model.Captcha{}
+	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	if err == nil {
-		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
+		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 	}
 
 	captcha := c.generate()
 	code := c.authCode(captcha, id)
 	// 实现数据库插入操作
-	err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
+	err = c.sqlDB.Model(&model.Captcha{}).Create(map[string]interface{}{
 		"key":         key,
 		"code":        code,
 		"captcha":     captcha,
@@ -144,10 +137,10 @@ func (c *Captcha) Create(id string) (string, error) {
 }
 
 // 获取验证码数据
-func (c *Captcha) GetCaptchaData(id string) (BaCaptcha, error) {
+func (c *Captcha) GetCaptchaData(id string) (model.Captcha, error) {
 	key := c.authCode(c.config.SeKey, id)
-	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
+	seCode := model.Captcha{}
+	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	return seCode, err
 }
 
@@ -190,8 +183,8 @@ func (c *Captcha) Entry(id string) (*image.RGBA, error) {
 	}
 
 	key := c.authCode(c.config.SeKey, id)
-	seCode := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Scan(&seCode).Error
+	seCode := model.Captcha{}
+	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 
 	// 绘验证码
 	if err == nil && time.Now().Unix() <= seCode.ExpireTime {
@@ -202,7 +195,7 @@ func (c *Captcha) Entry(id string) (*image.RGBA, error) {
 		captcha, err := writeText(img, c.config, "", textColor)
 		code := c.authCode(captcha, id)
 
-		if err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Create(&BaCaptcha{
+		if err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Create(&model.Captcha{
 			Key:        key,
 			Code:       code,
 			Captcha:    captcha,

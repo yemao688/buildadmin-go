@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaAdmin = "ba_admin"
 
-// BaAdmin 管理员表
-type BaAdmin struct {
+// Admin 管理员表
+type Admin struct {
 	ID            int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Username      string `gorm:"column:username;not null;comment:用户名" json:"username"`                // 用户名
 	Nickname      string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                 // 昵称
@@ -25,7 +24,3 @@ type BaAdmin struct {
 	CreateTime    int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                  // 创建时间
 }
 
-// TableName BaAdmin's table name
-func (*BaAdmin) TableName() string {
-	return TableNameBaAdmin
-}

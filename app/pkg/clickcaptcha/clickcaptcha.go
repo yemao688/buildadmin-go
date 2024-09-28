@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/model"
 	"go-build-admin/utils"
 	"image"
 	"image/color"
@@ -86,14 +87,6 @@ func NewClickCaptcha(config *conf.Configuration, sqlDB *gorm.DB) *ClickCaptcha {
 	return &ClickCaptcha{config: defaultConfig, sqlDB: sqlDB}
 }
 
-type BaCaptcha struct {
-	Key        string `gorm:"column:key;primaryKey;comment:验证码Key" json:"key"`    // 验证码Key
-	Code       string `gorm:"column:code;not null;comment:验证码(加密后)" json:"code"`  // 验证码(加密后)
-	Captcha    string `gorm:"column:captcha;comment:验证码数据" json:"captcha"`        // 验证码数据
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"` // 过期时间
-}
-
 type Point struct {
 	Size   int  //字体大小
 	Icon   bool //是否图标
@@ -105,7 +98,7 @@ type Point struct {
 	Y      int
 }
 
-type Captcha struct {
+type CaptchaInfo struct {
 	Width    int //背景图宽
 	Height   int //背景图高
 	PointArr []*Point
@@ -210,26 +203,26 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	content := buf.Bytes()
 
 	texts = texts[0:c.config.Length]
-	captcha := Captcha{
+	captchaInfo := CaptchaInfo{
 		Width:    imgWidth,
 		Height:   imgHeight,
 		PointArr: pointArr[0:c.config.Length],
 	}
-	captchaStr, _ := json.Marshal(captcha)
+	captchaStr, _ := json.Marshal(captchaInfo)
 
 	key := utils.Md5(id)
 	var result map[string]interface{}
-	c.sqlDB.Table("ba_captcha").Where(" `key` = ? ", key).Scan(&result)
+	c.sqlDB.Model(&model.Captcha{}).Where(" `key` = ? ", key).Scan(&result)
 
 	if _, ok := result["key"]; ok {
-		err = c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Updates(map[string]interface{}{
+		err = c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Updates(map[string]interface{}{
 			"code":        utils.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
 			"create_time": time.Now().Unix(),
 			"expire_time": time.Now().Unix() + 600,
 		}).Error
 	} else {
-		err = c.sqlDB.Table("ba_captcha").Create(map[string]interface{}{
+		err = c.sqlDB.Model(&model.Captcha{}).Create(map[string]interface{}{
 			"key":         key,
 			"code":        utils.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
@@ -286,19 +279,19 @@ func loadImage(filePath string) (image.Image, error) {
 func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	key := utils.Md5(id)
 
-	baCaptcha := BaCaptcha{}
-	err := c.sqlDB.Table("ba_captcha").Where("`key`=?", key).First(&baCaptcha).Error
+	captcha := model.Captcha{}
+	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).First(&captcha).Error
 	if err != nil {
 		return false
 	}
 
-	if baCaptcha.ExpireTime < time.Now().Unix() {
-		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
+	if captcha.ExpireTime < time.Now().Unix() {
+		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 		return false
 	}
 
-	captcha := Captcha{}
-	err = json.Unmarshal([]byte(baCaptcha.Captcha), &captcha)
+	captchaInfo := CaptchaInfo{}
+	err = json.Unmarshal([]byte(captcha.Captcha), &captchaInfo)
 	if err != nil {
 		return false
 	}
@@ -307,22 +300,22 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	xyArr := strings.Split(infoArr[0], "-")
 	w, _ := strconv.Atoi(infoArr[1])
 	h, _ := strconv.Atoi(infoArr[2])
-	xPro := w / captcha.Width
-	yPro := h / captcha.Height
+	xPro := w / captchaInfo.Width
+	yPro := h / captchaInfo.Height
 
 	for k, v := range xyArr {
 		xy := strings.Split(v, ",")
 		x, _ := strconv.Atoi(xy[0])
 		y, _ := strconv.Atoi(xy[1])
-		if x/xPro < captcha.PointArr[k].X || x/xPro > captcha.PointArr[k].X+captcha.PointArr[k].Width {
+		if x/xPro < captchaInfo.PointArr[k].X || x/xPro > captchaInfo.PointArr[k].X+captchaInfo.PointArr[k].Width {
 			return false
 		}
 
-		phStart := captcha.PointArr[k].Y - captcha.PointArr[k].Height
-		phEnd := captcha.PointArr[k].Y
-		if captcha.PointArr[k].Icon {
-			phStart = captcha.PointArr[k].Y
-			phEnd = captcha.PointArr[k].Y + captcha.PointArr[k].Height
+		phStart := captchaInfo.PointArr[k].Y - captchaInfo.PointArr[k].Height
+		phEnd := captchaInfo.PointArr[k].Y
+		if captchaInfo.PointArr[k].Icon {
+			phStart = captchaInfo.PointArr[k].Y
+			phEnd = captchaInfo.PointArr[k].Y + captchaInfo.PointArr[k].Height
 		}
 		if y/yPro < phStart || y/yPro > phEnd {
 			return false
@@ -330,7 +323,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	if unset {
-		c.sqlDB.Table("ba_captcha").Where("`key`=?", key).Delete(nil)
+		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 	}
 	return true
 }

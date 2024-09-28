@@ -2,13 +2,12 @@ package model
 
 import (
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/conf"
 	"slices"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameAdminRule = "ba_admin_rule"
 
 type AdminRule struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                     // ID
@@ -30,18 +29,14 @@ type AdminRule struct {
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                                // 创建时间
 }
 
-func (*AdminRule) TableName() string {
-	return TableNameAdminRule
-}
-
 type AdminRuleModel struct {
 	BaseModel
 }
 
-func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
+func NewAdminRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminRuleModel {
 	return &AdminRuleModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameAdminRule,
+			TableName:        config.Database.Prefix + "admin_rule",
 			Key:              "id",
 			QuickSearchField: "title",
 			DataLimit:        "",
@@ -51,12 +46,12 @@ func NewAdminRuleModel(sqlDB *gorm.DB) *AdminRuleModel {
 }
 
 func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).Take(&adminRule).Error
+	err = s.sqlDB.Where("id=?", id).Take(&adminRule).Error
 	return
 }
 
 func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
-	err = s.sqlDB.Table(s.TableName).Order("weigh desc,id desc").Find(&list).Error
+	err = s.sqlDB.Model(&AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
 	return
 }
 
@@ -68,7 +63,7 @@ func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Create(&adminRule).Error; err != nil {
+	if err := tx.Create(&adminRule).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -79,7 +74,7 @@ func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
 func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
 	parent := AdminRule{}
 	if adminRule.Pid > 0 {
-		if err := s.sqlDB.Table(s.TableName).Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
+		if err := s.sqlDB.Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
 			return err
 		}
 	}
@@ -92,13 +87,13 @@ func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
 	}()
 
 	if parent.Pid == adminRule.ID {
-		if err := tx.Table(s.TableName).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
+		if err := tx.Model(&AdminRule{}).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
-	if err := tx.Table(s.TableName).Save(&adminRule).Error; err != nil {
+	if err := tx.Save(&adminRule).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -107,7 +102,7 @@ func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
 
 func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int32) error {
 	var subIds []int32
-	if err := s.sqlDB.Table(s.TableName).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+	if err := s.sqlDB.Model(&AdminRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
@@ -117,23 +112,23 @@ func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int32) error {
 		}
 	}
 
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&AdminRule{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 
 func (s *AdminRuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	pids := []int32{}
-	err := s.sqlDB.Table(s.TableName).Where("id in ?", ids).Pluck("pid", &pids).Error
+	err := s.sqlDB.Model(&AdminRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }
 
 // crud 删除菜单
 func (s *AdminRuleModel) Delete(path string, recursion bool) error {
 	adminRule := AdminRule{}
-	s.sqlDB.Table(s.TableName).Where(" name = ? ", path).Take(&adminRule)
+	s.sqlDB.Where(" name = ? ", path).Take(&adminRule)
 
 	list := []AdminRule{}
-	s.sqlDB.Table(s.TableName).Where(" pid = ? ", adminRule.ID).Find(&list)
+	s.sqlDB.Model(&AdminRule{}).Where(" pid = ? ", adminRule.ID).Find(&list)
 
 	if recursion && len(list) > 0 {
 		for _, v := range list {
@@ -141,6 +136,6 @@ func (s *AdminRuleModel) Delete(path string, recursion bool) error {
 		}
 	}
 
-	s.sqlDB.Table(s.TableName).Where(" name = ? ", path).Delete(nil)
+	s.sqlDB.Model(&AdminRule{}).Where(" name = ? ", path).Delete(nil)
 	return nil
 }

@@ -11,8 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const TableNameUser = "ba_user"
-
 // User 会员表
 type User struct {
 	ID            int32     `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
@@ -39,20 +37,6 @@ type User struct {
 	CreateTime    int64     `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
 }
 
-func (*User) TableName() string {
-	return TableNameUser
-}
-
-type SimpleUser struct {
-	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	Username string `gorm:"column:username;not null;comment:用户名" json:"username"`
-	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
-}
-
-func (*SimpleUser) TableName() string {
-	return TableNameUser
-}
-
 type OutUser struct {
 	User
 	Birthday string `json:"birthday"`
@@ -73,7 +57,7 @@ func NewUserModel(sqlDB *gorm.DB, config *conf.Configuration) *UserModel {
 
 func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	data := User{}
-	err := s.sqlDB.Table(TableNameUser).Omit("password", "salt").Where("id=?", id).First(&data).Error
+	err := s.sqlDB.Omit("password", "salt").Where("id=?", id).First(&data).Error
 	return data, err
 }
 
@@ -81,7 +65,7 @@ func (s *UserModel) IsExist(ctx *gin.Context, fieldName string, fieldValue any, 
 	var err error
 	data := User{}
 	if slices.Contains([]string{"username", "mobile", "email"}, fieldName) {
-		err = s.sqlDB.Table(TableNameUser).
+		err = s.sqlDB.
 			Omit("password", "salt").
 			Where(fieldName+"=?", fieldValue).
 			Where("id<>?", id).
@@ -92,29 +76,26 @@ func (s *UserModel) IsExist(ctx *gin.Context, fieldName string, fieldValue any, 
 
 func (s *UserModel) GetOneByEmail(ctx *gin.Context, email string) (User, error) {
 	data := User{}
-	err := s.sqlDB.Table(TableNameUser).Omit("password", "salt").Where("email=?", email).First(&data).Error
+	err := s.sqlDB.Omit("password", "salt").Where("email=?", email).First(&data).Error
 	return data, err
 }
 
 func (s *UserModel) GetOneByMobile(ctx *gin.Context, mobile string) (User, error) {
 	data := User{}
-	err := s.sqlDB.Table(TableNameUser).Omit("password", "salt").Where("mobile=?", mobile).First(&data).Error
+	err := s.sqlDB.Omit("password", "salt").Where("mobile=?", mobile).First(&data).Error
 	return data, err
 }
 
 func (s *UserModel) ValidatePassword(ctx *gin.Context, id int32, oldPassword string) bool {
 	user := User{}
-	s.sqlDB.Table(TableNameUser).Where("id=?", id).First(&user)
-	if user.Password != utils.EncryptPassword(oldPassword, user.Salt) {
-		return false
-	}
-	return true
+	s.sqlDB.Where("id=?", id).First(&user)
+	return user.Password == utils.EncryptPassword(oldPassword, user.Salt)
 }
 
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
 	salt := random.Build("alnum", 16)
 	password = utils.EncryptPassword(password, salt)
-	err := s.sqlDB.Table(TableNameUser).Where("id=?", id).Updates(map[string]any{
+	err := s.sqlDB.Model(&User{}).Where("id=?", id).Updates(map[string]any{
 		"salt":     salt,
 		"password": password,
 	}).Error
@@ -122,6 +103,6 @@ func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) e
 }
 
 func (s *UserModel) Update(ctx *gin.Context, id int32, data map[string]any) error {
-	err := s.sqlDB.Table(TableNameUser).Where("id=?", id).Updates(data).Error
+	err := s.sqlDB.Model(&User{}).Where("id=?", id).Updates(data).Error
 	return err
 }

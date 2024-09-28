@@ -11,8 +11,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const TableNameAdmin = "ba_admin"
-
 type Admin struct {
 	ID            int32    `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Username      string   `gorm:"column:username;not null;comment:用户名" json:"username"`                // 用户名
@@ -33,29 +31,15 @@ type Admin struct {
 	GroupNameArr  []string `gorm:"-" json:"group_name_arr"`
 }
 
-func (*Admin) TableName() string {
-	return TableNameAdmin
-}
-
-type SimpleAdmin struct {
-	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	Username string `gorm:"column:username;not null;comment:用户名" json:"username"`
-	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
-}
-
-func (*SimpleAdmin) TableName() string {
-	return TableNameAdmin
-}
-
 type AdminModel struct {
 	BaseModel
 	config *conf.Configuration
 }
 
-func NewAdminModel(config *conf.Configuration, sqlDB *gorm.DB) *AdminModel {
+func NewAdminModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminModel {
 	return &AdminModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameAdmin,
+			TableName:        config.Database.Prefix + "admin",
 			Key:              "id",
 			QuickSearchField: "username,nickname",
 			DataLimit:        "",
@@ -72,10 +56,11 @@ func (s *AdminModel) DealData(ctx *gin.Context, data *Admin) error {
 		Id   int32
 		Name string
 	}{}
-	err := s.sqlDB.Table("ba_admin_group_access").
-		Joins("left join ba_admin_group g on g.id=ba_admin_group_access.group_id").
+	prefix := s.config.Database.Prefix
+	err := s.sqlDB.Table(prefix+"admin_group_access").
+		Joins("left join "+prefix+"admin_group g on g.id="+prefix+"admin_group_access.group_id").
 		Select("g.id as id,g.name as name").
-		Where("ba_admin_group_access.uid=?", data.ID).Scan(&groups).Error
+		Where(prefix+"admin_group_access.uid=?", data.ID).Scan(&groups).Error
 
 	if err != nil {
 		return err
@@ -89,7 +74,7 @@ func (s *AdminModel) DealData(ctx *gin.Context, data *Admin) error {
 
 func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 	data := Admin{}
-	if err := s.sqlDB.Table(s.TableName).Omit("password", "salt", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
+	if err := s.sqlDB.Omit("password", "salt", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
 		return data, err
 	}
 	if err := s.DealData(ctx, &data); err != nil {
@@ -99,13 +84,14 @@ func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 }
 
 func (s *AdminModel) GetGroupArr(ctx *gin.Context, id int32) (groupIds []int32, err error) {
-	err = s.sqlDB.Table(TableNameAdminGroupAccess).Where("uid=?", id).Pluck("group_id", &groupIds).Error
+	err = s.sqlDB.Model(&AdminGroupAccess{}).Where("uid=?", id).Pluck("group_id", &groupIds).Error
 	return
 }
 
 func (s *AdminModel) GetGroupNameArr(ctx *gin.Context, id int32) (groupNames []string, err error) {
-	err = s.sqlDB.Table(TableNameAdminGroupAccess).
-		Joins("left join ba_admin_group on ba_admin_group_access.group_id = ba_admin_group.id").Where("uid=?", id).Pluck("name", &groupNames).Error
+	prefix := s.config.Database.Prefix
+	err = s.sqlDB.Model(&AdminGroupAccess{}).
+		Joins("left join "+prefix+"admin_group on "+prefix+"admin_group_access.group_id = "+prefix+"admin_group.id").Where("uid=?", id).Pluck("name", &groupNames).Error
 	return
 }
 
@@ -114,7 +100,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 	if err != nil {
 		return
 	}
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&Admin{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return
 	}
@@ -129,7 +115,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 
 func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	//判断是否有重名的账号
-	if err := s.sqlDB.Table(s.TableName).Where("username=?", admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.sqlDB.Where("username=?", admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		return cErr.BadRequest("Account exist")
 	}
 
@@ -140,7 +126,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit("login_failure", "last_login_time", "last_login_ip").Create(&admin).Error; err != nil {
+	if err := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -153,7 +139,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		})
 	}
 
-	if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
+	if err := tx.Model(&AdminGroupAccess{}).Create(access).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -162,7 +148,7 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 
 func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit []string, groups []string) error {
 	//判断是否有重名的账号
-	if err := s.sqlDB.Table(s.TableName).Where("id<>? and username=?", admin.ID, admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.sqlDB.Where("id<>? and username=?", admin.ID, admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 		return cErr.BadRequest("Account exist")
 	}
 
@@ -173,14 +159,14 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit []string, groups [
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Omit(omit...).Save(&admin).Error; err != nil {
+	if err := tx.Omit(omit...).Save(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
 	}
 
 	if len(groups) > 0 {
-		if err := tx.Table(TableNameAdminGroupAccess).Where("uid=?", admin.ID).Delete(nil).Error; err != nil {
+		if err := tx.Model(&AdminGroupAccess{}).Where("uid=?", admin.ID).Delete(nil).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -191,7 +177,7 @@ func (s *AdminModel) Edit(ctx *gin.Context, admin Admin, omit []string, groups [
 			})
 		}
 
-		if err := tx.Table(TableNameAdminGroupAccess).Create(access).Error; err != nil {
+		if err := tx.Model(&AdminGroupAccess{}).Create(access).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -208,7 +194,7 @@ func (s *AdminModel) SelfEdit(ctx *gin.Context, admin Admin, selectField []strin
 		}
 	}()
 
-	if err := tx.Table(s.TableName).Select(selectField).Save(&admin).Error; err != nil {
+	if err := tx.Select(selectField).Save(&admin).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -219,7 +205,7 @@ func (s *AdminModel) SelfEdit(ctx *gin.Context, admin Admin, selectField []strin
 func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
 	salt := random.Build("alnum", 16)
 	password = utils.EncryptPassword(password, salt)
-	err := s.sqlDB.Table(s.TableName).Where("id=?", id).Updates(map[string]interface{}{
+	err := s.sqlDB.Model(&Admin{}).Where("id=?", id).Updates(map[string]interface{}{
 		"salt":     salt,
 		"password": password,
 	}).Error
@@ -227,6 +213,6 @@ func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) 
 }
 
 func (s *AdminModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&Admin{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

@@ -4,12 +4,11 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
-
-const TableNameCrudLog = "ba_crud_log"
 
 // CrudLog CRUD记录表
 type CrudLog struct {
@@ -137,10 +136,10 @@ type Field struct {
 	OriginalDesignType string `json:"originalDesignType"`
 }
 
-func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
+func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration) *CrudLogModel {
 	return &CrudLogModel{
 		BaseModel: BaseModel{
-			TableName:        TableNameCrudLog,
+			TableName:        config.Database.Prefix + "crud_log",
 			Key:              "id",
 			QuickSearchField: "table_name",
 			DataLimit:        "",
@@ -150,12 +149,12 @@ func NewCrudLogModel(sqlDB *gorm.DB) *CrudLogModel {
 }
 
 func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
+	err = s.sqlDB.Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
 	return
 }
 
 func (s *CrudLogModel) GetOne(ctx *gin.Context, id int32) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Table(s.TableName).Where("id=?", id).First(&crudLog).Error
+	err = s.sqlDB.Where("id=?", id).First(&crudLog).Error
 	return
 }
 
@@ -164,7 +163,7 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Table(s.TableName).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&CrudLog{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -173,16 +172,16 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 }
 
 func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&CrudLog{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 
 // 记录CRUD状态
 func (s *CrudLogModel) RecordCrudStatus(data CrudLog) int32 {
 	if data.ID != 0 {
-		s.sqlDB.Table(s.TableName).Where("id=?", data.ID).Update("status", data.Status)
+		s.sqlDB.Model(&CrudLog{}).Where("id=?", data.ID).Update("status", data.Status)
 		return data.ID
 	}
-	s.sqlDB.Table(s.TableName).Create(&data)
+	s.sqlDB.Create(&data)
 	return data.ID
 }

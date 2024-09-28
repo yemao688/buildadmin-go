@@ -4,10 +4,9 @@
 
 package model
 
-const TableNameBaAttachment = "ba_attachment"
 
-// BaAttachment 附件表
-type BaAttachment struct {
+// Attachment 附件表
+type Attachment struct {
 	ID             int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`   // ID
 	Topic          string `gorm:"column:topic;not null;comment:细目" json:"topic"`                  // 细目
 	AdminID        int32  `gorm:"column:admin_id;not null;comment:上传管理员ID" json:"admin_id"`       // 上传管理员ID
@@ -23,9 +22,4 @@ type BaAttachment struct {
 	Sha1           string `gorm:"column:sha1;not null;comment:sha1编码" json:"sha1"`                // sha1编码
 	CreateTime     int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`             // 创建时间
 	LastUploadTime int64  `gorm:"column:last_upload_time;comment:最后上传时间" json:"last_upload_time"` // 最后上传时间
-}
-
-// TableName BaAttachment's table name
-func (*BaAttachment) TableName() string {
-	return TableNameBaAttachment
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
@@ -356,6 +357,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]interface{}{
 			"lock": "static/" + LockFileName,
 		})))
+		return
 	}
 
 	envOk := h.commandExecutionCheck()
@@ -450,6 +452,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]interface{}{
 			"lock": "static/" + LockFileName,
 		})))
+		return
 	}
 
 	type Params struct {
@@ -475,7 +478,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		salt := random.Build("alnum", 16)
 		password := utils.EncryptPassword(params.Adminpassword, salt)
 		// 管理员配置入库
-		h.db.Table("ba_admin").Where("username=?", "admin").Updates(map[string]any{
+		h.db.Model(&model.Admin{}).Where("username=?", "admin").Updates(map[string]any{
 			"username": params.Adminname,
 			"nickname": params.Adminname,
 			"password": password,
@@ -483,7 +486,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 
 		// 修改站点名称
-		h.db.Table("ba_config").Where("name=?", "site_name").Updates(map[string]any{
+		h.db.Model(&model.Config{}).Where("name=?", "site_name").Updates(map[string]any{
 			"value": params.Sitename,
 		})
 	}
