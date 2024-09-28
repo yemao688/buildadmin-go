@@ -75,7 +75,7 @@ const baTable: baTableClass = new baTableClass(
             items.rules = formRef.value.getCheckeds()
 
             for (const key in items) {
-                if (items[key] === null) {
+                if (items[key] === null || items[key] === '') {
                     delete items[key]
                 }
             }

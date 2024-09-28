@@ -153,7 +153,7 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: mailConfig["smtp_server"]}
 	}
 	if err := dialer.DialAndSend(message); err != nil {
-		FailByErr(ctx, err)
+		FailByErr(ctx, cErr.BadRequest("Mail sending service unavailable"))
 		return
 	}
 	Success(ctx, "")

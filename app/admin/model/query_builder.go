@@ -101,10 +101,15 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	if quickSearch != "" && quickSearchField != "" {
 		if ok := strings.Contains(quickSearchField, ","); ok {
 			quickSearchFieldArr := strings.Split(quickSearchField, ",")
-			for _, v := range quickSearchFieldArr {
-				whereS += " AND " + Backquote(v) + " LIKE ? "
+			whereS += " AND ("
+			for p, v := range quickSearchFieldArr {
+				whereS += Backquote(v) + " LIKE ?  "
+				if p != len(quickSearchFieldArr)-1 {
+					whereS += " or "
+				}
 				whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
 			}
+			whereS += " )"
 		} else {
 			whereS += " AND " + Backquote(quickSearchField) + " LIKE ? "
 			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")

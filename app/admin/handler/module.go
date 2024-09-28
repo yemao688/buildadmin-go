@@ -17,7 +17,7 @@ func NewModuleHandler(log *zap.Logger) *ModuleHandler {
 
 func (h *ModuleHandler) Index(ctx *gin.Context) {
 
-	Success(ctx, "")
+	SuccessMsg(ctx, nil, "待实现")
 }
 
 func (h *ModuleHandler) State(ctx *gin.Context) {

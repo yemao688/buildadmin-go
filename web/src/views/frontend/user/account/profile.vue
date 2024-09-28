@@ -72,7 +72,7 @@
                             },
                         }"
                     />
-                    <FormItem :label="$t('user.account.profile.birthday')" type="date" v-model="state.form.birthday" />
+                    <FormItem :label="$t('user.account.profile.birthday')" value-format="YYYY-MM-DD" type="date" v-model="state.form.birthday" />
                     <FormItem
                         :label="$t('user.account.profile.Personal signature')"
                         type="textarea"

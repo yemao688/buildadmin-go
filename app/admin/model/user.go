@@ -116,7 +116,7 @@ func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 func (s *UserModel) Add(ctx *gin.Context, user User) error {
 	//判断是否有重名的账号
 	if err := s.sqlDB.Where("username=?", user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-		return cErr.BadRequest("Account not exist")
+		return cErr.BadRequest("Account exist")
 	}
 
 	tx := s.sqlDB.Begin()

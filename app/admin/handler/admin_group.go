@@ -162,7 +162,6 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-
 	if err := h.CheckAuth(ctx, params.ID); err != nil {
 		FailByErr(ctx, err)
 		return

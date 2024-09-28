@@ -193,7 +193,7 @@ export default class baTable {
         const operate = this.form.operate!.replace(this.form.operate![0], this.form.operate![0].toLowerCase())
 
         if (this.runBefore('onSubmit', { formEl: formEl, operate: operate, items: this.form.items! }) === false) return
-
+        
         Object.keys(this.form.items!).forEach((item) => {
             //删除null与空字符串,接口就取相应字段的默认值
             if (this.form.items![item] === null || this.form.items![item] === '' ) delete this.form.items![item]

@@ -38,6 +38,7 @@ func InitRouter(
 	crudHandler *admin.CrudHandler,
 	crudLogHandler *admin.CrudLogHandler,
 	configHandler *admin.ConfigHandler,
+	moduleHandler *admin.ModuleHandler,
 
 	dataRecycleHandler *admin.DataRecycleHandler,
 	dataRecycleLogHandler *admin.DataRecycleLogHandler,
@@ -188,10 +189,13 @@ func InitRouter(
 
 	adminRouter.GET("crud.Log/index", crudLogHandler.Index)
 
+	adminRouter.GET("module/index", moduleHandler.Index)
+
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
+	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)

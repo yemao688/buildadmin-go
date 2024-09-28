@@ -27,4 +27,5 @@ var ProviderSet = wire.NewSet(
 	NewUserRuleHandler,
 	NewUserScoreLogHandler,
 	NewUserHandler,
+	NewModuleHandler,
 )

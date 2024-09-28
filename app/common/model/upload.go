@@ -214,7 +214,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 		URL:            savePath,
 		Width:          int32(width),
 		Height:         int32(height),
-		Name:           filepath.Base(savePath),
+		Name:           s.file.Filename,
 		Size:           int32(s.file.Size),
 		Mimetype:       s.sourceType,
 		Storage:        "local",

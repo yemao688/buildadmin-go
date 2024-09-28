@@ -89,8 +89,8 @@ func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) ClearCache(ctx *gin.Context) {
-
-	Success(ctx, "")
+	//TODO: 清除缓存
+	SuccessMsg(ctx, nil, "Cache cleaned~")
 }
 
 func (h *AjaxHandler) Terminal(ctx *gin.Context) {

@@ -26,6 +26,17 @@ func Success(c *gin.Context, data interface{}) {
 	})
 }
 
+func SuccessMsg(c *gin.Context, data interface{}, msg string) {
+	timestamp, _ := c.Get("Timestamp")
+	msg = utils.Lang(c, msg, nil)
+	c.JSON(http.StatusOK, Response{
+		1,
+		data,
+		msg,
+		timestamp.(int64),
+	})
+}
+
 // 失败返回
 func Fail(c *gin.Context, httpCode int, code int, msg string) {
 	msg = utils.Lang(c, msg, nil)
