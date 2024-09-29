@@ -225,8 +225,9 @@ func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string 
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
-	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
+	for tableName, comment := range tables {
+		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
+		if !slices.Contains(outExcludeTable, name) {
 			outTables[name] = comment
 		}
 	}

@@ -2,7 +2,6 @@ package model
 
 import (
 	"fmt"
-	"go-build-admin/database/migrations/model"
 	"testing"
 
 	"gorm.io/driver/mysql"
@@ -51,9 +50,9 @@ func TestJoin(t *testing.T) {
 	// fmt.Printf("%+v", err)
 	// fmt.Printf("%+v", groups)
 
-	var result map[string]interface{}
-	db.Model(&model.Captcha{}).Where(" `key` = ? ", 1).Scan(&result)
-	fmt.Printf("%+v", result)
+	// var result map[string]interface{}
+	// db.Model(&model.Captcha{}).Where(" `key` = ? ", 1).Scan(&result)
+	// fmt.Printf("%+v", result)
 
 	// var result1 map[string]interface{}
 	// db.Table("ba_captcha").Where(" `key` = ? ", 1).Scan(&result1)
@@ -62,5 +61,11 @@ func TestJoin(t *testing.T) {
 	// result2 := model.Captcha{}
 	// db.Where(" `key` = ? ", 1).Scan(&result2)
 	// fmt.Printf("%+v", result2)
+
+	tx := db.Table("ba_admin_rule").Where("status=?", "1")
+	var ruleList []Rule
+	tx.Order("weigh desc,id asc").Scan(&ruleList)
+
+	fmt.Printf("%+v", ruleList)
 
 }

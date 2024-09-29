@@ -89,7 +89,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	}
 	//分页
 	if queryParameter.Page != 0 {
-		offset = queryParameter.Page * limit
+		offset = (queryParameter.Page - 1) * limit
 	}
 	if queryParameter.Limit != 0 {
 		limit = queryParameter.Limit

@@ -17,20 +17,15 @@ type Response struct {
 
 // 成功返回
 func Success(c *gin.Context, data interface{}) {
-	timestamp, _ := c.Get("Timestamp")
-	c.JSON(http.StatusOK, Response{
-		1,
-		data,
-		"",
-		timestamp.(int64),
-	})
+	JsonReturn(c, http.StatusOK, 1, "", data)
 }
 
-func SuccessMsg(c *gin.Context, data interface{}, msg string) {
+// 返回
+func JsonReturn(c *gin.Context, httpCode int, code int, msg string, data interface{}) {
 	timestamp, _ := c.Get("Timestamp")
 	msg = utils.Lang(c, msg, nil)
-	c.JSON(http.StatusOK, Response{
-		1,
+	c.JSON(httpCode, Response{
+		code,
 		data,
 		msg,
 		timestamp.(int64),
@@ -38,21 +33,11 @@ func SuccessMsg(c *gin.Context, data interface{}, msg string) {
 }
 
 // 失败返回
-func Fail(c *gin.Context, httpCode int, code int, msg string) {
-	msg = utils.Lang(c, msg, nil)
-	c.JSON(httpCode, Response{
-		code,
-		nil,
-		msg,
-		0,
-	})
-}
-
 func FailByErr(c *gin.Context, err error) {
 	v, ok := err.(*cErr.Error)
 	if ok {
-		Fail(c, v.HttpCode(), v.ErrorCode(), v.Error())
+		JsonReturn(c, v.HttpCode(), v.ErrorCode(), v.Error(), nil)
 	} else {
-		Fail(c, http.StatusBadRequest, cErr.DefaultError, err.Error())
+		JsonReturn(c, http.StatusBadRequest, cErr.DefaultError, err.Error(), nil)
 	}
 }

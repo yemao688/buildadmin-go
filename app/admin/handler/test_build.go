@@ -3,7 +3,6 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -39,7 +38,7 @@ type TestBuildParam struct {
 func (h *TestBuildHandler) Add(ctx *gin.Context) {
 	var params TestBuildParam
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 	var data model.TestBuild
@@ -55,7 +54,7 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
 	var params TestBuildParam
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 

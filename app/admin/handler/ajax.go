@@ -90,7 +90,7 @@ func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 
 func (h *AjaxHandler) ClearCache(ctx *gin.Context) {
 	//TODO: 清除缓存
-	SuccessMsg(ctx, nil, "Cache cleaned~")
+	JsonReturn(ctx, http.StatusOK, 1, "Cache cleaned~", nil)
 }
 
 func (h *AjaxHandler) Terminal(ctx *gin.Context) {

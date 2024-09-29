@@ -57,6 +57,7 @@ func (s *TableModel) GetTablePk(tableName string) string {
 	if tableName == "" {
 		return ""
 	}
+	tableName = s.Name(tableName, true)
 
 	var columnName string
 	s.sqlDB.Raw("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY'", tableName).Scan(&columnName)
@@ -79,6 +80,7 @@ func (s *TableModel) GetTableFields(tableName string, onlyCleanComment bool) map
 	if tableName == "" {
 		return nil
 	}
+	tableName = s.Name(tableName, true)
 
 	var columnList []Column
 	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, tableName).Scan(&columnList)

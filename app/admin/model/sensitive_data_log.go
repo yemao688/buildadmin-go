@@ -48,7 +48,7 @@ func NewSensitiveDataLogModel(sqlDB *gorm.DB, config *conf.Configuration) *Sensi
 
 func (s *SensitiveDataLogModel) GetOne(ctx *gin.Context, id int32) (sensitiveData SecuritySensitiveDataLog, err error) {
 	prefix := s.config.Database.Prefix
-	err = s.sqlDB.Table(prefix+"security_sensitive_data_log").
+	err = s.sqlDB.Model(&SecuritySensitiveDataLog{}).
 		Preload("Admin").
 		Preload("SensitiveData").
 		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_sensitive_data_log.admin_id").
@@ -62,7 +62,7 @@ func (s *SensitiveDataLogModel) List(ctx *gin.Context) (list []SecuritySensitive
 		return nil, 0, err
 	}
 	prefix := s.config.Database.Prefix
-	db := s.sqlDB.Table(prefix+"security_sensitive_data_log").
+	db := s.sqlDB.Model(&SecuritySensitiveDataLog{}).
 		Preload("Admin").
 		Preload("SensitiveData").
 		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_sensitive_data_log.admin_id").

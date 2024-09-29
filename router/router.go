@@ -145,6 +145,7 @@ func InitRouter(
 	adminRouter.POST("routine.Config/add", configHandler.Add)
 	adminRouter.POST("routine.Config/edit", configHandler.Edit)
 	adminRouter.DELETE("routine.Config/del", configHandler.Del)
+	adminRouter.POST("routine.Config/sendTestMail", configHandler.SendTestMail)
 
 	adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
 	adminRouter.GET("routine.Attachment/edit", attachmentHandler.One)

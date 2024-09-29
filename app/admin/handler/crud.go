@@ -286,7 +286,7 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
 	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
+		if !slices.Contains(outExcludeTable, strings.TrimPrefix(name, h.config.Database.Prefix)) {
 			outTables[name] = comment
 		}
 	}

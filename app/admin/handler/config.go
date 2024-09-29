@@ -7,6 +7,8 @@ import (
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
+	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -188,7 +190,7 @@ func (h *ConfigHandler) Del(ctx *gin.Context) {
 
 type MailParam struct {
 	SmtpServer       string `json:"smtp_server" binding:"required"`
-	SmtpPort         int    `json:"smtp_port" binding:"required"`
+	SmtpPort         string `json:"smtp_port" binding:"required"`
 	SmtpUser         string `json:"smtp_user" binding:"required"`
 	SmtpPass         string `json:"smtp_pass" binding:"required"`
 	SmtpVerification string `json:"smtp_verification" binding:"required"`
@@ -214,7 +216,12 @@ func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 	message.SetBody("text/plain", "congratulations, receiving this email means that your email service has been configured correctly")
 
 	// 根据提供的加密类型设置 Dialer 的 TLSConfig
-	dialer := mail.NewDialer(params.SmtpServer, params.SmtpPort, params.SmtpUser, params.SmtpPass)
+	port, err := strconv.Atoi(params.SmtpPort)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	dialer := mail.NewDialer(params.SmtpServer, port, params.SmtpUser, params.SmtpPass)
 	if strings.EqualFold(params.SmtpVerification, "SSL") {
 		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 	} else {
@@ -222,7 +229,7 @@ func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 	}
 
 	if err := dialer.DialAndSend(message); err != nil {
-		FailByErr(ctx, err)
+		JsonReturn(ctx, http.StatusOK, 0, "Mail sending service unavailable", err.Error())
 		return
 	}
 	Success(ctx, "test mail sent successfully~")

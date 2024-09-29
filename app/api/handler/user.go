@@ -51,7 +51,7 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 
 	//检查登陆
 	if _, ok := h.authM.IsLogin(ctx); ok {
-		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LOGIN_RESPONSE_CODE))
+		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode))
 		return
 	}
 

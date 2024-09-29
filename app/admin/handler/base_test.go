@@ -2,6 +2,8 @@ package handler
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -39,4 +41,23 @@ func TestBase(t *testing.T) {
 	fmt.Println("outer.Inner.Value (int):", outer1.Inner.Value)
 	fmt.Println("GetValue:", outer1.GetValue())
 
+}
+
+func TestTrim(t *testing.T) {
+	outExcludeTable := []string{
+		// 功能表
+		"area",
+		"token",
+		"captcha",
+		"admin_group_access",
+		// 无删除功能
+		"user_money_log",
+		"user_score_log",
+	}
+
+	if !slices.Contains(outExcludeTable, strings.TrimLeft("ba_area", "ba_")) {
+		fmt.Println("1111111111")
+
+		fmt.Println(strings.TrimLeft("ba_area", "ba_"))
+	}
 }

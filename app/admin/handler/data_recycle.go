@@ -77,6 +77,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
+	params.ControllerAs = params.Controller
 	var data model.SecurityDataRecycle
 	copier.Copy(&data, params)
 	err := h.dataRecycleM.Add(ctx, data)
@@ -102,7 +103,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-
+	params.ControllerAs = params.Controller
 	copier.Copy(&data, params)
 	err = h.dataRecycleM.Edit(ctx, data)
 	if err != nil {
@@ -174,8 +175,9 @@ func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
-	for name, comment := range tables {
-		if !slices.Contains(outExcludeTable, strings.TrimLeft(name, h.config.Database.Prefix)) {
+	for tableName, comment := range tables {
+		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
+		if !slices.Contains(outExcludeTable, name) {
 			outTables[name] = comment
 		}
 	}

@@ -45,7 +45,7 @@ func NewDataRecycleLogModel(sqlDB *gorm.DB, config *conf.Configuration) *DataRec
 
 func (s *DataRecycleLogModel) GetOne(ctx *gin.Context, id int32) (dataRecycle SecurityDataRecycleLog, err error) {
 	prefix := s.config.Database.Prefix
-	err = s.sqlDB.Table(prefix+"security_data_recycle_log").
+	err = s.sqlDB.Model(&SecurityDataRecycleLog{}).
 		Preload("Admin").
 		Preload("Recycle").
 		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_data_recycle_log.admin_id").
@@ -59,7 +59,7 @@ func (s *DataRecycleLogModel) List(ctx *gin.Context) (list []SecurityDataRecycle
 		return nil, 0, err
 	}
 	prefix := s.config.Database.Prefix
-	db := s.sqlDB.Table(prefix+"security_data_recycle_log").
+	db := s.sqlDB.Model(&SecurityDataRecycleLog{}).
 		Preload("Admin").
 		Preload("Recycle").
 		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_data_recycle_log.admin_id").

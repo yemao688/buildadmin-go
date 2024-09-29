@@ -47,7 +47,7 @@ type Rule struct {
 	Component string `json:"component"` // 组件路径
 	Keepalive string `json:"keepalive"` // 缓存:0=关闭,1=开启
 	Extend    string `json:"extend"`    // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
-	Children  []Rule `json:"children"`
+	Children  []Rule `json:"children" gorm:"-"`
 }
 
 type AuthModel struct {
