@@ -89,7 +89,7 @@ func (s *SensitiveDataLogModel) Rollback(ctx *gin.Context, ids interface{}) erro
 	}()
 
 	for _, v := range list {
-		if err := tx.Table(v.DataTable).Where("`"+v.PrimaryKey+"`=?", v.IDValue).UpdateColumn("`"+v.DataField+"`", v.Before).Error; err != nil {
+		if err := tx.Table(s.config.Database.Prefix+v.DataTable).Where("`"+v.PrimaryKey+"`=?", v.IDValue).UpdateColumn("`"+v.DataField+"`", v.Before).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -98,7 +98,7 @@ func (s *SensitiveDataLogModel) Rollback(ctx *gin.Context, ids interface{}) erro
 		return err
 	}
 
-	err = s.sqlDB.Model(&SecuritySensitiveDataLog{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	//err = s.sqlDB.Model(&SecuritySensitiveDataLog{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 

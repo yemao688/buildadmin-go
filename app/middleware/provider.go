@@ -9,4 +9,5 @@ var ProviderSet = wire.NewSet(
 	NewDataLimit,
 	NewRecord,
 	NewUserLogin,
+	NewSecurity,
 )

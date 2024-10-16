@@ -94,7 +94,12 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 			return err
 		}
 
-		if err := tx.Table(v.DataTable).Create(data).Error; err != nil {
+		//gorm scan到map会包含时间,还原时需要去掉时间
+		if v.DataTable == "user" && data["birthday"] != "" {
+			data["birthday"] = data["birthday"].(string)[:10]
+		}
+
+		if err := tx.Table(s.config.Database.Prefix + v.DataTable).Create(data).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -103,7 +108,7 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 		return err
 	}
 
-	err = s.sqlDB.Model(&SecurityDataRecycleLog{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	//err = s.sqlDB.Model(&SecurityDataRecycleLog{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 

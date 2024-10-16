@@ -85,7 +85,6 @@ func (h *DataRecycleLogHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// 还原 TODO:
 func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -98,4 +97,5 @@ func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	Success(ctx, "")
 }

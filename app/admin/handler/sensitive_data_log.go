@@ -69,7 +69,6 @@ func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// 回滚 TODO:
 func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {

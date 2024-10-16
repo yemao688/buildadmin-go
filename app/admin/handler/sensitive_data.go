@@ -83,6 +83,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 		return
 	}
 
+	params.ControllerAs = params.Controller
 	var sensitiveData model.SecuritySensitiveData
 	copier.Copy(&sensitiveData, params)
 
@@ -144,6 +145,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
+	params.ControllerAs = params.Controller
 	copier.Copy(&data, params)
 	dateField := map[string]string{}
 	for _, v := range params.Fields {

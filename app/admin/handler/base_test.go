@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -60,4 +61,17 @@ func TestTrim(t *testing.T) {
 
 		fmt.Println(strings.TrimLeft("ba_area", "ba_"))
 	}
+}
+
+type TestPerson struct {
+	Name string
+	Age  int
+}
+
+func TestPrint(t *testing.T) {
+	p := TestPerson{Name: "Bob", Age: 25}
+	jsonBytes, _ := json.MarshalIndent(p, "", "  ")
+	fmt.Println(string(jsonBytes))
+
+	fmt.Printf("%+v\n", p)
 }

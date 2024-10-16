@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -68,4 +69,22 @@ func TestJoin(t *testing.T) {
 
 	fmt.Printf("%+v", ruleList)
 
+}
+
+func TestMarshal(t *testing.T) {
+	db := getDb()
+
+	rows := []map[string]any{}
+	err := db.Table("ba_user").Where("id=1").Scan(&rows).Error
+	fmt.Println(err)
+	fmt.Printf("%+v \n", rows[0])
+
+	data, _ := json.Marshal(rows[0])
+	fmt.Printf("%+v \n", string(data))
+
+	data1 := map[string]any{}
+	err = json.Unmarshal([]byte(data), &data1)
+	fmt.Printf("%+v \n", data1)
+
+	fmt.Println(err)
 }

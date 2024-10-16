@@ -17,6 +17,7 @@ import (
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	loginM *middleware.Login,
+	securityM *middleware.Security,
 	userLoginM *middleware.UserLogin,
 	dataLimitM *middleware.DataLimit,
 	recordM *middleware.Record,
@@ -87,7 +88,7 @@ func InitRouter(
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
 
 	// 引入admin路由
-	adminRouter := router.Group("/admin/").Use(loginM.Handler())
+	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
@@ -169,7 +170,7 @@ func InitRouter(
 
 	adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
 	adminRouter.GET("security.SensitiveDataLog/info", sensitiveDataLogHandler.Info)
-	adminRouter.GET("security.SensitiveDataLog/rollback", sensitiveDataLogHandler.Rollback)
+	adminRouter.POST("security.SensitiveDataLog/rollback", sensitiveDataLogHandler.Rollback)
 	adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
 
 	adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
