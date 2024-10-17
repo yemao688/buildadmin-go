@@ -403,7 +403,7 @@ func getTestFieldData() []model.Field {
 		},
 		Form: model.FormAttr{
 			Validator: []string{"number"},
-			Step:      "1",
+			Step:      1,
 		},
 		Type:               "int",
 		Length:             10,
@@ -599,7 +599,7 @@ func getTestFieldData() []model.Field {
 		},
 		Form: model.FormAttr{
 			Validator: []string{"float"},
-			Step:      "1",
+			Step:      1,
 		},
 		Type:               "decimal",
 		Length:             6,

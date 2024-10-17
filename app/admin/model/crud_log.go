@@ -103,7 +103,7 @@ type FormAttr struct {
 	SelectMulti string `json:"select-multi"` //下拉框多选
 	ImageMulti  string `json:"image-multi"`  //图片多选上传
 	FileMulti   string `json:"file-multi"`   //文件多选上传
-	Step        string `json:"step"`         //步进值
+	Step        int    `json:"step"`         //步进值
 
 	RemotePk         string `json:"remote-pk"`         //远程下拉value字段
 	RemoteField      string `json:"remote-field"`      //远程下拉label字段

@@ -501,8 +501,8 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 
 	} else if field.DesignType == "number" {
 		step := 1
-		if field.Form.Step != "" && field.Form.Step != "0" {
-			step, _ = strconv.Atoi(field.Form.Step)
+		if field.Form.Step != 0 {
+			step = field.Form.Step
 		}
 		fieldHtml += " :input-attr=\"{ step: " + strconv.Itoa(step) + " }\""
 
