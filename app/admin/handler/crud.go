@@ -57,6 +57,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	record.Tablename = params.Table.Name
 	record.Status = "start"
 	crudLogId := h.crudLogM.RecordCrudStatus(record)
+	h.log.Info("创建crud日志start:" + fmt.Sprintf("%+v", record))
 
 	getTableName := func(tableName string, fullName bool) string {
 		return h.tableM.Name(tableName, fullName)
@@ -71,11 +72,19 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		//数据表存在则删除
 		h.tableM.DelTable(record.Table.Name)
 	}
-	helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
+	h.log.Info("处理表设计")
+	err := helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
+	if err != nil {
+		h.log.Error("处理表设计error:" + err.Error())
+		FailByErr(ctx, err)
+		return
+	}
 
 	//生成文件
+	h.log.Info("生成文件")
 	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns)
 	if err != nil {
+		h.log.Error("生成文件error:" + err.Error())
 		record.ID = crudLogId
 		record.Status = "error"
 		h.crudLogM.RecordCrudStatus(record)
@@ -84,11 +93,17 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}
 
 	// 生成菜单
-	helper.CreateMenu(h.adminRuleM, webViewsDir, tableComment)
+	h.log.Info("生成菜单")
+	if err := helper.CreateMenu(h.adminRuleM, webViewsDir, tableComment); err != nil {
+		h.log.Error("生成菜单error:" + err.Error())
+		FailByErr(ctx, err)
+		return
+	}
 
 	record.ID = crudLogId
 	record.Status = "success"
 	h.crudLogM.RecordCrudStatus(record)
+	h.log.Info("创建crud日志end:" + fmt.Sprintf("%+v", record))
 
 	Success(ctx, map[string]interface{}{})
 }

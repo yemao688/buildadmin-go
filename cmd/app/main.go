@@ -183,6 +183,27 @@ func initLogger() {
 	}
 
 	logger = zap.New(zapcore.NewCore(encoder, zapcore.AddSync(loggerWriter), level), options...)
+
+	//根据不同级别记入不同文件
+	// // 创建不同级别的日志写入器
+	// debugWriter := getLogWriter(filepath.Join(logFileDir, "/app", "debug.log"), config)
+	// infoWriter := getLogWriter(filepath.Join(logFileDir, "/app", "info.log"), config)
+	// warnWriter := getLogWriter(filepath.Join(logFileDir, "/app", "warn.log"), config)
+	// errorWriter := getLogWriter(filepath.Join(logFileDir, "/app", "error.log"), config)
+	// dpanicWriter := getLogWriter(filepath.Join(logFileDir, "/app", "dpanic.log"), config)
+	// panicWriter := getLogWriter(filepath.Join(logFileDir, "/app", "panic.log"), config)
+	// fatalWriter := getLogWriter(filepath.Join(logFileDir, "/app", "fatal.log"), config)
+
+	// // 创建不同级别的核心
+	// core := zapcore.NewTee(
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(debugWriter), zap.DebugLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(infoWriter), zap.InfoLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(warnWriter), zap.WarnLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(errorWriter), zap.ErrorLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(dpanicWriter), zap.DPanicLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(panicWriter), zap.PanicLevel),
+	// 	zapcore.NewCore(encoder, zapcore.AddSync(fatalWriter), zap.FatalLevel),
+	// )
 }
 
 func initValidator() {

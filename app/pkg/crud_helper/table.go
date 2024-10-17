@@ -47,7 +47,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 	pk := getPk(fields)
 	if db.Migrator().HasTable(fullTableName) {
 		//更新表
-		if err := db.Exec("ALTER TABLE `"+fullTableName+"` COMMENT = ?", comment).Error; err != nil {
+		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + comment + "'").Error; err != nil {
 			return err
 		}
 		designChange := table.DesignChange
