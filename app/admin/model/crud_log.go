@@ -79,11 +79,11 @@ type Table struct {
 	WebViewsDir          string        `json:"webViewsDir"`          //WEB端视图目录
 	DesignChange         []ChangeField `json:"designChange"`         //表设计变更
 	Rebuild              string        `json:"rebuild"`              //是否重建
-	Empty                bool          `json:"empty"`                //表格是否有数据
+	Empty                bool          `json:"empty"`                //表格是否有数据,后台增加
 }
 
 type TableAttr struct {
-	Width      string `json:"width"`      //表格列宽度
+	Width      int    `json:"width"`      //表格列宽度
 	Operator   string `json:"operator"`   //公共搜索操作符
 	Sortable   string `json:"sortable"`   //字段排序
 	Render     string `json:"render"`     //渲染方案
@@ -99,7 +99,7 @@ type FormAttr struct {
 	Validator    []string `json:"validator"`    //验证规则
 	ValidatorMsg string   `json:"validatorMsg"` //验证错误提示
 
-	Rows        string `json:"rows"`         //富文本行数
+	Rows        int    `json:"rows"`         //富文本行数
 	SelectMulti string `json:"select-multi"` //下拉框多选
 	ImageMulti  string `json:"image-multi"`  //图片多选上传
 	FileMulti   string `json:"file-multi"`   //文件多选上传
@@ -117,21 +117,21 @@ type FormAttr struct {
 type Field struct {
 	Title             string    `json:"title"`             //生成为
 	Name              string    `json:"name"`              //字段名
+	Type              string    `json:"type"`              //字段类型
 	DataType          string    `json:"dataType"`          //enum,set数据值
+	Length            int       `json:"length"`            //长度
+	Precision         int       `json:"precision"`         //小数点
+	Default           string    `json:"default"`           //字段默认值
+	Null              bool      `json:"null"`              //允许NULL
+	PrimaryKey        bool      `json:"primaryKey"`        //主键
+	Unsigned          bool      `json:"unsigned"`          //无符号
+	AutoIncrement     bool      `json:"autoIncrement"`     //自动递增
 	Comment           string    `json:"comment"`           //字段注释
 	DesignType        string    `json:"designType"`        //字段类型
-	TableBuildExclude string    `json:"tableBuildExclude"` //表单表格字段预定义
-	FormBuildExclude  string    `json:"formBuildExclude"`  //表单表格字段预定义
+	FormBuildExclude  bool      `json:"formBuildExclude"`  //表单表格字段预定义
+	TableBuildExclude bool      `json:"tableBuildExclude"` //表单表格字段预定义
 	Table             TableAttr `json:"table"`             //字段表格属性
 	Form              FormAttr  `json:"form"`              //字段表单属性
-	Type              string    `json:"type"`              //字段类型
-	Length            string    `json:"length"`            //长度
-	Precision         string    `json:"precision"`         //小数点
-	Default           string    `json:"default"`           //字段默认值
-	Null              string    `json:"null"`              //允许NULL
-	PrimaryKey        string    `json:"primaryKey"`        //主键
-	Unsigned          string    `json:"unsigned"`          //无符号
-	AutoIncrement     string    `json:"autoIncrement"`     //自动递增
 
 	OriginalDesignType string `json:"originalDesignType"`
 }

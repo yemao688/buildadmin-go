@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"bytes"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	cErr "go-build-admin/app/pkg/error"
 	"regexp"
@@ -46,7 +47,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 	pk := getPk(fields)
 	if db.Migrator().HasTable(fullTableName) {
 		//更新表
-		if err := db.Exec("ALTER TABLE `?` COMMENT = `?`", fullTableName, comment).Error; err != nil {
+		if err := db.Exec("ALTER TABLE `"+fullTableName+"` COMMENT = ?", comment).Error; err != nil {
 			return err
 		}
 		designChange := table.DesignChange
@@ -70,12 +71,12 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 					return err
 				}
 				fieldData = strings.ReplaceAll(fieldData, "'"+v.OldName+"'", "'"+v.OldName+"'"+" `"+v.NewName+"`")
-				if err := db.Exec("ALTER TABLE `?` CHANGE ?", fullTableName, fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` CHANGE " + fieldData).Error; err != nil {
 					return err
 				}
 
 			} else if v.Type == "del-field" {
-				if err := db.Exec("ALTER TABLE `?` DROP COLUMN `?`", fullTableName, v.OldName).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` DROP COLUMN `" + v.OldName + "`").Error; err != nil {
 					return err
 				}
 			}
@@ -95,7 +96,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				if err != nil {
 					return err
 				}
-				if err := db.Exec("ALTER TABLE `?` MODIFY ?", fullTableName, fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + fieldData).Error; err != nil {
 					return err
 				}
 
@@ -109,7 +110,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				if err != nil {
 					return err
 				}
-				if err := db.Exec("ALTER TABLE `?` ADD  ?", fullTableName, fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD  " + fieldData).Error; err != nil {
 					return err
 				}
 			}
@@ -180,7 +181,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 		DataSet:  "",
 	}
 
-	if field.Unsigned == "1" {
+	if field.Unsigned {
 		fieldTemplData.Unsigned = "unsigned"
 	}
 
@@ -189,7 +190,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 	// 	fieldTemplData.SortRule = "NOT NULL"
 	// }
 
-	if field.Null != "1" {
+	if field.Null {
 		fieldTemplData.Null = "NOT NULL"
 	}
 
@@ -209,7 +210,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 		}
 	}
 
-	if field.AutoIncrement != "" && field.PrimaryKey == "1" {
+	if field.AutoIncrement && field.PrimaryKey {
 		fieldTemplData.Increment = "AUTO_INCREMENT"
 	}
 
@@ -255,7 +256,7 @@ func updateFieldOrder(db *gorm.DB, fullTableName string, fields []model.Field, d
 			} else {
 				fieldData += " FIRST  AFTER `" + v.After + "`"
 			}
-			if err := db.Exec("ALTER TABLE `?` MODIFY ?", fullTableName, fieldData).Error; err != nil {
+			if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + fieldData).Error; err != nil {
 				return err
 			}
 		}
@@ -293,15 +294,15 @@ func analyseFieldLimit(conciseType string, field model.Field) (string, []string)
 		if len(dataTL) == 2 {
 			return "decimalType", []string{dataTL[0], dataTL[1]}
 		}
-		precision := "10"
-		if field.Length != "" {
+		precision := 10
+		if field.Length != 0 {
 			precision = field.Length
 		}
-		scale := "0"
-		if field.Precision != "" {
+		scale := 0
+		if field.Precision != 0 {
 			scale = field.Precision
 		}
-		return "decimalType", []string{precision, scale}
+		return "decimalType", []string{fmt.Sprintf("%v", precision), fmt.Sprintf("%v", scale)}
 	}
 
 	if slices.Contains(valuesType, conciseType) {
@@ -318,8 +319,8 @@ func analyseFieldLimit(conciseType string, field model.Field) (string, []string)
 		return "limitType", []string{dataTL[0]}
 	}
 
-	if field.Length != "" {
-		return "limitType", []string{field.Length}
+	if field.Length != 0 {
+		return "limitType", []string{fmt.Sprintf("%v", field.Length)}
 	}
 	return "", nil
 }
@@ -358,32 +359,32 @@ func ParseTableColumns(columns []model.Column, analyseField bool) []model.Field 
 		}
 		field.DataType = dataType
 
-		isNullAble := "0"
+		isNullAble := false
 		if v.IS_NULLABLE == "YES" {
-			isNullAble = "1"
+			isNullAble = true
 		}
 		field.Null = isNullAble
-		if isNullAble == "1" {
+		if isNullAble {
 			field.Default = "null"
 		} else {
 			field.Default = v.COLUMN_DEFAULT
 		}
 
-		primaryKey := "0"
+		primaryKey := false
 		if v.COLUMN_KEY == "PRI" {
-			primaryKey = "1"
+			primaryKey = true
 		}
 		field.PrimaryKey = primaryKey
 
-		unsigned := "0"
+		unsigned := false
 		if strings.Contains(v.COLUMN_TYPE, "unsigned") {
-			unsigned = "1"
+			unsigned = true
 		}
 		field.Unsigned = unsigned
 
-		autoIncrement := "0"
+		autoIncrement := false
 		if strings.Contains(v.EXTRA, "auto_increment") {
-			autoIncrement = "1"
+			autoIncrement = true
 		}
 		field.AutoIncrement = autoIncrement
 		field.Comment = v.COLUMN_COMMENT
@@ -436,6 +437,6 @@ func isMatchSuffix(name string, suffixArr []string) bool {
 }
 
 // 解析到的表字段的额外处理
-func handleTableColumn() {
-	// 预留
-}
+// func handleTableColumn() {
+// 	// 预留
+// }

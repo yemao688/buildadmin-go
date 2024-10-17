@@ -215,7 +215,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 func getPk(fields []model.Field) string {
 	pk := "id"
 	for _, v := range fields {
-		if v.PrimaryKey == "1" {
+		if v.PrimaryKey {
 			pk = v.Name
 			break
 		}
@@ -234,7 +234,7 @@ func getCommnet(comment string) string {
 
 // 解析文件数据
 func parseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
-	pathArr := []string{}
+	var pathArr []string
 	if file != "" {
 		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
@@ -303,7 +303,7 @@ func TrimPrefix(slice1, slice2 []string) ([]string, []string) {
 }
 
 func ParseWebDirNameData(tableName string, moduleType string, file string) WebDir {
-	pathArr := []string{}
+	var pathArr []string
 	if file != "" {
 		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
@@ -479,8 +479,8 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 
 	} else if field.DesignType == "textarea" {
 		rows := 3
-		if field.Form.Rows != "0" {
-			rows, _ = strconv.Atoi(field.Form.Rows)
+		if field.Form.Rows != 0 {
+			rows = field.Form.Rows
 		}
 
 		fieldHtml += " :input-attr=\"{ rows: " + strconv.Itoa(rows) + " }\""
@@ -616,8 +616,8 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 	if field.Table.Sortable != "" {
 		columnStr += buildTableColumnKey("sortable", field.Table.Sortable)
 	}
-	if field.Table.Width != "" {
-		columnStr += buildTableColumnKey("width", field.Table.Width)
+	if field.Table.Width != 0 {
+		columnStr += buildTableColumnKey("width", fmt.Sprintf("%v", field.Table.Width))
 	}
 	if field.Table.TimeFormat != "" {
 		columnStr += buildTableColumnKey("timeFormat", field.Table.TimeFormat)
@@ -802,7 +802,7 @@ func checkJoinMoel(fields []model.Field, field model.Field, tableName, fullTable
 			joinFieldsMap := map[string]string{}
 			for _, v := range fields {
 				joinFieldsMap[v.Name] = v.DesignType
-				if v.PrimaryKey == "1" {
+				if v.PrimaryKey {
 					joinTablePk = v.Name
 				}
 				parseModelMethods(field, &joinModelData)

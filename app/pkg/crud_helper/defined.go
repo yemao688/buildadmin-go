@@ -234,15 +234,15 @@ type NameInfo struct {
 }
 
 // 属性的类型对照表
-var attrType = map[string]string{
-	"handler/preExcludeFields": "string",
-	"handler/quickSearchField": "string",
-	"handler/withJoinTable":    "array",
-	"handler/defaultSortField": "string",
-}
+// var attrType = map[string]string{
+// 	"handler/preExcludeFields": "string",
+// 	"handler/quickSearchField": "string",
+// 	"handler/withJoinTable":    "array",
+// 	"handler/defaultSortField": "string",
+// }
 
-var createTimeField = "create_time"
-var updateTimeField = "update_time"
+// var createTimeField = "create_time"
+// var updateTimeField = "update_time"
 
 type HandlerData struct {
 	Namespace      string //包名

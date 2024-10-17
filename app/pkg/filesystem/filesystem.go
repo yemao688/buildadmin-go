@@ -170,7 +170,7 @@ func Zip(files []string, zipfileName string, erasePre string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(fullFilePath)
+
 		file, err := os.Open(fullFilePath)
 		if err != nil {
 			return err

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	helper "go-build-admin/app/pkg/crud_helper"
@@ -181,10 +182,14 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 
 // 检查是否已有CRUD记录
 func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
-	tableName := ctx.Request.FormValue("table")
+	tableName := ctx.Query("table")
+	//ctx.Request.FormValue("table")
 	crudLog, err := h.crudLogM.GetByTableName(ctx, tableName)
 	if err != nil {
-		FailByErr(ctx, err)
+		fmt.Println(err)
+		Success(ctx, map[string]interface{}{
+			"id": 0,
+		})
 		return
 	}
 
@@ -192,7 +197,6 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 	if crudLog.Status == "success" {
 		id = crudLog.ID
 	}
-
 	Success(ctx, map[string]interface{}{
 		"id": id,
 	})
@@ -285,7 +289,8 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 
 	outTables := map[string]string{}
 	tables := h.tableM.GetTableList()
-	for name, comment := range tables {
+	for tableName, comment := range tables {
+		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
 		if !slices.Contains(outExcludeTable, strings.TrimPrefix(name, h.config.Database.Prefix)) {
 			outTables[name] = comment
 		}

@@ -70,30 +70,30 @@ func getGenerateStruct(fullTableName string, tableName string) (string, error) {
 	return buf.String(), nil
 }
 
-func buildModelAppend() {
+// func buildModelAppend() {
 
-}
+// }
 
-func buildFormatSimpleArray(data []string, tab int) string {
-	if len(data) == 0 {
-		return "[]"
-	}
-	str := "["
-	for _, v := range data {
-		_, err := strconv.Atoi(v)
-		if v == "undefined" || v == "false" || err != nil {
-			str += Tab(tab) + v + ","
-		} else {
-			quote := getQuote(v)
-			str += Tab(tab) + quote + v + quote + ", "
-		}
-	}
-	return str + Tab(tab-1) + "]"
-}
+// func buildFormatSimpleArray(data []string, tab int) string {
+// 	if len(data) == 0 {
+// 		return "[]"
+// 	}
+// 	str := "["
+// 	for _, v := range data {
+// 		_, err := strconv.Atoi(v)
+// 		if v == "undefined" || v == "false" || err != nil {
+// 			str += Tab(tab) + v + ","
+// 		} else {
+// 			quote := getQuote(v)
+// 			str += Tab(tab) + quote + v + quote + ", "
+// 		}
+// 	}
+// 	return str + Tab(tab-1) + "]"
+// }
 
-func buildModelFieldType() {
+// func buildModelFieldType() {
 
-}
+// }
 
 func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
 	//渲染文件内容

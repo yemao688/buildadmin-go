@@ -278,7 +278,6 @@ func (h *AccountHandler) ChangePassword(ctx *gin.Context) {
 
 // 积分日志
 func (h *AccountHandler) Integral(ctx *gin.Context) {
-	fmt.Println(ctx.ClientIP())
 	userAuth := header.GetUserAuth(ctx)
 	result, total, err := h.userScoreLogM.List(ctx, userAuth.Id)
 	if err != nil {
