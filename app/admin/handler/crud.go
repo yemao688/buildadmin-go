@@ -95,8 +95,16 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 
 // 从log开始
 func (h *CrudHandler) LogStart(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	crudLog, err := h.crudLogM.GetOne(ctx, int32(id))
+	params := struct {
+		Id int32 `json:"id" binding:"required"`
+	}{}
+
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+
+	crudLog, err := h.crudLogM.GetOne(ctx, params.Id)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -204,6 +212,7 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 
 // 解析字段数据
 func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
+
 	params := struct {
 		TableName string `json:"table" binding:"required"`
 		Type      string `json:"type"`
