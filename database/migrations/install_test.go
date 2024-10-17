@@ -29,13 +29,13 @@ func getDB() *gorm.DB {
 	return db
 }
 
-func TestParseWebDirNameData(t *testing.T) {
+func TestInstall(t *testing.T) {
 	db := getDB()
 	install := NewInstall(db)
 	install.CreateTable()
 }
 
-func TestAddColumn(t *testing.T) {
+func TestRenameColumn(t *testing.T) {
 	db := getDB()
 	admin := model.Admin{}
 
