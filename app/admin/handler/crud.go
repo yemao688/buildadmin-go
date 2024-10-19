@@ -10,6 +10,7 @@ import (
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -58,6 +59,9 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	record.Status = "start"
 	crudLogId := h.crudLogM.RecordCrudStatus(record)
 	h.log.Info("创建crud日志start:" + fmt.Sprintf("%+v", record))
+	h.log.Info("请求参数Type:" + fmt.Sprintf("%+v", params.Type))
+	h.log.Info("请求参数Table:" + fmt.Sprintf("%+v", params.Table))
+	h.log.Info("请求参数Fields:" + fmt.Sprintf("%+v", params.Fields))
 
 	getTableName := func(tableName string, fullName bool) string {
 		return h.tableM.Name(tableName, fullName)
@@ -72,7 +76,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		//数据表存在则删除
 		h.tableM.DelTable(record.Table.Name)
 	}
-	h.log.Info("处理表设计")
+	h.log.Info("开始处理表设计")
 	err := helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
 	if err != nil {
 		h.log.Error("处理表设计error:" + err.Error())
@@ -81,7 +85,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}
 
 	//生成文件
-	h.log.Info("生成文件")
+	h.log.Info("开始生成文件")
 	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns)
 	if err != nil {
 		h.log.Error("生成文件error:" + err.Error())
@@ -91,11 +95,27 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	h.log.Info("webViewsDir数据:" + fmt.Sprintf("%+v", webViewsDir))
 
 	// 生成菜单
-	h.log.Info("生成菜单")
+	h.log.Info("开始生成菜单")
 	if err := helper.CreateMenu(h.adminRuleM, webViewsDir, tableComment); err != nil {
 		h.log.Error("生成菜单error:" + err.Error())
+		FailByErr(ctx, err)
+		return
+	}
+
+	h.log.Info("wire注入")
+	cmd := exec.Command("wire")                             // 构造wire命令
+	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
+	if err := cmd.Start(); err != nil {                     // 执行命令
+		h.log.Info("wire start error:" + err.Error())
+		FailByErr(ctx, err)
+		return
+	}
+
+	if err := cmd.Wait(); err != nil {
+		h.log.Info("wire wait error:" + err.Error())
 		FailByErr(ctx, err)
 		return
 	}

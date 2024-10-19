@@ -64,24 +64,29 @@ func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComme
 		}
 
 		for _, v := range menuChildren {
+			var err error
 			rule := model.AdminRule{}
 			name := menuName + v.Name
 			result = adminRuleM.DB().Where("name=?", name).First(&rule)
 			if result.RowsAffected == 1 {
-				adminRuleM.DB().Model(&model.AdminRule{}).Where("id=?", rule.ID).Updates(map[string]any{
+				err = adminRuleM.DB().Model(&model.AdminRule{}).Where("id=?", rule.ID).Updates(map[string]any{
 					"pid":    menuRule.ID,
 					"Type":   v.Type,
 					"Title":  v.Title,
 					"Status": v.Status,
-				})
+				}).Error
 			} else {
-				adminRuleM.DB().Create(&model.AdminRule{
+				err = adminRuleM.DB().Create(&model.AdminRule{
 					Pid:    menuRule.ID,
 					Type:   v.Type,
 					Title:  v.Title,
 					Name:   name,
 					Status: v.Status,
-				})
+				}).Error
+			}
+
+			if err != nil {
+				return err
 			}
 		}
 	}

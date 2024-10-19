@@ -5,7 +5,6 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -113,19 +112,6 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
 	if err := writeRouter(handlerData.ClassName); err != nil {
 		return err
 	}
-
-	// 构造wire命令
-	cmd := exec.Command("wire")
-	// 设置工作目录
-	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
-	// 执行命令
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	if err := cmd.Wait(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -220,7 +206,7 @@ func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile N
 	}
 	data["componentName"] = componentName
 	data["optButtons"] = buildSimpleArray(indexVueData.OptButtons)
-	data["apiUrl"] = "'/admin/" + handlerFile.LastName + "/'"
+	data["apiUrl"] = "'/admin/" + utils.SnakeToCamel(handlerFile.LastName, false) + "/'"
 	data["tablePk"] = indexVueData.TablePk
 	data["tableColumn"] = buildTableColumn(indexVueData.TableColumn)
 	data["dblClickNotEditColumn"] = buildSimpleArray(indexVueData.DblClickNotEditColumn)
