@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/utils"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -154,4 +157,17 @@ func TestHandleTableDesign(t *testing.T) {
 
 	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
 	HandleTableDesign(db, fullTableName, table, fields)
+}
+
+func TestCmd(t *testing.T) {
+	cmd := exec.Command("wire")                             // 构造wire命令
+	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
+	if err := cmd.Start(); err != nil {                     // 执行命令
+		fmt.Println("start" + err.Error())
+		return
+	}
+
+	if err := cmd.Wait(); err != nil {
+		fmt.Println("Wait" + err.Error())
+	}
 }
