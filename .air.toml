@@ -1,26 +1,47 @@
+#https://github.com/air-verse/air/blob/master/air_example.toml#L8
+# Working directory
+# . or absolute path, please note that the directories following must be under root.
 root = "."
-testdata_dir = "test"
 tmp_dir = "/tmp"
 
 [build]
-  args_bin = []
-  bin = "tmp\\main.exe --conf config.local.yaml"
+  # pre_cmd = ["cd ./cmd/app && wire.exe"]
+  # Just plain old shell command. You could use `make` as well.
   cmd = "go build -o ./tmp/main.exe ./cmd/app"
-  delay = 1000
-  exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web"]
-  exclude_file = []
-  exclude_regex = ["_test.go"]
-  exclude_unchanged = false
-  follow_symlink = false
+  # Binary file yields from `cmd`.
+  bin = "tmp\\main.exe --conf config.local.yaml"
+  # Customize binary, can setup environment variables when run your app.
   full_bin = ""
-  include_dir = []
+  args_bin = []
+  # Ignore these filename extensions or directories.
+  exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web"]
+  # Exclude files.
+  exclude_file = []
+  # Exclude specific regular expressions.
+  exclude_regex = ["_test.go",'_gen.go']
+  # Watch these filename extensions.
   include_ext = ["go", "tpl", "tmpl", "html"]
-  kill_delay = "0s"
+  # Watch these directories if you specified.
+  include_dir = []
+  include_file = []
+  # Exclude unchanged files.
+  exclude_unchanged = true
+  follow_symlink = true
   log = "build-errors.log"
-  send_interrupt = false
+  # It's not necessary to trigger build each time file changes if it's too frequent.
+  delay = 7000 # ms
+  # Stop running old binary when build errors occur.
   stop_on_error = true
+  # Send Interrupt signal before killing process (windows does not support this feature)
+  send_interrupt = true
+  kill_delay = 50000000 # nanosecond
+  # Rerun binary or not
+  #rerun = false
+  # Delay after each execution
+  #rerun_delay = 500
 
 [color]
+  # Customize each part's color. If no color found, use the raw app log.
   app = ""
   build = "yellow"
   main = "magenta"
@@ -31,9 +52,11 @@ tmp_dir = "/tmp"
   time = true
 
 [misc]
+  # Delete tmp directory on exit
   clean_on_exit = false
 
 [screen]
-  clear_on_rebuild = false
+  clear_on_rebuild = true
 
 
+[proxy]

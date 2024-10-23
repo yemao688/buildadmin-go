@@ -105,6 +105,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		return
 	}
 
+	// 命令行模式可通过代码wire实现注入,接口模式下可能wire还没有执行完air就重新编译了,可延迟.air.toml配置文件的delay时间
 	h.log.Info("wire注入")
 	cmd := exec.Command("wire")                             // 构造wire命令
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
