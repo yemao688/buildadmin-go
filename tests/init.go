@@ -142,6 +142,6 @@ func setupRouter() *gin.Engine {
 	// 	panic(err)
 	// }
 	// return r
-
+	logger.Info("取消注释,目录下执行wire命令,生成wire_gen.go")
 	return gin.Default()
 }
