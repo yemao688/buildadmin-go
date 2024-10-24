@@ -14,7 +14,7 @@ tmp_dir = "/tmp"
   full_bin = ""
   args_bin = []
   # Ignore these filename extensions or directories.
-  exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web"]
+  exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web","tests"]
   # Exclude files.
   exclude_file = []
   # Exclude specific regular expressions.

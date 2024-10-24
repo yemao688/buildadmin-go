@@ -54,6 +54,7 @@ func InitRouter(
 	apiIndexHandler *api.IndexHandler,
 	apiInstallHandler *api.InstallHandler,
 	apiUserHandler *api.UserHandler,
+	apiDemoHandler *api.DemoHandler,
 
 ) *gin.Engine {
 	router := gin.New()
@@ -64,7 +65,7 @@ func InitRouter(
 		middleware.CustomRecovery(loggerWriter),
 		//开启多语言
 		ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-			RootPath:         "conf/localize",
+			RootPath:         utils.RootPath() + "/conf/localize",
 			AcceptLanguage:   []language.Tag{language.Chinese, language.TraditionalChinese, language.English},
 			DefaultLanguage:  language.Chinese,
 			UnmarshalFunc:    json.Unmarshal,
@@ -241,6 +242,7 @@ func InitRouter(
 	apiRouter.POST("install/manualInstall", apiInstallHandler.ManualInstall)
 	apiRouter.POST("install/mvDist", apiInstallHandler.MvDist)
 
+	apiRouter.POST("demo/index", apiDemoHandler.Index)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	admin.CollectRoutes(router)
