@@ -200,12 +200,13 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	}
 
 	// 写入模型代码
-	if err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile); err != nil {
+	err, structContent := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile)
+	if err != nil {
 		return WebDir{}, "", err
 	}
 
 	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile); err != nil {
+	if err := writeHandlerFile(handlerData, handlerFile, structContent); err != nil {
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err

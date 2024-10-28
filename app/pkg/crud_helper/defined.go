@@ -251,6 +251,7 @@ type HandlerData struct {
 	ModelName      string //模型类名
 	ModelVar       string //模型变量名
 	TableComment   string //表备注
+	ValidateParam  string //表单参数
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
@@ -296,8 +297,8 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	})
 }
 
-type {{.ClassName}}Param struct {
-}
+{{.ValidateParam}}
+
 
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	var params {{.ClassName}}Param

@@ -220,6 +220,8 @@ func InitRouter(
 	router.POST("/api/common/checkClickCaptcha", apiCommonHandler.CheckClickCaptcha)
 	router.POST("/api/common/refreshToken", apiCommonHandler.RefreshToken)
 
+	router.POST("/api/demo/index", apiDemoHandler.Index)
+
 	// 引入api接口路由
 	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
 	apiRouter.GET("account/overview", apiAccountHandler.Overview)
@@ -242,7 +244,6 @@ func InitRouter(
 	apiRouter.POST("install/manualInstall", apiInstallHandler.ManualInstall)
 	apiRouter.POST("install/mvDist", apiInstallHandler.MvDist)
 
-	apiRouter.POST("demo/index", apiDemoHandler.Index)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	admin.CollectRoutes(router)

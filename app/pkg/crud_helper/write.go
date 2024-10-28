@@ -16,25 +16,28 @@ import (
 	"gorm.io/gorm"
 )
 
-func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) error {
+func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (error, string) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
 	structContent, err := getGenerateStruct(fullTableName, tableName)
 	if err != nil {
-		return err
+		return err, ""
 	}
 	modelData.StructTemp = structContent
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
-		return err
+		return err, ""
 	}
 	if err := writeFile(modelFile.ParseFile, modelContent); err != nil {
-		return err
+		return err, ""
 	}
-	//写入provider
-	return writeProvider(modelFile.RootFileName, modelData.ClassName+"Model")
+
+	if err := writeProvider(modelFile.RootFileName, modelData.ClassName+"Model"); err != nil {
+		return err, ""
+	}
+	return nil, structContent
 }
 
 func getGenerateStruct(fullTableName string, tableName string) (string, error) {
@@ -94,7 +97,14 @@ func getGenerateStruct(fullTableName string, tableName string) (string, error) {
 
 // }
 
-func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo) error {
+func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string) error {
+
+	index := strings.Index(structContent, "struct {")
+	if index == -1 {
+		return nil
+	}
+	handlerData.ValidateParam = "type " + handlerData.ClassName + "Param " + structContent[index:]
+
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
 	if err != nil {
