@@ -285,6 +285,9 @@ func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *model.{{.ModelNam
 }
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
+	if data, ok := h.Select(ctx); ok {
+		Success(ctx, data)
+	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -302,7 +305,7 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	var params {{.ClassName}}Param
-	if err := ctx.ShouldBindQuery(&params); err != nil {
+	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
@@ -317,15 +320,23 @@ func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
-	var params {{.ClassName}}Param
-	if err := ctx.ShouldBindQuery(&params); err != nil {
+	var params = struct {
+		IDS
+		{{.ClassName}}Param
+	}{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	var data model.{{.ClassName}}
+	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
 	copier.Copy(&data, params)
-	err := h.{{.ModelVar}}M.Edit(ctx, data)
+	err = h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

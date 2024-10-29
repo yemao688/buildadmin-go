@@ -37,7 +37,7 @@ type TestBuildParam struct {
 
 func (h *TestBuildHandler) Add(ctx *gin.Context) {
 	var params TestBuildParam
-	if err := ctx.ShouldBindQuery(&params); err != nil {
+	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
@@ -53,7 +53,7 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
 	var params TestBuildParam
-	if err := ctx.ShouldBindQuery(&params); err != nil {
+	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}

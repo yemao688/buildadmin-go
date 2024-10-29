@@ -200,7 +200,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	}
 
 	// 写入模型代码
-	err, structContent := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile)
+	structContent, err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}

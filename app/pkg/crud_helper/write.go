@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
@@ -17,28 +18,28 @@ import (
 	"gorm.io/gorm"
 )
 
-func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (error, string) {
+func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
 	structContent, err := getGenerateStruct(fullTableName, tableName)
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 	modelData.StructTemp = structContent
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 	if err := writeFile(modelFile.ParseFile, modelContent); err != nil {
-		return err, ""
+		return "", err
 	}
 
 	if err := writeProvider(modelFile.RootFileName, modelData.ClassName+"Model"); err != nil {
-		return err, ""
+		return "", err
 	}
-	return nil, structContent
+	return structContent, nil
 }
 
 func getGenerateStruct(fullTableName string, tableName string) (string, error) {
@@ -99,12 +100,25 @@ func getGenerateStruct(fullTableName string, tableName string) (string, error) {
 // }
 
 func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string) error {
-
+	//请求参数验证结构体
 	index := strings.Index(structContent, "struct {")
 	if index == -1 {
 		return nil
 	}
-	handlerData.ValidateParam = "type " + handlerData.ClassName + "Param " + structContent[index:]
+	validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
+
+	re := regexp.MustCompile(`gorm:"[^"]*" `)
+	validateContent = re.ReplaceAllString(validateContent, "")
+
+	var newLines []string
+	lines := strings.Split(validateContent, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, `json:"id"`) {
+			continue
+		}
+		newLines = append(newLines, line)
+	}
+	handlerData.ValidateParam = strings.Join(newLines, "\n")
 
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
