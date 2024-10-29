@@ -18,7 +18,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -163,8 +162,12 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 
 // 删除CRUD记录和生成的文件
 func (h *CrudHandler) Delete(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	crudLog, err := h.crudLogM.GetOne(ctx, int32(id))
+	var param IDS
+	if err := ctx.ShouldBindJSON(&param); err != nil {
+		FailByErr(ctx, validate.GetError(param, err))
+		return
+	}
+	crudLog, err := h.crudLogM.GetOne(ctx, param.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -204,7 +207,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	h.adminRuleM.Delete(path, true)
 
 	record := model.CrudLog{
-		ID:     int32(id),
+		ID:     param.ID,
 		Status: "delete",
 	}
 	h.crudLogM.RecordCrudStatus(record)

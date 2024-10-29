@@ -208,6 +208,10 @@ func RemoveRouter(name string) error {
 	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
 	newStr = strings.Replace(string(newStr), route, "", -1)
 
+	newStr, err = formatGoCode(newStr)
+	if err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
 }
 
@@ -240,17 +244,6 @@ func RemoveProvider(dir string, name string) error {
 	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(newContent), 0644)
 }
 
-func writeFile(path string, content string) error {
-	dir := filepath.Dir(path)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		// 创建目录
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-	return os.WriteFile(path, []byte(content), 0644)
-}
-
 func formatGoCode(code string) (string, error) {
 	// 创建 gofmt 命令
 	cmd := exec.Command("gofmt")
@@ -262,6 +255,17 @@ func formatGoCode(code string) (string, error) {
 		return "", err
 	}
 	return string(output), nil
+}
+
+func writeFile(path string, content string) error {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		// 创建目录
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(path, []byte(content), 0644)
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {

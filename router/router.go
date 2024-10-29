@@ -188,7 +188,7 @@ func InitRouter(
 	adminRouter.POST("crud.Crud/generateCheck", crudHandler.GenerateCheck)
 	adminRouter.POST("crud.Crud/generate", crudHandler.Generate)
 	adminRouter.POST("crud.Crud/logStart", crudHandler.LogStart)
-	adminRouter.DELETE("crud.Crud/delete", crudHandler.Delete)
+	adminRouter.POST("crud.Crud/delete", crudHandler.Delete)
 
 	adminRouter.GET("crud.Log/index", crudLogHandler.Index)
 
@@ -247,5 +247,6 @@ func InitRouter(
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	admin.CollectRoutes(router)
+
 	return router
 }
