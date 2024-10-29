@@ -34,12 +34,12 @@ func TestParseNameData(t *testing.T) {
 	module := "admin"
 	tableName := "test1"
 	table := getTestTableData()
-	modelFile, err := parseNameData(module, tableName, "model", table.ModelFile)
+	modelFile, err := ParseNameData(module, tableName, "model", table.ModelFile)
 	content, _ := json.MarshalIndent(modelFile, "", " ")
 	fmt.Println(string(content))
 	fmt.Println(err)
 
-	handlerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
+	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
 	content, _ = json.MarshalIndent(handlerFile, "", " ")
 	fmt.Println(string(content))
 	fmt.Println(err)

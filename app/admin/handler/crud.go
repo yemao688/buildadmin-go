@@ -11,6 +11,7 @@ import (
 	"go-build-admin/utils"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -169,6 +170,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		return
 	}
 
+	h.log.Info("删除web页面文件start")
 	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
 	files := []string{
 		webLangDir.LangDir + "/en/" + webLangDir.LastName + ".ts",
@@ -177,7 +179,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		crudLog.Table.WebViewsDir + "/popupForm.vue",
 		crudLog.Table.ControllerFile,
 		crudLog.Table.ModelFile,
-		crudLog.Table.ValidateFile,
+		// crudLog.Table.ValidateFile,
 	}
 
 	for _, v := range files {
@@ -197,6 +199,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	}
 
 	// 删除菜单
+	h.log.Info("删除菜单")
 	path := helper.GetMenuName(webLangDir)
 	h.adminRuleM.Delete(path, true)
 
@@ -206,22 +209,85 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	}
 	h.crudLogM.RecordCrudStatus(record)
 
-	//TODO: 删除provider和路由
+	h.log.Info("删除provider和路由")
+	dirPath := filepath.Dir(crudLog.Table.ControllerFile)
+	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Handler")
 
+	dirPath = filepath.Dir(crudLog.Table.ModelFile)
+	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Model")
+
+	helper.RemoveRouter(crudLog.Table.Name)
 	Success(ctx, map[string]interface{}{})
 }
 
 // 获取文件路径数据
 func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 	params := struct {
-		TableName   string `json:"table" binding:"required"`
-		CommonModel bool   `json:"commonModel"`
+		TableName   string `form:"table" json:"table" binding:"required"`
+		CommonModel int    `form:"commonModel" json:"commonModel"`
 	}{}
 
-	if err := ctx.ShouldBindJSON(&params); err != nil {
+	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	module := "admin"
+	if params.CommonModel != 0 {
+		module = "common"
+	}
+	modelFile, err := helper.ParseNameData(module, params.TableName, "model", "")
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	fmt.Printf("%+v", modelFile)
+	handlerFile, err := helper.ParseNameData("admin", params.TableName, "handler", "")
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	fmt.Printf("%+v", handlerFile)
+	webViewsDir := helper.ParseWebDirNameData(params.TableName, "views", "")
+	modelFileList := map[string]string{}
+	adminModelFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "app/admin/model"), []string{".go"})
+	for _, v := range adminModelFiles {
+		v = path.Join("app/admin/model", v)
+		modelFileList[v] = v
+	}
+	commonModelFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "app/common/model"), []string{".go"})
+	for _, v := range commonModelFiles {
+		v = path.Join("app/common/model", v)
+		modelFileList[v] = v
+	}
+
+	outExcludeHandler := []string{
+		"addon.go",
+		"ajax.go",
+		"dashboard.go",
+		"index.go",
+		"module.go",
+		"terminal.go",
+		"admin_info.go",
+		"config.go",
+	}
+	controllerFiles := map[string]string{}
+	adminControllerFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "app/admin/handler"), []string{".go"})
+	for _, v := range adminControllerFiles {
+		if slices.Contains(outExcludeHandler, v) {
+			continue
+		}
+
+		v = path.Join("app/admin/handler", v)
+		controllerFiles[v] = v
+	}
+	Success(ctx, map[string]any{
+		"modelFile":          modelFile.RootFileName + "\\" + modelFile.OriginalLastName + ".go",
+		"controllerFile":     handlerFile.RootFileName + "\\" + handlerFile.OriginalLastName + ".go",
+		"validateFile":       "",
+		"controllerFileList": controllerFiles,
+		"modelFileList":      modelFileList,
+		"webViewsDir":        webViewsDir.Views,
+	})
 }
 
 // 检查是否已有CRUD记录
@@ -230,7 +296,6 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 	//ctx.Request.FormValue("table")
 	crudLog, err := h.crudLogM.GetByTableName(ctx, tableName)
 	if err != nil {
-		fmt.Println(err)
 		Success(ctx, map[string]interface{}{
 			"id": 0,
 		})

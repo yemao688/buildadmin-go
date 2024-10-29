@@ -26,11 +26,11 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	if table.IsCommonModel != 0 {
 		module = "common"
 	}
-	modelFile, err := parseNameData(module, tableName, "model", table.ModelFile)
+	modelFile, err := ParseNameData(module, tableName, "model", table.ModelFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}
-	handlerFile, err := parseNameData("admin", tableName, "handler", table.ControllerFile)
+	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -234,7 +234,7 @@ func getCommnet(comment string) string {
 }
 
 // 解析文件数据
-func parseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
+func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
 	var pathArr []string
 	if file != "" {
 		file = strings.TrimSuffix(file, ".go")
@@ -778,7 +778,7 @@ func checkJoinMoel(fields []model.Field, field model.Field, tableName, fullTable
 	path := filepath.Join(utils.RootPath(), field.Form.RemoteModel)
 	_, err := os.Stat(path)
 	if field.Form.RemoteModel == "" || os.IsNotExist(err) {
-		joinModelFile, err := parseNameData("admin", tableName, "model", field.Form.RemoteModel)
+		joinModelFile, err := ParseNameData("admin", tableName, "model", field.Form.RemoteModel)
 		if err != nil {
 			return "", err
 		}

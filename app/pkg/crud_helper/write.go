@@ -5,6 +5,7 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -168,6 +169,34 @@ func writeRouter(name string) error {
 	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
 }
 
+func RemoveRouter(name string) error {
+	content, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
+	if err != nil {
+		return err
+	}
+
+	nameVar := utils.SnakeToCamel(name, false)
+	paramContent := "	" + nameVar + "Handler *admin." + name + "Handler,"
+	newStr := strings.Replace(string(content), paramContent, "", -1)
+
+	route := `adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)`
+	newStr = strings.Replace(string(newStr), route, "", -1)
+
+	route = `adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)`
+	newStr = strings.Replace(string(newStr), route, "", -1)
+
+	route = `adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)`
+	newStr = strings.Replace(string(newStr), route, "", -1)
+
+	route = `adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)`
+	newStr = strings.Replace(string(newStr), route, "", -1)
+
+	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
+	newStr = strings.Replace(string(newStr), route, "", -1)
+
+	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
+}
+
 func writeProvider(dir string, name string) error {
 	content, err := os.ReadFile(filepath.Join(utils.RootPath(), dir, "provider.go"))
 	if err != nil {
@@ -183,6 +212,20 @@ func writeProvider(dir string, name string) error {
 	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(content), 0644)
 }
 
+// 移除生成的相应代码
+func RemoveProvider(dir string, name string) error {
+	content, err := os.ReadFile(filepath.Join(utils.RootPath(), dir, "provider.go"))
+	if err != nil {
+		return err
+	}
+	newContent := strings.ReplaceAll(string(content), "New"+name+",", "")
+	newContent, err = formatGoCode(newContent)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(newContent), 0644)
+}
+
 func writeFile(path string, content string) error {
 	dir := filepath.Dir(path)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
@@ -192,6 +235,19 @@ func writeFile(path string, content string) error {
 		}
 	}
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+func formatGoCode(code string) (string, error) {
+	// 创建 gofmt 命令
+	cmd := exec.Command("gofmt")
+	cmd.Stdin = strings.NewReader(code)
+
+	// 获取输出
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {
