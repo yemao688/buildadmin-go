@@ -105,18 +105,8 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		return
 	}
 
-	// 命令行模式可通过代码wire实现注入,接口模式下可能wire还没有执行完air就重新编译了,可延迟.air.toml配置文件的delay时间
 	h.log.Info("wire注入")
-	cmd := exec.Command("wire")                             // 构造wire命令
-	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
-	if err := cmd.Start(); err != nil {                     // 执行命令
-		h.log.Info("wire start error:" + err.Error())
-		FailByErr(ctx, err)
-		return
-	}
-
-	if err := cmd.Wait(); err != nil {
-		h.log.Info("wire wait error:" + err.Error())
+	if err := h.execWire(ctx); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -127,6 +117,23 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	h.log.Info("创建crud日志end:" + fmt.Sprintf("%+v", record))
 
 	Success(ctx, map[string]interface{}{})
+}
+
+// 命令行模式可通过代码wire实现注入,接口模式下可能wire还没有执行完air就重新编译了,可延迟.air.toml配置文件的delay时间
+// 或者修改.air.toml的pre_cmd配置,每次更新是执行wire命令
+func (h *CrudHandler) execWire(ctx *gin.Context) error {
+	cmd := exec.Command("wire")                             // 构造wire命令
+	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
+	if err := cmd.Start(); err != nil {                     // 执行命令
+		h.log.Info("wire start error:" + err.Error())
+		return err
+	}
+
+	if err := cmd.Wait(); err != nil {
+		h.log.Info("wire wait error:" + err.Error())
+		return err
+	}
+	return nil
 }
 
 // 从log开始
@@ -220,6 +227,11 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Model")
 
 	helper.RemoveRouter(crudLog.Table.Name)
+
+	if err := h.execWire(ctx); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	Success(ctx, map[string]interface{}{})
 }
 

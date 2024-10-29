@@ -190,7 +190,8 @@ func RemoveRouter(name string) error {
 	}
 
 	nameVar := utils.SnakeToCamel(name, false)
-	paramContent := "	" + nameVar + "Handler *admin." + name + "Handler,"
+	paramContent := nameVar + "Handler *admin." + strings.ToUpper(nameVar[:1]) + nameVar[1:] + "Handler,"
+
 	newStr := strings.Replace(string(content), paramContent, "", -1)
 
 	route := `adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)`
