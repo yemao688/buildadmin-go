@@ -4,6 +4,7 @@ import (
 	adminModel "go-build-admin/app/admin/model"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/utils"
 	"net/http"
 	"strconv"
@@ -17,10 +18,11 @@ type AjaxHandler struct {
 	areaM        *model.AreaModel
 	tableM       *adminModel.TableModel
 	uploadHelper *model.UploadHelper
+	terminal     *terminal.Terminal
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper) *AjaxHandler {
-	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper}
+func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper, terminal *terminal.Terminal) *AjaxHandler {
+	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal}
 }
 
 func (h *AjaxHandler) Upload(ctx *gin.Context) {
@@ -95,5 +97,6 @@ func (h *AjaxHandler) ClearCache(ctx *gin.Context) {
 
 func (h *AjaxHandler) Terminal(ctx *gin.Context) {
 
+	h.terminal.Exec(ctx, false)
 	Success(ctx, "")
 }

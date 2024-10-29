@@ -199,6 +199,7 @@ func InitRouter(
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
 	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
+	adminRouter.POST("ajax/terminal", ajaxHandler.Terminal)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)

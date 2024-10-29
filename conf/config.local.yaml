@@ -81,7 +81,7 @@ upload:
 
 terminal:
   npm_package_manager: 'npm'
-  install_service_port: '8000'
+  install_service_port: '9989'
   commands:
     migrate:
       run: 
