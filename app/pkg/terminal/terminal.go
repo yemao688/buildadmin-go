@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -76,16 +78,15 @@ type OutputFunc func(string)
 
 // 执行命令
 func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
-	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
-	ctx.Writer.Header().Set("Content-Type", "text/event-stream")
-	ctx.Writer.Header().Set("Cache-Control", "no-cache")
+	ctx.Header("X-Accel-Buffering", "no")
+	ctx.Header("Content-Type", "text/event-stream")
+	ctx.Header("Cache-Control", "no-cache")
+	ctx.Header("Connection", "keep-alive")
 
 	uuid := ctx.Query("uuid")
 	extend := ctx.Query("extend")
 	commandKey := ctx.Query("command")
 
-	// 创建一个通道，用于控制何时结束 SSE 发送
-	stopChan := make(chan struct{})
 	// 保持连接开放
 	flusher := ctx.Writer.(http.Flusher)
 
@@ -98,8 +99,8 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 			"key":    commandKey,
 		}
 		content, _ := json.Marshal(outData)
-
-		ctx.Writer.Write([]byte(content))
+		sseContent := fmt.Sprintf("data: %s\n\n", content)
+		ctx.Writer.Write([]byte(sseContent))
 		flusher.Flush()
 	}
 
@@ -117,64 +118,68 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 	output(t.OutputFlag("link-success"))
 	output("> " + command.Command)
 
-	// 创建一个 goroutine 用于发送数据
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/C", command.Command)
+	} else {
+		cmd = exec.Command("sh", "-c", command.Command)
+	}
+
+	if command.Cwd != "" {
+		cmd.Dir = path.Join(command.Cwd)
+		fmt.Println(cmd.Dir)
+	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.ExecError(output, fmt.Sprintf("error creating stdout pipe: %s", err.Error()))
+		return
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.ExecError(output, fmt.Sprintf("error creating stderr pipe: %s", err.Error()))
+		return
+	}
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		t.ExecError(output, fmt.Sprintf("error starting command: %s", err.Error()))
+		return
+	}
+
+	// 读取并流式传输 stdout 和 stderr
+	var wg sync.WaitGroup
+	wg.Add(2)
+
 	go func() {
-		defer close(stopChan)
-		cmd := exec.Command(command.Command)
-		if command.Cwd != "" {
-			cmd.Dir = filepath.Join(utils.RootPath(), command.Cwd)
+		defer wg.Done()
+		scan := bufio.NewScanner(stdout)
+		for scan.Scan() {
+			line := scan.Text()
+			output(line)
 		}
-
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			t.ExecError(output, fmt.Sprintf("error creating stdout pipe: %s", err.Error()))
-			return
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			t.ExecError(output, fmt.Sprintf("error creating stderr pipe: %s", err.Error()))
-			return
-		}
-
-		// 启动命令
-		if err := cmd.Start(); err != nil {
-			t.ExecError(output, fmt.Sprintf("error starting command: %s", err.Error()))
-			return
-		}
-
-		// 读取并流式传输 stdout 和 stderr
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		go func() {
-			defer wg.Done()
-			scan := bufio.NewScanner(stdout)
-			for scan.Scan() {
-				line := scan.Text()
-				output(line)
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			scan := bufio.NewScanner(stderr)
-			for scan.Scan() {
-				line := scan.Text()
-				output(line)
-			}
-		}()
-		// 等待读取完成
-		wg.Wait()
-
-		// 等待命令完成
-		if err := cmd.Wait(); err != nil {
-			t.ExecError(output, fmt.Sprintf("error waiting for command: %s", err.Error()))
-			return
-		}
-		t.SuccessCallback(output, commandKey, extend)
 	}()
-	// 等待停止信号
-	<-stopChan
+
+	go func() {
+		defer wg.Done()
+		scan := bufio.NewScanner(stderr)
+		for scan.Scan() {
+			line := scan.Text()
+			output(line)
+		}
+	}()
+	// 等待读取完成
+	wg.Wait()
+
+	// 等待命令完成
+	if err := cmd.Wait(); err != nil {
+		t.ExecError(output, fmt.Sprintf("error waiting for command: %s", err.Error()))
+		return
+	}
+	if t.SuccessCallback(output, commandKey, extend) {
+		output(t.OutputFlag("exec-success"))
+	}
+
 	output(t.OutputFlag("exec-completed"))
 }
 
@@ -232,7 +237,7 @@ func (t *Terminal) ExecError(outputFunc OutputFunc, errMsg string) {
 }
 
 func (t *Terminal) OutputFlag(flag string) string {
-	return Flag["exec-error"]
+	return Flag[flag]
 }
 
 /**
@@ -271,20 +276,18 @@ func (t *Terminal) MvDist() bool {
 	toAssetsPath := filepath.Join(utils.RootPath(), "static", "assets")
 	if err := os.Remove(toIndexHtmlPath); err != nil {
 		t.log.Info(err.Error())
-		return false
 	}
 
 	if err := filesystem.DelDir(toAssetsPath); err != nil {
 		t.log.Info(err.Error())
-		return false
 	}
 
-	if err := os.Rename(toIndexHtmlPath, indexHtmlPath); err != nil {
+	if err := os.Rename(indexHtmlPath, toIndexHtmlPath); err != nil {
 		t.log.Info(err.Error())
 		return false
 	}
 
-	if err := os.Rename(toAssetsPath, assetsPath); err != nil {
+	if err := os.Rename(assetsPath, toAssetsPath); err != nil {
 		t.log.Info(err.Error())
 		return false
 	}
@@ -301,16 +304,24 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
 	oldPort := t.config.Terminal.InstallServicePort
 	oldPackageManager := t.config.Terminal.NpmPackageManager
 
+	param := struct {
+		Port    string `json:"port"`
+		Manager string `json:"manager"`
+	}{}
+
+	if err := ctx.ShouldBindJSON(&param); err != nil {
+		t.log.Error(err.Error())
+		return false
+	}
+
 	newPort := oldPort
-	port := ctx.Query("port")
-	if port != "" {
-		newPort = port
+	if param.Port != "" {
+		newPort = param.Port
 	}
 
 	newPackageManager := oldPackageManager
-	manager := ctx.Query("manager")
-	if manager != "" {
-		newPackageManager = manager
+	if param.Manager != "" {
+		newPackageManager = param.Manager
 	}
 
 	if oldPort == newPort && oldPackageManager == newPackageManager {
@@ -328,7 +339,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
 	replacedContent := pattern.ReplaceAllString(string(bytesData), "install_service_port:$1'"+newPort+"'")
 
 	pattern = regexp.MustCompile(`npm_package_manager:(\s+)'` + oldPackageManager + `'`)
-	replacedContent = pattern.ReplaceAllString(replacedContent, "install_service_port:$1'"+newPackageManager+"'")
+	replacedContent = pattern.ReplaceAllString(replacedContent, "npm_package_manager:$1'"+newPackageManager+"'")
 
 	err = os.WriteFile(configPath, []byte(replacedContent), 0644)
 	if err != nil {

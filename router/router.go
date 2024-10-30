@@ -87,6 +87,7 @@ func InitRouter(
 	router.GET("/admin/Index/login", indexHandler.Login)
 	router.POST("/admin/Index/login", indexHandler.Login)
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
+	router.GET("/admin/ajax/terminal", ajaxHandler.Terminal)
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
@@ -199,7 +200,7 @@ func InitRouter(
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
 	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
-	adminRouter.POST("ajax/terminal", ajaxHandler.Terminal)
+	adminRouter.POST("ajax/changeTerminalConfig", ajaxHandler.ChangeTerminalConfig)
 
 	adminRouter.GET("testBuild/index", testBuildHandler.Index)
 	adminRouter.POST("testBuild/add", testBuildHandler.Add)

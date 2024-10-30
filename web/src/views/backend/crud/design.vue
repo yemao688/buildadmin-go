@@ -122,14 +122,14 @@
                                 </template>
                             </el-input>
                         </el-form-item>
-                        <FormItem
+                        <!-- <FormItem
                             :label="t('crud.crud.Generated Validator Location')"
                             v-model="state.table.validateFile"
                             type="string"
                             :attr="{
                                 labelWidth: 140,
                             }"
-                        />
+                        /> -->
                         <FormItem
                             :label="t('crud.crud.WEB end view directory')"
                             v-model="state.table.webViewsDir"

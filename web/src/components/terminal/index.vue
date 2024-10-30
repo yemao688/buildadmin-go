@@ -139,7 +139,7 @@
                     t('terminal.The port number to start the installation service (this port needs to be opened for external network access)')
                 "
             />
-            <FormItem
+            <!-- <FormItem
                 :label="t('terminal.Installation service startup command')"
                 v-model="startCommand"
                 type="string"
@@ -152,7 +152,7 @@
                 type="string"
                 :input-attr="{ disabled: true }"
                 :attr="{ blockHelp: t('terminal.Please access the site through the installation service URL (except in debug mode)') }"
-            />
+            /> -->
         </el-form>
         <FormItem
             :label="t('terminal.Clean up successful tasks when starting a new task')"

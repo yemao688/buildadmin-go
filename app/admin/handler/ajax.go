@@ -3,6 +3,7 @@ package handler
 import (
 	adminModel "go-build-admin/app/admin/model"
 	"go-build-admin/app/common/model"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/utils"
@@ -87,6 +88,12 @@ func (h *AjaxHandler) GetTableFieldList(ctx *gin.Context) {
 
 func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 
+	if !h.terminal.ChangeTerminalConfig(ctx) {
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]any{
+			"content": "/conf/config.local.yaml",
+		})))
+		return
+	}
 	Success(ctx, "")
 }
 
