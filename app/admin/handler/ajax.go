@@ -104,6 +104,6 @@ func (h *AjaxHandler) ClearCache(ctx *gin.Context) {
 
 func (h *AjaxHandler) Terminal(ctx *gin.Context) {
 
-	h.terminal.Exec(ctx, false)
+	h.terminal.Exec(ctx, true)
 	Success(ctx, "")
 }

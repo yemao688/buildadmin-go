@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -40,12 +41,14 @@ type Command struct {
 type Terminal struct {
 	config *conf.Configuration
 	log    *zap.Logger
+	authM  *model.AuthModel
 }
 
-func NewTerminal(config *conf.Configuration, log *zap.Logger) *Terminal {
+func NewTerminal(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel) *Terminal {
 	return &Terminal{
 		config: config,
 		log:    log,
+		authM:  authM,
 	}
 }
 
@@ -111,7 +114,15 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 	}
 
 	if authentication {
-
+		//判断是否登陆
+		token, ok := t.authM.IsLogin(ctx)
+		if !ok {
+			t.ExecError(output, "You are not super administrator or not logged in")
+		}
+		//判断是否超级管理员
+		if !t.authM.IsSuperAdmin(token.UserID) {
+			t.ExecError(output, "You are not super administrator or not logged in")
+		}
 	}
 
 	t.BeforeExecution(commandKey)

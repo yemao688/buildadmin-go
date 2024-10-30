@@ -82,7 +82,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	sensitiveDataLogHandler := handler.NewSensitiveDataLogHandler(zapLogger, configuration, sensitiveDataLogModel)
 	areaModel := model2.NewAreaModel(gormDB, configuration)
 	uploadHelper := model2.NewUploadHelper(gormDB, configuration)
-	terminalTerminal := terminal.NewTerminal(configuration, zapLogger)
+	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authModel)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableModel, uploadHelper, terminalTerminal)
 	modelUserModel := model2.NewUserModel(gormDB, configuration)
 	modelUserScoreLogModel := model2.NewUserScoreLogModel(gormDB)
