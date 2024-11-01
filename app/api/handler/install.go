@@ -80,20 +80,9 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	if h.isInstallComplete() {
 		return
 	}
-	type Params struct {
-		Manager string `json:"manager"`
-	}
-	params := Params{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
-		return
-	}
 
-	if params.Manager == "" {
-		params.Manager = h.config.Terminal.NpmPackageManager
-	}
-
-	if !h.terminal.ChangeTerminalConfig(ctx) {
+	port, manager, ok := h.terminal.ChangeTerminalConfig(ctx)
+	if !ok {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
 			"content": "根目录/conf/config.local.yaml",
 		})))
@@ -101,7 +90,8 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	}
 
 	Success(ctx, map[string]any{
-		"manager": params.Manager,
+		"port":    port,
+		"manager": manager,
 	})
 }
 
@@ -192,8 +182,18 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("", 2))
 		return
 	}
-
 	packageManager := "none"
+	params := struct {
+		Manager string `json:"manager"`
+	}{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+	if params.Manager != "" {
+		packageManager = params.Manager
+	}
+
 	//npm
 	npmVersionLink := []map[string]string{}
 	npmVersion := version.GetVersion(h.terminal, "npm")
@@ -218,7 +218,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 	pmVersionLink := []map[string]string{}
 	pmVersionCompare := true
 	if slices.Contains([]string{"npm", "cnpm", "pnpm", "yarn"}, packageManager) {
-		pmVersion := version.GetVersion(h.terminal, packageManager)
+		pmVersion = version.GetVersion(h.terminal, packageManager)
 		pmVersionCompare = version.Compare(NeedDependentVersion[packageManager], pmVersion)
 		if pmVersion == "" {
 			// 安装
@@ -314,12 +314,12 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 }
 
 type Database struct {
+	Database string `json:"database" binding:"required"`
 	Hostname string `json:"hostname" binding:"required"`
+	Hostport string `json:"hostport" binding:"required"`
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
-	Hostport string `json:"hostport" binding:"required"`
-	Database string `json:"database" binding:"required"`
-	Prefix   string `json:"prefix" binding:"required"`
+	Prefix   string `json:"prefix"`
 }
 
 func (v Database) GetMessages() validate.ValidatorMessages {

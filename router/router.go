@@ -82,8 +82,20 @@ func InitRouter(
 	)
 
 	rootDir := utils.RootPath()
+	router.Static("/install", filepath.Join(rootDir, "static/install"))
+	router.POST("/api/install/changePackageManager", apiInstallHandler.ChangePackageManager)
+	router.GET("/api/install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
+	router.POST("/api/install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
+	router.GET("/api/install/terminal", apiInstallHandler.Terminal)
+	router.GET("/api/install/baseConfig", apiInstallHandler.BaseConfig)
+	router.POST("/api/install/testDatabase", apiInstallHandler.TestDatabase)
+	router.POST("/api/install/commandExecComplete", apiInstallHandler.CommandExecComplete)
+	router.POST("/api/install/manualInstall", apiInstallHandler.ManualInstall)
+	router.POST("/api/install/mvDist", apiInstallHandler.MvDist)
+
 	router.Static("/static", filepath.Join(rootDir, "static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
+
 	router.GET("/admin/Index/login", indexHandler.Login)
 	router.POST("/admin/Index/login", indexHandler.Login)
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
@@ -236,16 +248,6 @@ func InitRouter(
 	apiRouter.GET("account/balance", apiAccountHandler.Balance)
 
 	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
-
-	apiRouter.POST("install/changePackageManager", apiInstallHandler.ChangePackageManager)
-	apiRouter.POST("install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
-	apiRouter.POST("install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
-	apiRouter.POST("install/testDatabase", apiInstallHandler.TestDatabase)
-	apiRouter.POST("install/baseConfig", apiInstallHandler.BaseConfig)
-	apiRouter.POST("install/commandExecComplete", apiInstallHandler.CommandExecComplete)
-	apiRouter.POST("install/manualInstall", apiInstallHandler.ManualInstall)
-	apiRouter.POST("install/mvDist", apiInstallHandler.MvDist)
-
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	admin.CollectRoutes(router)

@@ -259,7 +259,12 @@ func (t *Terminal) GetCommandOutput(commandKey string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	cmd := exec.Command(command.Command)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/C", command.Command)
+	} else {
+		cmd = exec.Command("sh", "-c", command.Command)
+	}
 	// 执行命令并获取输出
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -310,7 +315,7 @@ func (t *Terminal) MvDist() bool {
 	return true
 }
 
-func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
+func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) (string, string, bool) {
 
 	oldPort := t.config.Terminal.InstallServicePort
 	oldPackageManager := t.config.Terminal.NpmPackageManager
@@ -322,7 +327,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
 
 	if err := ctx.ShouldBindJSON(&param); err != nil {
 		t.log.Error(err.Error())
-		return false
+		return "", "", false
 	}
 
 	newPort := oldPort
@@ -336,14 +341,14 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
 	}
 
 	if oldPort == newPort && oldPackageManager == newPackageManager {
-		return true
+		return newPort, newPackageManager, true
 	}
 
 	configPath := filepath.Join(utils.RootPath(), "conf", "config.local.yaml")
 	bytesData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.log.Error(err.Error())
-		return false
+		return newPort, newPackageManager, false
 	}
 
 	pattern := regexp.MustCompile(`install_service_port:(\s+)'` + oldPort + `'`)
@@ -355,7 +360,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) bool {
 	err = os.WriteFile(configPath, []byte(replacedContent), 0644)
 	if err != nil {
 		t.log.Error(err.Error())
-		return false
+		return newPort, newPackageManager, false
 	}
-	return true
+	return newPort, newPackageManager, true
 }
