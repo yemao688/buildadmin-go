@@ -131,10 +131,10 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 	}
 
 	site_name, _ := h.configM.GetValueByName(ctx, "mail")
-	subject := utils.Lang(ctx, params.Event+"-"+site_name, map[string]interface{}{
+	subject := utils.Lang(ctx, params.Event+"-"+site_name, map[string]string{
 		"code": code,
 	})
-	body := utils.Lang(ctx, "Your verification code is: {code}", map[string]interface{}{
+	body := utils.Lang(ctx, "Your verification code is: {code}", map[string]string{
 		"code": code,
 	})
 

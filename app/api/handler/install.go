@@ -94,8 +94,8 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	}
 
 	if !h.terminal.ChangeTerminalConfig(ctx) {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]interface{}{
-			"content": "根目录/conf/config.yaml",
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
+			"content": "根目录/conf/config.local.yaml",
 		})))
 		return
 	}
@@ -108,7 +108,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 // 环境基础检查
 func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]interface{}{
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
 			"lock": "static/" + LockFileName,
 		})))
 		return
@@ -228,7 +228,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 			})
 			if pmVersionCompare {
 				pmVersionLink = append(pmVersionLink, map[string]string{
-					"name": utils.Lang(ctx, "Click Install {name} ", map[string]interface{}{
+					"name": utils.Lang(ctx, "Click Install {name} ", map[string]string{
 						"name": packageManager,
 					}),
 					"title": "",
@@ -247,7 +247,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 				"type": "text",
 			})
 			pmVersionLink = append(pmVersionLink, map[string]string{
-				"name": utils.Lang(ctx, "Please upgrade {name} version", map[string]interface{}{
+				"name": utils.Lang(ctx, "Please upgrade {name} version", map[string]string{
 					"name": packageManager,
 				}),
 				"type": "text",
@@ -354,7 +354,7 @@ func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
  */
 func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]interface{}{
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
 			"lock": "static/" + LockFileName,
 		})))
 		return
@@ -449,7 +449,7 @@ func (h *InstallHandler) isInstallComplete() bool {
 // 标记命令执行完毕
 func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]interface{}{
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
 			"lock": "static/" + LockFileName,
 		})))
 		return

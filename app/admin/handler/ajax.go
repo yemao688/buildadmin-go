@@ -89,7 +89,7 @@ func (h *AjaxHandler) GetTableFieldList(ctx *gin.Context) {
 func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 
 	if !h.terminal.ChangeTerminalConfig(ctx) {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]any{
+		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]string{
 			"content": "/conf/config.local.yaml",
 		})))
 		return
