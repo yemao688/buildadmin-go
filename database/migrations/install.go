@@ -17,36 +17,22 @@ func NewInstall(sqlDB *gorm.DB) *Install {
 	}
 }
 
-func (s Install) CreateTable() {
+func (s Install) InsertData() {
 	s.AdminGroupAccess()
 	s.AdminGroup()
-	s.AdminLog()
 	s.AdminRule()
 	s.Admin()
-	s.Area()
-	s.Attachment()
-	s.Captcha()
 	s.Config()
-	s.CrudLog()
-	s.Migration()
-	s.SecurityDataRecycleLog()
 	s.SecurityDataRecycle()
-	s.SecuritySensitiveDataLog()
 	s.SecuritySensitiveData()
-	s.TestBuild()
-	s.Token()
 	s.UserGroup()
-	s.UserMoneyLog()
 	s.UserRule()
-	s.UserScoreLog()
 	s.User()
 }
 
 func (s Install) AdminGroupAccess() {
-	table := model.AdminGroupAccess{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("uid=?", "1").First(&model.AdminGroupAccess{}).Error
+	if err != nil {
 		dataList := []*model.AdminGroupAccess{
 			{
 				UID:     1,
@@ -58,10 +44,8 @@ func (s Install) AdminGroupAccess() {
 }
 
 func (s Install) AdminGroup() {
-	table := model.AdminGroup{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.AdminGroup{}).Error
+	if err != nil {
 		dataList := []*model.AdminGroup{
 			{
 				ID:         1,
@@ -101,18 +85,9 @@ func (s Install) AdminGroup() {
 
 }
 
-func (s Install) AdminLog() {
-	table := model.AdminLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) AdminRule() {
-	table := model.AdminRule{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.AdminRule{}).Error
+	if err != nil {
 		dataList := []*model.AdminRule{
 			{
 				ID:         1,
@@ -1040,10 +1015,8 @@ func (s Install) AdminRule() {
 }
 
 func (s Install) Admin() {
-	table := model.Admin{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.Admin{}).Error
+	if err != nil {
 		dataList := []*model.Admin{
 			{
 				ID:         1,
@@ -1060,32 +1033,9 @@ func (s Install) Admin() {
 	}
 }
 
-func (s Install) Area() {
-	table := model.Area{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
-func (s Install) Attachment() {
-	table := model.Attachment{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
-func (s Install) Captcha() {
-	table := model.Captcha{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) Config() {
-	table := model.Config{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.Config{}).Error
+	if err != nil {
 		dataList := []*model.Config{
 			{
 				ID:      1,
@@ -1212,32 +1162,9 @@ func (s Install) Config() {
 	}
 }
 
-func (s Install) CrudLog() {
-	table := model.CrudLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
-func (s Install) Migration() {
-	table := model.Migration{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
-func (s Install) SecurityDataRecycleLog() {
-	table := model.SecurityDataRecycleLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) SecurityDataRecycle() {
-	table := model.SecurityDataRecycle{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.SecurityDataRecycle{}).Error
+	if err != nil {
 		dataList := []*model.SecurityDataRecycle{
 			{
 				ID:           1,
@@ -1304,17 +1231,9 @@ func (s Install) SecurityDataRecycle() {
 	}
 }
 
-func (s Install) SecuritySensitiveDataLog() {
-	table := model.SecuritySensitiveDataLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) SecuritySensitiveData() {
-	table := model.SecuritySensitiveData{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
+	err := s.sqlDB.Where("id=?", "1").First(&model.SecuritySensitiveData{}).Error
+	if err != nil {
 
 		dataList := []*model.SecuritySensitiveData{
 			{
@@ -1358,24 +1277,9 @@ func (s Install) SecuritySensitiveData() {
 	}
 }
 
-func (s Install) TestBuild() {
-	table := model.TestBuild{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
-func (s Install) Token() {
-	table := model.Token{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) UserGroup() {
-	table := model.UserGroup{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
+	err := s.sqlDB.Where("id=?", "1").First(&model.UserGroup{}).Error
+	if err != nil {
 
 		dataList := []*model.UserGroup{
 			{
@@ -1391,18 +1295,9 @@ func (s Install) UserGroup() {
 	}
 }
 
-func (s Install) UserMoneyLog() {
-	table := model.UserMoneyLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) UserRule() {
-	table := model.UserRule{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-
+	err := s.sqlDB.Where("id=?", "1").First(&model.UserRule{}).Error
+	if err != nil {
 		dataList := []*model.UserRule{
 			{
 				ID:         1,
@@ -1492,17 +1387,9 @@ func (s Install) UserRule() {
 	}
 }
 
-func (s Install) UserScoreLog() {
-	table := model.UserScoreLog{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
-	}
-}
-
 func (s Install) User() {
-	table := model.User{}
-	if !s.sqlDB.Migrator().HasTable(&table) {
-		s.sqlDB.Migrator().CreateTable(&table)
+	err := s.sqlDB.Where("id=?", "1").First(&model.User{}).Error
+	if err != nil {
 
 		dataList := []*model.User{
 			{

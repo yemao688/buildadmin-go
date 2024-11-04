@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"go-build-admin/app/cmd"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"log"
@@ -80,9 +81,9 @@ func main() {
 	}
 
 	// 注册命令
-	// cmd.Register(rootCmd, func() (*cmd.Command, func(), error) {
-	// 	return wireCommand(config, loggerWriter, logger)
-	// })
+	cmd.Register(rootCmd, func() (*cmd.Command, func(), error) {
+		return wireCommand(config, loggerWriter, logger)
+	})
 
 	if err := rootCmd.Execute(); err != nil {
 		panic(err)

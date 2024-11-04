@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -338,7 +338,7 @@ func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
 		return
 	}
 
-	_, result, err := h.connectDb(params)
+	result, err := h.getDatabases(params)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -375,17 +375,10 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	db, databases, err := h.connectDb(databaseParam)
+	err := h.initDatabase(databaseParam)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
-	}
-
-	if !slices.Contains(databases, databaseParam.Database) {
-		if err := db.Exec("CREATE DATABASE IF NOT EXISTS " + databaseParam.Database + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
-			FailByErr(ctx, err)
-			return
-		}
 	}
 
 	configPath := filepath.Join(utils.RootPath(), "conf", ConfigFileName)
@@ -528,29 +521,70 @@ func (h *InstallHandler) MvDist(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-// 数据库连接-获取数据表列表
-func (h *InstallHandler) connectDb(database Database) (*gorm.DB, []string, error) {
-	result := []string{}
-	db, err := gorm.Open(mysql.Open(fmt.Sprintf("%s:%s@(%s:%s)?charset=utf8mb4&parseTime=True&loc=Local", database.Username, database.Password, database.Hostname, database.Hostport)))
+func (h *InstallHandler) getDatabases(params Database) ([]string, error) {
+	var databases []string
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local", params.Username, params.Password, params.Hostname, params.Hostport))
 	if err != nil {
-		return nil, result, err
+		return databases, err
 	}
-	h.db = db
+	defer db.Close()
 
-	sqlDb, _ := db.DB()
-	if err := sqlDb.Ping(); err != nil {
-		return nil, result, err
+	rows, err := db.Query("SHOW DATABASES")
+	if err != nil {
+		return databases, err
 	}
+	defer rows.Close()
 
-	list := []map[string]string{}
-	if err := db.Raw("SHOW DATABASES").Scan(&list).Error; err != nil {
-		return nil, result, err
-	}
+	for rows.Next() {
+		var dbName string
+		if err := rows.Scan(&dbName); err != nil {
+			return databases, err
+		}
 
-	for _, v := range list {
-		if !slices.Contains([]string{"information_schema", "mysql", "performance_schema", "sys"}, v["Database"]) {
-			result = append(result, v["Database"])
+		if !slices.Contains([]string{"information_schema", "mysql", "performance_schema", "sys"}, dbName) {
+			databases = append(databases, dbName)
 		}
 	}
-	return db, result, err
+
+	if err := rows.Err(); err != nil {
+		return databases, err
+	}
+	return databases, err
+}
+
+func (h *InstallHandler) initDatabase(params Database) error {
+	var databases []string
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local", params.Username, params.Password, params.Hostname, params.Hostport))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SHOW DATABASES")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbName string
+		if err := rows.Scan(&dbName); err != nil {
+			return err
+		}
+
+		if !slices.Contains([]string{"information_schema", "mysql", "performance_schema", "sys"}, dbName) {
+			databases = append(databases, dbName)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if !slices.Contains(databases, params.Database) {
+		_, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + params.Database + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+		return err
+	}
+	return nil
 }

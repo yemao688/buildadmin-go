@@ -5,4 +5,7 @@ import (
 )
 
 // ProviderSet is handler providers.
-var ProviderSet = wire.NewSet(NewExampleHandler, NewMigrateHandler)
+var ProviderSet = wire.NewSet(
+	NewExampleHandler,
+	NewMigrateHandler,
+)

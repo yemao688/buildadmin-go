@@ -9,6 +9,8 @@ import (
 	adminHandler "go-build-admin/app/admin/handler"
 	adminModel "go-build-admin/app/admin/model"
 	apiHandler "go-build-admin/app/api/handler"
+	"go-build-admin/app/cmd"
+	commandHandler "go-build-admin/app/cmd/handler"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -44,9 +46,9 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 }
 
 // wireCommand init application.
-// func wireCommand(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*cmd.Command, func(), error) {
-// 	panic(wire.Build(
-// 		cHandler.ProviderSet,
-// 		cmd.NewCommand,
-// 	))
-// }
+func wireCommand(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*cmd.Command, func(), error) {
+	panic(wire.Build(
+		commandHandler.ProviderSet,
+		cmd.NewCommand,
+	))
+}

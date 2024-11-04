@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func getDB() *gorm.DB {
@@ -17,10 +18,14 @@ func getDB() *gorm.DB {
 		"root",
 		"127.0.0.1",
 		"3306",
-		"te",
+		"test_go",
 		"utf8mb4",
 	)
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true,
+			TablePrefix:   "go_", // 表前缀
+		},
 		DisableForeignKeyConstraintWhenMigrating: true, // 禁用自动创建外键约束
 	})
 	if err != nil {
@@ -31,8 +36,34 @@ func getDB() *gorm.DB {
 
 func TestInstall(t *testing.T) {
 	db := getDB()
+	err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+		&model.AdminGroupAccess{},
+		&model.AdminGroup{},
+		&model.AdminLog{},
+		&model.AdminRule{},
+		&model.Admin{},
+		&model.Area{},
+		&model.Attachment{},
+		&model.Captcha{},
+		&model.Config{},
+		&model.CrudLog{},
+		&model.Migration{},
+		&model.SecurityDataRecycleLog{},
+		&model.SecurityDataRecycle{},
+		&model.SecuritySensitiveDataLog{},
+		&model.SecuritySensitiveData{},
+		&model.TestBuild{},
+		&model.Token{},
+		&model.UserGroup{},
+		&model.UserMoneyLog{},
+		&model.UserRule{},
+		&model.UserScoreLog{},
+		&model.User{},
+	)
+	fmt.Println("生成数据表:", err)
+
 	install := NewInstall(db)
-	install.CreateTable()
+	install.InsertData()
 }
 
 func TestRenameColumn(t *testing.T) {

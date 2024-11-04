@@ -86,13 +86,13 @@ terminal:
     migrate:
       run: 
         cwd: ''
-        command: 'php think migrate:run'
+        command: ''
       rollback: 
         cwd: ''
-        command: 'php think migrate:rollback'
+        command: ''
       breakpoint: 
         cwd: ''
-        command: 'php think migrate:breakpoint'
+        command: ''
     install:
       yarn: 
         cwd: ''

@@ -10,6 +10,8 @@ import (
 	"go-build-admin/app/admin/handler"
 	"go-build-admin/app/admin/model"
 	handler2 "go-build-admin/app/api/handler"
+	"go-build-admin/app/cmd"
+	handler3 "go-build-admin/app/cmd/handler"
 	model2 "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -102,5 +104,14 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)
 	app := newApp(configuration, zapLogger, server, cronCron)
 	return app, func() {
+	}, nil
+}
+
+// wireCommand init application.
+func wireCommand(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*cmd.Command, func(), error) {
+	exampleHandler := handler3.NewExampleHandler(zapLogger)
+	migrateHandler := handler3.NewMigrateHandler(zapLogger, configuration)
+	command := cmd.NewCommand(exampleHandler, migrateHandler)
+	return command, func() {
 	}, nil
 }

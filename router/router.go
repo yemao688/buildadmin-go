@@ -88,6 +88,7 @@ func InitRouter(
 	router.POST("/api/install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
 	router.GET("/api/install/terminal", apiInstallHandler.Terminal)
 	router.GET("/api/install/baseConfig", apiInstallHandler.BaseConfig)
+	router.POST("/api/install/baseConfig", apiInstallHandler.BaseConfig)
 	router.POST("/api/install/testDatabase", apiInstallHandler.TestDatabase)
 	router.POST("/api/install/commandExecComplete", apiInstallHandler.CommandExecComplete)
 	router.POST("/api/install/manualInstall", apiInstallHandler.ManualInstall)

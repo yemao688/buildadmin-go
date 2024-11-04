@@ -48,7 +48,7 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 				}
 				defer cleanup()
 
-				command.migrateH.Migrate(cmd, args)
+				command.migrateH.Run(cmd, args)
 			},
 		},
 	)

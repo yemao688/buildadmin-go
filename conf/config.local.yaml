@@ -85,14 +85,14 @@ terminal:
   commands:
     migrate:
       run: 
-        cwd: ''
-        command: 'php think migrate:run'
+        cwd: 'cmd/app'
+        command: 'go run main.go migrate run'
       rollback: 
-        cwd: ''
-        command: 'php think migrate:rollback'
+        cwd: 'cmd/app'
+        command: 'go run main.go migrate rollback'
       breakpoint: 
         cwd: ''
-        command: 'php think migrate:breakpoint'
+        command: 'go run main.go migrate breakpoint'
     install:
       yarn: 
         cwd: ''

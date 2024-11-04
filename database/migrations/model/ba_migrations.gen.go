@@ -11,10 +11,10 @@ import (
 
 // Migration mapped from table <migrations>
 type Migration struct {
-	Version       int64     `gorm:"column:version;primaryKey" json:"version"`
-	MigrationName string    `gorm:"column:migration_name" json:"migration_name"`
-	StartTime     time.Time `gorm:"column:start_time" json:"start_time"`
-	EndTime       time.Time `gorm:"column:end_time" json:"end_time"`
-	Breakpoint    bool      `gorm:"column:breakpoint;not null" json:"breakpoint"`
+	Version       int64     `gorm:"column:version;type:bigint(20) unsigned;not null;primaryKey" json:"version"`
+	MigrationName string    `gorm:"column:migration_name;type:varchar(100) default null" json:"migration_name"`
+	StartTime     time.Time `gorm:"column:start_time;type:timestamp null default null" json:"start_time"`
+	EndTime       time.Time `gorm:"column:end_time;type:timestamp null default null" json:"end_time"`
+	Breakpoint    bool      `gorm:"column:breakpoint;type:tinyint(1);not null;default:0" json:"breakpoint"`
 }
 

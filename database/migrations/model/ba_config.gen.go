@@ -7,18 +7,18 @@ package model
 
 // Config 系统配置
 type Config struct {
-	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`    // ID
-	Name     string `gorm:"column:name;not null;comment:变量名" json:"name"`                    // 变量名
-	Group    string `gorm:"column:group;not null;comment:分组" json:"group"`                   // 分组
-	Title    string `gorm:"column:title;not null;comment:变量标题" json:"title"`                 // 变量标题
-	Tip      string `gorm:"column:tip;not null;comment:变量描述" json:"tip"`                     // 变量描述
-	Type     string `gorm:"column:type;not null;comment:变量输入组件类型" json:"type"`               // 变量输入组件类型
-	Value    string `gorm:"column:value;comment:变量值" json:"value"`                           // 变量值
-	Content  string `gorm:"column:content;comment:字典数据" json:"content"`                      // 字典数据
-	Rule     string `gorm:"column:rule;not null;comment:验证规则" json:"rule"`                   // 验证规则
-	Extend   string `gorm:"column:extend;not null;comment:扩展属性" json:"extend"`               // 扩展属性
-	AllowDel int32  `gorm:"column:allow_del;not null;comment:允许删除:0=否,1=是" json:"allow_del"` // 允许删除:0=否,1=是
-	Weigh    int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                   // 权重
+	ID       int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`    // ID
+	Name     string `gorm:"column:name;type:varchar(30) default '';not null;uniqueIndex:name;comment:变量名" json:"name"`                    // 变量名
+	Group    string `gorm:"column:group;type:varchar(30) default '';not null;comment:分组" json:"group"`                   // 分组
+	Title    string `gorm:"column:title;type:varchar(50) default '';not null;comment:变量标题" json:"title"`                 // 变量标题
+	Tip      string `gorm:"column:tip;type:varchar(100) default '';not null;comment:变量描述" json:"tip"`                     // 变量描述
+	Type     string `gorm:"column:type;type:varchar(30) default '';not null;comment:变量输入组件类型" json:"type"`               // 变量输入组件类型
+	Value    string `gorm:"column:value;type:longtext;comment:变量值" json:"value"`                           // 变量值
+	Content  string `gorm:"column:content;type:longtext;comment:字典数据" json:"content"`                      // 字典数据
+	Rule     string `gorm:"column:rule;type:varchar(100) default '';not null;comment:验证规则" json:"rule"`                   // 验证规则
+	Extend   string `gorm:"column:extend;type:varchar(255) default '';not null;comment:扩展属性" json:"extend"`               // 扩展属性
+	AllowDel int32  `gorm:"column:allow_del;type:tinyint(4) unsigned;not null;comment:允许删除:0=否,1=是" json:"allow_del"` // 允许删除:0=否,1=是
+	Weigh    int32  `gorm:"column:weigh;type:int(11);not null;default:0;comment:权重" json:"weigh"`                   // 权重
 }
 
 

@@ -7,10 +7,10 @@ package model
 
 // Captcha 验证码表
 type Captcha struct {
-	Key        string `gorm:"column:key;primaryKey;comment:验证码Key" json:"key"`    // 验证码Key
-	Code       string `gorm:"column:code;not null;comment:验证码(加密后)" json:"code"`  // 验证码(加密后)
-	Captcha    string `gorm:"column:captcha;comment:验证码数据" json:"captcha"`        // 验证码数据
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"` // 过期时间
+	Key        string `gorm:"column:key;type:varchar(32) default '';primaryKey;comment:验证码Key" json:"key"`    // 验证码Key
+	Code       string `gorm:"column:code;type:varchar(32) default '';not null;comment:验证码(加密后)" json:"code"`  // 验证码(加密后)
+	Captcha    string `gorm:"column:captcha;type:text;comment:验证码数据" json:"captcha"`        // 验证码数据
+	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
+	ExpireTime int64  `gorm:"column:expire_time;type:bigint(16) unsigned default null;comment:过期时间" json:"expire_time"` // 过期时间
 }
 

@@ -7,22 +7,22 @@ package model
 
 // AdminRule 菜单和权限规则表
 type AdminRule struct {
-	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                     // ID
-	Pid        int32  `gorm:"column:pid;not null;comment:上级菜单" json:"pid"`                                                                      // 上级菜单
-	Type       string `gorm:"column:type;not null;default:menu;comment:类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮" json:"type"`                      // 类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮
-	Title      string `gorm:"column:title;not null;comment:标题" json:"title"`                                                                    // 标题
-	Name       string `gorm:"column:name;not null;comment:规则名称" json:"name"`                                                                    // 规则名称
-	Path       string `gorm:"column:path;not null;comment:路由路径" json:"path"`                                                                    // 路由路径
-	Icon       string `gorm:"column:icon;not null;comment:图标" json:"icon"`                                                                      // 图标
-	MenuType   string `gorm:"column:menu_type;comment:菜单类型:tab=选项卡,link=链接,iframe=Iframe" json:"menu_type"`                                     // 菜单类型:tab=选项卡,link=链接,iframe=Iframe
-	URL        string `gorm:"column:url;not null;comment:Url" json:"url"`                                                                       // Url
-	Component  string `gorm:"column:component;not null;comment:组件路径" json:"component"`                                                          // 组件路径
-	Keepalive  int32  `gorm:"column:keepalive;not null;comment:缓存:0=关闭,1=开启" json:"keepalive"`                                                  // 缓存:0=关闭,1=开启
-	Extend     string `gorm:"column:extend;not null;default:none;comment:扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单" json:"extend"` // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
-	Remark     string `gorm:"column:remark;not null;comment:备注" json:"remark"`                                                                  // 备注
-	Weigh      int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                                                                    // 权重
-	Status     string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                              // 状态:0=禁用,1=启用
-	UpdateTime int64  `gorm:"column:update_time;comment:更新时间" json:"update_time"`                                                               // 更新时间
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`                                                               // 创建时间
+	ID         int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                    // ID
+	Pid        int32  `gorm:"column:pid;type:int(11) unsigned;not null;index:pid;default:0;comment:上级菜单" json:"pid"`                                                       // 上级菜单
+	Type       string `gorm:"column:type;type:enum('menu_dir','menu','button');not null;default:menu;comment:类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮" json:"type"`    // 类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮
+	Title      string `gorm:"column:title;type:varchar(50) default '';not null;comment:标题" json:"title"`                                                                     // 标题
+	Name       string `gorm:"column:name;type:varchar(50) default '';not null;comment:规则名称" json:"name"`                                                                   // 规则名称
+	Path       string `gorm:"column:path;type:varchar(100) default '';not null;comment:路由路径" json:"path"`                                                                  // 路由路径
+	Icon       string `gorm:"column:icon;type:varchar(50) default '';not null;comment:图标" json:"icon"`                                                                      // 图标
+	MenuType   string `gorm:"column:menu_type;type:varchar(20) default '';comment:菜单类型:tab=选项卡,link=链接,iframe=Iframe" json:"menu_type"`                                // 菜单类型:tab=选项卡,link=链接,iframe=Iframe
+	URL        string `gorm:"column:url;type:varchar(255) default '';not null;comment:Url" json:"url"`                                                                       // Url
+	Component  string `gorm:"column:component;type:varchar(100) default '';not null;comment:组件路径" json:"component"`                                                        // 组件路径
+	Keepalive  int32  `gorm:"column:keepalive;tinyint(4) unsigned;not null;default:0;comment:缓存:0=关闭,1=开启" json:"keepalive"`                                             // 缓存:0=关闭,1=开启
+	Extend     string `gorm:"column:extend;type:enum('none','add_rules_only','add_menu_only');not null;default:none;comment:扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单" json:"extend"` // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
+	Remark     string `gorm:"column:remark;type:varchar(255) default '';not null;comment:备注" json:"remark"`                                                                 // 备注
+	Weigh      int32  `gorm:"column:weigh;type:int(11) unsigned;not null;default:0;comment:权重" json:"weigh"`                                                                // 权重
+	Status     string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                              		// 状态:0=禁用,1=启用
+	UpdateTime int64  `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`                                                     // 更新时间
+	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                                                     // 创建时间
 }
 
