@@ -17,7 +17,7 @@ type AdminRule struct {
 	MenuType   string `gorm:"column:menu_type;type:varchar(20) default '';comment:菜单类型:tab=选项卡,link=链接,iframe=Iframe" json:"menu_type"`                                // 菜单类型:tab=选项卡,link=链接,iframe=Iframe
 	URL        string `gorm:"column:url;type:varchar(255) default '';not null;comment:Url" json:"url"`                                                                       // Url
 	Component  string `gorm:"column:component;type:varchar(100) default '';not null;comment:组件路径" json:"component"`                                                        // 组件路径
-	Keepalive  int32  `gorm:"column:keepalive;tinyint(4) unsigned;not null;default:0;comment:缓存:0=关闭,1=开启" json:"keepalive"`                                             // 缓存:0=关闭,1=开启
+	Keepalive  int32  `gorm:"column:keepalive;type:tinyint(4) unsigned;not null;default:0;comment:缓存:0=关闭,1=开启" json:"keepalive"`                                             // 缓存:0=关闭,1=开启
 	Extend     string `gorm:"column:extend;type:enum('none','add_rules_only','add_menu_only');not null;default:none;comment:扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单" json:"extend"` // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
 	Remark     string `gorm:"column:remark;type:varchar(255) default '';not null;comment:备注" json:"remark"`                                                                 // 备注
 	Weigh      int32  `gorm:"column:weigh;type:int(11) unsigned;not null;default:0;comment:权重" json:"weigh"`                                                                // 权重

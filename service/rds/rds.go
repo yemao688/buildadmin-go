@@ -20,7 +20,7 @@ func NewRedis(config *conf.Configuration, gLog *zap.Logger) *redis.Client {
 	client.AddHook(redisotel.TracingHook{})
 	if err := client.Ping(context.Background()).Err(); err != nil {
 		gLog.Error("redis connect failed, err:", zap.Any("err", err))
-		panic("failed to connect redis")
+		// panic("failed to connect redis")
 	}
 	return client
 }

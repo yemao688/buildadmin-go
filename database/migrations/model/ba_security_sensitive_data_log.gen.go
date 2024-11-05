@@ -14,7 +14,7 @@ type SecuritySensitiveDataLog struct {
 	PrimaryKey  string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`         // 数据表主键
 	DataField   string `gorm:"column:data_field;type:varchar(50) default '';not null;comment:被修改字段" json:"data_field"`           // 被修改字段
 	DataComment string `gorm:"column:data_comment;type:varchar(50) default '';not null;comment:被修改项" json:"data_comment"`        // 被修改项
-	IDValue     int32  `gorm:"column:id_value;type:int(11) default 0;not null;comment:被修改项主键值" json:"id_value"`             // 被修改项主键值
+	IDValue     int32  `gorm:"column:id_value;type:int(11);not null;default:0;comment:被修改项主键值" json:"id_value"`             // 被修改项主键值
 	Before      string `gorm:"column:before;type:text;comment:修改前" json:"before"`                              // 修改前
 	After       string `gorm:"column:after;type:text;comment:修改后" json:"after"`                                // 修改后
 	IP          string `gorm:"column:ip;type:varchar(50) default '';not null;comment:操作者IP" json:"ip"`                           // 操作者IP

@@ -94,9 +94,6 @@ func InitRouter(
 	router.POST("/api/install/manualInstall", apiInstallHandler.ManualInstall)
 	router.POST("/api/install/mvDist", apiInstallHandler.MvDist)
 
-	router.Static("/static", filepath.Join(rootDir, "static"))
-	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
-
 	router.GET("/admin/Index/login", indexHandler.Login)
 	router.POST("/admin/Index/login", indexHandler.Login)
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
@@ -250,6 +247,11 @@ func InitRouter(
 
 	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
+
+	router.Static("/assets", filepath.Join(rootDir, "static/assets"))
+	router.Static("/static", filepath.Join(rootDir, "static"))
+	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
+	router.StaticFile("/index.html", filepath.Join(rootDir, "static/index.html"))
 
 	admin.CollectRoutes(router)
 

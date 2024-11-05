@@ -91,8 +91,15 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger
 	}); err != nil {
-		gLog.Error("failed opening connection to err:", zap.Any("err", err))
-		panic("failed to connect database")
+		path := filepath.Join(utils.RootPath(), "static/install.lock")
+		if _, err := os.Stat(path); err == nil {
+			content, _ := os.ReadFile(path)
+			if string(content) == "install-end" {
+				gLog.Error("failed opening connection to err:", zap.Any("err", err))
+				panic("failed to connect database")
+			}
+		}
+		return nil
 	} else {
 		sqlDB, _ := db.DB()
 		sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)

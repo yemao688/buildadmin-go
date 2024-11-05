@@ -12,6 +12,8 @@ import (
 	"go-build-admin/app/pkg/version"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -22,7 +24,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"gorm.io/gorm/schema"
 )
 
 // 环境检查状态
@@ -423,10 +429,76 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+
+	db, err := h.newDB(databaseParam)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	h.db = db
+
 	Success(ctx, map[string]any{
 		"rootPath":            utils.RootPath(),
 		"executionWebCommand": envOk,
 	})
+}
+
+func (h *InstallHandler) newDB(dbConfig Database) (*gorm.DB, error) {
+	logConfig := h.config.Log
+
+	var writer io.Writer
+	var logMode logger.LogLevel
+
+	logFileDir := logConfig.RootDir
+	if !filepath.IsAbs(logFileDir) {
+		logFileDir = filepath.Join(utils.RootPath(), logFileDir)
+	}
+	// 自定义 Writer
+	writer = &lumberjack.Logger{
+		Filename:   filepath.Join(logFileDir, "/sql", time.Now().Format("2006-01-02")+".log"),
+		MaxSize:    logConfig.MaxSize,
+		MaxBackups: logConfig.MaxBackups,
+		MaxAge:     logConfig.MaxAge,
+		Compress:   logConfig.Compress,
+	}
+
+	logMode = logger.Info
+	newLogger := logger.New(
+		log.New(writer, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             time.Second, // 慢查询 SQL 阈值
+			Colorful:                  false,       // 禁用彩色打印
+			IgnoreRecordNotFoundError: false,       // 忽略ErrRecordNotFound（记录未找到）错误
+			LogLevel:                  logMode,     // Log lever
+		},
+	)
+
+	dsn := fmt.Sprintf(
+		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+		dbConfig.Username,
+		dbConfig.Password,
+		dbConfig.Hostname,
+		dbConfig.Hostport,
+		dbConfig.Database,
+	)
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			SingularTable: true,
+			TablePrefix:   dbConfig.Prefix, // 表前缀
+		},
+		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
+		Logger:                                   newLogger, // 使用自定义 Logger
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(100 * time.Second)
+	return db, nil
 }
 
 func (h *InstallHandler) isInstallComplete() bool {
@@ -450,9 +522,9 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 
 	type Params struct {
 		Type          string `json:"type" binding:"required"`
-		Adminname     string `json:"adminname" binding:"required"`
-		Adminpassword string `json:"adminpassword" binding:"required"`
-		Sitename      string `json:"sitename" binding:"required"`
+		Adminname     string `json:"adminname"`
+		Adminpassword string `json:"adminpassword"`
+		Sitename      string `json:"sitename"`
 	}
 
 	params := Params{}

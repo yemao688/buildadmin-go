@@ -16,7 +16,7 @@ tmp_dir = "/tmp"
   # Ignore these filename extensions or directories.
   exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web","tests"]
   # Exclude files.
-  exclude_file = []
+  exclude_file = ["config.local.yaml"]
   # Exclude specific regular expressions.
   exclude_regex = ["_test.go",'_gen.go']
   # Watch these filename extensions.
