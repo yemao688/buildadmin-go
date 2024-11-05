@@ -10,7 +10,7 @@ Target Server Type    : MYSQL
 Target Server Version : 50726
 File Encoding         : 65001
 
-Date: 2024-10-30 18:18:15
+Date: 2024-11-05 18:15:31
 */
 
 SET FOREIGN_KEY_CHECKS=0;
@@ -37,7 +37,7 @@ CREATE TABLE `ba_admin` (
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='管理员表';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='管理员表';
 
 -- ----------------------------
 -- Records of ba_admin
@@ -57,7 +57,7 @@ CREATE TABLE `ba_admin_group` (
   `update_time` bigint(16) unsigned DEFAULT NULL COMMENT '更新时间',
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='管理分组表';
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='管理分组表';
 
 -- ----------------------------
 -- Records of ba_admin_group
@@ -229,7 +229,7 @@ INSERT INTO `ba_admin_rule` VALUES ('89', '1', 'button', '查看', 'dashboard/in
 DROP TABLE IF EXISTS `ba_area`;
 CREATE TABLE `ba_area` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
-  `pid` int(11) unsigned DEFAULT NULL COMMENT '父id',
+  `pid` int(11) unsigned NOT NULL COMMENT '父id',
   `shortname` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '简称',
   `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '名称',
   `mergename` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '全称',
@@ -282,26 +282,6 @@ INSERT INTO `ba_attachment` VALUES ('3', 'default', '1', '0', '/storage/default/
 INSERT INTO `ba_attachment` VALUES ('13', 'default', '0', '18', '/storage/default/20240824/微信截图_20ac6153ae2743afd01b0511f3b5c3b39ada7bf648.png', '238', '104', '微信截图_20ac6153ae2743afd01b0511f3b5c3b39ada7bf648.png', '25003', 'image/png', '1', 'local', 'ac6153ae2743afd01b0511f3b5c3b39ada7bf648', '1724479893', '1724479893');
 INSERT INTO `ba_attachment` VALUES ('19', 'default', '1', '0', '/storage/default/20240928/微信图片_20587297ab9faea910d2107b07578461b13c448e7b.jpg', '353', '353', '微信图片_20587297ab9faea910d2107b07578461b13c448e7b.jpg', '23405', 'image/jpeg', '1', 'local', '587297ab9faea910d2107b07578461b13c448e7b', '1727518028', '1727518028');
 INSERT INTO `ba_attachment` VALUES ('20', 'default', '1', '0', '/storage/default/20240928/微信截图_20dacc376d191198375cd59f5e3abcd62d58a527de.png', '238', '104', '微信截图_20220424114327.png', '23087', 'image/png', '1', 'local', 'dacc376d191198375cd59f5e3abcd62d58a527de', '1727518301', '1727518301');
-
--- ----------------------------
--- Table structure for `ba_banner`
--- ----------------------------
-DROP TABLE IF EXISTS `ba_banner`;
-CREATE TABLE `ba_banner` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
-  `name` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '名称',
-  `image` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '图片',
-  `href` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '跳转链接',
-  `weigh` int(10) DEFAULT '0' COMMENT '权重',
-  `status` tinyint(1) unsigned NOT NULL DEFAULT '1' COMMENT '状态:0=禁用,1=启用',
-  `create_time` bigint(20) unsigned DEFAULT NULL COMMENT '创建时间',
-  `update_time` bigint(20) unsigned DEFAULT NULL COMMENT '修改时间',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='轮播图';
-
--- ----------------------------
--- Records of ba_banner
--- ----------------------------
 
 -- ----------------------------
 -- Table structure for `ba_captcha`
@@ -522,21 +502,6 @@ INSERT INTO `ba_security_sensitive_data_log` VALUES ('14', '1', '4', 'admin', 'i
 INSERT INTO `ba_security_sensitive_data_log` VALUES ('15', '1', '4', 'admin', 'id', 'email', '邮箱', '3', '22255@qq.com', '111@qq.com', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36', '0', '1729058828');
 
 -- ----------------------------
--- Table structure for `ba_team`
--- ----------------------------
-DROP TABLE IF EXISTS `ba_team`;
-CREATE TABLE `ba_team` (
-  `id` int(10) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
-  `name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '团队名称',
-  `admin_id` int(10) unsigned NOT NULL DEFAULT '0' COMMENT '负责人',
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='团队';
-
--- ----------------------------
--- Records of ba_team
--- ----------------------------
-
--- ----------------------------
 -- Table structure for `ba_test_build`
 -- ----------------------------
 DROP TABLE IF EXISTS `ba_test_build`;
@@ -552,6 +517,8 @@ CREATE TABLE `ba_test_build` (
   `weigh` int(11) NOT NULL DEFAULT '0' COMMENT '权重',
   `update_time` bigint(20) unsigned DEFAULT NULL COMMENT '更新时间',
   `create_time` bigint(20) unsigned DEFAULT NULL COMMENT '创建时间',
+  `views` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '浏览量',
+  `likes` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '有帮助数',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='知识库表';
 
@@ -607,7 +574,7 @@ CREATE TABLE `ba_user` (
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='会员表';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='会员表';
 
 -- ----------------------------
 -- Records of ba_user
@@ -626,7 +593,7 @@ CREATE TABLE `ba_user_group` (
   `update_time` bigint(16) unsigned DEFAULT NULL COMMENT '更新时间',
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='会员组表';
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC COMMENT='会员组表';
 
 -- ----------------------------
 -- Records of ba_user_group

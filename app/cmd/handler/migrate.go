@@ -36,7 +36,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		&model.Captcha{},
 		&model.Config{},
 		&model.CrudLog{},
-		&model.Migration{},
+		&model.Migrations{},
 		&model.SecurityDataRecycleLog{},
 		&model.SecurityDataRecycle{},
 		&model.SecuritySensitiveDataLog{},
