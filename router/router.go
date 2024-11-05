@@ -251,7 +251,7 @@ func InitRouter(
 	router.Static("/assets", filepath.Join(rootDir, "static/assets"))
 	router.Static("/static", filepath.Join(rootDir, "static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
-	router.StaticFile("/index.html", filepath.Join(rootDir, "static/index.html"))
+	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
 
 	admin.CollectRoutes(router)
 

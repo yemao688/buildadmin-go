@@ -86,7 +86,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 
 	//生成文件
 	h.log.Info("开始生成文件")
-	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns)
+	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns, h.tableM.DB())
 	if err != nil {
 		h.log.Error("生成文件error:" + err.Error())
 		record.ID = crudLogId

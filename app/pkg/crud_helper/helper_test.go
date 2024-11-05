@@ -132,7 +132,7 @@ func TestGenerate(t *testing.T) {
 		}
 		return result, nil
 	}
-	_, _, err := GenerateFile(table, fields, getTableName, getColumns)
+	_, _, err := GenerateFile(table, fields, getTableName, getColumns, db)
 	// fmt.Println(webDir)
 	// fmt.Println(lang)
 	fmt.Println(err)

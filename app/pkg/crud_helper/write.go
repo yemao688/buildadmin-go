@@ -13,9 +13,7 @@ import (
 	"text/template"
 
 	"golang.org/x/tools/imports"
-	"gorm.io/driver/mysql"
 	"gorm.io/gen"
-	"gorm.io/gorm"
 )
 
 func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (string, error) {
@@ -59,8 +57,7 @@ func getGenerateStruct(fullTableName string, tableName string) (string, error) {
 		//if you need unit tests for query code, set WithUnitTest true
 		// WithUnitTest: true,
 	})
-	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
-	g.UseDB(db)
+	g.UseDB(gormDb)
 	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true))
 
 	var buf bytes.Buffer

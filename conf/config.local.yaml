@@ -63,7 +63,7 @@ jwt:
 
 token:
   default: 'mysql'
-  key: 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I'
+  key: 'obrIGq1l5u6MnSkLHf87spRmFBZCAjzc'
   algo: 'sha256'
 
 redis:
@@ -86,13 +86,13 @@ terminal:
     migrate:
       run: 
         cwd: 'cmd/app'
-        command: 'go run main.go migrate run'
+        command: 'go run . --conf config.local.yaml migrate run'
       rollback: 
         cwd: 'cmd/app'
-        command: 'go run main.go migrate rollback'
+        command: ''
       breakpoint: 
         cwd: ''
-        command: 'go run main.go migrate breakpoint'
+        command: ''
     install:
       yarn: 
         cwd: ''

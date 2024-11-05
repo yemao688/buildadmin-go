@@ -11,10 +11,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"gorm.io/gorm"
 )
 
+var gormDb *gorm.DB
+
 // 生成表
-func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns) (WebDir, string, error) {
+func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+	gormDb = db
 	tableName := getTableName(table.Name, false)
 	fullTableName := getTableName(table.Name, true)
 	//主键
