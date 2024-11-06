@@ -10,8 +10,9 @@
  * NodeJs >= 16.14.2
  * Npm >= 8.5.0
 
+# 特别鸣谢
+前端使用的是buildAdmin的前端,做了部分修改,使用请参考https://www.buildadmin.com/
 
-前端使用的是buildAdmin,做了部分修改,使用请参考https://www.buildadmin.com/
 
 注意:
 crud生成代码需修改根目录.air.toml文件delay的时间,这样代码变更后不会马上编译
