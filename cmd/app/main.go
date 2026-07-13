@@ -91,6 +91,9 @@ func main() {
 }
 
 func initConfig() {
+	if err := utils.EnsureConfigFile(rootPath); err != nil {
+		panic(fmt.Errorf("ensure config failed: %s ", err))
+	}
 	if !filepath.IsAbs(configPath) {
 		configPath = filepath.Join(rootPath, "conf", configPath)
 	}

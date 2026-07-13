@@ -40,7 +40,7 @@ const WARN = "warn"
 const LockFileName = "install.lock"
 
 // 配置文件
-const ConfigFileName = "config.local.yaml"
+const ConfigFileName = "config.yaml"
 
 // 自动构建的前端文件的 outDir 相对于根目录
 const DistDir = "web/dist"
@@ -90,7 +90,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	port, manager, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
-			"content": "根目录/conf/config.local.yaml",
+			"content": "根目录/conf/config.yaml",
 		})))
 		return
 	}
@@ -131,6 +131,10 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 	// go版本-end
 
 	// 配置文件-start
+	if err := ensureConfigFile(); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	configIsWritableLink := []map[string]any{}
 	configPath := filepath.Join(utils.RootPath(), "conf", ConfigFileName)
 	configDescribe := utils.Lang(ctx, "Writable", nil)
@@ -388,6 +392,10 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	}
 
 	configPath := filepath.Join(utils.RootPath(), "conf", ConfigFileName)
+	if err := ensureConfigFile(); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	bytesData, err := os.ReadFile(configPath)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -441,6 +449,12 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		"rootPath":            utils.RootPath(),
 		"executionWebCommand": envOk,
 	})
+}
+
+// ensureConfigFile creates the editable runtime configuration from the tracked
+// example when an installation starts on a fresh checkout.
+func ensureConfigFile() error {
+	return utils.EnsureConfigFile(utils.RootPath())
 }
 
 func (h *InstallHandler) newDB(dbConfig Database) (*gorm.DB, error) {

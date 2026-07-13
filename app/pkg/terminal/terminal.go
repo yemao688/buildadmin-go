@@ -344,7 +344,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) (string, string, bool)
 		return newPort, newPackageManager, true
 	}
 
-	configPath := filepath.Join(utils.RootPath(), "conf", "config.local.yaml")
+	configPath := filepath.Join(utils.RootPath(), "conf", "config.yaml")
 	bytesData, err := os.ReadFile(configPath)
 	if err != nil {
 		t.log.Error(err.Error())

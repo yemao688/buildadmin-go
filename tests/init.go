@@ -31,13 +31,16 @@ var (
 )
 
 func init() {
-	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "conf", "config.local.yaml"), "config path, eg: --conf config.yaml")
+	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "conf", "config.yaml"), "config path, eg: --conf config.yaml")
 	initConfig()
 	initLogger()
 	initValidator()
 }
 
 func initConfig() {
+	if err := utils.EnsureConfigFile(rootPath); err != nil {
+		panic(fmt.Errorf("ensure config failed: %s ", err))
+	}
 	if !filepath.IsAbs(configPath) {
 		configPath = filepath.Join(rootPath, "conf", configPath)
 	}

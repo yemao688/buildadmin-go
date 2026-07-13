@@ -8,11 +8,11 @@ tmp_dir = "tmp"
   # pre_cmd = ["cd ./cmd/app && wire.exe"]
   # Just plain old shell command. You could use `make` as well.
   cmd = "go build -o ./tmp/main ./cmd/app"
-  entrypoint = ["./tmp/main", "--conf", "config.local.yaml"]
+  entrypoint = ["./tmp/main", "--conf", "config.yaml"]
   # Ignore these filename extensions or directories.
   exclude_dir = ["assets", "tmp", "vendor", "test","storage","generate","docs","static","web","tests"]
   # Exclude files.
-  exclude_file = ["config.local.yaml"]
+  exclude_file = ["config.yaml"]
   # Exclude specific regular expressions.
   exclude_regex = ["_test.go",'_gen.go']
   # Watch these filename extensions.

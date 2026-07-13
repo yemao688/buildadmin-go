@@ -38,8 +38,8 @@
    │
    ├─conf（配置目录）
    │  ├─localize (多语言)
-   │  ├─config.local.yaml (本地配置文件)
-   │  └─config.yaml
+   │  ├─config.example.yaml (完整配置模板，纳入版本控制)
+   │  └─config.yaml (安装器生成的运行配置，不纳入版本控制)
    │
    ├─database（数据库迁移文件）
    │

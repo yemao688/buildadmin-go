@@ -39,3 +39,21 @@ func PathExists(path string) bool {
 	}
 	return false
 }
+
+// EnsureConfigFile creates the runtime configuration from the tracked example
+// when a fresh installation has no editable config yet.
+func EnsureConfigFile(rootPath string) error {
+	configPath := filepath.Join(rootPath, "conf", "config.yaml")
+	if _, err := os.Stat(configPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	templatePath := filepath.Join(rootPath, "conf", "config.example.yaml")
+	data, err := os.ReadFile(templatePath)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configPath, data, 0600)
+}

@@ -55,3 +55,5 @@ static/assets
 static/index.html
 install.lock
 
+# Runtime configuration generated or edited during installation
+/conf/config.yaml
