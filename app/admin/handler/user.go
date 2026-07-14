@@ -59,7 +59,7 @@ type User struct {
 	JoinTime int64  `json:"join_time"`
 	Motto    string `json:"motto"`
 	Password string `json:"password"`
-	Status   string `json:"status"`
+	Status   string `json:"status" binding:"oneof=enable disable"`
 }
 
 func (v User) GetMessages() validate.ValidatorMessages {
@@ -130,7 +130,12 @@ func (h *UserHandler) One(ctx *gin.Context) {
 }
 
 func (h *UserHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}, func(_ int32, fieldName string, fieldValue any) error {
+		if fieldName != "status" {
+			return nil
+		}
+		return validateAccountStatusValue(fieldValue)
+	}) {
 		return
 	}
 

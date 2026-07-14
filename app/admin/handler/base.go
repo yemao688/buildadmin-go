@@ -26,10 +26,14 @@ type Base struct {
 	currentM CommonModel
 }
 
+// PartialEditValidator optionally validates a switch update before it is
+// written. Existing callers can omit it and retain the historical behavior.
+type PartialEditValidator func(id int32, fieldName string, fieldValue any) error
+
 // MaybePartialEdit 检测并处理 Switch 单元格的部分字段更新
 // allowedFields 是该表允许通过 Switch 修改的字段名集合
 // 返回 true 表示已处理（Switch 请求），false 表示不是 Switch 请求，继续走正常 Edit
-func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool) bool {
+func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		return false
@@ -64,6 +68,15 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool)
 	}
 
 	id := int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
+	for _, validator := range validators {
+		if validator == nil {
+			continue
+		}
+		if err := validator(id, fieldName, fieldValue); err != nil {
+			FailByErr(ctx, err)
+			return true
+		}
+	}
 	updates := map[string]any{fieldName: fieldValue}
 	err = h.currentM.DB().Table(h.currentM.Table()).
 		Scopes(LimitAdminIds(ctx)).

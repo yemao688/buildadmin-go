@@ -93,7 +93,7 @@ func TestMigrationRegistry(t *testing.T) {
 	if err := validateMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127}
+	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127, 20260714120000}
 	if len(allMigrations) != len(want) {
 		t.Fatalf("migration count = %d", len(allMigrations))
 	}
@@ -122,6 +122,27 @@ func TestVersion202DashboardRuleCount(t *testing.T) {
 	}
 	if err := validateDashboardRuleCount(2); err == nil {
 		t.Fatal("duplicate dashboard rules must be rejected")
+	}
+}
+
+func TestMapAccountStatuses(t *testing.T) {
+	got, err := mapAccountStatuses([]string{"0", "1", "enable", "disable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"disable", "enable", "enable", "disable"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("status %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+	if _, err := mapAccountStatuses([]string{"enable", ""}); err == nil {
+		t.Fatal("empty status must be rejected")
+	}
+	for _, value := range []string{"ENABLE", "Disable", "enable ", "other"} {
+		if _, err := mapAccountStatuses([]string{"enable", value}); err == nil {
+			t.Fatalf("%q must be rejected", value)
+		}
 	}
 }
 

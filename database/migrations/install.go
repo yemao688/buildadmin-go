@@ -1047,6 +1047,7 @@ func (s Install) Admin() error {
 				Avatar:     "",
 				Email:      "admin@buildadmin.com",
 				Mobile:     "18888888888",
+				Status:     "enable",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},

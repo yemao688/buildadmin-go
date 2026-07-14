@@ -32,7 +32,7 @@ CREATE TABLE `ba_admin` (
   `password` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '密码',
   `salt` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '密码盐',
   `motto` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '签名',
-  `status` enum('0','1') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '1' COMMENT '状态:0=禁用,1=启用',
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'enable' COMMENT '状态:enable=启用,disable=禁用',
   `update_time` bigint(16) unsigned DEFAULT NULL COMMENT '更新时间',
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),
@@ -42,7 +42,7 @@ CREATE TABLE `ba_admin` (
 -- ----------------------------
 -- Records of ba_admin
 -- ----------------------------
-INSERT INTO `ba_admin` VALUES ('1', 'admin', 'Admin', '/storage/default/20240928/微信截图_20dacc376d191198375cd59f5e3abcd62d58a527de.png', 'admin@buildadmin.com', '18888880000', '0', '1730266693', '127.0.0.1', 'e3c0e9af0e7c595013c922aa5da9bbd1', 'F8YeaAsmZRDOEQd9', '测试签名test', '1', '1730266693', '1715912035');
+INSERT INTO `ba_admin` VALUES ('1', 'admin', 'Admin', '/storage/default/20240928/微信截图_20dacc376d191198375cd59f5e3abcd62d58a527de.png', 'admin@buildadmin.com', '18888880000', '0', '1730266693', '127.0.0.1', 'e3c0e9af0e7c595013c922aa5da9bbd1', 'F8YeaAsmZRDOEQd9', '测试签名test', 'enable', '1730266693', '1715912035');
 
 -- ----------------------------
 -- Table structure for `ba_admin_group`
@@ -569,7 +569,7 @@ CREATE TABLE `ba_user` (
   `motto` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '签名',
   `password` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '密码',
   `salt` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '密码盐',
-  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '' COMMENT '状态',
+  `status` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'enable' COMMENT '状态:enable=启用,disable=禁用',
   `update_time` bigint(16) unsigned DEFAULT NULL COMMENT '更新时间',
   `create_time` bigint(16) unsigned DEFAULT NULL COMMENT '创建时间',
   PRIMARY KEY (`id`),

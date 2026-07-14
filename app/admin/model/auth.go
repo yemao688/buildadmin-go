@@ -98,7 +98,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, cErr.BadRequest("Incorrect user name or password!")
 	}
 
-	if admin.Status == "0" {
+	if !utils.AccountStatusEnabled(admin.Status) {
 		return nil, cErr.BadRequest("Username is incorrect")
 	}
 

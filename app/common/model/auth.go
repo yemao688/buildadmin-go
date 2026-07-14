@@ -120,7 +120,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, cErr.BadRequest("Account not exist")
 	}
 
-	if user.Status == "disable" {
+	if !utils.AccountStatusEnabled(user.Status) {
 		return nil, cErr.BadRequest("Account disabled")
 	}
 

@@ -58,7 +58,7 @@ type Admin struct {
 	Mobile   string   `json:"mobile" binding:"omitempty,phone"`
 	Password string   `json:"password" binding:"omitempty,password"`
 	Motto    string   `json:"motto"`
-	Status   string   `json:"status" binding:"oneof=0 1"`
+	Status   string   `json:"status" binding:"oneof=enable disable"`
 	GroupArr []string `json:"group_arr" binding:"required"`
 }
 
@@ -126,7 +126,20 @@ func (h *AdminHandler) One(ctx *gin.Context) {
 }
 
 func (h *AdminHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}, func(id int32, fieldName string, fieldValue any) error {
+		if fieldName != "status" {
+			return nil
+		}
+		if err := validateAccountStatusValue(fieldValue); err != nil {
+			return err
+		}
+		status := fieldValue.(string)
+		adminAuth := header.GetAdminAuth(ctx)
+		if adminAuth.Id == id && status == "disable" {
+			return cErr.BadRequest("Please use another administrator account to disable the current account!")
+		}
+		return nil
+	}) {
 		return
 	}
 
@@ -146,7 +159,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	}
 
 	adminAuth := header.GetAdminAuth(ctx)
-	if adminAuth.Id == admin.ID && params.Status == "0" {
+	if adminAuth.Id == admin.ID && params.Status == "disable" {
 		FailByErr(ctx, cErr.BadRequest("Please use another administrator account to disable the current account!"))
 		return
 	}
@@ -181,6 +194,14 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+}
+
+func validateAccountStatusValue(value any) error {
+	status, ok := value.(string)
+	if !ok || (status != "enable" && status != "disable") {
+		return cErr.BadRequest("status must be enable or disable")
+	}
+	return nil
 }
 
 func (h *AdminHandler) Del(ctx *gin.Context) {

@@ -18,7 +18,7 @@ type Admin struct {
 	Password      string `gorm:"column:password;type:varchar(255) default '';not null;comment:密码" json:"password"`                      // 密码
 	Salt          string `gorm:"column:salt;type:varchar(30) default '';not null;comment:密码盐" json:"salt"`                              // 密码盐
 	Motto         string `gorm:"column:motto;type:varchar(255) default '';not null;comment:签名" json:"motto"`                            // 签名
-	Status        string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                // 状态:0=禁用,1=启用
+	Status        string `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`  // 状态:enable=启用,disable=禁用
 	UpdateTime    int64  `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`              // 更新时间
 	CreateTime    int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`              // 创建时间
 }

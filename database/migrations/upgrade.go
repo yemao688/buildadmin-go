@@ -112,6 +112,36 @@ func legacyColumnExists(db *gorm.DB, table, column string) (bool, error) {
 	return count > 0, result.Error
 }
 
+func adminStatusNeedsBridge(db *gorm.DB, table string) (bool, error) {
+	var columnType string
+	result := db.Raw("SELECT column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='status'", table).Scan(&columnType)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return strings.EqualFold(columnType, "enum('0','1')"), nil
+}
+
+// bridgeAdminStatusSchema removes the legacy enum before AutoMigrate can
+// coerce the new string defaults. Existing values are deliberately untouched.
+func bridgeAdminStatusSchema(db *gorm.DB, config *conf.Configuration) error {
+	t := tableName(config, "admin")
+	if !tableExists(db, t) || !columnExists(db, t, "status") {
+		return nil
+	}
+	needs, err := adminStatusNeedsBridge(db, t)
+	if err != nil {
+		return err
+	}
+	if needs {
+		// Keep the old default until Version223 maps the data. If a later stage
+		// fails, the legacy runtime can still create administrators safely.
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(t) + " MODIFY COLUMN `status` VARCHAR(30) NOT NULL DEFAULT '1'").Error; err != nil {
+			return fmt.Errorf("bridge %s.status: %w", t, err)
+		}
+	}
+	return nil
+}
+
 func tableExists(db *gorm.DB, name string) bool { ok, _ := legacyTableExists(db, name); return ok }
 func columnExists(db *gorm.DB, table, column string) bool {
 	ok, _ := legacyColumnExists(db, table, column)
@@ -269,6 +299,9 @@ func PrepareLegacySchema(db *gorm.DB, config *conf.Configuration) error {
 	if err := normalizeLegacyColumns(db, config, ""); err != nil {
 		return err
 	}
+	if err := bridgeAdminStatusSchema(db, config); err != nil {
+		return err
+	}
 	for _, item := range []struct{ table, column, typ string }{
 		{"admin_log", "data", "LONGTEXT"}, {"captcha", "captcha", "TEXT"},
 	} {
@@ -277,6 +310,84 @@ func PrepareLegacySchema(db *gorm.DB, config *conf.Configuration) error {
 			if err := db.Exec("ALTER TABLE `" + t + "` MODIFY COLUMN `" + item.column + "` " + item.typ).Error; err != nil {
 				return fmt.Errorf("alter %s.%s: %w", t, item.column, err)
 			}
+		}
+	}
+	return nil
+}
+
+var allowedAccountStatuses = map[string]string{"0": "disable", "1": "enable", "enable": "enable", "disable": "disable"}
+
+// mapAccountStatuses validates the complete input before returning any
+// replacements, allowing migrations to preflight both tables atomically.
+func mapAccountStatuses(values []string) ([]string, error) {
+	result := make([]string, len(values))
+	for i, value := range values {
+		mapped, ok := allowedAccountStatuses[value]
+		if !ok {
+			return nil, fmt.Errorf("invalid account status %q", value)
+		}
+		result[i] = mapped
+	}
+	return result, nil
+}
+
+func accountStatusValues(db *gorm.DB, table string) ([]string, error) {
+	var nullCount int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + quoteIdentifier(table) + " WHERE status IS NULL").Scan(&nullCount).Error; err != nil {
+		return nil, err
+	}
+	if nullCount > 0 {
+		return nil, fmt.Errorf("null status")
+	}
+	var values []string
+	if err := db.Raw("SELECT DISTINCT CAST(status AS BINARY) AS status FROM " + quoteIdentifier(table)).Scan(&values).Error; err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func alterAccountStatusColumn(db *gorm.DB, table string) error {
+	return db.Exec("ALTER TABLE " + quoteIdentifier(table) + " MODIFY COLUMN `status` VARCHAR(30) NOT NULL DEFAULT 'enable' COMMENT '状态:enable=启用,disable=禁用'").Error
+}
+
+// ─── Version223: admin/user status protocol 0/1 → disable/enable ───
+func version223(db *gorm.DB, config *conf.Configuration) error {
+	tables := []string{tableName(config, "admin"), tableName(config, "user")}
+	values := make([][]string, len(tables))
+	present := make([]bool, len(tables))
+	for i, table := range tables {
+		if !tableExists(db, table) || !columnExists(db, table, "status") {
+			continue
+		}
+		present[i] = true
+		var err error
+		values[i], err = accountStatusValues(db, table)
+		if err != nil {
+			return fmt.Errorf("preflight %s.status: %w", table, err)
+		}
+		if _, err := mapAccountStatuses(values[i]); err != nil {
+			return fmt.Errorf("preflight %s.status: %w", table, err)
+		}
+	}
+	for i, table := range tables {
+		if !present[i] {
+			continue
+		}
+		if err := alterAccountStatusColumn(db, table); err != nil {
+			return fmt.Errorf("alter %s.status: %w", table, err)
+		}
+		if err := db.Table(table).Where("status = ?", "0").Update("status", "disable").Error; err != nil {
+			return err
+		}
+		if err := db.Table(table).Where("status = ?", "1").Update("status", "enable").Error; err != nil {
+			return err
+		}
+		var invalid int64
+		if err := db.Raw("SELECT COUNT(*) FROM " + quoteIdentifier(table) + " WHERE status IS NULL OR BINARY status NOT IN ('enable', 'disable')").Scan(&invalid).Error; err != nil {
+			return err
+		}
+		if invalid != 0 {
+			return fmt.Errorf("%s.status contains invalid values after migration", table)
 		}
 	}
 	return nil
@@ -619,7 +730,7 @@ func version206(db *gorm.DB, config *conf.Configuration) error {
 }
 
 // ─── Version222: 列类型扩容 + crud_log 新增字段 + 历史回填 ───
-// 跳过：status 类型迁移（0/1 → enable/disable）、7 张表 status 值映射
+// 账号 status 转换延后至 Version223；7 张布尔状态表保持 Go 的 0/1 语义。
 func version222(db *gorm.DB, config *conf.Configuration) error {
 	// 列类型扩容
 	type alterSpec struct {
@@ -688,6 +799,7 @@ var allMigrations = []VersionMigration{
 	{Version: 20231112093414, Name: "Version205", Up: version205},
 	{Version: 20231229043002, Name: "Version206", Up: version206},
 	{Version: 20250412134127, Name: "Version222", Up: version222},
+	{Version: 20260714120000, Name: "Version223", Up: version223},
 }
 
 // validateMigrations 验证迁移列表的版本号严格递增、名称非空
