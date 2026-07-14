@@ -8,6 +8,7 @@ package wiretest
 
 import (
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/conf"
 )
 
 // Injectors from wire.go:
@@ -15,12 +16,17 @@ import (
 // Initialize proves the application package provider graph can resolve the
 // Enforcer interface required by a generated scoped model.
 func Initialize() *generatedScopedModel {
-	denyAllEnforcer := data_scope.NewDenyAllEnforcer()
-	wiretestGeneratedScopedModel := newGeneratedScopedModel(denyAllEnforcer)
+	configuration := testConfiguration()
+	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
+	wiretestGeneratedScopedModel := newGeneratedScopedModel(closureEnforcer)
 	return wiretestGeneratedScopedModel
 }
 
 // wire.go:
+
+func testConfiguration() *conf.Configuration {
+	return &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
+}
 
 // generatedScopedModel mirrors the constructor shape emitted by the CRUD
 // template: a scoped model receives the Enforcer explicitly.

@@ -165,7 +165,8 @@ func NewUnrestrictedActor(adminID int32) (Actor, error) {
 
 // actorContextKey is intentionally a string so that it works both with
 // context.WithValue and with gin.Context.Get/Set lookups.
-const actorContextKey = "go-build-admin/app/pkg/data_scope.actor"
+const ActorContextKey = "go-build-admin/app/pkg/data_scope.actor"
+const actorContextKey = ActorContextKey
 
 // WithActor attaches an Actor to a context.
 func WithActor(ctx context.Context, actor Actor) context.Context {

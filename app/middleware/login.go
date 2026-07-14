@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/token"
@@ -66,6 +67,16 @@ func (m *Login) Handler() gin.HandlerFunc {
 			Id:           tokenData.UserID,
 			Token:        tokenStr,
 			IsSuperAdmin: m.authM.IsSuperAdmin(tokenData.UserID),
+		}
+		var actor data_scope.Actor
+		if authParam.IsSuperAdmin {
+			actor, err = data_scope.NewUnrestrictedActor(tokenData.UserID)
+		} else {
+			actor, err = data_scope.NewActor(tokenData.UserID)
+		}
+		if err != nil || data_scope.SetActor(c, actor) != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": http.StatusInternalServerError, "msg": "invalid authenticated actor"})
+			return
 		}
 		c.Set("AdminAuth", authParam)
 	}

@@ -3,25 +3,48 @@ package data_scope
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go-build-admin/conf"
 	"gorm.io/gorm"
 )
 
-// DenyAllEnforcer is a fail-closed Enforcer scaffold. It provides typed actor
-// extraction from the request context and applies a deny-all scope to any
-// non-unrestricted actor. It does not implement the real closure-SQL predicate;
-// that work belongs to the runtime lane.
-type DenyAllEnforcer struct{}
+type ClosureEnforcer struct{ closureTable string }
 
-// NewDenyAllEnforcer returns the shared fail-closed scaffold.
-func NewDenyAllEnforcer() *DenyAllEnforcer {
-	return &DenyAllEnforcer{}
+// ClosureTable reports the resolved closure table for diagnostics and tests.
+func (e *ClosureEnforcer) ClosureTable() string {
+	if e == nil {
+		return ""
+	}
+	return e.closureTable
+}
+
+// Deprecated: retained only for compatibility with pre-runtime tests. It is
+// not used by production or Wire provider paths.
+type DenyAllEnforcer = ClosureEnforcer
+
+// Deprecated: use NewClosureEnforcer.
+func NewDenyAllEnforcer() *DenyAllEnforcer { return &ClosureEnforcer{} }
+
+func NewClosureEnforcer(config *conf.Configuration) *ClosureEnforcer {
+	e := &ClosureEnforcer{}
+	prefix := ""
+	if config != nil {
+		prefix = config.Database.Prefix
+	}
+	if ValidateTablePrefix(prefix) == nil {
+		table := prefix + "admin_closure"
+		if ValidateIdentifier(table) == nil {
+			e.closureTable = table
+		}
+	}
+	return e
 }
 
 // Actor extracts a typed Actor from the request context. If no actor is
 // attached, or if the attached actor fails validation, the call fails closed.
-func (DenyAllEnforcer) Actor(ctx *gin.Context) (Actor, error) {
+func (ClosureEnforcer) Actor(ctx *gin.Context) (Actor, error) {
 	if ctx == nil {
 		return Actor{}, fmt.Errorf("%w: nil context", ErrInvalidActor)
 	}
@@ -41,7 +64,7 @@ func (DenyAllEnforcer) Actor(ctx *gin.Context) (Actor, error) {
 // ErrScopedAccessDenied. Only an explicit unrestricted actor receives the
 // original DB. The returned DB is never the original input for scoped
 // (non-bypass) requests, and the original shared DB is never mutated.
-func (e DenyAllEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *gorm.DB {
+func (e ClosureEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *gorm.DB {
 	if db == nil {
 		// The interface does not allow returning an error. Return nil so the
 		// caller panics deterministically rather than silently running
@@ -62,9 +85,25 @@ func (e DenyAllEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *g
 		return db
 	}
 
-	// Fail closed: block the scoped query until the real closure predicate
-	// is integrated in the runtime lane.
-	return addScopeError(db, fmt.Errorf("%w: actor %d is restricted", ErrScopedAccessDenied, actor.AdminID))
+	if e.closureTable == "" {
+		return addScopeError(db, fmt.Errorf("%w: closure table is not configured", ErrScopedAccessDenied))
+	}
+	closure := quoteIdentifier(e.closureTable)
+	condition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?) AND EXISTS (SELECT 1 FROM %s AS closure WHERE closure.ancestor_id = ? AND closure.descendant_id = %s.%s)", closure, closure, quoteIdentifier(owner.TableAlias), quoteIdentifier(owner.Column))
+	return db.Session(&gorm.Session{}).Where(condition, actor.AdminID, actor.AdminID, actor.AdminID)
+}
+
+func quoteIdentifier(s string) string { return "`" + strings.ReplaceAll(s, "`", "``") + "`" }
+
+func SetActor(ctx *gin.Context, actor Actor) error {
+	if ctx == nil {
+		return fmt.Errorf("%w: nil context", ErrInvalidActor)
+	}
+	if err := ValidateActor(actor); err != nil {
+		return err
+	}
+	ctx.Set(actorContextKey, actor)
+	return nil
 }
 
 // addScopeError creates an independent GORM session, adds the supplied errors,

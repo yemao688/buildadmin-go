@@ -3,12 +3,14 @@ package data_scope
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/conf"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -228,6 +230,32 @@ func TestDenyAllEnforcer_ActorMissing(t *testing.T) {
 	enf := NewDenyAllEnforcer()
 	_, err := enf.Actor(ctx)
 	assert.ErrorIs(t, err, ErrInvalidActor)
+}
+
+func TestClosureEnforcerPrefixAndSQLShape(t *testing.T) {
+	for _, tc := range []struct{ prefix, table string }{{"", "admin_closure"}, {"ba_", "ba_admin_closure"}} {
+		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: tc.prefix}})
+		assert.Equal(t, tc.table, e.ClosureTable())
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		a, err := NewActor(7)
+		require.NoError(t, err)
+		ctx.Set(actorContextKey, a)
+		scoped := e.Scope(ctx, openTestDB(t).Table("resource"), OwnerRef{TableAlias: "resource", Column: "owner_admin_id"})
+		where := fmt.Sprintf("%v", scoped.Statement.Clauses["WHERE"].Expression)
+		assert.Contains(t, where, "EXISTS (SELECT 1 FROM `"+tc.table+"` AS closure")
+		assert.Contains(t, where, "closure.descendant_id = `resource`.`owner_admin_id`")
+	}
+}
+
+func TestClosureEnforcerInvalidPrefixesFailClosed(t *testing.T) {
+	for _, prefix := range []string{"bad.prefix", "bad`prefix", "bad prefix"} {
+		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: prefix}})
+		assert.Empty(t, e.ClosureTable())
+		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+		a, _ := NewActor(7)
+		ctx.Set(actorContextKey, a)
+		assert.ErrorIs(t, e.Scope(ctx, openTestDB(t), OwnerRef{TableAlias: "resource", Column: "id"}).Error, ErrScopedAccessDenied)
+	}
 }
 
 func TestDenyAllEnforcer_ActorFromContext(t *testing.T) {

@@ -6,6 +6,6 @@ import "github.com/google/wire"
 // application graph. Phase 2A can replace the concrete provider without
 // changing consumers of the Enforcer interface.
 var ProviderSet = wire.NewSet(
-	NewDenyAllEnforcer,
-	wire.Bind(new(Enforcer), new(*DenyAllEnforcer)),
+	NewClosureEnforcer,
+	wire.Bind(new(Enforcer), new(*ClosureEnforcer)),
 )

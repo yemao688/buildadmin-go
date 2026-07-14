@@ -3,14 +3,19 @@
 
 package wiretest
 
-//go:generate go run github.com/google/wire/cmd/wire
+//go:generate go run -mod=mod github.com/google/wire/cmd/wire
 
 import (
 	"go-build-admin/app/pkg"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/conf"
 
 	"github.com/google/wire"
 )
+
+func testConfiguration() *conf.Configuration {
+	return &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
+}
 
 // generatedScopedModel mirrors the constructor shape emitted by the CRUD
 // template: a scoped model receives the Enforcer explicitly.
@@ -25,5 +30,5 @@ func newGeneratedScopedModel(enforcer data_scope.Enforcer) *generatedScopedModel
 // Initialize proves the application package provider graph can resolve the
 // Enforcer interface required by a generated scoped model.
 func Initialize() *generatedScopedModel {
-	panic(wire.Build(pkg.ProviderSet, newGeneratedScopedModel))
+	panic(wire.Build(pkg.ProviderSet, testConfiguration, newGeneratedScopedModel))
 }
