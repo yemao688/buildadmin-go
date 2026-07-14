@@ -4,22 +4,21 @@
 
 package model
 
-
 // SecuritySensitiveDataLog 敏感数据修改记录
 type SecuritySensitiveDataLog struct {
-	ID          int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`         // ID
-	AdminID     int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;comment:操作管理员" json:"admin_id"`               // 操作管理员
-	SensitiveID int32  `gorm:"column:sensitive_id;type:int(11) unsigned;not null;default:0;comment:敏感数据规则ID" json:"sensitive_id"`    // 敏感数据规则ID
-	DataTable   string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:数据表" json:"data_table"`             // 数据表
-	PrimaryKey  string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`         // 数据表主键
-	DataField   string `gorm:"column:data_field;type:varchar(50) default '';not null;comment:被修改字段" json:"data_field"`           // 被修改字段
-	DataComment string `gorm:"column:data_comment;type:varchar(50) default '';not null;comment:被修改项" json:"data_comment"`        // 被修改项
-	IDValue     int32  `gorm:"column:id_value;type:int(11);not null;default:0;comment:被修改项主键值" json:"id_value"`             // 被修改项主键值
-	Before      string `gorm:"column:before;type:text;comment:修改前" json:"before"`                              // 修改前
-	After       string `gorm:"column:after;type:text;comment:修改后" json:"after"`                                // 修改后
-	IP          string `gorm:"column:ip;type:varchar(50) default '';not null;comment:操作者IP" json:"ip"`                           // 操作者IP
-	Useragent   string `gorm:"column:useragent;type:varchar(255) default '';not null;comment:User-Agent" json:"useragent"`        // User-Agent
+	ID          int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`             // ID
+	AdminID     int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;comment:操作管理员" json:"admin_id"`                  // 操作管理员
+	SensitiveID int32  `gorm:"column:sensitive_id;type:int(11) unsigned;not null;default:0;comment:敏感数据规则ID" json:"sensitive_id"`       // 敏感数据规则ID
+	DataTable   string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:数据表" json:"data_table"`                   // 数据表
+	PrimaryKey  string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`                // 数据表主键
+	DataField   string `gorm:"column:data_field;type:varchar(50) default '';not null;comment:被修改字段" json:"data_field"`                  // 被修改字段
+	DataComment string `gorm:"column:data_comment;type:varchar(50) default '';not null;comment:被修改项" json:"data_comment"`               // 被修改项
+	IDValue     int32  `gorm:"column:id_value;type:int(11);not null;default:0;comment:被修改项主键值" json:"id_value"`                         // 被修改项主键值
+	Before      string `gorm:"column:before;type:text;comment:修改前" json:"before"`                                                       // 修改前
+	After       string `gorm:"column:after;type:text;comment:修改后" json:"after"`                                                         // 修改后
+	IP          string `gorm:"column:ip;type:varchar(50) default '';not null;comment:操作者IP" json:"ip"`                                  // 操作者IP
+	Useragent   string `gorm:"column:useragent;type:varchar(255) default '';not null;comment:User-Agent" json:"useragent"`              // User-Agent
 	IsRollback  int32  `gorm:"column:is_rollback;type:tinyint(4) unsigned;not null;default:0;comment:是否已回滚:0=否,1=是" json:"is_rollback"` // 是否已回滚:0=否,1=是
-	CreateTime  int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                   // 创建时间
+	Connection  string `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
+	CreateTime  int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
 }
-

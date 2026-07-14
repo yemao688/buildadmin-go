@@ -18,8 +18,9 @@ func RootPath() string {
 
 	rootDir = filepath.Dir(filepath.Dir(exePath))
 
-	tmpDir := os.TempDir()
-	if strings.Contains(exePath, tmpDir) {
+	// go run 会将编译产物放在临时目录或 build cache 中，
+	// 此时 os.Executable() 返回的路径不在项目目录下，需要用编译期路径回退
+	if isTempPath(exePath) {
 		_, filename, _, ok := runtime.Caller(0)
 		if ok {
 			rootDir = filepath.Dir(filepath.Dir(filename))
@@ -27,6 +28,22 @@ func RootPath() string {
 	}
 
 	return rootDir
+}
+
+// isTempPath 判断路径是否位于系统临时目录或 Go build cache 中
+func isTempPath(path string) bool {
+	if strings.Contains(path, os.TempDir()) {
+		return true
+	}
+	// Go build cache（go run 产物在此）
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		buildCache := filepath.Join(homeDir, "Library", "Caches", "go-build")
+		if strings.Contains(path, buildCache) {
+			return true
+		}
+	}
+	return false
 }
 
 func PathExists(path string) bool {

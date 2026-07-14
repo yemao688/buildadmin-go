@@ -2,7 +2,6 @@ package migrations
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,7 +19,7 @@ type migrationRecord struct {
 	Breakpoint    bool       `gorm:"column:breakpoint"`
 }
 
-type MigrationFn func(*gorm.DB) error
+type MigrationFn func(*gorm.DB, *conf.Configuration) error
 
 type VersionMigration struct {
 	Version int64
@@ -35,14 +34,15 @@ func tableName(config *conf.Configuration, logicalName string) string {
 
 // ─── Version205: 配置快捷入口从 /admin/ 路径迁移到路由 name ───
 func version205(db *gorm.DB, config *conf.Configuration) error {
-	var cfg model.Config
-	result := db.Table(tableName(config, "config")).Where("name = ?", "config_quick_entrance").Take(&cfg)
+	var cfgs []model.Config
+	result := db.Table(tableName(config, "config")).Where("name = ?", "config_quick_entrance").Find(&cfgs)
 	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil
-		}
 		return result.Error
 	}
+	if len(cfgs) == 0 {
+		return nil
+	}
+	cfg := cfgs[0]
 	if strings.TrimSpace(cfg.Value) == "" {
 		return nil
 	}
@@ -60,14 +60,15 @@ func version205(db *gorm.DB, config *conf.Configuration) error {
 			continue
 		}
 		path := strings.TrimPrefix(val, "/admin/")
-		var rule model.AdminRule
-		result := db.Table(tableName(config, "admin_rule")).Where("path = ?", path).Take(&rule)
+		var rules []model.AdminRule
+		result := db.Table(tableName(config, "admin_rule")).Where("path = ?", path).Find(&rules)
 		if result.Error != nil {
-			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-				continue
-			}
 			return result.Error
 		}
+		if len(rules) == 0 {
+			continue
+		}
+		rule := rules[0]
 		if val != rule.Name {
 			entries[i]["value"] = rule.Name
 			changed = true
@@ -85,25 +86,26 @@ func version205(db *gorm.DB, config *conf.Configuration) error {
 
 // ─── Version206: 5 张表新增 connection 字段（跳过 PHP 专属 backend_entrance） ───
 func version206(db *gorm.DB, config *conf.Configuration) error {
-	type connModel struct {
-		Connection string `gorm:"column:connection;type:varchar(100);not null;default:''"`
+	tables := []struct {
+		name  string
+		model any
+	}{
+		{"crud_log", &model.CrudLog{}},
+		{"security_data_recycle", &model.SecurityDataRecycle{}},
+		{"security_data_recycle_log", &model.SecurityDataRecycleLog{}},
+		{"security_sensitive_data", &model.SecuritySensitiveData{}},
+		{"security_sensitive_data_log", &model.SecuritySensitiveDataLog{}},
 	}
-	tables := []string{
-		"crud_log",
-		"security_data_recycle",
-		"security_data_recycle_log",
-		"security_sensitive_data",
-		"security_sensitive_data_log",
-	}
-	for _, logicalName := range tables {
-		fullTable := tableName(config, logicalName)
-		if !db.Migrator().HasTable(fullTable) {
+	for _, item := range tables {
+		fullTable := tableName(config, item.name)
+		migrator := db.Table(fullTable).Migrator()
+		if !migrator.HasTable(item.model) {
 			continue
 		}
-		if db.Migrator().HasColumn(fullTable, "connection") {
+		if migrator.HasColumn(item.model, "Connection") {
 			continue
 		}
-		if err := db.Table(fullTable).Migrator().AddColumn(&connModel{}, "Connection"); err != nil {
+		if err := migrator.AddColumn(item.model, "Connection"); err != nil {
 			return fmt.Errorf("add connection column to %s: %w", fullTable, err)
 		}
 	}
@@ -133,17 +135,15 @@ func version222(db *gorm.DB, config *conf.Configuration) error {
 
 	// crud_log 新增 comment 和 sync（独立检查，幂等）
 	crudLogTable := tableName(config, "crud_log")
-	type crudAddition struct {
-		Comment string `gorm:"column:comment;type:varchar(255);not null;default:''"`
-		Sync    int32  `gorm:"column:sync;type:int;not null;default:0"`
-	}
-	if !db.Migrator().HasColumn(crudLogTable, "comment") {
-		if err := db.Table(crudLogTable).Migrator().AddColumn(&crudAddition{}, "Comment"); err != nil {
+	crudLogModel := &model.CrudLog{}
+	crudMigrator := db.Table(crudLogTable).Migrator()
+	if !crudMigrator.HasColumn(crudLogModel, "Comment") {
+		if err := crudMigrator.AddColumn(crudLogModel, "Comment"); err != nil {
 			return fmt.Errorf("add comment column to %s: %w", crudLogTable, err)
 		}
 	}
-	if !db.Migrator().HasColumn(crudLogTable, "sync") {
-		if err := db.Table(crudLogTable).Migrator().AddColumn(&crudAddition{}, "Sync"); err != nil {
+	if !crudMigrator.HasColumn(crudLogModel, "Sync") {
+		if err := crudMigrator.AddColumn(crudLogModel, "Sync"); err != nil {
 			return fmt.Errorf("add sync column to %s: %w", crudLogTable, err)
 		}
 	}
@@ -176,40 +176,9 @@ func version222(db *gorm.DB, config *conf.Configuration) error {
 // ─── 迁移注册 ───
 
 var allMigrations = []VersionMigration{
-	{Version: 20231112093414, Name: "Version205", Up: func(db *gorm.DB) error {
-		cfg, err := migrationConfig(db)
-		if err != nil {
-			return err
-		}
-		return version205(db, cfg)
-	}},
-	{Version: 20231229043002, Name: "Version206", Up: func(db *gorm.DB) error {
-		cfg, err := migrationConfig(db)
-		if err != nil {
-			return err
-		}
-		return version206(db, cfg)
-	}},
-	{Version: 20250412134127, Name: "Version222", Up: func(db *gorm.DB) error {
-		cfg, err := migrationConfig(db)
-		if err != nil {
-			return err
-		}
-		return version222(db, cfg)
-	}},
-}
-
-// migrationConfig 从 GORM session 中获取迁移配置
-func migrationConfig(db *gorm.DB) (*conf.Configuration, error) {
-	value, ok := db.Get("migration:config")
-	if !ok {
-		return nil, fmt.Errorf("migration:config not set in db session")
-	}
-	config, ok := value.(*conf.Configuration)
-	if !ok {
-		return nil, fmt.Errorf("migration:config has unexpected type: %T", value)
-	}
-	return config, nil
+	{Version: 20231112093414, Name: "Version205", Up: version205},
+	{Version: 20231229043002, Name: "Version206", Up: version206},
+	{Version: 20250412134127, Name: "Version222", Up: version222},
 }
 
 // validateMigrations 验证迁移列表的版本号严格递增、名称非空
@@ -236,37 +205,34 @@ func RunVersionMigrations(db *gorm.DB, config *conf.Configuration) (int, error) 
 	if err := validateMigrations(); err != nil {
 		return 0, err
 	}
-	db = db.Set("migration:config", config)
-
 	migrationsTable := tableName(config, "migrations")
 	count := 0
 
 	for _, migration := range allMigrations {
-		// 查询该版本是否存在记录
+		// 查询该版本是否存在已完成记录
 		var record migrationRecord
-		result := db.Table(migrationsTable).Where("version = ?", migration.Version).Take(&record)
-
-		if result.Error == nil {
-			// 记录存在
-			if record.EndTime != nil {
-				// 已完成：验证名称一致（collision 检测）
-				if record.MigrationName != migration.Name {
-					return count, fmt.Errorf("migration version %d: name collision (db=%s, code=%s)",
-						migration.Version, record.MigrationName, migration.Name)
-				}
-				continue // 跳过已完成的迁移
-			}
-			// end_time 为空 = 未完成，允许重跑
-		} else if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			// 真实数据库错误
+		recordDB := db.Session(&gorm.Session{})
+		result := recordDB.Table(migrationsTable).Where("version = ?", migration.Version).Limit(1).Find(&record)
+		if result.Error != nil {
 			return count, fmt.Errorf("query migration version %d: %w", migration.Version, result.Error)
+		}
+
+		recordExists := result.RowsAffected > 0
+		if recordExists && record.EndTime != nil {
+			// 已完成：验证名称一致（collision 检测）
+			if record.MigrationName != migration.Name {
+				return count, fmt.Errorf("migration version %d: name collision (db=%s, code=%s)",
+					migration.Version, record.MigrationName, migration.Name)
+			}
+			continue // 跳过已完成的迁移
 		}
 
 		// 记录开始时间
 		start := time.Now()
 
 		// 执行迁移
-		if err := migration.Up(db); err != nil {
+		migrationDB := db.Session(&gorm.Session{})
+		if err := migration.Up(migrationDB, config); err != nil {
 			return count, fmt.Errorf("migration %s failed: %w", migration.Name, err)
 		}
 
@@ -274,21 +240,17 @@ func RunVersionMigrations(db *gorm.DB, config *conf.Configuration) (int, error) 
 
 		// 成功后才写入/更新 migration record
 		var writeErr error
-		if result.Error == nil {
-			// 更新已有的未完成记录
-			writeErr = db.Table(migrationsTable).Where("version = ?", migration.Version).Updates(map[string]any{
+		if recordExists {
+			writeErr = db.Session(&gorm.Session{}).Table(migrationsTable).Where("version = ?", migration.Version).Updates(map[string]any{
 				"migration_name": migration.Name,
 				"start_time":     start,
 				"end_time":       end,
 			}).Error
 		} else {
-			// 创建新记录
-			writeErr = db.Table(migrationsTable).Create(&migrationRecord{
-				Version:       migration.Version,
-				MigrationName: migration.Name,
-				StartTime:     start,
-				EndTime:       &end,
-			}).Error
+			writeErr = db.Session(&gorm.Session{}).Exec(
+				"INSERT INTO `"+migrationsTable+"` (`version`, `migration_name`, `start_time`, `end_time`, `breakpoint`) VALUES (?, ?, ?, ?, ?)",
+				migration.Version, migration.Name, start, end, false,
+			).Error
 		}
 		if writeErr != nil {
 			return count, fmt.Errorf("write migration record for %s: %w", migration.Name, writeErr)
