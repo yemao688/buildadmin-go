@@ -170,4 +170,27 @@ export default {
     'Reset generate type attr':
         'The field generation type has been changed. Do you want to reset the field design to the preset scheme for the new type?',
     'Design efficiency': 'Determine design validity by yourself',
+
+    // data scope (Phase 1C)
+    'Data scope': 'Data Scope',
+    'Data scope mode': 'Data scope mode',
+    'Data scope mode auto': 'Auto detect',
+    'Data scope mode required': 'Assign owner column',
+    'Data scope mode none': 'Global data',
+    'Data scope owner column': 'Owner column',
+    'Data scope assign on create': 'Auto-assign current admin on create',
+    'Data scope preview': 'Parsed preview',
+    'Data scope admin data': 'admin_id detected: data is administrator-scoped, new records will be bound to the current administrator.',
+    'Data scope global data': 'No admin_id detected: data is global.',
+    'Data scope required preview': 'Owner column: {field}. On create: {assign}.',
+    'Data scope required no owner': 'Please select an owner column from compatible fields.',
+    'Data scope assign yes': 'auto-assign to current admin',
+    'Data scope assign no': 'no auto-assign',
+    'Data scope none preview': 'Data is global; administrator-level isolation is disabled.',
+    'Data scope server managed': 'Server-managed',
+    'Data scope server managed tip': 'This field is managed by the data-scope setting; it is recommended not to edit it as a normal form item.',
+    'Data scope none confirm title': 'Confirm disabling data scope',
+    'Data scope none confirm content': 'The current table contains an admin_id field. Selecting "Global data" means it will not be treated as administrator-scoped data. Please confirm this action.',
+    'Data scope owner is pk tip': 'Auto-assign cannot be enabled when the owner column is the primary key.',
+    'Data scope compatible fields only': 'Only compatible fields (integer types or admin_id) are shown as owner columns',
 }
