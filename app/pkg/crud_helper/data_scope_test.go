@@ -519,7 +519,7 @@ func compileDemoStruct(className, ownerCol, ownerGo, structOwner string) string 
 	b.WriteString("// " + className + " demo table\n")
 	b.WriteString("type " + className + " struct {\n")
 	b.WriteString("\tID int32 `gorm:\"column:id;primaryKey;autoIncrement:true\" json:\"id\"`\n")
-	if structOwner == "admin_id" || structOwner == "" {
+	if structOwner == "admin_id" {
 		b.WriteString("\tAdminID int32 `gorm:\"column:admin_id\" json:\"admin_id\"`\n")
 	}
 	if ownerCol != "" && ownerCol != "id" && ownerCol != "admin_id" {
@@ -556,7 +556,18 @@ func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode str
 	root := repoRoot(t)
 	tmp := t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), []byte("module go-build-admin\n\ngo 1.25\n"), 0644); err != nil {
+	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return err
+	}
+	goSum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), goMod, 0644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "go.sum"), goSum, 0644); err != nil {
 		return err
 	}
 
@@ -651,14 +662,7 @@ func GetError(v interface{}, err error) error { return err }
 		return err
 	}
 
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = tmp
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Logf("go mod tidy output:\n%s", out)
-		return err
-	}
-
-	cmd = exec.Command("go", "build", "./...")
+	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = tmp
 	out, err := cmd.CombinedOutput()
 	if err != nil {

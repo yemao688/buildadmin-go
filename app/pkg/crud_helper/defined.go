@@ -397,7 +397,10 @@ type ModelData struct {
 
 const modelTemp = `package {{.Namespace}}
 
-import "go-build-admin/app/pkg/data_scope"
+import (
+	"fmt"
+	"go-build-admin/app/pkg/data_scope"
+)
 
 {{.StructTemp}}
 
@@ -438,7 +441,9 @@ func (s *{{.ClassName}}Model) scopedDB(ctx *gin.Context) *gorm.DB {
 }
 
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
-	err = s.scopedDB(ctx).Where("id=?", id).First(&{{.ModelVar}}).Error
+	db := s.scopedDB(ctx).Session(&gorm.Session{})
+	db.Statement.Table = s.TableName
+	err = db.Where("id=?", id).First(&{{.ModelVar}}).Error
 	return
 }
 
@@ -447,11 +452,16 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.scopedDB(ctx).Model(&{{.ClassName}}{}).Where(whereS, whereP...)
-	if err = db.Count(&total).Error; err != nil {
+	countDB := s.scopedDB(ctx).Session(&gorm.Session{})
+	countDB.Statement.Table = s.TableName
+	countDB = countDB.Where(whereS, whereP...)
+	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	findDB := s.scopedDB(ctx).Session(&gorm.Session{})
+	findDB.Statement.Table = s.TableName
+	findDB = findDB.Where(whereS, whereP...)
+	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
@@ -482,7 +492,7 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 		}
 	}()
 
-	if err := tx.Create(&{{.ModelVar}}).Error; err != nil {
+	if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -499,7 +509,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 		}
 	}
 
-	tx := s.scopedDB(ctx).Begin()
+	tx := s.scopedDB(ctx).Session(&gorm.Session{}).Begin()
 	if err := tx.Error; err != nil {
 		return err
 	}
@@ -509,7 +519,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 		}
 	}()
 
-	res := tx.Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
+	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
 	if err := res.Error; err != nil {
 		tx.Rollback()
 		return err
@@ -522,7 +532,15 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 }
 
 func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
-	tx := s.scopedDB(ctx).Begin()
+	normalizedIDs, err := normalize{{.ClassName}}IDs(ids)
+	if err != nil {
+		return err
+	}
+	if len(normalizedIDs) == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	tx := s.scopedDB(ctx).Session(&gorm.Session{}).Begin()
 	if err := tx.Error; err != nil {
 		return err
 	}
@@ -532,16 +550,43 @@ func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}()
 
-	res := tx.Model(&{{.ClassName}}{}).Where(" {{.Pk}} in ? ", ids).Delete(nil)
+	var visible int64
+	if err := tx.Table(s.TableName).Model(&{{.ClassName}}{}).Where("{{.Pk}} IN ?", normalizedIDs).Count(&visible).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if visible != int64(len(normalizedIDs)) {
+		tx.Rollback()
+		return gorm.ErrRecordNotFound
+	}
+
+	res := tx.Table(s.TableName).Where("{{.Pk}} IN ?", normalizedIDs).Delete(&{{.ClassName}}{})
 	if err := res.Error; err != nil {
 		tx.Rollback()
 		return err
 	}
-	if res.RowsAffected == 0 {
+	if res.RowsAffected != int64(len(normalizedIDs)) {
 		tx.Rollback()
 		return gorm.ErrRecordNotFound
 	}
 	return tx.Commit().Error
+}
+
+func normalize{{.ClassName}}IDs(ids interface{}) ([]int32, error) {
+	raw, ok := ids.([]int32)
+	if !ok {
+		return nil, fmt.Errorf("invalid {{.Pk}} ids type %T", ids)
+	}
+	seen := make(map[int32]struct{}, len(raw))
+	result := make([]int32, 0, len(raw))
+	for _, id := range raw {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result, nil
 }
 `
 
