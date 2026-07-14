@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"regexp"
 	"slices"
@@ -52,7 +53,9 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 		}
 		designChange := table.DesignChange
 		if len(designChange) == 0 {
-			return nil
+			pk := getPk(fields)
+			ownerCol := resolveOwnerColumn(table.DataScope, fields)
+			return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
 		}
 		// 改名和删除操作优先
 		for _, v := range designChange {
@@ -152,10 +155,72 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 			return err
 		}
 
-		err = db.Exec(buf.String()).Error
+		if err := db.Exec(buf.String()).Error; err != nil {
+			return err
+		}
+	}
+	// Ensure a data-scope index exists whenever the resolved owner column is
+	// not the primary key. This makes the generated DDL self-consistent with
+	// the fail-closed index proof required by ResolveDataScope.
+	pk = getPk(fields)
+	ownerCol := resolveOwnerColumn(table.DataScope, fields)
+	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+}
+
+// HandleTableDesignWithDataScope creates or updates the table and ensures an
+// index exists for the resolved data-scope owner column when required.
+func HandleTableDesignWithDataScope(db *gorm.DB, fullTableName string, table model.Table, fields []model.Field, dsConfig *data_scope.Config) error {
+	table.DataScope = dsConfig
+	if err := HandleTableDesign(db, fullTableName, table, fields); err != nil {
 		return err
 	}
-	return nil
+	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
+		AllowNoneWithAdminID: dsConfig != nil && dsConfig.Mode == data_scope.ModeNone,
+		ProveIndex:           buildIndexProver(db, fullTableName),
+	})
+	if err != nil {
+		return err
+	}
+	return EnsureDataScopeIndex(db, fullTableName, ds.OwnerColumn, getPk(fields))
+}
+
+// EnsureDataScopeIndex creates idx_<ownerColumn> on fullTableName when the
+// owner column is configured and is not the primary key.
+func EnsureDataScopeIndex(db *gorm.DB, fullTableName, ownerColumn, pk string) error {
+	if db == nil || ownerColumn == "" || ownerColumn == pk {
+		return nil
+	}
+	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+		return err
+	}
+	if err := data_scope.ValidateIdentifier(ownerColumn); err != nil {
+		return err
+	}
+	indexName := "idx_" + ownerColumn
+	var sameNameFirstColumn string
+	if err := db.Raw(
+		"SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1 LIMIT 1",
+		fullTableName, indexName,
+	).Scan(&sameNameFirstColumn).Error; err != nil {
+		return err
+	}
+	if sameNameFirstColumn != "" && sameNameFirstColumn != ownerColumn {
+		return fmt.Errorf("data_scope: index %q exists but its first column is %q, not owner column %q", indexName, sameNameFirstColumn, ownerColumn)
+	}
+	if sameNameFirstColumn == ownerColumn {
+		return nil
+	}
+	var ownerLeadingIndex string
+	if err := db.Raw(
+		"SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND SEQ_IN_INDEX = 1 LIMIT 1",
+		fullTableName, ownerColumn,
+	).Scan(&ownerLeadingIndex).Error; err != nil {
+		return err
+	}
+	if ownerLeadingIndex != "" {
+		return nil
+	}
+	return db.Exec("CREATE INDEX `" + indexName + "` ON `" + fullTableName + "` (`" + ownerColumn + "`)").Error
 }
 
 func searchField(fields []model.Field, name string) model.Field {

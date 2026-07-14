@@ -1,6 +1,9 @@
 package crud_helper
 
-import "go-build-admin/app/admin/model"
+import (
+	"go-build-admin/app/admin/model"
+	"go-build-admin/app/pkg/data_scope"
+)
 
 // 内部保留词
 var reservedKeywords = []string{
@@ -259,6 +262,8 @@ type HandlerData struct {
 	Attr                     map[string]string // preExcludeFields quickSearchField withJoinTable defaultSortField
 	Methods                  []string
 	RelationVisibleFieldList map[string][]string
+
+	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
 }
 
 const handlerTemp = `
@@ -368,6 +373,7 @@ type ModelData struct {
 	Name       string //表名
 	ClassName  string //类名
 	Pk         string //主键
+	PkGoField  string //主键Go字段名
 	ModelVar   string //结构体变量
 	StructTemp string //结构体
 
@@ -381,17 +387,27 @@ type ModelData struct {
 	BeforeInsert       string
 	AfterInsert        string
 	RelationMethodList map[string]string
+
+	DataScopePolicy       data_scope.ResourcePolicy
+	DataScopeOwnerGoField string
+	EffectiveFormFields   []string
+	EditableColumns       []string
+	EditableColumnsGo     string
 }
 
 const modelTemp = `package {{.Namespace}}
+
+import "go-build-admin/app/pkg/data_scope"
 
 {{.StructTemp}}
 
 type {{.ClassName}}Model struct {
 	BaseModel
+	Policy   data_scope.ResourcePolicy
+	Enforcer data_scope.Enforcer
 }
 
-func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration) *{{.ClassName}}Model {
+func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
 		BaseModel: BaseModel{
 			TableName:        config.Database.Prefix + "{{.ModelVar}}",
@@ -400,11 +416,29 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration) *{{.Clas
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
+		Policy: data_scope.ResourcePolicy{
+			Mode:           "{{.DataScopePolicy.Mode}}",
+			OwnerColumn:    "{{.DataScopePolicy.OwnerColumn}}",
+			AssignOnCreate: {{.DataScopePolicy.AssignOnCreate}},
+		},
+		Enforcer: enforcer,
 	}
 }
 
+func (s *{{.ClassName}}Model) scopedDB(ctx *gin.Context) *gorm.DB {
+	if s.Policy.Mode == data_scope.ModeNone {
+		return s.sqlDB
+	}
+	if s.Enforcer == nil {
+		tx := s.sqlDB.Session(&gorm.Session{})
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	return s.Enforcer.Scope(ctx, s.sqlDB, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn})
+}
+
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
-	err = s.sqlDB.Where("id=?", id).First(&{{.ModelVar}}).Error
+	err = s.scopedDB(ctx).Where("id=?", id).First(&{{.ModelVar}}).Error
 	return
 }
 
@@ -413,7 +447,7 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&{{.ClassName}}{}).Where(whereS, whereP...)
+	db := s.scopedDB(ctx).Model(&{{.ClassName}}{}).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -422,7 +456,26 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 }
 
 func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		{{if .DataScopePolicy.AssignOnCreate}}actor, err := s.Enforcer.Actor(ctx)
+		if err != nil {
+			return err
+		}
+		if s.Policy.AssignOnCreate {
+			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = actor.AdminID
+		}
+		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
+			return err
+		}{{end}}
+	}
+
 	tx := s.sqlDB.Begin()
+	if err := tx.Error; err != nil {
+		return err
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -432,29 +485,63 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 	if err := tx.Create(&{{.ModelVar}}).Error; err != nil {
 		tx.Rollback()
 		return err
-
 	}
 	return tx.Commit().Error
 }
 
 func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
-	tx := s.sqlDB.Begin()
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		if _, err := s.Enforcer.Actor(ctx); err != nil {
+			return err
+		}
+	}
+
+	tx := s.scopedDB(ctx).Begin()
+	if err := tx.Error; err != nil {
+		return err
+	}
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
-	if err := tx.Save(&{{.ModelVar}}).Error; err != nil {
+	res := tx.Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
+	if err := res.Error; err != nil {
 		tx.Rollback()
 		return err
+	}
+	if res.RowsAffected != 1 {
+		tx.Rollback()
+		return gorm.ErrRecordNotFound
 	}
 	return tx.Commit().Error
 }
 
 func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Model(&{{.ClassName}}{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
-	return err
+	tx := s.scopedDB(ctx).Begin()
+	if err := tx.Error; err != nil {
+		return err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	res := tx.Model(&{{.ClassName}}{}).Where(" {{.Pk}} in ? ", ids).Delete(nil)
+	if err := res.Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if res.RowsAffected == 0 {
+		tx.Rollback()
+		return gorm.ErrRecordNotFound
+	}
+	return tx.Commit().Error
 }
 `
 

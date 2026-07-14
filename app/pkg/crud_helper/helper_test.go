@@ -3,15 +3,14 @@ package crud_helper
 import (
 	"encoding/json"
 	"fmt"
-	"go-build-admin/app/admin/model"
-	"go-build-admin/utils"
-	"os/exec"
-	"path/filepath"
+	"go-build-admin/app/pkg/data_scope"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/magiconair/properties/assert"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -110,9 +109,12 @@ func TestGetDictData(t *testing.T) {
 	fmt.Println(quickSearchFieldZhCnTitle)
 }
 
-func TestGenerate(t *testing.T) {
+// TestGenerate_UsesTableDataScope verifies that GenerateFile reads the data-scope
+// configuration from the Table value and that temp-dir rendering succeeds.
+func TestGenerate_UsesTableDataScope(t *testing.T) {
 	table := getTestTableData()
-	fields := getTestFieldData()
+	table.DataScope = &data_scope.Config{Mode: data_scope.ModeNone}
+	fields := getCompileFields("")
 
 	getTableName := func(tableName string, fullName bool) string {
 		prefix := ""
@@ -123,19 +125,20 @@ func TestGenerate(t *testing.T) {
 		return prefix + tableName
 	}
 
-	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
-	getColumns := func(tableName string) ([]model.Column, error) {
-		result := []model.Column{}
-		err := db.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", "buildadmin", getTableName(tableName, true)).Scan(&result).Error
-		if err != nil {
-			return result, err
-		}
-		return result, nil
-	}
-	_, _, err := GenerateFile(table, fields, getTableName, getColumns, db)
-	// fmt.Println(webDir)
-	// fmt.Println(lang)
-	fmt.Println(err)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	require.NoError(t, err)
+	require.Equal(t, data_scope.ModeNone, modelData.DataScopePolicy.Mode)
+
+	className := modelData.ClassName
+	structContent := compileDemoStruct(className, "", "", "")
+	modelData.Pk = "id"
+	modelData.StructTemp = structContent
+
+	modelCode, err := renderModel(modelData)
+	require.NoError(t, err)
+	handlerCode, err := renderHandler(handlerData, structContent)
+	require.NoError(t, err)
+	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
 }
 
 func TestGetQuote(t *testing.T) {
@@ -151,23 +154,15 @@ func TestBuildSimpleArray(t *testing.T) {
 }
 
 func TestHandleTableDesign(t *testing.T) {
+	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping DB mutation test")
+	}
 	table := getTestTableData()
 	fields := getTestFieldData()
 	fullTableName := "ba_test1"
 
-	db, _ := gorm.Open(mysql.Open("root:root@(127.0.0.1:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"))
+	db, err := gorm.Open(mysql.Open(dsn))
+	require.NoError(t, err)
 	HandleTableDesign(db, fullTableName, table, fields)
-}
-
-func TestCmd(t *testing.T) {
-	cmd := exec.Command("wire")                             // 构造wire命令
-	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app") // 设置工作目录
-	if err := cmd.Start(); err != nil {                     // 执行命令
-		fmt.Println("start" + err.Error())
-		return
-	}
-
-	if err := cmd.Wait(); err != nil {
-		fmt.Println("Wait" + err.Error())
-	}
 }
