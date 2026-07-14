@@ -800,6 +800,37 @@ func indexExists(db *gorm.DB, table, index string) bool {
 	return result.Error == nil && count > 0
 }
 
+func indexFirstColumn(db *gorm.DB, table, index string) (string, error) {
+	var column string
+	err := db.Raw("SELECT column_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? AND seq_in_index = 1", table, index).Scan(&column).Error
+	return column, err
+}
+
+// ─── Version225: attachment owner-leading index ───
+func version225(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	table := tableName(config, "attachment")
+	if !tableExists(db, table) {
+		return nil
+	}
+	if indexExists(db, table, "idx_admin_id") {
+		column, err := indexFirstColumn(db, table, "idx_admin_id")
+		if err != nil {
+			return fmt.Errorf("inspect idx_admin_id on %s: %w", table, err)
+		}
+		if column != "admin_id" {
+			return fmt.Errorf("idx_admin_id on %s starts with %q, want admin_id", table, column)
+		}
+		return nil
+	}
+	if err := db.Exec("CREATE INDEX `idx_admin_id` ON " + quoteIdentifier(table) + " (`admin_id`)").Error; err != nil {
+		return fmt.Errorf("add idx_admin_id to %s: %w", table, err)
+	}
+	return nil
+}
+
 // EnsureAdminClosureSelfRows inserts the mandatory (id,id,0) self-row for every
 // administrator that does not already have one. It is idempotent and safe to
 // call after both fresh seed and upgrade paths.
@@ -907,6 +938,7 @@ var allMigrations = []VersionMigration{
 	{Version: 20250412134127, Name: "Version222", Up: version222},
 	{Version: 20260714120000, Name: "Version223", Up: version223},
 	{Version: 20260714130000, Name: "Version224", Up: version224},
+	{Version: 20260715000000, Name: "Version225", Up: version225},
 }
 
 // validateMigrations 验证迁移列表的版本号严格递增、名称非空

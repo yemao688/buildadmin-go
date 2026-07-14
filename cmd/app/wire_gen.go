@@ -17,6 +17,7 @@ import (
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -66,7 +67,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	userMoneyLogHandler := handler.NewUserMoneyLogHandler(zapLogger, userMoneyLogModel)
 	userScoreLogModel := model.NewUserScoreLogModel(gormDB, configuration)
 	userScoreLogHandler := handler.NewUserScoreLogHandler(zapLogger, userScoreLogModel)
-	attachmentModel := model2.NewAttachmentModel(gormDB, configuration)
+	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
+	attachmentModel := model2.NewAttachmentModel(gormDB, configuration, closureEnforcer)
 	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentModel)
 	tableModel := model.NewTableModel(configuration, gormDB)
 	crudLogModel := model.NewCrudLogModel(gormDB, configuration)

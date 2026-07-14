@@ -1,7 +1,9 @@
 package model
 
 import (
+	"fmt"
 	"go-build-admin/app/admin/model/simple"
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -37,10 +39,12 @@ type Attachment struct {
 
 type AttachmentModel struct {
 	BaseModel
-	config *conf.Configuration
+	config   *conf.Configuration
+	enforcer data_scope.Enforcer
+	Policy   data_scope.ResourcePolicy
 }
 
-func NewAttachmentModel(sqlDB *gorm.DB, config *conf.Configuration) *AttachmentModel {
+func NewAttachmentModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *AttachmentModel {
 	return &AttachmentModel{
 		BaseModel: BaseModel{
 			TableName:        config.Database.Prefix + "attachment",
@@ -49,13 +53,26 @@ func NewAttachmentModel(sqlDB *gorm.DB, config *conf.Configuration) *AttachmentM
 			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
-		config: config,
+		config:   config,
+		enforcer: enforcer,
+		Policy:   data_scope.ResourcePolicy{Mode: data_scope.ModeRequired, OwnerColumn: "admin_id", AssignOnCreate: true},
 	}
 }
 
+func (s *AttachmentModel) scoped(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	if s.enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: "attachment", Column: "admin_id"})
+}
+
 func (s *AttachmentModel) GetOne(ctx *gin.Context, id int32) (attachment Attachment, err error) {
-	err = s.sqlDB.Where("id=?", id).Take(&attachment).Error
-	s.DealData(ctx, &attachment)
+	err = s.scoped(ctx, s.sqlDB.Table(s.TableName+" AS attachment")).Where("attachment.id=?", id).Preload("Admin").Preload("User").Take(&attachment).Error
+	if err == nil {
+		_, err = s.DealData(ctx, &attachment)
+	}
 	return
 }
 
@@ -66,11 +83,15 @@ func (s *AttachmentModel) DealData(ctx *gin.Context, data *Attachment) (*Attachm
 }
 
 func (s *AttachmentModel) List(ctx *gin.Context) (list []*Attachment, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	tableInfo := s.TableInfo()
+	// The query uses an explicit alias so the owner predicate remains
+	// unambiguous alongside Admin/User joins.
+	tableInfo.TableName = "attachment"
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, tableInfo, nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&Attachment{}).Preload("Admin").Preload("User").
+	db := s.scoped(ctx, s.sqlDB.Table(s.TableName+" AS attachment")).Model(&Attachment{}).Preload("Admin").Preload("User").
 		Joins("Admin").
 		Joins("User").
 		Where(whereS, whereP...)
@@ -79,28 +100,68 @@ func (s *AttachmentModel) List(ctx *gin.Context) (list []*Attachment, total int6
 	}
 	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	for _, v := range list {
-		s.DealData(ctx, v)
+		if _, err = s.DealData(ctx, v); err != nil {
+			return nil, 0, err
+		}
 	}
 	return
 }
 
 func (s *AttachmentModel) Edit(ctx *gin.Context, data Attachment) error {
-	err := s.sqlDB.Table(s.TableName).Updates(data).Error
-	return err
+	updates := map[string]interface{}{"topic": data.Topic, "url": data.URL, "width": data.Width, "height": data.Height, "name": data.Name, "size": data.Size, "mimetype": data.Mimetype, "quote": data.Quote, "storage": data.Storage, "sha1": data.Sha1}
+	tx := s.scoped(ctx, s.sqlDB.Table(s.TableName+" AS attachment")).Where("attachment.id = ?", data.ID).Updates(updates)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (s *AttachmentModel) Del(ctx *gin.Context, ids interface{}) error {
-	list := []Attachment{}
-	if err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Find(&list).Error; err != nil {
-		return err
+	values, ok := ids.([]int32)
+	if !ok || len(values) == 0 {
+		return fmt.Errorf("invalid attachment ids")
 	}
-
-	for _, v := range list {
-		if utils.PathExists(utils.RootPath() + v.URL) {
-			os.Remove(utils.RootPath() + v.URL)
+	seen := make(map[int32]struct{}, len(values))
+	normalized := make([]int32, 0, len(values))
+	for _, id := range values {
+		if id <= 0 {
+			return fmt.Errorf("invalid attachment id %d", id)
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			normalized = append(normalized, id)
 		}
 	}
-
-	err := s.sqlDB.Table(s.TableName).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
-	return err
+	var list []Attachment
+	err := s.sqlDB.Transaction(func(tx *gorm.DB) error {
+		scoped := s.scoped(ctx, tx.Table(s.TableName+" AS attachment"))
+		if err := scoped.Where("attachment.id IN ?", normalized).Find(&list).Error; err != nil {
+			return err
+		}
+		if len(list) != len(normalized) {
+			return gorm.ErrRecordNotFound
+		}
+		del := scoped.Where("attachment.id IN ?", normalized).Delete(&Attachment{})
+		if del.Error != nil {
+			return del.Error
+		}
+		if del.RowsAffected != int64(len(normalized)) {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, v := range list {
+		if utils.PathExists(utils.RootPath() + v.URL) {
+			if removeErr := os.Remove(utils.RootPath() + v.URL); removeErr != nil {
+				return removeErr
+			}
+		}
+	}
+	return nil
 }
