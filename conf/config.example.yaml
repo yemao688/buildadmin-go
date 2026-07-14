@@ -87,8 +87,8 @@ terminal:
   commands:
     migrate:
       run: 
-        cwd: ''
-        command: ''
+        cwd: 'cmd/app'
+        command: 'go run . --conf config.yaml migrate run'
       rollback: 
         cwd: ''
         command: ''
@@ -202,4 +202,3 @@ terminal:
       localhost: 
         cwd: ''
         command: 'ping 127.0.0.1 -n 6'
-

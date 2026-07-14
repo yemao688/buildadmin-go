@@ -10,28 +10,26 @@ import (
 
 // User 会员表
 type User struct {
-	ID            int32     `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
-	GroupID       int32     `gorm:"column:group_id;type:int(11) unsigned;not null;default:0;comment:分组ID" json:"group_id"`             // 分组ID
-	Username      string    `gorm:"column:username;type:varchar(32) default '';not null;uniqueIndex:username;comment:用户名" json:"username"`              // 用户名
-	Nickname      string    `gorm:"column:nickname;type:varchar(50) default '';not null;comment:昵称" json:"nickname"`               // 昵称
-	Email         string    `gorm:"column:email;type:varchar(50) default '';not null;comment:邮箱" json:"email"`                     // 邮箱
-	Mobile        string    `gorm:"column:mobile;type:varchar(11) default '';not null;comment:手机" json:"mobile"`                   // 手机
-	Avatar        string    `gorm:"column:avatar;type:varchar(255) default '';not null;comment:头像" json:"avatar"`                   // 头像
-	Gender        int32     `gorm:"column:gender;type:tinyint(4) unsigned;not null;default:0;comment:性别:0=未知,1=男,2=女" json:"gender"`      // 性别:0=未知,1=男,2=女
-	Birthday      time.Time `gorm:"column:birthday;type:date default null;comment:生日" json:"birthday"`                        // 生日
-	Money         int32     `gorm:"column:money;type:int(11) unsigned;not null;default:0;comment:余额" json:"money"`                     // 余额
-	Score         int32     `gorm:"column:score;type:int(11) unsigned;not null;default:0;comment:积分" json:"score"`                     // 积分
-	LastLoginTime int64     `gorm:"column:last_login_time;type:bigint(16) unsigned;default:null;comment:上次登录时间" json:"last_login_time"`      // 上次登录时间
-	LastLoginIP   string    `gorm:"column:last_login_ip;type:varchar(50) default '';not null;comment:上次登录IP" json:"last_login_ip"` // 上次登录IP
-	LoginFailure  int32     `gorm:"column:login_failure;type:tinyint(4) unsigned;not null;default:0;comment:登录失败次数" json:"login_failure"` // 登录失败次数
-	JoinIP        string    `gorm:"column:join_ip;type:varchar(50) default '';not null;comment:加入IP" json:"join_ip"`               // 加入IP
-	JoinTime      int64     `gorm:"column:join_time;type:bigint(16) unsigned;default:null;comment:加入时间" json:"join_time"`                    // 加入时间
-	Motto         string    `gorm:"column:motto;type:varchar(255) default '';not null;comment:签名" json:"motto"`                     // 签名
-	Password      string    `gorm:"column:password;type:varchar(32) default '';not null;comment:密码" json:"password"`               // 密码
-	Salt          string    `gorm:"column:salt;type:varchar(30) default '';not null;comment:密码盐" json:"salt"`                      // 密码盐
-	Status        string    `gorm:"column:status;type:varchar(30) default '';not null;comment:状态" json:"status"`                   // 状态
-	UpdateTime    int64     `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`                // 更新时间
-	CreateTime    int64     `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                // 创建时间
+	ID            int32     `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`           // ID
+	GroupID       int32     `gorm:"column:group_id;type:int(11) unsigned;not null;default:0;comment:分组ID" json:"group_id"`                 // 分组ID
+	Username      string    `gorm:"column:username;type:varchar(32) default '';not null;uniqueIndex:username;comment:用户名" json:"username"` // 用户名
+	Nickname      string    `gorm:"column:nickname;type:varchar(50) default '';not null;comment:昵称" json:"nickname"`                       // 昵称
+	Email         string    `gorm:"column:email;type:varchar(50) default '';not null;comment:邮箱" json:"email"`                             // 邮箱
+	Mobile        string    `gorm:"column:mobile;type:varchar(11) default '';not null;comment:手机" json:"mobile"`                           // 手机
+	Avatar        string    `gorm:"column:avatar;type:varchar(255) default '';not null;comment:头像" json:"avatar"`                          // 头像
+	Gender        int32     `gorm:"column:gender;type:tinyint(4) unsigned;not null;default:0;comment:性别:0=未知,1=男,2=女" json:"gender"`       // 性别:0=未知,1=男,2=女
+	Birthday      time.Time `gorm:"column:birthday;type:date default null;comment:生日" json:"birthday"`                                     // 生日
+	Money         int32     `gorm:"column:money;type:int(11) unsigned;not null;default:0;comment:余额" json:"money"`                         // 余额
+	Score         int32     `gorm:"column:score;type:int(11) unsigned;not null;default:0;comment:积分" json:"score"`                         // 积分
+	LastLoginTime int64     `gorm:"column:last_login_time;type:bigint(16) unsigned;default:null;comment:上次登录时间" json:"last_login_time"`    // 上次登录时间
+	LastLoginIP   string    `gorm:"column:last_login_ip;type:varchar(50) default '';not null;comment:上次登录IP" json:"last_login_ip"`         // 上次登录IP
+	LoginFailure  int32     `gorm:"column:login_failure;type:tinyint(4) unsigned;not null;default:0;comment:登录失败次数" json:"login_failure"`  // 登录失败次数
+	JoinIP        string    `gorm:"column:join_ip;type:varchar(50) default '';not null;comment:加入IP" json:"join_ip"`                       // 加入IP
+	JoinTime      int64     `gorm:"column:join_time;type:bigint(16) unsigned;default:null;comment:加入时间" json:"join_time"`                  // 加入时间
+	Motto         string    `gorm:"column:motto;type:varchar(255) default '';not null;comment:签名" json:"motto"`                            // 签名
+	Password      string    `gorm:"column:password;type:varchar(255) default '';not null;comment:密码" json:"password"`                      // 密码
+	Salt          string    `gorm:"column:salt;type:varchar(30) default '';not null;comment:密码盐" json:"salt"`                              // 密码盐
+	Status        string    `gorm:"column:status;type:varchar(30) default '';not null;comment:状态" json:"status"`                           // 状态
+	UpdateTime    int64     `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`              // 更新时间
+	CreateTime    int64     `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`              // 创建时间
 }
-
-

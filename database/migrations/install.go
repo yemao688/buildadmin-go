@@ -1155,7 +1155,7 @@ func (s Install) Config() {
 				Group: "config_quick_entrance",
 				Title: "Config Quick entrance",
 				Type:  "array",
-				Value: `[{"key":"数据回收规则配置","value":"/admin/security/dataRecycle"},{"key":"敏感数据规则配置","value":"/admin/security/sensitiveData"}]`,
+				Value: `[{"key":"数据回收规则配置","value":"security/dataRecycle"},{"key":"敏感数据规则配置","value":"security/sensitiveData"}]`,
 			},
 		}
 		s.sqlDB.Create(dataList)

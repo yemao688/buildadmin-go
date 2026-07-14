@@ -14,12 +14,14 @@ import (
 type MigrateHandler struct {
 	logger *zap.Logger
 	db     *gorm.DB
+	config *conf.Configuration
 }
 
 func NewMigrateHandler(logger *zap.Logger, config *conf.Configuration) *MigrateHandler {
 	return &MigrateHandler{
 		logger: logger,
 		db:     db.NewDB(config, logger),
+		config: config,
 	}
 }
 
@@ -51,11 +53,23 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 	)
 	if err != nil {
 		cmd.Println("database migrate error:", err)
+		return
+	}
+
+	// 版本化迁移（处理 AutoMigrate 无法完成的列类型变更）
+	upgradeCount, err := migrations.RunVersionMigrations(h.db, h.config)
+	if err != nil {
+		cmd.Println("version migration error:", err)
+		return
+	}
+	if upgradeCount > 0 {
+		cmd.Printf("executed %d version migrations\n", upgradeCount)
 	}
 
 	//插入数据
 	install := migrations.NewInstall(h.db)
 	install.InsertData()
+	cmd.Println("data seed completed")
 
 	cmd.Println("database migrate success")
 }
