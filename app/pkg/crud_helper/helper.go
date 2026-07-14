@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"fmt"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"os"
@@ -19,7 +20,12 @@ var gormDb *gorm.DB
 
 // 生成表
 func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
-	gormDb = db
+	return GenerateFileWithDataScope(table, fields, table.DataScope, getTableName, getColumns, db)
+}
+
+// prepareGenerationData resolves data-scope policy and initializes the model/handler
+// data structures used by both production generation and compile-only tests.
+func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
 	tableName := getTableName(table.Name, false)
 	fullTableName := getTableName(table.Name, true)
 	//主键
@@ -33,11 +39,11 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	}
 	modelFile, err := ParseNameData(module, tableName, "model", table.ModelFile)
 	if err != nil {
-		return WebDir{}, "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
 	if err != nil {
-		return WebDir{}, "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
 	webViewsDir := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
@@ -50,7 +56,6 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	if !slices.Contains(table.QuickSearchField, tablePk) {
 		table.QuickSearchField = append(table.QuickSearchField, tablePk)
 	}
-	quickSearchFieldZhCnTitle := []string{}
 
 	// 模型数据
 	modelData := ModelData{}
@@ -79,7 +84,47 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	handlerData.Methods = []string{}
 	handlerData.RelationVisibleFieldList = map[string][]string{}
 
-	// index.vue数据
+	// 数据权限解析：只有用户显式持久化 ModeNone 时才允许 admin_id 资源走 none。
+	allowNoneExplicit := dsConfig != nil && dsConfig.Mode == data_scope.ModeNone
+	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
+		AllowNoneWithAdminID: allowNoneExplicit,
+		ProveIndex:           proveIndex,
+	})
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+	modelData.PkGoField = pkGoField(tablePk)
+	modelData.DataScopePolicy = ds.Policy
+	modelData.DataScopeOwnerGoField = ds.OwnerGoField
+	effectiveFormFields := slices.Clone(table.FormFields)
+	if ds.OwnerColumn != "" {
+		effectiveFormFields = slices.DeleteFunc(effectiveFormFields, func(s string) bool {
+			return s == ds.OwnerColumn
+		})
+	}
+	modelData.EffectiveFormFields = effectiveFormFields
+	modelData.EditableColumns = buildEditableColumns(tablePk, ds.OwnerColumn, effectiveFormFields, fields)
+	modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
+
+	if ds.OwnerColumn != "" {
+		handlerData.ExcludeParamFields = []string{ds.OwnerColumn}
+	}
+
+	return modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
+}
+
+// GenerateFileWithDataScope generates CRUD files using the persisted data-scope
+// configuration. A nil dsConfig preserves legacy auto-detection behavior.
+func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+	gormDb = db
+	fullTableName := getTableName(table.Name, true)
+	modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
+	if err != nil {
+		return WebDir{}, "", err
+	}
+	table.FormFields = slices.Clone(modelData.EffectiveFormFields)
+	quickSearchFieldZhCnTitle := []string{}
+
 	indexVueData := IndexVueData{}
 	indexVueData.EnableDragSort = "false"
 	indexVueData.DefaultItems = []string{}
@@ -91,7 +136,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	// form.vue数据
 	formVueData := FormVueData{}
 	formVueData.BigDialog = "false"
-	formVueData.FormFields = []string{}
+	formVueData.FormFields = buildFormFieldMarkup(table.FormFields, fields, webTranslate, getTableName)
 
 	// 语言包数据
 	langEnData := map[string]string{}
@@ -131,9 +176,6 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 			if fieldDefault != "" {
 				indexVueData.DefaultItems = append(indexVueData.DefaultItems, fieldDefault)
 			}
-
-			formFieldHtml := getFormField(field, columnDict, webTranslate, getTableName)
-			formVueData.FormFields = append(formVueData.FormFields, formFieldHtml)
 		}
 
 		// 表格列
@@ -215,6 +257,77 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
+}
+
+// pkGoField returns the Go field name used by generated GORM structs for the
+// table primary key. GORM/gen capitalizes "id" as "ID".
+func pkGoField(pk string) string {
+	if strings.EqualFold(pk, "id") {
+		return "ID"
+	}
+	return utils.SnakeToCamel(pk, true)
+}
+
+// buildIndexProver returns a prover that checks information_schema.STATISTICS for
+// an index on the owner column. It is production-only; tests can supply their
+// own ProveIndex callback.
+func buildIndexProver(db *gorm.DB, fullTableName string) func(string) (bool, error) {
+	return func(column string) (bool, error) {
+		if db == nil {
+			return false, nil
+		}
+		var count int64
+		err := db.Raw(
+			"SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND SEQ_IN_INDEX = 1",
+			fullTableName, column,
+		).Scan(&count).Error
+		if err != nil {
+			return false, err
+		}
+		return count > 0, nil
+	}
+}
+
+// buildEditableColumns returns the columns that may be updated by Edit.
+// It excludes the primary key, the data-scope owner, timestamp fields, and any
+// fields that are not part of the form (read-only / form-excluded).
+func buildEditableColumns(pk, ownerColumn string, formFields []string, fields []model.Field) []string {
+	timestampFields := []string{"create_time", "createtime", "update_time", "updatetime"}
+	result := make([]string, 0, len(formFields))
+	for _, name := range formFields {
+		if name == pk || name == ownerColumn {
+			continue
+		}
+		if slices.Contains(timestampFields, name) {
+			continue
+		}
+		f := searchField(fields, name)
+		if f.Name != "" && (f.FormBuildExclude || f.TableBuildExclude) {
+			continue
+		}
+		result = append(result, name)
+	}
+	return result
+}
+
+func joinQuotedColumns(columns []string) string {
+	parts := make([]string, len(columns))
+	for i, c := range columns {
+		parts[i] = strconv.Quote(c)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func buildFormFieldMarkup(formFields []string, fields []model.Field, webTranslate string, getTableName GetTableName) []string {
+	result := make([]string, 0, len(formFields))
+	for _, field := range fields {
+		if !slices.Contains(formFields, field.Name) {
+			continue
+		}
+		field = analyseField(field)
+		result = append(result, getFormField(field, getColumnDict(field, "", webTranslate), webTranslate, getTableName))
+	}
+	return result
 }
 
 // 获取表主键

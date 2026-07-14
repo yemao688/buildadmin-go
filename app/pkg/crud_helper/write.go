@@ -106,16 +106,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 
 	re := regexp.MustCompile(`gorm:"[^"]*" `)
 	validateContent = re.ReplaceAllString(validateContent, "")
-
-	var newLines []string
-	lines := strings.Split(validateContent, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, `json:"id"`) {
-			continue
-		}
-		newLines = append(newLines, line)
-	}
-	handlerData.ValidateParam = strings.Join(newLines, "\n")
+	handlerData.ValidateParam = excludeParamFields(validateContent, handlerData.ExcludeParamFields)
 
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
@@ -135,6 +126,45 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 		return err
 	}
 	return nil
+}
+
+func excludeParamFields(validateContent string, exclude []string) string {
+	var newLines []string
+	lines := strings.Split(validateContent, "\n")
+	excludedFields := []string{"id"}
+	excludedFields = append(excludedFields, exclude...)
+	for _, line := range lines {
+		skip := false
+		for _, f := range excludedFields {
+			if f != "" && strings.Contains(line, `json:"`+f+`"`) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		newLines = append(newLines, line)
+	}
+	return strings.Join(newLines, "\n")
+}
+
+// renderModel renders the model template to a string for tests.
+func renderModel(modelData ModelData) (string, error) {
+	return render("", modelTemp, modelData)
+}
+
+// renderHandler renders the handler template to a string for tests. It mirrors
+// the validate-param derivation in writeHandlerFile without touching the disk.
+func renderHandler(handlerData HandlerData, structContent string) (string, error) {
+	index := strings.Index(structContent, "struct {")
+	if index != -1 {
+		validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
+		re := regexp.MustCompile(`gorm:"[^"]*" `)
+		validateContent = re.ReplaceAllString(validateContent, "")
+		handlerData.ValidateParam = excludeParamFields(validateContent, handlerData.ExcludeParamFields)
+	}
+	return render("", handlerTemp, handlerData)
 }
 
 func render(file string, temp string, data any) (string, error) {
@@ -331,6 +361,14 @@ func buildTableColumn(tableColumnList []string) string {
 }
 
 func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []model.Field, webTranslate string) error {
+	formVueContent, err := renderFormFile(formVueData, fields, webTranslate)
+	if err != nil {
+		return err
+	}
+	return writeFile(filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
+}
+
+func renderFormFile(formVueData FormVueData, fields []model.Field, webTranslate string) (string, error) {
 	fieldHtml := "\n"
 	data := map[string]string{}
 	if formVueData.BigDialog != "" {
@@ -356,8 +394,7 @@ func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []model.F
 		}
 	}
 	data["formItemRules"] = buildFormValidatorRules(formValidatorRules)
-	formVueContent := assembleStub("html/form", data, false)
-	return writeFile(filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
+	return assembleStub("html/form", data, false), nil
 }
 
 func buildFormValidatorRules(formValidatorRules map[string][]string) string {
