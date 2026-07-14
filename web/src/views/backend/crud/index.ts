@@ -968,3 +968,90 @@ export const designTypes: anyObj = {
 }
 
 export const tableFieldsKey = ['quickSearchField', 'formFields', 'columnFields']
+
+/**
+ * 数据归属配置（Phase 1C）
+ * 序列化冻结形状：{ mode, ownerColumn, assignOnCreate }
+ */
+export interface DataScopeConfig {
+    mode: 'auto' | 'required' | 'none'
+    ownerColumn: string
+    assignOnCreate: boolean
+}
+
+export type DataScopeMode = DataScopeConfig['mode']
+
+export const defaultDataScope: DataScopeConfig = {
+    mode: 'auto',
+    ownerColumn: '',
+    assignOnCreate: false,
+}
+
+/**
+ * 是否为精确 admin_id 字段
+ */
+export const isAdminIdField = (field: FieldItem) => field.name === 'admin_id'
+
+/**
+ * 查找字段列表中的 admin_id
+ */
+export const findAdminIdField = (fields: FieldItem[]) => fields.find(isAdminIdField)
+
+/**
+ * 是否为可作为归属字段的兼容字段（整数类型，或名为 admin_id）
+ */
+export const isCompatibleOwnerField = (field: FieldItem) => {
+    if (isAdminIdField(field)) return true
+    const intTypes = ['int', 'integer', 'tinyint', 'smallint', 'mediumint', 'bigint']
+    const type = (field.type || '').toLowerCase()
+    return intTypes.some((t) => type === t || type.startsWith(t + '('))
+}
+
+/**
+ * 获取可作为归属字段的兼容字段列表
+ */
+export const getCompatibleOwnerFields = (fields: FieldItem[]) => fields.filter(isCompatibleOwnerField)
+
+/**
+ * 纯函数：根据新模式计算数据归属配置
+ * 返回 result.mode 为实际应生效的模式（需要确认时回退为 oldMode）
+ */
+export const computeDataScopeForMode = (
+    newMode: DataScopeMode,
+    oldMode: DataScopeMode,
+    fields: FieldItem[],
+    currentOwnerColumn: string
+): {
+    mode: DataScopeMode
+    ownerColumn: string
+    assignOnCreate: boolean
+    needsConfirm: boolean
+} => {
+    const adminField = findAdminIdField(fields)
+
+    if (newMode === 'none') {
+        if (adminField) {
+            return { mode: oldMode, ownerColumn: currentOwnerColumn, assignOnCreate: false, needsConfirm: true }
+        }
+        return { mode: 'none', ownerColumn: '', assignOnCreate: false, needsConfirm: false }
+    }
+
+    if (newMode === 'auto') {
+        return {
+            mode: 'auto',
+            ownerColumn: adminField ? adminField.name : '',
+            assignOnCreate: !!adminField,
+            needsConfirm: false,
+        }
+    }
+
+    // required
+    const compatibleFields = getCompatibleOwnerFields(fields)
+    let ownerColumn = currentOwnerColumn
+    if (!ownerColumn || !fields.some((item) => item.name === ownerColumn)) {
+        ownerColumn = adminField ? adminField.name : compatibleFields[0] ? compatibleFields[0].name : ''
+    }
+    const ownerField = fields.find((item) => item.name === ownerColumn)
+    const assignOnCreate = ownerField ? !ownerField.primaryKey : false
+    return { mode: 'required', ownerColumn, assignOnCreate, needsConfirm: false }
+}

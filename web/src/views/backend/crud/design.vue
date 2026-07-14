@@ -137,6 +137,47 @@
                                 remoteUrl: getDatabaseConnectionListUrl,
                             }"
                         />
+                        <el-divider content-position="left">{{ t('crud.crud.Data scope') }}</el-divider>
+                        <div class="data-scope-box">
+                            <FormItem
+                                :label="t('crud.crud.Data scope mode')"
+                                v-model="state.table.dataScope.mode"
+                                type="radio"
+                                :input-attr="{
+                                    border: true,
+                                    content: {
+                                        auto: t('crud.crud.Data scope mode auto'),
+                                        required: t('crud.crud.Data scope mode required'),
+                                        none: t('crud.crud.Data scope mode none'),
+                                    },
+                                }"
+                            />
+                            <el-form-item :label="t('crud.crud.Data scope preview')" :label-width="140">
+                                <div class="data-scope-preview">{{ dataScopePreview }}</div>
+                            </el-form-item>
+                            <template v-if="state.table.dataScope.mode === 'required'">
+                                <el-form-item :label="t('crud.crud.Data scope owner column')" :label-width="140">
+                                    <el-select v-model="state.table.dataScope.ownerColumn" class="w100" @change="onDataScopeOwnerChange">
+                                        <el-option
+                                            v-for="field in compatibleOwnerFields"
+                                            :key="field.uuid"
+                                            :label="field.name + (field.comment ? '-' + field.comment : '')"
+                                            :value="field.name"
+                                        />
+                                    </el-select>
+                                    <div class="block-help">{{ t('crud.crud.Data scope compatible fields only') }}</div>
+                                </el-form-item>
+                                <FormItem
+                                    :label="t('crud.crud.Data scope assign on create')"
+                                    v-model="state.table.dataScope.assignOnCreate"
+                                    type="switch"
+                                    :input-attr="{
+                                        disabled: ownerColumnIsPrimaryKey,
+                                    }"
+                                    :block-help="ownerColumnIsPrimaryKey ? t('crud.crud.Data scope owner is pk tip') : ''"
+                                />
+                            </template>
+                        </div>
                     </div>
                 </div>
             </transition>
@@ -198,6 +239,9 @@
                                     onInput: ($event: string) => onFieldNameChange($event, index),
                                 }"
                             />
+                            <el-tag v-if="isServerManagedField(field)" size="small" type="warning" effect="plain" class="server-managed-tag">
+                                {{ t('crud.crud.Data scope server managed') }}
+                            </el-tag>
                         </div>
                         <div class="design-field">
                             <span>{{ t('crud.crud.field comment') }}：</span>
@@ -240,6 +284,13 @@
                     </div>
                     <div v-else :key="'activate-field-' + state.activateField">
                         <el-form label-position="top">
+                            <el-alert
+                                v-if="isServerManagedField(state.fields[state.activateField])"
+                                :title="t('crud.crud.Data scope server managed tip')"
+                                type="warning"
+                                :closable="false"
+                                class="server-managed-alert"
+                            />
                             <el-divider content-position="left">{{ t('crud.crud.Common') }}</el-divider>
                             <el-form-item :label="t('crud.crud.Generate type')">
                                 <el-select
@@ -673,6 +724,27 @@
                 </div>
             </template>
         </el-dialog>
+        <el-dialog
+            class="ba-operate-dialog data-scope-none-confirm-dialog"
+            v-model="state.dataScopeNoneConfirm.show"
+            :title="t('crud.crud.Data scope none confirm title')"
+            :close-on-click-modal="false"
+            :close-on-press-escape="false"
+            :destroy-on-close="true"
+            @close="cancelDataScopeNone"
+        >
+            <div class="data-scope-none-confirm-body">
+                <el-alert :title="t('crud.crud.Data scope none confirm content')" type="warning" :closable="false" show-icon center />
+            </div>
+            <template #footer>
+                <div class="confirm-generate-dialog-footer">
+                    <el-button @click="cancelDataScopeNone">{{ $t('Cancel') }}</el-button>
+                    <el-button v-blur @click="confirmDataScopeNone" type="danger">
+                        {{ $t('Confirm') }}
+                    </el-button>
+                </div>
+            </template>
+        </el-dialog>
     </div>
 </template>
 
@@ -683,7 +755,7 @@ import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import { cloneDeep, isEmpty, range } from 'lodash-es'
 import type { SortableEvent } from 'sortablejs'
 import Sortable from 'sortablejs'
-import { nextTick, onMounted, reactive, useTemplateRef } from 'vue'
+import { computed, nextTick, onMounted, reactive, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { generate, generateCheck, getFileData, parseFieldData, postLogStart, uploadCompleted, uploadLog } from '/@/api/backend/crud'
 import { getDatabaseConnectionListUrl, getTableFieldList, getTableListUrl } from '/@/api/common'
@@ -695,8 +767,8 @@ import { getArrayKey } from '/@/utils/common'
 import { uuid } from '/@/utils/random'
 import { buildValidatorData, regularVarName } from '/@/utils/validate'
 import { reloadServer } from '/@/utils/vite'
-import type { FieldItem, TableDesignChange, TableDesignChangeType } from '/@/views/backend/crud/index'
-import { changeStep, state as crudState, designTypes, fieldItem, getTableAttr, tableFieldsKey } from '/@/views/backend/crud/index'
+import type { DataScopeConfig, DataScopeMode, FieldItem, TableDesignChange, TableDesignChangeType } from '/@/views/backend/crud/index'
+import { changeStep, state as crudState, computeDataScopeForMode, defaultDataScope, designTypes, fieldItem, findAdminIdField, getCompatibleOwnerFields, getTableAttr, isAdminIdField, tableFieldsKey } from '/@/views/backend/crud/index'
 
 let nameRepeatCount = 1
 const { t } = useI18n()
@@ -730,6 +802,7 @@ const state: {
         databaseConnection: string
         designChange: TableDesignChange[]
         rebuild: string
+        dataScope: DataScopeConfig
     }
     fields: FieldItem[]
     activateField: number
@@ -768,6 +841,16 @@ const state: {
         fieldName: MessageHandler | null
         fieldNameDuplication: MessageHandler | null
     }
+    /**
+     * 数据归属自动设置 formBuildExclude 前的原始值快照（UI 侧状态，不参与序列化）
+     * key: field.uuid, value: 原 formBuildExclude
+     */
+    dataScopeFormSnapshot: Record<string, boolean>
+    dataScopeNoneConfirm: {
+        show: boolean
+        revertMode: 'auto' | 'required' | 'none'
+        confirming: boolean
+    }
 } = reactive({
     loading: {
         init: false,
@@ -792,6 +875,7 @@ const state: {
         databaseConnection: '',
         designChange: [],
         rebuild: 'No',
+        dataScope: cloneDeep(defaultDataScope),
     },
     fields: [],
     activateField: -1,
@@ -830,9 +914,168 @@ const state: {
         fieldName: null,
         fieldNameDuplication: null,
     },
+    dataScopeFormSnapshot: {},
+    dataScopeNoneConfirm: {
+        show: false,
+        revertMode: 'auto',
+        confirming: false,
+    },
 })
 
 type TableKey = keyof typeof state.table
+
+/**
+ * 当前是否包含 admin_id 字段
+ */
+const hasAdminId = computed(() => !!findAdminIdField(state.fields))
+
+/**
+ * 可作为归属字段的兼容字段列表
+ */
+const compatibleOwnerFields = computed(() => getCompatibleOwnerFields(state.fields))
+
+/**
+ * 当前归属字段是否为主键
+ */
+const ownerColumnIsPrimaryKey = computed(() => {
+    const field = state.fields.find((item) => item.name === state.table.dataScope.ownerColumn)
+    return !!field && field.primaryKey
+})
+
+/**
+ * 数据归属解析预览文本
+ */
+const dataScopePreview = computed(() => {
+    const { mode, ownerColumn, assignOnCreate } = state.table.dataScope
+    if (mode === 'none') {
+        return t('crud.crud.Data scope none preview')
+    }
+    if (mode === 'auto') {
+        return hasAdminId.value ? t('crud.crud.Data scope admin data') : t('crud.crud.Data scope global data')
+    }
+    if (!ownerColumn) {
+        return t('crud.crud.Data scope required no owner')
+    }
+    return t('crud.crud.Data scope required preview', {
+        field: ownerColumn,
+        assign: assignOnCreate ? t('crud.crud.Data scope assign yes') : t('crud.crud.Data scope assign no'),
+    })
+})
+
+/**
+ * 字段是否由数据归属服务端管理
+ */
+const isServerManagedField = (field: FieldItem) => {
+    if (state.table.dataScope.mode === 'none') return false
+    return !!field.name && field.name === state.table.dataScope.ownerColumn
+}
+
+/**
+ * 自动模式下刷新数据归属检测
+ */
+const refreshAutoDataScope = () => {
+    if (state.table.dataScope.mode !== 'auto') return
+    const adminField = findAdminIdField(state.fields)
+    state.table.dataScope.ownerColumn = adminField ? adminField.name : ''
+    state.table.dataScope.assignOnCreate = !!adminField
+}
+
+/**
+ * 校验 assignOnCreate 与主键冲突
+ */
+const validateAssignOnCreate = () => {
+    if (ownerColumnIsPrimaryKey.value) {
+        state.table.dataScope.assignOnCreate = false
+    }
+}
+
+/**
+ * 同步数据归属对 formBuildExclude 的自动设置
+ * 仅修改由 DataScope 自动排除的字段，并记录快照以便恢复用户原有手工选择
+ */
+const applyDataScopeFormExclusion = () => {
+    const ownerField = state.fields.find(
+        (item) => state.table.dataScope.mode !== 'none' && item.name === state.table.dataScope.ownerColumn
+    )
+    const ownerUuid = ownerField ? ownerField.uuid : undefined
+
+    // 为新的归属字段建立快照并自动排除
+    if (ownerUuid && !(ownerUuid in state.dataScopeFormSnapshot)) {
+        state.dataScopeFormSnapshot[ownerUuid] = !!state.fields.find((item) => item.uuid === ownerUuid)?.formBuildExclude
+        const target = state.fields.find((item) => item.uuid === ownerUuid)
+        if (target) target.formBuildExclude = true
+    }
+
+    // 对不再属于 DataScope 管理的字段，按快照恢复用户原设置
+    for (const uuid in state.dataScopeFormSnapshot) {
+        if (uuid === ownerUuid) continue
+        const target = state.fields.find((item) => item.uuid === uuid)
+        if (target) {
+            target.formBuildExclude = state.dataScopeFormSnapshot[uuid]
+        }
+        delete state.dataScopeFormSnapshot[uuid]
+    }
+}
+
+/**
+ * 归属模式变更（携带 oldMode，确保取消可恢复到 auto/required）
+ */
+const onDataScopeModeChange = (newMode: DataScopeMode, oldMode: DataScopeMode) => {
+    if (newMode === oldMode || state.dataScopeNoneConfirm.confirming) return
+
+    const result = computeDataScopeForMode(newMode, oldMode, state.fields, state.table.dataScope.ownerColumn)
+
+    if (result.needsConfirm) {
+        state.dataScopeNoneConfirm.revertMode = oldMode
+        state.dataScopeNoneConfirm.show = true
+        // 立即回退到旧模式，避免 UI 停留在 none 且阻止递归弹窗
+        state.table.dataScope.mode = oldMode
+        return
+    }
+
+    state.table.dataScope.mode = result.mode
+    state.table.dataScope.ownerColumn = result.ownerColumn
+    state.table.dataScope.assignOnCreate = result.assignOnCreate
+    applyDataScopeFormExclusion()
+}
+
+/**
+ * 归属字段变更
+ */
+const onDataScopeOwnerChange = () => {
+    validateAssignOnCreate()
+    applyDataScopeFormExclusion()
+}
+
+/**
+ * 取消 none 模式确认：关闭弹窗即可，模式已回退为 revertMode
+ */
+const cancelDataScopeNone = () => {
+    state.dataScopeNoneConfirm.show = false
+    state.table.dataScope.mode = state.dataScopeNoneConfirm.revertMode
+}
+
+/**
+ * 确认 none 模式：持久化为全局数据
+ */
+const confirmDataScopeNone = () => {
+    state.dataScopeNoneConfirm.confirming = true
+    state.table.dataScope.mode = 'none'
+    state.table.dataScope.ownerColumn = ''
+    state.table.dataScope.assignOnCreate = false
+    state.dataScopeNoneConfirm.show = false
+    state.dataScopeNoneConfirm.confirming = false
+    applyDataScopeFormExclusion()
+}
+
+// 监听模式变更，统一入口处理高摩擦与自动检测
+watch(
+    () => state.table.dataScope.mode,
+    (newMode, oldMode) => {
+        if (state.dataScopeNoneConfirm.confirming) return
+        onDataScopeModeChange(newMode, oldMode)
+    }
+)
 
 const onActivateField = (idx: number) => {
     state.activateField = idx
@@ -892,6 +1135,7 @@ const onFieldDesignTypeChange = (designType: string) => {
             const oldName = state.fields[state.activateField].name
             state.fields[state.activateField] = handleFieldAttr(fieldDesignData)
             state.fields[state.activateField].name = oldName
+            applyDataScopeFormExclusion()
 
             if (fieldDesignData.primaryKey) {
                 // 设置为默认排序字段、快速搜索字段
@@ -927,6 +1171,14 @@ const onFieldDesignTypeChange = (designType: string) => {
 const onFieldNameChange = (val: string, index: number) => {
     const oldName = state.fields[index].name
     state.fields[index].name = val
+
+    // 若重命名的是当前归属字段，同步更新配置
+    if (state.table.dataScope.ownerColumn === oldName) {
+        state.table.dataScope.ownerColumn = val
+    }
+    refreshAutoDataScope()
+    applyDataScopeFormExclusion()
+
     logTableDesignChange({
         type: 'change-field-name',
         index: state.activateField,
@@ -1057,9 +1309,11 @@ const onDelField = (index: number) => {
 
     clearFieldTableData(state.fields[index].uuid!)
 
+    const deletedName = state.fields[index].name
+    const deletedUuid = state.fields[index].uuid
     logTableDesignChange({
         type: 'del-field',
-        oldName: state.fields[index].name,
+        oldName: deletedName,
         newName: '',
     })
 
@@ -1074,6 +1328,22 @@ const onDelField = (index: number) => {
     }
 
     state.fields.splice(index, 1)
+
+    // 清理被删字段的快照
+    if (deletedUuid && deletedUuid in state.dataScopeFormSnapshot) {
+        delete state.dataScopeFormSnapshot[deletedUuid]
+    }
+
+    // 删除归属字段后，重新检测数据归属
+    if (state.table.dataScope.ownerColumn === deletedName) {
+        if (state.table.dataScope.mode === 'auto') {
+            refreshAutoDataScope()
+        } else if (state.table.dataScope.mode === 'required') {
+            state.table.dataScope.ownerColumn = ''
+        }
+        validateAssignOnCreate()
+    }
+    applyDataScopeFormExclusion()
 }
 
 const showRemoteSelectPre = (index: number, hideDelField = false) => {
@@ -1389,6 +1659,19 @@ const loadData = () => {
 
                 state.sync = res.data.sync
                 state.table = res.data.table
+
+                // 恢复/初始化数据归属配置，保持冻结形状
+                const loadedDataScope = state.table.dataScope
+                state.table.dataScope = {
+                    mode: ['auto', 'required', 'none'].includes(loadedDataScope?.mode) ? loadedDataScope.mode : 'auto',
+                    ownerColumn: loadedDataScope?.ownerColumn || '',
+                    assignOnCreate: !!loadedDataScope?.assignOnCreate,
+                }
+                if (state.table.dataScope.mode === 'auto') {
+                    refreshAutoDataScope()
+                }
+                applyDataScopeFormExclusion()
+
                 tableDesignChangeInit()
                 if (res.data.table.empty) {
                     state.table.rebuild = 'Yes'
@@ -1431,6 +1714,9 @@ const loadData = () => {
             state.fields = fields
             state.table.comment = res.data.comment
             state.table.databaseConnection = crudState.startData.databaseConnection
+            state.table.dataScope = cloneDeep(defaultDataScope)
+            refreshAutoDataScope()
+            applyDataScopeFormExclusion()
             if (res.data.empty) {
                 state.table.rebuild = 'Yes'
             }
@@ -1514,6 +1800,10 @@ onMounted(() => {
                 if (!data.tableBuildExclude) {
                     state.table.columnFields.push(data.uuid!)
                 }
+
+                // 新增字段可能影响自动识别的数据归属
+                refreshAutoDataScope()
+                applyDataScopeFormExclusion()
             }
             evt.item.remove()
             nextTick(() => {
@@ -2070,6 +2360,37 @@ const getTableDesignTimelineType = (type: TableDesignChangeType): TimelineItemPr
     .rebuild-form-item {
         padding-top: 20px;
         border-top: 1px solid var(--el-border-color-lighter);
+    }
+}
+.data-scope-box {
+    padding: 10px;
+    background-color: var(--ba-bg-color);
+    border-radius: var(--el-border-radius-base);
+    .data-scope-preview {
+        padding: 8px 12px;
+        background-color: var(--el-color-primary-light-9);
+        border-radius: var(--el-border-radius-base);
+        color: var(--el-text-color-primary);
+        font-size: var(--el-font-size-small);
+        line-height: 1.6;
+    }
+    :deep(.el-radio-group) {
+        flex-wrap: wrap;
+    }
+}
+.server-managed-tag {
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+.server-managed-alert {
+    margin-bottom: 10px;
+}
+.data-scope-none-confirm-body {
+    padding: 20px 10px;
+}
+@at-root .dark {
+    .data-scope-box .data-scope-preview {
+        background-color: var(--el-color-primary-dark-2);
     }
 }
 </style>
