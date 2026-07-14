@@ -26,12 +26,13 @@ func IsSuperAdmin(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 func LimitAdminIds(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		value, _ := ctx.Get("dataLimitAdminIds")
-		if value != nil {
-			dataLimitAdminIds := value.([]string)
-			if len(dataLimitAdminIds) > 0 {
-				db.Where(" admin_id in ? ", dataLimitAdminIds)
-			}
+		if value == nil {
+			return db
 		}
-		return db
+		dataLimitAdminIds, ok := value.([]int32)
+		if !ok || len(dataLimitAdminIds) == 0 {
+			return db
+		}
+		return db.Where("admin_id IN ?", dataLimitAdminIds)
 	}
 }

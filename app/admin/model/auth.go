@@ -307,7 +307,7 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 // 获取管理员所在分组的所有子级分组
 func (s *AuthModel) GetAdminChildGroups(id int32) []int32 {
 	accessList := []AdminGroupAccess{}
-	s.sqlDB.Model(&AdminGroupAccess{}).Where("id=?", id).Find(&accessList)
+	s.sqlDB.Model(&AdminGroupAccess{}).Where("uid=?", id).Find(&accessList)
 	children := []int32{}
 	for _, v := range accessList {
 		children = append(children, s.GetGroupChildGroups(v.GroupID)...)
