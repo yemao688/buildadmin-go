@@ -26,8 +26,23 @@ func NewMigrateHandler(logger *zap.Logger, config *conf.Configuration) *MigrateH
 }
 
 func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
+	if err := migrations.ValidatePrefix(h.config); err != nil {
+		cmd.Println("database prefix error:", err)
+		return
+	}
+	// Legacy table/column normalization must precede AutoMigrate: otherwise
+	// GORM may create the replacement table and leave old data behind.
+	if err := migrations.PrepareLegacySchema(h.db, h.config); err != nil {
+		cmd.Println("legacy schema migration error:", err)
+		return
+	}
+	fresh, err := migrations.IsFreshDatabase(h.db, h.config)
+	if err != nil {
+		cmd.Println("database state check error:", err)
+		return
+	}
 
-	err := h.db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+	err = h.db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
 		&model.AdminGroupAccess{},
 		&model.AdminGroup{},
 		&model.AdminLog{},
@@ -55,21 +70,47 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		cmd.Println("database migrate error:", err)
 		return
 	}
-
+	if fresh {
+		if err := migrations.MarkSeedPending(h.db, h.config); err != nil {
+			cmd.Println("database seed marker error:", err)
+			return
+		}
+	}
+	if err := migrations.ValidateCurrentSchema(h.db, h.config); err != nil {
+		cmd.Println("database schema validation error:", err)
+		return
+	}
 	// 版本化迁移（处理 AutoMigrate 无法完成的列类型变更）
 	upgradeCount, err := migrations.RunVersionMigrations(h.db, h.config)
 	if err != nil {
 		cmd.Println("version migration error:", err)
 		return
 	}
+	if err := migrations.ReconcileLegacyData(h.db, h.config); err != nil {
+		cmd.Println("legacy data reconciliation error:", err)
+		return
+	}
 	if upgradeCount > 0 {
 		cmd.Printf("executed %d version migrations\n", upgradeCount)
 	}
 
-	//插入数据
-	install := migrations.NewInstall(h.db)
-	install.InsertData()
-	cmd.Println("data seed completed")
+	pending, err := migrations.SeedPending(h.db, h.config)
+	if err != nil {
+		cmd.Println("database seed state error:", err)
+		return
+	}
+	if pending {
+		install := migrations.NewInstall(h.db)
+		if err := install.InsertData(); err != nil {
+			cmd.Println("database seed error:", err)
+			return
+		}
+		if err := migrations.MarkSeedCompleted(h.db, h.config); err != nil {
+			cmd.Println("database seed marker error:", err)
+			return
+		}
+		cmd.Println("data seed completed")
+	}
 
 	cmd.Println("database migrate success")
 }

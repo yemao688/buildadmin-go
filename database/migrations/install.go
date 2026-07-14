@@ -1,6 +1,7 @@
 package migrations
 
 import (
+	"errors"
 	"go-build-admin/database/migrations/model"
 	"time"
 
@@ -17,35 +18,39 @@ func NewInstall(sqlDB *gorm.DB) *Install {
 	}
 }
 
-func (s Install) InsertData() {
-	s.AdminGroupAccess()
-	s.AdminGroup()
-	s.AdminRule()
-	s.Admin()
-	s.Config()
-	s.SecurityDataRecycle()
-	s.SecuritySensitiveData()
-	s.UserGroup()
-	s.UserRule()
-	s.User()
+func (s Install) InsertData() error {
+	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+		seed := Install{sqlDB: tx}
+		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Admin, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData, seed.UserGroup, seed.UserRule, seed.User} {
+			if err := fn(); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
-func (s Install) AdminGroupAccess() {
+func (s Install) AdminGroupAccess() error {
 	err := s.sqlDB.Where("uid=?", "1").First(&model.AdminGroupAccess{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.AdminGroupAccess{
 			{
 				UID:     1,
 				GroupID: 1,
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) AdminGroup() {
+func (s Install) AdminGroup() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.AdminGroup{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.AdminGroup{
 			{
 				ID:         1,
@@ -59,7 +64,7 @@ func (s Install) AdminGroup() {
 				ID:         2,
 				Pid:        1,
 				Name:       "一级管理员",
-				Rules:      "1,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,77,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76",
+				Rules:      "1,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,77,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,89",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -80,20 +85,22 @@ func (s Install) AdminGroup() {
 				CreateTime: time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
 	}
-
+	return nil
 }
 
-func (s Install) AdminRule() {
+func (s Install) AdminRule() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.AdminRule{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.AdminRule{
 			{
 				ID:         1,
 				Type:       "menu",
 				Title:      "控制台",
-				Name:       "dashboard/dashboard",
+				Name:       "dashboard",
 				Path:       "dashboard",
 				Icon:       "fa fa-dashboard",
 				MenuType:   "tab",
@@ -223,11 +230,11 @@ func (s Install) AdminRule() {
 				Pid:        2,
 				Type:       "menu",
 				Title:      "菜单规则管理",
-				Name:       "auth/menu",
-				Path:       "auth/menu",
+				Name:       "auth/rule",
+				Path:       "auth/rule",
 				Icon:       "el-icon-Grid",
 				MenuType:   "tab",
-				Component:  "/src/views/backend/auth/menu/index.vue",
+				Component:  "/src/views/backend/auth/rule/index.vue",
 				Keepalive:  1,
 				Weigh:      97,
 				UpdateTime: time.Now().Unix(),
@@ -238,7 +245,7 @@ func (s Install) AdminRule() {
 				Pid:        13,
 				Type:       "button",
 				Title:      "查看",
-				Name:       "auth/menu/index",
+				Name:       "auth/rule/index",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -247,7 +254,7 @@ func (s Install) AdminRule() {
 				Pid:        13,
 				Type:       "button",
 				Title:      "添加",
-				Name:       "auth/menu/add",
+				Name:       "auth/rule/add",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -256,7 +263,7 @@ func (s Install) AdminRule() {
 				Pid:        13,
 				Type:       "button",
 				Title:      "编辑",
-				Name:       "auth/menu/edit",
+				Name:       "auth/rule/edit",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -265,7 +272,7 @@ func (s Install) AdminRule() {
 				Pid:        13,
 				Type:       "button",
 				Title:      "删除",
-				Name:       "auth/menu/del",
+				Name:       "auth/rule/del",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -274,7 +281,7 @@ func (s Install) AdminRule() {
 				Pid:        13,
 				Type:       "button",
 				Title:      "快速排序",
-				Name:       "auth/menu/sortable",
+				Name:       "auth/rule/sortable",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -882,7 +889,7 @@ func (s Install) AdminRule() {
 				ID:         76,
 				Type:       "menu",
 				Title:      "BuildAdmin",
-				Name:       "buildadmin/buildadmin",
+				Name:       "buildadmin",
 				Path:       "buildadmin",
 				Icon:       "local-logo",
 				MenuType:   "link",
@@ -1009,14 +1016,29 @@ func (s Install) AdminRule() {
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
+			{
+				ID:         89,
+				Pid:        1,
+				Type:       "button",
+				Title:      "查看",
+				Name:       "dashboard/index",
+				Status:     "1",
+				UpdateTime: time.Now().Unix(),
+				CreateTime: time.Now().Unix(),
+			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) Admin() {
+func (s Install) Admin() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.Admin{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.Admin{
 			{
 				ID:         1,
@@ -1029,13 +1051,18 @@ func (s Install) Admin() {
 				CreateTime: time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) Config() {
+func (s Install) Config() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.Config{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.Config{
 			{
 				ID:      1,
@@ -1158,13 +1185,18 @@ func (s Install) Config() {
 				Value: `[{"key":"数据回收规则配置","value":"security/dataRecycle"},{"key":"敏感数据规则配置","value":"security/sensitiveData"}]`,
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) SecurityDataRecycle() {
+func (s Install) SecurityDataRecycle() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.SecurityDataRecycle{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.SecurityDataRecycle{
 			{
 				ID:           1,
@@ -1190,8 +1222,8 @@ func (s Install) SecurityDataRecycle() {
 				ID:           3,
 				Name:         "菜单规则",
 				Controller:   "auth/Menu.php",
-				ControllerAs: "auth/menu",
-				DataTable:    "menu_rule",
+				ControllerAs: "auth/rule",
+				DataTable:    "admin_rule",
 				PrimaryKey:   "id",
 				UpdateTime:   time.Now().Unix(),
 				CreateTime:   time.Now().Unix(),
@@ -1227,13 +1259,18 @@ func (s Install) SecurityDataRecycle() {
 				CreateTime:   time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) SecuritySensitiveData() {
+func (s Install) SecuritySensitiveData() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.SecuritySensitiveData{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 
 		dataList := []*model.SecuritySensitiveData{
 			{
@@ -1273,13 +1310,18 @@ func (s Install) SecuritySensitiveData() {
 				CreateTime:   time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) UserGroup() {
+func (s Install) UserGroup() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.UserGroup{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 
 		dataList := []*model.UserGroup{
 			{
@@ -1291,13 +1333,18 @@ func (s Install) UserGroup() {
 				CreateTime: time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) UserRule() {
+func (s Install) UserRule() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.UserRule{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		dataList := []*model.UserRule{
 			{
 				ID:         1,
@@ -1383,13 +1430,18 @@ func (s Install) UserRule() {
 				CreateTime: time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
 
-func (s Install) User() {
+func (s Install) User() error {
 	err := s.sqlDB.Where("id=?", "1").First(&model.User{}).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 
 		dataList := []*model.User{
 			{
@@ -1406,6 +1458,11 @@ func (s Install) User() {
 				CreateTime: time.Now().Unix(),
 			},
 		}
-		s.sqlDB.Create(dataList)
+		if err := s.sqlDB.Create(dataList).Error; err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
 	}
+	return nil
 }
