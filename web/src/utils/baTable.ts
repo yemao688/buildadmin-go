@@ -1,19 +1,22 @@
-import { reactive, watch } from 'vue'
-import { auth, getArrayKey } from '/@/utils/common'
-import type { baTableApi } from '/@/api/common'
-import Sortable from 'sortablejs'
-import { findIndexRow } from '/@/components/table'
-import { ElNotification } from 'element-plus'
 import type { FormInstance, TableColumnCtx } from 'element-plus'
+import { ElNotification, dayjs } from 'element-plus'
+import { cloneDeep, isArray, isEmpty } from 'lodash-es'
+import Sortable from 'sortablejs'
+import { reactive } from 'vue'
 import { useRoute } from 'vue-router'
-import { cloneDeep } from 'lodash-es'
+import type { baTableApi } from '/@/api/common'
+import { findIndexRow } from '/@/components/table'
 import { i18n } from '/@/lang/index'
+import { auth, getArrayKey } from '/@/utils/common'
 
+/**
+ * 表格管家类
+ */
 export default class baTable {
-    // API实例
-    public api
+    /** baTableApi 类的实例，开发者可重写该类 */
+    public api: baTableApi
 
-    /* 表格状态-s 属性对应含义请查阅 BaTable 的类型定义 */
+    /** 表格状态，属性对应含义请查阅 BaTable 的类型定义 */
     public table: BaTable = reactive({
         ref: undefined,
         pk: 'id',
@@ -31,9 +34,8 @@ export default class baTable {
         expandAll: false,
         extend: {},
     })
-    /* 表格状态-e */
 
-    /* 表单状态-s 属性对应含义请查阅 BaTableForm 的类型定义 */
+    /** 表单状态，属性对应含义请查阅 BaTableForm 的类型定义 */
     public form: BaTableForm = reactive({
         ref: undefined,
         labelWidth: 160,
@@ -45,15 +47,14 @@ export default class baTable {
         loading: false,
         extend: {},
     })
-    /* 表单状态-e */
 
-    // BaTable前置处理函数列表（前置埋点）
+    /** BaTable 前置处理函数列表（前置埋点） */
     public before: BaTableBefore
 
-    // BaTable后置处理函数列表（后置埋点）
+    /** BaTable 后置处理函数列表（后置埋点） */
     public after: BaTableAfter
 
-    // 通用搜索数据
+    /** 公共搜索数据 */
     public comSearch: ComSearch = reactive({
         form: {},
         fieldData: new Map(),
@@ -100,9 +101,12 @@ export default class baTable {
         return true
     }
 
-    /* API请求方法-s */
-    // 查看
-    getIndex = () => {
+    /**
+     * 表格数据获取（请求表格对应控制器的查看方法）
+     * @alias getIndex
+     */
+    getData = () => {
+        if (this.runBefore('getData') === false) return
         if (this.runBefore('getIndex') === false) return
         this.table.loading = true
         return this.api
@@ -111,22 +115,35 @@ export default class baTable {
                 this.table.data = res.data.list
                 this.table.total = res.data.total
                 this.table.remark = res.data.remark
+                this.runAfter('getData', { res })
                 this.runAfter('getIndex', { res })
+            })
+            .catch((err) => {
+                this.runAfter('getData', { err })
+                this.runAfter('getIndex', { err })
             })
             .finally(() => {
                 this.table.loading = false
             })
     }
-    // 删除
+
+    /**
+     * 删除数据
+     */
     postDel = (ids: string[]) => {
         if (this.runBefore('postDel', { ids }) === false) return
         this.api.del(ids).then((res) => {
-            this.onTableHeaderAction('refresh', {})
+            this.onTableHeaderAction('refresh', { event: 'delete', ids })
             this.runAfter('postDel', { res })
         })
     }
-    // 编辑
-    requestEdit = (id: string) => {
+
+    /**
+     * 获取被编辑行数据
+     * @alias requestEdit
+     */
+    getEditData = (id: string) => {
+        if (this.runBefore('getEditData', { id }) === false) return
         if (this.runBefore('requestEdit', { id }) === false) return
         this.form.loading = true
         this.form.items = {}
@@ -136,17 +153,18 @@ export default class baTable {
             })
             .then((res) => {
                 this.form.items = res.data.row
+                this.runAfter('getEditData', { res })
                 this.runAfter('requestEdit', { res })
             })
             .catch((err) => {
                 this.toggleForm()
+                this.runAfter('getEditData', { err })
                 this.runAfter('requestEdit', { err })
             })
             .finally(() => {
                 this.form.loading = false
             })
     }
-    /* API请求方法-e */
 
     /**
      * 双击表格
@@ -168,14 +186,11 @@ export default class baTable {
      */
     toggleForm = (operate = '', operateIds: string[] = []) => {
         if (this.runBefore('toggleForm', { operate, operateIds }) === false) return
-        if (this.form.ref) {
-            this.form.ref.resetFields()
-        }
         if (operate == 'Edit') {
             if (!operateIds.length) {
                 return false
             }
-            this.requestEdit(operateIds[0])
+            this.getEditData(operateIds[0])
         } else if (operate == 'Add') {
             this.form.items = cloneDeep(this.form.defaultItems)
         }
@@ -188,24 +203,19 @@ export default class baTable {
      * 提交表单
      * @param formEl 表单组件ref
      */
-    onSubmit = (formEl: FormInstance | undefined = undefined) => {
+    onSubmit = (formEl?: FormInstance | null) => {
         // 当前操作的首字母小写
         const operate = this.form.operate!.replace(this.form.operate![0], this.form.operate![0].toLowerCase())
 
         if (this.runBefore('onSubmit', { formEl: formEl, operate: operate, items: this.form.items! }) === false) return
-        
-        Object.keys(this.form.items!).forEach((item) => {
-            //删除null与空字符串,接口就取相应字段的默认值
-            if (this.form.items![item] === null || this.form.items![item] === '' ) delete this.form.items![item]
-        })
 
-        // 表单验证通过后执行的api请求操作
+        // 表单验证通过后执行的 api 请求操作
         const submitCallback = () => {
             this.form.submitLoading = true
             this.api
                 .postData(operate, this.form.items!)
                 .then((res) => {
-                    this.onTableHeaderAction('refresh', {})
+                    this.onTableHeaderAction('refresh', { event: 'submit', operate, items: this.form.items })
                     this.form.operateIds?.shift()
                     if (this.form.operateIds!.length > 0) {
                         this.toggleForm('Edit', this.form.operateIds)
@@ -232,7 +242,7 @@ export default class baTable {
     }
 
     /**
-     * 获取表格选择项的id数组
+     * 获取表格选择项的主键数组
      */
     getSelectionIds() {
         const ids: string[] = []
@@ -244,10 +254,10 @@ export default class baTable {
 
     /**
      * 表格内的事件统一响应
-     * @param event 事件:selection-change=选中项改变,page-size-change=每页数量改变,current-page-change=翻页,sort-change=排序,edit=编辑,delete=删除,field-change=单元格值改变,com-search=公共搜索
+     * @param event 事件名称，含义请参考其类型定义
      * @param data 携带数据
      */
-    onTableAction = (event: string, data: anyObj) => {
+    onTableAction = (event: BaTableActionEventName, data: anyObj) => {
         if (this.runBefore('onTableAction', { event, data }) === false) return
         const actionFun = new Map([
             [
@@ -298,48 +308,19 @@ export default class baTable {
             [
                 'field-change',
                 () => {
-                    if (data.field.render == 'switch') {
-                        if (!data.field || !data.field.prop) return
-                        data.row.loading = true
-                        //防止后台验证不通过,先获取编辑数据然后替换相应字段
-                        this.api
-                            .edit({
-                                [this.table.pk!]: data.row[this.table.pk!],
-                            })
-                            .then((res) => {
-                                const typeA = typeof res.data.row[data.field.prop];
-                                const typeB = typeof data.value;
-                                res.data.row[data.field.prop] = data.value;
-                                if (typeA !== typeB) {
-                                    if (typeA === 'number') {
-                                        res.data.row[data.field.prop] = Number(data.value);
-                                    } else if (typeA === 'string') {
-                                        res.data.row[data.field.prop] = String(data.value);
-                                    } else if (typeA === 'boolean') {
-                                        res.data.row[data.field.prop] = Boolean(data.value);
-                                    } else {
-                                        console.warn(`Unsupported type conversion for type: ${typeA}`);
-                                        return;
-                                    }
-                                }
-                                this.api
-                                    .postData('edit', res.data.row)
-                                    .then(() => {
-                                        data.row.loading = false
-                                        data.row[data.field.prop] = data.value
-                                    })
-                                    .catch(() => {
-                                        data.row.loading = false
-                                    })
-                            })
+                    if (data.field && data.field.prop && this.table.data![data.index]) {
+                        this.table.data![data.index][data.field.prop!] = data.value
                     }
                 },
             ],
             [
                 'com-search',
                 () => {
-                    this.table.filter!.search = data as comSearchData[]
-                    this.onTableHeaderAction('refresh', { event: 'com-search', data: data })
+                    // 主动触发公共搜索，采用覆盖模式设定请求筛选数据
+                    this.setFilterSearchData(this.getComSearchData(), 'cover')
+
+                    // 刷新表格
+                    this.onTableHeaderAction('refresh', { event: 'com-search', data: this.table.filter!.search })
                 },
             ],
             [
@@ -357,10 +338,10 @@ export default class baTable {
 
     /**
      * 表格顶栏按钮事件统一响应
-     * @param event 事件:refresh=刷新,edit=编辑,delete=删除,quick-search=快速查询,unfold=折叠/展开,change-show-column=调整列显示状态
+     * @param event 事件名称，含义参考其类型定义
      * @param data 携带数据
      */
-    onTableHeaderAction = (event: string, data: anyObj) => {
+    onTableHeaderAction = (event: BaTableHeaderActionEventName, data: anyObj) => {
         if (this.runBefore('onTableHeaderAction', { event, data }) === false) return
         const actionFun = new Map([
             [
@@ -368,7 +349,7 @@ export default class baTable {
                 () => {
                     // 刷新表格在大多数情况下无需置空 data，但任需防范表格列组件的 :key 不会被更新的问题，比如关联表的数据列
                     this.table.data = []
-                    this.getIndex()
+                    this.getData()
                 },
             ],
             [
@@ -428,7 +409,7 @@ export default class baTable {
 
     /**
      * 初始化默认排序
-     * el表格的`default-sort`在自定义排序时无效
+     * el-table 的 `default-sort` 在自定义排序时无效
      * 此方法只有在表格数据请求结束后执行有效
      */
     initSort = () => {
@@ -459,7 +440,7 @@ export default class baTable {
             return
         }
 
-        const el = this.table.ref.getRef().$el.querySelector('.el-table__body-wrapper .el-table__body tbody')
+        const el = this.table.ref.getRef()?.$el.querySelector('.el-table__body-wrapper .el-table__body tbody')
         const disabledTip = this.table.column[buttonsKey].buttons![moveButton].disabledTip
         Sortable.create(el, {
             animation: 200,
@@ -470,11 +451,23 @@ export default class baTable {
             },
             onEnd: (evt: Sortable.SortableEvent) => {
                 this.table.column[buttonsKey].buttons![moveButton].disabledTip = disabledTip
+
+                // 目标位置不变
+                if (evt.oldIndex == evt.newIndex || typeof evt.newIndex == 'undefined' || typeof evt.oldIndex == 'undefined') return
+
                 // 找到对应行id
-                const moveRow = findIndexRow(this.table.data!, evt.oldIndex!) as TableRow
-                const replaceRow = findIndexRow(this.table.data!, evt.newIndex!) as TableRow
-                if (this.table.dragSortLimitField && moveRow[this.table.dragSortLimitField] != replaceRow[this.table.dragSortLimitField]) {
-                    this.onTableHeaderAction('refresh', {})
+                const moveRow = findIndexRow(this.table.data!, evt.oldIndex) as TableRow
+                const targetRow = findIndexRow(this.table.data!, evt.newIndex) as TableRow
+
+                const eventData = {
+                    move: moveRow[this.table.pk!],
+                    target: targetRow[this.table.pk!],
+                    order: this.table.filter?.order,
+                    direction: evt.newIndex > evt.oldIndex ? 'down' : 'up',
+                }
+
+                if (this.table.dragSortLimitField && moveRow[this.table.dragSortLimitField] != targetRow[this.table.dragSortLimitField]) {
+                    this.onTableHeaderAction('refresh', { event: 'sort', ...eventData })
                     ElNotification({
                         type: 'error',
                         message: i18n.global.t('utils.The moving position is beyond the movable range!'),
@@ -482,8 +475,8 @@ export default class baTable {
                     return
                 }
 
-                this.api.sortableApi(moveRow[this.table.pk!], replaceRow[this.table.pk!]).finally(() => {
-                    this.onTableHeaderAction('refresh', {})
+                this.api.sortable(eventData).finally(() => {
+                    this.onTableHeaderAction('refresh', { event: 'sort', ...eventData })
                 })
             },
         })
@@ -495,80 +488,59 @@ export default class baTable {
     mount = () => {
         if (this.runBefore('mount') === false) return
 
+        // 记录表格的路由路径
         const route = useRoute()
-        this.table.routePath = route.path
+        this.table.routePath = route.fullPath
 
-        // 初始化公共搜索数据
-        this.initComSearch(route?.query ? route.query : {})
+        // 按需初始化公共搜索表单数据和字段Map
+        if (this.comSearch.fieldData.size === 0) {
+            this.initComSearch()
+        }
 
-        // 路由未改变，而 query 改变了，重新筛选数据
-        let routeFlag = route.path + Object.entries(route.query).toString()
-        watch(
-            () => route.query,
-            () => {
-                const newRouteFlag = route.path + Object.entries(route.query).toString()
-                if (route.path == this.table.routePath && routeFlag != newRouteFlag) {
-                    this.initComSearch(route.query)
-                    this.onTableHeaderAction('refresh', { event: 'route-query-change', query: route.query })
-                    routeFlag = newRouteFlag
-                }
-            }
-        )
+        if (this.table.acceptQuery && !isEmpty(route.query)) {
+            // 根据当前 URL 的 query 初始化公共搜索默认值
+            this.setComSearchData(route.query)
+
+            // 获取公共搜索数据合并至表格筛选条件
+            this.setFilterSearchData(this.getComSearchData(), 'merge')
+        }
     }
 
     /**
-     * 通用搜索初始化
-     * @param query 要搜索的数据
+     * 公共搜索初始化
      */
-    initComSearch = (query: anyObj = {}) => {
+    initComSearch = () => {
         const form: anyObj = {}
         const field = this.table.column
 
-        if (field.length <= 0) {
-            return
-        }
+        if (field.length <= 0) return
 
         for (const key in field) {
-            if (field[key].operator === false) {
-                continue
-            }
-            const prop = field[key].prop
+            // 关闭搜索的字段
+            if (field[key].operator === false) continue
+
+            // 取默认操作符号
             if (typeof field[key].operator == 'undefined') {
                 field[key].operator = 'eq'
             }
+
+            // 公共搜索表单字段初始化
+            const prop = field[key].prop
             if (prop) {
                 if (field[key].operator == 'RANGE' || field[key].operator == 'NOT RANGE') {
+                    // 范围查询
                     form[prop] = ''
                     form[prop + '-start'] = ''
                     form[prop + '-end'] = ''
                 } else if (field[key].operator == 'NULL' || field[key].operator == 'NOT NULL') {
+                    // 复选框
                     form[prop] = false
                 } else {
+                    // 普通文本框
                     form[prop] = ''
                 }
 
-                // 初始化来自query中的默认值
-                if (this.table.acceptQuery && typeof query[prop] != 'undefined') {
-                    const queryProp = (query[prop] as string) ?? ''
-                    if (field[key].operator == 'RANGE' || field[key].operator == 'NOT RANGE') {
-                        const range = queryProp.split(',')
-                        if (field[key].render == 'datetime') {
-                            if (range && range.length >= 2) {
-                                form[prop + '-default'] = [new Date(range[0]), new Date(range[1])]
-                            }
-                        } else {
-                            form[prop + '-start'] = range[0] ?? ''
-                            form[prop + '-end'] = range[1] ?? ''
-                        }
-                    } else if (field[key].operator == 'NULL' || field[key].operator == 'NOT NULL') {
-                        form[prop] = queryProp ? true : false
-                    } else if (field[key].render == 'datetime') {
-                        form[prop + '-default'] = new Date(queryProp)
-                    } else {
-                        form[prop] = queryProp
-                    }
-                }
-
+                // 初始化字段的公共搜索数据
                 this.comSearch.fieldData.set(prop, {
                     operator: field[key].operator,
                     render: field[key].render,
@@ -577,23 +549,136 @@ export default class baTable {
             }
         }
 
-        // 接受query再搜索
-        if (this.table.acceptQuery) {
-            const comSearchData: comSearchData[] = []
-            for (const key in query) {
-                const fieldDataTemp = this.comSearch.fieldData.get(key)
-                if (fieldDataTemp) {
-                    comSearchData.push({
-                        field: key,
-                        val: query[key] as string,
-                        operator: fieldDataTemp.operator,
-                        render: fieldDataTemp.render,
-                    })
-                }
-            }
-            this.table.filter!.search = comSearchData
-        }
-
         this.comSearch.form = Object.assign(this.comSearch.form, form)
     }
+
+    /**
+     * 设置公共搜索表单数据
+     */
+    setComSearchData = (query: anyObj) => {
+        // 必需已经完成公共搜索数据的初始化
+        if (this.comSearch.fieldData.size === 0) {
+            this.initComSearch()
+        }
+
+        for (const key in this.table.column) {
+            const prop = this.table.column[key].prop
+            if (prop && typeof query[prop] !== 'undefined') {
+                const queryProp = query[prop] ?? ''
+                if (this.table.column[key].operator == 'RANGE' || this.table.column[key].operator == 'NOT RANGE') {
+                    const range = queryProp.split(',')
+                    if (this.table.column[key].render == 'datetime' || this.table.column[key].comSearchRender == 'date') {
+                        if (range && range.length >= 2) {
+                            const rangeDayJs = [dayjs(range[0]), dayjs(range[1])]
+                            if (rangeDayJs[0].isValid() && rangeDayJs[1].isValid()) {
+                                if (this.table.column[key].comSearchRender == 'date') {
+                                    this.comSearch.form[prop] = [rangeDayJs[0].format('YYYY-MM-DD'), rangeDayJs[1].format('YYYY-MM-DD')]
+                                } else {
+                                    this.comSearch.form[prop] = [
+                                        rangeDayJs[0].format('YYYY-MM-DD HH:mm:ss'),
+                                        rangeDayJs[1].format('YYYY-MM-DD HH:mm:ss'),
+                                    ]
+                                }
+                            }
+                        }
+                    } else if (this.table.column[key].comSearchRender == 'time') {
+                        if (range && range.length >= 2) {
+                            this.comSearch.form[prop] = [range[0], range[1]]
+                        }
+                    } else {
+                        this.comSearch.form[prop + '-start'] = range[0] ?? ''
+                        this.comSearch.form[prop + '-end'] = range[1] ?? ''
+                    }
+                } else if (this.table.column[key].operator == 'NULL' || this.table.column[key].operator == 'NOT NULL') {
+                    this.comSearch.form[prop] = queryProp ? true : false
+                } else if (this.table.column[key].render == 'datetime' || this.table.column[key].comSearchRender == 'date') {
+                    const propDayJs = dayjs(queryProp)
+                    if (propDayJs.isValid()) {
+                        this.comSearch.form[prop] = propDayJs.format(
+                            this.table.column[key].comSearchRender == 'date' ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm:ss'
+                        )
+                    }
+                } else {
+                    this.comSearch.form[prop] = queryProp
+                }
+            }
+        }
+    }
+
+    /**
+     * 获取公共搜索表单数据
+     */
+    getComSearchData = () => {
+        // 必需已经完成公共搜索数据的初始化
+        if (this.comSearch.fieldData.size === 0) {
+            this.initComSearch()
+        }
+
+        const comSearchData: ComSearchData[] = []
+
+        for (const key in this.comSearch.form) {
+            if (!this.comSearch.fieldData.has(key)) continue
+
+            let val = null
+            const fieldDataTemp = this.comSearch.fieldData.get(key)
+            if (
+                (fieldDataTemp.render == 'datetime' || ['datetime', 'date', 'time'].includes(fieldDataTemp.comSearchRender)) &&
+                (fieldDataTemp.operator == 'RANGE' || fieldDataTemp.operator == 'NOT RANGE')
+            ) {
+                if (this.comSearch.form[key] && this.comSearch.form[key].length >= 2) {
+                    // 日期范围
+                    if (fieldDataTemp.comSearchRender == 'date') {
+                        val = this.comSearch.form[key][0] + ' 00:00:00' + ',' + this.comSearch.form[key][1] + ' 23:59:59'
+                    } else {
+                        // 时间范围、时间日期范围
+                        val = this.comSearch.form[key][0] + ',' + this.comSearch.form[key][1]
+                    }
+                }
+            } else if (fieldDataTemp.operator == 'RANGE' || fieldDataTemp.operator == 'NOT RANGE') {
+                // 普通的范围筛选，公共搜索初始化时已准备好 start 和 end 字段
+                if (!this.comSearch.form[key + '-start'] && !this.comSearch.form[key + '-end']) {
+                    continue
+                }
+                val = this.comSearch.form[key + '-start'] + ',' + this.comSearch.form[key + '-end']
+            } else if (this.comSearch.form[key]) {
+                val = this.comSearch.form[key]
+            }
+
+            if (val === null) continue
+            if (isArray(val) && !val.length) continue
+
+            comSearchData.push({
+                field: key,
+                val: val,
+                operator: fieldDataTemp.operator,
+                render: fieldDataTemp.render,
+            })
+        }
+
+        return comSearchData
+    }
+
+    /**
+     * 设置 getData 请求时的过滤条件（搜索数据）
+     * @param search 新的搜索数据
+     * @param mode 模式:cover=覆盖到已有搜索数据,merge=合并到已有搜索数据
+     */
+    setFilterSearchData = (search: ComSearchData[], mode: 'cover' | 'merge' = 'merge') => {
+        if (mode == 'cover' || !this.table.filter?.search) {
+            this.table.filter!.search = search
+        } else {
+            const merged = this.table.filter!.search.concat(search)
+            const fieldMap = new Map<string, ComSearchData>()
+
+            merged.forEach((item) => {
+                fieldMap.set(item.field, item)
+            })
+
+            this.table.filter!.search = Array.from(fieldMap.values())
+        }
+    }
+
+    // 方法别名
+    getIndex = this.getData
+    requestEdit = this.getEditData
 }

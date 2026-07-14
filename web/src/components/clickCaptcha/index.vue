@@ -39,18 +39,11 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed } from 'vue'
-import { getCaptchaData, checkClickCaptcha } from '/@/api/common'
+import { computed, reactive } from 'vue'
+import { Props } from './index'
+import { checkClickCaptcha, getCaptchaData } from '/@/api/common'
 import { i18n } from '/@/lang'
-
-interface Props {
-    uuid: string
-    callback?: (captchaInfo: string) => void
-    class?: string
-    unset?: boolean
-    error?: string
-    success?: string
-}
+import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 
 const props = withDefaults(defineProps<Props>(), {
     uuid: '',
@@ -59,6 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
     unset: false,
     error: i18n.global.t('validate.The correct area is not clicked, please try again!'),
     success: i18n.global.t('validate.Verification is successful!'),
+    apiBaseURL: '',
 })
 
 const state: {
@@ -85,9 +79,13 @@ const state: {
     },
 })
 
+const emits = defineEmits<{
+    (e: 'destroy'): void
+}>()
+
 const load = () => {
     state.loading = true
-    getCaptchaData(props.uuid).then((res) => {
+    getCaptchaData(props.uuid, props.apiBaseURL).then((res) => {
         state.xy = []
         state.tip = ''
         state.loading = false
@@ -100,7 +98,7 @@ const onRecord = (event: MouseEvent) => {
         state.xy.push(event.offsetX + ',' + event.offsetY)
         if (state.xy.length == state.captcha.text.length) {
             const captchaInfo = [state.xy.join('-'), (event.target as HTMLImageElement).width, (event.target as HTMLImageElement).height].join(';')
-            checkClickCaptcha(props.uuid, captchaInfo, props.unset)
+            checkClickCaptcha(props.uuid, captchaInfo, props.unset, props.apiBaseURL)
                 .then(() => {
                     state.tip = props.success
                     setTimeout(() => {
@@ -123,7 +121,7 @@ const onCancelRecord = (index: number) => {
 }
 
 const onClose = () => {
-    document.getElementById(props.uuid)?.remove()
+    emits('destroy')
 }
 
 const captchaBoxTop = computed(() => (state.captcha.height + 200) / 2 + 'px')
@@ -138,11 +136,13 @@ load()
     border: 1px solid var(--el-border-color-extra-light);
     background-color: var(--el-color-white);
     position: fixed;
-    z-index: 9999991;
+    z-index: v-bind('SYSTEM_ZINDEX');
     left: calc(50% - v-bind('captchaBoxLeft'));
     top: calc(50% - v-bind('captchaBoxTop'));
     border-radius: 10px;
-    box-shadow: 0 0 0 1px hsla(0, 0%, 100%, 0.3) inset, 0 0.5em 1em rgba(0, 0, 0, 0.6);
+    box-shadow:
+        0 0 0 1px hsla(0, 0%, 100%, 0.3) inset,
+        0 0.5em 1em rgba(0, 0, 0, 0.6);
     .loading {
         color: var(--el-color-info);
         width: 350px;

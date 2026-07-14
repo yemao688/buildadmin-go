@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -19,7 +17,10 @@ func NewModuleHandler(log *zap.Logger) *ModuleHandler {
 
 func (h *ModuleHandler) Index(ctx *gin.Context) {
 
-	JsonReturn(ctx, http.StatusOK, 1, "待实现", nil)
+	Success(ctx, map[string]any{
+		"list":  []any{},
+		"total": 0,
+	})
 }
 
 func (h *ModuleHandler) State(ctx *gin.Context) {
@@ -53,6 +54,11 @@ func (h *ModuleHandler) Update(ctx *gin.Context) {
 }
 
 func (h *ModuleHandler) Upload(ctx *gin.Context) {
+
+	Success(ctx, "")
+}
+
+func (h *ModuleHandler) UploadCompleted(ctx *gin.Context) {
 
 	Success(ctx, "")
 }

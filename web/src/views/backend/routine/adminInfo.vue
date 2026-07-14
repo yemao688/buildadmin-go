@@ -12,7 +12,7 @@
                         accept="image/gif, image/jpg, image/jpeg, image/bmp, image/png, image/webp"
                         v-if="!isEmpty(state.adminInfo)"
                     >
-                        <el-image :src="fullUrl(state.adminInfo.avatar)" class="avatar">
+                        <el-image fit="cover" :src="fullUrl(state.adminInfo.avatar)" class="avatar">
                             <template #error>
                                 <div class="image-slot">
                                     <Icon size="30" color="#c0c4cc" name="el-icon-Picture" />
@@ -23,7 +23,7 @@
                     <div class="admin-info-base">
                         <div class="admin-nickname">{{ state.adminInfo.nickname }}</div>
                         <div class="admin-other">
-                            <div>{{ t('routine.adminInfo.Last logged in on') }} {{ state.adminInfo.last_login_time }}</div>
+                            <div>{{ t('routine.adminInfo.Last logged in on') }} {{ timeFormat(state.adminInfo.last_login_time) }}</div>
                         </div>
                     </div>
                     <div class="admin-info-form">
@@ -103,10 +103,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { reactive, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { index, log, postData } from '/@/api/backend/routine/AdminInfo'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { fullUrl, onResetForm, timeFormat } from '/@/utils/common'
 import { uuid } from '../../../utils/random'
 import { buildValidatorData } from '/@/utils/validate'
@@ -119,7 +119,7 @@ defineOptions({
 })
 
 const { t } = useI18n()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 
 const adminInfoStore = useAdminInfo()
 
@@ -207,7 +207,7 @@ const onAvatarBeforeUpload = (file: any) => {
                 id: state.adminInfo.id,
                 avatar: res.data.file.url,
             }).then(() => {
-                adminInfoStore.dataFill({ ...adminInfoStore.$state, avatar: res.data.file.full_url })
+                adminInfoStore.dataFill({ avatar: res.data.file.full_url })
                 state.adminInfo.avatar = res.data.file.full_url
             })
         }
@@ -215,8 +215,7 @@ const onAvatarBeforeUpload = (file: any) => {
 }
 
 const onSubmit = () => {
-    if (!formRef.value) return
-    formRef.value.validate((valid) => {
+    formRef.value?.validate((valid) => {
         if (valid) {
             let data = { ...state.adminInfo }
             delete data.last_login_time
@@ -225,7 +224,7 @@ const onSubmit = () => {
             state.buttonLoading = true
             postData(data)
                 .then(() => {
-                    adminInfoStore.dataFill({ ...adminInfoStore.$state, nickname: state.adminInfo.nickname })
+                    adminInfoStore.dataFill({ nickname: state.adminInfo.nickname })
                     state.buttonLoading = false
                 })
                 .catch(() => {

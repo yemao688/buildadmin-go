@@ -10,15 +10,15 @@
             "
         >
             <el-button v-if="!isEmpty(state.userInfo)" v-blur class="table-header-operate">
-                <span class="table-header-operate-text">{{
-                    state.userInfo.username + '(ID:' + state.userInfo.id + ') ' + t('user.scoreLog.integral') + ':' + state.userInfo.score
-                }}</span>
+                <span class="table-header-operate-text">
+                    {{ state.userInfo.username + '(ID:' + state.userInfo.id + ') ' + t('user.scoreLog.integral') + ':' + state.userInfo.score }}
+                </span>
             </el-button>
         </TableHeader>
 
         <!-- 表格 -->
         <!-- 要使用`el-table`组件原有的属性，直接加在Table标签上即可 -->
-        <Table ref="tableRef" />
+        <Table />
 
         <!-- 表单 -->
         <PopupForm />
@@ -26,30 +26,26 @@
 </template>
 
 <script setup lang="ts">
-import { isEmpty, parseInt } from 'lodash-es'
-import { ref, provide, reactive, watch } from 'vue'
-import baTableClass from '/@/utils/baTable'
-import { url } from '/@/api/backend/user/scoreLog'
-import PopupForm from './popupForm.vue'
-import Table from '/@/components/table/index.vue'
-import TableHeader from '/@/components/table/header/index.vue'
-import { baTableApi } from '/@/api/common'
-import { useRoute } from 'vue-router'
-import { add } from '/@/api/backend/user/scoreLog'
+import { debounce, isEmpty, parseInt } from 'lodash-es'
+import { provide, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
+import PopupForm from './popupForm.vue'
+import { add, url } from '/@/api/backend/user/scoreLog'
+import { baTableApi } from '/@/api/common'
+import TableHeader from '/@/components/table/header/index.vue'
+import Table from '/@/components/table/index.vue'
+import baTableClass from '/@/utils/baTable'
 
 defineOptions({
     name: 'user/scoreLog',
 })
 
 const { t } = useI18n()
-const tableRef = ref()
 const route = useRoute()
 const defalutUser = (route.query.user_id ?? '') as string
-const state: {
-    userInfo: anyObj
-} = reactive({
-    userInfo: {},
+const state = reactive({
+    userInfo: {} as anyObj,
 })
 
 const baTable = new baTableClass(
@@ -87,21 +83,26 @@ const baTable = new baTableClass(
             user_id: defalutUser,
             memo: '',
         },
-    },
-    {},
-    {
-        onSubmit: () => {
-            getUserInfo(baTable.comSearch.form.user_id)
-        },
     }
 )
 
+// 表单提交后
+baTable.after.onSubmit = () => {
+    getUserInfo(baTable.comSearch.form.user_id)
+}
+baTable.after.onTableHeaderAction = ({ event }) => {
+    // 刷新后
+    if (event == 'refresh') {
+        getUserInfo(baTable.comSearch.form.user_id)
+    }
+}
+
 baTable.mount()
-baTable.getIndex()
+baTable.getData()
 
 provide('baTable', baTable)
 
-const getUserInfo = (userId: string) => {
+const getUserInfo = debounce((userId: string) => {
     if (userId && parseInt(userId) > 0) {
         add(userId).then((res) => {
             state.userInfo = res.data.user
@@ -109,7 +110,7 @@ const getUserInfo = (userId: string) => {
     } else {
         state.userInfo = {}
     }
-}
+}, 300)
 
 getUserInfo(baTable.comSearch.form.user_id)
 

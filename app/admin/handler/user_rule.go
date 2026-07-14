@@ -101,6 +101,10 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *UserRuleHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		UserRule

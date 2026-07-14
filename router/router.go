@@ -204,11 +204,14 @@ func InitRouter(
 	adminRouter.GET("crud.Log/index", crudLogHandler.Index)
 
 	adminRouter.GET("module/index", moduleHandler.Index)
+	adminRouter.POST("module/uploadCompleted", moduleHandler.UploadCompleted)
 
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
+	adminRouter.GET("ajax/getTableList", ajaxHandler.GetTableList)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
+	adminRouter.GET("ajax/getDatabaseConnectionList", ajaxHandler.GetDatabaseConnectionList)
 	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
 	adminRouter.POST("ajax/changeTerminalConfig", ajaxHandler.ChangeTerminalConfig)
 

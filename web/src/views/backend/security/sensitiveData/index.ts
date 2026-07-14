@@ -15,40 +15,42 @@ export class sensitiveDataClass extends baTableClass {
     }
 
     // 重写编辑
-    requestEdit = (id: string) => {
-        this.runBefore('requestEdit', { id })
+    getEditData = (id: string) => {
         this.form.loading = true
         this.form.items = {}
-        return this.api
-            .edit({
-                id: id,
-            })
-            .then((res) => {
-                const fields: string[] = []
-                const dataFields: DataFields[] = []
-                for (const key in res.data.row.data_fields) {
-                    fields.push(key)
-                    dataFields.push({
-                        name: key,
-                        value: res.data.row.data_fields[key] ?? '',
-                    })
-                }
-
-                this.form.extend = Object.assign(this.form.extend!, {
-                    tableList: res.data.tables,
-                    controllerList: res.data.controllers,
+        return this.api.edit({ id: id }).then((res) => {
+            const fields: string[] = []
+            const dataFields: DataFields[] = []
+            for (const key in res.data.row.data_fields) {
+                fields.push(key)
+                dataFields.push({
+                    name: key,
+                    value: res.data.row.data_fields[key] ?? '',
                 })
+            }
 
-                if (res.data.row.data_table) {
-                    this.onTableChange(res.data.row.data_table)
-                    if (this.form.extend!.parentRef) this.form.extend!.parentRef.setDataFields(dataFields)
-                }
+            this.form.items!.connection = res.data.row.connection ? res.data.row.connection : ''
+            this.form.extend!.controllerList = res.data.controllers
 
-                res.data.row.data_fields = fields
-                this.form.loading = false
-                this.form.items = res.data.row
-                this.runAfter('requestEdit', { res })
-            })
+            if (res.data.row.data_table) {
+                this.onTableChange(res.data.row.data_table)
+                if (this.form.extend!.parentRef) this.form.extend!.parentRef.setDataFields(dataFields)
+            }
+
+            res.data.row.data_fields = fields
+            this.form.loading = false
+            this.form.items = res.data.row
+        })
+    }
+
+    onConnectionChange = () => {
+        this.form.extend!.fieldList = {}
+        this.form.extend!.fieldSelect = {}
+        this.form.extend!.fieldSelectKey = uuid()
+
+        this.form.items!.data_table = ''
+        this.form.items!.data_fields = []
+        if (this.form.extend!.parentRef) this.form.extend!.parentRef.setDataFields([])
     }
 
     // 数据表改变事件
@@ -63,7 +65,7 @@ export class sensitiveDataClass extends baTableClass {
         this.form.items!.data_fields = []
         if (this.form.extend!.parentRef) this.form.extend!.parentRef.setDataFields([])
 
-        getTableFieldList(table).then((res) => {
+        getTableFieldList(table, true, this.form.items!.connection).then((res) => {
             this.form.items!.primary_key = res.data.pk
             this.form.defaultItems!.primary_key = res.data.pk
 
@@ -85,7 +87,6 @@ export class sensitiveDataClass extends baTableClass {
      * 重写打开表单方法
      */
     toggleForm = (operate = '', operateIds: string[] = []) => {
-        this.runBefore('toggleForm', { operate, operateIds })
         if (this.form.ref) {
             this.form.ref.resetFields()
         }
@@ -96,14 +97,11 @@ export class sensitiveDataClass extends baTableClass {
             if (!operateIds.length) {
                 return false
             }
-            this.requestEdit(operateIds[0])
+            this.getEditData(operateIds[0])
         } else if (operate == 'Add') {
             this.form.loading = true
             add().then((res) => {
-                this.form.extend = Object.assign(this.form.extend!, {
-                    tableList: res.data.tables,
-                    controllerList: res.data.controllers,
-                })
+                this.form.extend!.controllerList = res.data.controllers
                 this.form.items = Object.assign({}, this.form.defaultItems)
                 this.form.loading = false
             })
@@ -111,6 +109,5 @@ export class sensitiveDataClass extends baTableClass {
 
         this.form.operate = operate
         this.form.operateIds = operateIds
-        this.runAfter('toggleForm', { operate, operateIds })
     }
 }

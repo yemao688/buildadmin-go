@@ -1,11 +1,9 @@
-import createAxios from '/@/utils/axios'
-import { useSiteConfig } from '/@/stores/siteConfig'
 import { useBaAccount } from '/@/stores/baAccount'
+import { useSiteConfig } from '/@/stores/siteConfig'
+import createAxios from '/@/utils/axios'
 
-const userControllerUrl = '/api/user/'
-const captchaUrl = '/api/common/captcha'
+const storeUrl = '/api/v7.store/'
 const moduleControllerUrl = '/admin/module/'
-const storeUrl = '/api/v6.store/'
 
 export function index(params: anyObj = {}) {
     return createAxios({
@@ -32,51 +30,6 @@ export function info(params: anyObj) {
             url: siteConfig.apiUrl + storeUrl + 'info',
             method: 'get',
             params: params,
-        },
-        {
-            anotherToken: baAccount.getToken('auth'),
-        }
-    )
-}
-
-export function postLogout() {
-    const siteConfig = useSiteConfig()
-    const baAccount = useBaAccount()
-    return createAxios({
-        url: siteConfig.apiUrl + userControllerUrl + 'logout',
-        method: 'POST',
-        data: {
-            refreshToken: baAccount.getToken('refresh'),
-        },
-    })
-}
-
-export function buildCaptchaUrl() {
-    const siteConfig = useSiteConfig()
-    return siteConfig.apiUrl + captchaUrl + '?server=1'
-}
-
-export function checkIn(method: 'get' | 'post', params: object = {}) {
-    const siteConfig = useSiteConfig()
-    return createAxios(
-        {
-            url: siteConfig.apiUrl + userControllerUrl + 'checkIn',
-            data: params,
-            method: method,
-        },
-        {
-            showSuccessMessage: true,
-        }
-    )
-}
-
-export function getUserInfo() {
-    const baAccount = useBaAccount()
-    const siteConfig = useSiteConfig()
-    return createAxios(
-        {
-            url: siteConfig.apiUrl + userControllerUrl + 'info',
-            method: 'get',
         },
         {
             anotherToken: baAccount.getToken('auth'),
@@ -136,6 +89,24 @@ export function payCheck(sn: string) {
     )
 }
 
+/**
+ * 获取模块的可安装版本列表
+ */
+export function preDownload(data: anyObj) {
+    const baAccount = useBaAccount()
+    const siteConfig = useSiteConfig()
+    return createAxios(
+        {
+            url: siteConfig.apiUrl + storeUrl + 'preDownload',
+            method: 'POST',
+            data,
+        },
+        {
+            anotherToken: baAccount.getToken('auth'),
+        }
+    )
+}
+
 export function getInstallState(uid: string) {
     return createAxios({
         url: moduleControllerUrl + 'state',
@@ -146,19 +117,19 @@ export function getInstallState(uid: string) {
     })
 }
 
-export function postInstallModule(uid: string, orderId: number, extend: anyObj = {}) {
+export function postInstallModule(uid: string, orderId: number, version: string, update: boolean, extend: anyObj = {}) {
     const baAccount = useBaAccount()
     return createAxios(
         {
             url: moduleControllerUrl + 'install',
-            method: 'post',
-            params: {
-                uid: uid,
-                orderId: orderId,
-                token: baAccount.getToken('auth'),
-            },
+            method: 'POST',
             data: {
-                extend: extend,
+                uid,
+                update,
+                version,
+                orderId,
+                token: baAccount.getToken('auth'),
+                extend,
             },
             timeout: 3000 * 10,
         },
@@ -166,23 +137,6 @@ export function postInstallModule(uid: string, orderId: number, extend: anyObj =
             showCodeMessage: false,
         }
     )
-}
-
-export function postUpdate(uid: string, orderId: number, extend: anyObj = {}) {
-    const baAccount = useBaAccount()
-    return createAxios({
-        url: moduleControllerUrl + 'update',
-        method: 'POST',
-        params: {
-            uid,
-            orderId: orderId,
-            token: baAccount.getToken('auth'),
-        },
-        data: {
-            extend: extend,
-        },
-        timeout: 3000 * 10,
-    })
 }
 
 export function postUninstall(uid: string) {

@@ -10,6 +10,7 @@
 <script setup lang="ts">
 import { reactive, onMounted } from 'vue'
 import { useNavTabs } from '/@/stores/navTabs'
+import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 
 const navTabs = useNavTabs()
 
@@ -43,7 +44,7 @@ const onCloseFullScreen = () => {
     justify-content: center;
     position: fixed;
     right: calc(50% - 20px);
-    z-index: 9999999;
+    z-index: v-bind('SYSTEM_ZINDEX');
     height: 40px;
     width: 40px;
     background-color: rgba($color: #000000, $alpha: 0.1);
@@ -63,7 +64,7 @@ const onCloseFullScreen = () => {
 .close-full-screen-on {
     position: fixed;
     top: 0;
-    z-index: 9999998;
+    z-index: v-bind('SYSTEM_ZINDEX - 1');
     height: 60px;
     width: 100px;
     left: calc(50% - 50px);

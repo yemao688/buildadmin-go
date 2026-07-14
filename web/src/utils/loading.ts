@@ -1,4 +1,3 @@
-import { nextTick } from 'vue'
 import '/@/styles/loading.scss'
 
 export const loading = {
@@ -24,11 +23,7 @@ export const loading = {
         bodys.insertBefore(div, bodys.childNodes[0])
     },
     hide: () => {
-        nextTick(() => {
-            setTimeout(() => {
-                const el = document.querySelector('.block-loading')
-                el && el.parentNode?.removeChild(el)
-            }, 1000)
-        })
+        const el = document.querySelector('.block-loading')
+        el && el.parentNode?.removeChild(el)
     },
 }

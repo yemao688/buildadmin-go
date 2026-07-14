@@ -1,7 +1,7 @@
 export default {
-    'personal data': 'personal data',
+    profile: 'Profile',
     'Change Password': 'Change Password',
-    'head portrait': 'head portrait',
+    avatar: 'Avatar',
     'User name': 'User name',
     'User nickname': 'User nickname',
     mail: 'mail',

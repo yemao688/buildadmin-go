@@ -52,6 +52,10 @@ func (h *TestBuildHandler) Add(ctx *gin.Context) {
 }
 
 func (h *TestBuildHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params TestBuildParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))

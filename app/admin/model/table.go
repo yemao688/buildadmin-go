@@ -52,6 +52,44 @@ func (s *TableModel) GetTableList() map[string]string {
 	return data
 }
 
+type TableListItem struct {
+	Table      string `json:"table"`
+	Comment    string `json:"comment"`
+	Connection string `json:"connection"`
+	Prefix     string `json:"prefix"`
+}
+
+// 获取数据表列表（v2.3.7 前端格式）
+func (s *TableModel) GetTableListV2(quickSearch string) []TableListItem {
+	type Table struct {
+		TABLE_NAME    string
+		TABLE_COMMENT string
+	}
+	var tableList []Table
+	query := "SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = ?"
+
+	result := []TableListItem{}
+	if err := s.sqlDB.Raw(query, s.config.Database.Database).Scan(&tableList).Error; err != nil {
+		return result
+	}
+	for _, v := range tableList {
+		if quickSearch != "" && !strings.Contains(v.TABLE_NAME, quickSearch) && !strings.Contains(v.TABLE_COMMENT, quickSearch) {
+			continue
+		}
+		item := TableListItem{
+			Table:      v.TABLE_NAME,
+			Comment:    v.TABLE_NAME + " - " + v.TABLE_COMMENT,
+			Connection: "mysql",
+			Prefix:     s.config.Database.Prefix,
+		}
+		if v.TABLE_COMMENT == "" {
+			item.Comment = v.TABLE_NAME
+		}
+		result = append(result, item)
+	}
+	return result
+}
+
 // 获取表主键字段
 func (s *TableModel) GetTablePk(tableName string) string {
 	if tableName == "" {

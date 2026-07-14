@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, provide } from 'vue'
+import { onMounted, provide, useTemplateRef } from 'vue'
 import { sensitiveDataClass } from './index'
 import { url } from '/@/api/backend/security/sensitiveData'
 import PopupForm from './popupForm.vue'
@@ -33,8 +33,9 @@ defineOptions({
 })
 
 const { t } = useI18n()
-const tableRef = ref()
-const formRef = ref()
+const formRef = useTemplateRef('formRef')
+const tableRef = useTemplateRef('tableRef')
+
 const baTable = new sensitiveDataClass(
     new baTableApi(url),
     {
@@ -45,6 +46,13 @@ const baTable = new sensitiveDataClass(
             {
                 label: t('security.sensitiveData.controller'),
                 prop: 'controller',
+                align: 'center',
+                operator: 'LIKE',
+                operatorPlaceholder: t('Fuzzy query'),
+            },
+            {
+                label: t('Connection'),
+                prop: 'connection',
                 align: 'center',
                 operator: 'LIKE',
                 operatorPlaceholder: t('Fuzzy query'),
@@ -77,8 +85,8 @@ const baTable = new sensitiveDataClass(
                 prop: 'status',
                 align: 'center',
                 render: 'tag',
-                custom: { '0': 'danger', '1': 'success' },
-                replaceValue: { '0': t('Disable'), '1': t('security.sensitiveData.Modifying monitoring') },
+                custom: { 0: 'danger', 1: 'success' },
+                replaceValue: { 0: t('Disable'), 1: t('security.sensitiveData.Modifying monitoring') },
             },
             { label: t('Update time'), prop: 'update_time', align: 'center', render: 'datetime', sortable: 'custom', operator: 'RANGE', width: 160 },
             { label: t('Create time'), prop: 'create_time', align: 'center', render: 'datetime', sortable: 'custom', operator: 'RANGE', width: 160 },
@@ -95,26 +103,22 @@ const baTable = new sensitiveDataClass(
     },
     {
         defaultItems: {
-            status: '1',
-        },
-    },
-    {
-        // 提交前
-        onSubmit: () => {
-            baTable.form.items!.fields = formRef.value.getDataFields()
+            status: 1,
         },
     }
 )
 
+baTable.before.onSubmit = () => {
+    baTable.form.items!.fields = formRef.value?.getDataFields()
+}
+
 provide('baTable', baTable)
 
 onMounted(() => {
-    baTable.form.extend = Object.assign({}, baTable.form.extend, {
-        parentRef: formRef.value,
-    })
+    baTable.form.extend!.parentRef = formRef.value
     baTable.table.ref = tableRef.value
     baTable.mount()
-    baTable.getIndex()
+    baTable.getData()
 })
 </script>
 

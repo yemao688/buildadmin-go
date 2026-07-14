@@ -13,7 +13,9 @@
                     <div class="goods-basic">
                         <h4 class="goods-basic-title">{{ state.goodsInfo.title }}</h4>
                         <div class="goods-tag">
-                            <el-tag v-for="(tag, idx) in state.goodsInfo.tags" :key="idx" :type="tag.type">{{ tag.name }}</el-tag>
+                            <el-tag v-for="(tag, idx) in state.goodsInfo.tags" :key="idx" :type="tag.type ? tag.type : 'primary'">
+                                {{ tag.name }}
+                            </el-tag>
                         </div>
                         <div class="basic-item">
                             <div class="basic-item-title">{{ t('module.Price') }}</div>
@@ -42,14 +44,31 @@
                             <div class="basic-item-content">{{ state.goodsInfo.category ? state.goodsInfo.category.name : '-' }}</div>
                         </div>
                         <div class="basic-item">
+                            <div class="basic-item-title">{{ t('module.Module documentation') }}</div>
+                            <div class="basic-item-content">
+                                <el-link
+                                    type="primary"
+                                    class="basic-item-link"
+                                    v-if="state.goodsInfo.docs"
+                                    target="_blank"
+                                    :href="`https://doc.buildadmin.com/md/${state.goodsInfo.docs.name ? state.goodsInfo.docs.name : state.goodsInfo.docs.id}`"
+                                    rel="noopener noreferrer"
+                                >
+                                    {{ t('module.Click to access') }}
+                                </el-link>
+                                <span v-else>-</span>
+                            </div>
+                        </div>
+                        <div class="basic-item">
                             <div class="basic-item-title">{{ t('module.Developer Homepage') }}</div>
                             <div class="basic-item-content">
                                 <el-link
                                     type="primary"
-                                    class="developer-homepage"
+                                    class="basic-item-link"
                                     v-if="state.goodsInfo.author_url"
                                     target="_blank"
                                     :href="state.goodsInfo.author_url"
+                                    rel="noopener noreferrer"
                                 >
                                     {{ t('module.Click to access') }}
                                 </el-link>
@@ -113,7 +132,7 @@
                                     installButtonState.buy.includes(state.goodsInfo.state) &&
                                     state.goodsInfo.type == 'online'
                                 "
-                                @click="onBuy"
+                                @click="onBuy(false)"
                                 v-blur
                                 class="basic-button-item"
                                 type="danger"
@@ -125,7 +144,13 @@
                                     (state.goodsInfo.state == moduleInstallState.UNINSTALLED && state.goodsInfo.purchased) ||
                                     state.goodsInfo.state == moduleInstallState.WAIT_INSTALL
                                 "
-                                @click="onInstall(state.goodsInfo.uid, state.goodsInfo.purchased)"
+                                @click="
+                                    onPreInstallModule(
+                                        state.goodsInfo.uid,
+                                        state.goodsInfo.purchased,
+                                        state.goodsInfo.state == moduleInstallState.WAIT_INSTALL ? false : true
+                                    )
+                                "
                                 :loading="state.loading.common"
                                 v-blur
                                 class="basic-button-item"
@@ -135,7 +160,7 @@
                             </el-button>
                             <el-button
                                 v-if="installButtonState.continueInstallation.includes(state.goodsInfo.state)"
-                                @click="onInstall(state.goodsInfo.uid, state.goodsInfo.purchased)"
+                                @click="onPreInstallModule(state.goodsInfo.uid, state.goodsInfo.purchased, false)"
                                 :loading="state.loading.common"
                                 v-blur
                                 class="basic-button-item"
@@ -257,17 +282,17 @@
 </template>
 
 <script setup lang="ts">
-import { state } from '../store'
-import { showInfo, currency, onBuy, onInstall, onDisable, onEnable, onRefreshTableData, loginExpired } from '../index'
-import { postUninstall, getInstallState, postUpdate } from '/@/api/backend/module'
-import { moduleInstallState } from '../types'
-import { timeFormat } from '/@/utils/common'
-import { isEmpty } from 'lodash-es'
 import { ElMessageBox } from 'element-plus'
-import { useBaAccount } from '/@/stores/baAccount'
+import { isEmpty } from 'lodash-es'
 import { useI18n } from 'vue-i18n'
+import { currency, onBuy, onDisable, onEnable, onPreInstallModule, onRefreshTableData, showInfo } from '../index'
+import { state } from '../store'
+import { moduleInstallState } from '../types'
 import Buy from './buy.vue'
 import Pay from './pay.vue'
+import { getInstallState, postUninstall } from '/@/api/backend/module'
+import { useBaAccount } from '/@/stores/baAccount'
+import { timeFormat } from '/@/utils/common'
 
 const installButtonState = {
     InstallNow: [moduleInstallState.UNINSTALLED, moduleInstallState.WAIT_INSTALL],
@@ -314,6 +339,21 @@ const unInstall = (uid: string) => {
 }
 
 const onUpdate = (uid: string, order: number) => {
+    // 无有效订单
+    if (!order) {
+        ElMessageBox.confirm(t('module.No module purchase order was found'), t('Reminder'), {
+            confirmButtonText: t('Confirm'),
+            cancelButtonText: t('Cancel'),
+            type: 'warning',
+        })
+            .then(() => {
+                onBuy(true)
+            })
+            .catch(() => {})
+        return
+    }
+
+    // 未登录
     const baAccount = useBaAccount()
     if (!baAccount.token) {
         state.dialog.baAccount = true
@@ -323,13 +363,7 @@ const onUpdate = (uid: string, order: number) => {
     getInstallState(uid)
         .then((res) => {
             if (res.data.state == moduleInstallState.DISABLE) {
-                postUpdate(uid, order)
-                    .then(() => {
-                        onInstall(uid, order)
-                    })
-                    .catch((res) => {
-                        if (loginExpired(res)) return
-                    })
+                onPreInstallModule(uid, order, true, true)
             } else {
                 ElMessageBox.confirm(t('module.You need to disable this module before updating Do you want to disable it now?'), t('Reminder'), {
                     confirmButtonText: t('module.Disable and update'),
@@ -341,8 +375,6 @@ const onUpdate = (uid: string, order: number) => {
                             uid: uid,
                             state: 0,
                             update: 1,
-                            order: order,
-                            token: baAccount.token,
                         }
                         onDisable()
                     })
@@ -383,6 +415,12 @@ const onUpdate = (uid: string, order: number) => {
             align-items: center;
             justify-content: center;
         }
+        :deep(.el-carousel__indicators) {
+            line-height: 10px;
+            .el-carousel__indicator {
+                padding: 0 var(--el-carousel-indicator-padding-horizontal);
+            }
+        }
     }
     .goods-basic {
         position: relative;
@@ -395,7 +433,7 @@ const onUpdate = (uid: string, order: number) => {
         .basic-item {
             display: flex;
             align-items: center;
-            padding: 5px 0;
+            padding: 4px 0;
             .basic-item-title {
                 font-size: var(--el-font-size-base);
                 color: var(--el-text-color-secondary);
@@ -414,9 +452,7 @@ const onUpdate = (uid: string, order: number) => {
             padding-right: 6px;
         }
         .basic-buttons {
-            position: absolute;
-            bottom: 26px;
-            padding-top: 3px;
+            padding-top: 6px;
         }
         .basic-button-demo {
             margin-right: 10px;
@@ -481,6 +517,7 @@ const onUpdate = (uid: string, order: number) => {
                 display: -webkit-box;
                 -webkit-box-orient: vertical;
                 -webkit-line-clamp: 2;
+                line-clamp: 2;
                 line-height: 15px;
                 height: 28px;
             }
@@ -497,7 +534,7 @@ const onUpdate = (uid: string, order: number) => {
     .el-carousel__item:nth-child(2n) {
         background-color: #99a9bf;
     }
-    .developer-homepage {
+    .basic-item-link {
         font-size: var(--el-font-size-small);
     }
 }
@@ -564,9 +601,6 @@ const onUpdate = (uid: string, order: number) => {
         .goods-images {
             max-width: 100%;
             width: 100%;
-        }
-        .goods-basic .basic-buttons {
-            position: unset;
         }
     }
     .goods-detail {

@@ -18,23 +18,25 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, provide } from 'vue'
-import baTableClass from '/@/utils/baTable'
-import PopupForm from './popupForm.vue'
-import Table from '/@/components/table/index.vue'
-import TableHeader from '/@/components/table/header/index.vue'
-import { defaultOptButtons } from '/@/components/table'
-import { baTableApi } from '/@/api/common'
+import { onMounted, provide, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { cloneDeep } from 'lodash-es'
+import PopupForm from './popupForm.vue'
+import { getUserRules } from '/@/api/backend/user/group'
+import { baTableApi } from '/@/api/common'
+import { defaultOptButtons } from '/@/components/table'
+import TableHeader from '/@/components/table/header/index.vue'
+import Table from '/@/components/table/index.vue'
+import baTableClass from '/@/utils/baTable'
+import { uuid } from '/@/utils/random'
 
 defineOptions({
     name: 'user/group',
 })
 
 const { t } = useI18n()
-const tableRef = ref()
-const formRef = ref()
+const formRef = useTemplateRef('formRef')
+const tableRef = useTemplateRef('tableRef')
+
 const baTable = new baTableClass(
     new baTableApi('/admin/user.Group/'),
     {
@@ -47,8 +49,8 @@ const baTable = new baTableClass(
                 prop: 'status',
                 align: 'center',
                 render: 'tag',
-                custom: { '0': 'danger', '1': 'success' },
-                replaceValue: { '0': t('Disable'), '1': t('Enable') },
+                custom: { 0: 'danger', 1: 'success' },
+                replaceValue: { 0: t('Disable'), 1: t('Enable') },
             },
             { label: t('Update time'), prop: 'update_time', align: 'center', render: 'datetime', sortable: 'custom', operator: 'RANGE', width: 160 },
             { label: t('Create time'), prop: 'create_time', align: 'center', render: 'datetime', sortable: 'custom', operator: 'RANGE', width: 160 },
@@ -65,65 +67,88 @@ const baTable = new baTableClass(
     },
     {
         defaultItems: {
-            status: '1',
-        },
-    },
-    {
-        // 提交前
-        onSubmit: ({ formEl, operate, items }) => {
-            var items = cloneDeep(items)
-            items.rules = formRef.value.getCheckeds()
-
-            for (const key in items) {
-                if (items[key] === null || items[key] === '') {
-                    delete items[key]
-                }
-            }
-
-            operate = operate.replace(operate[0], operate[0].toLowerCase())
-
-            // 表单验证通过后执行的api请求操作
-            let submitCallback = () => {
-                baTable.form.submitLoading = true
-                baTable.api
-                    .postData(operate, items)
-                    .then((res) => {
-                        baTable.onTableHeaderAction('refresh', {})
-                        baTable.form.submitLoading = false
-                        baTable.form.operateIds?.shift()
-                        if (baTable.form.operateIds!.length > 0) {
-                            baTable.toggleForm('Edit', baTable.form.operateIds)
-                        } else {
-                            baTable.toggleForm()
-                        }
-                        baTable.runAfter('onSubmit', { res })
-                    })
-                    .catch(() => {
-                        baTable.form.submitLoading = false
-                    })
-            }
-
-            if (formEl) {
-                baTable.form.ref = formEl
-                formEl.validate((valid) => {
-                    if (valid) {
-                        submitCallback()
-                    }
-                })
-            } else {
-                submitCallback()
-            }
-            return false
+            status: 1,
         },
     }
 )
+
+// 利用提交前钩子重写提交操作
+baTable.before.onSubmit = ({ formEl, operate, items }) => {
+    let submitCallback = () => {
+        baTable.form.submitLoading = true
+        baTable.api
+            .postData(operate, {
+                ...items,
+                rules: formRef.value?.getCheckeds(),
+            })
+            .then((res) => {
+                baTable.onTableHeaderAction('refresh', {})
+                baTable.form.submitLoading = false
+                baTable.form.operateIds?.shift()
+                if (baTable.form.operateIds!.length > 0) {
+                    baTable.toggleForm('Edit', baTable.form.operateIds)
+                } else {
+                    baTable.toggleForm()
+                }
+                baTable.runAfter('onSubmit', { res })
+            })
+            .catch(() => {
+                baTable.form.submitLoading = false
+            })
+    }
+
+    if (formEl) {
+        baTable.form.ref = formEl
+        formEl.validate((valid) => {
+            if (valid) {
+                submitCallback()
+            }
+        })
+    } else {
+        submitCallback()
+    }
+    return false
+}
+
+// 打开表单后
+baTable.after.toggleForm = ({ operate }) => {
+    if (operate == 'Add') {
+        menuRuleTreeUpdate()
+    }
+}
+
+// 获取到编辑数据后
+baTable.after.getEditData = () => {
+    menuRuleTreeUpdate()
+}
+
+const menuRuleTreeUpdate = () => {
+    getUserRules().then((res) => {
+        baTable.form.extend!.menuRules = res.data.list
+
+        if (baTable.form.items!.rules && baTable.form.items!.rules.length) {
+            if (baTable.form.items!.rules.includes('*')) {
+                let arr: number[] = []
+                for (const key in baTable.form.extend!.menuRules) {
+                    arr.push(baTable.form.extend!.menuRules[key].id)
+                }
+                baTable.form.extend!.defaultCheckedKeys = arr
+            } else {
+                baTable.form.extend!.defaultCheckedKeys = baTable.form.items!.rules
+            }
+        } else {
+            baTable.form.extend!.defaultCheckedKeys = []
+        }
+        baTable.form.extend!.treeKey = uuid()
+    })
+}
 
 provide('baTable', baTable)
 
 onMounted(() => {
     baTable.table.ref = tableRef.value
     baTable.mount()
-    baTable.getIndex()
+    baTable.getData()
 })
 </script>
 

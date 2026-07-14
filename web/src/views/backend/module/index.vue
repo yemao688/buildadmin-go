@@ -2,42 +2,39 @@
     <div class="default-main ba-table-box">
         <TableHeader />
         <Tabs />
-        <BaAccount />
         <GoodsInfo />
         <CommonDialog />
+        <BaAccountDialog v-model="state.dialog.baAccount" :login-callback="() => (state.dialog.baAccount = false)" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { state } from './store'
-import { loadData } from './index'
-import TableHeader from './components/tableHeader.vue'
-import BaAccount from './components/baAccount.vue'
-import Tabs from './components/tabs.vue'
-import GoodsInfo from './components/goodsInfo.vue'
+import { onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import CommonDialog from './components/commonDialog.vue'
-import { useI18n } from 'vue-i18n'
+import GoodsInfo from './components/goodsInfo.vue'
+import TableHeader from './components/tableHeader.vue'
+import Tabs from './components/tabs.vue'
+import { loadData } from './index'
+import { state } from './store'
+import BaAccountDialog from '/@/layouts/backend/components/baAccount.vue'
+import { closeHotUpdate, openHotUpdate } from '/@/utils/vite'
 
 defineOptions({
     name: 'moduleStore/moduleStore',
 })
 
-const { t } = useI18n()
-
 onMounted(() => {
     loadData()
-    if (import.meta.hot) {
-        import.meta.hot.on('vite:beforeFullReload', () => {
-            if (state.common.disableHmr) throw t('This is a deliberate error thrown to prevent a hot update of Vite')
-        })
-        import.meta.hot.on('vite:beforeUpdate', () => {
-            if (state.common.disableHmr) throw t('This is a deliberate error thrown to prevent a hot update of Vite')
-        })
-        import.meta.hot.on('vite:beforePrune', () => {
-            if (state.common.disableHmr) throw t('This is a deliberate error thrown to prevent a hot update of Vite')
-        })
-    }
+    closeHotUpdate('modules')
+})
+onActivated(() => {
+    closeHotUpdate('modules')
+})
+onDeactivated(() => {
+    openHotUpdate('modules')
+})
+onUnmounted(() => {
+    openHotUpdate('modules')
 })
 </script>
 

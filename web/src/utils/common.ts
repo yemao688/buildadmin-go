@@ -1,18 +1,18 @@
-import { nextTick } from 'vue'
-import type { App } from 'vue'
 import * as elIcons from '@element-plus/icons-vue'
-import router from '/@/router/index'
-import Icon from '/@/components/icon/index.vue'
-import { useNavTabs } from '/@/stores/navTabs'
-import { useMemberCenter } from '/@/stores/memberCenter'
-import type { FormInstance } from 'element-plus'
-import { useSiteConfig } from '../stores/siteConfig'
 import { useTitle } from '@vueuse/core'
-import { i18n } from '../lang'
-import { getUrl } from './axios'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { trim, trimStart } from 'lodash-es'
+import type { FormInstance } from 'element-plus'
+import { isArray, isNull, trim, trimStart } from 'lodash-es'
+import type { App } from 'vue'
+import { nextTick } from 'vue'
 import type { TranslateOptions } from 'vue-i18n'
+import { i18n } from '../lang'
+import { useSiteConfig } from '../stores/siteConfig'
+import { getUrl } from './axios'
+import Icon from '/@/components/icon/index.vue'
+import router from '/@/router/index'
+import { adminBaseRoutePath } from '/@/router/static/adminBase'
+import { useMemberCenter } from '/@/stores/memberCenter'
+import { useNavTabs } from '/@/stores/navTabs'
 
 export function registerIcons(app: App) {
     /*
@@ -57,16 +57,13 @@ export function loadJs(url: string): void {
  * 根据路由 meta.title 设置浏览器标题
  */
 export function setTitleFromRoute() {
-    if (typeof router.currentRoute.value.meta.title != 'string') {
-        return
-    }
     nextTick(() => {
-        let webTitle = ''
-        if ((router.currentRoute.value.meta.title as string).indexOf('pagesTitle.') === -1) {
-            webTitle = router.currentRoute.value.meta.title as string
-        } else {
-            webTitle = i18n.global.t(router.currentRoute.value.meta.title as string)
+        if (typeof router.currentRoute.value.meta.title != 'string') {
+            return
         }
+        const webTitle = i18n.global.te(router.currentRoute.value.meta.title)
+            ? i18n.global.t(router.currentRoute.value.meta.title)
+            : router.currentRoute.value.meta.title
         const title = useTitle()
         const siteConfig = useSiteConfig()
         title.value = `${webTitle}${siteConfig.siteName ? ' - ' + siteConfig.siteName : ''}`
@@ -74,13 +71,18 @@ export function setTitleFromRoute() {
 }
 
 /**
- * 设置浏览器标题-只能在路由加载完成后调用
+ * 设置浏览器标题
  * @param webTitle 新的标题
  */
 export function setTitle(webTitle: string) {
-    const title = useTitle()
-    const siteConfig = useSiteConfig()
-    title.value = `${webTitle}${siteConfig.siteName ? ' - ' + siteConfig.siteName : ''}`
+    if (router.currentRoute.value) {
+        router.currentRoute.value.meta.title = webTitle
+    }
+    nextTick(() => {
+        const title = useTitle()
+        const siteConfig = useSiteConfig()
+        title.value = `${webTitle}${siteConfig.siteName ? ' - ' + siteConfig.siteName : ''}`
+    })
 }
 
 /**
@@ -92,7 +94,8 @@ export function isExternal(path: string): boolean {
 }
 
 /**
- * 防抖
+ * 全局防抖
+ * 与 _.debounce 不同的是，间隔期间如果再次传递不同的函数，两个函数也只会执行一次
  * @param fn 执行函数
  * @param ms 间隔毫秒数
  */
@@ -126,9 +129,8 @@ export const getArrayKey = (arr: any, pk: string, value: any): any => {
  * 表单重置
  * @param formEl
  */
-export const onResetForm = (formEl: FormInstance | undefined) => {
-    if (!formEl) return
-    formEl.resetFields && formEl.resetFields()
+export const onResetForm = (formEl?: FormInstance | null) => {
+    typeof formEl?.resetFields == 'function' && formEl.resetFields()
 }
 
 /**
@@ -219,10 +221,8 @@ export function auth(node: string | { name: string; subNodeName?: string }) {
 export const fullUrl = (relativeUrl: string, domain = '') => {
     const siteConfig = useSiteConfig()
     if (!domain) {
-        console.log(siteConfig.cdnUrl)
         domain = siteConfig.cdnUrl ? siteConfig.cdnUrl : getUrl()
     }
-    console.log(relativeUrl,domain)
     if (!relativeUrl) return domain
 
     const regUrl = new RegExp(/^http(s)?:\/\//)
@@ -230,7 +230,13 @@ export const fullUrl = (relativeUrl: string, domain = '') => {
     if (!domain || regUrl.test(relativeUrl) || regexImg.test(relativeUrl)) {
         return relativeUrl
     }
-    return domain + relativeUrl
+
+    let url = domain + relativeUrl
+    if (domain === siteConfig.cdnUrl && siteConfig.cdnUrlParams) {
+        const separator = url.includes('?') ? '&' : '?'
+        url += separator + siteConfig.cdnUrlParams
+    }
+    return url
 }
 
 /**
@@ -260,29 +266,33 @@ export const __ = (key: string, named?: Record<string, unknown>, options?: Trans
         langPath = trim(path, '/').replaceAll('/', '.')
     }
     langPath = langPath ? langPath + '.' + key : key
-    return i18n.global.te(langPath) ? i18n.global.t(langPath, named ?? {}, options) : i18n.global.t(key, named ?? {}, options)
+    return i18n.global.te(langPath)
+        ? i18n.global.t(langPath, named ?? {}, options ? options : {})
+        : i18n.global.t(key, named ?? {}, options ? options : {})
 }
 
 /**
- * 文件类型效验，主要用于云存储
- * 服务端并不能单纯此函数来限制文件上传
- * @param {string} fileName 文件名
- * @param {string} fileType 文件mimetype，不一定存在
+ * 文件类型效验，前端根据服务端配置进行初步检查
+ * @param fileName 文件名
+ * @param fileType 文件 mimeType，不一定存在
  */
 export const checkFileMimetype = (fileName: string, fileType: string) => {
     if (!fileName) return false
     const siteConfig = useSiteConfig()
-    const mimetype = siteConfig.upload.mimetype.toLowerCase().split(',')
+    const allowedSuffixes = isArray(siteConfig.upload.allowedSuffixes)
+        ? siteConfig.upload.allowedSuffixes
+        : siteConfig.upload.allowedSuffixes.toLowerCase().split(',')
+
+    const allowedMimeTypes = isArray(siteConfig.upload.allowedMimeTypes)
+        ? siteConfig.upload.allowedMimeTypes
+        : siteConfig.upload.allowedMimeTypes.toLowerCase().split(',')
 
     const fileSuffix = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase()
-    if (siteConfig.upload.mimetype === '*' || mimetype.includes(fileSuffix) || mimetype.includes('.' + fileSuffix)) {
+    if (allowedSuffixes.includes(fileSuffix) || allowedSuffixes.includes('.' + fileSuffix)) {
         return true
     }
-    if (fileType) {
-        const fileTypeTemp = fileType.toLowerCase().split('/')
-        if (mimetype.includes(fileTypeTemp[0] + '/*') || mimetype.includes(fileType)) {
-            return true
-        }
+    if (fileType && allowedMimeTypes.includes(fileType)) {
+        return true
     }
     return false
 }
@@ -304,17 +314,34 @@ export const arrayFullUrl = (relativeUrls: string | string[], domain = '') => {
 
 /**
  * 格式化时间戳
- * @param dateTime 时间戳
+ * @param dateTime 时间戳，默认使用当前时间戳
  * @param fmt 格式化方式，默认：yyyy-mm-dd hh:MM:ss
  */
 export const timeFormat = (dateTime: string | number | null = null, fmt = 'yyyy-mm-dd hh:MM:ss') => {
-    if (dateTime == 'none') return i18n.global.t('None')
-    if (!dateTime) dateTime = Number(new Date())
-    if (dateTime.toString().length === 10) {
+    if (dateTime == 'none') {
+        return i18n.global.t('None')
+    }
+
+    if (isNull(dateTime)) {
+        dateTime = Number(new Date())
+    }
+
+    /**
+     * 1. 秒级时间戳（10位）需要转换为毫秒级，才能供 Date 对象直接使用
+     * 2. yyyy-mm-dd 也是10位，使用 isFinite 进行排除
+     */
+    if (String(dateTime).length === 10 && isFinite(Number(dateTime))) {
         dateTime = +dateTime * 1000
     }
 
-    const date = new Date(dateTime)
+    let date = new Date(dateTime)
+    if (isNaN(date.getTime())) {
+        date = new Date(Number(dateTime))
+        if (isNaN(date.getTime())) {
+            return 'Invalid Date'
+        }
+    }
+
     let ret
     const opt: anyObj = {
         'y+': date.getFullYear().toString(), // 年

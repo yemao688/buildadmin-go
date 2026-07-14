@@ -15,7 +15,7 @@
                                     <el-radio-group size="large" v-model="state.form.registerType">
                                         <el-radio
                                             class="register-verification-radio"
-                                            label="email"
+                                            value="email"
                                             :disabled="!state.accountVerificationType.includes('email')"
                                             border
                                         >
@@ -23,7 +23,7 @@
                                         </el-radio>
                                         <el-radio
                                             class="register-verification-radio"
-                                            label="mobile"
+                                            value="mobile"
                                             :disabled="!state.accountVerificationType.includes('mobile')"
                                             border
                                         >
@@ -182,10 +182,10 @@
                 >
                     <el-form-item :label="t('user.login.Retrieval method')">
                         <el-radio-group v-model="state.retrievePasswordForm.type">
-                            <el-radio label="email" :disabled="!state.accountVerificationType.includes('email')" border>
+                            <el-radio value="email" :disabled="!state.accountVerificationType.includes('email')" border>
                                 {{ t('user.login.Via email') }}
                             </el-radio>
-                            <el-radio label="mobile" :disabled="!state.accountVerificationType.includes('mobile')" border>
+                            <el-radio value="mobile" :disabled="!state.accountVerificationType.includes('mobile')" border>
                                 {{ t('user.login.Via mobile number') }}
                             </el-radio>
                         </el-radio-group>
@@ -254,7 +254,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, onUnmounted, ref } from 'vue'
+import { reactive, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import Header from '/@/layouts/frontend/components/header.vue'
 import Footer from '/@/layouts/frontend/components/footer.vue'
 import { useSiteConfig } from '/@/stores/siteConfig'
@@ -281,8 +281,8 @@ const router = useRouter()
 const userInfo = useUserInfo()
 const siteConfig = useSiteConfig()
 const memberCenter = useMemberCenter()
-const formRef = ref<FormInstance>()
-const retrieveFormRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
+const retrieveFormRef = useTemplateRef('retrieveFormRef')
 
 interface State {
     form: {
@@ -306,6 +306,7 @@ interface State {
         password: string
     }
     dialogWidth: number
+    userLoginCaptchaSwitch: boolean
     accountVerificationType: string[]
     codeSendCountdown: number
     submitRetrieveLoading: boolean
@@ -335,6 +336,7 @@ const state: State = reactive({
         password: '',
     },
     dialogWidth: 36,
+    userLoginCaptchaSwitch: true,
     accountVerificationType: [],
     codeSendCountdown: 0,
     submitRetrieveLoading: false,
@@ -388,7 +390,7 @@ const resize = () => {
 const onSubmitPre = () => {
     formRef.value?.validate((valid) => {
         if (!valid) return
-        if (state.form.tab == 'login') {
+        if (state.form.tab == 'login' && state.userLoginCaptchaSwitch) {
             clickCaptcha(state.form.captchaId, (captchaInfo: string) => onSubmit(captchaInfo))
         } else {
             onSubmit()
@@ -400,7 +402,7 @@ const onSubmit = (captchaInfo = '') => {
     state.form.captchaInfo = captchaInfo
     checkIn('post', state.form)
         .then((res) => {
-            userInfo.dataFill(res.data.userInfo)
+            userInfo.dataFill(res.data.userInfo, false)
             if (state.to) return (location.href = state.to)
             router.push({ path: res.data.routePath })
         })
@@ -473,7 +475,7 @@ const sendRetrieveCaptcha = (captchaInfo: string) => {
         })
 }
 
-const switchTab = (formRef: FormInstance | undefined = undefined, tab: 'login' | 'register') => {
+const switchTab = (formRef: FormInstance | null | undefined = undefined, tab: 'login' | 'register') => {
     state.form.tab = tab
     if (tab == 'register') state.form.username = ''
     if (formRef) formRef.clearValidate()
@@ -500,6 +502,7 @@ onMounted(async () => {
     useEventListener(window, 'resize', resize)
 
     checkIn('get').then((res) => {
+        state.userLoginCaptchaSwitch = res.data.userLoginCaptchaSwitch
         state.accountVerificationType = res.data.accountVerificationType
         state.retrievePasswordForm.type = res.data.accountVerificationType.length > 0 ? res.data.accountVerificationType[0] : ''
     })

@@ -1,27 +1,17 @@
-import { reactive } from 'vue'
 import { defineStore } from 'pinia'
+import { reactive } from 'vue'
+import type { RouteRecordRaw } from 'vue-router'
 import type { MemberCenter } from '/@/stores/interface/index'
-import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router'
 
 export const useMemberCenter = defineStore('memberCenter', () => {
     const state: MemberCenter = reactive({
-        // 是否开启会员中心
-        open: false,
-        // 布局模式
+        open: true,
         layoutMode: 'Default',
-        // 当前激活菜单
-        activeRoute: null,
-        // 从后台加载到的菜单
         viewRoutes: [],
-        // 是否显示一级菜单标题(当有多个一级菜单分组时显示)
         showHeadline: false,
-        // 权限节点
         authNode: new Map(),
-        // 收缩布局
         shrink: false,
-        // 菜单展开（小屏设备）
         menuExpand: false,
-        // 顶栏会员菜单下拉项
         navUserMenus: [],
     })
 
@@ -49,10 +39,6 @@ export const useMemberCenter = defineStore('memberCenter', () => {
         state.showHeadline = show
     }
 
-    const setActiveRoute = (route: RouteLocationNormalized | RouteRecordRaw) => {
-        state.activeRoute = route
-    }
-
     const setShrink = (shrink: boolean) => {
         state.shrink = shrink
     }
@@ -77,7 +63,6 @@ export const useMemberCenter = defineStore('memberCenter', () => {
         mergeAuthNode,
         setViewRoutes,
         setShowHeadline,
-        setActiveRoute,
         setShrink,
         setStatus,
         setLayoutMode,

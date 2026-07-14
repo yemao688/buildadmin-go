@@ -4,15 +4,16 @@
             <Header />
             <Main />
         </el-container>
+        <CloseFullScreen v-if="navTabs.state.tabFullScreen" />
     </el-container>
-    <CloseFullScreen v-if="navTabs.state.tabFullScreen" />
 </template>
 
 <script setup lang="ts">
+import CloseFullScreen from '/@/layouts/backend/components/closeFullScreen.vue'
 import Header from '/@/layouts/backend/components/header.vue'
 import Main from '/@/layouts/backend/router-view/main.vue'
-import CloseFullScreen from '/@/layouts/backend/components/closeFullScreen.vue'
 import { useNavTabs } from '/@/stores/navTabs'
+
 const navTabs = useNavTabs()
 </script>
 

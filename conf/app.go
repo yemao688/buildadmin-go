@@ -18,6 +18,8 @@ type App struct {
 	AutoWriteAdminLog  bool   `mapstructure:"auto_write_admin_log" json:"auto_write_admin_log" yaml:"auto_write_admin_log"`
 	DefaultAvatar      string `mapstructure:"default_avatar" json:"default_avatar" yaml:"default_avatar"`
 	CdnUrl             string `mapstructure:"cdn_url" json:"cdn_url" yaml:"cdn_url"`
+	CdnUrlParams       string `mapstructure:"cdn_url_params" json:"cdnUrlParams" yaml:"cdn_url_params"`
+	UserLoginCaptcha   bool   `mapstructure:"user_login_captcha" json:"userLoginCaptcha" yaml:"user_login_captcha"`
 	Version            string `mapstructure:"version" json:"version" yaml:"version"`
 	ApiUrl             string `mapstructure:"api_url" json:"api_url" yaml:"api_url"`
 }

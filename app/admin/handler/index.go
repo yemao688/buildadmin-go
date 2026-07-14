@@ -53,15 +53,17 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		},
 		"menus": menus,
 		"siteConfig": map[string]any{
-			"siteName": basicConfig["site_name"],
-			"version":  basicConfig["version"],
-			"cdnUrl":   utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
-			"apiUrl":   h.config.App.ApiUrl,
-			"upload":   h.config.Upload,
+			"siteName":         basicConfig["site_name"],
+			"version":          basicConfig["version"],
+			"cdnUrl":           utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
+			"apiUrl":           h.config.App.ApiUrl,
+			"upload":           h.config.Upload,
+			"cdnUrlParams":     h.config.App.CdnUrlParams,
+			"userLoginCaptcha": h.config.App.UserLoginCaptcha,
 		},
 		"terminal": map[string]any{
-			"installServicePort": h.config.Terminal.InstallServicePort,
-			"npmPackageManager":  h.config.Terminal.NpmPackageManager,
+			"npmPackageManager":    h.config.Terminal.NpmPackageManager,
+			"phpDevelopmentServer": false,
 		},
 	})
 }

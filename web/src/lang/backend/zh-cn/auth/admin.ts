@@ -1,9 +1,9 @@
 export default {
     username: '用户名',
     nickname: '昵称',
-    grouping: '角色组',
-    'head portrait': '头像',
-    mailbox: '邮箱',
+    group: '角色组',
+    avatar: '头像',
+    email: '电子邮箱',
     mobile: '手机号',
     'Last login': '最后登录',
     Password: '密码',

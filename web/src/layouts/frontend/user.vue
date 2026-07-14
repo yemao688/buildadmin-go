@@ -10,7 +10,7 @@ import { useMemberCenter } from '/@/stores/memberCenter'
 import { initialize } from '/@/api/frontend/index'
 import { getFirstRoute, routePush } from '/@/utils/router'
 import { memberCenterBaseRoutePath } from '/@/router/static/memberCenterBase'
-import { useRoute, useRouter, onBeforeRouteUpdate } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Default from '/@/layouts/frontend/container/default.vue'
 import Disable from '/@/layouts/frontend/container/disable.vue'
 import { ElNotification } from 'element-plus'
@@ -28,10 +28,6 @@ const router = useRouter()
 const userInfo = useUserInfo()
 const siteConfig = useSiteConfig()
 const memberCenter = useMemberCenter()
-
-onBeforeRouteUpdate((to) => {
-    memberCenter.setActiveRoute(to)
-})
 
 onMounted(async () => {
     const ret = await userMounted()

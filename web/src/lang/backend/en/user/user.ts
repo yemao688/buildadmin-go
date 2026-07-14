@@ -1,8 +1,8 @@
 export default {
     'User name': 'Username',
     nickname: 'Nickname',
-    grouping: 'Group',
-    'head portrait': 'Profile picture',
+    group: 'Group',
+    avatar: 'Avatar',
     Gender: 'Gender',
     male: 'Male',
     female: 'Female',

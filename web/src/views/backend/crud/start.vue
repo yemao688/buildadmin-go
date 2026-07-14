@@ -28,18 +28,19 @@
                     <ol>
                         <li>
                             {{ t('crud.crud.experience 1 1') }}
-                            <a target="_blank" href="https://wonderful-code.gitee.io/guide/other/developerMustSee.html" rel="noopener noreferrer">
+                            <a target="_blank" href="https://doc.buildadmin.com/guide/other/developerMustSee.html" rel="noopener noreferrer">
                                 {{ t('crud.crud.experience 1 2') }}
                             </a>
                             {{ t('crud.crud.experience 1 3') }}
                         </li>
                         <li>
                             {{ t('crud.crud.experience 2 1') }}
-                            <code>{{ t('crud.crud.experience 2 2') }}</code>
-                            {{ t('crud.crud.experience 2 3') }}<code>test_build</code>{{ t('crud.crud.data sheet') }}
+                            <code>{{ t('crud.crud.create') }}</code>
+                            {{ t('crud.crud.or') }}
+                            <code> {{ t('crud.crud.experience 2 2') }}{{ t('crud.crud.experience 2 3') }} </code>
                         </li>
                         <li>
-                            {{ t('crud.crud.experience 3 1') }}<code>{{ t('crud.crud.experience 3 2') }}</code>
+                            {{ t('crud.crud.experience 3 1') }} <code>{{ t('crud.crud.experience 3 2') }}</code>
                             {{ t('crud.crud.experience 3 3') }}
                             <code>{{ t('crud.crud.experience 3 4') }}</code>
                         </li>
@@ -47,7 +48,7 @@
                     <el-alert v-if="!isDev()" class="no-dev" type="warning" :show-icon="true" :closable="false">
                         <template #title>
                             <span>{{ t('crud.crud.experience 4 1') }}</span>
-                            <a target="_blank" href="https://wonderful-code.gitee.io/guide/other/developerMustSee.html" rel="noopener noreferrer">
+                            <a target="_blank" href="https://doc.buildadmin.com/guide/other/developerMustSee.html" rel="noopener noreferrer">
                                 {{ t('crud.crud.experience 4 2') }}
                             </a>
                             <span>
@@ -59,7 +60,7 @@
             </el-row>
 
             <el-dialog
-                class="ba-operate-dialog select-db-dialog"
+                class="ba-operate-dialog select-table-dialog"
                 v-model="state.dialog.visible"
                 :title="state.dialog.type == 'sql' ? t('crud.crud.Please enter SQL') : t('crud.crud.Please select a data table')"
                 :destroy-on-close="true"
@@ -67,7 +68,7 @@
                 <el-form
                     :label-width="140"
                     @keyup.enter="onSubmit()"
-                    class="select-db-form"
+                    class="select-table-form"
                     ref="formRef"
                     :model="crudState.startData"
                     :rules="rules"
@@ -87,22 +88,48 @@
                     </template>
                     <template v-else-if="state.dialog.type == 'db'">
                         <FormItem
-                            :label="t('crud.crud.data sheet')"
-                            class="select-db"
-                            v-model="crudState.startData.db"
-                            type="select"
-                            :key="JSON.stringify(state.dialog.dbList)"
-                            :placeholder="t('crud.crud.Please select a data table')"
-                            :data="{
-                                content: state.dialog.dbList,
-                            }"
-                            :attr="{
-                                blockHelp: t('crud.crud.data sheet help'),
-                            }"
+                            :label="t('Database connection')"
+                            v-model="crudState.startData.databaseConnection"
+                            type="remoteSelect"
+                            :label-width="140"
+                            :block-help="t('Database connection help')"
                             :input-attr="{
-                                onChange: onDbStartChange,
+                                pk: 'key',
+                                field: 'key',
+                                remoteUrl: getDatabaseConnectionListUrl,
+                                onChange: onDatabaseChange,
                             }"
-                            prop="db"
+                            :placeholder="t('Please select field', { field: t('Database connection') })"
+                        />
+                        <FormItem
+                            :label="t('crud.crud.data sheet')"
+                            v-model="crudState.startData.table"
+                            type="remoteSelect"
+                            :key="crudState.startData.databaseConnection"
+                            :placeholder="t('crud.crud.Please select a data table')"
+                            :label-width="140"
+                            :block-help="t('crud.crud.data sheet help')"
+                            :input-attr="{
+                                pk: 'table',
+                                field: 'comment',
+                                params: {
+                                    connection: crudState.startData.databaseConnection,
+                                    samePrefix: 1,
+                                    excludeTable: [
+                                        'area',
+                                        'token',
+                                        'captcha',
+                                        'admin_group_access',
+                                        'config',
+                                        'admin_log',
+                                        'user_money_log',
+                                        'user_score_log',
+                                    ],
+                                },
+                                remoteUrl: getTableListUrl,
+                                onRow: onTableStartChange,
+                            }"
+                            prop="table"
                         />
                         <el-alert
                             v-if="state.successRecord"
@@ -131,24 +158,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { getDatabaseList, checkCrudLog } from '/@/api/backend/crud'
+import { reactive, useTemplateRef } from 'vue'
+import { checkCrudLog } from '/@/api/backend/crud'
 import FormItem from '/@/components/formItem/index.vue'
 import { changeStep, state as crudState } from '/@/views/backend/crud/index'
 import { ElNotification } from 'element-plus'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
 import CrudLog from '/@/views/backend/crud/log.vue'
 import { useI18n } from 'vue-i18n'
+import { getDatabaseConnectionListUrl, getTableListUrl } from '/@/api/common'
 
 const { t } = useI18n()
-const sqlInputRef = ref()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
+const sqlInputRef = useTemplateRef('sqlInputRef')
+
 const state = reactive({
     dialog: {
         type: '',
         visible: false,
-        dbList: [],
     },
     showLog: false,
     loading: false,
@@ -160,23 +188,19 @@ const onShowDialog = (type: string) => {
     state.dialog.visible = true
     if (type == 'sql') {
         setTimeout(() => {
-            sqlInputRef.value.focus()
+            sqlInputRef.value?.focus()
         }, 200)
     } else if (type == 'db') {
         state.successRecord = 0
-        crudState.startData.db = ''
-        getDatabaseList().then((res) => {
-            state.dialog.dbList = res.data.dbs
-        })
+        crudState.startData.table = ''
     }
 }
 
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
-    db: [buildValidatorData({ name: 'required', message: t('crud.crud.Please select a data table') })],
+    table: [buildValidatorData({ name: 'required', message: t('crud.crud.Please select a data table') })],
 })
 
 const onSubmit = () => {
-    if (!formRef.value) return
     if (state.dialog.type == 'sql' && !crudState.startData.sql) {
         ElNotification({
             type: 'error',
@@ -184,18 +208,23 @@ const onSubmit = () => {
         })
         return
     }
-    formRef.value.validate((valid) => {
+    formRef.value?.validate((valid) => {
         if (valid) {
             changeStep(state.dialog.type)
         }
     })
 }
 
-const onDbStartChange = () => {
-    if (crudState.startData.db) {
+const onDatabaseChange = () => {
+    state.successRecord = 0
+    crudState.startData.table = ''
+}
+
+const onTableStartChange = () => {
+    if (crudState.startData.table) {
         // 检查是否有CRUD记录
         state.loading = true
-        checkCrudLog(crudState.startData.db)
+        checkCrudLog(crudState.startData.table, crudState.startData.databaseConnection)
             .then((res) => {
                 state.successRecord = res.data.id
             })
@@ -218,16 +247,17 @@ const isDev = () => {
 </script>
 
 <style scoped lang="scss">
-:deep(.select-db-dialog) .el-dialog__body {
+:deep(.select-table-dialog) .el-dialog__body {
     height: unset;
-    .select-db-form {
+    .select-table-form {
         width: 88%;
+        padding: 40px 0;
     }
     .success-record-alert {
         width: calc(100% - 140px);
         margin-left: 140px;
         margin-bottom: 30px;
-        margin-top: -30px;
+        margin-top: -10px;
     }
 }
 .crud-title {
@@ -263,9 +293,6 @@ const isDev = () => {
 }
 .sql-input {
     margin: 20px 0;
-}
-.select-db {
-    margin: 40px 0;
 }
 .crud-tips {
     margin-top: 60px;

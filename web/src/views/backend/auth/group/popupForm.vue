@@ -16,7 +16,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     ref="formRef"
@@ -35,8 +35,10 @@
                         :input-attr="{
                             params: { isTree: true },
                             field: 'name',
-                            'remote-url': baTable.api.actionUrl.get('index'),
+                            remoteUrl: baTable.api.actionUrl.get('index'),
                             placeholder: t('Click select'),
+                            emptyValues: ['', null, undefined, 0],
+                            valueOnClear: 0,
                         }"
                     />
 
@@ -50,20 +52,24 @@
                     <el-form-item prop="auth" :label="t('auth.group.jurisdiction')">
                         <el-tree
                             ref="treeRef"
-                            :key="state.treeKey"
-                            :default-checked-keys="state.defaultCheckedKeys"
+                            :key="baTable.form.extend!.treeKey"
+                            :default-checked-keys="baTable.form.extend!.defaultCheckedKeys"
                             :default-expand-all="true"
                             show-checkbox
                             node-key="id"
                             :props="{ children: 'children', label: 'title', class: treeNodeClass }"
-                            :data="state.menuRules"
+                            :data="baTable.form.extend!.menuRules"
+                            class="w100"
                         />
                     </el-form-item>
                     <FormItem
                         :label="t('State')"
                         v-model="baTable.form.items!.status"
                         type="radio"
-                        :data="{ content: { '0': t('Disable'), '1': t('Enable') }, childrenAttr: { border: true } }"
+                        :input-attr="{
+                            border: true,
+                            content: { 0: t('Disable'), 1: t('Enable') },
+                        }"
                     />
                 </el-form>
             </div>
@@ -80,39 +86,21 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch, inject } from 'vue'
+import type { FormItemRule } from 'element-plus'
+import type { Node as ElTreeNode } from 'element-plus/es/components/tree/src/model/node'
+import { inject, reactive, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type baTableClass from '/@/utils/baTable'
 import FormItem from '/@/components/formItem/index.vue'
-import { getAdminRules } from '/@/api/backend/auth/group'
-import type { FormInstance, ElTree, FormItemRule } from 'element-plus'
-import { uuid } from '/@/utils/random'
-import { buildValidatorData } from '/@/utils/validate'
-import type Node from 'element-plus/es/components/tree/src/model/node'
 import { useConfig } from '/@/stores/config'
-
-interface MenuRules {
-    id: number
-    title: string
-    children: MenuRules[]
-}
+import type baTableClass from '/@/utils/baTable'
+import { buildValidatorData } from '/@/utils/validate'
 
 const config = useConfig()
-const formRef = ref<FormInstance>()
-const treeRef = ref<InstanceType<typeof ElTree>>()
+const formRef = useTemplateRef('formRef')
+const treeRef = useTemplateRef('treeRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
-
-const state: {
-    treeKey: string
-    defaultCheckedKeys: number[]
-    menuRules: MenuRules[]
-} = reactive({
-    treeKey: uuid(),
-    defaultCheckedKeys: [],
-    menuRules: [],
-})
 
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     name: [buildValidatorData({ name: 'required', title: t('auth.group.Group name') })],
@@ -144,15 +132,11 @@ const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     ],
 })
 
-getAdminRules().then((res) => {
-    state.menuRules = res.data.list
-})
-
 const getCheckeds = () => {
     return treeRef.value!.getCheckedKeys().concat(treeRef.value!.getHalfCheckedKeys())
 }
 
-const treeNodeClass = (data: anyObj, node: Node) => {
+const treeNodeClass = (data: anyObj, node: ElTreeNode) => {
     if (node.isLeaf) return ''
     let addClass = true
     for (const key in node.childNodes) {
@@ -166,26 +150,6 @@ const treeNodeClass = (data: anyObj, node: Node) => {
 defineExpose({
     getCheckeds,
 })
-
-watch(
-    () => baTable.form.items!.rules,
-    () => {
-        if (baTable.form.items!.rules && baTable.form.items!.rules.length) {
-            if (baTable.form.items!.rules.includes('*')) {
-                let arr: number[] = []
-                for (const key in state.menuRules) {
-                    arr.push(state.menuRules[key].id)
-                }
-                state.defaultCheckedKeys = arr
-            } else {
-                state.defaultCheckedKeys = baTable.form.items!.rules
-            }
-        } else {
-            state.defaultCheckedKeys = []
-        }
-        state.treeKey = uuid()
-    }
-)
 </script>
 
 <style scoped lang="scss">

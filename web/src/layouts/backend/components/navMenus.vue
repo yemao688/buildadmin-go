@@ -1,10 +1,43 @@
 <template>
-    <div class="nav-menus" :class="configStore.layout.layoutMode">
+    <div class="nav-menus" :class="[configStore.layout.layoutMode, configStore.layout.shrink ? 'shrink' : '']">
+        <!-- 需要重启 Vite 热更新服务警告 -->
+        <el-popover
+            ref="reloadHotServerPopover"
+            @show="onCurrentNavMenu(true, 'reloadHotServer')"
+            @hide="onCurrentNavMenu(false, 'reloadHotServer')"
+            :width="360"
+            v-if="hotUpdateState.dirtyFile"
+        >
+            <div>
+                <div class="el-popover__title">{{ t('vite.Reload hot server title') }}</div>
+                <div class="reload-hot-server-content">
+                    <p>
+                        <span>{{ t('vite.Reload hot server tips 1') }}</span>
+                        <span>【{{ t(`vite.Close type ${hotUpdateState.closeType}`) }}】</span>
+                        <span>{{ t('vite.Reload hot server tips 2') }}</span>
+                    </p>
+                    <p>{{ t('vite.Reload hot server tips 3') }}</p>
+                    <div class="reload-hot-server-buttons">
+                        <el-button @click="onHotServerOpt('cancel')">{{ t('vite.Later') }}</el-button>
+                        <el-button @click="onHotServerOpt('reload')" type="primary">{{ t('vite.Restart hot update') }}</el-button>
+                    </div>
+                </div>
+            </div>
+            <template #reference>
+                <div class="nav-menu-item" :class="state.currentNavMenu == 'reloadHotServer' ? 'hover' : ''">
+                    <Icon color="var(--el-color-danger)" class="nav-menu-icon" name="el-icon-Warning" size="18" />
+                </div>
+            </template>
+        </el-popover>
+
+        <!-- 站点主页 -->
         <router-link class="h100" target="_blank" :title="t('Home')" to="/">
             <div class="nav-menu-item">
                 <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" name="el-icon-Monitor" size="18" />
             </div>
         </router-link>
+
+        <!-- 语言切换 -->
         <el-dropdown
             @visible-change="onCurrentNavMenu($event, 'lang')"
             class="h100"
@@ -25,6 +58,8 @@
                 </el-dropdown-menu>
             </template>
         </el-dropdown>
+
+        <!-- 全屏切换 -->
         <div @click="onFullScreen" class="nav-menu-item" :class="state.isFullScreen ? 'hover' : ''">
             <Icon
                 :color="configStore.getColorVal('headerBarTabColor')"
@@ -35,11 +70,15 @@
             />
             <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" v-else name="el-icon-FullScreen" size="18" />
         </div>
+
+        <!-- 终端 - 仅超管 -->
         <div v-if="adminInfo.super" @click="terminal.toggle()" class="nav-menu-item pt2">
             <el-badge :is-dot="terminal.state.showDot">
                 <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" name="local-terminal" size="26" />
             </el-badge>
         </div>
+
+        <!-- 清理缓存 - 仅超管 -->
         <el-dropdown
             v-if="adminInfo.super"
             @visible-change="onCurrentNavMenu($event, 'clear')"
@@ -61,6 +100,8 @@
                 </el-dropdown-menu>
             </template>
         </el-dropdown>
+
+        <!-- 管理员信息 -->
         <el-popover
             v-if="siteConfig.userInitialize"
             @show="onCurrentNavMenu(true, 'adminInfo')"
@@ -74,55 +115,55 @@
         >
             <template #reference>
                 <div class="admin-info" :class="state.currentNavMenu == 'adminInfo' ? 'hover' : ''">
-                    <el-avatar :size="25" fit="fill">
-                        <img :src="fullUrl(adminInfo.avatar)" alt="" />
-                    </el-avatar>
+                    <el-avatar :size="25" :src="fullUrl(adminInfo.avatar)"></el-avatar>
                     <div class="admin-name">{{ adminInfo.nickname }}</div>
                 </div>
             </template>
             <div>
                 <div class="admin-info-base">
-                    <el-avatar :size="70" fit="fill">
-                        <img :src="fullUrl(adminInfo.avatar)" alt="" />
-                    </el-avatar>
+                    <el-avatar :size="70" :src="fullUrl(adminInfo.avatar)"></el-avatar>
                     <div class="admin-info-other">
                         <div class="admin-info-name">{{ adminInfo.nickname }}</div>
-                        <div class="admin-info-lasttime">{{ adminInfo.last_login_time }}</div>
+                        <div class="admin-info-lasttime">{{ timeFormat(adminInfo.last_login_time) }}</div>
                     </div>
                 </div>
                 <div class="admin-info-footer">
-                    <el-button @click="onAdminInfo" type="primary" plain>{{ t('layouts.personal data') }}</el-button>
-                    <el-button @click="onLogout" type="danger" plain>{{ t('layouts.cancellation') }}</el-button>
+                    <el-button @click="onAdminInfo" type="primary" plain>{{ t('layouts.Profile') }}</el-button>
+                    <el-button @click="onLogout" type="danger" plain>{{ t('layouts.Logout') }}</el-button>
                 </div>
             </div>
         </el-popover>
-        <div @click="configStore.setLayout('showDrawer', true)" class="nav-menu-item">
+
+        <!-- 配置 -->
+        <div @click="configStore.setLayout('showDrawer', true)" class="nav-menu-item ba-layout-config-btn">
             <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" name="fa fa-cogs" size="18" />
         </div>
+
         <Config />
-        <TerminalVue />
+        <Terminal />
     </div>
 </template>
 
 <script lang="ts" setup>
-import { reactive } from 'vue'
-import { editDefaultLang } from '/@/lang'
-import screenfull from 'screenfull'
-import { useConfig } from '/@/stores/config'
 import { ElMessage } from 'element-plus'
+import screenfull from 'screenfull'
+import { reactive, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Config from './config.vue'
-import { useAdminInfo } from '/@/stores/adminInfo'
-import { useTerminal } from '/@/stores/terminal'
-import { Local, Session } from '/@/utils/storage'
-import { ADMIN_INFO, BA_ACCOUNT } from '/@/stores/constant/cacheKey'
-import router from '/@/router'
-import { routePush } from '/@/utils/router'
 import { logout } from '/@/api/backend/index'
 import { postClearCache } from '/@/api/common'
-import TerminalVue from '/@/components/terminal/index.vue'
-import { fullUrl } from '/@/utils/common'
+import Terminal from '/@/components/terminal/index.vue'
+import { editDefaultLang } from '/@/lang'
+import router from '/@/router'
+import { useAdminInfo } from '/@/stores/adminInfo'
+import { useConfig } from '/@/stores/config'
+import { ADMIN_INFO, BA_ACCOUNT } from '/@/stores/constant/cacheKey'
 import { useSiteConfig } from '/@/stores/siteConfig'
+import { useTerminal } from '/@/stores/terminal'
+import { fullUrl, timeFormat } from '/@/utils/common'
+import { routePush } from '/@/utils/router'
+import { Local, Session } from '/@/utils/storage'
+import { hotUpdateState, reloadServer } from '/@/utils/vite'
 
 const { t } = useI18n()
 
@@ -130,6 +171,7 @@ const adminInfo = useAdminInfo()
 const configStore = useConfig()
 const terminal = useTerminal()
 const siteConfig = useSiteConfig()
+const reloadHotServerPopover = useTemplateRef('reloadHotServerPopover')
 
 const state = reactive({
     isFullScreen: false,
@@ -140,6 +182,14 @@ const state = reactive({
 
 const onCurrentNavMenu = (status: boolean, name: string) => {
     state.currentNavMenu = status ? name : ''
+}
+
+const onHotServerOpt = (opt: 'reload' | 'cancel') => {
+    if (opt == 'cancel') {
+        reloadHotServerPopover.value?.hide()
+    } else {
+        reloadServer('manual')
+    }
 }
 
 const onFullScreen = () => {
@@ -180,9 +230,20 @@ const onClearCache = (type: string) => {
 </script>
 
 <style scoped lang="scss">
-.nav-menus.Default {
+.nav-menus.Default:not(.shrink),
+.nav-menus.LeftSplit:not(.shrink) {
     border-radius: var(--el-border-radius-base);
     box-shadow: var(--el-box-shadow-light);
+}
+.reload-hot-server-content {
+    font-size: var(--el-font-size-small);
+    p {
+        margin-bottom: 6px;
+    }
+    .reload-hot-server-buttons {
+        display: flex;
+        justify-content: flex-end;
+    }
 }
 .nav-menus {
     display: flex;

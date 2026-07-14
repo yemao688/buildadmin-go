@@ -15,7 +15,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     v-if="!baTable.form.loading"
@@ -38,16 +38,38 @@
                         type="select"
                         v-model="baTable.form.items!.controller"
                         prop="controller"
-                        :data="{ content: props.formData.controllerList }"
+                        :input-attr="{ content: baTable.form.extend!.controllerList }"
                         :placeholder="t('security.dataRecycle.The data collection mechanism will monitor delete operations under this controller')"
                     />
                     <FormItem
+                        :label="t('Database connection')"
+                        v-model="baTable.form.items!.connection"
+                        type="remoteSelect"
+                        :block-help="t('Database connection help')"
+                        :input-attr="{
+                            pk: 'key',
+                            field: 'key',
+                            remoteUrl: getDatabaseConnectionListUrl,
+                            valueOnClear: '',
+                        }"
+                    />
+                    <FormItem
                         :label="t('security.dataRecycle.Corresponding data sheet')"
-                        type="select"
+                        type="remoteSelect"
                         v-model="baTable.form.items!.data_table"
+                        :key="baTable.form.items!.connection"
+                        :input-attr="{
+                            pk: 'table',
+                            field: 'comment',
+                            params: {
+                                connection: baTable.form.items!.connection,
+                                samePrefix: 1,
+                                excludeTable: ['area', 'token', 'captcha', 'admin_group_access', 'user_money_log', 'user_score_log'],
+                            },
+                            remoteUrl: getTableListUrl,
+                            onRow: onTableChange,
+                        }"
                         prop="data_table"
-                        :data="{ content: props.formData.tableList }"
-                        :input-attr="{ onChange: onTableChange }"
                     />
                     <FormItem
                         :label="t('security.dataRecycle.Data table primary key')"
@@ -60,7 +82,10 @@
                         type="radio"
                         v-model="baTable.form.items!.status"
                         prop="status"
-                        :data="{ content: { '0': t('Disable'), '1': t('Enable') } }"
+                        :input-attr="{
+                            border: true,
+                            content: { 0: t('Disable'), 1: t('Enable') },
+                        }"
                     />
                 </el-form>
             </div>
@@ -77,30 +102,17 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, inject } from 'vue'
+import { reactive, inject, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type baTableClass from '/@/utils/baTable'
 import FormItem from '/@/components/formItem/index.vue'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
-import { getTablePk } from '/@/api/common'
+import { getTablePk, getTableListUrl, getDatabaseConnectionListUrl } from '/@/api/common'
 import { useConfig } from '/@/stores/config'
 
-interface Props {
-    formData: {
-        tableList?: anyObj
-        controllerList?: anyObj
-    }
-}
-
-const props = withDefaults(defineProps<Props>(), {
-    formData: () => {
-        return {}
-    },
-})
-
 const config = useConfig()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
@@ -124,9 +136,9 @@ const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     primary_key: [buildValidatorData({ name: 'required', trigger: 'change', title: t('security.dataRecycle.Data table primary key') })],
 })
 
-const onTableChange = (val: string) => {
-    if (!val) return
-    getTablePk(val).then((res) => {
+const onTableChange = () => {
+    if (!baTable.form.items!.data_table) return
+    getTablePk(baTable.form.items!.data_table, baTable.form.items!.connection).then((res) => {
         baTable.form.items!.primary_key = res.data.pk
         baTable.form.defaultItems!.primary_key = res.data.pk
     })

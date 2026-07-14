@@ -102,6 +102,10 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		AdminRule

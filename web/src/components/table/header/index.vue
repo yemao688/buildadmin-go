@@ -1,30 +1,30 @@
 <template>
-    <!-- 通用搜索 -->
-    <transition name="el-zoom-in-bottom" mode="out-in">
-        <ComSearch v-show="props.buttons.includes('comSearch') && baTable.table.showComSearch">
+    <!-- 公共搜索 -->
+    <el-collapse-transition>
+        <ComSearch v-if="props.buttons.includes('comSearch') && baTable.table.showComSearch">
             <template v-for="(slot, idx) in $slots" :key="idx" #[idx]>
                 <slot :name="idx"></slot>
             </template>
         </ComSearch>
-    </transition>
+    </el-collapse-transition>
 
     <!-- 操作按钮组 -->
     <div v-bind="$attrs" class="table-header ba-scroll-style">
         <slot name="refreshPrepend"></slot>
         <el-tooltip v-if="props.buttons.includes('refresh')" :content="t('Refresh')" placement="top">
-            <el-button v-blur @click="onAction('refresh', { loading: true })" color="#40485b" class="table-header-operate" type="info">
+            <el-button v-blur @click="onAction('refresh', { loading: true })" color="#40485b" class="table-header-operate btns-ml-12" type="info">
                 <Icon name="fa fa-refresh" />
             </el-button>
         </el-tooltip>
         <slot name="refreshAppend"></slot>
         <el-tooltip v-if="props.buttons.includes('add') && baTable.auth('add')" :content="t('Add')" placement="top">
-            <el-button v-blur @click="onAction('add')" class="table-header-operate" type="primary">
+            <el-button v-blur @click="onAction('add')" class="table-header-operate btns-ml-12" type="primary">
                 <Icon name="fa fa-plus" />
                 <span class="table-header-operate-text">{{ t('Add') }}</span>
             </el-button>
         </el-tooltip>
         <el-tooltip v-if="props.buttons.includes('edit') && baTable.auth('edit')" :content="t('Edit selected row')" placement="top">
-            <el-button v-blur @click="onAction('edit')" :disabled="!enableBatchOpt" class="table-header-operate" type="primary">
+            <el-button v-blur @click="onAction('edit')" :disabled="!enableBatchOpt" class="table-header-operate btns-ml-12" type="primary">
                 <Icon name="fa fa-pencil" />
                 <span class="table-header-operate-text">{{ t('Edit') }}</span>
             </el-button>
@@ -39,7 +39,7 @@
             :disabled="!enableBatchOpt"
         >
             <template #reference>
-                <div class="mlr-12">
+                <div class="btns-ml-12">
                     <el-tooltip :content="t('Delete selected row')" placement="top">
                         <el-button v-blur :disabled="!enableBatchOpt" class="table-header-operate" type="danger">
                             <Icon name="fa fa-trash" />
@@ -57,7 +57,7 @@
             <el-button
                 v-blur
                 @click="baTable.onTableHeaderAction('unfold', { unfold: !baTable.table.expandAll })"
-                class="table-header-operate"
+                class="table-header-operate btns-ml-12"
                 :type="baTable.table.expandAll ? 'danger' : 'warning'"
             >
                 <span class="table-header-operate-text">{{ baTable.table.expandAll ? t('Shrink all') : t('Expand all') }}</span>
@@ -74,7 +74,7 @@
                 v-if="props.buttons.includes('quickSearch')"
                 v-model="baTable.table.filter!.quickSearch"
                 class="xs-hidden quick-search"
-                @input="debounce(onSearchInput, 500)()"
+                @input="onSearchInput"
                 :placeholder="quickSearchPlaceholder ? quickSearchPlaceholder : t('Search')"
                 clearable
             />
@@ -85,6 +85,7 @@
                         :class="props.buttons.includes('comSearch') ? 'right-border' : ''"
                         color="#dcdfe6"
                         plain
+                        v-blur
                     >
                         <Icon size="14" name="el-icon-Grid" />
                     </el-button>
@@ -94,8 +95,7 @@
                                 <el-checkbox
                                     v-if="item.prop"
                                     @change="onChangeShowColumn($event, item.prop!)"
-                                    :checked="!item.show"
-                                    :model-value="item.show"
+                                    :model-value="item.show !== false"
                                     size="small"
                                     :label="item.label"
                                 />
@@ -114,6 +114,7 @@
                         @click="baTable.table.showComSearch = !baTable.table.showComSearch"
                         color="#dcdfe6"
                         plain
+                        v-blur
                     >
                         <Icon size="14" name="el-icon-Search" />
                     </el-button>
@@ -124,11 +125,11 @@
 </template>
 
 <script setup lang="ts">
+import { debounce } from 'lodash-es'
 import { computed, inject } from 'vue'
-import { debounce } from '/@/utils/common'
-import type baTableClass from '/@/utils/baTable'
-import ComSearch from '/@/components/table/comSearch/index.vue'
 import { useI18n } from 'vue-i18n'
+import ComSearch from '/@/components/table/comSearch/index.vue'
+import type baTableClass from '/@/utils/baTable'
 
 const { t } = useI18n()
 const baTable = inject('baTable') as baTableClass
@@ -154,13 +155,13 @@ const columnDisplay = computed(() => {
 
 const enableBatchOpt = computed(() => (baTable.table.selection!.length > 0 ? true : false))
 
-const onAction = (event: string, data: anyObj = {}) => {
+const onAction = (event: BaTableHeaderActionEventName, data: anyObj = {}) => {
     baTable.onTableHeaderAction(event, data)
 }
 
-const onSearchInput = () => {
+const onSearchInput = debounce(() => {
     baTable.onTableHeaderAction('quick-search', { keyword: baTable.table.filter!.quickSearch })
-}
+}, 500)
 
 const onChangeShowColumn = (value: string | number | boolean, field: string) => {
     baTable.onTableHeaderAction('change-show-column', { field: field, value: value })
@@ -185,11 +186,7 @@ const onChangeShowColumn = (value: string | number | boolean, field: string) => 
         margin-left: 6px;
     }
 }
-
-.mlr-12 {
-    margin-left: 12px;
-}
-.mlr-12 + .el-button {
+.btns-ml-12 + .btns-ml-12 {
     margin-left: 12px;
 }
 .table-search {
@@ -235,7 +232,7 @@ html.dark {
             background-color: var(--el-color-info-light-7);
         }
         button {
-            background-color: #898a8d;
+            background-color: var(--ba-bg-color-overlay);
             el-icon {
                 color: white !important;
             }

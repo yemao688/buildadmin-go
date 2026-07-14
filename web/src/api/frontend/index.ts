@@ -1,7 +1,7 @@
 import createAxios from '/@/utils/axios'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { useMemberCenter } from '/@/stores/memberCenter'
-import { setTitle, debounce } from '/@/utils/common'
+import { debounce, setTitleFromRoute } from '/@/utils/common'
 import { handleFrontendRoute } from '/@/utils/router'
 import { useUserInfo } from '/@/stores/userInfo'
 import router from '/@/router/index'
@@ -32,13 +32,11 @@ export function initialize(callback?: (res: ApiResponse) => void, requiredLogin?
                 requiredLogin: requiredLogin ? 1 : 0,
             },
         }).then((res) => {
-            setTitle(res.data.site.siteName)
             handleFrontendRoute(res.data.rules, res.data.menus)
             siteConfig.dataFill(res.data.site)
             memberCenter.setStatus(res.data.openMemberCenter)
 
             if (!isEmpty(res.data.userInfo)) {
-                res.data.userInfo.refresh_token = userInfo.getToken('refresh')
                 userInfo.dataFill(res.data.userInfo)
 
                 // 请求到会员信息才设置会员中心初始化是成功的
@@ -48,6 +46,9 @@ export function initialize(callback?: (res: ApiResponse) => void, requiredLogin?
             if (!res.data.openMemberCenter) memberCenter.setLayoutMode('Disable')
 
             siteConfig.setInitialize(true)
+
+            // 根据当前路由重设页面标题
+            setTitleFromRoute()
 
             typeof callback == 'function' && callback(res)
         })

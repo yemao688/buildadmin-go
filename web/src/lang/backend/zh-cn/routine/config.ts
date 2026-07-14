@@ -3,7 +3,7 @@ export default {
     'Add configuration item': '添加配置项',
     'Quick configuration entry': '快捷配置入口',
     'Variable name': '变量名',
-    'Variable grouping': '变量分组',
+    'Variable group': '变量分组',
     'Variable title': '变量标题',
     'Variable type': '变量类型',
     number: '数字',

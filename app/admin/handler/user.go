@@ -130,6 +130,10 @@ func (h *UserHandler) One(ctx *gin.Context) {
 }
 
 func (h *UserHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		User

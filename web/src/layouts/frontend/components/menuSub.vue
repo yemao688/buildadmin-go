@@ -6,7 +6,7 @@
                     <Icon v-if="showIcon" :name="item.meta?.icon" color="var(--el-text-color-primary)" />
                     {{ item.meta?.title }}
                 </template>
-                <MenuSub :menus="item.children" :show-icon="showIcon" />
+                <MenuSub :menus="item.children!" :show-icon="showIcon" />
             </el-sub-menu>
         </template>
         <template v-else>

@@ -6,6 +6,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/terminal"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"net/http"
 	"strconv"
@@ -20,10 +21,11 @@ type AjaxHandler struct {
 	tableM       *adminModel.TableModel
 	uploadHelper *model.UploadHelper
 	terminal     *terminal.Terminal
+	config       *conf.Configuration
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper, terminal *terminal.Terminal) *AjaxHandler {
-	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal}
+func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
+	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal, config: config}
 }
 
 func (h *AjaxHandler) Upload(ctx *gin.Context) {
@@ -70,14 +72,36 @@ func (h *AjaxHandler) BuildSuffixSvg(ctx *gin.Context) {
 
 func (h *AjaxHandler) GetTablePk(ctx *gin.Context) {
 	table := ctx.Request.FormValue("table")
+	_ = ctx.Request.FormValue("connection") // 接收但忽略，单库模式
 	pk := h.tableM.GetTablePk(table)
 	Success(ctx, map[string]string{
 		"pk": pk,
 	})
 }
 
+func (h *AjaxHandler) GetTableList(ctx *gin.Context) {
+	quickSearch := ctx.Request.FormValue("quickSearch")
+	result := h.tableM.GetTableListV2(quickSearch)
+	Success(ctx, map[string]any{
+		"list": result,
+	})
+}
+
+func (h *AjaxHandler) GetDatabaseConnectionList(ctx *gin.Context) {
+	Success(ctx, map[string]any{
+		"list": []map[string]string{
+			{
+				"type":     "mysql",
+				"database": maskDatabase(h.config.Database.Database),
+				"key":      "mysql",
+			},
+		},
+	})
+}
+
 func (h *AjaxHandler) GetTableFieldList(ctx *gin.Context) {
 	table := ctx.Request.FormValue("table")
+	_ = ctx.Request.FormValue("connection") // 接收但忽略，单库模式
 	pk := h.tableM.GetTablePk(table)
 
 	Success(ctx, map[string]any{
@@ -107,4 +131,11 @@ func (h *AjaxHandler) Terminal(ctx *gin.Context) {
 
 	h.terminal.Exec(ctx, true)
 	Success(ctx, "")
+}
+
+func maskDatabase(db string) string {
+	if len(db) <= 2 {
+		return db
+	}
+	return db[:1] + "****" + db[len(db)-1:]
 }

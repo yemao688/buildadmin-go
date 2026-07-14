@@ -20,8 +20,9 @@
                             {{ t('module.New adjustment of dependency detected') }}
                         </span>
                         <span v-else-if="state.common.moduleState == moduleInstallState.DEPENDENT_WAIT_INSTALL">
-                            {{ t('module.This module adds new dependencies') }} </span
-                        >，
+                            {{ t('module.This module adds new dependencies') }}
+                        </span>
+                        <span>，</span>
                         <span>
                             {{ t('module.The built-in terminal of the system is automatically installing these dependencies, please wait~') }}
                         </span>
@@ -34,7 +35,7 @@
                         {{ t('module.Dependency installation fail 1') }}
                         <span class="span-a" @click="showTerminal">{{ t('module.Dependency installation fail 2') }}</span>
                         {{ t('module.Dependency installation fail 3') }}
-                        <el-link target="_blank" type="primary" href="https://wonderful-code.gitee.io/guide/install/manualOperation.html">
+                        <el-link target="_blank" type="primary" href="https://doc.buildadmin.com/guide/install/manualOperation.html">
                             {{ t('module.Dependency installation fail 4') }}
                         </el-link>
                     </div>
@@ -59,8 +60,9 @@
         </div>
         <div class="install-tis-box">
             <div class="install-tis">
-                {{ t('module.please') }}{{ state.common.moduleState == moduleInstallState.DISABLE ? '' : t('module.After installation 1') }}
-                {{ t('module.Manually clean up the system and browser cache, and refresh the page') }}
+                {{ t('module.please') }}
+                {{ state.common.moduleState == moduleInstallState.DISABLE ? '' : t('module.After installation 1') }}
+                {{ t('module.Manually clean up the system and browser cache') }}
             </div>
         </div>
         <div class="install-tis-box">
@@ -72,40 +74,83 @@
                     "
                     v-model="form.rebuild"
                     type="radio"
-                    :data="{ content: { 0: t('module.no'), 1: t('module.yes') }, childrenAttr: { border: true } }"
+                    :input-attr="{
+                        border: true,
+                        content: { 0: t('module.no'), 1: t('module.yes') },
+                    }"
                 />
             </div>
         </div>
-        <el-button
-            v-blur
-            class="install-done-button"
-            :disabled="state.common.dependInstallState != 'executing' || state.common.moduleState == moduleInstallState.INSTALLED ? false : true"
-            size="large"
-            type="primary"
-            v-loading="state.loading.common"
-            @click="onSubmitInstallDone"
-        >
-            {{ state.common.moduleState == moduleInstallState.DISABLE ? t('Complete') : t('module.End of installation') }}
-        </el-button>
+        <div class="install-tis-box" v-if="hotUpdateState.dirtyFile && state.common.moduleState != moduleInstallState.DISABLE">
+            <div class="install-form">
+                <el-form-item :label="t('module.After installation 2') + t('module.Restart Vite hot server')">
+                    <BaInput
+                        v-model="form.reloadHotServer"
+                        type="radio"
+                        :attr="{
+                            class: 'hot-server-input',
+                            border: true,
+                            content: {
+                                0: t('vite.Later') + t('module.Manual restart'),
+                                1: t('module.Restart Now'),
+                            },
+                        }"
+                    />
+                    <el-popover :width="360" placement="top">
+                        <div>
+                            <div class="el-popover__title">{{ t('vite.Reload hot server title') }}</div>
+                            <div class="reload-hot-server-content">
+                                <p>
+                                    <span>{{ t('vite.Reload hot server tips 1') }}</span>
+                                    <span>【{{ t(`vite.Close type ${hotUpdateState.closeType}`) }}】</span>
+                                    <span>{{ t('vite.Reload hot server tips 2') }}</span>
+                                </p>
+                                <p>{{ t('vite.Reload hot server tips 3') }}</p>
+                                <p>{{ t('module.Restart Vite hot server tips') }}</p>
+                            </div>
+                        </div>
+                        <template #reference>
+                            <div class="block-help hot-server-tips">{{ t('module.detailed information') }}？</div>
+                        </template>
+                    </el-popover>
+                </el-form-item>
+            </div>
+        </div>
+        <div class="install-done-button-box">
+            <el-button
+                v-blur
+                :disabled="state.common.dependInstallState != 'executing' || state.common.moduleState == moduleInstallState.INSTALLED ? false : true"
+                size="large"
+                class="install-done-button"
+                type="primary"
+                :loading="state.loading.common"
+                @click="onSubmitInstallDone"
+            >
+                {{ state.common.moduleState == moduleInstallState.DISABLE ? t('Complete') : t('module.End of installation') }}
+            </el-button>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
+import { ElMessageBox } from 'element-plus'
 import { reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { onRefreshTableData } from '../index'
 import { state } from '../store'
 import { moduleInstallState } from '../types'
-import { onRefreshTableData } from '../index'
-import { useTerminal } from '/@/stores/terminal'
-import FormItem from '/@/components/formItem/index.vue'
-import { taskStatus } from '/@/components/terminal/constant'
-import { ElMessageBox } from 'element-plus'
-import { useI18n } from 'vue-i18n'
 import { dependentInstallComplete } from '/@/api/backend/module'
+import BaInput from '/@/components/baInput/index.vue'
+import FormItem from '/@/components/formItem/index.vue'
+import { taskStatus } from '/@/stores/constant/terminalTaskStatus'
+import { useTerminal } from '/@/stores/terminal'
+import { hotUpdateState, reloadServer } from '/@/utils/vite'
 
 const { t } = useI18n()
 const terminal = useTerminal()
 const form = reactive({
     rebuild: 0,
+    reloadHotServer: 0,
 })
 
 const showTerminal = () => {
@@ -119,8 +164,13 @@ const onSubmitInstallDone = () => {
         terminal.addTaskPM('web-build', false, '', (res: number) => {
             if (res == taskStatus.Success) {
                 terminal.toggle(false)
+                if (form.reloadHotServer == 1 && state.common.moduleState != moduleInstallState.DISABLE) {
+                    reloadServer('modules')
+                }
             }
         })
+    } else if (form.reloadHotServer == 1 && state.common.moduleState != moduleInstallState.DISABLE) {
+        reloadServer('modules')
     }
 }
 
@@ -198,10 +248,26 @@ const onConfirmDepend = () => {
 .color-green {
     color: var(--el-color-success);
 }
-.install-done-button {
-    display: block;
-    margin: 20px auto;
-    width: 120px;
+.install-done-button-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    .install-done-button {
+        width: 120px;
+    }
+}
+.reload-hot-server-content {
+    font-size: var(--el-font-size-small);
+    p {
+        margin-bottom: 6px;
+    }
+}
+.hot-server-input {
+    width: 100%;
+}
+.hot-server-tips {
+    width: auto;
+    cursor: pointer;
 }
 @media screen and (max-width: 1600px) {
     :deep(.install-tis-box) {

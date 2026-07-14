@@ -3,7 +3,7 @@ export default {
     'Add configuration item': 'Add configuration item',
     'Quick configuration entry': 'Quick configuration entry',
     'Variable name': 'Variable name',
-    'Variable grouping': 'Variable grouping',
+    'Variable group': 'Variable group',
     'Variable title': 'Variable title',
     'Variable type': 'Variable type',
     number: 'Number',

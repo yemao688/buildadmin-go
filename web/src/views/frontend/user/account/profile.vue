@@ -3,7 +3,7 @@
         <el-card class="user-views-card" shadow="hover">
             <template #header>
                 <div class="card-header">
-                    <span>{{ $t('user.account.profile.personal data') }}</span>
+                    <span>{{ $t('user.account.profile.profile') }}</span>
                     <el-button @click="router.push({ name: 'account/changePassword' })" type="info" v-blur plain>
                         {{ $t('user.account.profile.Change Password') }}
                     </el-button>
@@ -19,9 +19,9 @@
                     @keyup.enter="onSubmit()"
                 >
                     <FormItem
-                        :label="$t('user.account.profile.head portrait')"
+                        :label="$t('user.account.profile.avatar')"
                         :input-attr="{
-                            'hide-select-file': true,
+                            hideSelectFile: true,
                         }"
                         type="image"
                         v-model="state.form.avatar"
@@ -63,8 +63,8 @@
                         :label="$t('user.account.profile.Gender')"
                         type="radio"
                         v-model.number="state.form.gender"
-                        :data="{
-                            childrenAttr: { border: true },
+                        :input-attr="{
+                            border: true,
                             content: {
                                 '0': $t('user.account.profile.secrecy'),
                                 '1': $t('user.account.profile.male'),
@@ -72,13 +72,13 @@
                             },
                         }"
                     />
-                    <FormItem :label="$t('user.account.profile.birthday')" value-format="YYYY-MM-DD" type="date" v-model="state.form.birthday" />
+                    <FormItem :label="$t('user.account.profile.birthday')" type="date" value-format="YYYY-MM-DD" v-model="state.form.birthday" />
                     <FormItem
                         :label="$t('user.account.profile.Personal signature')"
                         type="textarea"
                         :placeholder="$t('Please input field', { field: $t('user.account.profile.Personal signature') })"
                         v-model="state.form.motto"
-                        :input-attr="{ 'show-word-limit': true, rows: 3 }"
+                        :input-attr="{ showWordLimit: true, maxlength: 120, rows: 3 }"
                     />
                     <UserProfileMixin />
                     <el-form-item class="submit-buttons">
@@ -110,7 +110,7 @@
                     type="password"
                     v-model="state.dialog.verification.form.password"
                     prop="password"
-                    :input-attr="{ 'show-password': true }"
+                    :input-attr="{ showPassword: true }"
                     :placeholder="$t('Please input field', { field: $t('user.account.profile.password') })"
                 />
                 <el-form-item prop="captcha">
@@ -181,7 +181,7 @@
                     type="password"
                     v-model="state.dialog.bind.form.password"
                     prop="password"
-                    :input-attr="{ 'show-password': true }"
+                    :input-attr="{ showPassword: true }"
                     :placeholder="$t('Please input field', { field: $t('user.account.profile.password') })"
                 />
                 <FormItem
@@ -242,9 +242,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { reactive, onMounted, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import FormItem from '/@/components/formItem/index.vue'
 import { useUserInfo } from '/@/stores/userInfo'
 import { onResetForm } from '/@/utils/common'
@@ -263,9 +263,10 @@ const router = useRouter()
 const userInfo = useUserInfo()
 const memberCenter = useMemberCenter()
 
-const formRef = ref<FormInstance>()
-const bindFormRef = ref<FormInstance>()
-const verificationFormRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
+const bindFormRef = useTemplateRef('bindFormRef')
+const verificationFormRef = useTemplateRef('verificationFormRef')
+
 const state: {
     formSubmitLoading: boolean
     form: anyObj
@@ -422,8 +423,7 @@ const sendBindCaptcha = (captchaInfo: string) => {
 }
 
 const onSubmitVerification = () => {
-    if (!verificationFormRef.value) return
-    verificationFormRef.value.validate((res) => {
+    verificationFormRef.value?.validate((res) => {
         if (res) {
             state.dialog.submitLoading = true
             postVerification({
@@ -445,8 +445,7 @@ const onSubmitVerification = () => {
 }
 
 const onSubmitBind = () => {
-    if (!bindFormRef.value) return
-    bindFormRef.value.validate((res) => {
+    bindFormRef.value?.validate((res) => {
         if (res) {
             state.dialog.submitLoading = true
             postChangeBind({
@@ -467,8 +466,7 @@ const onSubmitBind = () => {
 }
 
 const onSubmit = () => {
-    if (!formRef.value) return
-    formRef.value.validate((valid) => {
+    formRef.value?.validate((valid) => {
         if (valid) {
             state.formSubmitLoading = true
             postProfile(state.form)

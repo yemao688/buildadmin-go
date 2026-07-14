@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
+	"io"
 	"slices"
 	"strings"
 
@@ -20,6 +24,57 @@ type CommonModel interface {
 
 type Base struct {
 	currentM CommonModel
+}
+
+// MaybePartialEdit 检测并处理 Switch 单元格的部分字段更新
+// allowedFields 是该表允许通过 Switch 修改的字段名集合
+// 返回 true 表示已处理（Switch 请求），false 表示不是 Switch 请求，继续走正常 Edit
+func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool) bool {
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		return false
+	}
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var m map[string]any
+	if err := json.Unmarshal(bodyBytes, &m); err != nil {
+		return false
+	}
+
+	if len(m) != 2 {
+		return false
+	}
+	idVal, hasID := m["id"]
+	if !hasID {
+		return false
+	}
+
+	var fieldName string
+	var fieldValue any
+	for k, v := range m {
+		if k != "id" {
+			fieldName = k
+			fieldValue = v
+			break
+		}
+	}
+
+	if !allowedFields[fieldName] {
+		return false
+	}
+
+	id := int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
+	updates := map[string]any{fieldName: fieldValue}
+	err = h.currentM.DB().Table(h.currentM.Table()).
+		Scopes(LimitAdminIds(ctx)).
+		Where("id = ?", id).
+		Updates(updates).Error
+	if err != nil {
+		FailByErr(ctx, err)
+	} else {
+		Success(ctx, "")
+	}
+	return true
 }
 
 func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
@@ -60,8 +115,10 @@ func (h *Base) One(ctx *gin.Context) {
 
 func (h *Base) Sortable(ctx *gin.Context) {
 	type Sort struct {
-		Id       int `json:"id" binding:"required"`
-		TargetId int `json:"targetId" binding:"required"`
+		Move      any    `json:"move"`
+		Target    any    `json:"target"`
+		Order     string `json:"order"`
+		Direction string `json:"direction"`
 	}
 	params := Sort{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -69,49 +126,104 @@ func (h *Base) Sortable(ctx *gin.Context) {
 		return
 	}
 
-	if err := Sortable(ctx, h.currentM, params.Id, params.TargetId); err != nil {
+	if err := Sortable(ctx, h.currentM, params.Move, params.Target, params.Direction); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
 }
 
-func Sortable(ctx *gin.Context, m1 CommonModel, id, targetId int) error {
-	type Row struct {
-		Id    int
-		Weigh int
+func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction string) error {
+	table := m1.Table()
+	pkField := "id"
+	moveID := fmt.Sprintf("%v", moveId)
+	targetID := fmt.Sprintf("%v", targetId)
+
+	type FullRow struct {
+		Id    int32
+		Weigh int32
 	}
-	source := Row{}
-	target := Row{}
-	err1 := m1.DB().Table(m1.Table()).Scopes(LimitAdminIds(ctx)).Where("id=?", id).Scan(&source).Error
-	err2 := m1.DB().Table(m1.Table()).Scopes(LimitAdminIds(ctx)).Where("id=?", targetId).Scan(&target).Error
-	if err1 != nil || err2 != nil {
+
+	var rows []FullRow
+	if err := m1.DB().Table(table).Scopes(LimitAdminIds(ctx)).Order("weigh desc, id desc").Scan(&rows).Error; err != nil {
+		return err
+	}
+
+	newWeigh := int32(len(rows))
+	weightMap := map[int32]int32{}
+	for _, r := range rows {
+		weightMap[r.Id] = newWeigh
+		newWeigh--
+	}
+
+	moveIdx, targetIdx := -1, -1
+	for i, r := range rows {
+		if fmt.Sprintf("%d", r.Id) == moveID {
+			moveIdx = i
+		}
+		if fmt.Sprintf("%d", r.Id) == targetID {
+			targetIdx = i
+		}
+	}
+	if moveIdx == -1 || targetIdx == -1 {
 		return cErr.BadRequest("Record not found")
 	}
 
-	if source.Weigh == target.Weigh {
-		return cErr.BadRequest("Invalid collation because the weights of the two targets are equal")
+	movedRow := rows[moveIdx]
+	remaining := make([]FullRow, 0, len(rows)-1)
+	remaining = append(remaining, rows[:moveIdx]...)
+	remaining = append(remaining, rows[moveIdx+1:]...)
+
+	insertIdx := 0
+	if direction == "down" {
+		tempTargetIdx := -1
+		for i, r := range remaining {
+			if fmt.Sprintf("%d", r.Id) == targetID {
+				tempTargetIdx = i
+				break
+			}
+		}
+		insertIdx = tempTargetIdx + 1
+	} else {
+		for i, r := range remaining {
+			if fmt.Sprintf("%d", r.Id) == targetID {
+				insertIdx = i
+				break
+			}
+		}
 	}
 
-	m1.DB().Table(m1.Table()).Scopes(LimitAdminIds(ctx)).Where("id=?", id).Updates(map[string]interface{}{
-		"weigh": target.Weigh,
+	newOrder := make([]FullRow, 0, len(rows))
+	newOrder = append(newOrder, remaining[:insertIdx]...)
+	newOrder = append(newOrder, movedRow)
+	newOrder = append(newOrder, remaining[insertIdx:]...)
+
+	err := m1.DB().Transaction(func(tx *gorm.DB) error {
+		newWeigh = int32(len(newOrder))
+		for _, r := range newOrder {
+			if weightMap[r.Id] != newWeigh {
+				if err := tx.Table(table).Where(pkField+" = ?", r.Id).Update("weigh", newWeigh).Error; err != nil {
+					return err
+				}
+			}
+			newWeigh--
+		}
+		return nil
 	})
-	m1.DB().Table(m1.Table()).Scopes(LimitAdminIds(ctx)).Where("id=?", targetId).Updates(map[string]interface{}{
-		"weigh": source.Weigh,
-	})
-	return nil
+	return err
 }
 
 func LimitAdminIds(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		value, _ := ctx.Get("dataLimitAdminIds")
-		if value != nil {
-			dataLimitAdminIds := value.([]string)
-			if len(dataLimitAdminIds) > 0 {
-				db.Where(" admin_id in ? ", dataLimitAdminIds)
-			}
+		if value == nil {
+			return db
 		}
-		return db
+		dataLimitAdminIds, ok := value.([]int32)
+		if !ok || len(dataLimitAdminIds) == 0 {
+			return db
+		}
+		return db.Where("admin_id IN ?", dataLimitAdminIds)
 	}
 }
 

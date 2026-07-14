@@ -15,7 +15,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     v-if="!baTable.form.loading"
@@ -38,18 +38,41 @@
                         type="select"
                         v-model="baTable.form.items!.controller"
                         prop="controller"
-                        :data="{ content: baTable.form.extend!.controllerList }"
+                        :input-attr="{ content: baTable.form.extend!.controllerList }"
                         :placeholder="
                             t('security.sensitiveData.The data listening mechanism will monitor the modification operations under this controller')
                         "
                     />
                     <FormItem
+                        :label="t('Database connection')"
+                        v-model="baTable.form.items!.connection"
+                        type="remoteSelect"
+                        :block-help="t('Database connection help')"
+                        :input-attr="{
+                            pk: 'key',
+                            field: 'key',
+                            remoteUrl: getDatabaseConnectionListUrl,
+                            onChange: baTable.onConnectionChange,
+                            valueOnClear: '',
+                        }"
+                    />
+                    <FormItem
                         :label="t('security.sensitiveData.Corresponding data sheet')"
-                        type="select"
+                        type="remoteSelect"
                         v-model="baTable.form.items!.data_table"
+                        :key="baTable.form.items!.connection"
+                        :input-attr="{
+                            pk: 'table',
+                            field: 'comment',
+                            params: {
+                                connection: baTable.form.items!.connection,
+                                samePrefix: 1,
+                                excludeTable: ['area', 'token', 'captcha', 'admin_group_access', 'admin_log', 'user_money_log', 'user_score_log'],
+                            },
+                            remoteUrl: getTableListUrl,
+                            onChange: baTable.onTableChange,
+                        }"
                         prop="data_table"
-                        :data="{ content: baTable.form.extend!.tableList }"
-                        :input-attr="{ onChange: baTable.onTableChange }"
                     />
                     <FormItem
                         :label="t('security.sensitiveData.Data table primary key')"
@@ -57,35 +80,42 @@
                         v-model="baTable.form.items!.primary_key"
                         prop="primary_key"
                     />
-                    <hr class="form-hr" />
+                    <template v-if="!isEmpty(baTable.form.extend!.fieldSelect)">
+                        <hr class="form-hr" />
 
-                    <FormItem
-                        :label="t('security.sensitiveData.Sensitive fields')"
-                        type="selects"
-                        v-model="baTable.form.items!.data_fields"
-                        :key="baTable.form.extend!.fieldSelectKey"
-                        prop="data_fields"
-                        :data="{ content: baTable.form.extend!.fieldSelect }"
-                        :input-attr="{ onChange: onFieldChange }"
-                        v-loading="baTable.form.extend!.fieldLoading"
-                    />
+                        <FormItem
+                            :label="t('security.sensitiveData.Sensitive fields')"
+                            type="selects"
+                            v-model="baTable.form.items!.data_fields"
+                            :key="baTable.form.extend!.fieldSelectKey"
+                            prop="data_fields"
+                            :input-attr="{
+                                onChange: onFieldChange,
+                                content: baTable.form.extend!.fieldSelect,
+                            }"
+                            v-loading="baTable.form.extend!.fieldLoading"
+                        />
 
-                    <FormItem
-                        v-for="(item, idx) in state.dataFields"
-                        :key="idx"
-                        :label="item.name"
-                        type="string"
-                        v-model="item.value"
-                        :placeholder="t('security.sensitiveData.Filling in field notes helps you quickly identify fields later')"
-                    />
+                        <FormItem
+                            v-for="(item, idx) in state.dataFields"
+                            :key="idx"
+                            :label="item.name"
+                            type="string"
+                            v-model="item.value"
+                            :tip="t('security.sensitiveData.Filling in field notes helps you quickly identify fields later')"
+                        />
 
-                    <hr class="form-hr" />
+                        <hr class="form-hr" />
+                    </template>
                     <FormItem
                         :label="t('State')"
                         type="radio"
                         v-model="baTable.form.items!.status"
                         prop="status"
-                        :data="{ content: { '0': t('Disable'), '1': t('Enable') } }"
+                        :input-attr="{
+                            border: true,
+                            content: { 0: t('Disable'), 1: t('Enable') },
+                        }"
                     />
                 </el-form>
             </div>
@@ -102,16 +132,18 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, inject } from 'vue'
+import { reactive, inject, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { sensitiveDataClass, DataFields } from './index'
 import FormItem from '/@/components/formItem/index.vue'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
 import { useConfig } from '/@/stores/config'
+import { getTableListUrl, getDatabaseConnectionListUrl } from '/@/api/common'
+import { isEmpty } from 'lodash-es'
 
 const config = useConfig()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as sensitiveDataClass
 
 const { t } = useI18n()

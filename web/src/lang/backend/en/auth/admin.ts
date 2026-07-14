@@ -1,9 +1,9 @@
 export default {
     username: 'Username',
     nickname: 'Nickname',
-    grouping: 'Grouping',
-    'head portrait': 'Profile picture',
-    mailbox: 'Mailbox',
+    group: 'Group',
+    avatar: 'Avatar',
+    email: 'Email',
     mobile: 'Mobile Number',
     'Last login': 'Last login',
     Password: 'Password',

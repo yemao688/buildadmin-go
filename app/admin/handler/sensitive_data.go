@@ -131,6 +131,10 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		SensitiveData

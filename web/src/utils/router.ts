@@ -1,17 +1,17 @@
-import router from '/@/router/index'
-import { isNavigationFailure, NavigationFailureType } from 'vue-router'
-import type { RouteRecordRaw, RouteLocationRaw } from 'vue-router'
 import { ElNotification } from 'element-plus'
-import { useConfig } from '/@/stores/config'
-import { useNavTabs } from '/@/stores/navTabs'
-import { useSiteConfig } from '/@/stores/siteConfig'
-import { useMemberCenter } from '/@/stores/memberCenter'
-import { closeShade } from '/@/utils/pageShade'
+import { compact, isEmpty, reverse } from 'lodash-es'
+import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
+import { isNavigationFailure, NavigationFailureType } from 'vue-router'
+import { i18n } from '/@/lang/index'
+import router from '/@/router/index'
 import adminBaseRoute from '/@/router/static/adminBase'
 import memberCenterBaseRoute from '/@/router/static/memberCenterBase'
-import { i18n } from '/@/lang/index'
+import { useConfig } from '/@/stores/config'
+import { useMemberCenter } from '/@/stores/memberCenter'
+import { useNavTabs } from '/@/stores/navTabs'
+import { useSiteConfig } from '/@/stores/siteConfig'
 import { isAdminApp } from '/@/utils/common'
-import { compact, isEmpty, reverse } from 'lodash-es'
+import { closeShade } from '/@/utils/pageShade'
 
 /**
  * 导航失败有错误消息的路由push
@@ -51,7 +51,7 @@ export const getFirstRoute = (routes: RouteRecordRaw[]): false | RouteRecordRaw 
     })
     let find: boolean | RouteRecordRaw = false
     for (const key in routes) {
-        if (routes[key].meta?.menu_type == 'tab' && routerPaths.indexOf(routes[key].path) !== -1) {
+        if (routes[key].meta?.type == 'menu' && routerPaths.indexOf(routes[key].path) !== -1) {
             return routes[key]
         } else if (routes[key].children && routes[key].children?.length) {
             find = getFirstRoute(routes[key].children!)
@@ -69,7 +69,7 @@ export const onClickMenu = (menu: RouteRecordRaw) => {
     switch (menu.meta?.menu_type) {
         case 'iframe':
         case 'tab':
-            routePush({ path: menu.path })
+            routePush(menu.path)
             break
         case 'link':
             window.open(menu.path, '_blank')
@@ -109,11 +109,11 @@ export const handleFrontendRoute = (routes: any, menus: any) => {
     }
     if (menus.length && isEmpty(memberCenter.state.viewRoutes)) {
         addRouteAll(viewsComponent, menus, memberCenterBaseRoute.name as string)
-        const menuMemberCenterBaseRoute = '/' + (memberCenterBaseRoute.name as string) + '/'
+        const menuMemberCenterBaseRoute = (memberCenterBaseRoute.path as string) + '/'
         memberCenter.mergeAuthNode(handleAuthNode(menus, menuMemberCenterBaseRoute))
 
         memberCenter.mergeNavUserMenus(handleMenuRule(menus, '/', ['nav_user_menu']))
-        memberCenter.setShowHeadline(menus.length > 1 ? true : false)
+        memberCenter.setShowHeadline(menus.length > 1)
         memberCenter.setViewRoutes(handleMenuRule(menus, menuMemberCenterBaseRoute))
     }
 }
@@ -124,7 +124,7 @@ export const handleFrontendRoute = (routes: any, menus: any) => {
 export const handleAdminRoute = (routes: any) => {
     const viewsComponent = import.meta.glob('/src/views/backend/**/*.vue')
     addRouteAll(viewsComponent, routes, adminBaseRoute.name as string)
-    const menuAdminBaseRoute = '/' + (adminBaseRoute.name as string) + '/'
+    const menuAdminBaseRoute = (adminBaseRoute.path as string) + '/'
 
     // 更新stores中的路由菜单数据
     const navTabs = useNavTabs()
@@ -144,6 +144,18 @@ export const getMenuPaths = (menus: RouteRecordRaw[]): string[] => {
         }
     })
     return menuPaths
+}
+
+/**
+ * 获取菜单唯一标识
+ * @param menu 菜单数据
+ * @param prefix 前缀
+ */
+export const getMenuKey = (menu: RouteRecordRaw, prefix = '') => {
+    if (prefix === '') {
+        prefix = menu.path
+    }
+    return `${prefix}-${menu.name as string}-${menu.meta && menu.meta.id ? menu.meta.id : ''}`
 }
 
 /**

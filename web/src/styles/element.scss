@@ -1,23 +1,5 @@
-/* 修复 Chrome 浏览器输入框内选中字符行高异常的bug-s */
-.el-input .el-input__inner {
-    line-height: calc(var(--el-input-height, 40px) - 4px);
-}
-/* 修复 Chrome 浏览器输入框内选中字符行高异常的bug-e */
-
-.datetime-picker {
-    height: 32px;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-.el-divider__text.is-center {
-    transform: translateX(-50%) translateY(-62%);
-}
-
 .el-menu {
     user-select: none;
-    .el-sub-menu__title:hover {
-        background-color: var(--el-color-primary-light-9) !important;
-    }
 }
 
 .el-table {
@@ -26,18 +8,45 @@
 
 .el-card {
     border: none;
+    .el-card__header {
+        border-bottom: 1px solid var(--el-border-color-extra-light);
+    }
 }
-.el-card__header {
-    border-bottom: 1px solid var(--el-border-color-extra-light);
+
+.el-divider__text.is-center {
+    transform: translateX(-50%) translateY(-62%);
+}
+
+/* 修复 Chrome 浏览器输入框内选中字符行高异常的问题开始 <<< */
+.el-input {
+    .el-input__inner {
+        line-height: calc(var(--el-input-height, 40px) - 4px);
+    }
+}
+/* 修复 Chrome 浏览器输入框内选中字符行高异常的问题结束 >>> */
+
+/* 输入框样式统一开始 <<< */
+.el-input-number.is-controls-right {
+    .el-input__wrapper {
+        padding-left: 11px;
+    }
+    .el-input__inner {
+        text-align: left;
+    }
 }
 .el-textarea__inner {
     padding: 5px 11px;
 }
+.datetime-picker {
+    height: 32px;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+/* 输入框样式统一结束 >>> */
 
-/* dialog滚动条-s */
+/* dialog 滚动条样式优化开始 <<< */
 .el-overlay-dialog,
 .ba-scroll-style {
-    scrollbar-width: none;
     &::-webkit-scrollbar {
         width: 5px;
         height: 5px;
@@ -54,15 +63,25 @@
         }
     }
 }
-/* dialog滚动条-e */
+@supports not (selector(::-webkit-scrollbar)) {
+    .el-overlay-dialog,
+    .ba-scroll-style {
+        scrollbar-width: thin;
+        scrollbar-color: #c8c9cc #eaeaea;
+    }
+}
+/* dialog 滚动条样式优化结束 >>> */
 
-/* 小屏设备 el-radio-group 样式优化-s */
-.ba-input-item-radio {
-    margin-bottom: 10px;
-    .el-radio-group {
-        .el-radio {
-            margin-bottom: 8px;
+/* 小屏设备 el-radio 和 el-checkbox 样式优化开始 <<< */
+.ba-input-item-radio,
+.ba-input-item-checkbox {
+    .el-radio-group,
+    .el-checkbox-group {
+        margin-top: -8px;
+        .el-radio,
+        .el-checkbox {
+            margin-top: 8px;
         }
     }
 }
-/* 小屏设备 el-radio-group 样式调整-e */
+/* 小屏设备 el-radio 和 el-checkbox 样式优化结束 >>> */

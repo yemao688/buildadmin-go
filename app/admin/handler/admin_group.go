@@ -148,6 +148,10 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 }
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		AdminGroup

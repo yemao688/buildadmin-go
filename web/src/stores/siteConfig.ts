@@ -6,23 +6,22 @@ export const useSiteConfig = defineStore('siteConfig', {
     state: (): SiteConfig => {
         return {
             siteName: '',
-            recordNumber: '',
             version: '',
             cdnUrl: '',
             apiUrl: '',
             upload: {
                 mode: 'local',
-                maxsize: 0,
-                mimetype: '',
-                savename: '',
             },
             headNav: [],
+            recordNumber: '',
+            cdnUrlParams: '',
             initialize: false,
             userInitialize: false,
         }
     },
     actions: {
         dataFill(state: SiteConfig) {
+            // 使用 this.$patch(state) 时 headNav 的类型异常，直接赋值
             this.$state = state
         },
         setHeadNav(headNav: RouteRecordRaw[]) {

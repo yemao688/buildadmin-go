@@ -1,8 +1,9 @@
+<!-- 模块市场 和 CRUD 记录页面等地方的 BuildAdmin 官方账户登录弹窗 -->
 <template>
     <div>
-        <el-dialog v-model="state.dialog.baAccount" class="ba-account-dialog" width="25%" :title="t('module.Member information')">
+        <el-dialog v-model="model" class="ba-account-dialog" width="25%" :title="t('layouts.Member information')">
             <template v-if="baAccount.token">
-                <div v-loading="state.loading.common" class="userinfo">
+                <div v-loading="state.loading" class="userinfo">
                     <div class="user-avatar-box">
                         <img class="user-avatar" :src="baAccount.avatar" alt="" />
                         <Icon
@@ -13,67 +14,51 @@
                         />
                     </div>
                     <p class="username">{{ baAccount.nickname }}</p>
-                    <p class="user-integral">
-                        <span>{{ $t('module.Integral') + ' ' + baAccount.score }}</span>
-                        <span>{{ $t('module.Balance') + ' ' + baAccount.money }}</span>
+                    <p class="user-info">
+                        <span>{{ $t('Integral') + ' ' + baAccount.score }}</span>
+                        <span>{{ $t('Balance') + ' ' + baAccount.money }}</span>
                     </p>
                     <div class="userinfo-buttons">
-                        <el-button @click="openUrl('https://uni.buildadmin.com/user/account/moduleOrders')" v-blur size="default" type="primary">
-                            {{ $t('module.My module') }}
-                        </el-button>
-                        <el-button @click="baAccount.logout()" v-blur size="default" type="warning">{{ $t('module.Logout login') }}</el-button>
+                        <a href="https://uni.buildadmin.com/user" target="_blank" rel="noopener noreferrer">
+                            <el-button v-blur size="default" type="primary">
+                                {{ $t('layouts.Member center') }}
+                            </el-button>
+                        </a>
+                        <el-button @click="baAccount.logout()" v-blur size="default" type="warning">{{ $t('layouts.Logout') }}</el-button>
                     </div>
                 </div>
             </template>
             <template v-else>
                 <div class="ba-login">
-                    <h3 class="ba-title">{{ t('module.Log in to the buildadmin module marketplace') }}</h3>
+                    <h3 class="ba-title">{{ t('layouts.Login to the buildadmin') }}</h3>
                     <el-form
-                        @keyup.enter="onBaAccountSubmit()"
+                        @keyup.enter="onBaAccountSubmitPre()"
                         ref="baAccountFormRef"
                         :rules="baAccountFormRules"
                         class="ba-account-login-form"
-                        :model="user.form"
+                        :model="state.user"
                     >
                         <FormItem
-                            v-model="user.form.username"
+                            v-model="state.user.username"
                             type="string"
                             prop="username"
-                            :placeholder="t('module.Please enter buildadmin account name or email')"
+                            :placeholder="t('layouts.Please enter buildadmin account name or email')"
                             :input-attr="{
                                 size: 'large',
                             }"
                         />
                         <FormItem
-                            v-model="user.form.password"
+                            v-model="state.user.password"
                             type="password"
                             prop="password"
-                            :placeholder="t('module.Please enter the buildadmin account password')"
+                            :placeholder="t('layouts.Please enter the buildadmin account password')"
                             :input-attr="{
                                 size: 'large',
                             }"
                         />
-                        <!-- 登录注册验证码 -->
-                        <el-form-item prop="captcha">
-                            <el-row class="w100">
-                                <el-col :span="16">
-                                    <el-input
-                                        v-model="user.form.captcha"
-                                        size="large"
-                                        clearable
-                                        autocomplete="off"
-                                        :placeholder="t('module.Please enter the login verification code')"
-                                    >
-                                    </el-input>
-                                </el-col>
-                                <el-col class="captcha-box" :span="8">
-                                    <img @click="onChangeCaptcha" class="captcha-img" :src="buildCaptchaUrl() + '&id=' + user.form.captchaId" />
-                                </el-col>
-                            </el-row>
-                        </el-form-item>
                         <el-form-item class="form-buttons">
-                            <el-button @click="onBaAccountSubmit()" :loading="user.loading" round type="primary" size="large">
-                                {{ t('module.Sign in') }}
+                            <el-button @click="onBaAccountSubmitPre()" :loading="state.submitLoading" round type="primary" size="large">
+                                {{ t('layouts.Login') }}
                             </el-button>
                             <a
                                 target="_blank"
@@ -81,7 +66,7 @@
                                 href="https://uni.buildadmin.com/user/login?type=register"
                                 rel="noopener noreferrer"
                             >
-                                <el-button round plain type="info" size="large"> {{ t('module.Register') }} </el-button>
+                                <el-button round plain type="info" size="large"> {{ t('layouts.Register') }} </el-button>
                             </a>
                         </el-form-item>
                     </el-form>
@@ -92,76 +77,87 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import FormItem from '/@/components/formItem/index.vue'
-import type { FormInstance, FormItemRule } from 'element-plus'
-import { buildValidatorData } from '/@/utils/validate'
+import type { FormItemRule } from 'element-plus'
+import { reactive, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { uuid } from '/@/utils/random'
-import { checkIn, buildCaptchaUrl } from '/@/api/backend/module'
+import { baAccountCheckIn, baAccountGetUserInfo } from '/@/api/backend/index'
+import clickCaptcha from '/@/components/clickCaptcha'
+import FormItem from '/@/components/formItem/index.vue'
 import { useBaAccount } from '/@/stores/baAccount'
-import { state } from '../store'
+import { useSiteConfig } from '/@/stores/siteConfig'
+import { uuid } from '/@/utils/random'
+import { buildValidatorData } from '/@/utils/validate'
 
 const { t } = useI18n()
 const baAccount = useBaAccount()
-const baAccountFormRef = ref<FormInstance>()
-const user: {
-    loading: boolean
-    form: {
-        tab: 'login' | 'register'
-        username: string
-        password: string
-        captcha: string
-        captchaId: string
-        keep: boolean
-    }
-} = reactive({
-    loading: false,
-    form: {
+const siteConfig = useSiteConfig()
+const model = defineModel<boolean>()
+const baAccountFormRef = useTemplateRef('baAccountFormRef')
+
+interface Props {
+    loginCallback?: (res: ApiResponse) => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    loginCallback: () => {},
+})
+
+const state = reactive({
+    loading: true,
+    submitLoading: false,
+    user: {
         tab: 'login',
         username: '',
         password: '',
-        captcha: '',
         captchaId: uuid(),
+        captchaInfo: '',
         keep: false,
     },
 })
 
-const baAccountFormRules: Partial<Record<string, FormItemRule[]>> = reactive({
-    username: [buildValidatorData({ name: 'required', title: t('module.User name') })],
-    captcha: [buildValidatorData({ name: 'required', title: t('module.Verification Code') })],
-    password: [buildValidatorData({ name: 'required', title: t('module.Password') }), buildValidatorData({ name: 'password' })],
-})
-
-const openUrl = (url: string) => {
-    window.open(url)
-}
-
-const onBaAccountSubmit = () => {
-    if (!baAccountFormRef.value) return
-    baAccountFormRef.value.validate((valid) => {
+const onBaAccountSubmitPre = () => {
+    baAccountFormRef.value?.validate((valid) => {
         if (valid) {
-            user.loading = true
-            checkIn('post', user.form)
-                .then((res) => {
-                    state.dialog.baAccount = false
-                    user.loading = false
-                    baAccount.dataFill(res.data.userInfo)
-                })
-                .catch(() => {
-                    user.loading = false
-                    onChangeCaptcha()
-                })
-        } else {
-            onChangeCaptcha()
+            clickCaptcha(state.user.captchaId, (captchaInfo: string) => onBaAccountSubmit(captchaInfo), { apiBaseURL: siteConfig.apiUrl })
         }
     })
 }
 
-const onChangeCaptcha = () => {
-    user.form.captcha = ''
-    user.form.captchaId = uuid()
+const onBaAccountSubmit = (captchaInfo = '') => {
+    state.submitLoading = true
+    state.user.captchaInfo = captchaInfo
+    baAccountCheckIn(state.user)
+        .then((res) => {
+            baAccount.dataFill(res.data.userInfo, false)
+            props.loginCallback(res)
+        })
+        .finally(() => {
+            state.submitLoading = false
+        })
 }
+
+const baAccountFormRules: Partial<Record<string, FormItemRule[]>> = reactive({
+    username: [buildValidatorData({ name: 'required', title: t('layouts.Username') })],
+    password: [buildValidatorData({ name: 'required', title: t('layouts.Password') }), buildValidatorData({ name: 'password' })],
+})
+
+watch(
+    () => model.value,
+    (newVal) => {
+        if (newVal && baAccount.token) {
+            baAccountGetUserInfo()
+                .then((res) => {
+                    baAccount.dataFill(res.data.userInfo)
+                })
+                .catch(() => {
+                    baAccount.removeToken()
+                })
+                .finally(() => {
+                    state.loading = false
+                })
+        }
+    }
+)
 </script>
 
 <style scoped lang="scss">
@@ -179,7 +175,7 @@ const onChangeCaptcha = () => {
         font-size: var(--el-font-size-large);
         font-weight: bold;
     }
-    .user-integral {
+    .user-info {
         display: block;
         text-align: center;
         width: 100%;
@@ -214,6 +210,9 @@ const onChangeCaptcha = () => {
     }
     .userinfo-buttons {
         margin-top: 10px;
+        a {
+            margin-right: 15px;
+        }
     }
 }
 
@@ -221,27 +220,11 @@ const onChangeCaptcha = () => {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-
+    padding: 20px;
     .ba-title {
         width: 100%;
         text-align: center;
     }
-
-    .captcha-box {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        .captcha-img {
-            width: 90%;
-            margin-left: auto;
-        }
-
-        .el-button {
-            width: 90%;
-        }
-    }
-
     .form-buttons {
         .el-button {
             width: 100%;

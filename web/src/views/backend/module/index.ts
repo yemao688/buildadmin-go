@@ -1,14 +1,29 @@
-import { state } from './store'
-import { index, modules, info, createOrder, payOrder, postInstallModule, getInstallState, changeState, payCheck } from '/@/api/backend/module'
-import { useBaAccount } from '/@/stores/baAccount'
 import { ElNotification } from 'element-plus'
-import { useTerminal } from '/@/stores/terminal'
-import { taskStatus } from '/@/components/terminal/constant'
+import { isArray } from 'lodash-es'
+import { state } from './store'
 import { moduleInstallState, type moduleState } from './types'
-import { uuid } from '/@/utils/random'
-import { fullUrl } from '/@/utils/common'
-import type { UserInfo } from '/@/stores/interface'
+import {
+    changeState,
+    createOrder,
+    getInstallState,
+    index,
+    info,
+    modules,
+    payCheck,
+    payOrder,
+    postInstallModule,
+    preDownload,
+} from '/@/api/backend/module'
 import { i18n } from '/@/lang/index'
+import router from '/@/router/index'
+import { useBaAccount } from '/@/stores/baAccount'
+import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
+import { taskStatus } from '/@/stores/constant/terminalTaskStatus'
+import type { UserInfo } from '/@/stores/interface'
+import { useTerminal } from '/@/stores/terminal'
+import { fullUrl } from '/@/utils/common'
+import { uuid } from '/@/utils/random'
+import { changeListenDirtyFileSwitch, closeHotUpdate } from '/@/utils/vite'
 
 export const loadData = () => {
     state.loading.table = true
@@ -33,13 +48,21 @@ const loadIndex = () => {
     return index().then((res) => {
         state.table.indexLoaded = true
         state.sysVersion = res.data.sysVersion
+        state.nuxtVersion = res.data.nuxtVersion
         state.installedModule = res.data.installed
-        const installedModuleUids = []
+
+        const installedModuleUids: string[] = []
+        const installedModuleVersions: { uid: string; version: string }[] = []
         if (res.data.installed) {
-            for (const key in res.data.installed) {
-                installedModuleUids.push(res.data.installed[key].uid)
-            }
+            state.installedModule.forEach((item) => {
+                installedModuleUids.push(item.uid)
+                installedModuleVersions.push({
+                    uid: item.uid,
+                    version: item.version,
+                })
+            })
             state.installedModuleUids = installedModuleUids
+            state.installedModuleVersions = installedModuleVersions
         }
     })
 }
@@ -57,14 +80,7 @@ const getModules = () => {
         }
     }
     const moduleUids: string[] = []
-    const installedModule: { uid: string; version: string }[] = []
-    state.installedModule.forEach((item) => {
-        installedModule.push({
-            uid: item.uid,
-            version: item.version,
-        })
-    })
-    params['installed'] = installedModule
+    params['installed'] = state.installedModuleVersions
     params['sysVersion'] = state.sysVersion
     modules(params)
         .then((res) => {
@@ -89,9 +105,16 @@ const getModules = () => {
                 const idx = state.installedModuleUids.indexOf(item.uid)
                 if (idx !== -1) {
                     item.state = state.installedModule[idx].state
+                    item.title = state.installedModule[idx].title
                     item.version = state.installedModule[idx].version
                     item.website = state.installedModule[idx].website
                     item.stateTag = moduleStatus(item.state)
+
+                    if (!isArray(item.tags)) item.tags = []
+                    item.tags.push({
+                        name: `${i18n.global.t('module.installed')} v${state.installedModule[idx].version}`,
+                        type: 'primary',
+                    })
                 } else {
                     item.state = 0
                 }
@@ -154,7 +177,11 @@ export const showInfo = (uid: string) => {
         })
 }
 
-export const onBuy = () => {
+/**
+ * 支付订单
+ * @param renew 是否是续费订单
+ */
+export const onBuy = (renew = false) => {
     state.dialog.buy = true
     state.loading.buy = true
     createOrder({
@@ -162,6 +189,7 @@ export const onBuy = () => {
     })
         .then((res) => {
             state.loading.buy = false
+            state.buy.renew = renew
             state.buy.info = res.data.info
         })
         .catch((err) => {
@@ -176,11 +204,11 @@ export const onPay = (payType: 'score' | 'wx' | 'balance' | 'zfb') => {
     state.loading.common = true
     payOrder(state.buy.info.id, payType)
         .then((res) => {
-            if (payType == 'wx' || payType == 'zfb') {
-                // 关闭其他弹窗
-                state.dialog.buy = false
-                state.dialog.goodsInfo = false
+            // 关闭其他弹窗
+            state.dialog.buy = false
+            state.dialog.goodsInfo = false
 
+            if (payType == 'wx' || payType == 'zfb') {
                 // 显示支付二维码
                 state.dialog.pay = true
                 state.payInfo = res.data
@@ -191,13 +219,21 @@ export const onPay = (payType: 'score' | 'wx' | 'balance' | 'zfb') => {
                         .then(() => {
                             state.payInfo.pay.status = 'success'
                             clearInterval(timer)
-                            onInstall(res.data.info.uid, res.data.info.id)
+                            if (state.buy.renew) {
+                                showInfo(res.data.info.uid)
+                            } else {
+                                onPreInstallModule(res.data.info.uid, res.data.info.id, true)
+                            }
                             state.dialog.pay = false
                         })
                         .catch(() => {})
                 }, 3000)
             } else {
-                onInstall(res.data.info.uid, res.data.info.id)
+                if (state.buy.renew) {
+                    showInfo(res.data.info.uid)
+                } else {
+                    onPreInstallModule(res.data.info.uid, res.data.info.id, true)
+                }
             }
         })
         .catch((err) => {
@@ -214,51 +250,95 @@ export const showCommonLoading = (loadingTitle: moduleState['common']['loadingTi
     state.common.loadingComponentKey = uuid()
 }
 
-export const onInstall = (uid: string, id: number) => {
+/**
+ * 模块预安装
+ */
+export const onPreInstallModule = (uid: string, id: number, needGetInstallableVersion: boolean, update: boolean = false) => {
     state.dialog.common = true
     showCommonLoading('init')
     state.common.dialogTitle = i18n.global.t('module.Install')
 
-    // 获取安装状态
-    getInstallState(uid).then((res) => {
-        if (
-            res.data.state === moduleInstallState.INSTALLED ||
-            res.data.state === moduleInstallState.DISABLE ||
-            res.data.state === moduleInstallState.DIRECTORY_OCCUPIED
-        ) {
-            ElNotification({
-                type: 'error',
-                message:
-                    res.data.state === moduleInstallState.INSTALLED || res.data.state === moduleInstallState.DISABLE
-                        ? i18n.global.t('module.Installation cancelled because module already exists!')
-                        : i18n.global.t('module.Installation cancelled because the directory required by the module is occupied!'),
+    const nextStep = (moduleState: number) => {
+        if (needGetInstallableVersion) {
+            // 获取模块版本列表
+            showCommonLoading('getInstallableVersion')
+            preDownload({
+                uid,
+                orderId: id,
+                sysVersion: state.sysVersion,
+                nuxtVersion: state.nuxtVersion,
+                installed: state.installedModuleUids,
             })
-            state.dialog.common = false
+                .then((res) => {
+                    state.common.uid = uid
+                    state.common.update = update
+                    state.common.type = 'selectVersion'
+                    state.common.dialogTitle = i18n.global.t('module.Select Version')
+                    state.common.versions = res.data.versions
+
+                    // 关闭其他弹窗
+                    state.dialog.baAccount = false
+                    state.dialog.buy = false
+                    state.dialog.goodsInfo = false
+                })
+                .catch((res) => {
+                    if (loginExpired(res)) return
+                    state.dialog.common = false
+                })
         } else {
-            showCommonLoading(res.data.state === moduleInstallState.UNINSTALLED ? 'download' : 'install')
-            execInstall(uid, id)
+            // 立即安装（上传安装、继续安装）
+            showCommonLoading(moduleState === moduleInstallState.UNINSTALLED ? 'download' : 'install')
+            execInstall(uid, id, '', update)
 
             // 关闭其他弹窗
             state.dialog.baAccount = false
             state.dialog.buy = false
             state.dialog.goodsInfo = false
         }
-    })
+    }
+
+    if (update) {
+        nextStep(moduleInstallState.DISABLE)
+    } else {
+        // 获取安装状态
+        getInstallState(uid).then((res) => {
+            if (
+                res.data.state === moduleInstallState.INSTALLED ||
+                res.data.state === moduleInstallState.DISABLE ||
+                res.data.state === moduleInstallState.DIRECTORY_OCCUPIED
+            ) {
+                ElNotification({
+                    type: 'error',
+                    message:
+                        res.data.state === moduleInstallState.INSTALLED || res.data.state === moduleInstallState.DISABLE
+                            ? i18n.global.t('module.Installation cancelled because module already exists!')
+                            : i18n.global.t('module.Installation cancelled because the directory required by the module is occupied!'),
+                })
+                state.dialog.common = false
+                return
+            }
+
+            nextStep(res.data.state)
+        })
+    }
 }
 
-export const execInstall = (uid: string, id: number, extend: anyObj = {}) => {
-    state.common.disableHmr = true
-    postInstallModule(uid, id, extend)
+/**
+ * 执行安装请求，还包含启用、安装时的冲突处理
+ */
+export const execInstall = (uid: string, id: number, version: string = '', update: boolean = false, extend: anyObj = {}) => {
+    postInstallModule(uid, id, version, update, extend)
         .then(() => {
             state.common.dialogTitle = i18n.global.t('module.Installation complete')
             state.common.moduleState = moduleInstallState.INSTALLED
             state.common.type = 'done'
+            onRefreshTableData()
         })
         .catch((res) => {
             if (loginExpired(res)) return
             if (res.code == -1) {
                 state.common.uid = res.data.uid
-                state.common.type = 'InstallConflict'
+                state.common.type = 'installConflict'
                 state.common.dialogTitle = i18n.global.t('module.A conflict is found Please handle it manually')
                 state.common.fileConflict = res.data.fileConflict
                 state.common.dependConflict = res.data.dependConflict
@@ -289,14 +369,14 @@ export const execInstall = (uid: string, id: number, extend: anyObj = {}) => {
                 ElNotification({
                     type: 'error',
                     message: res.msg,
+                    zIndex: SYSTEM_ZINDEX,
                 })
                 state.dialog.common = false
+                onRefreshTableData()
             }
         })
         .finally(() => {
             state.loading.common = false
-            state.common.disableHmr = true
-            onRefreshTableData()
         })
 }
 
@@ -307,18 +387,31 @@ const terminalTaskExecComplete = (res: number, type: string) => {
         })
         if (state.common.waitInstallDepend.length == 0) {
             state.common.dependInstallState = 'success'
+
+            // 仅在命令全部执行完毕才刷新数据
+            if (router.currentRoute.value.name === 'moduleStore/moduleStore') {
+                onRefreshTableData()
+            }
         }
     } else {
         const terminal = useTerminal()
         terminal.toggle(true)
         state.common.dependInstallState = 'fail'
+
+        // 有命令执行失败了，刷新一次数据
+        if (router.currentRoute.value.name === 'moduleStore/moduleStore') {
+            onRefreshTableData()
+        }
     }
-    onRefreshTableData()
+
+    // 连续安装模块的情况中，首个模块的命令执行完毕时，自动启动了热更新
+    if (router.currentRoute.value.name === 'moduleStore/moduleStore') {
+        closeHotUpdate('modules')
+    }
 }
 
 export const onDisable = (confirmConflict = false) => {
     state.loading.common = true
-    state.common.disableHmr = true
 
     // 拼装依赖处理方案
     if (confirmConflict) {
@@ -341,6 +434,7 @@ export const onDisable = (confirmConflict = false) => {
             ElNotification({
                 type: 'success',
                 message: i18n.global.t('module.The operation succeeds Please clear the system cache and refresh the browser ~'),
+                zIndex: SYSTEM_ZINDEX,
             })
             state.dialog.common = false
             onRefreshTableData()
@@ -368,20 +462,24 @@ export const onDisable = (confirmConflict = false) => {
                 }
                 state.common.uid = state.goodsInfo.uid
                 execCommand(commandsData)
-                onRefreshTableData()
             } else if (res.code == -3) {
                 // 更新
-                onInstall(state.goodsInfo.uid, state.goodsInfo.purchased)
+                onPreInstallModule(state.goodsInfo.uid, state.goodsInfo.purchased, true, true)
             } else {
                 ElNotification({
                     type: 'error',
                     message: res.msg,
+                    zIndex: SYSTEM_ZINDEX,
                 })
+                if (state.common.disableParams && state.common.disableParams.uid) {
+                    showInfo(state.common.disableParams.uid)
+                } else {
+                    onRefreshTableData()
+                }
             }
         })
         .finally(() => {
             state.loading.common = false
-            state.common.disableHmr = true
         })
 }
 
@@ -403,7 +501,9 @@ export const onEnable = (uid: string) => {
             ElNotification({
                 type: 'error',
                 message: res.msg,
+                zIndex: SYSTEM_ZINDEX,
             })
+            state.loading.common = false
         })
 }
 
@@ -420,7 +520,7 @@ export const loginExpired = (res: ApiResponse) => {
 const modulesOnlyLocalHandle = (modules: anyObj) => {
     if (!state.table.onlyLocal) return modules
     return modules.filter((item: anyObj) => {
-        return item.state > moduleInstallState.UNINSTALLED
+        return item.installed
     })
 }
 
@@ -435,8 +535,14 @@ export const execCommand = (data: anyObj) => {
         data.commands.forEach((item: anyObj) => {
             state.common.waitInstallDepend.push(item.type)
             if (item.pm) {
+                if (item.command == 'web-install') {
+                    changeListenDirtyFileSwitch(false)
+                }
                 terminal.addTaskPM(item.command, true, '', (res: number) => {
                     terminalTaskExecComplete(res, item.type)
+                    if (item.command == 'web-install') {
+                        changeListenDirtyFileSwitch(true)
+                    }
                 })
             } else {
                 terminal.addTask(item.command, true, '', (res: number) => {
@@ -456,7 +562,7 @@ export const currency = (price: number, val: number) => {
         return '-'
     }
     if (val == 0) {
-        return parseInt(price.toString()) + i18n.global.t('module.Points')
+        return parseInt(price.toString()) + i18n.global.t('Integral')
     } else {
         return '￥' + price
     }

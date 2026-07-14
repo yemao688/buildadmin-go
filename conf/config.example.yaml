@@ -17,6 +17,8 @@ app:
   auto_write_admin_log: true #自动写入管理员操作日志
   default_avatar: '/static/images/avatar.png' #缺省头像图片路径
   cdn_url: ''  #内容分发网络URL，末尾不带`/`
+  cdn_url_params: ''
+  user_login_captcha: true
   version: 'v2.0.4' #版本号
   api_url: 'https://buildadmin.com' #接口地址
   
@@ -200,5 +202,4 @@ terminal:
       localhost: 
         cwd: ''
         command: 'ping 127.0.0.1 -n 6'
-
 

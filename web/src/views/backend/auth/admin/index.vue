@@ -48,9 +48,9 @@ const baTable = new baTableClass(
             { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
             { label: t('auth.admin.username'), prop: 'username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('auth.admin.nickname'), prop: 'nickname', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            { label: t('auth.admin.grouping'), prop: 'group_name_arr', align: 'center', operator: false, render: 'tags' },
-            { label: t('auth.admin.head portrait'), prop: 'avatar', align: 'center', render: 'image', operator: false },
-            { label: t('auth.admin.mailbox'), prop: 'email', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
+            { label: t('auth.admin.group'), prop: 'group_name_arr', align: 'center', operator: false, render: 'tags' },
+            { label: t('auth.admin.avatar'), prop: 'avatar', align: 'center', render: 'image', operator: false },
+            { label: t('auth.admin.email'), prop: 'email', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('auth.admin.mobile'), prop: 'mobile', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             {
                 label: t('auth.admin.Last login'),
@@ -67,8 +67,8 @@ const baTable = new baTableClass(
                 prop: 'status',
                 align: 'center',
                 render: 'tag',
-                custom: { '0': 'danger', '1': 'success' },
-                replaceValue: { '0': t('Disable'), '1': t('Enable') },
+                custom: { disable: 'danger', enable: 'success' },
+                replaceValue: { disable: t('Disable'), enable: t('Enable') },
             },
             {
                 label: t('Operate'),
@@ -83,7 +83,7 @@ const baTable = new baTableClass(
     },
     {
         defaultItems: {
-            status: '1',
+            status: 'enable',
         },
     }
 )
@@ -91,7 +91,7 @@ const baTable = new baTableClass(
 provide('baTable', baTable)
 
 baTable.mount()
-baTable.getIndex()
+baTable.getData()
 </script>
 
 <style scoped lang="scss"></style>

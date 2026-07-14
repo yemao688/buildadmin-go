@@ -1,8 +1,9 @@
+import { isEmpty, uniq } from 'lodash-es'
 import type { App } from 'vue'
+import type { Composer, I18n } from 'vue-i18n'
 import { createI18n } from 'vue-i18n'
-import type { I18n, Composer } from 'vue-i18n'
+import { handleMsglist } from './merge'
 import { useConfig } from '/@/stores/config'
-import { isEmpty } from 'lodash-es'
 
 /*
  * 默认只引入 element-plus 的中英文语言包
@@ -10,8 +11,8 @@ import { isEmpty } from 'lodash-es'
  * 动态 import 只支持相对路径，所以无法按需 import element-plus 的语言包
  * 但i18n的 messages 内是按需载入的
  */
-import elementZhcnLocale from 'element-plus/lib/locale/lang/zh-cn'
-import elementEnLocale from 'element-plus/lib/locale/lang/en'
+import elementEnLocale from 'element-plus/es/locale/lang/en'
+import elementZhcnLocale from 'element-plus/es/locale/lang/zh-cn'
 
 export let i18n: {
     global: Composer
@@ -109,32 +110,34 @@ export function mergeMessage(message: anyObj, pathName = '') {
     i18n.global.mergeLocaleMessage(i18n.global.locale.value, msg)
 }
 
-export function handleMsglist(msg: anyObj, mList: anyObj, pathName: string) {
-    const pathNameTmp = pathName.split('/')
-    let obj: anyObj = {}
-    for (let i = pathNameTmp.length - 1; i >= 0; i--) {
-        if (i == pathNameTmp.length - 1) {
-            obj = {
-                [pathNameTmp[i]]: mList,
-            }
-        } else {
-            obj = {
-                [pathNameTmp[i]]: obj,
-            }
-        }
-    }
-    return mergeMsg(msg, obj)
-}
+// 已加载的语言包文件路径，避免重复 import 与合并
+const loadedLangPaths = new Set<string>()
 
-export function mergeMsg(msg: anyObj, obj: anyObj) {
-    for (const key in obj) {
-        if (typeof msg[key] == 'undefined') {
-            msg[key] = obj[key]
-        } else if (typeof msg[key] == 'object') {
-            msg[key] = mergeMsg(msg[key], obj[key])
-        }
-    }
-    return msg
+/**
+ * 按需加载并合并路由对应的语言包文件
+ * @param rawPaths 语言包文件相对路径，支持 ${lang} 占位符
+ * @param prefix 当前语言的前缀（如 ./backend/zh-cn），用于剥离出文件命名空间
+ * @param lang 当前语言
+ */
+export async function loadAndMergeMessages(rawPaths: string[], prefix: string, lang: string) {
+    const paths = uniq(rawPaths).map((path) => path.replaceAll('${lang}', lang))
+    await Promise.all(
+        paths.map(async (path) => {
+            if (loadedLangPaths.has(path)) return
+            const loader = window.loadLangHandle[path] as undefined | (() => Promise<{ default: anyObj }>)
+            if (!loader) return
+            loadedLangPaths.add(path)
+            try {
+                const res = await loader()
+                const pathName = path.slice(path.lastIndexOf(prefix) + (prefix.length + 1), path.lastIndexOf('.'))
+                mergeMessage(res.default, pathName)
+            } catch (e) {
+                // 加载失败时移除记录以允许下次重试，且不阻断路由跳转
+                loadedLangPaths.delete(path)
+                console.error(`[i18n] 语言包加载失败: ${path}`, e)
+            }
+        })
+    )
 }
 
 export function editDefaultLang(lang: string): void {
@@ -146,3 +149,5 @@ export function editDefaultLang(lang: string): void {
      */
     location.reload()
 }
+
+export { handleMsglist, mergeMsg } from './merge'

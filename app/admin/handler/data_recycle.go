@@ -89,6 +89,10 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		DataRecycle

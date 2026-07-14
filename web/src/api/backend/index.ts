@@ -1,5 +1,7 @@
-import createAxios from '/@/utils/axios'
 import { useAdminInfo } from '/@/stores/adminInfo'
+import { useBaAccount } from '/@/stores/baAccount'
+import { useSiteConfig } from '/@/stores/siteConfig'
+import createAxios from '/@/utils/axios'
 
 export const url = '/admin/Index/'
 
@@ -25,6 +27,46 @@ export function logout() {
         method: 'POST',
         data: {
             refreshToken: adminInfo.getToken('refresh'),
+        },
+    })
+}
+
+export function baAccountCheckIn(params: object = {}) {
+    const siteConfig = useSiteConfig()
+    return createAxios(
+        {
+            url: siteConfig.apiUrl + '/api/user/checkIn',
+            data: params,
+            method: 'post',
+        },
+        {
+            showSuccessMessage: true,
+        }
+    )
+}
+
+export function baAccountGetUserInfo() {
+    const baAccount = useBaAccount()
+    const siteConfig = useSiteConfig()
+    return createAxios(
+        {
+            url: siteConfig.apiUrl + '/api/user/info',
+            method: 'get',
+        },
+        {
+            anotherToken: baAccount.getToken('auth'),
+        }
+    )
+}
+
+export function baAccountLogout() {
+    const siteConfig = useSiteConfig()
+    const baAccount = useBaAccount()
+    return createAxios({
+        url: siteConfig.apiUrl + '/api/user/logout',
+        method: 'POST',
+        data: {
+            refreshToken: baAccount.getToken('refresh'),
         },
     })
 }

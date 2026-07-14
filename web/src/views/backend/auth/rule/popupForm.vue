@@ -16,7 +16,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     ref="formRef"
@@ -36,16 +36,18 @@
                         :input-attr="{
                             params: { isTree: true },
                             field: 'title',
-                            'remote-url': baTable.api.actionUrl.get('index'),
+                            remoteUrl: baTable.api.actionUrl.get('index'),
+                            emptyValues: ['', null, undefined, 0],
+                            valueOnClear: 0,
                         }"
                     />
                     <FormItem
                         :label="t('auth.rule.Rule type')"
                         v-model="baTable.form.items!.type"
                         type="radio"
-                        :data="{
+                        :input-attr="{
+                            border: true,
                             content: { menu_dir: t('auth.rule.type menu_dir'), menu: t('auth.rule.type menu'), button: t('auth.rule.type button') },
-                            childrenAttr: { border: true },
                         }"
                     />
                     <el-form-item prop="title" :label="t('auth.rule.Rule title')">
@@ -65,7 +67,7 @@
                             {{ t('auth.rule.It will be registered as the web side routing name and used as the server side API authentication') }}
                         </div>
                     </el-form-item>
-                    <el-form-item v-if="baTable.form.items!.type != 'button'" :label="t('auth.rule.Routing path')">
+                    <el-form-item prop="path" v-if="baTable.form.items!.type != 'button'" :label="t('auth.rule.Routing path')">
                         <el-input
                             v-model="baTable.form.items!.path"
                             type="string"
@@ -77,21 +79,23 @@
                         type="icon"
                         :label="t('auth.rule.Rule Icon')"
                         v-model="baTable.form.items!.icon"
-                        :input-attr="{ 'show-icon-name': true }"
+                        :input-attr="{
+                            showIconName: true,
+                        }"
                     />
                     <FormItem
                         v-if="baTable.form.items!.type == 'menu'"
                         :label="t('auth.rule.Menu type')"
                         v-model="baTable.form.items!.menu_type"
                         type="radio"
-                        :data="{
+                        :input-attr="{
+                            border: true,
                             content: { tab: t('auth.rule.Menu type tab'), link: t('auth.rule.Menu type link (offsite)'), iframe: 'Iframe' },
-                            childrenAttr: { border: true },
                         }"
                     />
                     <el-form-item
                         prop="url"
-                        v-if="baTable.form.items!.menu_type != 'tab' && baTable.form.items!.type != 'button'"
+                        v-if="baTable.form.items!.menu_type != 'tab' && baTable.form.items!.type == 'menu'"
                         :label="t('auth.rule.Link address')"
                     >
                         <el-input
@@ -101,6 +105,7 @@
                         ></el-input>
                     </el-form-item>
                     <el-form-item
+                        prop="component"
                         v-if="baTable.form.items!.type == 'menu' && baTable.form.items!.menu_type == 'tab'"
                         :label="t('auth.rule.Component path')"
                     >
@@ -147,21 +152,38 @@
                         ></el-input>
                     </el-form-item>
                     <FormItem
+                        v-if="baTable.form.operate == 'Add' && baTable.form.items!.type == 'menu'"
+                        :label="t('auth.rule.Create Page Button')"
+                        v-model="baTable.form.items!.buttons"
+                        type="selects"
+                        :input-attr="{
+                            content: {
+                                index: t('auth.rule.Create Page Button index'),
+                                add: t('auth.rule.Create Page Button add'),
+                                edit: t('auth.rule.Create Page Button edit'),
+                                del: t('auth.rule.Create Page Button del'),
+                                sortable: t('auth.rule.Create Page Button sortable'),
+                            },
+                        }"
+                        :placeholder="t('auth.rule.Please select the button for automatically creating the desired page')"
+                        :block-help="t('auth.rule.Create Page Button tips')"
+                    />
+                    <FormItem
                         :label="t('auth.rule.cache')"
                         v-model="baTable.form.items!.keepalive"
                         type="radio"
-                        :data="{
+                        :input-attr="{
+                            border: true,
                             content: { 0: t('Disable'), 1: t('Enable') },
-                            childrenAttr: { border: true },
                         }"
                     />
                     <FormItem
                         :label="t('State')"
                         v-model="baTable.form.items!.status"
                         type="radio"
-                        :data="{
-                            content: { '0': t('Disable'), '1': t('Enable') },
-                            childrenAttr: { border: true },
+                        :input-attr="{
+                            border: true,
+                            content: { 0: t('Disable'), 1: t('Enable') },
                         }"
                     />
                 </el-form>
@@ -179,16 +201,16 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, inject } from 'vue'
+import { reactive, inject, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type baTableClass from '/@/utils/baTable'
 import FormItem from '/@/components/formItem/index.vue'
 import { buildValidatorData } from '/@/utils/validate'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { useConfig } from '/@/stores/config'
 
 const config = useConfig()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
@@ -196,7 +218,12 @@ const { t } = useI18n()
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     title: [buildValidatorData({ name: 'required', title: t('auth.rule.Rule title') })],
     name: [buildValidatorData({ name: 'required', title: t('auth.rule.Rule name') })],
-    url: [buildValidatorData({ name: 'url', message: t('auth.rule.Please enter the correct URL') })],
+    path: [buildValidatorData({ name: 'required', title: t('auth.rule.Routing path') })],
+    url: [
+        buildValidatorData({ name: 'required', title: t('auth.rule.Link address') }),
+        buildValidatorData({ name: 'url', message: t('auth.rule.Please enter the correct URL') }),
+    ],
+    component: [buildValidatorData({ name: 'required', message: t('auth.rule.Component path') })],
     pid: [
         {
             validator: (rule: any, val: string, callback: Function) => {

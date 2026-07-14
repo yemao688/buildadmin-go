@@ -33,6 +33,7 @@ export const state = reactive<moduleState>({
     goodsInfo: {},
     buy: {
         info: {},
+        renew: false,
         agreement: true,
     },
     common: {
@@ -40,7 +41,6 @@ export const state = reactive<moduleState>({
         moduleState: 0,
         quickClose: false,
         type: 'loading',
-        disableHmr: false,
         dialogTitle: '',
         fileConflict: [],
         dependConflict: [],
@@ -52,8 +52,12 @@ export const state = reactive<moduleState>({
         disableDependConflict: [],
         disableParams: {},
         payType: 'wx',
+        update: false,
+        versions: [],
     },
     sysVersion: '',
+    nuxtVersion: '',
     installedModule: [],
     installedModuleUids: [],
+    installedModuleVersions: [],
 })

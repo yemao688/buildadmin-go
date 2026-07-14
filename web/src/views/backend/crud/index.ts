@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
+import { fieldData, npuaFalse } from '/@/components/baInput/helper'
 import { i18n } from '/@/lang/index'
 import { validatorType } from '/@/utils/validate'
-import { npuaFalse, fieldData } from '/@/components/baInput/helper'
 
 /**
  * 字段修改类型标识
@@ -27,17 +27,21 @@ export const state: {
     step: 'Start' | 'Design'
     type: string
     startData: {
-        db: string
         sql: string
+        table: string
         logId: string
+        logType: string
+        databaseConnection: string
     }
 } = reactive({
     step: 'Start',
     type: '',
     startData: {
-        db: '',
         sql: '',
+        table: '',
         logId: '',
+        logType: '',
+        databaseConnection: '',
     },
 })
 
@@ -61,7 +65,8 @@ export interface FieldItem {
     dataType?: string
     length: number
     precision: number
-    default: string
+    default?: string
+    defaultType: 'INPUT' | 'EMPTY STRING' | 'NULL' | 'NONE'
     null: boolean
     primaryKey: boolean
     unsigned: boolean
@@ -72,6 +77,7 @@ export interface FieldItem {
     tableBuildExclude?: boolean
     table: anyObj
     form: anyObj
+    uuid?: string
 }
 
 export const fieldItem: {
@@ -89,7 +95,8 @@ export const fieldItem: {
             table: {},
             form: {},
             ...fieldData.number,
-            default: 'none',
+            defaultType: 'NONE',
+            null: false,
             primaryKey: true,
             unsigned: true,
             autoIncrement: true,
@@ -105,20 +112,10 @@ export const fieldItem: {
             ...fieldData.number,
             type: 'bigint',
             length: 20,
-            default: 'none',
+            defaultType: 'NONE',
+            null: false,
             primaryKey: true,
             unsigned: true,
-        },
-        {
-            title: i18n.global.t('crud.state.Weight (drag and drop sorting)'),
-            name: 'weigh',
-            comment: i18n.global.t('Weigh'),
-            designType: 'weigh',
-            table: {},
-            form: {},
-            ...fieldData.number,
-            default: '0',
-            null: true,
         },
         {
             title: i18n.global.t('State'),
@@ -128,6 +125,8 @@ export const fieldItem: {
             table: {},
             form: {},
             ...fieldData.switch,
+            default: '1',
+            defaultType: 'INPUT',
         },
         {
             title: i18n.global.t('crud.state.remarks'),
@@ -138,6 +137,15 @@ export const fieldItem: {
             table: {},
             form: {},
             ...fieldData.textarea,
+        },
+        {
+            title: i18n.global.t('crud.state.Weight (drag and drop sorting)'),
+            name: 'weigh',
+            comment: i18n.global.t('Weigh'),
+            designType: 'weigh',
+            table: {},
+            form: {},
+            ...fieldData.number,
         },
         {
             title: i18n.global.t('Update time'),
@@ -209,6 +217,7 @@ export const fieldItem: {
             form: {},
             ...fieldData.radio,
             default: 'opt0',
+            defaultType: 'INPUT',
         },
         {
             title: i18n.global.t('utils.checkbox'),
@@ -220,6 +229,7 @@ export const fieldItem: {
             form: {},
             ...fieldData.checkbox,
             default: 'opt0,opt1',
+            defaultType: 'INPUT',
         },
         {
             title: i18n.global.t('utils.select'),
@@ -231,6 +241,7 @@ export const fieldItem: {
             form: {},
             ...fieldData.select,
             default: 'opt0',
+            defaultType: 'INPUT',
         },
         {
             title: i18n.global.t('utils.switch'),
@@ -240,6 +251,8 @@ export const fieldItem: {
             table: {},
             form: {},
             ...fieldData.switch,
+            default: '1',
+            defaultType: 'INPUT',
         },
         {
             title: i18n.global.t('utils.rich Text'),
@@ -276,8 +289,9 @@ export const fieldItem: {
             type: 'decimal',
             length: 5,
             precision: 2,
-            default: '0',
+            defaultType: 'NULL',
             ...npuaFalse(),
+            null: true,
             comment: i18n.global.t('utils.float'),
             designType: 'float',
             table: {},
@@ -317,7 +331,7 @@ export const fieldItem: {
             type: 'datetime',
             length: 0,
             precision: 0,
-            default: 'null',
+            defaultType: 'NULL',
             ...npuaFalse(),
             null: true,
             comment: i18n.global.t('utils.time date'),
@@ -462,6 +476,26 @@ const tableBaseAttr = {
             FIND_IN_SET: 'FIND_IN_SET',
         },
     },
+    comSearchRender: {
+        type: 'select',
+        value: 'string',
+        options: {
+            string: i18n.global.t('utils.string'),
+            select: i18n.global.t('utils.select'),
+            remoteSelect: i18n.global.t('utils.remote select'),
+            time: i18n.global.t('utils.time') + i18n.global.t('utils.choice'),
+            date: i18n.global.t('utils.date') + i18n.global.t('utils.choice'),
+            datetime: i18n.global.t('utils.time date') + i18n.global.t('utils.choice'),
+        },
+    },
+    comSearchInputAttr: {
+        type: 'textarea',
+        value: '',
+        placeholder: i18n.global.t('crud.crud.comSearchInputAttrTip'),
+        attr: {
+            rows: 3,
+        },
+    },
     sortable: {
         type: 'select',
         value: 'false',
@@ -540,6 +574,8 @@ export const designTypes: anyObj = {
         table: {
             render: getTableAttr('render', 'datetime'),
             operator: getTableAttr('operator', 'RANGE'),
+            comSearchRender: getTableAttr('comSearchRender', 'datetime'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
             sortable: getTableAttr('sortable', 'custom'),
             width: {
                 type: 'number',
@@ -558,7 +594,8 @@ export const designTypes: anyObj = {
     string: {
         name: i18n.global.t('utils.string'),
         table: {
-            ...tableBaseAttr,
+            render: getTableAttr('render', 'none'),
+            sortable: getTableAttr('sortable', 'false'),
             operator: getTableAttr('operator', 'LIKE'),
         },
         form: formBaseAttr,
@@ -576,7 +613,8 @@ export const designTypes: anyObj = {
     number: {
         name: i18n.global.t('utils.number'),
         table: {
-            ...tableBaseAttr,
+            render: getTableAttr('render', 'none'),
+            sortable: getTableAttr('sortable', 'false'),
             operator: getTableAttr('operator', 'RANGE'),
         },
         form: {
@@ -591,7 +629,8 @@ export const designTypes: anyObj = {
     float: {
         name: i18n.global.t('utils.float'),
         table: {
-            ...tableBaseAttr,
+            render: getTableAttr('render', 'none'),
+            sortable: getTableAttr('sortable', 'false'),
             operator: getTableAttr('operator', 'RANGE'),
         },
         form: {
@@ -606,7 +645,8 @@ export const designTypes: anyObj = {
     radio: {
         name: i18n.global.t('utils.radio'),
         table: {
-            ...tableBaseAttr,
+            operator: getTableAttr('operator', 'eq'),
+            sortable: getTableAttr('sortable', 'false'),
             render: getTableAttr('render', 'tag'),
         },
         form: formBaseAttr,
@@ -614,7 +654,7 @@ export const designTypes: anyObj = {
     checkbox: {
         name: i18n.global.t('utils.checkbox'),
         table: {
-            ...tableBaseAttr,
+            sortable: getTableAttr('sortable', 'false'),
             render: getTableAttr('render', 'tags'),
             operator: getTableAttr('operator', 'FIND_IN_SET'),
         },
@@ -623,7 +663,8 @@ export const designTypes: anyObj = {
     switch: {
         name: i18n.global.t('utils.switch'),
         table: {
-            ...tableBaseAttr,
+            operator: getTableAttr('operator', 'eq'),
+            sortable: getTableAttr('sortable', 'false'),
             render: getTableAttr('render', 'switch'),
         },
         form: formBaseAttr,
@@ -651,7 +692,9 @@ export const designTypes: anyObj = {
     datetime: {
         name: i18n.global.t('utils.time date') + i18n.global.t('utils.choice'),
         table: {
-            operator: getTableAttr('operator', 'eq'),
+            operator: getTableAttr('operator', 'RANGE'),
+            comSearchRender: getTableAttr('comSearchRender', 'datetime'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
             sortable: getTableAttr('sortable', 'custom'),
             width: {
                 type: 'number',
@@ -677,7 +720,9 @@ export const designTypes: anyObj = {
     date: {
         name: i18n.global.t('utils.date') + i18n.global.t('utils.choice'),
         table: {
-            operator: getTableAttr('operator', 'eq'),
+            operator: getTableAttr('operator', 'RANGE'),
+            comSearchRender: getTableAttr('comSearchRender', 'date'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
             sortable: getTableAttr('sortable', 'custom'),
         },
         form: {
@@ -688,7 +733,9 @@ export const designTypes: anyObj = {
     time: {
         name: i18n.global.t('utils.time') + i18n.global.t('utils.choice'),
         table: {
-            operator: getTableAttr('operator', 'eq'),
+            operator: getTableAttr('operator', 'RANGE'),
+            comSearchRender: getTableAttr('comSearchRender', 'time'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
             sortable: getTableAttr('sortable', 'custom'),
         },
         form: formBaseAttr,
@@ -696,7 +743,8 @@ export const designTypes: anyObj = {
     select: {
         name: i18n.global.t('utils.select'),
         table: {
-            ...tableBaseAttr,
+            operator: getTableAttr('operator', 'eq'),
+            sortable: getTableAttr('sortable', 'false'),
             render: getTableAttr('render', 'tag'),
         },
         form: {
@@ -710,7 +758,7 @@ export const designTypes: anyObj = {
     selects: {
         name: i18n.global.t('utils.select') + i18n.global.t('crud.state.Multi'),
         table: {
-            ...tableBaseAttr,
+            sortable: getTableAttr('sortable', 'false'),
             render: getTableAttr('render', 'tags'),
             operator: getTableAttr('operator', 'FIND_IN_SET'),
         },
@@ -725,7 +773,10 @@ export const designTypes: anyObj = {
     remoteSelect: {
         name: i18n.global.t('utils.remote select') + i18n.global.t('utils.choice'),
         table: {
+            render: getTableAttr('render', 'tags'),
             operator: getTableAttr('operator', 'LIKE'),
+            comSearchRender: getTableAttr('comSearchRender', 'string'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
         },
         form: {
             ...formBaseAttr,
@@ -762,12 +813,23 @@ export const designTypes: anyObj = {
                 value: '',
                 placeholder: i18n.global.t('crud.state.If it is not input, it will be automatically analyzed by the controller'),
             },
+            'remote-primary-table-alias': {
+                type: 'string',
+                value: '',
+            },
+            'remote-source-config-type': {
+                type: 'hidden',
+                value: '',
+            },
         },
     },
     remoteSelects: {
         name: i18n.global.t('utils.remote select') + i18n.global.t('utils.choice') + i18n.global.t('crud.state.Multi'),
         table: {
-            operator: getTableAttr('operator', 'LIKE'),
+            render: getTableAttr('render', 'tags'),
+            operator: getTableAttr('operator', 'FIND_IN_SET'),
+            comSearchRender: getTableAttr('comSearchRender', 'remoteSelect'),
+            comSearchInputAttr: getTableAttr('comSearchInputAttr', ''),
         },
         form: {
             ...formBaseAttr,
@@ -803,6 +865,14 @@ export const designTypes: anyObj = {
                 type: 'string',
                 value: '',
                 placeholder: i18n.global.t('crud.state.If it is not input, it will be automatically analyzed by the controller'),
+            },
+            'remote-primary-table-alias': {
+                type: 'string',
+                value: '',
+            },
+            'remote-source-config-type': {
+                type: 'hidden',
+                value: '',
             },
         },
     },

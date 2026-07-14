@@ -72,9 +72,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, reactive, ref, nextTick } from 'vue'
+import { onMounted, onBeforeUnmount, reactive, nextTick, useTemplateRef } from 'vue'
 import * as pageBubble from '/@/utils/pageBubble'
-import type { FormInstance, InputInstance } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { editDefaultLang } from '/@/lang/index'
 import { useConfig } from '/@/stores/config'
@@ -86,15 +85,17 @@ import router from '/@/router'
 import clickCaptcha from '/@/components/clickCaptcha'
 import toggleDark from '/@/utils/useDark'
 import { fullUrl } from '/@/utils/common'
+import { adminBaseRoutePath } from '/@/router/static/adminBase'
 let timer: number
 
 const config = useConfig()
 const adminInfo = useAdminInfo()
 toggleDark(config.layout.isDark)
 
-const formRef = ref<FormInstance>()
-const usernameRef = ref<InputInstance>()
-const passwordRef = ref<InputInstance>()
+const formRef = useTemplateRef('formRef')
+const usernameRef = useTemplateRef('usernameRef')
+const passwordRef = useTemplateRef('passwordRef')
+
 const state = reactive({
     showCaptcha: false,
     submitLoading: false,
@@ -117,9 +118,9 @@ const rules = reactive({
 
 const focusInput = () => {
     if (form.username === '') {
-        usernameRef.value!.focus()
+        usernameRef.value?.focus()
     } else if (form.password === '') {
-        passwordRef.value!.focus()
+        passwordRef.value?.focus()
     }
 }
 
@@ -160,8 +161,8 @@ const onSubmit = (captchaInfo = '') => {
     form.captchaInfo = captchaInfo
     login('post', form)
         .then((res) => {
-            adminInfo.dataFill(res.data.userInfo)
-            router.push({ path: res.data.routePath })
+            adminInfo.dataFill(res.data.userInfo, false)
+            router.push({ path: adminBaseRoutePath })
         })
         .finally(() => {
             state.submitLoading = false

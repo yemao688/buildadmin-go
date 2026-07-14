@@ -45,8 +45,7 @@ export default {
     'All submenus': '所有子菜单',
     'Shrink all': '收缩所有',
     'Expand all': '展开所有',
-    'Expand generic search': '展开通用搜索',
+    'Expand generic search': '展开公共搜索',
     'Link address': '链接地址',
     'No route found to jump~': '没有找到可以跳转的路由~',
-    'This is a deliberate error thrown to prevent a hot update of Vite': '这是为了防止Vite的热更新而有意抛出的错误',
 }

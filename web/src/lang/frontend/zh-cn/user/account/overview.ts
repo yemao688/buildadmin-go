@@ -1,6 +1,6 @@
 export default {
     'Account information': '账户信息',
-    'personal data': '个人资料',
+    profile: '个人资料',
     'Filled in': '已填写',
     'Not filled in': '未填写',
     mobile: '手机号',

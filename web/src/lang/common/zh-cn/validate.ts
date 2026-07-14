@@ -12,4 +12,7 @@ export default {
     required: '必填',
     'editor required': '富文本必填',
     'Please enter the correct ID number': '请输入正确的身份证号码',
+    number: '数字（包括浮点数和整数）',
+    integer: '整数（不包括浮点数）',
+    float: '浮点数（不包括整数）',
 }

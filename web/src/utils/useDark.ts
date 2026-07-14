@@ -7,7 +7,6 @@ const isDark = useDark({
         const config = useConfig()
         updateHtmlDarkClass(dark)
         config.setLayout('isDark', dark)
-        config.onSetLayoutColor()
     },
 })
 

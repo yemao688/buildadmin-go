@@ -48,15 +48,4 @@ const baTable = inject('baTable') as BaTable
 const { t } = useI18n()
 </script>
 
-<style scoped lang="scss">
-.table-el-tree {
-    :deep(.el-tree-node) {
-        white-space: unset;
-    }
-    :deep(.el-tree-node__content) {
-        display: block;
-        align-items: unset;
-        height: unset;
-    }
-}
-</style>
+<style scoped lang="scss"></style>

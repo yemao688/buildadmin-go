@@ -12,12 +12,13 @@ export default {
     'Type button tips': '自动注册为权限节点，可通过 v-auth 快速验权',
     'Type nav_user_menu tips': '自动注册路由，并作为顶栏会员菜单下拉项',
     'English name': '英文名称',
-    'Web side routing path': 'web端路由路径(path)',
+    'Web side routing path': 'WEB 端路由路径（vue-router 的 path）',
     no_login_valid: '未登录有效',
     'no_login_valid 0': '游客无效',
     'no_login_valid 1': '游客有效',
     'no_login_valid tips': '游客没有会员分组，通过本选项设置当前规则是否对游客有效（可见）',
-    'For example, if you add account/overview as a route only': 'web端组件路径，请以/src开头，如:/src/views/frontend/index.vue',
+    'For example, if you add account/overview as a route only': 'WEB 端组件路径，请以 /src 开头，如：/src/views/frontend/index.vue',
     'Web side component path, please start with /src, such as: /src/views/frontend/index':
-        '比如将`account/overview`只添加为路由，那么可以另外将`account/overview`、`account/overview/:a`、`account/overview/:b/:c`只添加为菜单',
+        '比如将 `account/overview` 只添加为路由，那么可以另外将 `account/overview`、`account/overview/:a`、`account/overview/:b/:c` 只添加为菜单',
+    'Component path tips': '组件路径在 WEB 工程内是必填的，否则无法访问，但作为 Nuxt 工程内的菜单时，无需填写此项，请根据菜单使用场景填写',
 }

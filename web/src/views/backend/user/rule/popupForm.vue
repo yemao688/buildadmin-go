@@ -17,7 +17,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     ref="formRef"
@@ -37,17 +37,19 @@
                         :input-attr="{
                             params: { isTree: true },
                             field: 'title',
-                            'remote-url': baTable.api.actionUrl.get('index'),
+                            remoteUrl: baTable.api.actionUrl.get('index'),
+                            emptyValues: ['', null, undefined, 0],
+                            valueOnClear: 0,
                         }"
                     />
                     <el-form-item :label="t('auth.rule.Rule type')">
                         <el-radio-group v-model="baTable.form.items!.type">
-                            <el-radio class="ba-el-radio" label="route" :border="true">{{ t('user.rule.Normal routing') }}</el-radio>
-                            <el-radio class="ba-el-radio" label="menu_dir" :border="true">{{ t('user.rule.Member center menu contents') }}</el-radio>
-                            <el-radio class="ba-el-radio" label="menu" :border="true">{{ t('user.rule.Member center menu items') }}</el-radio>
-                            <el-radio class="ba-el-radio" label="nav" :border="true">{{ t('user.rule.Top bar menu items') }}</el-radio>
-                            <el-radio class="ba-el-radio" label="button" :border="true">{{ t('user.rule.Page button') }}</el-radio>
-                            <el-radio class="ba-el-radio" label="nav_user_menu" :border="true">{{ t('user.rule.Top bar user dropdown') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="route" :border="true">{{ t('user.rule.Normal routing') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="menu_dir" :border="true">{{ t('user.rule.Member center menu contents') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="menu" :border="true">{{ t('user.rule.Member center menu items') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="nav" :border="true">{{ t('user.rule.Top bar menu items') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="button" :border="true">{{ t('user.rule.Page button') }}</el-radio>
+                            <el-radio class="ba-el-radio" value="nav_user_menu" :border="true">{{ t('user.rule.Top bar user dropdown') }}</el-radio>
                         </el-radio-group>
                         <div class="block-help">{{ t('user.rule.Type ' + baTable.form.items!.type + ' tips') }}</div>
                     </el-form-item>
@@ -64,7 +66,7 @@
                             {{ t('auth.rule.It will be registered as the web side routing name and used as the server side API authentication') }}
                         </div>
                     </el-form-item>
-                    <el-form-item :label="t('auth.rule.Routing path')">
+                    <el-form-item v-if="baTable.form.items!.type != 'button'" prop="path" :label="t('auth.rule.Routing path')">
                         <el-input v-model="baTable.form.items!.path" type="string" :placeholder="t('user.rule.Web side routing path')"></el-input>
                     </el-form-item>
 
@@ -74,7 +76,7 @@
                         type="icon"
                         :label="t('auth.rule.Rule Icon')"
                         v-model="baTable.form.items!.icon"
-                        :input-attr="{ 'show-icon-name': true }"
+                        :input-attr="{ showIconName: true }"
                     />
                     <!-- 菜单类型：tab、link、iframe -->
                     <FormItem
@@ -82,9 +84,9 @@
                         :label="t('auth.rule.Menu type')"
                         v-model="baTable.form.items!.menu_type"
                         type="radio"
-                        :data="{
+                        :input-attr="{
+                            border: true,
                             content: { tab: t('auth.rule.Menu type tab'), link: t('auth.rule.Menu type link (offsite)'), iframe: 'Iframe' },
-                            childrenAttr: { border: true },
                         }"
                     />
                     <!-- URL -->
@@ -101,7 +103,10 @@
                     </el-form-item>
                     <!-- 组件路径 -->
                     <el-form-item
-                        v-if="baTable.form.items!.type == 'route' || (!['menu_dir', 'button'].includes(baTable.form.items!.type) && baTable.form.items!.menu_type == 'tab')"
+                        v-if="
+                            baTable.form.items!.type == 'route' ||
+                            (!['menu_dir', 'button'].includes(baTable.form.items!.type) && baTable.form.items!.menu_type == 'tab')
+                        "
                         :label="t('auth.rule.Component path')"
                     >
                         <el-input
@@ -109,6 +114,9 @@
                             type="string"
                             :placeholder="t('user.rule.For example, if you add account/overview as a route only')"
                         ></el-input>
+                        <div class="block-help component-path-tips">
+                            {{ t('user.rule.Component path tips') }}
+                        </div>
                     </el-form-item>
                     <!-- 扩展属性 -->
                     <el-form-item
@@ -133,13 +141,11 @@
                         :label="t('user.rule.no_login_valid')"
                         v-model="baTable.form.items!.no_login_valid"
                         type="radio"
-                        :data="{
+                        :input-attr="{
+                            border: true,
                             content: { '0': t('user.rule.no_login_valid 0'), '1': t('user.rule.no_login_valid 1') },
-                            childrenAttr: { border: true },
                         }"
-                        :attr="{
-                            blockHelp: t('user.rule.no_login_valid tips'),
-                        }"
+                        :block-help="t('user.rule.no_login_valid tips')"
                     />
                     <el-form-item :label="t('auth.rule.Rule comments')">
                         <el-input
@@ -162,9 +168,9 @@
                         :label="t('State')"
                         v-model="baTable.form.items!.status"
                         type="radio"
-                        :data="{
-                            content: { '0': t('Disable'), '1': t('Enable') },
-                            childrenAttr: { border: true },
+                        :input-attr="{
+                            border: true,
+                            content: { 0: t('Disable'), 1: t('Enable') },
                         }"
                     />
                 </el-form>
@@ -182,16 +188,16 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, inject } from 'vue'
+import { reactive, inject, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type baTableClass from '/@/utils/baTable'
 import FormItem from '/@/components/formItem/index.vue'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
 import { useConfig } from '/@/stores/config'
 
 const config = useConfig()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
@@ -213,12 +219,19 @@ const rules: Partial<Record<string, FormItemRule[]>> = reactive({
         },
     ],
     name: [buildValidatorData({ name: 'required', title: t('auth.rule.Rule name') })],
-    url: [buildValidatorData({ name: 'url', message: t('auth.rule.Please enter the correct URL') })],
+    path: [buildValidatorData({ name: 'required', title: t('auth.rule.Routing path') })],
+    url: [
+        buildValidatorData({ name: 'required', message: t('auth.rule.Link address') }),
+        buildValidatorData({ name: 'url', message: t('auth.rule.Please enter the correct URL') }),
+    ],
 })
 </script>
 
 <style scoped lang="scss">
 .ba-el-radio {
     margin-bottom: 10px;
+}
+.component-path-tips {
+    color: var(--el-color-warning);
 }
 </style>

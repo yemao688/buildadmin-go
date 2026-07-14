@@ -10,7 +10,7 @@
 
         <!-- 表格 -->
         <!-- 要使用`el-table`组件原有的属性，直接加在Table标签上即可 -->
-        <Table ref="tableRef" />
+        <Table />
 
         <!-- 表单 -->
         <PopupForm />
@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, provide } from 'vue'
+import { provide } from 'vue'
 import baTableClass from '/@/utils/baTable'
 import PopupForm from './popupForm.vue'
 import Table from '/@/components/table/index.vue'
@@ -32,7 +32,6 @@ defineOptions({
 })
 
 const { t } = useI18n()
-const tableRef = ref()
 const baTable = new baTableClass(
     new baTableApi('/admin/user.User/'),
     {
@@ -42,14 +41,14 @@ const baTable = new baTableClass(
             { label: t('user.user.User name'), prop: 'username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('user.user.nickname'), prop: 'nickname', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             {
-                label: t('user.user.grouping'),
-                prop: 'group.name',
+                label: t('user.user.group'),
+                prop: 'userGroup.name',
                 align: 'center',
                 operator: 'LIKE',
                 operatorPlaceholder: t('Fuzzy query'),
                 render: 'tag',
             },
-            { label: t('user.user.head portrait'), prop: 'avatar', align: 'center', render: 'image', operator: false },
+            { label: t('user.user.avatar'), prop: 'avatar', align: 'center', render: 'image', operator: false },
             {
                 label: t('user.user.Gender'),
                 prop: 'gender',
@@ -107,7 +106,7 @@ const baTable = new baTableClass(
 )
 
 baTable.mount()
-baTable.getIndex()
+baTable.getData()
 
 provide('baTable', baTable)
 </script>

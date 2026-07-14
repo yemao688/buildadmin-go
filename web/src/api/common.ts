@@ -9,6 +9,8 @@ import { state as uploadExpandState, fileUpload as uploadExpand } from '/@/compo
 import type { AxiosRequestConfig } from 'axios'
 import { uuid } from '/@/utils/random'
 import { i18n } from '../lang'
+import { adminBaseRoutePath } from '/@/router/static/adminBase'
+import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 
 /*
  * 公共请求函数和Url定义
@@ -16,11 +18,13 @@ import { i18n } from '../lang'
 
 // Admin模块
 export const adminUploadUrl = '/admin/ajax/upload'
-export const adminBuildSuffixSvgUrl = '/admin/ajax/buildSuffixSvg'
+export const adminBuildSuffixSvgUrl = adminBaseRoutePath + '/ajax/buildSuffixSvg'
 export const adminAreaUrl = '/admin/ajax/area'
 export const getTablePkUrl = '/admin/ajax/getTablePk'
+export const getTableListUrl = '/admin/ajax/getTableList'
 export const getTableFieldListUrl = '/admin/ajax/getTableFieldList'
-export const terminalUrl = '/admin/ajax/terminal'
+export const getDatabaseConnectionListUrl = '/admin/ajax/getDatabaseConnectionList'
+export const terminalUrl = adminBaseRoutePath + '/ajax/terminal'
 export const changeTerminalConfigUrl = '/admin/ajax/changeTerminalConfig'
 export const clearCacheUrl = '/admin/ajax/clearCache'
 
@@ -49,7 +53,7 @@ export function fileUpload(fd: FormData, params: anyObj = {}, forceLocal = false
         errorMsg = i18n.global.t('utils.The data of the uploaded file is incomplete!')
     } else if (!checkFileMimetype(file.name, file.type)) {
         errorMsg = i18n.global.t('utils.The type of uploaded file is not allowed!')
-    } else if (file.size > siteConfig.upload.maxsize) {
+    } else if (file.size > siteConfig.upload.maxSize) {
         errorMsg = i18n.global.t('utils.The size of the uploaded file exceeds the allowed range!')
     }
     if (errorMsg) {
@@ -57,6 +61,7 @@ export function fileUpload(fd: FormData, params: anyObj = {}, forceLocal = false
             ElNotification({
                 type: 'error',
                 message: errorMsg,
+                zIndex: SYSTEM_ZINDEX,
             })
             reject(errorMsg)
         })
@@ -186,29 +191,25 @@ export function buildTerminalUrl(commandKey: string, uuid: string, extend: strin
  * 请求修改终端配置
  */
 export function postChangeTerminalConfig(data: { manager?: string; port?: string }) {
-    return createAxios(
-        {
-            url: changeTerminalConfigUrl,
-            method: 'POST',
-            data: data,
-        },
-        {
-            loading: true,
-        }
-    )
+    return createAxios({
+        url: changeTerminalConfigUrl,
+        method: 'POST',
+        data: data,
+    })
 }
 
 /**
  * 远程下拉框数据获取
  */
-export function getSelectData(remoteUrl: string, q: string, params: {}) {
+export function getSelectData(remoteUrl: string, q: string, params: anyObj = {}) {
     return createAxios({
         url: remoteUrl,
         method: 'get',
-        params: Object.assign(params, {
+        params: {
             select: true,
             quickSearch: q,
-        }),
+            ...params,
+        },
     })
 }
 
@@ -216,9 +217,9 @@ export function buildCaptchaUrl() {
     return getUrl() + captchaUrl + '?server=1'
 }
 
-export function getCaptchaData(id: string) {
+export function getCaptchaData(id: string, apiBaseURL: string) {
     return createAxios({
-        url: clickCaptchaUrl,
+        url: apiBaseURL + clickCaptchaUrl,
         method: 'get',
         params: {
             id,
@@ -226,10 +227,10 @@ export function getCaptchaData(id: string) {
     })
 }
 
-export function checkClickCaptcha(id: string, info: string, unset: boolean) {
+export function checkClickCaptcha(id: string, info: string, unset: boolean, apiBaseURL: string) {
     return createAxios(
         {
-            url: checkClickCaptchaUrl,
+            url: apiBaseURL + checkClickCaptchaUrl,
             method: 'post',
             data: {
                 id,
@@ -243,12 +244,13 @@ export function checkClickCaptcha(id: string, info: string, unset: boolean) {
     )
 }
 
-export function getTablePk(table: string) {
+export function getTablePk(table: string, connection = '') {
     return createAxios({
         url: getTablePkUrl,
         method: 'get',
         params: {
             table: table,
+            connection: connection,
         },
     })
 }
@@ -258,13 +260,14 @@ export function getTablePk(table: string) {
  * @param table 数据表名
  * @param clean 只要干净的字段注释（只要字段标题）
  */
-export function getTableFieldList(table: string, clean = true) {
+export function getTableFieldList(table: string, clean = true, connection = '') {
     return createAxios({
         url: getTableFieldListUrl,
         method: 'get',
         params: {
             table: table,
             clean: clean ? 1 : 0,
+            connection: connection,
         },
     })
 }
@@ -282,7 +285,9 @@ export function refreshToken() {
 }
 
 /**
- * 生成一个控制器的：增、删、改、查、排序的操作url
+ * 快速生成一个控制器的 增、删、改、查、排序 接口的请求方法
+ * 本 class 实例通常直接传递给 baTable 使用，开发者可重写本类的方法，亦可直接向 baTable 传递自定义的 API 请求类
+ * 表格相关网络请求无需局限于本类，开发者可于 /src/api/ 目录创建自定义的接口请求函数，并于需要的地方导入使用即可
  */
 export class baTableApi {
     private controllerUrl
@@ -299,7 +304,11 @@ export class baTableApi {
         ])
     }
 
-    index(filter: anyObj = {}) {
+    /**
+     * 表格查看接口的请求方法
+     * @param filter 数据过滤条件
+     */
+    index(filter: BaTable['filter'] = {}) {
         return createAxios<TableDefaultData>({
             url: this.actionUrl.get('index'),
             method: 'get',
@@ -307,21 +316,29 @@ export class baTableApi {
         })
     }
 
+    /**
+     * 获取被编辑行数据
+     * @param params 被编辑行主键等
+     */
     edit(params: anyObj) {
         return createAxios({
             url: this.actionUrl.get('edit'),
             method: 'get',
-            params: params,
+            params,
         })
     }
 
+    /**
+     * 表格删除接口的请求方法
+     * @param ids 被删除数据的主键数组
+     */
     del(ids: string[]) {
         return createAxios(
             {
                 url: this.actionUrl.get('del'),
                 method: 'DELETE',
                 params: {
-                    ids: ids,
+                    ids,
                 },
             },
             {
@@ -330,12 +347,17 @@ export class baTableApi {
         )
     }
 
+    /**
+     * 向指定接口 POST 数据，本方法虽然较为通用，但请不要局限于此，开发者可于 /src/api/ 目录创建自定义的接口请求函数，并于需要的地方导入使用即可
+     * @param action 请求的接口，比如 add、edit
+     * @param data 要 POST 的数据
+     */
     postData(action: string, data: anyObj) {
         return createAxios(
             {
                 url: this.actionUrl.has(action) ? this.actionUrl.get(action) : this.controllerUrl + action,
                 method: 'post',
-                data: data,
+                data,
             },
             {
                 showSuccessMessage: true,
@@ -343,14 +365,14 @@ export class baTableApi {
         )
     }
 
-    sortableApi(id: number, targetId: number) {
+    /**
+     * 表格行排序接口的请求方法
+     */
+    sortable(data: anyObj) {
         return createAxios({
             url: this.actionUrl.get('sortable'),
             method: 'post',
-            data: {
-                id: id,
-                targetId: targetId,
-            },
+            data,
         })
     }
 }

@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, provide, watch, nextTick } from 'vue'
+import { reactive, onMounted, provide, watch, nextTick, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Table from '/@/components/table/index.vue'
 import TableHeader from '/@/components/table/header/index.vue'
@@ -66,12 +66,13 @@ const emits = defineEmits<{
     (e: 'choice', value: string[]): void
 }>()
 
-const tableRef = ref()
 const { t } = useI18n()
 const state = reactive({
     ready: false,
     tableSelectable: true,
 })
+
+const tableRef = useTemplateRef('tableRef')
 
 const optBtn: OptButton[] = [
     {
@@ -83,13 +84,14 @@ const optBtn: OptButton[] = [
         class: 'table-row-choice',
         disabledTip: false,
         click: (row: TableRow) => {
-            const elTableRef = tableRef.value.getRef()
-            elTableRef.clearSelection()
+            const elTableRef = tableRef.value?.getRef()
+            elTableRef?.clearSelection()
             emits('choice', props.returnFullUrl ? [row.full_url] : [row.url])
         },
     },
 ]
 const baTable = new baTableClass(new baTableApi('/admin/routine.Attachment/'), {
+    acceptQuery: false,
     column: [
         {
             type: 'selection',
@@ -113,7 +115,7 @@ const baTable = new baTableClass(new baTableApi('/admin/routine.Attachment/'), {
             label: t('utils.preview'),
             prop: 'suffix',
             align: 'center',
-            renderFormatter: previewRenderFormatter,
+            formatter: previewRenderFormatter,
             render: 'image',
             operator: false,
         },
@@ -178,13 +180,13 @@ const baTable = new baTableClass(new baTableApi('/admin/routine.Attachment/'), {
 
 provide('baTable', baTable)
 
-const getIndex = () => {
+const getData = () => {
     if (props.type == 'image') {
         baTable.table.filter!.search = [{ field: 'mimetype', val: 'image', operator: 'LIKE' }]
     }
     baTable.table.ref = tableRef.value
     baTable.table.filter!.limit = 8
-    baTable.getIndex()?.then(() => {
+    baTable.getData()?.then(() => {
         baTable.initSort()
     })
     state.ready = true
@@ -197,16 +199,16 @@ const onChoice = () => {
             files.push(props.returnFullUrl ? baTable.table.selection[key].full_url : baTable.table.selection[key].url)
         }
         emits('choice', files)
-        const elTableRef = tableRef.value.getRef()
-        elTableRef.clearSelection()
+        const elTableRef = tableRef.value?.getRef()
+        elTableRef?.clearSelection()
     }
 }
 
 const onSelectionChange = (selection: TableRow[]) => {
     if (props.limit == 0) return
     if (selection.length > props.limit) {
-        const elTableRef = tableRef.value.getRef()
-        elTableRef.toggleRowSelection(selection[selection.length - 1], false)
+        const elTableRef = tableRef.value?.getRef()
+        elTableRef?.toggleRowSelection(selection[selection.length - 1], false)
     }
     state.tableSelectable = !(selection.length >= props.limit)
 }
@@ -220,7 +222,7 @@ watch(
     (newVal) => {
         if (newVal && !state.ready) {
             nextTick(() => {
-                getIndex()
+                getData()
             })
         }
     }

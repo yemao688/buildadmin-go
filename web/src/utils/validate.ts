@@ -95,9 +95,9 @@ export const validatorType = {
     url: 'URL',
     email: i18n.global.t('utils.email'),
     date: i18n.global.t('utils.date'),
-    number: i18n.global.t('utils.number'),
-    integer: i18n.global.t('utils.integer'),
-    float: i18n.global.t('utils.float'),
+    number: i18n.global.t('validate.number'), // 数字（包括浮点和整数）
+    integer: i18n.global.t('validate.integer'), // 整数（不包括浮点数）
+    float: i18n.global.t('validate.float'), // 浮点数（不包括整数）
 }
 
 export interface buildValidatorParams {

@@ -12,4 +12,7 @@ export default {
     required: 'Required',
     'editor required': 'editor Required',
     'Please enter the correct ID number': 'Please enter the correct ID number',
+    number: 'Number (including float and integer)',
+    integer: 'Integer (excluding float)',
+    float: 'Float (excluding integer)',
 }

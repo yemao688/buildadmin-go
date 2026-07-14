@@ -16,7 +16,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     ref="formRef"
@@ -42,26 +42,26 @@
                         :placeholder="t('Please input field', { field: t('auth.admin.nickname') })"
                     />
                     <FormItem
-                        :label="t('auth.admin.grouping')"
+                        :label="t('auth.admin.group')"
                         v-model="baTable.form.items!.group_arr"
                         prop="group_arr"
                         type="remoteSelect"
-                        :key="('group-' + baTable.form.items!.id)"
+                        :key="'group-' + baTable.form.items!.id"
                         :input-attr="{
                             multiple: true,
                             params: { isTree: true, absoluteAuth: adminInfo.id == baTable.form.items!.id ? 0 : 1 },
                             field: 'name',
-                            'remote-url': '/admin/auth.Group/index',
+                            remoteUrl: '/admin/auth.Group/index',
                             placeholder: t('Click select'),
                         }"
                     />
-                    <FormItem :label="t('auth.admin.head portrait')" type="image" v-model="baTable.form.items!.avatar" />
+                    <FormItem :label="t('auth.admin.avatar')" type="image" v-model="baTable.form.items!.avatar" />
                     <FormItem
-                        :label="t('auth.admin.mailbox')"
+                        :label="t('auth.admin.email')"
                         prop="email"
                         v-model="baTable.form.items!.email"
                         type="string"
-                        :placeholder="t('Please input field', { field: t('auth.admin.mailbox') })"
+                        :placeholder="t('Please input field', { field: t('auth.admin.email') })"
                     />
                     <FormItem
                         :label="t('auth.admin.mobile')"
@@ -75,6 +75,7 @@
                         prop="password"
                         v-model="baTable.form.items!.password"
                         type="password"
+                        :input-attr="{ autocomplete: 'new-password' }"
                         :placeholder="
                             baTable.form.operate == 'Add'
                                 ? t('Please input field', { field: t('auth.admin.Password') })
@@ -94,7 +95,10 @@
                         :label="t('State')"
                         v-model="baTable.form.items!.status"
                         type="radio"
-                        :data="{ content: { '0': t('Disable'), '1': t('Enable') }, childrenAttr: { border: true } }"
+                        :input-attr="{
+                            border: true,
+                            content: { disable: t('Disable'), enable: t('Enable') },
+                        }"
                     />
                 </el-form>
             </div>
@@ -111,18 +115,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, inject, watch } from 'vue'
+import { reactive, inject, watch, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type baTableClass from '/@/utils/baTable'
 import { regularPassword, buildValidatorData } from '/@/utils/validate'
-import type { FormInstance, FormItemRule } from 'element-plus'
+import type { FormItemRule } from 'element-plus'
 import FormItem from '/@/components/formItem/index.vue'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
 
 const config = useConfig()
 const adminInfo = useAdminInfo()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
@@ -130,8 +134,8 @@ const { t } = useI18n()
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     username: [buildValidatorData({ name: 'required', title: t('auth.admin.username') }), buildValidatorData({ name: 'account' })],
     nickname: [buildValidatorData({ name: 'required', title: t('auth.admin.nickname') })],
-    group_arr: [buildValidatorData({ name: 'required', message: t('Please select field', { field: t('auth.admin.grouping') }) })],
-    email: [buildValidatorData({ name: 'email', message: t('Please enter the correct field', { field: t('auth.admin.mailbox') }) })],
+    group_arr: [buildValidatorData({ name: 'required', message: t('Please select field', { field: t('auth.admin.group') }) })],
+    email: [buildValidatorData({ name: 'email', message: t('Please enter the correct field', { field: t('auth.admin.email') }) })],
     mobile: [buildValidatorData({ name: 'mobile', message: t('Please enter the correct field', { field: t('auth.admin.mobile') }) })],
     password: [
         {

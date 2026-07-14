@@ -320,6 +320,10 @@ func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		return
+	}
+
 	var params = struct {
 		IDS
 		{{.ClassName}}Param

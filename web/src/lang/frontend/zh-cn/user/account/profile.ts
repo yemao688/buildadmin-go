@@ -1,7 +1,7 @@
 export default {
-    'personal data': '个人资料',
+    profile: '个人资料',
     'Change Password': '修改密码',
-    'head portrait': '头像',
+    avatar: '头像',
     'User name': '用户名',
     'User nickname': '用户昵称',
     mail: '邮箱',

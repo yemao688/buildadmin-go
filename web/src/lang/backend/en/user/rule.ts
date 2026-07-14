@@ -21,4 +21,6 @@ export default {
         'Please start with /src for web side component paths, such as: /src/views/frontend/index.vue',
     'Web side component path, please start with /src, such as: /src/views/frontend/index':
         "For example, if you add 'account/overview' as a route only, then you can additionally add 'account/overview', 'account/overview/:a' and 'account/overview/:b/:C' as menus only.",
+    'Component path tips':
+        'This item is mandatory within a WEB project; otherwise, it cannot be accessed. However, when it is used as a menu within a Nuxt project, there is no need to fill in this item',
 }

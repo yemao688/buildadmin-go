@@ -1,8 +1,8 @@
 export default {
     'User name': '用户名',
     nickname: '昵称',
-    grouping: '分组',
-    'head portrait': '头像',
+    group: '分组',
+    avatar: '头像',
     Gender: '性别',
     male: '男',
     female: '女',

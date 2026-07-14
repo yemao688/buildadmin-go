@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, provide } from 'vue'
+import { onMounted, provide, useTemplateRef } from 'vue'
 import PopupForm from './popupForm.vue'
 import Table from '/@/components/table/index.vue'
 import TableHeader from '/@/components/table/header/index.vue'
@@ -62,10 +62,13 @@ defineOptions({
 })
 
 const { t } = useI18n()
-const tableRef = ref()
+const tableRef = useTemplateRef('tableRef')
 
 const optBtn = defaultOptButtons(['edit', 'delete'])
-optBtn[1].popconfirm!.title = t('routine.attachment.Files and records will be deleted at the same time Are you sure?')
+optBtn[1].popconfirm = {
+    ...optBtn[1].popconfirm,
+    title: t('routine.attachment.Files and records will be deleted at the same time Are you sure?'),
+}
 
 const baTable = new baTableClass(new baTableApi('/admin/routine.Attachment/'), {
     column: [
@@ -111,7 +114,7 @@ const baTable = new baTableClass(new baTableApi('/admin/routine.Attachment/'), {
             label: t('utils.preview'),
             prop: 'suffix',
             align: 'center',
-            renderFormatter: previewRenderFormatter,
+            formatter: previewRenderFormatter,
             render: 'image',
             operator: false,
         },
@@ -165,7 +168,7 @@ provide('baTable', baTable)
 onMounted(() => {
     baTable.table.ref = tableRef.value
     baTable.mount()
-    baTable.getIndex()?.then(() => {
+    baTable.getData()?.then(() => {
         baTable.initSort()
     })
 })

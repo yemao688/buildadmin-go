@@ -50,6 +50,7 @@ func initConfig() {
 	v := viper.New()
 	v.SetConfigFile(configPath)
 	v.SetConfigType("yaml")
+	v.SetDefault("app.user_login_captcha", true)
 	if err := v.ReadInConfig(); err != nil {
 		panic(fmt.Errorf("read config failed: %s ", err))
 	}

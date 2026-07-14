@@ -13,14 +13,14 @@
                 :cancel-button-text="t('Cancel')"
                 confirmButtonType="success"
                 :title="t('security.dataRecycleLog.Are you sure to restore the selected records?')"
-                :disabled="baTable.table.selection!.length > 0 ? false:true"
+                :disabled="baTable.table.selection!.length > 0 ? false : true"
             >
                 <template #reference>
                     <div class="mlr-12">
                         <el-tooltip :content="t('security.dataRecycleLog.Restore the selected record to the original data table')" placement="top">
                             <el-button
                                 v-blur
-                                :disabled="baTable.table.selection!.length > 0 ? false:true"
+                                :disabled="baTable.table.selection!.length > 0 ? false : true"
                                 class="table-header-operate"
                                 type="success"
                             >
@@ -94,86 +94,89 @@ let optButtons: OptButton[] = [
     },
 ]
 optButtons = optButtons.concat(defaultOptButtons(['delete']))
-const baTable = new baTableClass(
-    new baTableApi(url),
-    {
-        column: [
-            { type: 'selection', align: 'center', operator: false },
-            { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
-            {
-                label: t('security.dataRecycleLog.Operation administrator'),
-                prop: 'admin.nickname',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-            },
-            {
-                label: t('security.dataRecycleLog.Recycling rule name'),
-                prop: 'recycle.name',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-            },
-            {
-                label: t('security.dataRecycleLog.controller'),
-                prop: 'recycle.controller_as',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-            },
-            {
-                label: t('security.dataRecycleLog.data sheet'),
-                prop: 'data_table',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-            },
-            {
-                label: t('security.dataRecycleLog.DeletedData'),
-                prop: 'data',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('security.dataRecycleLog.Arbitrary fragment fuzzy query'),
-                showOverflowTooltip: true,
-            },
-            { label: 'IP', prop: 'ip', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            {
-                show: false,
-                label: 'User Agent',
-                prop: 'useragent',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                showOverflowTooltip: true,
-            },
-            {
-                label: t('security.dataRecycleLog.Delete time'),
-                prop: 'create_time',
-                align: 'center',
-                render: 'datetime',
-                sortable: 'custom',
-                operator: 'RANGE',
-                width: 160,
-            },
-            {
-                label: t('Operate'),
-                align: 'center',
-                width: 120,
-                render: 'buttons',
-                buttons: optButtons,
-                operator: false,
-            },
-        ],
-        dblClickNotEditColumn: [undefined],
-    },
-    {},
-    {
-        onTableDblclick: ({ row }) => {
-            infoButtonClick(row[baTable.table.pk!])
-            return false
+const baTable = new baTableClass(new baTableApi(url), {
+    column: [
+        { type: 'selection', align: 'center', operator: false },
+        { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+        {
+            label: t('security.dataRecycleLog.Operation administrator'),
+            prop: 'admin.nickname',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
         },
-    }
-)
+        {
+            label: t('security.dataRecycleLog.Recycling rule name'),
+            prop: 'recycle.name',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+        },
+        {
+            label: t('security.dataRecycleLog.controller'),
+            prop: 'recycle.controller_as',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+        },
+        {
+            label: t('Connection'),
+            prop: 'connection',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+        },
+        {
+            label: t('security.dataRecycleLog.data sheet'),
+            prop: 'data_table',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+        },
+        {
+            label: t('security.dataRecycleLog.DeletedData'),
+            prop: 'data',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('security.dataRecycleLog.Arbitrary fragment fuzzy query'),
+            showOverflowTooltip: true,
+        },
+        { label: 'IP', prop: 'ip', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
+        {
+            show: false,
+            label: 'User Agent',
+            prop: 'useragent',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            showOverflowTooltip: true,
+        },
+        {
+            label: t('security.dataRecycleLog.Delete time'),
+            prop: 'create_time',
+            align: 'center',
+            render: 'datetime',
+            sortable: 'custom',
+            operator: 'RANGE',
+            width: 160,
+        },
+        {
+            label: t('Operate'),
+            align: 'center',
+            width: 120,
+            render: 'buttons',
+            buttons: optButtons,
+            operator: false,
+        },
+    ],
+    dblClickNotEditColumn: [undefined],
+})
+
+// 利用双击单元格前钩子重写双击操作
+baTable.before.onTableDblclick = ({ row }) => {
+    infoButtonClick(row[baTable.table.pk!])
+    return false
+}
 
 const onRestore = (ids: string[]) => {
     restore(ids).then(() => {
@@ -202,7 +205,7 @@ provide('baTable', baTable)
 
 onMounted(() => {
     baTable.mount()
-    baTable.getIndex()
+    baTable.getData()
 })
 </script>
 

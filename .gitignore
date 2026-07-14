@@ -57,3 +57,9 @@ install.lock
 
 # Runtime configuration generated or edited during installation
 /conf/config.yaml
+
+# Slim: upstream source clones for comparison
+/.slim/
+
+.slim/deepwork/
+/web.bak.v2.0.4

@@ -1,5 +1,5 @@
 <template>
-    <el-dialog class="ba-operate-dialog" :close-on-click-modal="false" :model-value="modelValue" @close="closeForm">
+    <el-dialog class="ba-operate-dialog" :close-on-click-modal="false" :model-value="props.modelValue" @close="closeForm">
         <template #header>
             <div class="title" v-drag="['.ba-operate-dialog', '.el-dialog__header']" v-zoom="'.ba-operate-dialog'">
                 {{ t('routine.config.Add configuration item') }}
@@ -16,14 +16,15 @@
                     :label-width="160"
                 >
                     <FormItem
-                        :label="t('routine.config.Variable grouping')"
+                        :label="t('routine.config.Variable group')"
                         type="select"
                         v-model="state.addConfig.group"
                         prop="group"
-                        :data="{ content: configGroup }"
+                        :input-attr="{ content: configGroup }"
+                        :placeholder="t('Please select field', { field: t('routine.config.Variable group') })"
                     />
                     <CreateFormItemData v-model="state.formItemData" />
-                    <FormItem :label="t('Weigh')" type="number" v-model.number="state.addConfig.weigh" prop="weigh" />
+                    <FormItem :label="t('Weigh')" type="number" v-model="state.addConfig.weigh" prop="weigh" />
                 </el-form>
             </div>
         </el-scrollbar>
@@ -37,9 +38,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { reactive, useTemplateRef } from 'vue'
 import FormItem from '/@/components/formItem/index.vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormRules } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
 import { postData } from '/@/api/backend/routine/config'
 import CreateFormItemData from '/@/components/formItem/createData.vue'
@@ -69,7 +70,8 @@ const closeForm = () => {
 }
 
 const { t } = useI18n()
-const formRef = ref<FormInstance>()
+const formRef = useTemplateRef('formRef')
+
 const state: {
     inputTypes: anyObj
     labelWidth: number
@@ -100,7 +102,7 @@ const rules = reactive<FormRules>({
         buildValidatorData({
             name: 'required',
             trigger: 'change',
-            message: t('Please select field', { field: t('routine.config.Variable grouping') }),
+            message: t('Please select field', { field: t('routine.config.Variable group') }),
         }),
     ],
     name: [
@@ -119,8 +121,7 @@ const rules = reactive<FormRules>({
 })
 
 const onAddSubmit = () => {
-    if (!formRef.value) return
-    formRef.value.validate((valid) => {
+    formRef.value?.validate((valid) => {
         if (valid) {
             state.addConfig.content = state.formItemData.dict
             delete state.formItemData.dict

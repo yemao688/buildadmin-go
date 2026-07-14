@@ -18,9 +18,10 @@ type SecurityDataRecycleLog struct {
 	DataTable  string              `gorm:"column:data_table;not null;comment:数据表" json:"data_table"`           // 数据表
 	PrimaryKey string              `gorm:"column:primary_key;not null;comment:数据表主键" json:"primary_key"`       // 数据表主键
 	IsRestore  int32               `gorm:"column:is_restore;not null;comment:是否已还原:0=否,1=是" json:"is_restore"` // 是否已还原:0=否,1=是
-	IP         string              `gorm:"column:ip;not null;comment:操作者IP" json:"ip"`                         // 操作者IP
-	Useragent  string              `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`      // User-Agent
-	CreateTime int64               `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`  // 创建时间
+	Connection string              `gorm:"column:connection;not null;default:'';comment:数据库连接配置标识" json:"connection"`
+	IP         string              `gorm:"column:ip;not null;comment:操作者IP" json:"ip"`                        // 操作者IP
+	Useragent  string              `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`     // User-Agent
+	CreateTime int64               `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
 	Admin      simple.Admin        `gorm:"foreignKey:AdminID" json:"admin"`
 	Recycle    SecurityDataRecycle `gorm:"foreignKey:RecycleID" json:"recycle"`
 }

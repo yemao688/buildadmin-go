@@ -1,21 +1,20 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import { createRouter, createWebHashHistory } from 'vue-router'
+import langAutoLoadMap from '/@/lang/autoload'
+import { loadAndMergeMessages } from '/@/lang/index'
 import staticRoutes from '/@/router/static'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { loading } from '/@/utils/loading'
-import langAutoLoadMap from '/@/lang/autoload'
-import { mergeMessage } from '/@/lang/index'
 import { useConfig } from '/@/stores/config'
 import { isAdminApp } from '/@/utils/common'
-import { uniq } from 'lodash-es'
+import { loading } from '/@/utils/loading'
 
 const router = createRouter({
     history: createWebHashHistory(),
     routes: staticRoutes,
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
     NProgress.configure({ showSpinner: false })
     NProgress.start()
     if (!window.existLoading) {
@@ -24,20 +23,21 @@ router.beforeEach((to, from, next) => {
     }
 
     // 按需动态加载页面的语言包-start
-    let loadPath: string[] = []
     const config = useConfig()
+    const loadPath: string[] = []
+    const lang = config.lang.defaultLang
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
     let prefix = ''
     if (isAdminApp(to.fullPath)) {
-        prefix = './backend/' + config.lang.defaultLang
+        prefix = './backend/' + lang
 
         // 去除 path 中的 /admin
         const adminPath = to.path.slice(to.path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
         if (adminPath) loadPath.push(prefix + adminPath + '.ts')
     } else {
-        prefix = './frontend/' + config.lang.defaultLang
+        prefix = './frontend/' + lang
         loadPath.push(prefix + to.path + '.ts')
     }
 
@@ -46,28 +46,12 @@ router.beforeEach((to, from, next) => {
         loadPath.push(prefix + '/' + to.name.toString() + '.ts')
     }
 
-    if (!window.loadLangHandle.publicMessageLoaded) window.loadLangHandle.publicMessageLoaded = []
-    const publicMessagePath = prefix + '.ts'
-    if (!window.loadLangHandle.publicMessageLoaded.includes(publicMessagePath)) {
-        loadPath.push(publicMessagePath)
-        window.loadLangHandle.publicMessageLoaded.push(publicMessagePath)
-    }
+    // 路由公共语言包
+    loadPath.push(prefix + '.ts')
 
-    // 去重
-    loadPath = uniq(loadPath)
-
-    for (const key in loadPath) {
-        loadPath[key] = loadPath[key].replaceAll('${lang}', config.lang.defaultLang)
-        if (loadPath[key] in window.loadLangHandle) {
-            window.loadLangHandle[loadPath[key]]().then((res: { default: anyObj }) => {
-                const pathName = loadPath[key].slice(loadPath[key].lastIndexOf(prefix) + (prefix.length + 1), loadPath[key].lastIndexOf('.'))
-                mergeMessage(res.default, pathName)
-            })
-        }
-    }
+    // 等待语言包加载并合并完成后再放行路由，避免页面已渲染但语言包未就绪
+    await loadAndMergeMessages(loadPath, prefix, lang)
     // 动态加载语言包-end
-
-    next()
 })
 
 // 路由加载后

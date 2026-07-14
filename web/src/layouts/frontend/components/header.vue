@@ -10,7 +10,7 @@
                     <Icon name="fa fa-indent" color="var(--el-color-primary)" size="20" />
                 </div>
 
-                <el-scrollbar class="hidden-sm-and-down">
+                <el-scrollbar ref="layoutMenuScrollbarRef" class="hidden-sm-and-down">
                     <Menu class="frontend-header-menu" :ellipsis="false" mode="horizontal" />
                 </el-scrollbar>
             </el-col>
@@ -21,7 +21,7 @@
             v-model="memberCenter.state.menuExpand"
             :with-header="false"
             direction="ltr"
-            size="40%"
+            :size="memberCenter.state.shrink ? '70%' : '40%'"
         >
             <div class="header-row">
                 <div @click="router.push({ name: '/' })" class="header-logo">
@@ -38,27 +38,20 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useSiteConfig } from '/@/stores/siteConfig'
-import { useMemberCenter } from '/@/stores/memberCenter'
+import { onBeforeRouteUpdate, useRouter } from 'vue-router'
 import { initialize } from '/@/api/frontend/index'
 import Menu from '/@/layouts/frontend/components/menu.vue'
+import { useMemberCenter } from '/@/stores/memberCenter'
+import { layoutMenuScrollbarRef } from '/@/stores/refs'
+import { useSiteConfig } from '/@/stores/siteConfig'
 
-const route = useRoute()
 const router = useRouter()
 const siteConfig = useSiteConfig()
 const memberCenter = useMemberCenter()
 
-watch(
-    () => route.path,
-    () => {
-        memberCenter.toggleMenuExpand(false)
-    },
-    {
-        immediate: true,
-    }
-)
+onBeforeRouteUpdate(() => {
+    memberCenter.toggleMenuExpand(false)
+})
 
 /**
  * 前端初始化请求，获取站点配置信息，动态路由信息等

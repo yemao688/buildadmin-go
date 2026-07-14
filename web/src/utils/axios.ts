@@ -4,10 +4,11 @@ import { ElLoading, ElNotification, type LoadingOptions } from 'element-plus'
 import { refreshToken } from '/@/api/common'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
+import adminBaseRoute from '/@/router/static/adminBase'
 import { memberCenterBaseRoutePath } from '/@/router/static/memberCenterBase'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
+import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 import { useUserInfo } from '/@/stores/userInfo'
 import { isAdminApp } from '/@/utils/common'
 
@@ -55,9 +56,15 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         responseType: 'json',
     })
 
+    // 自定义后台入口
+    if (adminBaseRoute.path != '/admin' && isAdminApp() && /^\/admin\//.test(axiosConfig.url!)) {
+        axiosConfig.url = axiosConfig.url!.replace(/^\/admin\//, adminBaseRoute.path + '.php/')
+    }
+
+    // 合并默认请求选项
     options = Object.assign(
         {
-            CancelDuplicateRequest: true, // 是否开启取消重复请求, 默认为 true
+            cancelDuplicateRequest: true, // 是否开启取消重复请求, 默认为 true
             loading: false, // 是否开启loading层效果, 默认为false
             reductDataFormat: true, // 是否开启简洁的数据结构响应, 默认为true
             showErrorMessage: true, // 是否开启接口错误信息展示,默认为true
@@ -72,7 +79,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
     Axios.interceptors.request.use(
         (config) => {
             removePending(config)
-            options.CancelDuplicateRequest && addPending(config)
+            options.cancelDuplicateRequest && addPending(config)
             // 创建loading实例
             if (options.loading) {
                 loadingInstance.count++
@@ -167,6 +174,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                         ElNotification({
                             type: 'error',
                             message: response.data.msg,
+                            zIndex: SYSTEM_ZINDEX,
                         })
                     }
                     // 自动跳转到路由name或path
@@ -175,7 +183,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                     }
                     if (response.data.code == 303) {
                         const isAdminAppFlag = isAdminApp()
-                        let routerPath = isAdminAppFlag ? adminBaseRoutePath : memberCenterBaseRoutePath
+                        let routerPath = isAdminAppFlag ? adminBaseRoute.path : memberCenterBaseRoutePath
 
                         // 需要登录，清理 token，转到登录页
                         if (response.data.data.type == 'need login') {
@@ -194,6 +202,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                     ElNotification({
                         message: response.data.msg ? response.data.msg : i18n.global.t('axios.Operation successful'),
                         type: 'success',
+                        zIndex: SYSTEM_ZINDEX,
                     })
                 }
             }
@@ -273,6 +282,7 @@ function httpErrorStatusHandle(error: any) {
     ElNotification({
         type: 'error',
         message,
+        zIndex: SYSTEM_ZINDEX,
     })
 }
 
@@ -351,16 +361,16 @@ interface LoadingInstance {
 }
 interface Options {
     // 是否开启取消重复请求, 默认为 true
-    CancelDuplicateRequest?: boolean
+    cancelDuplicateRequest?: boolean
     // 是否开启loading层效果, 默认为false
     loading?: boolean
     // 是否开启简洁的数据结构响应, 默认为true
     reductDataFormat?: boolean
     // 是否开启接口错误信息展示,默认为true
     showErrorMessage?: boolean
-    // 是否开启code不为0时的信息提示, 默认为true
+    // 是否开启code不为1时的信息提示, 默认为true
     showCodeMessage?: boolean
-    // 是否开启code为0时的信息提示, 默认为false
+    // 是否开启code为1时的信息提示, 默认为false
     showSuccessMessage?: boolean
     // 当前请求使用另外的用户token
     anotherToken?: string

@@ -3,17 +3,19 @@
         <component :is="config.layout.layoutMode + 'NavBar'"></component>
     </el-header>
 </template>
+
 <script setup lang="ts">
 import { useConfig } from '/@/stores/config'
 import { useNavTabs } from '/@/stores/navTabs'
 import DefaultNavBar from '/@/layouts/backend/components/navBar/default.vue'
 import ClassicNavBar from '/@/layouts/backend/components/navBar/classic.vue'
+import LeftSplitNavBar from '/@/layouts/backend/components/navBar/leftSplit.vue'
 import StreamlineNavBar from '/@/layouts/backend/components/menus/menuHorizontal.vue'
 import DoubleNavBar from '/@/layouts/backend/components/navBar/double.vue'
 
 defineOptions({
     name: 'layout/header',
-    components: { DefaultNavBar, ClassicNavBar, StreamlineNavBar, DoubleNavBar },
+    components: { DefaultNavBar, ClassicNavBar, LeftSplitNavBar, StreamlineNavBar, DoubleNavBar },
 })
 
 const config = useConfig()

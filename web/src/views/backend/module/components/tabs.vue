@@ -10,36 +10,51 @@
         >
             <el-tab-pane v-for="cat in state.table.category" :name="cat.id.toString()" :key="cat.id" :label="cat.name" class="store-tab-pane">
                 <template v-if="state.table.modules[state.table.params.activeTab] && state.table.modules[state.table.params.activeTab].length > 0">
-                    <div class="goods" v-for="item in state.table.modules[state.table.params.activeTab]" :key="item.uid">
-                        <div @click="showInfo(item.uid)" class="goods-item suspension">
-                            <el-image
-                                loading="lazy"
-                                fit="contain"
-                                class="goods-img"
-                                :src="item.logo ? item.logo : fullUrl('/static/images/local-module-logo.png')"
-                            />
-                            <div class="goods-footer">
-                                <div class="goods-tag" v-if="item.tags && item.tags.length > 0">
-                                    <el-tag v-for="(tag, idx) in item.tags" :type="tag.type" :key="idx">{{ tag.name }}</el-tag>
-                                </div>
-                                <div class="goods-title">
-                                    {{ item.title }}
-                                </div>
-                                <div class="goods-data">
-                                    <span class="download-count">
-                                        <Icon name="fa fa-download" color="#c0c4cc" size="13" /> {{ item.downloads ? item.downloads : '-' }}
-                                    </span>
-                                    <span v-if="item.state === moduleInstallState.UNINSTALLED" class="goods-price">
-                                        <span class="original-price">{{ currency(item.original_price, item.currency_select) }}</span>
-                                        <span class="current-price">{{ currency(item.present_price, item.currency_select) }}</span>
-                                    </span>
-                                    <div v-else class="goods-price">
-                                        <el-tag effect="dark" :type="item.stateTag.type">{{ item.stateTag.text }}</el-tag>
+                    <el-row :gutter="15" class="goods">
+                        <el-col
+                            :xs="12"
+                            :sm="8"
+                            :md="8"
+                            :lg="6"
+                            :xl="4"
+                            v-for="item in state.table.modules[state.table.params.activeTab]"
+                            :key="item.uid"
+                            class="goods-col"
+                        >
+                            <div @click="showInfo(item.uid)" class="goods-item suspension">
+                                <el-image
+                                    loading="lazy"
+                                    fit="cover"
+                                    class="goods-img"
+                                    :src="item.logo ? item.logo : fullUrl('/static/images/local-module-logo.png')"
+                                />
+                                <div class="goods-footer">
+                                    <div class="goods-tag" v-if="item.tags && item.tags.length > 0">
+                                        <el-tag v-for="(tag, idx) in item.tags" :type="tag.type ? tag.type : 'primary'" :key="idx">
+                                            {{ tag.name }}
+                                        </el-tag>
+                                    </div>
+                                    <div class="goods-title">
+                                        {{ item.title }}
+                                    </div>
+                                    <div class="goods-data">
+                                        <span class="download-count">
+                                            <Icon name="fa fa-download" color="#c0c4cc" size="13" /> {{ item.downloads ? item.downloads : '-' }}
+                                        </span>
+                                        <span v-if="item.state === moduleInstallState.UNINSTALLED" class="goods-price">
+                                            <span class="original-price">{{ currency(item.original_price, item.currency_select) }}</span>
+                                            <span class="current-price">{{ currency(item.present_price, item.currency_select) }}</span>
+                                        </span>
+                                        <div v-else class="goods-price">
+                                            <el-tag effect="dark" :type="item.stateTag.type ? item.stateTag.type : 'primary'">
+                                                {{ item.stateTag.text }}
+                                            </el-tag>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
+                        </el-col>
+                    </el-row>
                 </template>
                 <el-empty v-else class="modules-empty" :description="$t('module.No more')" />
             </el-tab-pane>
@@ -48,8 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import { currency, loadData, showInfo } from '../index'
 import { state } from '../store'
-import { loadData, currency, showInfo } from '../index'
 import { moduleInstallState } from '../types'
 import { fullUrl } from '/@/utils/common'
 
@@ -59,30 +74,24 @@ const onTabChange = () => {
 </script>
 
 <style scoped lang="scss">
-.store-tab-pane {
-    display: flex;
-    flex-wrap: wrap;
-}
-.goods {
-    display: flex;
-    flex-wrap: wrap;
+.suspension:hover {
+    z-index: 1;
 }
 .goods-item {
-    width: 245px;
-    margin: 10px;
+    display: block;
+    margin-bottom: 15px;
     padding-bottom: 40px;
     position: relative;
     border-radius: var(--el-border-radius-base);
     background-color: var(--el-fill-color-extra-light);
-    cursor: pointer;
     box-shadow: var(--el-box-shadow-light);
+    cursor: pointer;
 }
 .goods-img {
+    display: block;
     border-radius: var(--el-border-radius-base);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    width: 245px;
-    height: 163.33px;
 }
 .modules-empty {
     width: 100%;
@@ -100,6 +109,8 @@ const onTabChange = () => {
         text-overflow: ellipsis;
         white-space: nowrap;
         padding-top: 6px;
+        font-size: 14px;
+        line-height: 18px;
     }
     .goods-data {
         display: flex;
@@ -143,7 +154,15 @@ const onTabChange = () => {
     border-radius: var(--el-border-radius-base);
 }
 :deep(.store-tabs) .el-tabs__content {
-    padding: 10px 10px;
+    padding: 15px 15px 0 15px;
     min-height: 350px;
+}
+@media screen and (max-width: 520px) {
+    .goods {
+        .goods-col {
+            max-width: 100%;
+            flex-basis: 100%;
+        }
+    }
 }
 </style>

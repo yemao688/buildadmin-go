@@ -1,6 +1,6 @@
 <template>
     <el-main class="layout-main">
-        <el-scrollbar class="layout-main-scrollbar" :style="layoutMainScrollbarStyle()" ref="mainScrollbarRef">
+        <el-scrollbar class="layout-main-scrollbar" :style="layoutMainScrollbarStyle" ref="layoutMainScrollbarRef">
             <router-view v-slot="{ Component }">
                 <transition :name="config.layout.mainAnimation" mode="out-in">
                     <keep-alive :include="state.keepAliveComponentNameList">
@@ -13,13 +13,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, onBeforeMount, onUnmounted, nextTick, provide } from 'vue'
+import { reactive, onMounted, watch, onBeforeMount, onUnmounted, nextTick } from 'vue'
 import { useRoute, type RouteLocationNormalized } from 'vue-router'
-import { mainHeight as layoutMainScrollbarStyle } from '/@/utils/layout'
 import useCurrentInstance from '/@/utils/useCurrentInstance'
 import { useConfig } from '/@/stores/config'
 import { useNavTabs } from '/@/stores/navTabs'
-import type { ScrollbarInstance } from 'element-plus'
+import { layoutMainScrollbarRef, layoutMainScrollbarStyle } from '/@/stores/refs'
 
 defineOptions({
     name: 'layout/main',
@@ -30,13 +29,12 @@ const { proxy } = useCurrentInstance()
 const route = useRoute()
 const config = useConfig()
 const navTabs = useNavTabs()
-const mainScrollbarRef = ref<ScrollbarInstance>()
 
 const state: {
     componentKey: string
     keepAliveComponentNameList: string[]
 } = reactive({
-    componentKey: route.path,
+    componentKey: route.fullPath,
     keepAliveComponentNameList: [],
 })
 
@@ -50,12 +48,21 @@ const addKeepAliveComponentName = function (keepAliveName: string | undefined) {
     }
 }
 
+const addActiveRouteKeepAlive = () => {
+    if (navTabs.state.activeRoute) {
+        const tabView = navTabs.getTabsViewDataByRoute(navTabs.state.activeRoute)
+        if (tabView && typeof tabView.meta?.keepalive == 'string') {
+            addKeepAliveComponentName(tabView.meta.keepalive)
+        }
+    }
+}
+
 onBeforeMount(() => {
     proxy.eventBus.on('onTabViewRefresh', (menu: RouteLocationNormalized) => {
         state.keepAliveComponentNameList = state.keepAliveComponentNameList.filter((name: string) => menu.meta.keepalive !== name)
         state.componentKey = ''
         nextTick(() => {
-            state.componentKey = menu.path
+            state.componentKey = menu.fullPath
             addKeepAliveComponentName(menu.meta.keepalive as string)
         })
     })
@@ -70,23 +77,17 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
-    // 确保刷新页面时也能正确取得当前路由 keepalive 参数
-    if (typeof navTabs.state.activeRoute?.meta.keepalive == 'string') {
-        addKeepAliveComponentName(navTabs.state.activeRoute?.meta.keepalive)
-    }
+    // 确保刷新页面时也能正确取得当前路由 keepalive 参数（热更新）
+    addActiveRouteKeepAlive()
 })
 
 watch(
-    () => route.path,
+    () => route.fullPath,
     () => {
-        state.componentKey = route.path
-        if (typeof navTabs.state.activeRoute?.meta.keepalive == 'string') {
-            addKeepAliveComponentName(navTabs.state.activeRoute?.meta.keepalive)
-        }
+        state.componentKey = route.fullPath
+        addActiveRouteKeepAlive()
     }
 )
-
-provide('mainScrollbarRef', mainScrollbarRef)
 </script>
 
 <style scoped lang="scss">

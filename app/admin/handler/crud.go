@@ -329,26 +329,32 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 // 解析字段数据
 func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 
-	params := struct {
-		TableName string `json:"table" binding:"required"`
-		Type      string `json:"type"`
-	}{}
-
+	params := map[string]any{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validate.GetError(nil, err))
 		return
 	}
-	if params.Type == "db" {
+
+	// 兼容 v2.0.4 和 v2.3.7 两种参数格式
+	tableName, _ := params["table"].(string)
+	reqType, _ := params["type"].(string)
+
+	if tableName == "" {
+		FailByErr(ctx, cErr.BadRequest("table is required"))
+		return
+	}
+
+	if reqType == "db" {
 		comment := ""
-		if info, _ := h.tableM.GetInfo(params.TableName); len(info) == 0 {
+		if info, _ := h.tableM.GetInfo(tableName); len(info) == 0 {
 			FailByErr(ctx, cErr.BadRequest("Record not found"))
 			return
 		} else {
 			comment = info[0]["TABLE_COMMENT"].(string)
 		}
-		empty, _ := h.tableM.IsHasData(params.TableName)
+		empty, _ := h.tableM.IsHasData(tableName)
 
-		columns, _ := h.tableM.GetColumns(params.TableName)
+		columns, _ := h.tableM.GetColumns(tableName)
 		Success(ctx, map[string]interface{}{
 			"columns": helper.ParseTableColumns(columns, false), //TODO: 数据类型可能需要转换
 			"comment": comment,

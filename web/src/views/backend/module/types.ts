@@ -48,18 +48,18 @@ export interface moduleState {
     goodsInfo: anyObj
     buy: {
         info: anyObj
+        renew: boolean
         agreement: boolean
     }
     common: {
         uid: string
         moduleState: number
         quickClose: boolean
-        type: 'loading' | 'InstallConflict' | 'done' | 'disableConfirmConflict' | 'uploadInstall'
-        disableHmr: boolean
+        type: 'loading' | 'installConflict' | 'done' | 'disableConfirmConflict' | 'uploadInstall' | 'selectVersion'
         dialogTitle: string
         fileConflict: anyObj[]
         dependConflict: anyObj[]
-        loadingTitle: 'init' | 'download' | 'install'
+        loadingTitle: 'init' | 'download' | 'install' | 'getInstallableVersion'
         loadingComponentKey: string
         waitInstallDepend: string[]
         dependInstallState: 'none' | 'executing' | 'success' | 'fail'
@@ -67,8 +67,12 @@ export interface moduleState {
         disableDependConflict: anyObj[]
         disableParams: anyObj
         payType: 'score' | 'wx' | 'balance' | 'zfb'
+        update: boolean
+        versions: anyObj[]
     }
     sysVersion: string
+    nuxtVersion: string
     installedModule: moduleInfo[]
     installedModuleUids: string[]
+    installedModuleVersions: { uid: string; version: string }[]
 }

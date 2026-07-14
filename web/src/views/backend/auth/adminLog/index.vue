@@ -51,87 +51,83 @@ let optButtons: OptButton[] = [
 
 optButtons = concat(optButtons, defaultOptButtons(['delete']))
 
-const baTable = new baTableClass(
-    new baTableApi('/admin/auth.AdminLog/'),
-    {
-        column: [
-            { type: 'selection', align: 'center', operator: false },
-            { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
-            {
-                label: t('auth.adminLog.admin_id'),
-                prop: 'admin_id',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                width: 70,
-            },
-            {
-                label: t('auth.adminLog.username'),
-                prop: 'username',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                width: 160,
-            },
-            { label: t('auth.adminLog.title'), prop: 'title', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            {
-                show: false,
-                label: t('auth.adminLog.data'),
-                prop: 'data',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                showOverflowTooltip: true,
-            },
-            {
-                label: t('auth.adminLog.url'),
-                prop: 'url',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                showOverflowTooltip: true,
-                render: 'url',
-            },
-            { label: t('auth.adminLog.ip'), prop: 'ip', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query'), render: 'tag' },
-            {
-                label: t('auth.adminLog.useragent'),
-                prop: 'useragent',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-                showOverflowTooltip: true,
-            },
-            {
-                label: t('Create time'),
-                prop: 'create_time',
-                align: 'center',
-                render: 'datetime',
-                sortable: 'custom',
-                operator: 'RANGE',
-                width: 160,
-            },
-            {
-                label: t('Operate'),
-                align: 'center',
-                width: '100',
-                render: 'buttons',
-                buttons: optButtons,
-                operator: false,
-            },
-        ],
-        dblClickNotEditColumn: [undefined],
-    },
-    {},
-    {
-        onTableDblclick: ({ row }) => {
-            infoButtonClick(row)
-            return false
+const baTable = new baTableClass(new baTableApi('/admin/auth.AdminLog/'), {
+    column: [
+        { type: 'selection', align: 'center', operator: false },
+        { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+        {
+            label: t('auth.adminLog.admin_id'),
+            prop: 'admin_id',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            width: 70,
         },
-    }
-)
+        {
+            label: t('auth.adminLog.username'),
+            prop: 'username',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            width: 160,
+        },
+        { label: t('auth.adminLog.title'), prop: 'title', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
+        {
+            show: false,
+            label: t('auth.adminLog.data'),
+            prop: 'data',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            showOverflowTooltip: true,
+        },
+        {
+            label: t('auth.adminLog.url'),
+            prop: 'url',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            showOverflowTooltip: true,
+            render: 'url',
+        },
+        { label: t('auth.adminLog.ip'), prop: 'ip', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query'), render: 'tag' },
+        {
+            label: t('auth.adminLog.useragent'),
+            prop: 'useragent',
+            align: 'center',
+            operator: 'LIKE',
+            operatorPlaceholder: t('Fuzzy query'),
+            showOverflowTooltip: true,
+        },
+        {
+            label: t('Create time'),
+            prop: 'create_time',
+            align: 'center',
+            render: 'datetime',
+            sortable: 'custom',
+            operator: 'RANGE',
+            width: 160,
+        },
+        {
+            label: t('Operate'),
+            align: 'center',
+            width: '100',
+            render: 'buttons',
+            buttons: optButtons,
+            operator: false,
+        },
+    ],
+    dblClickNotEditColumn: [undefined],
+})
+
+// 利用双击单元格前钩子重写双击操作
+baTable.before.onTableDblclick = ({ row }) => {
+    infoButtonClick(row)
+    return false
+}
 
 baTable.mount()
-baTable.getIndex()
+baTable.getData()
 
 provide('baTable', baTable)
 
