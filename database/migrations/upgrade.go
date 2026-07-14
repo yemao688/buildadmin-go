@@ -790,6 +790,112 @@ func version222(db *gorm.DB, config *conf.Configuration) error {
 	return nil
 }
 
+func indexExists(db *gorm.DB, table, index string) bool {
+	var count int64
+	result := db.Raw(
+		"SELECT COUNT(*) FROM information_schema.statistics "+
+			"WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?",
+		table, index,
+	).Scan(&count)
+	return result.Error == nil && count > 0
+}
+
+// EnsureAdminClosureSelfRows inserts the mandatory (id,id,0) self-row for every
+// administrator that does not already have one. It is idempotent and safe to
+// call after both fresh seed and upgrade paths.
+func EnsureAdminClosureSelfRows(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	closureTable := tableName(config, "admin_closure")
+	if !tableExists(db, adminTable) {
+		return nil
+	}
+	if !tableExists(db, closureTable) {
+		return fmt.Errorf("%s does not exist", closureTable)
+	}
+	if err := db.Exec(
+		"INSERT IGNORE INTO " + quoteIdentifier(closureTable) + " (ancestor_id, descendant_id, depth) " +
+			"SELECT id, id, 0 FROM " + quoteIdentifier(adminTable),
+	).Error; err != nil {
+		return fmt.Errorf("backfill %s self rows: %w", closureTable, err)
+	}
+	return nil
+}
+
+// ─── Version224: 管理员层级 parent_id 与闭包表 ───
+func version224(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	closureTable := tableName(config, "admin_closure")
+
+	if tableExists(db, adminTable) {
+		if !columnExists(db, adminTable, "parent_id") {
+			if err := db.Exec(
+				"ALTER TABLE " + quoteIdentifier(adminTable) +
+					" ADD COLUMN `parent_id` int(11) unsigned DEFAULT NULL COMMENT '父级管理员ID'",
+			).Error; err != nil {
+				return fmt.Errorf("add parent_id to %s: %w", adminTable, err)
+			}
+		}
+		if !indexExists(db, adminTable, "idx_parent_id") {
+			if err := db.Exec(
+				"CREATE INDEX `idx_parent_id` ON " + quoteIdentifier(adminTable) + " (`parent_id`)",
+			).Error; err != nil {
+				return fmt.Errorf("add idx_parent_id to %s: %w", adminTable, err)
+			}
+		}
+	}
+
+	if !tableExists(db, closureTable) {
+		if err := db.Exec(
+			"CREATE TABLE IF NOT EXISTS " + quoteIdentifier(closureTable) + " (" +
+				"`ancestor_id` int(11) unsigned NOT NULL," +
+				"`descendant_id` int(11) unsigned NOT NULL," +
+				"`depth` int(11) unsigned NOT NULL DEFAULT 0," +
+				"PRIMARY KEY (`ancestor_id`,`descendant_id`)," +
+				"KEY `idx_descendant_ancestor` (`descendant_id`,`ancestor_id`)," +
+				"KEY `idx_ancestor_depth` (`ancestor_id`,`depth`)" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+		).Error; err != nil {
+			return fmt.Errorf("create %s: %w", closureTable, err)
+		}
+	}
+
+	for _, idx := range []struct{ name, cols string }{
+		{"idx_descendant_ancestor", "`descendant_id`,`ancestor_id`"},
+		{"idx_ancestor_depth", "`ancestor_id`,`depth`"},
+	} {
+		if !indexExists(db, closureTable, idx.name) {
+			if err := db.Exec(
+				"CREATE INDEX " + quoteIdentifier(idx.name) + " ON " + quoteIdentifier(closureTable) + " (" + idx.cols + ")",
+			).Error; err != nil {
+				return fmt.Errorf("add %s to %s: %w", idx.name, closureTable, err)
+			}
+		}
+	}
+
+	lockTable := tableName(config, "admin_hierarchy_lock")
+	if !tableExists(db, lockTable) {
+		if err := db.Exec(
+			"CREATE TABLE IF NOT EXISTS " + quoteIdentifier(lockTable) + " (" +
+				"`id` tinyint(3) unsigned NOT NULL," +
+				"PRIMARY KEY (`id`)" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+		).Error; err != nil {
+			return fmt.Errorf("create %s: %w", lockTable, err)
+		}
+	}
+	if err := db.Exec("INSERT IGNORE INTO " + quoteIdentifier(lockTable) + " (id) VALUES (1)").Error; err != nil {
+		return fmt.Errorf("seed %s: %w", lockTable, err)
+	}
+
+	return EnsureAdminClosureSelfRows(db, config)
+}
+
 // ─── 迁移注册 ───
 
 var allMigrations = []VersionMigration{
@@ -800,6 +906,7 @@ var allMigrations = []VersionMigration{
 	{Version: 20231229043002, Name: "Version206", Up: version206},
 	{Version: 20250412134127, Name: "Version222", Up: version222},
 	{Version: 20260714120000, Name: "Version223", Up: version223},
+	{Version: 20260714130000, Name: "Version224", Up: version224},
 }
 
 // validateMigrations 验证迁移列表的版本号严格递增、名称非空

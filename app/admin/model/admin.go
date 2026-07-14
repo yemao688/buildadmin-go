@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"errors"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
@@ -12,21 +13,22 @@ import (
 )
 
 type Admin struct {
-	ID            int32    `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                         // ID
-	Username      string   `gorm:"column:username;not null;comment:用户名" json:"username"`                                                 // 用户名
-	Nickname      string   `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                  // 昵称
-	Avatar        string   `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
-	Email         string   `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                        // 邮箱
-	Mobile        string   `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                      // 手机
-	LoginFailure  int32    `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                    // 登录失败次数
-	LastLoginTime int64    `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                         // 上次登录时间
-	LastLoginIP   string   `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                    // 上次登录IP
-	Password      string   `gorm:"column:password;not null;comment:密码" json:"password"`                                                  // 密码
-	Salt          string   `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                         // 密码盐
-	Motto         string   `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                        // 签名
-	Status        string   `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"` // 状态:enable=启用,disable=禁用
-	UpdateTime    int64    `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                    // 更新时间
-	CreateTime    int64    `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                    // 创建时间
+	ID            int32    `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                             // ID
+	ParentID      *int32   `gorm:"column:parent_id;type:int(11) unsigned;default:null;comment:父级管理员ID;index:idx_parent_id" json:"parent_id"` // 父级管理员ID
+	Username      string   `gorm:"column:username;not null;comment:用户名" json:"username"`                                                     // 用户名
+	Nickname      string   `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                      // 昵称
+	Avatar        string   `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                          // 头像
+	Email         string   `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                            // 邮箱
+	Mobile        string   `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                          // 手机
+	LoginFailure  int32    `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                        // 登录失败次数
+	LastLoginTime int64    `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                             // 上次登录时间
+	LastLoginIP   string   `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                        // 上次登录IP
+	Password      string   `gorm:"column:password;not null;comment:密码" json:"password"`                                                      // 密码
+	Salt          string   `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                             // 密码盐
+	Motto         string   `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                            // 签名
+	Status        string   `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`     // 状态:enable=启用,disable=禁用
+	UpdateTime    int64    `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                        // 更新时间
+	CreateTime    int64    `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                        // 创建时间
 	GroupArr      []int32  `gorm:"-" json:"group_arr"`
 	GroupNameArr  []string `gorm:"-" json:"group_name_arr"`
 }
@@ -140,6 +142,14 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	}
 
 	if err := tx.Model(&AdminGroupAccess{}).Create(access).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	reqCtx := context.Background()
+	if ctx != nil && ctx.Request != nil {
+		reqCtx = ctx.Request.Context()
+	}
+	if err := NewAdminHierarchy(s.config).LinkNewNode(reqCtx, tx, admin.ID, admin.ParentID); err != nil {
 		tx.Rollback()
 		return err
 	}

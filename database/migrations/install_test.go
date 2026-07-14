@@ -52,6 +52,8 @@ func TestInstall(t *testing.T) {
 		&model.AdminLog{},
 		&model.AdminRule{},
 		&model.Admin{},
+		&model.AdminClosure{},
+		&model.AdminHierarchyLock{},
 		&model.Area{},
 		&model.Attachment{},
 		&model.Captcha{},
@@ -93,7 +95,7 @@ func TestMigrationRegistry(t *testing.T) {
 	if err := validateMigrations(); err != nil {
 		t.Fatal(err)
 	}
-	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127, 20260714120000}
+	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127, 20260714120000, 20260714130000}
 	if len(allMigrations) != len(want) {
 		t.Fatalf("migration count = %d", len(allMigrations))
 	}

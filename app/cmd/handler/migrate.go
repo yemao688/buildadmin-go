@@ -48,6 +48,8 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		&model.AdminLog{},
 		&model.AdminRule{},
 		&model.Admin{},
+		&model.AdminClosure{},
+		&model.AdminHierarchyLock{},
 		&model.Area{},
 		&model.Attachment{},
 		&model.Captcha{},
@@ -103,6 +105,10 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		install := migrations.NewInstall(h.db)
 		if err := install.InsertData(); err != nil {
 			cmd.Println("database seed error:", err)
+			return
+		}
+		if err := migrations.EnsureAdminClosureSelfRows(h.db, h.config); err != nil {
+			cmd.Println("admin closure seed error:", err)
 			return
 		}
 		if err := migrations.MarkSeedCompleted(h.db, h.config); err != nil {
