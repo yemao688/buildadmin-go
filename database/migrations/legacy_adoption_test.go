@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
+
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-func TestAliasRepeatGateBranches(t *testing.T) {
+func TestAliasRepeatBranches(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")

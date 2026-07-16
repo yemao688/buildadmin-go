@@ -7,9 +7,9 @@ package model
 // Attachment 附件表
 type Attachment struct {
 	ID             int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`                 // ID
-	Topic          string `gorm:"column:topic;type:varchar(20) default '';not null;comment:细目" json:"topic"`                                   // 细目
 	AdminID        int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;comment:上传管理员ID;index:idx_admin_id" json:"admin_id"` // 上传管理员ID
 	UserID         int32  `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;comment:上传用户ID" json:"user_id"`                       // 上传用户ID
+	Topic          string `gorm:"column:topic;type:varchar(20) default '';not null;comment:细目" json:"topic"`                                   // 细目
 	URL            string `gorm:"column:url;type:varchar(255) default '';not null;comment:物理路径" json:"url"`                                    // 物理路径
 	Width          int32  `gorm:"column:width;type:int(11) unsigned;not null;default:0;comment:宽度" json:"width"`                               // 宽度
 	Height         int32  `gorm:"column:height;type:int(11) unsigned;not null;default:0;comment:高度" json:"height"`                             // 高度

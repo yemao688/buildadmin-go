@@ -8,27 +8,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
+
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
-func phase3RunnerConfig(label string) *conf.Configuration {
+func migrationRunnerConfig(label string) *conf.Configuration {
 	return &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("p3x%s%d_", label, time.Now().UnixNano()%1000000)}}
 }
 
-func phase3BootstrapRunner(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+func bootstrapMigrationRunner(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
 	t.Helper()
 	require.NoError(t, BootstrapOfficialLedger(db, cfg))
 	require.NoError(t, BootstrapLocalLedger(db, cfg))
 	t.Cleanup(func() {
 		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "go_migrations")))
 		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "migrations")))
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "phase3_side_effect")))
+		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "migration_side_effect")))
 	})
 }
 
-func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
+func TestFutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
@@ -38,12 +39,12 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	key := OfficialKey{Version: time.Now().UnixNano(), Name: "FutureOfficial"}
 	fail := true
 	officialSucceeded := false
-	official := []OfficialMigration{{Key: key, Source: "phase3-test", Up: func(db *gorm.DB, cfg *conf.Configuration) error {
+	official := []OfficialMigration{{Key: key, Source: "migration-test", Up: func(db *gorm.DB, cfg *conf.Configuration) error {
 		if fail {
 			fail = false
 			return errors.New("official retry failure")
 		}
-		err := db.Exec("CREATE TABLE " + quoteIdentifier(tableName(cfg, "phase3_side_effect")) + " (id INT PRIMARY KEY)").Error
+		err := db.Exec("CREATE TABLE " + quoteIdentifier(tableName(cfg, "migration_side_effect")) + " (id INT PRIMARY KEY)").Error
 		if err == nil {
 			officialSucceeded = true
 		}
@@ -57,7 +58,7 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	}, VerifySchema: func(db *gorm.DB, cfg *conf.Configuration) error {
 		localVerifyRan = true
 		var count int64
-		if err := db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?", tableName(cfg, "phase3_side_effect")).Scan(&count).Error; err != nil {
+		if err := db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?", tableName(cfg, "migration_side_effect")).Scan(&count).Error; err != nil {
 			return err
 		}
 		if officialSucceeded && count != 1 {
@@ -66,8 +67,8 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 		return nil
 	}, VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 
-	cfg := phase3RunnerConfig("collision")
-	phase3BootstrapRunner(t, db, cfg)
+	cfg := migrationRunnerConfig("collision")
+	bootstrapMigrationRunner(t, db, cfg)
 	completed := time.Now().Add(-time.Minute)
 	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(cfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,?, ?,0)", key.Version, key.Name, completed, completed).Error)
 	// Keep a completed local record while its exact official alias is pending removal.
@@ -100,11 +101,11 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	require.True(t, localVerifyRan)
 	require.False(t, localUpRan)
 
-	pendingCfg := phase3RunnerConfig("pendingcollision")
-	phase3BootstrapRunner(t, db, pendingCfg)
+	pendingCfg := migrationRunnerConfig("pendingcollision")
+	bootstrapMigrationRunner(t, db, pendingCfg)
 	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(pendingCfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,NOW(6),NULL,0)", key.Version+1, key.Name).Error)
 	pendingKey := OfficialKey{Version: key.Version + 1, Name: key.Name}
-	pendingOfficial := []OfficialMigration{{Key: pendingKey, Source: "phase3-test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
+	pendingOfficial := []OfficialMigration{{Key: pendingKey, Source: "migration-test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	pendingLocal := []LocalMigration{{Sequence: 1, ID: "pending-collision", Revision: 1, LegacyAliases: []OfficialKey{pendingKey}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }, VerifySchema: func(*gorm.DB, *conf.Configuration) error { return nil }, VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	count, err = ResolveOfficialAliasCollisions(db, pendingCfg, pendingOfficial, pendingLocal)
 	require.Error(t, err)
@@ -112,8 +113,8 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	require.NoError(t, db.Table(tableName(pendingCfg, "migrations")).Where("version=?", pendingKey.Version).Count(&aliasCount).Error)
 	require.Equal(t, int64(1), aliasCount)
 
-	retentionCfg := phase3RunnerConfig("retention")
-	phase3BootstrapRunner(t, db, retentionCfg)
+	retentionCfg := migrationRunnerConfig("retention")
+	bootstrapMigrationRunner(t, db, retentionCfg)
 	retentionKey := OfficialKey{Version: key.Version + 2, Name: "OrdinaryAlias"}
 	retentionLocal := LocalMigration{Sequence: 1, ID: "ordinary-retention", Revision: 1, LegacyAliases: []OfficialKey{retentionKey}, VerifySchema: func(*gorm.DB, *conf.Configuration) error { return nil }, VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { return nil }, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
 	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(retentionCfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,NOW(6),NOW(6),0)", retentionKey.Version, retentionKey.Name).Error)
@@ -124,25 +125,25 @@ func TestPhase3FutureOfficialCollisionRetryAndRetention(t *testing.T) {
 	require.Equal(t, int64(1), aliasCount)
 }
 
-func TestPhase3CompletedLocalSeesNewOfficialSideEffect(t *testing.T) {
+func TestCompletedLocalSeesNewOfficialSideEffect(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
 	db := getDB()
 	require.NotNil(t, db)
-	cfg := phase3RunnerConfig("order")
-	phase3BootstrapRunner(t, db, cfg)
+	cfg := migrationRunnerConfig("order")
+	bootstrapMigrationRunner(t, db, cfg)
 	key := OfficialKey{Version: time.Now().UnixNano(), Name: "NewOfficial"}
 	events := []string{}
-	official := []OfficialMigration{{Key: key, Source: "phase3-order", Up: func(db *gorm.DB, cfg *conf.Configuration) error {
+	official := []OfficialMigration{{Key: key, Source: "migration-order", Up: func(db *gorm.DB, cfg *conf.Configuration) error {
 		events = append(events, "official")
-		return db.Exec("CREATE TABLE " + quoteIdentifier(tableName(cfg, "phase3_side_effect")) + " (id INT PRIMARY KEY)").Error
+		return db.Exec("CREATE TABLE " + quoteIdentifier(tableName(cfg, "migration_side_effect")) + " (id INT PRIMARY KEY)").Error
 	}}}
 	local := LocalMigration{Sequence: 1, ID: "older-local", Revision: 1, RequiresOfficial: []OfficialKey{}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }, VerifySchema: func(*gorm.DB, *conf.Configuration) error { return nil }, VerifyUpgradeData: func(db *gorm.DB, cfg *conf.Configuration) error {
 		events = append(events, "verify")
 		var count int64
-		return db.Table(tableName(cfg, "phase3_side_effect")).Count(&count).Error
+		return db.Table(tableName(cfg, "migration_side_effect")).Count(&count).Error
 	}}
 	require.NoError(t, InsertPendingLocalMigration(db, cfg, local, nil))
 	require.NoError(t, CompleteLocalMigration(db, cfg, local))

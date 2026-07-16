@@ -11,15 +11,16 @@ import (
 	"testing"
 	"time"
 
+	"go-build-admin/conf"
+
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/conf"
 	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-func quotePhase3Database(name string) string {
+func quoteTestDatabase(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
 }
 
@@ -37,10 +38,10 @@ func loadTrackedBuildAdmin(t *testing.T, prefix string) (*gorm.DB, *conf.Configu
 	require.NoError(t, err)
 	require.NoError(t, adminDB.Ping())
 	databaseName := fmt.Sprintf("p3db_%d", time.Now().UnixNano())
-	_, err = adminDB.Exec("CREATE DATABASE " + quotePhase3Database(databaseName) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+	_, err = adminDB.Exec("CREATE DATABASE " + quoteTestDatabase(databaseName) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
 	require.NoError(t, err)
 	cleanup := func() {
-		adminDB.Exec("DROP DATABASE IF EXISTS " + quotePhase3Database(databaseName))
+		adminDB.Exec("DROP DATABASE IF EXISTS " + quoteTestDatabase(databaseName))
 		adminDB.Close()
 	}
 	t.Cleanup(cleanup)
@@ -69,7 +70,7 @@ func loadTrackedBuildAdmin(t *testing.T, prefix string) (*gorm.DB, *conf.Configu
 	return gormDB, cfg
 }
 
-func openEmptyPhase3Database(t *testing.T, prefix string) (*gorm.DB, *conf.Configuration) {
+func openEmptyTestDatabase(t *testing.T, prefix string) (*gorm.DB, *conf.Configuration) {
 	t.Helper()
 	parsed, err := mysqlDriver.ParseDSN(os.Getenv("BUILDADMIN_TEST_MYSQL_DSN"))
 	require.NoError(t, err)
@@ -79,10 +80,10 @@ func openEmptyPhase3Database(t *testing.T, prefix string) (*gorm.DB, *conf.Confi
 	require.NoError(t, err)
 	require.NoError(t, adminDB.Ping())
 	databaseName := fmt.Sprintf("p3fresh_%d", time.Now().UnixNano())
-	_, err = adminDB.Exec("CREATE DATABASE " + quotePhase3Database(databaseName) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+	_, err = adminDB.Exec("CREATE DATABASE " + quoteTestDatabase(databaseName) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		adminDB.Exec("DROP DATABASE IF EXISTS " + quotePhase3Database(databaseName))
+		adminDB.Exec("DROP DATABASE IF EXISTS " + quoteTestDatabase(databaseName))
 		adminDB.Close()
 	})
 	dbConfig := *parsed
@@ -98,7 +99,7 @@ func openEmptyPhase3Database(t *testing.T, prefix string) (*gorm.DB, *conf.Confi
 }
 
 // runTrackedOfficialTo222 is used only to prepare a Version222 boundary for
-// alias fixtures. Full lifecycle tests call phase3Lifecycle directly so the
+// alias fixtures. Full lifecycle tests call runMigrationLifecycle directly so the
 // production ordering remains official -> reconcile -> adoption -> local.
 func runTrackedOfficialTo222(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
 	t.Helper()
@@ -107,54 +108,65 @@ func runTrackedOfficialTo222(t *testing.T, db *gorm.DB, cfg *conf.Configuration)
 	require.Equal(t, 3, count)
 }
 
-type phase3ManagedIndex struct {
+type managedSchemaIndex struct {
 	name    string
 	columns []string
 }
 
-type phase3ManagedTable struct {
+type managedSchemaTable struct {
 	logical string
 	columns []string
-	indexes []phase3ManagedIndex
+	indexes []managedSchemaIndex
 }
 
-func phase3ManagedSchema() []phase3ManagedTable {
-	return []phase3ManagedTable{
-		{logical: "admin", columns: []string{"status", "parent_id", "password"}, indexes: []phase3ManagedIndex{{"idx_parent_id", []string{"parent_id"}}}},
-		{logical: "user", columns: []string{"status", "admin_id", "password"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "attachment", columns: []string{"admin_id", "name"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "admin_log", columns: []string{"admin_id"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "crud_log", columns: []string{"admin_id", "connection", "comment", "sync"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "user_money_log", columns: []string{"admin_id", "money"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "user_score_log", columns: []string{"admin_id", "score"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "admin_closure", columns: []string{"ancestor_id", "descendant_id", "depth"}, indexes: []phase3ManagedIndex{
+func managedSchema() []managedSchemaTable {
+	return []managedSchemaTable{
+		{logical: "admin", columns: []string{"status", "parent_id", "password"}, indexes: []managedSchemaIndex{{"idx_parent_id", []string{"parent_id"}}}},
+		{logical: "user", columns: []string{"status", "admin_id", "password"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "attachment", columns: []string{"admin_id", "name"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "admin_log", columns: []string{"admin_id"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "crud_log", columns: []string{"admin_id", "connection", "comment", "sync"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "user_money_log", columns: []string{"admin_id", "money"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "user_score_log", columns: []string{"admin_id", "score"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "admin_closure", columns: []string{"ancestor_id", "descendant_id", "depth"}, indexes: []managedSchemaIndex{
 			{"PRIMARY", []string{"ancestor_id", "descendant_id"}},
 			{"idx_descendant_ancestor", []string{"descendant_id", "ancestor_id"}},
 			{"idx_ancestor_depth", []string{"ancestor_id", "depth"}},
 		}},
-		{logical: "admin_hierarchy_lock", columns: []string{"id"}, indexes: []phase3ManagedIndex{{"PRIMARY", []string{"id"}}}},
-		{logical: "security_data_recycle_log", columns: []string{"admin_id", "target_admin_id", "legacy_unrecoverable", "is_committed", "connection"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}, {"idx_target_admin_id", []string{"target_admin_id"}}}},
-		{logical: "security_sensitive_data_log", columns: []string{"admin_id", "target_admin_id", "legacy_unrecoverable", "is_committed", "connection"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}, {"idx_target_admin_id", []string{"target_admin_id"}}}},
-		{logical: "security_data_recycle", columns: []string{"id", "admin_id", "name", "controller", "controller_as", "data_table", "primary_key", "connection"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "security_sensitive_data", columns: []string{"id", "admin_id", "name", "controller", "controller_as", "data_table", "primary_key", "data_fields", "connection"}, indexes: []phase3ManagedIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "admin_hierarchy_lock", columns: []string{"id"}, indexes: []managedSchemaIndex{{"PRIMARY", []string{"id"}}}},
+		{logical: "security_data_recycle_log", columns: []string{"admin_id", "target_admin_id", "legacy_unrecoverable", "is_committed", "connection"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}, {"idx_target_admin_id", []string{"target_admin_id"}}}},
+		{logical: "security_sensitive_data_log", columns: []string{"admin_id", "target_admin_id", "legacy_unrecoverable", "is_committed", "connection"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}, {"idx_target_admin_id", []string{"target_admin_id"}}}},
+		{logical: "security_data_recycle", columns: []string{"id", "admin_id", "name", "controller", "controller_as", "data_table", "primary_key", "connection"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "security_sensitive_data", columns: []string{"id", "admin_id", "name", "controller", "controller_as", "data_table", "primary_key", "data_fields", "connection"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
 		{logical: "config", columns: []string{"id", "name", "value"}},
 		{logical: "admin_rule", columns: []string{"id", "name", "path"}},
-		{logical: "go_migrations", columns: []string{"sequence", "migration_id", "revision", "start_time", "end_time", "adopted_from"}, indexes: []phase3ManagedIndex{{"PRIMARY", []string{"sequence"}}, {"uq_go_migrations_id", []string{"migration_id"}}}},
+		{logical: "go_migrations", columns: []string{"sequence", "migration_id", "revision", "start_time", "end_time", "adopted_from"}, indexes: []managedSchemaIndex{{"PRIMARY", []string{"sequence"}}, {"uq_go_migrations_id", []string{"migration_id"}}}},
 	}
 }
 
-func phase3SchemaSummary(db *gorm.DB, cfg *conf.Configuration) ([]string, error) {
+func schemaSummary(db *gorm.DB, cfg *conf.Configuration) ([]string, error) {
+	return schemaSummaryWithOrdinal(db, cfg, false)
+}
+
+// schemaSummaryWithOrdinal is used for fresh snapshots only.  Upgraded
+// databases intentionally retain historical column order, so ordinal data is
+// not part of the fresh/upgrade equivalence comparison.
+func schemaSummaryWithOrdinal(db *gorm.DB, cfg *conf.Configuration, includeOrdinal bool) ([]string, error) {
 	var summary []string
-	for _, managed := range phase3ManagedSchema() {
+	for _, managed := range managedSchema() {
 		table := tableName(cfg, managed.logical)
 		for _, columnName := range managed.columns {
 			var column string
-			result := db.Raw("SELECT CONCAT(column_name,':',column_type,':',is_nullable,':',COALESCE(column_default,'<NULL>')) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, columnName).Scan(&column)
+			selectExpr := "CONCAT(column_name,':',column_type,':',is_nullable,':',COALESCE(column_default,'<NULL>'))"
+			if includeOrdinal {
+				selectExpr = "CONCAT(ordinal_position,':'," + selectExpr + ")"
+			}
+			result := db.Raw("SELECT "+selectExpr+" FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, columnName).Scan(&column)
 			if result.Error != nil {
 				return nil, result.Error
 			}
 			if column == "" {
-				return nil, fmt.Errorf("phase3 managed column %s.%s is missing", table, columnName)
+				return nil, fmt.Errorf("managed column %s.%s is missing", table, columnName)
 			}
 			summary = append(summary, table+"/column/"+column)
 		}
@@ -165,19 +177,19 @@ func phase3SchemaSummary(db *gorm.DB, cfg *conf.Configuration) ([]string, error)
 				return nil, result.Error
 			}
 			if len(indexes) != len(managedIndex.columns) {
-				return nil, fmt.Errorf("phase3 managed index %s.%s has %d columns, want %d", table, managedIndex.name, len(indexes), len(managedIndex.columns))
+				return nil, fmt.Errorf("managed index %s.%s has %d columns, want %d", table, managedIndex.name, len(indexes), len(managedIndex.columns))
 			}
 			for i, index := range indexes {
 				parts := strings.Split(index, ":")
 				if len(parts) < 3 || parts[2] != managedIndex.columns[i] {
-					return nil, fmt.Errorf("phase3 managed index %s.%s column mismatch", table, managedIndex.name)
+					return nil, fmt.Errorf("managed index %s.%s column mismatch", table, managedIndex.name)
 				}
 				summary = append(summary, table+"/index/"+index)
 			}
 		}
 	}
 	if len(summary) == 0 {
-		return nil, fmt.Errorf("phase3 schema summary is empty")
+		return nil, fmt.Errorf("schema summary is empty")
 	}
 	depthTable := tableName(cfg, "admin_closure")
 	for i := range summary {
@@ -188,7 +200,38 @@ func phase3SchemaSummary(db *gorm.DB, cfg *conf.Configuration) ([]string, error)
 	return summary, nil
 }
 
-func phase3SchemaSetDiff(fresh, upgrade []string) (onlyFresh, onlyUpgrade []string) {
+func assertFreshSnapshotOrdinals(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+	t.Helper()
+	expected := map[string]map[string]int{
+		"admin":                       {"parent_id": 2},
+		"attachment":                  {"admin_id": 2, "user_id": 3, "topic": 4},
+		"user":                        {"admin_id": 2},
+		"user_money_log":              {"admin_id": 2},
+		"user_score_log":              {"admin_id": 2},
+		"admin_log":                   {"admin_id": 2},
+		"security_data_recycle":       {"admin_id": 2},
+		"security_sensitive_data":     {"admin_id": 2},
+		"crud_log":                    {"admin_id": 2},
+		"security_data_recycle_log":   {"admin_id": 2, "target_admin_id": 3, "legacy_unrecoverable": 4, "is_committed": 5},
+		"security_sensitive_data_log": {"admin_id": 2, "target_admin_id": 3, "legacy_unrecoverable": 4, "is_committed": 5},
+	}
+	for logical, columns := range expected {
+		for column, want := range columns {
+			var got int
+			err := db.Raw("SELECT ordinal_position FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", tableName(cfg, logical), column).Scan(&got).Error
+			require.NoError(t, err, logical+"."+column)
+			require.Equal(t, want, got, logical+"."+column)
+		}
+	}
+	// Keep the ordinal-bearing summary exercised so a future schema contract
+	// change cannot silently drop position information from fresh checks.
+	summary, err := schemaSummaryWithOrdinal(db, cfg, true)
+	require.NoError(t, err)
+	require.NotEmpty(t, summary)
+	require.Contains(t, strings.Join(summary, "\n"), tableName(cfg, "crud_log")+"/column/2:admin_id:")
+}
+
+func schemaSetDiff(fresh, upgrade []string) (onlyFresh, onlyUpgrade []string) {
 	freshSet, upgradeSet := make(map[string]struct{}, len(fresh)), make(map[string]struct{}, len(upgrade))
 	for _, item := range fresh {
 		freshSet[item] = struct{}{}
@@ -211,12 +254,12 @@ func phase3SchemaSetDiff(fresh, upgrade []string) (onlyFresh, onlyUpgrade []stri
 	return onlyFresh, onlyUpgrade
 }
 
-func TestPhase3TrackedVersion222OfficialAndSentinel(t *testing.T) {
+func TestTrackedVersion222OfficialAndSentinel(t *testing.T) {
 	db, cfg := loadTrackedBuildAdmin(t, "ba_")
 	require.NoError(t, ValidateOfficialLedgerSchema(db, cfg))
 	require.NoError(t, db.Exec("ALTER TABLE "+quoteIdentifier(tableName(cfg, "test_build"))+" DROP COLUMN note_textarea").Error)
-	section := &phase3CriticalSection{}
-	result, err := phase3Lifecycle(db, cfg, section)
+	section := &migrationCriticalSection{}
+	result, err := runMigrationLifecycle(db, cfg, section)
 	require.NoError(t, err)
 	require.Equal(t, InstallStrictUpgrade, result.recovery)
 	require.Equal(t, 3, result.official)
@@ -237,23 +280,23 @@ func TestPhase3TrackedVersion222OfficialAndSentinel(t *testing.T) {
 	require.NoError(t, ValidateCurrentSchema(db, cfg))
 }
 
-func TestPhase3FreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
+func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
-	freshDB, freshCfg := openEmptyPhase3Database(t, "ba_")
-	freshSection := &phase3CriticalSection{}
+	freshDB, freshCfg := openEmptyTestDatabase(t, "ba_")
+	freshSection := &migrationCriticalSection{}
 	var err error
 	err = WithMigrationLock(freshDB, freshCfg.Database.Prefix+"dual-track-migrations", 10*time.Second, func(pinned *gorm.DB) error {
-		_, err := phase3Lifecycle(pinned, freshCfg, freshSection)
+		_, err := runMigrationLifecycle(pinned, freshCfg, freshSection)
 		return err
 	})
 	require.NoError(t, err)
 	require.NoError(t, ValidateOfficialLedgerSchema(freshDB, freshCfg))
 
 	upgradeDB, upgradeCfg := loadTrackedBuildAdmin(t, "ba_")
-	upgradeSection := &phase3CriticalSection{}
-	upgradeResult, err := phase3Lifecycle(upgradeDB, upgradeCfg, upgradeSection)
+	upgradeSection := &migrationCriticalSection{}
+	upgradeResult, err := runMigrationLifecycle(upgradeDB, upgradeCfg, upgradeSection)
 	require.NoError(t, err)
 	require.NoError(t, ValidateOfficialLedgerSchema(upgradeDB, upgradeCfg))
 	require.Equal(t, 3, upgradeResult.official)
@@ -261,9 +304,10 @@ func TestPhase3FreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	require.Zero(t, upgradeResult.adopted)
 	require.False(t, upgradeResult.seeded)
 	require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, upgradeResult.events)
-	freshSummary, err := phase3SchemaSummary(freshDB, freshCfg)
+	freshSummary, err := schemaSummary(freshDB, freshCfg)
 	require.NoError(t, err)
-	upgradeSummary, err := phase3SchemaSummary(upgradeDB, upgradeCfg)
+	assertFreshSnapshotOrdinals(t, freshDB, freshCfg)
+	upgradeSummary, err := schemaSummary(upgradeDB, upgradeCfg)
 	require.NoError(t, err)
 	require.NotEmpty(t, freshSummary)
 	require.NotEmpty(t, upgradeSummary)
@@ -271,7 +315,7 @@ func TestPhase3FreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 		require.True(t, strings.Contains(strings.Join(freshSummary, "\n"), table), table)
 		require.True(t, strings.Contains(strings.Join(upgradeSummary, "\n"), table), table)
 	}
-	onlyFresh, onlyUpgrade := phase3SchemaSetDiff(freshSummary, upgradeSummary)
+	onlyFresh, onlyUpgrade := schemaSetDiff(freshSummary, upgradeSummary)
 	if len(onlyFresh) != 0 || len(onlyUpgrade) != 0 {
 		var lines []string
 		lines = append(lines, "onlyFresh:")
@@ -284,7 +328,7 @@ func TestPhase3FreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	require.NoError(t, localPostSeedVerify(upgradeDB, upgradeCfg))
 }
 
-func TestPhase3TrackedMixed223To232Aliases(t *testing.T) {
+func TestTrackedMixed223To232Aliases(t *testing.T) {
 	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
@@ -300,8 +344,8 @@ func TestPhase3TrackedMixed223To232Aliases(t *testing.T) {
 	completedAt := time.Now().Add(-time.Minute)
 	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(cfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,?,?,0)", locals[0].LegacyAliases[0].Version, locals[0].LegacyAliases[0].Name, completedAt, completedAt).Error)
 	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(cfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,NOW(6),NULL,0)", locals[1].LegacyAliases[0].Version, locals[1].LegacyAliases[0].Name).Error)
-	section := &phase3CriticalSection{}
-	result, err := phase3Lifecycle(db, cfg, section)
+	section := &migrationCriticalSection{}
+	result, err := runMigrationLifecycle(db, cfg, section)
 	require.NoError(t, err)
 	require.Equal(t, InstallStrictUpgrade, result.recovery)
 	require.Equal(t, len(LocalMigrations())-1, result.local)
@@ -326,13 +370,13 @@ func TestPhase3TrackedMixed223To232Aliases(t *testing.T) {
 	}
 }
 
-func TestPhase3RecoveryFixturesUseIndependentDatabases(t *testing.T) {
+func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
 	for _, fixture := range []string{"ledger_only", "pending_partial", "snapshot_complete_pending"} {
 		t.Run(fixture, func(t *testing.T) {
-			db, cfg := openEmptyPhase3Database(t, "ba_")
+			db, cfg := openEmptyTestDatabase(t, "ba_")
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			if fixture != "ledger_only" {
 				require.NoError(t, MarkSeedPending(db, cfg))
@@ -342,9 +386,9 @@ func TestPhase3RecoveryFixturesUseIndependentDatabases(t *testing.T) {
 			}
 			if fixture == "snapshot_complete_pending" {
 				db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
-				require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(phase3Models()...))
+				require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(migrationModels()...))
 			}
-			result, err := phase3Lifecycle(db, cfg, &phase3CriticalSection{})
+			result, err := runMigrationLifecycle(db, cfg, &migrationCriticalSection{})
 			require.NoError(t, err)
 			require.Equal(t, InstallInterrupted, result.recovery)
 			require.Equal(t, len(OfficialMigrations()), result.official)
@@ -361,7 +405,7 @@ func TestPhase3RecoveryFixturesUseIndependentDatabases(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 3, count)
 		require.NoError(t, BootstrapLocalLedger(db, cfg))
-		result, err := phase3Lifecycle(db, cfg, &phase3CriticalSection{})
+		result, err := runMigrationLifecycle(db, cfg, &migrationCriticalSection{})
 		require.NoError(t, err)
 		require.Equal(t, InstallStrictUpgrade, result.recovery)
 		require.Zero(t, result.official)
@@ -371,7 +415,7 @@ func TestPhase3RecoveryFixturesUseIndependentDatabases(t *testing.T) {
 	})
 
 	t.Run("completed_marker_ledger_only", func(t *testing.T) {
-		db, cfg := openEmptyPhase3Database(t, "ba_")
+		db, cfg := openEmptyTestDatabase(t, "ba_")
 		require.NoError(t, BootstrapOfficialLedger(db, cfg))
 		require.NoError(t, MarkSeedPending(db, cfg))
 		require.NoError(t, MarkSeedCompleted(db, cfg))

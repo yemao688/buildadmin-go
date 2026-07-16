@@ -103,17 +103,6 @@ func TestInstall(t *testing.T) {
 	}
 }
 
-func TestRenameColumn(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	admin := model.Admin{}
-
-	err := db.Migrator().RenameColumn(&admin, "salt", "test")
-	fmt.Println(err)
-}
-
 func TestMigrationRegistry(t *testing.T) {
 	official := OfficialMigrations()
 	if err := ValidateOfficialMigrations(official); err != nil {
@@ -127,15 +116,6 @@ func TestMigrationRegistry(t *testing.T) {
 		if official[i].Key.Version != v {
 			t.Fatalf("migration %d = %d, want %d", i, official[i].Key.Version, v)
 		}
-	}
-}
-
-func TestLegacyRuleTargets(t *testing.T) {
-	if got := []string{"auth/rule", "auth/rule/index", "auth/rule/add", "auth/rule/edit", "auth/rule/del", "auth/rule/sortable"}; got[0] != "auth/rule" || got[1] != "auth/rule/index" {
-		t.Fatal("unexpected auth rule target mapping")
-	}
-	if got := []string{"dashboard", "buildadmin"}; got[0] != "dashboard" || got[1] != "buildadmin" {
-		t.Fatal("unexpected Version202 target mapping")
 	}
 }
 

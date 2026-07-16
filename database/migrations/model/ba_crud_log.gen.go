@@ -7,6 +7,7 @@ package model
 // CrudLog CRUD记录表
 type CrudLog struct {
 	ID         int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                          // ID
+	AdminID    int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:管理员ID" json:"admin_id"`                                            // 管理员ID
 	Tablename  string `gorm:"column:table_name;type:varchar(200) default '';not null;comment:数据表名" json:"table_name"`                                                               // 数据表名
 	Table      string `gorm:"column:table;type:text;comment:数据表数据" json:"table"`                                                                                                    // 数据表数据
 	Fields     string `gorm:"column:fields;type:text;comment:字段数据" json:"fields"`                                                                                                   // 字段数据

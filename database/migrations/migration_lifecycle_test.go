@@ -7,14 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/model"
+
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-func phase3Models() []any {
+func migrationModels() []any {
 	return []any{
 		&model.AdminGroupAccess{}, &model.AdminGroup{}, &model.AdminLog{}, &model.AdminRule{}, &model.Admin{}, &model.AdminClosure{}, &model.AdminHierarchyLock{},
 		&model.Area{}, &model.Attachment{}, &model.Captcha{}, &model.Config{}, &model.CrudLog{}, &model.Migrations{},
@@ -23,7 +24,7 @@ func phase3Models() []any {
 	}
 }
 
-func phase3FreshDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *conf.Configuration) {
+func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *conf.Configuration) {
 	t.Helper()
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: prefix}}
 	db = db.Session(&gorm.Session{NewDB: true})
@@ -36,20 +37,20 @@ func phase3FreshDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *c
 	return db, cfg
 }
 
-type phase3LifecycleResult struct {
+type migrationLifecycleResult struct {
 	recovery                 InstallRecoveryState
 	official, adopted, local int
 	seeded                   bool
 	events                   []string
 }
 
-type phase3CriticalSection struct {
+type migrationCriticalSection struct {
 	mu     sync.Mutex
 	active int
 	max    int
 }
 
-func (s *phase3CriticalSection) enter() func() {
+func (s *migrationCriticalSection) enter() func() {
 	s.mu.Lock()
 	s.active++
 	if s.active > s.max {
@@ -63,7 +64,7 @@ func (s *phase3CriticalSection) enter() func() {
 	}
 }
 
-func phase3Lifecycle(db *gorm.DB, cfg *conf.Configuration, section *phase3CriticalSection) (result phase3LifecycleResult, err error) {
+func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrationCriticalSection) (result migrationLifecycleResult, err error) {
 	release := section.enter()
 	defer release()
 	event := func(name string) { result.events = append(result.events, name) }
@@ -87,7 +88,7 @@ func phase3Lifecycle(db *gorm.DB, cfg *conf.Configuration, section *phase3Critic
 		if err := MarkSeedPending(db, cfg); err != nil {
 			return result, err
 		}
-		if err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(phase3Models()...); err != nil {
+		if err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(migrationModels()...); err != nil {
 			return result, err
 		}
 	}
@@ -149,20 +150,20 @@ func phase3Lifecycle(db *gorm.DB, cfg *conf.Configuration, section *phase3Critic
 	return result, nil
 }
 
-func TestPhase3FreshLifecycleRerunAndConcurrentLock(t *testing.T) {
+func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
 	db := getDB()
 	require.NotNil(t, db)
-	db, cfg := phase3FreshDatabase(t, db, fmt.Sprintf("phase3_fresh_%d_", time.Now().UnixNano()))
+	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("migration_fresh_%d_", time.Now().UnixNano()))
 	lock := cfg.Database.Prefix + "dual-track-migrations"
-	section := &phase3CriticalSection{}
-	var first phase3LifecycleResult
+	section := &migrationCriticalSection{}
+	var first migrationLifecycleResult
 	require.NoError(t, WithMigrationLock(db, lock, 10*time.Second, func(pinned *gorm.DB) error {
 		var err error
-		first, err = phase3Lifecycle(pinned, cfg, section)
+		first, err = runMigrationLifecycle(pinned, cfg, section)
 		return err
 	}))
 	require.Equal(t, InstallFresh, first.recovery)
@@ -182,13 +183,13 @@ func TestPhase3FreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
-	results := make(chan phase3LifecycleResult, 2)
+	results := make(chan migrationLifecycleResult, 2)
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			errs <- WithMigrationLock(db, lock, 10*time.Second, func(pinned *gorm.DB) error {
-				result, err := phase3Lifecycle(pinned, cfg, section)
+				result, err := runMigrationLifecycle(pinned, cfg, section)
 				results <- result
 				return err
 			})
