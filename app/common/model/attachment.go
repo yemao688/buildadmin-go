@@ -50,7 +50,6 @@ func NewAttachmentModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer dat
 			TableName:        config.Database.Prefix + "attachment",
 			Key:              "id",
 			QuickSearchField: "name",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 		config:   config,

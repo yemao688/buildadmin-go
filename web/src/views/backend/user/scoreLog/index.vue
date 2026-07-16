@@ -54,6 +54,7 @@ const baTable = new baTableClass(
         column: [
             { type: 'selection', align: 'center', operator: false },
             { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+            { label: t('user.scoreLog.Superior agent'), prop: 'admin_id', align: 'center', operator: '=', operatorPlaceholder: t('user.scoreLog.Superior agent'), comSearchRender: 'remoteSelect', remote: { pk: 'id', field: 'nickname', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true } }, formatter: (row: anyObj, _column: any, cellValue: any, _index: number) => row.admin?.nickname || cellValue || '-', width: 130 },
             { label: t('user.moneyLog.User ID'), prop: 'user_id', align: 'center', width: 70 },
             { label: t('user.moneyLog.User name'), prop: 'user.username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             {
@@ -95,6 +96,10 @@ baTable.after.onTableHeaderAction = ({ event }) => {
     if (event == 'refresh') {
         getUserInfo(baTable.comSearch.form.user_id)
     }
+}
+
+baTable.before.onSubmit = ({ items }: { items: anyObj }) => {
+    delete items.admin_id
 }
 
 baTable.mount()

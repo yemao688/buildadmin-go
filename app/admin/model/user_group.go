@@ -27,7 +27,6 @@ func NewUserGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *UserGroupMod
 			TableName:        config.Database.Prefix + "user_group",
 			Key:              "id",
 			QuickSearchField: "name",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}
@@ -79,6 +78,6 @@ func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
 }
 
 func (s *UserGroupModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Model(&UserGroup{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&UserGroup{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

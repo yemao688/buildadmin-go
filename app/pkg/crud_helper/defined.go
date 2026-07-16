@@ -416,7 +416,6 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 			TableName:        config.Database.Prefix + "{{.ModelVar}}",
 			Key:              "{{.Pk}}",
 			QuickSearchField: "name",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 		Policy: data_scope.ResourcePolicy{
@@ -429,15 +428,24 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 }
 
 func (s *{{.ClassName}}Model) scopedDB(ctx *gin.Context) *gorm.DB {
+	return s.scopeDB(ctx, s.DBFor(ctx))
+}
+
+func (s *{{.ClassName}}Model) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
-		return s.sqlDB
+		return db
 	}
 	if s.Enforcer == nil {
-		tx := s.sqlDB.Session(&gorm.Session{})
+		tx := db.Session(&gorm.Session{})
 		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
 		return tx
 	}
-	return s.Enforcer.Scope(ctx, s.sqlDB, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn})
+	return s.Enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn})
+}
+
+// ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
+func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	return s.scopeDB(ctx, db)
 }
 
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
@@ -482,21 +490,9 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 		}{{end}}
 	}
 
-	tx := s.sqlDB.Begin()
-	if err := tx.Error; err != nil {
-		return err
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit().Error
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
+	})
 }
 
 func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
@@ -509,26 +505,18 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 		}
 	}
 
-	tx := s.scopedDB(ctx).Session(&gorm.Session{}).Begin()
-	if err := tx.Error; err != nil {
-		return err
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		tx = s.scopeDB(ctx, tx)
 
 	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
 	if err := res.Error; err != nil {
-		tx.Rollback()
 		return err
 	}
 	if res.RowsAffected != 1 {
-		tx.Rollback()
 		return gorm.ErrRecordNotFound
 	}
-	return tx.Commit().Error
+	return nil
+	})
 }
 
 func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
@@ -540,36 +528,26 @@ func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
 		return gorm.ErrRecordNotFound
 	}
 
-	tx := s.scopedDB(ctx).Session(&gorm.Session{}).Begin()
-	if err := tx.Error; err != nil {
-		return err
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		tx = s.scopeDB(ctx, tx)
 
 	var visible int64
 	if err := tx.Table(s.TableName).Model(&{{.ClassName}}{}).Where("{{.Pk}} IN ?", normalizedIDs).Count(&visible).Error; err != nil {
-		tx.Rollback()
 		return err
 	}
 	if visible != int64(len(normalizedIDs)) {
-		tx.Rollback()
 		return gorm.ErrRecordNotFound
 	}
 
 	res := tx.Table(s.TableName).Where("{{.Pk}} IN ?", normalizedIDs).Delete(&{{.ClassName}}{})
 	if err := res.Error; err != nil {
-		tx.Rollback()
 		return err
 	}
 	if res.RowsAffected != int64(len(normalizedIDs)) {
-		tx.Rollback()
 		return gorm.ErrRecordNotFound
 	}
-	return tx.Commit().Error
+	return nil
+	})
 }
 
 func normalize{{.ClassName}}IDs(ids interface{}) ([]int32, error) {

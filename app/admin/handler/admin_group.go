@@ -118,7 +118,7 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 
 	// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
 	ruleIds := strings.Split(adminGroup.Rules, ",")
-	pids, err := h.adminRuleM.GetRulePIds(ruleIds)
+	pids, err := h.adminRuleM.GetRulePIds(ruleIds, ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

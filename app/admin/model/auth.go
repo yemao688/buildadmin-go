@@ -304,37 +304,6 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 	return authGroups, err
 }
 
-// 获取管理员所在分组的所有子级分组
-func (s *AuthModel) GetAdminChildGroups(id int32) []int32 {
-	accessList := []AdminGroupAccess{}
-	s.sqlDB.Model(&AdminGroupAccess{}).Where("uid=?", id).Find(&accessList)
-	children := []int32{}
-	for _, v := range accessList {
-		children = append(children, s.GetGroupChildGroups(v.GroupID)...)
-	}
-	return children
-}
-
-// 获取一个分组下的子分组
-func (s *AuthModel) GetGroupChildGroups(groupId int32) []int32 {
-	adminGroups := []AdminGroup{}
-	s.sqlDB.Model(&AdminGroup{}).Where("pid=? and status=?", groupId, 1).Find(&adminGroups)
-	children := []int32{}
-	for _, v := range adminGroups {
-		children = append(children, v.ID)
-		subIds := s.GetGroupChildGroups(v.ID)
-		children = append(children, subIds...)
-	}
-	return children
-}
-
-// 获取分组内的管理员
-func (s *AuthModel) GetGroupAdmins(ids interface{}) []int32 {
-	adminIds := []int32{}
-	s.sqlDB.Model(&AdminGroupAccess{}).Where("group_id in ?", ids).Pluck("uid", &adminIds)
-	return adminIds
-}
-
 // 获取拥有"所有权限"的分组
 func (s *AuthModel) GetAllAuthGroups(dataLimit string, id int32) ([]string, error) {
 	rules, err := s.GetRuleIds(id)

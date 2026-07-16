@@ -40,7 +40,6 @@ func NewUserRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *UserRuleModel
 			TableName:        config.Database.Prefix + "user_rule",
 			Key:              "id",
 			QuickSearchField: "title",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}
@@ -117,7 +116,7 @@ func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 		}
 	}
 
-	err := s.sqlDB.Model(&UserRule{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&UserRule{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 

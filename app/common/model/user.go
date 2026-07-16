@@ -14,6 +14,7 @@ import (
 // User 会员表
 type User struct {
 	ID            int32     `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                         // ID
+	AdminID       int32     `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                               // 管理员ID
 	GroupID       int32     `gorm:"column:group_id;not null;comment:分组ID" json:"group_id"`                                                // 分组ID
 	Username      string    `gorm:"column:username;not null;comment:用户名" json:"username"`                                                 // 用户名
 	Nickname      string    `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                  // 昵称

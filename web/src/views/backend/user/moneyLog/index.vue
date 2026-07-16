@@ -54,6 +54,7 @@ const baTable = new baTableClass(
         column: [
             { type: 'selection', align: 'center', operator: false },
             { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+            { label: t('user.moneyLog.Superior agent'), prop: 'admin_id', align: 'center', operator: '=', operatorPlaceholder: t('user.moneyLog.Superior agent'), comSearchRender: 'remoteSelect', remote: { pk: 'id', field: 'nickname', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true } }, formatter: (row: anyObj, _column: any, cellValue: any, _index: number) => row.admin?.nickname || cellValue || '-', width: 130 },
             { label: t('user.moneyLog.User ID'), prop: 'user_id', align: 'center', width: 70 },
             { label: t('user.moneyLog.User name'), prop: 'user.username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             {
@@ -102,20 +103,13 @@ baTable.before.onTableAction = ({ event }) => {
     if (event === 'com-search') {
         baTable.table.filter!.search = baTable.getComSearchData()
 
-        for (const key in baTable.table.filter!.search) {
-            if (['money', 'before', 'after'].includes(baTable.table.filter!.search[key].field)) {
-                const val = (baTable.table.filter!.search[key].val as string).split(',')
-                const newVal: (string | number)[] = []
-                for (const k in val) {
-                    newVal.push(isNaN(parseFloat(val[k])) ? '' : parseFloat(val[k]) * 100)
-                }
-                baTable.table.filter!.search[key].val = newVal.join(',')
-            }
-        }
-
         baTable.onTableHeaderAction('refresh', { event: 'com-search', data: baTable.table.filter!.search })
         return false
     }
+}
+
+baTable.before.onSubmit = ({ items }: { items: anyObj }) => {
+    delete items.admin_id
 }
 
 baTable.mount()

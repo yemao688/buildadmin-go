@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
@@ -9,7 +10,6 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"io"
-	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -20,6 +20,14 @@ import (
 type CommonModel interface {
 	DB() *gorm.DB
 	Table() string
+}
+
+type scopedModel interface {
+	ScopeDB(*gin.Context, *gorm.DB) *gorm.DB
+}
+
+type transactionalModel interface {
+	Transaction(context.Context, func(*gorm.DB) error) error
 }
 
 type Base struct {
@@ -78,12 +86,22 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 		}
 	}
 	updates := map[string]any{fieldName: fieldValue}
-	err = h.currentM.DB().Table(h.currentM.Table()).
-		Scopes(LimitAdminIds(ctx)).
+	db := h.currentM.DB()
+	if scoped, ok := h.currentM.(interface {
+		DBFor(context.Context) *gorm.DB
+	}); ok {
+		db = scoped.DBFor(ctx)
+	}
+	if scoped, ok := h.currentM.(scopedModel); ok {
+		db = scoped.ScopeDB(ctx, db)
+	}
+	res := db.Table(h.currentM.Table()).
 		Where("id = ?", id).
-		Updates(updates).Error
-	if err != nil {
-		FailByErr(ctx, err)
+		Updates(updates)
+	if res.Error != nil {
+		FailByErr(ctx, res.Error)
+	} else if res.RowsAffected != 1 {
+		FailByErr(ctx, gorm.ErrRecordNotFound)
 	} else {
 		Success(ctx, "")
 	}
@@ -94,33 +112,23 @@ func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
 	return nil, false
 }
 
-func (h *Base) CheckDataLimit(ctx *gin.Context, id int32) bool {
-	value, exists := ctx.Get("dataLimitAdminIds")
-	if exists && value != nil {
-		dataLimitAdminIds := value.([]int32)
-		if len(dataLimitAdminIds) == 0 {
-			return true
-		}
-		return slices.Contains(dataLimitAdminIds, id)
-	}
-	return true
-}
-
 func (h *Base) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	result := map[string]interface{}{}
-	err := h.currentM.DB().Table(h.currentM.Table()).Where("id=?", id).Take(&result).Error
+	db := h.currentM.DB()
+	if scoped, ok := h.currentM.(interface {
+		DBFor(context.Context) *gorm.DB
+	}); ok {
+		db = scoped.DBFor(ctx)
+	}
+	if scoped, ok := h.currentM.(scopedModel); ok {
+		db = scoped.ScopeDB(ctx, db)
+	}
+	err := db.Table(h.currentM.Table()).Where("id=?", id).Take(&result).Error
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, int32(id)) {
-		FailByErr(ctx, cErr.BadRequest("You have no permission"))
-		return
-	}
-
 	Success(ctx, map[string]interface{}{
 		"row": result,
 	})
@@ -157,61 +165,70 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		Weigh int32
 	}
 
-	var rows []FullRow
-	if err := m1.DB().Table(table).Scopes(LimitAdminIds(ctx)).Order("weigh desc, id desc").Scan(&rows).Error; err != nil {
-		return err
-	}
-
-	newWeigh := int32(len(rows))
-	weightMap := map[int32]int32{}
-	for _, r := range rows {
-		weightMap[r.Id] = newWeigh
-		newWeigh--
-	}
-
-	moveIdx, targetIdx := -1, -1
-	for i, r := range rows {
-		if fmt.Sprintf("%d", r.Id) == moveID {
-			moveIdx = i
+	transaction := func(fn func(*gorm.DB) error) error {
+		if m, ok := m1.(transactionalModel); ok {
+			return m.Transaction(ctx, fn)
 		}
-		if fmt.Sprintf("%d", r.Id) == targetID {
-			targetIdx = i
+		return m1.DB().Transaction(fn)
+	}
+	return transaction(func(tx *gorm.DB) error {
+		if scoped, ok := m1.(scopedModel); ok {
+			tx = scoped.ScopeDB(ctx, tx)
 		}
-	}
-	if moveIdx == -1 || targetIdx == -1 {
-		return cErr.BadRequest("Record not found")
-	}
+		var rows []FullRow
+		if err := tx.Table(table).Order("weigh desc, id desc").Scan(&rows).Error; err != nil {
+			return err
+		}
 
-	movedRow := rows[moveIdx]
-	remaining := make([]FullRow, 0, len(rows)-1)
-	remaining = append(remaining, rows[:moveIdx]...)
-	remaining = append(remaining, rows[moveIdx+1:]...)
+		newWeigh := int32(len(rows))
+		weightMap := map[int32]int32{}
+		for _, r := range rows {
+			weightMap[r.Id] = newWeigh
+			newWeigh--
+		}
 
-	insertIdx := 0
-	if direction == "down" {
-		tempTargetIdx := -1
-		for i, r := range remaining {
+		moveIdx, targetIdx := -1, -1
+		for i, r := range rows {
+			if fmt.Sprintf("%d", r.Id) == moveID {
+				moveIdx = i
+			}
 			if fmt.Sprintf("%d", r.Id) == targetID {
-				tempTargetIdx = i
-				break
+				targetIdx = i
 			}
 		}
-		insertIdx = tempTargetIdx + 1
-	} else {
-		for i, r := range remaining {
-			if fmt.Sprintf("%d", r.Id) == targetID {
-				insertIdx = i
-				break
+		if moveIdx == -1 || targetIdx == -1 {
+			return cErr.BadRequest("Record not found")
+		}
+
+		movedRow := rows[moveIdx]
+		remaining := make([]FullRow, 0, len(rows)-1)
+		remaining = append(remaining, rows[:moveIdx]...)
+		remaining = append(remaining, rows[moveIdx+1:]...)
+
+		insertIdx := 0
+		if direction == "down" {
+			tempTargetIdx := -1
+			for i, r := range remaining {
+				if fmt.Sprintf("%d", r.Id) == targetID {
+					tempTargetIdx = i
+					break
+				}
+			}
+			insertIdx = tempTargetIdx + 1
+		} else {
+			for i, r := range remaining {
+				if fmt.Sprintf("%d", r.Id) == targetID {
+					insertIdx = i
+					break
+				}
 			}
 		}
-	}
 
-	newOrder := make([]FullRow, 0, len(rows))
-	newOrder = append(newOrder, remaining[:insertIdx]...)
-	newOrder = append(newOrder, movedRow)
-	newOrder = append(newOrder, remaining[insertIdx:]...)
+		newOrder := make([]FullRow, 0, len(rows))
+		newOrder = append(newOrder, remaining[:insertIdx]...)
+		newOrder = append(newOrder, movedRow)
+		newOrder = append(newOrder, remaining[insertIdx:]...)
 
-	err := m1.DB().Transaction(func(tx *gorm.DB) error {
 		newWeigh = int32(len(newOrder))
 		for _, r := range newOrder {
 			if weightMap[r.Id] != newWeigh {
@@ -223,21 +240,6 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		}
 		return nil
 	})
-	return err
-}
-
-func LimitAdminIds(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
-	return func(db *gorm.DB) *gorm.DB {
-		value, _ := ctx.Get("dataLimitAdminIds")
-		if value == nil {
-			return db
-		}
-		dataLimitAdminIds, ok := value.([]int32)
-		if !ok || len(dataLimitAdminIds) == 0 {
-			return db
-		}
-		return db.Where("admin_id IN ?", dataLimitAdminIds)
-	}
 }
 
 func (h *Base) GetRemark(ctx *gin.Context) string {

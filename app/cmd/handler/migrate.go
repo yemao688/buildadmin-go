@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations"
 	"go-build-admin/database/migrations/model"
@@ -30,94 +31,80 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		cmd.Println("database prefix error:", err)
 		return
 	}
-	// Legacy table/column normalization must precede AutoMigrate: otherwise
-	// GORM may create the replacement table and leave old data behind.
-	if err := migrations.PrepareLegacySchema(h.db, h.config); err != nil {
-		cmd.Println("legacy schema migration error:", err)
-		return
-	}
-	fresh, err := migrations.IsFreshDatabase(h.db, h.config)
-	if err != nil {
-		cmd.Println("database state check error:", err)
-		return
-	}
-
-	err = h.db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
-		&model.AdminGroupAccess{},
-		&model.AdminGroup{},
-		&model.AdminLog{},
-		&model.AdminRule{},
-		&model.Admin{},
-		&model.AdminClosure{},
-		&model.AdminHierarchyLock{},
-		&model.Area{},
-		&model.Attachment{},
-		&model.Captcha{},
-		&model.Config{},
-		&model.CrudLog{},
-		&model.Migrations{},
-		&model.SecurityDataRecycleLog{},
-		&model.SecurityDataRecycle{},
-		&model.SecuritySensitiveDataLog{},
-		&model.SecuritySensitiveData{},
-		&model.TestBuild{},
-		&model.Token{},
-		&model.UserGroup{},
-		&model.UserMoneyLog{},
-		&model.UserRule{},
-		&model.UserScoreLog{},
-		&model.User{},
-	)
+	err := migrations.WithMigrationLock(h.db, h.config.Database.Prefix+"dual-track-migrations", 120000000000, func(pinned *gorm.DB) error {
+		if err := migrations.PrepareUpstreamNeutralSchema(pinned, h.config); err != nil {
+			return fmt.Errorf("legacy schema migration: %w", err)
+		}
+		recovery, err := migrations.DecideInstallRecovery(pinned, h.config)
+		if err != nil {
+			return fmt.Errorf("database state check: %w", err)
+		}
+		snapshot := recovery != migrations.InstallStrictUpgrade
+		if snapshot {
+			if err := migrations.BootstrapOfficialLedger(pinned, h.config); err != nil {
+				return fmt.Errorf("official ledger bootstrap before snapshot: %w", err)
+			}
+			if err := migrations.MarkSeedPending(pinned, h.config); err != nil {
+				return fmt.Errorf("database seed marker before snapshot: %w", err)
+			}
+			if err := pinned.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+				&model.AdminGroupAccess{}, &model.AdminGroup{}, &model.AdminLog{}, &model.AdminRule{}, &model.Admin{}, &model.AdminClosure{}, &model.AdminHierarchyLock{}, &model.Area{}, &model.Attachment{}, &model.Captcha{}, &model.Config{}, &model.CrudLog{}, &model.Migrations{}, &model.SecurityDataRecycleLog{}, &model.SecurityDataRecycle{}, &model.SecuritySensitiveDataLog{}, &model.SecuritySensitiveData{}, &model.TestBuild{}, &model.Token{}, &model.UserGroup{}, &model.UserMoneyLog{}, &model.UserRule{}, &model.UserScoreLog{}, &model.User{}); err != nil {
+				return fmt.Errorf("database fresh snapshot: %w", err)
+			}
+		}
+		if err := migrations.BootstrapOfficialLedger(pinned, h.config); err != nil {
+			return fmt.Errorf("official ledger bootstrap: %w", err)
+		}
+		if err := migrations.ValidateOfficialLedgerSchema(pinned, h.config); err != nil {
+			return fmt.Errorf("official ledger schema: %w", err)
+		}
+		if err := migrations.BootstrapLocalLedger(pinned, h.config); err != nil {
+			return fmt.Errorf("local ledger bootstrap: %w", err)
+		}
+		if err := migrations.ValidateLocalLedgerSchema(pinned, h.config); err != nil {
+			return fmt.Errorf("local ledger schema: %w", err)
+		}
+		official, local := migrations.OfficialMigrations(), migrations.LocalMigrations()
+		if err := migrations.PreflightLegacyAliases(pinned, h.config, migrations.LegacyVersionAliases()); err != nil {
+			return fmt.Errorf("legacy alias preflight: %w", err)
+		}
+		if _, err := migrations.ResolveOfficialAliasCollisions(pinned, h.config, official, local); err != nil {
+			return fmt.Errorf("legacy alias collision: %w", err)
+		}
+		officialCount, err := migrations.RunOfficialMigrations(pinned, h.config, official)
+		if err != nil {
+			return fmt.Errorf("official migration: %w", err)
+		}
+		if err := migrations.ReconcileLegacyData(pinned, h.config); err != nil {
+			return fmt.Errorf("official reconciliation: %w", err)
+		}
+		adopted, err := migrations.AdoptCompletedLegacyAliases(pinned, h.config, local)
+		if err != nil {
+			return fmt.Errorf("legacy adoption: %w", err)
+		}
+		localCount, err := migrations.RunLocalMigrations(pinned, h.config, official, local)
+		if err != nil {
+			return fmt.Errorf("local migration: %w", err)
+		}
+		if err := migrations.ValidateCurrentSchema(pinned, h.config); err != nil {
+			return fmt.Errorf("database schema validation: %w", err)
+		}
+		pending, err := migrations.SeedPending(pinned, h.config)
+		if err != nil {
+			return fmt.Errorf("database seed state: %w", err)
+		}
+		if pending {
+			if err := migrations.RunFreshSeed(pinned, h.config, local); err != nil {
+				return err
+			}
+		}
+		cmd.Printf("executed %d migrations (%d official, %d local, %d adopted)\n", officialCount+localCount, officialCount, localCount, adopted)
+		return nil
+	})
 	if err != nil {
 		cmd.Println("database migrate error:", err)
 		return
 	}
-	if fresh {
-		if err := migrations.MarkSeedPending(h.db, h.config); err != nil {
-			cmd.Println("database seed marker error:", err)
-			return
-		}
-	}
-	if err := migrations.ValidateCurrentSchema(h.db, h.config); err != nil {
-		cmd.Println("database schema validation error:", err)
-		return
-	}
-	// 版本化迁移（处理 AutoMigrate 无法完成的列类型变更）
-	upgradeCount, err := migrations.RunVersionMigrations(h.db, h.config)
-	if err != nil {
-		cmd.Println("version migration error:", err)
-		return
-	}
-	if err := migrations.ReconcileLegacyData(h.db, h.config); err != nil {
-		cmd.Println("legacy data reconciliation error:", err)
-		return
-	}
-	if upgradeCount > 0 {
-		cmd.Printf("executed %d version migrations\n", upgradeCount)
-	}
-
-	pending, err := migrations.SeedPending(h.db, h.config)
-	if err != nil {
-		cmd.Println("database seed state error:", err)
-		return
-	}
-	if pending {
-		install := migrations.NewInstall(h.db)
-		if err := install.InsertData(); err != nil {
-			cmd.Println("database seed error:", err)
-			return
-		}
-		if err := migrations.EnsureAdminClosureSelfRows(h.db, h.config); err != nil {
-			cmd.Println("admin closure seed error:", err)
-			return
-		}
-		if err := migrations.MarkSeedCompleted(h.db, h.config); err != nil {
-			cmd.Println("database seed marker error:", err)
-			return
-		}
-		cmd.Println("data seed completed")
-	}
-
 	cmd.Println("database migrate success")
 }
 

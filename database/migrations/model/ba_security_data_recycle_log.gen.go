@@ -6,15 +6,18 @@ package model
 
 // SecurityDataRecycleLog 数据回收记录表
 type SecurityDataRecycleLog struct {
-	ID         int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`           // ID
-	AdminID    int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;comment:操作管理员" json:"admin_id"`                // 操作管理员
-	RecycleID  int32  `gorm:"column:recycle_id;type:int(11) unsigned;not null;default:0;comment:回收规则ID" json:"recycle_id"`           // 回收规则ID
-	Data       string `gorm:"column:data;type:text;comment:回收的数据" json:"data"`                                                       // 回收的数据
-	DataTable  string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:数据表" json:"data_table"`                 // 数据表
-	PrimaryKey string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`              // 数据表主键
-	IsRestore  int32  `gorm:"column:is_restore;type:tinyint(4) unsigned;not null;default:0;comment:是否已还原:0=否,1=是" json:"is_restore"` // 是否已还原:0=否,1=是
-	IP         string `gorm:"column:ip;type:varchar(50) default '';not null;comment:操作者IP" json:"ip"`                                // 操作者IP
-	Useragent  string `gorm:"column:useragent;type:varchar(255) default '';not null;comment:User-Agent" json:"useragent"`            // User-Agent
-	Connection string `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
-	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
+	ID                  int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`               // ID
+	AdminID             int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:操作管理员" json:"admin_id"` // 操作管理员
+	TargetAdminID       int32  `gorm:"column:target_admin_id;type:int(11) unsigned;not null;default:0;index:idx_target_admin_id;comment:目标数据管理员" json:"target_admin_id"`
+	LegacyUnrecoverable int32  `gorm:"column:legacy_unrecoverable;type:tinyint(1) unsigned;not null;default:0;comment:历史目标管理员不可恢复" json:"legacy_unrecoverable"`
+	IsCommitted         int32  `gorm:"column:is_committed;type:tinyint(1) unsigned;not null;default:0;comment:提交状态" json:"is_committed"`
+	RecycleID           int32  `gorm:"column:recycle_id;type:int(11) unsigned;not null;default:0;comment:回收规则ID" json:"recycle_id"`           // 回收规则ID
+	Data                string `gorm:"column:data;type:text;comment:回收的数据" json:"data"`                                                       // 回收的数据
+	DataTable           string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:数据表" json:"data_table"`                 // 数据表
+	PrimaryKey          string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`              // 数据表主键
+	IsRestore           int32  `gorm:"column:is_restore;type:tinyint(4) unsigned;not null;default:0;comment:是否已还原:0=否,1=是" json:"is_restore"` // 是否已还原:0=否,1=是
+	IP                  string `gorm:"column:ip;type:varchar(50) default '';not null;comment:操作者IP" json:"ip"`                                // 操作者IP
+	Useragent           string `gorm:"column:useragent;type:varchar(255) default '';not null;comment:User-Agent" json:"useragent"`            // User-Agent
+	Connection          string `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
+	CreateTime          int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
 }

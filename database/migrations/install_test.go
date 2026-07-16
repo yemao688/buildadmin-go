@@ -78,6 +78,29 @@ func TestInstall(t *testing.T) {
 	if err := install.InsertData(); err != nil {
 		t.Fatal(err)
 	}
+	var baselineOwner int32
+	if err := db.Table("go_security_data_recycle").Where("id=1").Pluck("admin_id", &baselineOwner).Error; err != nil {
+		t.Fatal(err)
+	}
+	if baselineOwner != 0 {
+		t.Fatalf("upstream baseline wrote local owner %d", baselineOwner)
+	}
+	seedConfig := &conf.Configuration{Database: conf.Database{Prefix: "go_"}}
+	if err := MarkSeedPending(db, seedConfig); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunFreshSeed(db, seedConfig, LocalMigrations()); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
+		var ownerCount int64
+		if err := db.Raw("SELECT COUNT(*) FROM `go_" + table + "` r JOIN `go_admin` a ON a.id=r.admin_id WHERE r.data_table='user' AND r.admin_id > 0").Scan(&ownerCount).Error; err != nil {
+			t.Fatal(err)
+		}
+		if ownerCount == 0 {
+			t.Fatalf("seed %s user rule has no valid admin owner", table)
+		}
+	}
 }
 
 func TestRenameColumn(t *testing.T) {
@@ -92,16 +115,17 @@ func TestRenameColumn(t *testing.T) {
 }
 
 func TestMigrationRegistry(t *testing.T) {
-	if err := validateMigrations(); err != nil {
+	official := OfficialMigrations()
+	if err := ValidateOfficialMigrations(official); err != nil {
 		t.Fatal(err)
 	}
-	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127, 20260714120000, 20260714130000, 20260715000000}
-	if len(allMigrations) != len(want) {
-		t.Fatalf("migration count = %d", len(allMigrations))
+	want := []int64{20230622221507, 20230719211338, 20230905060702, 20231112093414, 20231229043002, 20250412134127}
+	if len(official) != len(want) {
+		t.Fatalf("migration count = %d", len(official))
 	}
 	for i, v := range want {
-		if allMigrations[i].Version != v {
-			t.Fatalf("migration %d = %d, want %d", i, allMigrations[i].Version, v)
+		if official[i].Key.Version != v {
+			t.Fatalf("migration %d = %d, want %d", i, official[i].Key.Version, v)
 		}
 	}
 }

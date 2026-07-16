@@ -6,14 +6,15 @@ package model
 
 // SecuritySensitiveData 敏感数据规则表
 type SecuritySensitiveData struct {
-	ID           int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`   // ID
-	Name         string `gorm:"column:name;type:varchar(50) default '';not null;comment:规则名称" json:"name"`                     // 规则名称
-	Controller   string `gorm:"column:controller;type:varchar(100) default '';not null;comment:控制器" json:"controller"`         // 控制器
-	ControllerAs string `gorm:"column:controller_as;type:varchar(100) default '';not null;comment:控制器别名" json:"controller_as"` // 控制器别名
-	DataTable    string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:对应数据表" json:"data_table"`       // 对应数据表
-	PrimaryKey   string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`      // 数据表主键
-	DataFields   string `gorm:"column:data_fields;type:text;comment:敏感数据字段" json:"data_fields"`                                // 敏感数据字段
-	Status       string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`        // 状态:0=禁用,1=启用
+	ID           int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`               // ID
+	AdminID      int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:管理员ID" json:"admin_id"` // 管理员ID
+	Name         string `gorm:"column:name;type:varchar(50) default '';not null;comment:规则名称" json:"name"`                                 // 规则名称
+	Controller   string `gorm:"column:controller;type:varchar(100) default '';not null;comment:控制器" json:"controller"`                     // 控制器
+	ControllerAs string `gorm:"column:controller_as;type:varchar(100) default '';not null;comment:控制器别名" json:"controller_as"`             // 控制器别名
+	DataTable    string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:对应数据表" json:"data_table"`                   // 对应数据表
+	PrimaryKey   string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`                  // 数据表主键
+	DataFields   string `gorm:"column:data_fields;type:text;comment:敏感数据字段" json:"data_fields"`                                            // 敏感数据字段
+	Status       string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                    // 状态:0=禁用,1=启用
 	Connection   string `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
 	UpdateTime   int64  `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"` // 更新时间
 	CreateTime   int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间

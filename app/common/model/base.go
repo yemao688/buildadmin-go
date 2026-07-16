@@ -8,7 +8,6 @@ type BaseModel struct {
 	TableName        string
 	Key              string
 	QuickSearchField string
-	DataLimit        string
 	sqlDB            *gorm.DB
 }
 

@@ -33,7 +33,6 @@ func NewAdminLogModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminLogModel
 			TableName:        config.Database.Prefix + "admin_log",
 			Key:              "id",
 			QuickSearchField: "title",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}

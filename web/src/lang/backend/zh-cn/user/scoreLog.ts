@@ -5,4 +5,5 @@ export default {
     'Please enter the change amount of points': '请输入积分变更数额',
     'Points after change': '变更后积分',
     'Please enter change remarks / description': '请输入变更备注/说明',
+    'Superior agent': '上级代理',
 }

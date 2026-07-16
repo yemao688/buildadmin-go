@@ -263,13 +263,6 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 			return
 		}
 	}
-	//数据权限
-	value, exists := ctx.Get("dataLimitAdminIds")
-	if exists && len(value.([]int32)) > 0 {
-		dataLimitAdminIds := value.([]int32)
-		whereS += " AND " + Backquote(table.TableName+".admin_id") + " IN ? "
-		whereP = append(whereP, dataLimitAdminIds)
-	}
 	if len(whereS) >= 5 {
 		whereS = whereS[5:]
 	}

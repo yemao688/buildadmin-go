@@ -3,18 +3,34 @@ package model
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"os"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
+
+	"github.com/gin-gonic/gin"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
+
+func hierarchyRequestContext(t *testing.T) *gin.Context {
+	t.Helper()
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/edit", nil)
+	actor, err := data_scope.NewUnrestrictedActor(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.Set(data_scope.ActorContextKey, actor)
+	return ctx
+}
 
 func openAdminHierarchyTestDB(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
@@ -454,7 +470,7 @@ func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
 
 	model := NewAdminModel(db, hierarchyConfig("ba_"))
 	child := Admin{Username: "child", Status: "enable", ParentID: &parent.ID}
-	if err := model.Add(nil, child, []string{"1"}); err != nil {
+	if err := model.Add(hierarchyRequestContext(t), child, []string{"1"}); err != nil {
 		t.Fatalf("add child: %v", err)
 	}
 
@@ -481,7 +497,7 @@ func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 	model := NewAdminModel(db, hierarchyConfig("ba_"))
 	missing := int32(9999)
 	child := Admin{Username: "rollback", Status: "enable", ParentID: &missing}
-	if err := model.Add(nil, child, []string{"1"}); err == nil {
+	if err := model.Add(hierarchyRequestContext(t), child, []string{"1"}); err == nil {
 		t.Fatal("expected add to fail due to orphan parent")
 	}
 

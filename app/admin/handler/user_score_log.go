@@ -26,14 +26,31 @@ func NewUserScoreLogHandler(log *zap.Logger, userScoreLogM *model.UserScoreLogMo
 func (h *UserScoreLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
+		return
 	}
 	result, total, err := h.userScoreLogM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+
+	list := []map[string]any{}
+	for _, v := range result {
+		list = append(list, map[string]any{
+			"admin_id":    v.AdminID,
+			"admin":       v.Admin,
+			"id":          v.ID,
+			"user_id":     v.UserID,
+			"score":       v.Score,
+			"before":      v.Before,
+			"after":       v.After,
+			"memo":        v.Memo,
+			"create_time": v.CreateTime,
+			"user":        v.User,
+		})
+	}
 	Success(ctx, map[string]any{
-		"list":   result,
+		"list":   list,
 		"total":  total,
 		"remark": "",
 	})
@@ -66,7 +83,8 @@ func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	err := h.userScoreLogM.Add(ctx, userScoreLog)
+	err := h.userScoreLogM.Add(ctx, &userScoreLog)
+	// Add takes a pointer so the caller can inspect the generated ID.
 	if err != nil {
 		FailByErr(ctx, err)
 		return

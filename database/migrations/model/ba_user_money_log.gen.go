@@ -4,16 +4,14 @@
 
 package model
 
-
 // UserMoneyLog 会员余额变动表
 type UserMoneyLog struct {
-	ID         int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
-	UserID     int32  `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;comment:会员ID" json:"user_id"`          // 会员ID
-	Money      int32  `gorm:"column:money;type:int(11) unsigned;not null;default:0;comment:变更余额" json:"money"`              // 变更余额
-	Before     int32  `gorm:"column:before;type:int(11) unsigned;not null;default:0;comment:变更前余额" json:"before"`           // 变更前余额
-	After      int32  `gorm:"column:after;type:int(11) unsigned;not null;default:0;comment:变更后余额" json:"after"`             // 变更后余额
-	Memo       string `gorm:"column:memo;type:varchar(255) default '';not null;comment:备注" json:"memo"`                  // 备注
-	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`           // 创建时间
+	ID         int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`               // ID
+	AdminID    int32  `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:管理员ID" json:"admin_id"` // 管理员ID
+	UserID     int32  `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;comment:会员ID" json:"user_id"`                       // 会员ID
+	Money      int32  `gorm:"column:money;type:int(11);not null;default:0;comment:变更余额" json:"money"`                                    // 变更余额
+	Before     int32  `gorm:"column:before;type:int(11) unsigned;not null;default:0;comment:变更前余额" json:"before"`                        // 变更前余额
+	After      int32  `gorm:"column:after;type:int(11) unsigned;not null;default:0;comment:变更后余额" json:"after"`                          // 变更后余额
+	Memo       string `gorm:"column:memo;type:varchar(255) default '';not null;comment:备注" json:"memo"`                                  // 备注
+	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                  // 创建时间
 }
-
-

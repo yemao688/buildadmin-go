@@ -37,7 +37,6 @@ package tests
 // 	security := middleware.NewSecurity(configuration, zapLogger, gormDB)
 // 	modelAuthModel := model2.NewAuthModel(gormDB, tokenHelper, configuration)
 // 	userLogin := middleware.NewUserLogin(configuration, tokenHelper, modelAuthModel)
-// 	dataLimit := middleware.NewDataLimit(configuration, authModel)
 // 	adminLogModel := model.NewAdminLogModel(gormDB, configuration)
 // 	record := middleware.NewRecord(configuration, adminLogModel)
 // 	adminModel := model.NewAdminModel(gormDB, configuration)

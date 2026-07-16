@@ -57,7 +57,11 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	copier.Copy(&record, params)
 	record.Tablename = params.Table.Name
 	record.Status = "start"
-	crudLogId := h.crudLogM.RecordCrudStatus(record)
+	crudLogId, err := h.crudLogM.RecordCrudStatus(ctx, record)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	h.log.Info("创建crud日志start:" + fmt.Sprintf("%+v", record))
 	h.log.Info("请求参数Type:" + fmt.Sprintf("%+v", params.Type))
 	h.log.Info("请求参数Table:" + fmt.Sprintf("%+v", params.Table))
@@ -77,7 +81,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		h.tableM.DelTable(record.Table.Name)
 	}
 	h.log.Info("开始处理表设计")
-	err := helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
+	err = helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
 	if err != nil {
 		h.log.Error("处理表设计error:" + err.Error())
 		FailByErr(ctx, err)
@@ -91,7 +95,9 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		h.log.Error("生成文件error:" + err.Error())
 		record.ID = crudLogId
 		record.Status = "error"
-		h.crudLogM.RecordCrudStatus(record)
+		if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
+			h.log.Error("更新crud日志error状态失败:" + statusErr.Error())
+		}
 		FailByErr(ctx, err)
 		return
 	}
@@ -113,7 +119,9 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 
 	record.ID = crudLogId
 	record.Status = "success"
-	h.crudLogM.RecordCrudStatus(record)
+	if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
+		h.log.Error("更新crud日志success状态失败:" + statusErr.Error())
+	}
 	h.log.Info("创建crud日志end:" + fmt.Sprintf("%+v", record))
 
 	Success(ctx, map[string]interface{}{})
@@ -217,7 +225,9 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		ID:     param.ID,
 		Status: "delete",
 	}
-	h.crudLogM.RecordCrudStatus(record)
+	if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
+		h.log.Error("更新crud日志delete状态失败:" + statusErr.Error())
+	}
 
 	h.log.Info("删除provider和路由")
 	dirPath := filepath.Dir(crudLog.Table.ControllerFile)

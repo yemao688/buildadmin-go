@@ -6,6 +6,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/random"
+	"go-build-admin/app/pkg/systemroot"
 	"go-build-admin/conf"
 	"regexp"
 	"slices"
@@ -214,9 +215,17 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 
 	salt := random.Build("alnum", 16)
 	password = utils.EncryptPassword(password, salt)
+	rootID, err := (systemroot.Resolver{
+		DB:         s.sqlDB,
+		AdminTable: s.config.Database.Prefix + "admin",
+	}).Resolve()
+	if err != nil {
+		return nil, cErr.BadRequest("system root administrator is not configured")
+	}
 
 	nickname := utils.MaskPhone(username)
 	user := User{
+		AdminID:       rootID,
 		GroupID:       1,
 		Username:      username,
 		Nickname:      nickname,

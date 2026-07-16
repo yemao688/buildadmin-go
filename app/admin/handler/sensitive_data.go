@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -131,8 +134,26 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
-		return
+	// Detect Switch partial-edit (id + status only) and apply it under scope.
+	bodyBytes, _ := io.ReadAll(ctx.Request.Body)
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	var m map[string]any
+	if err := json.Unmarshal(bodyBytes, &m); err == nil && len(m) == 2 {
+		_, hasID := m["id"]
+		status, hasStatus := m["status"]
+		if hasID && hasStatus {
+			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt())
+			statusStr, _ := status.(string)
+			if statusStr == "" {
+				statusStr = fmt.Sprintf("%v", status)
+			}
+			if err := h.sensitiveDataM.UpdateStatus(ctx, id, statusStr); err != nil {
+				FailByErr(ctx, err)
+				return
+			}
+			Success(ctx, "")
+			return
+		}
 	}
 
 	var params = struct {

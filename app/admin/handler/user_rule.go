@@ -3,7 +3,6 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
-	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
 	"strings"
 
@@ -116,12 +115,6 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 	userRule, err := h.userRuleM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
-		return
-	}
-
-	//校验数据权限
-	if !h.CheckDataLimit(ctx, userRule.ID) {
-		FailByErr(ctx, cErr.BadRequest("You have no permission"))
 		return
 	}
 

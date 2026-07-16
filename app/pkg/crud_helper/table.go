@@ -343,6 +343,9 @@ func analyseFieldDataType(field model.Field) string {
 	} else if limitType == "valuesType" {
 		return conciseType + "(" + strings.Join(data, ",") + ")"
 	}
+	if len(data) == 0 {
+		return conciseType
+	}
 	return conciseType + "(" + data[0] + ")"
 }
 

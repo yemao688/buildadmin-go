@@ -19,4 +19,5 @@ export default {
     'Please leave blank if not modified': '不修改请留空',
     'Personal signature': '个性签名',
     'Login account': '登录账户名',
+    'Superior agent': '上级代理',
 }

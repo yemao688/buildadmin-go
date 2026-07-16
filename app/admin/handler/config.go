@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
@@ -15,6 +16,7 @@ import (
 	"github.com/go-mail/mail"
 	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type ConfigHandler struct {
@@ -159,17 +161,27 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	all, err := h.configM.List(ctx)
-	if err != nil {
+	if err := h.configM.Transaction(ctx, func(tx *gorm.DB) error {
+		all := []model.Config{}
+		if err := tx.Model(&model.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
+			return err
+		}
+		for _, v := range all {
+			if value, ok := params[v.Name]; ok {
+				newValue := v.SetValueAttr(value, v.Type)
+				result := tx.Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return fmt.Errorf("config update failed: rows affected mismatch")
+				}
+			}
+		}
+		return nil
+	}); err != nil {
 		FailByErr(ctx, err)
 		return
-	}
-
-	for _, v := range all {
-		if value, ok := params[v.Name]; ok {
-			newValue := v.SetValueAttr(value, v.Type)
-			h.configM.DB().Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
-		}
 	}
 	Success(ctx, "")
 }

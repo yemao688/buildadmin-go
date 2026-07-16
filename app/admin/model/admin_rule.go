@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 	"slices"
@@ -39,103 +40,128 @@ func NewAdminRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminRuleMod
 			TableName:        config.Database.Prefix + "admin_rule",
 			Key:              "id",
 			QuickSearchField: "title",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}
 }
 
 func (s *AdminRuleModel) GetOne(ctx *gin.Context, id int32) (adminRule AdminRule, err error) {
-	err = s.sqlDB.Where("id=?", id).Take(&adminRule).Error
+	err = s.DBFor(ctx).Where("id=?", id).Take(&adminRule).Error
 	return
 }
 
 func (s *AdminRuleModel) List(ctx *gin.Context) (list []AdminRule, err error) {
-	err = s.sqlDB.Model(&AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
+	err = s.DBFor(ctx).Model(&AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
 	return
 }
 
 func (s *AdminRuleModel) Add(ctx *gin.Context, adminRule AdminRule) error {
-	tx := s.sqlDB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		result := tx.Create(&adminRule)
+		if result.Error != nil {
+			return result.Error
 		}
-	}()
-
-	if err := tx.Create(&adminRule).Error; err != nil {
-		tx.Rollback()
-		return err
-
-	}
-	return tx.Commit().Error
+		if result.RowsAffected != 1 {
+			return cErr.BadRequest("create failed: rows affected mismatch")
+		}
+		return nil
+	})
 }
 
 func (s *AdminRuleModel) Edit(ctx *gin.Context, adminRule AdminRule) error {
-	parent := AdminRule{}
-	if adminRule.Pid > 0 {
-		if err := s.sqlDB.Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
-			return err
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		parent := AdminRule{}
+		if adminRule.Pid > 0 {
+			if err := tx.Where("id=?", adminRule.Pid).First(&parent).Error; err != nil {
+				return err
+			}
 		}
-	}
-
-	tx := s.sqlDB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
+		if parent.Pid == adminRule.ID {
+			result := tx.Model(&AdminRule{}).Where("id=?", parent.ID).Update("pid", 0)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return cErr.BadRequest("parent update failed")
+			}
 		}
-	}()
-
-	if parent.Pid == adminRule.ID {
-		if err := tx.Model(&AdminRule{}).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
-			tx.Rollback()
-			return err
+		result := tx.Save(&adminRule)
+		if result.Error != nil {
+			return result.Error
 		}
-	}
-
-	if err := tx.Save(&adminRule).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit().Error
+		if result.RowsAffected != 1 {
+			return cErr.BadRequest("update failed: rows affected mismatch")
+		}
+		return nil
+	})
 }
 
 func (s *AdminRuleModel) Del(ctx *gin.Context, ids []int32) error {
-	var subIds []int32
-	if err := s.sqlDB.Model(&AdminRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
-		return err
-	}
-
-	for _, v := range subIds {
-		if !slices.Contains(ids, v) {
-			return cErr.BadRequest("Please delete the child element first, or use batch deletion")
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		var subIds []int32
+		if err := tx.Model(&AdminRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+			return err
 		}
-	}
-
-	err := s.sqlDB.Model(&AdminRule{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
-	return err
+		for _, v := range subIds {
+			if !slices.Contains(ids, v) {
+				return cErr.BadRequest("Please delete the child element first, or use batch deletion")
+			}
+		}
+		query := tx.Model(&AdminRule{}).Where(" id in ? ", ids)
+		var expected int64
+		if err := query.Count(&expected).Error; err != nil {
+			return err
+		}
+		result := query.Delete(nil)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != expected {
+			return cErr.BadRequest("delete failed: rows affected mismatch")
+		}
+		return nil
+	})
 }
 
-func (s *AdminRuleModel) GetRulePIds(ids []string) ([]int32, error) {
+func (s *AdminRuleModel) GetRulePIds(ids []string, contexts ...*gin.Context) ([]int32, error) {
+	var ctx *gin.Context
+	if len(contexts) > 0 {
+		ctx = contexts[0]
+	}
 	pids := []int32{}
-	err := s.sqlDB.Model(&AdminRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
+	err := s.DBFor(ctx).Model(&AdminRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }
 
 // crud 删除菜单
 func (s *AdminRuleModel) Delete(path string, recursion bool) error {
-	adminRule := AdminRule{}
-	s.sqlDB.Where(" name = ? ", path).Take(&adminRule)
-
-	list := []AdminRule{}
-	s.sqlDB.Model(&AdminRule{}).Where(" pid = ? ", adminRule.ID).Find(&list)
-
-	if recursion && len(list) > 0 {
-		for _, v := range list {
-			s.Delete(v.Name, true)
+	return s.Transaction(context.Background(), func(tx *gorm.DB) error {
+		var deleteRule func(string) error
+		deleteRule = func(name string) error {
+			var adminRule AdminRule
+			if err := tx.Where(" name = ? ", name).Take(&adminRule).Error; err != nil {
+				return err
+			}
+			var list []AdminRule
+			if err := tx.Model(&AdminRule{}).Where(" pid = ? ", adminRule.ID).Find(&list).Error; err != nil {
+				return err
+			}
+			if recursion {
+				for _, child := range list {
+					if err := deleteRule(child.Name); err != nil {
+						return err
+					}
+				}
+			}
+			result := tx.Model(&AdminRule{}).Where(" name = ? ", name).Delete(nil)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return cErr.BadRequest("delete failed: rows affected mismatch")
+			}
+			return nil
 		}
-	}
-
-	s.sqlDB.Model(&AdminRule{}).Where(" name = ? ", path).Delete(nil)
-	return nil
+		return deleteRule(path)
+	})
 }

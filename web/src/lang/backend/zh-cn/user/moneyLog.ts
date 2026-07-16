@@ -13,4 +13,5 @@ export default {
     'Balance after change': '变更后余额',
     'Please enter change remarks / description': '请输入变更备注/说明',
     User: '用户',
+    'Superior agent': '上级代理',
 }

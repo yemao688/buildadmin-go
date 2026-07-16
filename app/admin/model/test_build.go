@@ -32,7 +32,6 @@ func NewTestBuildModel(sqlDB *gorm.DB, config *conf.Configuration) *TestBuildMod
 			TableName:        config.Database.Prefix + "test_build",
 			Key:              "id",
 			QuickSearchField: "id",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}
@@ -62,6 +61,6 @@ func (s *TestBuildModel) Edit(ctx *gin.Context, data TestBuild) error {
 }
 
 func (s *TestBuildModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Model(&TestBuild{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.sqlDB.Model(&TestBuild{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

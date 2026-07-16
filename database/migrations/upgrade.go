@@ -1,13 +1,16 @@
 package migrations
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
 
+	"go-build-admin/app/pkg/systemroot"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/model"
 	"gorm.io/gorm"
@@ -39,6 +42,7 @@ func MarkSeedPending(db *gorm.DB, config *conf.Configuration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
+	db = db.Session(&gorm.Session{NewDB: true})
 	table := tableName(config, "migrations")
 	var record migrationRecord
 	result := db.Table(table).Where("version = ?", installDataVersion).First(&record)
@@ -62,6 +66,7 @@ func SeedPending(db *gorm.DB, config *conf.Configuration) (bool, error) {
 	if err := ValidatePrefix(config); err != nil {
 		return false, err
 	}
+	db = db.Session(&gorm.Session{NewDB: true})
 	var record migrationRecord
 	result := db.Table(tableName(config, "migrations")).Where("version = ?", installDataVersion).First(&record)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -80,6 +85,7 @@ func MarkSeedCompleted(db *gorm.DB, config *conf.Configuration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
+	db = db.Session(&gorm.Session{NewDB: true})
 	now := time.Now()
 	result := db.Table(tableName(config, "migrations")).Where("version = ? AND migration_name = ?", installDataVersion, installDataName).Updates(map[string]any{"end_time": now, "start_time": now})
 	if result.Error != nil {
@@ -207,7 +213,9 @@ func normalizeLegacyColumns(db *gorm.DB, config *conf.Configuration, onlyTable s
 // PrepareLegacySchema must run before AutoMigrate.  It is deliberately made
 // independent of the generated models so that it can also open very old
 // BuildAdmin databases.
-func PrepareLegacySchema(db *gorm.DB, config *conf.Configuration) error {
+// PrepareUpstreamNeutralSchema performs only compatibility normalization that
+// does not change the local account-status protocol.
+func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
@@ -297,9 +305,6 @@ func PrepareLegacySchema(db *gorm.DB, config *conf.Configuration) error {
 		}
 	}
 	if err := normalizeLegacyColumns(db, config, ""); err != nil {
-		return err
-	}
-	if err := bridgeAdminStatusSchema(db, config); err != nil {
 		return err
 	}
 	for _, item := range []struct{ table, column, typ string }{
@@ -393,20 +398,68 @@ func version223(db *gorm.DB, config *conf.Configuration) error {
 	return nil
 }
 
-func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
+type InstallRecoveryState string
+
+const (
+	InstallFresh         InstallRecoveryState = "fresh"
+	InstallInterrupted   InstallRecoveryState = "interrupted_install"
+	InstallStrictUpgrade InstallRecoveryState = "strict_upgrade"
+)
+
+// DecideInstallRecovery reads only ledger/table state. It is intentionally
+// separate from AutoMigrate so the handler cannot choose a destructive path
+// before it knows whether an install snapshot was interrupted.
+func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallRecoveryState, error) {
 	if err := ValidatePrefix(config); err != nil {
-		return false, err
+		return "", err
 	}
-	for _, name := range []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "menu_rule", "admin", "area", "attachment", "captcha", "config", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"} {
+	ledgerExists, err := legacyTableExists(db, tableName(config, "migrations"))
+	if err != nil {
+		return "", err
+	}
+	markerPending := false
+	markerFound := false
+	if ledgerExists {
+		var marker migrationRecord
+		result := db.Table(tableName(config, "migrations")).Where("version = ?", installDataVersion).First(&marker)
+		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return "", result.Error
+		}
+		if result.Error == nil {
+			markerFound = true
+			if marker.MigrationName != installDataName {
+				return "", fmt.Errorf("migration version %d name collision", installDataVersion)
+			}
+			markerPending = marker.EndTime == nil
+		}
+	}
+	businessTables := []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "menu_rule", "admin", "area", "attachment", "captcha", "config", "crud_log", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"}
+	businessExists := false
+	for _, name := range businessTables {
 		ok, err := legacyTableExists(db, tableName(config, name))
 		if err != nil {
-			return false, err
+			return "", err
 		}
 		if ok {
-			return false, nil
+			businessExists = true
+			break
 		}
 	}
-	return true, nil
+	if markerPending || (ledgerExists && !businessExists && !markerFound) {
+		return InstallInterrupted, nil
+	}
+	if ledgerExists && !businessExists && markerFound {
+		return "", fmt.Errorf("completed InstallData marker has no business schema")
+	}
+	if !ledgerExists && !businessExists {
+		return InstallFresh, nil
+	}
+	return InstallStrictUpgrade, nil
+}
+
+func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
+	state, err := DecideInstallRecovery(db, config)
+	return state != InstallStrictUpgrade, err
 }
 
 // SeedCurrentData reports whether the install seed is complete. A schema can
@@ -460,12 +513,6 @@ type migrationRecord struct {
 }
 
 type MigrationFn func(*gorm.DB, *conf.Configuration) error
-
-type VersionMigration struct {
-	Version int64
-	Name    string
-	Up      MigrationFn
-}
 
 // tableName 获取带前缀的表名
 func tableName(config *conf.Configuration, logicalName string) string {
@@ -927,95 +974,638 @@ func version224(db *gorm.DB, config *conf.Configuration) error {
 	return EnsureAdminClosureSelfRows(db, config)
 }
 
-// ─── 迁移注册 ───
-
-var allMigrations = []VersionMigration{
-	{Version: 20230622221507, Name: "Version200", Up: version200},
-	{Version: 20230719211338, Name: "Version201", Up: version201},
-	{Version: 20230905060702, Name: "Version202", Up: version202},
-	{Version: 20231112093414, Name: "Version205", Up: version205},
-	{Version: 20231229043002, Name: "Version206", Up: version206},
-	{Version: 20250412134127, Name: "Version222", Up: version222},
-	{Version: 20260714120000, Name: "Version223", Up: version223},
-	{Version: 20260714130000, Name: "Version224", Up: version224},
-	{Version: 20260715000000, Name: "Version225", Up: version225},
+type migrationColumn struct {
+	ColumnType string  `gorm:"column:column_type"`
+	Nullable   string  `gorm:"column:is_nullable"`
+	Default    *string `gorm:"column:column_default"`
 }
 
-// validateMigrations 验证迁移列表的版本号严格递增、名称非空
-func validateMigrations() error {
-	var previous int64
-	for i, m := range allMigrations {
-		if m.Version <= previous {
-			return fmt.Errorf("migration versions must be strictly increasing: %d", m.Version)
-		}
-		if i > 0 && m.Version == allMigrations[i-1].Version {
-			return fmt.Errorf("duplicate migration version: %d", m.Version)
-		}
-		if strings.TrimSpace(m.Name) == "" || m.Up == nil {
-			return fmt.Errorf("invalid migration at version %d", m.Version)
-		}
-		previous = m.Version
+func migrationColumnInfo(db *gorm.DB, table, column string) (migrationColumn, bool, error) {
+	var columnType, nullable string
+	var defaultValue sql.NullString
+	err := db.Raw("SELECT column_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, column).Row().Scan(&columnType, &nullable, &defaultValue)
+	if errors.Is(err, sql.ErrNoRows) {
+		return migrationColumn{}, false, nil
+	}
+	if err != nil {
+		return migrationColumn{}, false, err
+	}
+	var defaultPtr *string
+	if defaultValue.Valid {
+		value := defaultValue.String
+		defaultPtr = &value
+	}
+	return migrationColumn{ColumnType: columnType, Nullable: nullable, Default: defaultPtr}, true, nil
+}
+
+func migrationIndexInfo(db *gorm.DB, table, index string) (bool, string, error) {
+	var column string
+	err := db.Raw("SELECT column_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND index_name=? AND seq_in_index=1", table, index).Row().Scan(&column)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	return true, column, nil
+}
+
+func validOwnerColumn(def migrationColumn, label string) error {
+	typ := strings.ToLower(def.ColumnType)
+	if !strings.Contains(typ, "int") || !strings.Contains(typ, "unsigned") || !strings.EqualFold(def.Nullable, "NO") || def.Default == nil || *def.Default != "0" {
+		return fmt.Errorf("%s has invalid owner column schema", label)
 	}
 	return nil
 }
 
-// RunVersionMigrations 执行尚未完成的版本迁移
-// 每个迁移必须幂等；成功后才写入 migration record
-func RunVersionMigrations(db *gorm.DB, config *conf.Configuration) (int, error) {
-	if err := validateMigrations(); err != nil {
+func addAdminOwnerColumnAndIndex(db *gorm.DB, table string) error {
+	exists, err := legacyTableExists(db, table)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	def, ok, err := migrationColumnInfo(db, table, "admin_id")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(table) + " ADD COLUMN `admin_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '管理员ID'").Error; err != nil {
+			return err
+		}
+		def, ok, err = migrationColumnInfo(db, table, "admin_id")
+		if err != nil {
+			return err
+		}
+	}
+	if !ok {
+		return fmt.Errorf("%s.admin_id was not created", table)
+	}
+	if err := validOwnerColumn(def, table+".admin_id"); err != nil {
+		return err
+	}
+	has, first, err := migrationIndexInfo(db, table, "idx_admin_id")
+	if err != nil {
+		return fmt.Errorf("inspect idx_admin_id on %s: %w", table, err)
+	}
+	if has {
+		if first != "admin_id" {
+			return fmt.Errorf("idx_admin_id on %s starts with %q, want admin_id", table, first)
+		}
+		return nil
+	}
+	return db.Exec("CREATE INDEX `idx_admin_id` ON " + quoteIdentifier(table) + " (`admin_id`)").Error
+}
+
+func migrationRootID(db *gorm.DB, config *conf.Configuration) (int32, error) {
+	adminTable := tableName(config, "admin")
+	if ok, err := legacyTableExists(db, adminTable); err != nil {
 		return 0, err
+	} else if !ok {
+		return 0, fmt.Errorf("admin table %s does not exist", adminTable)
 	}
-	migrationsTable := tableName(config, "migrations")
-	count := 0
+	return (systemroot.Resolver{DB: db, AdminTable: adminTable}).Resolve()
+}
 
-	for _, migration := range allMigrations {
-		// 查询该版本是否存在已完成记录
-		var record migrationRecord
-		recordDB := db.Session(&gorm.Session{})
-		result := recordDB.Table(migrationsTable).Where("version = ?", migration.Version).Limit(1).Find(&record)
-		if result.Error != nil {
-			return count, fmt.Errorf("query migration version %d: %w", migration.Version, result.Error)
+func repairMigrationOwners(db *gorm.DB, table, adminTable string, rootID int32) error {
+	return db.Exec("UPDATE "+quoteIdentifier(table)+" t LEFT JOIN "+quoteIdentifier(adminTable)+" a ON a.id=t.admin_id SET t.admin_id=? WHERE t.admin_id=0 OR t.admin_id IS NULL OR a.id IS NULL", rootID).Error
+}
+
+func validateMigrationOwners(db *gorm.DB, table, adminTable string) error {
+	var invalid int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + quoteIdentifier(table) + " t LEFT JOIN " + quoteIdentifier(adminTable) + " a ON a.id=t.admin_id WHERE t.admin_id=0 OR a.id IS NULL").Scan(&invalid).Error; err != nil {
+		return err
+	}
+	if invalid != 0 {
+		return fmt.Errorf("%s contains %d invalid admin owner(s)", table, invalid)
+	}
+	return nil
+}
+
+func migrationTablesHaveRows(db *gorm.DB, tables []string) (bool, error) {
+	for _, table := range tables {
+		if !tableExists(db, table) {
+			continue
 		}
+		var count int64
+		if err := db.Table(table).Limit(1).Count(&count).Error; err != nil {
+			return false, err
+		}
+		if count != 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
-		recordExists := result.RowsAffected > 0
-		if recordExists && record.EndTime != nil {
-			// 已完成：验证名称一致（collision 检测）
-			if record.MigrationName != migration.Name {
-				return count, fmt.Errorf("migration version %d: name collision (db=%s, code=%s)",
-					migration.Version, record.MigrationName, migration.Name)
+func validateLogOwnerMatchesUser(db *gorm.DB, logTable, userTable string) error {
+	if !tableExists(db, logTable) || !tableExists(db, userTable) {
+		return nil
+	}
+	var invalid int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + quoteIdentifier(logTable) + " l JOIN " + quoteIdentifier(userTable) + " u ON u.id=l.user_id WHERE l.admin_id<>u.admin_id").Scan(&invalid).Error; err != nil {
+		return err
+	}
+	if invalid != 0 {
+		return fmt.Errorf("%s contains %d owner mismatch(es)", logTable, invalid)
+	}
+	return nil
+}
+
+func version226(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	userTable := tableName(config, "user")
+	logTables := []string{tableName(config, "user_money_log"), tableName(config, "user_score_log")}
+	allTables := append([]string{userTable}, logTables...)
+	for _, table := range allTables {
+		if err := addAdminOwnerColumnAndIndex(db, table); err != nil {
+			return err
+		}
+	}
+	hasRows, err := migrationTablesHaveRows(db, allTables)
+	if err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	hasAdmin, err := legacyTableExists(db, adminTable)
+	if err != nil {
+		return err
+	}
+	if !hasRows {
+		return nil
+	}
+	if !hasAdmin {
+		return fmt.Errorf("admin table %s does not exist while ownership backfill is required", adminTable)
+	}
+	rootID, err := migrationRootID(db, config)
+	if err != nil {
+		return err
+	}
+	if tableExists(db, userTable) {
+		if err := repairMigrationOwners(db, userTable, adminTable, rootID); err != nil {
+			return err
+		}
+		if err := validateMigrationOwners(db, userTable, adminTable); err != nil {
+			return err
+		}
+	}
+	for _, table := range logTables {
+		if !tableExists(db, table) {
+			continue
+		}
+		if tableExists(db, userTable) {
+			if err := db.Exec("UPDATE " + quoteIdentifier(table) + " l JOIN " + quoteIdentifier(userTable) + " u ON u.id=l.user_id SET l.admin_id=u.admin_id").Error; err != nil {
+				return err
 			}
-			continue // 跳过已完成的迁移
 		}
-
-		// 记录开始时间
-		start := time.Now()
-
-		// 执行迁移
-		migrationDB := db.Session(&gorm.Session{})
-		if err := migration.Up(migrationDB, config); err != nil {
-			return count, fmt.Errorf("migration %s failed: %w", migration.Name, err)
+		if err := db.Exec("UPDATE "+quoteIdentifier(table)+" l LEFT JOIN "+quoteIdentifier(adminTable)+" a ON a.id=l.admin_id SET l.admin_id=? WHERE l.admin_id=0 OR a.id IS NULL", rootID).Error; err != nil {
+			return err
 		}
-
-		end := time.Now()
-
-		// 成功后才写入/更新 migration record
-		var writeErr error
-		if recordExists {
-			writeErr = db.Session(&gorm.Session{}).Table(migrationsTable).Where("version = ?", migration.Version).Updates(map[string]any{
-				"migration_name": migration.Name,
-				"start_time":     start,
-				"end_time":       end,
-			}).Error
-		} else {
-			writeErr = db.Session(&gorm.Session{}).Exec(
-				"INSERT INTO `"+migrationsTable+"` (`version`, `migration_name`, `start_time`, `end_time`, `breakpoint`) VALUES (?, ?, ?, ?, ?)",
-				migration.Version, migration.Name, start, end, false,
-			).Error
+		if err := validateMigrationOwners(db, table, adminTable); err != nil {
+			return err
 		}
-		if writeErr != nil {
-			return count, fmt.Errorf("write migration record for %s: %w", migration.Name, writeErr)
+		if err := validateLogOwnerMatchesUser(db, table, userTable); err != nil {
+			return err
 		}
-		count++
 	}
-	return count, nil
+	return nil
+}
+
+func version228(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	for _, item := range []struct{ table, column string }{
+		{tableName(config, "user_money_log"), "money"},
+		{tableName(config, "user_score_log"), "score"},
+	} {
+		if !tableExists(db, item.table) {
+			continue
+		}
+		def, ok, err := migrationColumnInfo(db, item.table, item.column)
+		if err != nil {
+			return err
+		}
+		if !ok || !strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
+			continue
+		}
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(item.table) + " MODIFY COLUMN " + quoteIdentifier(item.column) + " int(11) NOT NULL DEFAULT 0").Error; err != nil {
+			return fmt.Errorf("sign %s.%s: %w", item.table, item.column, err)
+		}
+	}
+	return nil
+}
+
+func version227(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	tables := []string{
+		tableName(config, "admin_log"),
+		tableName(config, "security_data_recycle_log"),
+		tableName(config, "security_sensitive_data_log"),
+		tableName(config, "security_data_recycle"),
+		tableName(config, "security_sensitive_data"),
+		tableName(config, "crud_log"),
+	}
+	for _, table := range tables {
+		if err := addAdminOwnerColumnAndIndex(db, table); err != nil {
+			return err
+		}
+	}
+	hasRows, err := migrationTablesHaveRows(db, tables)
+	if err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	hasAdmin, err := legacyTableExists(db, adminTable)
+	if err != nil {
+		return err
+	}
+	if !hasRows {
+		return nil
+	}
+	if !hasAdmin {
+		return fmt.Errorf("admin table %s does not exist while ownership backfill is required", adminTable)
+	}
+	rootID, err := migrationRootID(db, config)
+	if err != nil {
+		return err
+	}
+	for _, table := range tables {
+		if tableExists(db, table) {
+			if err := repairMigrationOwners(db, table, adminTable, rootID); err != nil {
+				return err
+			}
+			if err := validateMigrationOwners(db, table, adminTable); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func addTargetOwnerColumnAndIndex(db *gorm.DB, table string) error {
+	exists, err := legacyTableExists(db, table)
+	if err != nil || !exists {
+		return err
+	}
+	def, ok, err := migrationColumnInfo(db, table, "target_admin_id")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(table) + " ADD COLUMN `target_admin_id` int(11) unsigned NOT NULL DEFAULT 0 COMMENT '目标数据管理员ID'").Error; err != nil {
+			return err
+		}
+		def, ok, err = migrationColumnInfo(db, table, "target_admin_id")
+		if err != nil {
+			return err
+		}
+	}
+	if !ok {
+		return fmt.Errorf("%s.target_admin_id was not created", table)
+	}
+	if err := validOwnerColumn(def, table+".target_admin_id"); err != nil {
+		return err
+	}
+	has, first, err := migrationIndexInfo(db, table, "idx_target_admin_id")
+	if err != nil {
+		return fmt.Errorf("inspect idx_target_admin_id on %s: %w", table, err)
+	}
+	if has {
+		if first != "target_admin_id" {
+			return fmt.Errorf("idx_target_admin_id on %s starts with %q, want target_admin_id", table, first)
+		}
+		return nil
+	}
+	return db.Exec("CREATE INDEX `idx_target_admin_id` ON " + quoteIdentifier(table) + " (`target_admin_id`)").Error
+}
+
+func parseTargetAdminID(raw string) (int32, bool) {
+	var data map[string]json.RawMessage
+	if strings.TrimSpace(raw) == "" || json.Unmarshal([]byte(raw), &data) != nil {
+		return 0, false
+	}
+	value, ok := data["admin_id"]
+	if !ok {
+		return 0, false
+	}
+	var id int64
+	if json.Unmarshal(value, &id) != nil || id <= 0 || id > math.MaxInt32 {
+		return 0, false
+	}
+	return int32(id), true
+}
+
+func targetAdminExists(db *gorm.DB, adminTable string, id int32) (bool, error) {
+	var count int64
+	if err := db.Table(adminTable).Where("id=?", id).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count == 1, nil
+}
+
+func validateTargetOwners(db *gorm.DB, table, adminTable string) error {
+	var nonzero int64
+	if err := db.Table(table).Where("target_admin_id<>0").Count(&nonzero).Error; err != nil {
+		return err
+	}
+	if nonzero == 0 {
+		return nil
+	}
+	if ok, err := legacyTableExists(db, adminTable); err != nil {
+		return err
+	} else if !ok {
+		return fmt.Errorf("admin table %s does not exist for nonzero target_admin_id values", adminTable)
+	}
+	var invalid int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + quoteIdentifier(table) + " t LEFT JOIN " + quoteIdentifier(adminTable) + " a ON a.id=t.target_admin_id WHERE t.target_admin_id<>0 AND a.id IS NULL").Scan(&invalid).Error; err != nil {
+		return err
+	}
+	if invalid != 0 {
+		return fmt.Errorf("%s contains invalid target_admin_id values", table)
+	}
+	return nil
+}
+
+func backfillTargetOwnerFromJSON(db *gorm.DB, table, jsonColumn, adminTable string) error {
+	var rows []struct {
+		ID   int32  `gorm:"column:id"`
+		JSON string `gorm:"column:payload"`
+	}
+	if err := db.Table(table).Select("id, " + quoteIdentifier(jsonColumn) + " AS payload").Where("target_admin_id=0").Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		candidate, ok := parseTargetAdminID(row.JSON)
+		if !ok {
+			continue
+		}
+		exists, err := targetAdminExists(db, adminTable, candidate)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		if err := db.Table(table).Where("id=? AND target_admin_id=0", row.ID).Update("target_admin_id", candidate).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func version229(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	tables := []struct{ table, jsonColumn string }{
+		{tableName(config, "security_data_recycle_log"), "data"},
+		{tableName(config, "security_sensitive_data_log"), "before"},
+	}
+	for _, item := range tables {
+		if err := addTargetOwnerColumnAndIndex(db, item.table); err != nil {
+			return err
+		}
+		if tableExists(db, item.table) && columnExists(db, item.table, "target_admin_id") {
+			if err := backfillTargetOwnerFromJSON(db, item.table, item.jsonColumn, adminTable); err != nil {
+				return err
+			}
+			if err := validateTargetOwners(db, item.table, adminTable); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func addLegacyTargetFlagColumn(db *gorm.DB, table string) error {
+	if !tableExists(db, table) {
+		return nil
+	}
+	def, ok, err := migrationColumnInfo(db, table, "legacy_unrecoverable")
+	if err != nil {
+		return err
+	}
+	if !ok {
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(table) + " ADD COLUMN `legacy_unrecoverable` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '历史目标管理员不可恢复'").Error; err != nil {
+			return err
+		}
+		def, ok, err = migrationColumnInfo(db, table, "legacy_unrecoverable")
+		if err != nil {
+			return err
+		}
+	}
+	if !ok || !strings.Contains(strings.ToLower(def.ColumnType), "tinyint") || !strings.Contains(strings.ToLower(def.ColumnType), "unsigned") || !strings.EqualFold(def.Nullable, "NO") || def.Default == nil || *def.Default != "0" {
+		return fmt.Errorf("%s.legacy_unrecoverable has invalid schema", table)
+	}
+	return nil
+}
+
+func version230(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	adminTable := tableName(config, "admin")
+	for _, table := range []string{tableName(config, "security_data_recycle_log"), tableName(config, "security_sensitive_data_log")} {
+		if err := addLegacyTargetFlagColumn(db, table); err != nil {
+			return err
+		}
+		if !tableExists(db, table) {
+			continue
+		}
+		if err := db.Table(table).Where("target_admin_id=0").Update("legacy_unrecoverable", 1).Error; err != nil {
+			return err
+		}
+		if err := validateTargetOwners(db, table, adminTable); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func addCommittedColumn(db *gorm.DB, table string) error {
+	if !tableExists(db, table) {
+		return nil
+	}
+	def, ok, err := migrationColumnInfo(db, table, "is_committed")
+	if err != nil {
+		return fmt.Errorf("inspect %s.is_committed: %w", table, err)
+	}
+	if !ok {
+		if err := db.Exec("ALTER TABLE " + quoteIdentifier(table) + " ADD COLUMN `is_committed` tinyint(1) unsigned NOT NULL DEFAULT 0 COMMENT '提交状态'").Error; err != nil {
+			return fmt.Errorf("add is_committed to %s: %w", table, err)
+		}
+		def, ok, err = migrationColumnInfo(db, table, "is_committed")
+		if err != nil {
+			return fmt.Errorf("inspect %s.is_committed after add: %w", table, err)
+		}
+	}
+	if !ok {
+		return fmt.Errorf("%s.is_committed was not created", table)
+	}
+	typ := strings.ToLower(def.ColumnType)
+	if !strings.Contains(typ, "tinyint") || !strings.Contains(typ, "unsigned") || !strings.EqualFold(def.Nullable, "NO") || def.Default == nil || *def.Default != "0" {
+		return fmt.Errorf("%s.is_committed has invalid schema", table)
+	}
+	return nil
+}
+
+func version231(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	for _, table := range []string{tableName(config, "security_data_recycle_log"), tableName(config, "security_sensitive_data_log")} {
+		if err := addCommittedColumn(db, table); err != nil {
+			return err
+		}
+	}
+	// Existing records intentionally remain is_committed=0. The migration must
+	// not infer whether an old security operation completed successfully.
+	return nil
+}
+
+const version232SensitiveUserOldFields = `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`
+
+// version232 removes only the security rules shipped by the old installer.
+// User-created rules are left untouched by matching the complete seed shape.
+func version232(db *gorm.DB, config *conf.Configuration) error {
+	if err := ValidatePrefix(config); err != nil {
+		return err
+	}
+	recycle := tableName(config, "security_data_recycle")
+	if tableExists(db, recycle) {
+		for _, seed := range []struct {
+			id                             int
+			name, controller, route, table string
+		}{
+			{1, "管理员", "auth/Admin.php", "auth/admin", "admin"},
+			{2, "管理员日志", "auth/AdminLog.php", "auth/adminlog", "admin_log"},
+			{3, "菜单规则", "auth/Menu.php", "auth/rule", "admin_rule"},
+			{4, "系统配置项", "routine/Config.php", "routine/config", "config"},
+			{6, "数据回收规则", "security/DataRecycle.php", "security/datarecycle", "security_data_recycle"},
+		} {
+			if err := db.Table(recycle).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", seed.id, seed.name, seed.controller, seed.route, seed.table, "id").Delete(&model.SecurityDataRecycle{}).Error; err != nil {
+				return err
+			}
+		}
+		// The historical user row used id=5; normalize it only when it is
+		// still the installer row, so a reused id cannot alter custom data.
+		if err := db.Table(recycle).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", 5, "会员", "user/User.php", "auth/user", "user", "id").Update("controller_as", "user/user").Error; err != nil {
+			return err
+		}
+	}
+
+	sensitive := tableName(config, "security_sensitive_data")
+	if tableExists(db, sensitive) {
+		for _, seed := range []struct {
+			id                                     int
+			name, controller, route, table, fields string
+		}{
+			{1, "管理员数据", "auth/Admin.php", "auth/admin", "admin", `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`},
+			{3, "管理员权限", "auth/Group.php", "auth/group", "admin_group", `{"rules":"权限规则ID"}`},
+		} {
+			if err := db.Table(sensitive).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ? AND data_fields = ?", seed.id, seed.name, seed.controller, seed.route, seed.table, "id", seed.fields).Delete(&model.SecuritySensitiveData{}).Error; err != nil {
+				return err
+			}
+		}
+		newFields := `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`
+		if err := db.Table(sensitive).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ? AND data_fields = ?", 2, "会员数据", "user/User.php", "user/user", "user", "id", version232SensitiveUserOldFields).Updates(map[string]any{"data_fields": newFields}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// normalizeFreshSecuritySeed is the local overlay for the upstream installer
+// seed. It preserves user-created rows while normalizing only the known
+// installer identities whose IDs are part of the local compatibility contract.
+func normalizeFreshSecuritySeed(db *gorm.DB, config *conf.Configuration) error {
+	if err := version232(db, config); err != nil {
+		return err
+	}
+	recycle := tableName(config, "security_data_recycle")
+	if tableExists(db, recycle) {
+		if err := convergeSecurityRule(db, recycle, 1, 5, "会员", "user/User.php", "user", "id", "user/user", "auth/user", ""); err != nil {
+			return err
+		}
+	}
+	sensitive := tableName(config, "security_sensitive_data")
+	if tableExists(db, sensitive) {
+		fields := `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`
+		if err := convergeSecurityRule(db, sensitive, 1, 2, "会员数据", "user/User.php", "user", "id", "user/user", "auth/user", fields); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func convergeSecurityRule(db *gorm.DB, table string, sourceID, targetID int, name, controller, dataTable, primaryKey, finalRoute, sourceRoute, finalFields string) error {
+	identity := "name = ? AND controller = ? AND data_table = ? AND primary_key = ?"
+	var sourceCount, targetCount, duplicateCount int64
+	if err := db.Table(table).Where("id = ? AND (controller_as = ? OR controller_as = ?)", sourceID, sourceRoute, finalRoute).Where(identity, name, controller, dataTable, primaryKey).Count(&sourceCount).Error; err != nil {
+		return err
+	}
+	if err := db.Table(table).Where("id = ?", targetID).Count(&targetCount).Error; err != nil {
+		return err
+	}
+	if err := db.Table(table).Where("id <> ? AND "+identity, targetID, name, controller, dataTable, primaryKey).Count(&duplicateCount).Error; err != nil {
+		return err
+	}
+	if duplicateCount > 1 || (duplicateCount == 1 && sourceCount == 0) {
+		return fmt.Errorf("duplicate installer identity in %s", table)
+	}
+	if targetCount == 0 && sourceCount == 1 {
+		result := db.Table(table).Where("id = ? AND "+identity, sourceID, name, controller, dataTable, primaryKey).Update("id", targetID)
+		if result.Error != nil {
+			return result.Error
+		}
+	} else if targetCount == 1 && sourceCount == 1 && sourceID != targetID {
+		result := db.Exec("DELETE FROM "+quoteIdentifier(table)+" WHERE id = ? AND "+identity, sourceID, name, controller, dataTable, primaryKey)
+		if result.Error != nil {
+			return result.Error
+		}
+	}
+	if targetCount == 0 && sourceCount == 0 {
+		return fmt.Errorf("installer identity missing in %s", table)
+	}
+	updates := map[string]any{"controller_as": finalRoute}
+	if finalFields != "" {
+		updates["data_fields"] = finalFields
+	}
+	return db.Table(table).Where("id = ? AND "+identity, targetID, name, controller, dataTable, primaryKey).Updates(updates).Error
+}
+
+func normalizeFreshOwnership(db *gorm.DB, config *conf.Configuration) error {
+	adminTable := tableName(config, "admin")
+	if !tableExists(db, adminTable) {
+		return nil
+	}
+	root, err := migrationRootID(db, config)
+	if err != nil {
+		return err
+	}
+	for _, logical := range []string{"user", "attachment", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log"} {
+		t := tableName(config, logical)
+		if tableExists(db, t) && columnExists(db, t, "admin_id") {
+			if err := repairMigrationOwners(db, t, adminTable, root); err != nil {
+				return err
+			}
+		}
+	}
+	userTable := tableName(config, "user")
+	for _, logical := range []string{"user_money_log", "user_score_log"} {
+		t := tableName(config, logical)
+		if tableExists(db, t) && tableExists(db, userTable) {
+			if err := db.Exec("UPDATE " + quoteIdentifier(t) + " l JOIN " + quoteIdentifier(userTable) + " u ON u.id=l.user_id SET l.admin_id=u.admin_id").Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

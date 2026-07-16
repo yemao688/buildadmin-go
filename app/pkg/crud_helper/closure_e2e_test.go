@@ -81,6 +81,7 @@ type Database struct { Prefix string }
 		"app/admin/model/base.go": `package model
 
 import (
+	"context"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 ) 
@@ -89,10 +90,11 @@ type BaseModel struct {
 	TableName string
 	Key string
 	QuickSearchField string
-	DataLimit string
 	sqlDB *gorm.DB
 }
 func (b *BaseModel) TableInfo() map[string]string { return map[string]string{} }
+func (b *BaseModel) DBFor(context.Context) *gorm.DB { return b.sqlDB }
+func (b *BaseModel) Transaction(_ context.Context, fn func(*gorm.DB) error) error { return b.sqlDB.Transaction(fn) }
 func QueryBuilder(*gin.Context, map[string]string, map[string]interface{}) (string, []interface{}, string, int, int, error) {
 	return "", nil, "id ASC", 100, 0, nil
 }

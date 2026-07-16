@@ -3,92 +3,482 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-build-admin/app/admin/model"
-	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/conf"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/unknwon/com"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Security struct {
-	config *conf.Configuration
-	log    *zap.Logger
-	sqlDB  *gorm.DB
+	config   *conf.Configuration
+	log      *zap.Logger
+	sqlDB    *gorm.DB
+	enforcer data_scope.Enforcer
+}
+
+var errBusinessRollback = errors.New("requesttx: business response requested rollback")
+var errMissingOutcome = errors.New("requesttx: protected handler produced no staged outcome")
+var errDirectResponse = errors.New("requesttx: direct response bypassed staging")
+
+type transactionResponseWriter struct {
+	gin.ResponseWriter
+	status  int
+	started bool
+	body    bytes.Buffer
+	header  http.Header
+}
+
+// normalizeAuditValue gives database driver values a stable representation;
+// in particular []byte must be treated as text rather than formatted as a
+// numeric byte slice.
+func normalizeAuditValue(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case []byte:
+		return string(v)
+	case time.Time:
+		return v.UTC().Format(time.RFC3339Nano)
+	case json.Number:
+		return v.String()
+	case float32:
+		return strconv.FormatFloat(float64(v), 'g', -1, 32)
+	case float64:
+		return strconv.FormatFloat(v, 'g', -1, 64)
+	case int:
+		return strconv.Itoa(v)
+	case int8, int16, int32, int64:
+		return fmt.Sprintf("%d", v)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", v)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func (w *transactionResponseWriter) WriteHeader(code int) {
+	if !w.started && code > 0 {
+		w.status = code
+	}
+}
+func (w *transactionResponseWriter) WriteHeaderNow() {
+	if !w.started {
+		w.started = true
+	}
+}
+func (w *transactionResponseWriter) Header() http.Header { return w.header }
+func (w *transactionResponseWriter) Write(p []byte) (int, error) {
+	w.WriteHeaderNow()
+	return w.body.Write(p)
+}
+func (w *transactionResponseWriter) WriteString(s string) (int, error) {
+	w.WriteHeaderNow()
+	return w.body.WriteString(s)
+}
+func (w *transactionResponseWriter) Status() int   { return w.status }
+func (w *transactionResponseWriter) Size() int     { return w.body.Len() }
+func (w *transactionResponseWriter) Written() bool { return w.started }
+func (w *transactionResponseWriter) flush() {
+	for key, values := range w.header {
+		w.ResponseWriter.Header()[key] = append([]string(nil), values...)
+	}
+	if !w.started {
+		return
+	}
+	w.ResponseWriter.WriteHeader(w.status)
+	if w.body.Len() > 0 {
+		_, _ = w.ResponseWriter.Write(w.body.Bytes())
+	}
 }
 
 func NewSecurity(
 	config *conf.Configuration,
 	log *zap.Logger,
 	sqlDB *gorm.DB,
+	enforcer data_scope.Enforcer,
 ) *Security {
 	return &Security{
-		config: config,
-		log:    log,
-		sqlDB:  sqlDB,
+		config:   config,
+		log:      log,
+		sqlDB:    sqlDB,
+		enforcer: enforcer,
 	}
 }
 
+type AtomicRoute struct {
+	Route  string
+	Action string
+	Method string
+}
+
+var atomicRoutes = map[AtomicRoute]struct{}{
+	{Route: "auth/admin", Action: "add", Method: http.MethodPost}:                     {},
+	{Route: "auth/admin", Action: "edit", Method: http.MethodPost}:                    {},
+	{Route: "auth/admin", Action: "del", Method: http.MethodDelete}:                   {},
+	{Route: "auth/group", Action: "add", Method: http.MethodPost}:                     {},
+	{Route: "auth/group", Action: "edit", Method: http.MethodPost}:                    {},
+	{Route: "auth/group", Action: "del", Method: http.MethodDelete}:                   {},
+	{Route: "auth/rule", Action: "add", Method: http.MethodPost}:                      {},
+	{Route: "auth/rule", Action: "edit", Method: http.MethodPost}:                     {},
+	{Route: "auth/rule", Action: "del", Method: http.MethodDelete}:                    {},
+	{Route: "routine/config", Action: "add", Method: http.MethodPost}:                 {},
+	{Route: "routine/config", Action: "edit", Method: http.MethodPost}:                {},
+	{Route: "routine/config", Action: "del", Method: http.MethodDelete}:               {},
+	{Route: "user/user", Action: "add", Method: http.MethodPost}:                      {},
+	{Route: "user/user", Action: "edit", Method: http.MethodPost}:                     {},
+	{Route: "user/user", Action: "del", Method: http.MethodDelete}:                    {},
+	{Route: "security/datarecycle", Action: "add", Method: http.MethodPost}:           {},
+	{Route: "security/datarecycle", Action: "edit", Method: http.MethodPost}:          {},
+	{Route: "security/datarecycle", Action: "del", Method: http.MethodDelete}:         {},
+	{Route: "security/datarecyclelog", Action: "restore", Method: http.MethodPost}:    {},
+	{Route: "security/datarecyclelog", Action: "del", Method: http.MethodDelete}:      {},
+	{Route: "security/sensitivedata", Action: "add", Method: http.MethodPost}:         {},
+	{Route: "security/sensitivedata", Action: "edit", Method: http.MethodPost}:        {},
+	{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete}:       {},
+	{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost}: {},
+	{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete}:    {},
+}
+
+// RegisterAtomicRoute lets router construction be the source of truth for
+// capability registration. Seed entries remain for deployments that construct
+// Security in isolation (and for compatibility tests).
+func RegisterAtomicRoute(route AtomicRoute) {
+	atomicRoutes[route] = struct{}{}
+}
+
+func normalizeRouteAction(fullPath string) (string, string, bool) {
+	parts := strings.Split(strings.Trim(fullPath, "/"), "/")
+	if len(parts) != 3 || parts[0] != "admin" {
+		return "", "", false
+	}
+	controller := strings.ReplaceAll(parts[1], ".", "/")
+	return strings.ToLower(controller), strings.ToLower(parts[2]), true
+}
+
+func AtomicRouteCapability(c *gin.Context) (AtomicRoute, bool) {
+	route, action, ok := normalizeRouteAction(c.FullPath())
+	if !ok {
+		return AtomicRoute{}, false
+	}
+	cap := AtomicRoute{Route: route, Action: action, Method: c.Request.Method}
+	_, ok = atomicRoutes[cap]
+	return cap, ok
+}
+
+func (m *Security) hasSecurityRule(c *gin.Context, route string) (bool, error) {
+	if m.config == nil || m.sqlDB == nil {
+		return false, errors.New("security rule database is unavailable")
+	}
+	if route == "" {
+		return false, nil
+	}
+	logical := "security_sensitive_data"
+	if c.Request.Method == http.MethodDelete {
+		logical = "security_data_recycle"
+	}
+	var count int64
+	err := m.sqlDB.Table(m.config.Database.Prefix+logical).
+		Where("status = ? AND controller_as = ?", "1", route).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// Handler opens the request transaction before the protected handler runs.
+// Response bodies are staged by the response helpers and emitted only after
+// GORM commits successfully.
 func (m *Security) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		getPath := func(c *gin.Context) string {
-			path := ""
-			parts := strings.Split(c.FullPath(), "/")
-			if len(parts) >= 3 {
-				path = parts[1] + "/" + parts[2]
+		if c.Request.Method != http.MethodPost && c.Request.Method != http.MethodDelete {
+			m.workHandler()(c)
+			return
+		}
+		if _, ok := AtomicRouteCapability(c); !ok {
+			route, _, _ := normalizeRouteAction(c.FullPath())
+			hasRule, err := m.hasSecurityRule(c, route)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "security rule lookup failed"})
+				return
 			}
-			return path
+			if hasRule {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "atomic route capability missing"})
+				return
+			}
+			m.workHandler()(c)
+			return
+		}
+		var outcome requesttx.Outcome
+		var hasOutcome bool
+		var txErr error
+		originalWriter := c.Writer
+		bufferedWriter := &transactionResponseWriter{ResponseWriter: originalWriter, status: http.StatusOK, header: make(http.Header)}
+		c.Writer = bufferedWriter
+		finishRequest := func() {
+			if c.Request == nil {
+				return
+			}
+			boundContext := c.Request.Context()
+			requesttx.Finish(boundContext)
+			c.Request = c.Request.WithContext(requesttx.Unbind(boundContext))
+		}
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					requesttx.DiscardOutcome(c.Request.Context())
+					finishRequest()
+					c.Writer = originalWriter
+					panic(recovered)
+				}
+			}()
+			txErr = m.sqlDB.Transaction(func(tx *gorm.DB) error {
+				bound := requesttx.Bind(c.Request.Context(), tx)
+				c.Request = c.Request.WithContext(bound)
+				m.workHandler()(c)
+				outcome, hasOutcome = requesttx.PeekOutcome(c.Request.Context())
+				if !hasOutcome {
+					return errMissingOutcome
+				}
+				if bufferedWriter.Written() {
+					return errDirectResponse
+				}
+				if outcome.BusinessCode != 1 {
+					return errBusinessRollback
+				}
+				if c.IsAborted() || c.Writer.Status() >= http.StatusBadRequest {
+					return errors.New("requesttx: request aborted")
+				}
+				return nil
+			})
+		}()
+		if txErr != nil {
+			if errors.Is(txErr, errBusinessRollback) {
+				if out, ok := requesttx.TakeOutcome(c.Request.Context()); ok {
+					c.Writer = originalWriter
+					c.JSON(out.HTTPCode, gin.H{"code": out.BusinessCode, "data": out.Data, "msg": out.Message, "time": 0})
+				}
+				finishRequest()
+				return
+			}
+			requesttx.DiscardOutcome(c.Request.Context())
+			finishRequest()
+			if bufferedWriter.Written() {
+				m.log.Warn("[ DataSecurity ] direct response discarded after transaction failure")
+			}
+			c.Writer = originalWriter
+			c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "data": nil, "msg": "transaction failed", "time": 0})
+			return
+		}
+		c.Writer = originalWriter
+		bufferedWriter.flush()
+		if out, ok := requesttx.TakeOutcome(c.Request.Context()); ok {
+			c.JSON(out.HTTPCode, gin.H{"code": out.BusinessCode, "data": out.Data, "msg": out.Message, "time": 0})
+		}
+		finishRequest()
+	}
+}
+
+func (m *Security) workHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		actor, ok := data_scope.ActorFromContext(c)
+		if !ok || data_scope.ValidateActor(actor) != nil {
+			m.log.Warn("[ DataSecurity ] missing or invalid actor; abort")
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "invalid authenticated actor"})
+			return
+		}
+		abort := func(httpCode int, message string) {
+			ctx := c.Request.Context()
+			if requesttx.Active(ctx) && requesttx.Stage(ctx, requesttx.Outcome{HTTPCode: httpCode, BusinessCode: 0, Message: message}) {
+				c.Abort()
+				return
+			}
+			c.AbortWithStatusJSON(httpCode, gin.H{"error": message})
+		}
+		scope := func(db *gorm.DB, table string) *gorm.DB {
+			if m.enforcer == nil {
+				tx := db.Session(&gorm.Session{})
+				_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+				return tx
+			}
+			return m.enforcer.Scope(c, db, data_scope.OwnerRef{TableAlias: table, Column: "admin_id"})
+		}
+		getPath := func(c *gin.Context) string {
+			route, _, ok := normalizeRouteAction(c.FullPath())
+			if !ok {
+				return ""
+			}
+			return route
+		}
+		executionRule := func(table, route string, rule any) error {
+			if err := data_scope.ValidateTablePrefix(m.config.Database.Prefix); err != nil {
+				return err
+			}
+			if err := data_scope.ValidateIdentifier(table); err != nil {
+				return err
+			}
+			db := requesttx.DB(c.Request.Context())
+			if db == nil {
+				db = m.sqlDB
+			}
+			adminTable := m.config.Database.Prefix + "admin"
+			base := db.Table(table).
+				Joins("JOIN `"+adminTable+"` AS rule_owner ON rule_owner.id = `"+table+"`.admin_id").
+				Where("`"+table+"`.status = ? AND `"+table+"`.controller_as = ?", "1", route)
+			if !actor.Unrestricted {
+				closure := m.config.Database.Prefix + "admin_closure"
+				base = base.Joins("JOIN `"+closure+"` AS owner_scope ON owner_scope.ancestor_id = `"+table+"`.admin_id AND owner_scope.descendant_id = ?", actor.AdminID).
+					Order("owner_scope.depth ASC").Order("`" + table + "`.admin_id ASC")
+			} else {
+				// Unrestricted is deterministic too: only a rule owned by the
+				// hierarchy root is eligible, and the join proves that owner exists.
+				base = base.Where("rule_owner.parent_id IS NULL").Order("rule_owner.id ASC")
+			}
+			return base.First(rule).Error
 		}
 
 		//记录删除数据操作
 		if c.Request.Method == http.MethodDelete {
 			//是否配置回收规则
 			recycle := model.SecurityDataRecycle{}
-			err := m.sqlDB.Model(&model.SecurityDataRecycle{}).Where(" status=? and controller_as=?", "1", getPath(c)).First(&recycle).Error
+			err := executionRule(m.config.Database.Prefix+"security_data_recycle", getPath(c), &recycle)
 			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					c.Next()
+					return
+				}
+				abort(http.StatusInternalServerError, "security rule lookup failed")
 				return
 			}
 
 			var params = struct {
 				Ids []int32 `form:"ids[]" binding:"required"`
 			}{}
-			c.ShouldBindQuery(&params)
+			if err := c.ShouldBindQuery(&params); err != nil || len(params.Ids) == 0 {
+				abort(http.StatusBadRequest, "invalid ids")
+				return
+			}
+			seenIDs := make(map[int32]struct{}, len(params.Ids))
+			normalizedIDs := make([]int32, 0, len(params.Ids))
+			for _, id := range params.Ids {
+				if id <= 0 {
+					abort(http.StatusBadRequest, "ids must be positive")
+					return
+				}
+				if _, exists := seenIDs[id]; !exists {
+					seenIDs[id] = struct{}{}
+					normalizedIDs = append(normalizedIDs, id)
+				}
+			}
+			sort.Slice(normalizedIDs, func(i, j int) bool { return normalizedIDs[i] < normalizedIDs[j] })
 
 			rows := []map[string]any{}
-			err = m.sqlDB.Table(m.config.Database.Prefix+recycle.DataTable).Where(recycle.PrimaryKey+" in ? ", params.Ids).Scan(&rows).Error
+			db := requesttx.DB(c.Request.Context())
+			if db == nil {
+				db = m.sqlDB
+			}
+			resolvedTable, err := data_scope.ResolveBusinessTable(db, m.config.Database.Prefix, recycle.DataTable)
+			if err != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, recycle.PrimaryKey) != nil {
+				abort(http.StatusInternalServerError, "invalid security rule identifier")
+				return
+			}
+			err = scope(db.Table(resolvedTable), resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+recycle.PrimaryKey+"` IN ?", normalizedIDs).Find(&rows).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
+				abort(http.StatusInternalServerError, "target lookup failed")
 				return
+			}
+			if len(rows) != len(normalizedIDs) {
+				abort(http.StatusForbidden, "target scope incomplete")
+				return
+			}
+			matched := make(map[int32]struct{}, len(rows))
+			for _, row := range rows {
+				id, err := strconv.ParseInt(fmt.Sprintf("%v", row[recycle.PrimaryKey]), 10, 32)
+				if err != nil {
+					abort(http.StatusInternalServerError, "invalid target primary key")
+					return
+				}
+				matched[int32(id)] = struct{}{}
+			}
+			for _, id := range normalizedIDs {
+				if _, ok := matched[id]; !ok {
+					abort(http.StatusForbidden, "target scope incomplete")
+					return
+				}
 			}
 
 			//创建删除记录
-			admin := header.GetAdminAuth(c)
 			recycleLogs := []model.SecurityDataRecycleLog{}
 			for _, v := range rows {
-				data, _ := json.Marshal(v)
+				data, err := json.Marshal(v)
+				if err != nil {
+					abort(http.StatusInternalServerError, "snapshot failed")
+					return
+				}
+				var targetOwner int32
+				switch vOwner := v["admin_id"].(type) {
+				case int32:
+					targetOwner = vOwner
+				case int64:
+					targetOwner = int32(vOwner)
+				case uint64:
+					targetOwner = int32(vOwner)
+				case float64:
+					targetOwner = int32(vOwner)
+				}
+				if targetOwner <= 0 {
+					abort(http.StatusInternalServerError, "target owner missing")
+					return
+				}
 				recycleLogs = append(recycleLogs, model.SecurityDataRecycleLog{
-					AdminID:    admin.Id,
-					RecycleID:  recycle.ID,
-					Data:       string(data),
-					DataTable:  recycle.DataTable,
-					PrimaryKey: recycle.PrimaryKey,
-					IP:         c.ClientIP(),
-					Useragent:  c.Request.Header.Get("User-Agent"),
+					AdminID:       actor.AdminID,
+					TargetAdminID: targetOwner,
+					IsCommitted:   1,
+					RecycleID:     recycle.ID,
+					Data:          string(data),
+					DataTable:     recycle.DataTable,
+					PrimaryKey:    recycle.PrimaryKey,
+					IP:            c.ClientIP(),
+					Useragent:     c.Request.Header.Get("User-Agent"),
 				})
 			}
 			if len(recycleLogs) == 0 {
+				abort(http.StatusInternalServerError, "empty target set")
 				return
 			}
 
-			err = m.sqlDB.Model(&model.SecurityDataRecycleLog{}).Create(&recycleLogs).Error
+			err = db.Model(&model.SecurityDataRecycleLog{}).Create(&recycleLogs).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
+				abort(http.StatusInternalServerError, "security log write failed")
+				return
+			}
+			c.Next()
+			outcome, hasOutcome := requesttx.PeekOutcome(c.Request.Context())
+			if !hasOutcome || outcome.BusinessCode != 1 {
+				return
+			}
+			var remaining int64
+			if err := db.Table(resolvedTable).Where("`"+recycle.PrimaryKey+"` IN ?", normalizedIDs).Count(&remaining).Error; err != nil {
+				abort(http.StatusInternalServerError, "delete verification failed")
+				return
+			}
+			if remaining != 0 {
+				abort(http.StatusInternalServerError, "delete was not complete")
 				return
 			}
 			return
@@ -98,33 +488,49 @@ func (m *Security) Handler() gin.HandlerFunc {
 		if c.Request.Method == http.MethodPost {
 			//是否配置敏感数据规则
 			sensitive := model.SecuritySensitiveData{}
-			err := m.sqlDB.Model(&model.SecuritySensitiveData{}).Where(" status=? and controller_as=?", "1", getPath(c)).First(&sensitive).Error
+			err := executionRule(m.config.Database.Prefix+"security_sensitive_data", getPath(c), &sensitive)
 			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					c.Next()
+					return
+				}
+				abort(http.StatusInternalServerError, "security rule lookup failed")
 				return
 			}
 
 			//读取请求参数
 			body, err := io.ReadAll(c.Request.Body)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read request body"})
-				c.Abort()
+				abort(http.StatusInternalServerError, "Failed to read request body")
 				return
 			}
 
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 			var params map[string]interface{}
 			if err := json.Unmarshal(body, &params); err != nil {
+				abort(http.StatusBadRequest, "invalid request body")
 				return
 			}
 			if _, ok := params["id"]; !ok {
+				c.Next()
 				return
 			}
 
 			//查询需要修改的记录
+			db := requesttx.DB(c.Request.Context())
+			if db == nil {
+				db = m.sqlDB
+			}
+			resolvedTable, err := data_scope.ResolveBusinessTable(db, m.config.Database.Prefix, sensitive.DataTable)
+			if err != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, sensitive.PrimaryKey) != nil {
+				abort(http.StatusInternalServerError, "invalid security rule identifier")
+				return
+			}
 			row := map[string]any{}
-			err = m.sqlDB.Table(m.config.Database.Prefix+sensitive.DataTable).Where(sensitive.PrimaryKey+"=?", params["id"]).Scan(&row).Error
+			err = scope(db.Table(resolvedTable), resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&row).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
+				abort(http.StatusInternalServerError, "target lookup failed")
 				return
 			}
 
@@ -133,43 +539,74 @@ func (m *Security) Handler() gin.HandlerFunc {
 			err = json.Unmarshal([]byte(sensitive.DataFields), &dataFields)
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
+				abort(http.StatusInternalServerError, "invalid security field rule")
+				return
+			}
+			for field := range dataFields {
+				if err := data_scope.ValidateSecurityField(field); err != nil {
+					abort(http.StatusInternalServerError, "forbidden security field")
+					return
+				}
+				if err := data_scope.ResolveBusinessColumn(db, resolvedTable, field); err != nil {
+					abort(http.StatusInternalServerError, "invalid security field identifier")
+					return
+				}
+			}
+			var targetOwner int32
+			switch owner := row["admin_id"].(type) {
+			case int32:
+				targetOwner = owner
+			case int64:
+				targetOwner = int32(owner)
+			case uint64:
+				targetOwner = int32(owner)
+			case float64:
+				targetOwner = int32(owner)
+			}
+			if targetOwner <= 0 {
+				abort(http.StatusInternalServerError, "target owner missing")
 				return
 			}
 
-			//创建修改记录
-			admin := header.GetAdminAuth(c)
+			// Let the business handler perform the write first. The transaction
+			// wrapper keeps the before snapshot locked and this same DB reads the
+			// actual persisted after values below.
+			c.Next()
+			if outcome, ok := requesttx.PeekOutcome(c.Request.Context()); !ok || outcome.BusinessCode != 1 {
+				return
+			}
+			afterRow := map[string]any{}
+			err = scope(db.Table(resolvedTable), resolvedTable).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&afterRow).Error
+			if err != nil {
+				abort(http.StatusInternalServerError, "after-state lookup failed")
+				return
+			}
 			sensitiveDataLogs := []model.SecuritySensitiveDataLog{}
 			for k, v := range dataFields {
 				beforeV, oldOk := row[k]
-				afterV, newOk := params[k]
+				afterV, newOk := afterRow[k]
 				idValue := com.StrTo(fmt.Sprintf("%v", params["id"])).MustInt()
-
-				if oldOk && newOk && beforeV != afterV {
+				if oldOk && newOk && normalizeAuditValue(beforeV) != normalizeAuditValue(afterV) {
 					sensitiveDataLogs = append(sensitiveDataLogs, model.SecuritySensitiveDataLog{
-						AdminID:     admin.Id,
-						SensitiveID: sensitive.ID,
-						DataTable:   sensitive.DataTable,
-						PrimaryKey:  sensitive.PrimaryKey,
-						DataField:   k,
-						DataComment: v,
-						IDValue:     int32(idValue),
-						Before:      fmt.Sprintf("%v", beforeV),
-						After:       fmt.Sprintf("%v", afterV),
-						IP:          c.ClientIP(),
-						Useragent:   c.Request.Header.Get("User-Agent"),
+						AdminID: actor.AdminID, TargetAdminID: targetOwner, IsCommitted: 1,
+						SensitiveID: sensitive.ID, DataTable: sensitive.DataTable, PrimaryKey: sensitive.PrimaryKey,
+						DataField: k, DataComment: v, IDValue: int32(idValue),
+						Before: normalizeAuditValue(beforeV), After: normalizeAuditValue(afterV),
+						IP: c.ClientIP(), Useragent: c.Request.Header.Get("User-Agent"),
 					})
 				}
 			}
 			if len(sensitiveDataLogs) == 0 {
 				return
 			}
-
-			err = m.sqlDB.Model(&model.SecuritySensitiveDataLog{}).Create(&sensitiveDataLogs).Error
+			err = db.Model(&model.SecuritySensitiveDataLog{}).Create(&sensitiveDataLogs).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
+				abort(http.StatusInternalServerError, "security log write failed")
 				return
 			}
 			return
 		}
+		c.Next()
 	}
 }

@@ -33,7 +33,6 @@ func NewAreaModel(sqlDB *gorm.DB, config *conf.Configuration) *AreaModel {
 			TableName:        config.Database.Prefix + "area",
 			Key:              "id",
 			QuickSearchField: "name",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
 	}

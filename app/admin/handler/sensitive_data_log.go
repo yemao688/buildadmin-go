@@ -81,4 +81,5 @@ func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	Success(ctx, "")
 }

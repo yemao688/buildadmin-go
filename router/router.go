@@ -6,6 +6,7 @@ import (
 	api "go-build-admin/app/api/handler"
 	"go-build-admin/app/middleware"
 	"go-build-admin/utils"
+	"net/http"
 	"path/filepath"
 
 	ginI18n "github.com/gin-contrib/i18n"
@@ -19,7 +20,6 @@ func InitRouter(
 	loginM *middleware.Login,
 	securityM *middleware.Security,
 	userLoginM *middleware.UserLogin,
-	dataLimitM *middleware.DataLimit,
 	recordM *middleware.Record,
 
 	adminHandler *admin.AdminHandler,
@@ -101,6 +101,35 @@ func InitRouter(
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
+	for _, capability := range []middleware.AtomicRoute{
+		{Route: "auth/group", Action: "add", Method: http.MethodPost},
+		{Route: "auth/group", Action: "edit", Method: http.MethodPost},
+		{Route: "auth/group", Action: "del", Method: http.MethodDelete},
+		{Route: "auth/admin", Action: "add", Method: http.MethodPost},
+		{Route: "auth/admin", Action: "edit", Method: http.MethodPost},
+		{Route: "auth/admin", Action: "del", Method: http.MethodDelete},
+		{Route: "auth/rule", Action: "add", Method: http.MethodPost},
+		{Route: "auth/rule", Action: "edit", Method: http.MethodPost},
+		{Route: "auth/rule", Action: "del", Method: http.MethodDelete},
+		{Route: "routine/config", Action: "add", Method: http.MethodPost},
+		{Route: "routine/config", Action: "edit", Method: http.MethodPost},
+		{Route: "routine/config", Action: "del", Method: http.MethodDelete},
+		{Route: "user/user", Action: "add", Method: http.MethodPost},
+		{Route: "user/user", Action: "edit", Method: http.MethodPost},
+		{Route: "user/user", Action: "del", Method: http.MethodDelete},
+		{Route: "security/datarecycle", Action: "add", Method: http.MethodPost},
+		{Route: "security/datarecycle", Action: "edit", Method: http.MethodPost},
+		{Route: "security/datarecycle", Action: "del", Method: http.MethodDelete},
+		{Route: "security/datarecyclelog", Action: "restore", Method: http.MethodPost},
+		{Route: "security/datarecyclelog", Action: "del", Method: http.MethodDelete},
+		{Route: "security/sensitivedata", Action: "add", Method: http.MethodPost},
+		{Route: "security/sensitivedata", Action: "edit", Method: http.MethodPost},
+		{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete},
+		{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost},
+		{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete},
+	} {
+		middleware.RegisterAtomicRoute(capability)
+	}
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
@@ -112,7 +141,7 @@ func InitRouter(
 	adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
 	adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
 
-	adminRouter.GET("auth.Admin/index", dataLimitM.Handler("allAuthAndOthers"), adminHandler.Index)
+	adminRouter.GET("auth.Admin/index", adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
 	adminRouter.GET("auth.Admin/edit", adminHandler.One)
 	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)

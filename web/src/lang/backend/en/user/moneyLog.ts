@@ -13,4 +13,5 @@ export default {
     'Balance after change': 'Balance after change',
     'Please enter change remarks / description': 'Please enter change remarks/description',
     User: 'User',
+    'Superior agent': 'Superior agent',
 }

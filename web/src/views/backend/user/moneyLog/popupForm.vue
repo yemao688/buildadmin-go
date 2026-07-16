@@ -51,7 +51,7 @@
                     <el-form-item prop="money" :label="t('user.moneyLog.Change amount')">
                         <el-input
                             @input="changeMoney"
-                            v-model.number="baTable.form.items!.money"
+                            v-model="baTable.form.items!.money"
                             type="number"
                             :placeholder="t('user.moneyLog.Please enter the balance change amount')"
                         ></el-input>
@@ -116,10 +116,10 @@ const formRef = useTemplateRef('formRef')
 
 const state: {
     userInfo: anyObj
-    after: number
+    after: string
 } = reactive({
     userInfo: {},
-    after: 0,
+    after: '0.00',
 })
 
 const getAdd = () => {
@@ -134,11 +134,12 @@ const getAdd = () => {
 
 const changeMoney = (value: string) => {
     if (!state.userInfo || typeof state.userInfo == 'undefined') {
-        state.after = 0
+        state.after = '0.00'
         return
     }
-    let newValue = value == '' ? 0 : parseFloat(value)
-    state.after = parseFloat((parseFloat(state.userInfo.money) + newValue).toFixed(2))
+    const currentValue = Number(state.userInfo.money || 0)
+    const newValue = value == '' ? 0 : Number(value)
+    state.after = Number.isFinite(currentValue + newValue) ? (currentValue + newValue).toFixed(2) : '0.00'
 }
 
 // 打开表单时刷新用户数据

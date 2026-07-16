@@ -55,6 +55,22 @@
                             placeholder: t('Click select'),
                         }"
                     />
+                    <FormItem
+                        :label="t('auth.admin.Parent agent')"
+                        v-model="parentIdBridge"
+                        prop="parent_id"
+                        type="remoteSelect"
+                        :key="'parent-' + baTable.form.items!.id"
+                        :input-attr="{
+                            params: { isTree: true, exclude_id: baTable.form.items!.id },
+                            disabled: adminInfo.id == baTable.form.items!.id && !adminInfo.super,
+                            field: 'nickname',
+                            remoteUrl: baTable.api.actionUrl.get('index'),
+                            placeholder: t('Click select'),
+                            emptyValues: ['', null, undefined, 0],
+                            valueOnClear: 0,
+                        }"
+                    />
                     <FormItem :label="t('auth.admin.avatar')" type="image" v-model="baTable.form.items!.avatar" />
                     <FormItem
                         :label="t('auth.admin.email')"
@@ -115,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, inject, watch, useTemplateRef } from 'vue'
+import { computed, reactive, inject, watch, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type baTableClass from '/@/utils/baTable'
 import { regularPassword, buildValidatorData } from '/@/utils/validate'
@@ -131,12 +147,33 @@ const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
 
+const parentIdBridge = computed({
+    get: () => baTable.form.items!.parent_id,
+    set: (val) => {
+        baTable.form.items!.parent_id = val === '' || val === null || val === undefined || val === 0 ? 0 : Number(val)
+    },
+})
+
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     username: [buildValidatorData({ name: 'required', title: t('auth.admin.username') }), buildValidatorData({ name: 'account' })],
     nickname: [buildValidatorData({ name: 'required', title: t('auth.admin.nickname') })],
     group_arr: [buildValidatorData({ name: 'required', message: t('Please select field', { field: t('auth.admin.group') }) })],
     email: [buildValidatorData({ name: 'email', message: t('Please enter the correct field', { field: t('auth.admin.email') }) })],
     mobile: [buildValidatorData({ name: 'mobile', message: t('Please enter the correct field', { field: t('auth.admin.mobile') }) })],
+    parent_id: [
+        {
+            validator: (rule: any, val: string, callback: Function) => {
+                if (!val) {
+                    return callback()
+                }
+                if (parseInt(val) == parseInt(baTable.form.items!.id)) {
+                    return callback(new Error(t('auth.admin.The parent agent cannot be the admin itself')))
+                }
+                return callback()
+            },
+            trigger: 'blur',
+        },
+    ],
     password: [
         {
             validator: (rule: any, val: string, callback: Function) => {

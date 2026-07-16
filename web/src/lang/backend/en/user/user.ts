@@ -19,4 +19,5 @@ export default {
     'Please leave blank if not modified': 'Please leave blank if you do not modify',
     'Personal signature': 'Personal signature',
     'Login account': 'Login account name',
+    'Superior agent': 'Superior agent',
 }

@@ -198,6 +198,7 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 
 	assert.Contains(t, out, "Enforcer data_scope.Enforcer")
 	assert.Contains(t, out, "func (s *DemoModel) scopedDB")
+	assert.Contains(t, out, "func (s *DemoModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}")
 	assert.Contains(t, out, "demo.AdminID = actor.AdminID")
 	assert.Contains(t, out, `Where("id = ?", demo.ID)`)
@@ -221,10 +222,25 @@ func TestModelTemplate_DataScopeNone(t *testing.T) {
 
 	assert.Contains(t, out, "Policy   data_scope.ResourcePolicy")
 	assert.Contains(t, out, `Mode:           "none"`)
-	assert.Contains(t, out, "return s.sqlDB")
+	assert.Contains(t, out, "return s.scopeDB(ctx, s.DBFor(ctx))")
+	assert.Contains(t, out, "return s.scopeDB(ctx, db)")
 	assert.NotContains(t, out, "actor.AdminID")
 	assert.NotContains(t, out, "LimitAdminIds")
 	assert.NotContains(t, out, ".Save(&demo)")
+}
+
+func TestModelTemplate_UsesRequestTransactions(t *testing.T) {
+	out := renderModelString(t, ModelData{
+		Namespace: "model", Name: "demo", ClassName: "Demo", ModelVar: "demo",
+		Pk: "id", PkGoField: "ID", DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
+		EditableColumns: []string{"name"}, EditableColumnsGo: `"name"`,
+	})
+
+	assert.Contains(t, out, "s.DBFor(ctx)")
+	assert.Contains(t, out, "return s.Transaction(ctx, func(tx *gorm.DB) error")
+	assert.Contains(t, out, "tx = s.scopeDB(ctx, tx)")
+	assert.NotContains(t, out, "s.sqlDB.Begin")
+	assert.NotContains(t, out, ".Session(&gorm.Session{}).Begin")
 }
 
 func TestModelTemplate_NilEnforcerFailClosed(t *testing.T) {
@@ -466,9 +482,9 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 			if tc.cfg == nil || tc.cfg.Mode != data_scope.ModeNone {
 				addIndex := strings.Index(modelCode, "func (s *"+className+"Model) Add(")
 				actorIndex := strings.Index(modelCode[addIndex:], "Enforcer.Actor(ctx)")
-				beginIndex := strings.Index(modelCode[addIndex:], "Begin()")
+				transactionIndex := strings.Index(modelCode[addIndex:], "s.Transaction(ctx")
 				assert.GreaterOrEqual(t, actorIndex, 0)
-				assert.Greater(t, beginIndex, actorIndex, "actor must be validated before Begin")
+				assert.Greater(t, transactionIndex, actorIndex, "actor must be validated before Transaction")
 			}
 
 			if err := compileDataScopeFixture(t, className, modelCode, handlerCode); err != nil {
@@ -591,6 +607,7 @@ type Database struct {
 		"app/admin/model/base.go": `package model
 
 import (
+	"context"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -599,11 +616,12 @@ type BaseModel struct {
 	TableName        string
 	Key              string
 	QuickSearchField string
-	DataLimit        string
 	sqlDB            *gorm.DB
 }
 
 func (b *BaseModel) TableInfo() map[string]string { return map[string]string{} }
+func (b *BaseModel) DBFor(context.Context) *gorm.DB { return b.sqlDB }
+func (b *BaseModel) Transaction(_ context.Context, fn func(*gorm.DB) error) error { return b.sqlDB.Transaction(fn) }
 
 func QueryBuilder(ctx *gin.Context, tableInfo map[string]string, where map[string]interface{}) (string, []interface{}, string, int, int, error) {
 	return "", nil, "", 0, 0, nil

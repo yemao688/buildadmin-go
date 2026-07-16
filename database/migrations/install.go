@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"errors"
+	"go-build-admin/app/pkg/systemroot"
 	"go-build-admin/database/migrations/model"
 	"time"
 
@@ -9,7 +10,8 @@ import (
 )
 
 type Install struct {
-	sqlDB *gorm.DB
+	sqlDB       *gorm.DB
+	rootAdminID int32
 }
 
 func NewInstall(sqlDB *gorm.DB) *Install {
@@ -21,13 +23,28 @@ func NewInstall(sqlDB *gorm.DB) *Install {
 func (s Install) InsertData() error {
 	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
 		seed := Install{sqlDB: tx}
-		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Admin, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData, seed.UserGroup, seed.UserRule, seed.User} {
+		if err := seed.Admin(); err != nil {
+			return err
+		}
+		rootID, err := (systemroot.Resolver{DB: tx, AdminTable: tx.Config.NamingStrategy.TableName("admin")}).Resolve()
+		if err != nil {
+			return err
+		}
+		seed.rootAdminID = rootID
+		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData, seed.UserGroup, seed.UserRule, seed.User} {
 			if err := fn(); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+}
+
+func (s Install) rootID() (int32, error) {
+	if s.rootAdminID != 0 {
+		return s.rootAdminID, nil
+	}
+	return (systemroot.Resolver{DB: s.sqlDB, AdminTable: s.sqlDB.Config.NamingStrategy.TableName("admin")}).Resolve()
 }
 
 func (s Install) AdminGroupAccess() error {
@@ -1196,126 +1213,66 @@ func (s Install) Config() error {
 }
 
 func (s Install) SecurityDataRecycle() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.SecurityDataRecycle{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		dataList := []*model.SecurityDataRecycle{
-			{
-				ID:           1,
-				Name:         "管理员",
-				Controller:   "auth/Admin.php",
-				ControllerAs: "auth/admin",
-				DataTable:    "admin",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           2,
-				Name:         "管理员日志",
-				Controller:   "auth/AdminLog.php",
-				ControllerAs: "auth/adminlog",
-				DataTable:    "admin_log",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           3,
-				Name:         "菜单规则",
-				Controller:   "auth/Menu.php",
-				ControllerAs: "auth/rule",
-				DataTable:    "admin_rule",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           4,
-				Name:         "系统配置项",
-				Controller:   "routine/Config.php",
-				ControllerAs: "routine/config",
-				DataTable:    "config",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           5,
-				Name:         "会员",
-				Controller:   "user/User.php",
-				ControllerAs: "user/user",
-				DataTable:    "user",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           6,
-				Name:         "数据回收规则",
-				Controller:   "security/DataRecycle.php",
-				ControllerAs: "security/datarecycle",
-				DataTable:    "security_data_recycle",
-				PrimaryKey:   "id",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-		}
-		if err := s.sqlDB.Create(dataList).Error; err != nil {
+	dataList := []*model.SecurityDataRecycle{
+		{
+			ID:           1,
+			AdminID:      0,
+			Name:         "管理员",
+			Controller:   "auth/Admin.php",
+			ControllerAs: "auth/admin",
+			DataTable:    "admin",
+			PrimaryKey:   "id",
+			UpdateTime:   time.Now().Unix(),
+			CreateTime:   time.Now().Unix(),
+		},
+		{ID: 2, AdminID: 0, Name: "管理员日志", Controller: "auth/AdminLog.php", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, AdminID: 0, Name: "菜单规则", Controller: "auth/Menu.php", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 4, AdminID: 0, Name: "系统配置项", Controller: "routine/Config.php", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 5, AdminID: 0, Name: "会员", Controller: "user/User.php", ControllerAs: "auth/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 6, AdminID: 0, Name: "数据回收规则", Controller: "security/DataRecycle.php", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+	}
+	for _, row := range dataList {
+		var existing model.SecurityDataRecycle
+		err := s.sqlDB.Where("id=?", row.ID).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := s.sqlDB.Create(row).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
-	} else if err != nil {
-		return err
 	}
 	return nil
 }
 
 func (s Install) SecuritySensitiveData() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.SecuritySensitiveData{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-
-		dataList := []*model.SecuritySensitiveData{
-			{
-				ID:           1,
-				Name:         "管理员数据",
-				Controller:   "auth/Admin.php",
-				ControllerAs: "auth/admin",
-				DataTable:    "admin",
-				PrimaryKey:   "id",
-				DataFields:   `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`,
-				Status:       "1",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           2,
-				Name:         "会员数据",
-				Controller:   "user/User.php",
-				ControllerAs: "user/user",
-				DataTable:    "user",
-				PrimaryKey:   "id",
-				DataFields:   `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`,
-				Status:       "1",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-			{
-				ID:           3,
-				Name:         "管理员权限",
-				Controller:   "auth/Group.php",
-				ControllerAs: "auth/group",
-				DataTable:    "admin_group",
-				PrimaryKey:   "id",
-				DataFields:   `{"rules":"权限规则ID"}`,
-				Status:       "1",
-				UpdateTime:   time.Now().Unix(),
-				CreateTime:   time.Now().Unix(),
-			},
-		}
-		if err := s.sqlDB.Create(dataList).Error; err != nil {
+	dataList := []*model.SecuritySensitiveData{
+		{
+			ID:           1,
+			AdminID:      0,
+			Name:         "管理员数据",
+			Controller:   "auth/Admin.php",
+			ControllerAs: "auth/admin",
+			DataTable:    "admin",
+			PrimaryKey:   "id",
+			DataFields:   `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`,
+			Status:       "1",
+			UpdateTime:   time.Now().Unix(),
+			CreateTime:   time.Now().Unix(),
+		},
+		{ID: 2, AdminID: 0, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, AdminID: 0, Name: "管理员权限", Controller: "auth/Group.php", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+	}
+	for _, row := range dataList {
+		var existing model.SecuritySensitiveData
+		err := s.sqlDB.Where("id=?", row.ID).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := s.sqlDB.Create(row).Error; err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
-	} else if err != nil {
-		return err
 	}
 	return nil
 }

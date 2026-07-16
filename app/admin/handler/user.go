@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
+	"io"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -91,7 +94,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	user.Salt = random.Build("alnum", 16)
 	user.Password = utils.EncryptPassword(params.Password, user.Salt)
 
-	err := h.userM.Add(ctx, user)
+	err := h.userM.Add(ctx, &user)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -130,12 +133,36 @@ func (h *UserHandler) One(ctx *gin.Context) {
 }
 
 func (h *UserHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}, func(_ int32, fieldName string, fieldValue any) error {
-		if fieldName != "status" {
-			return nil
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest("invalid request body"))
+		return
+	}
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var switchReq struct {
+		ID     int32  `json:"id"`
+		Status string `json:"status"`
+	}
+	isSwitch := false
+	if err := json.Unmarshal(bodyBytes, &switchReq); err == nil && switchReq.ID != 0 {
+		var raw map[string]any
+		if err := json.Unmarshal(bodyBytes, &raw); err == nil && len(raw) == 2 {
+			_, hasID := raw["id"]
+			_, hasStatus := raw["status"]
+			isSwitch = hasID && hasStatus
 		}
-		return validateAccountStatusValue(fieldValue)
-	}) {
+	}
+	if isSwitch {
+		if err := validateAccountStatusValue(switchReq.Status); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+		if err := h.userM.UpdateStatus(ctx, switchReq.ID, switchReq.Status); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+		Success(ctx, "")
 		return
 	}
 
@@ -143,7 +170,7 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		IDS
 		User
 	}{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
+	if err = ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
@@ -153,18 +180,11 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if params.Password != "" {
-		if err := h.userM.ResetPassword(ctx, user.ID, params.Password); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
 	copier.Copy(&user, params)
 	birthday, _ := utils.ParseTimeShort(params.Birthday)
 	user.Birthday = birthday
 
-	err = h.userM.Edit(ctx, user)
+	err = h.userM.Edit(ctx, &user, params.Password)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

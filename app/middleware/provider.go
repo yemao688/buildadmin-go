@@ -6,7 +6,6 @@ import (
 
 var ProviderSet = wire.NewSet(
 	NewLogin,
-	NewDataLimit,
 	NewRecord,
 	NewUserLogin,
 	NewSecurity,

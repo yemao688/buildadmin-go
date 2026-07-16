@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	"go-build-admin/app/pkg/safeint"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -27,6 +29,7 @@ func NewUserMoneyLogHandler(log *zap.Logger, userMoneyLogM *model.UserMoneyLogMo
 func (h *UserMoneyLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
+		return
 	}
 	list, total, err := h.userMoneyLogM.List(ctx)
 	if err != nil {
@@ -37,6 +40,8 @@ func (h *UserMoneyLogHandler) Index(ctx *gin.Context) {
 	result := []map[string]any{}
 	for _, v := range list {
 		result = append(result, map[string]any{
+			"admin_id":    v.AdminID,
+			"admin":       v.Admin,
 			"id":          v.ID,
 			"user_id":     v.UserID,
 			"money":       fmt.Sprintf("%.2f", float64(v.Money)/100),
@@ -55,9 +60,9 @@ func (h *UserMoneyLogHandler) Index(ctx *gin.Context) {
 }
 
 type Money struct {
-	UserID int32  `json:"user_id"  binding:"required"` // 会员ID
-	Money  int32  `json:"money"  binding:"required"`   // 变更余额
-	Memo   string `json:"memo"  binding:"required"`    // 备注
+	UserID int32           `json:"user_id"  binding:"required"` // 会员ID
+	Money  json.RawMessage `json:"money"  binding:"required"`   // yuan, up to two decimals
+	Memo   string          `json:"memo"  binding:"required"`    // 备注
 }
 
 func (v Money) GetMessages() validate.ValidatorMessages {
@@ -76,12 +81,20 @@ func (h *UserMoneyLogHandler) Add(ctx *gin.Context) {
 	}
 
 	userMoneyLog := model.UserMoneyLog{}
+	cents, err := safeint.ParseDecimalCents(params.Money)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	if err := copier.Copy(&userMoneyLog, params); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+	userMoneyLog.Money = cents
+	userMoneyLog.MoneyCents = true
 
-	err := h.userMoneyLogM.Add(ctx, userMoneyLog)
+	err = h.userMoneyLogM.Add(ctx, &userMoneyLog)
+	// Add takes a pointer so the caller can inspect the generated ID.
 	if err != nil {
 		FailByErr(ctx, err)
 		return

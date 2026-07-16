@@ -1,15 +1,20 @@
 package handler
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/conf"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
+	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +24,16 @@ type DataRecycleHandler struct {
 	config       *conf.Configuration
 	dataRecycleM *model.DataRecycleModel
 	tableM       *model.TableModel
+}
+
+func (h *DataRecycleHandler) One(ctx *gin.Context) {
+	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	row, err := h.dataRecycleM.GetOne(ctx, int32(id))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, map[string]any{"row": row})
 }
 
 func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *model.DataRecycleModel, tableM *model.TableModel) *DataRecycleHandler {
@@ -89,8 +104,26 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
-		return
+	// Detect Switch partial-edit (id + status only) and apply it under scope.
+	bodyBytes, _ := io.ReadAll(ctx.Request.Body)
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	var m map[string]any
+	if err := json.Unmarshal(bodyBytes, &m); err == nil && len(m) == 2 {
+		_, hasID := m["id"]
+		status, hasStatus := m["status"]
+		if hasID && hasStatus {
+			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt())
+			statusStr, _ := status.(string)
+			if statusStr == "" {
+				statusStr = fmt.Sprintf("%v", status)
+			}
+			if err := h.dataRecycleM.UpdateStatus(ctx, id, statusStr); err != nil {
+				FailByErr(ctx, err)
+				return
+			}
+			Success(ctx, "")
+			return
+		}
 	}
 
 	var params = struct {

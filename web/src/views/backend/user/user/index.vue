@@ -38,6 +38,7 @@ const baTable = new baTableClass(
         column: [
             { type: 'selection', align: 'center', operator: false },
             { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+            { label: t('user.user.Superior agent'), prop: 'admin_id', align: 'center', operator: '=', operatorPlaceholder: t('user.user.Superior agent'), comSearchRender: 'remoteSelect', remote: { pk: 'id', field: 'nickname', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true } }, formatter: (row: anyObj, _column: any, cellValue: any, _index: number) => row.admin?.nickname || cellValue || '-', width: 130 },
             { label: t('user.user.User name'), prop: 'username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('user.user.nickname'), prop: 'nickname', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             {
@@ -104,6 +105,10 @@ const baTable = new baTableClass(
         },
     }
 )
+
+baTable.before.onSubmit = ({ items }: { items: anyObj }) => {
+    delete items.admin_id
+}
 
 baTable.mount()
 baTable.getData()

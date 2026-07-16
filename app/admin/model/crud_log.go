@@ -13,7 +13,8 @@ import (
 
 // CrudLog CRUD记录表
 type CrudLog struct {
-	ID         int32       `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                           // ID
+	ID         int32       `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
+	AdminID    int32       `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                                 // ID
 	Tablename  string      `gorm:"column:table_name;not null;comment:数据表名" json:"table_name"`                                              // 数据表名
 	Table      JSON_TABLE  `gorm:"column:table;comment:数据表数据" json:"table"`                                                                // 数据表数据
 	Fields     JSON_FIELDS `gorm:"column:fields;comment:字段数据" json:"fields"`                                                               // 字段数据
@@ -26,6 +27,7 @@ type CrudLog struct {
 
 type CrudLogModel struct {
 	BaseModel
+	enforcer data_scope.Enforcer
 }
 
 type JSON_TABLE Table
@@ -141,25 +143,38 @@ type Field struct {
 	OriginalDesignType string `json:"originalDesignType"`
 }
 
-func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration) *CrudLogModel {
+func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CrudLogModel {
 	return &CrudLogModel{
 		BaseModel: BaseModel{
 			TableName:        config.Database.Prefix + "crud_log",
 			Key:              "id",
 			QuickSearchField: "table_name",
-			DataLimit:        "",
 			sqlDB:            sqlDB,
 		},
+		enforcer: enforcer,
+	}
+}
+
+// scoped applies the fail-closed hierarchical data-scope enforcer to
+// crud_log.admin_id. Only an explicit unrestricted actor bypasses scope.
+func (s *CrudLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if s.enforcer == nil {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: s.TableName, Column: "admin_id"})
 	}
 }
 
 func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
+	err = s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
 	return
 }
 
 func (s *CrudLogModel) GetOne(ctx *gin.Context, id int32) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Where("id=?", id).First(&crudLog).Error
+	err = s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).First(&crudLog).Error
 	return
 }
 
@@ -168,7 +183,7 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&CrudLog{}).Where(whereS, whereP...)
+	db := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -177,16 +192,64 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 }
 
 func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Model(&CrudLog{}).Scopes(LimitAdminIds(ctx)).Where(" id in ? ", ids).Delete(nil).Error
-	return err
+	values, ok := ids.([]int32)
+	if !ok || len(values) == 0 {
+		return fmt.Errorf("invalid crud log ids")
+	}
+	seen := make(map[int32]struct{}, len(values))
+	normalized := make([]int32, 0, len(values))
+	for _, id := range values {
+		if id <= 0 {
+			return fmt.Errorf("invalid crud log id %d", id)
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			normalized = append(normalized, id)
+		}
+	}
+	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+		var list []CrudLog
+		scoped := tx.Model(&CrudLog{}).Scopes(s.scoped(ctx))
+		if err := scoped.Where("id IN ?", normalized).Find(&list).Error; err != nil {
+			return err
+		}
+		if len(list) != len(normalized) {
+			return gorm.ErrRecordNotFound
+		}
+		del := scoped.Where("id IN ?", normalized).Delete(nil)
+		if del.Error != nil {
+			return del.Error
+		}
+		if del.RowsAffected != int64(len(normalized)) {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
 // 记录CRUD状态
-func (s *CrudLogModel) RecordCrudStatus(data CrudLog) int32 {
-	if data.ID != 0 {
-		s.sqlDB.Model(&CrudLog{}).Where("id=?", data.ID).Update("status", data.Status)
-		return data.ID
+func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, error) {
+	if s.enforcer == nil {
+		return 0, data_scope.ErrScopedAccessDenied
 	}
-	s.sqlDB.Create(&data)
-	return data.ID
+	actor, err := s.enforcer.Actor(ctx)
+	if err != nil {
+		return 0, err
+	}
+	data.AdminID = actor.AdminID
+
+	if data.ID != 0 {
+		result := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", data.ID).Update("status", data.Status)
+		if result.Error != nil {
+			return 0, result.Error
+		}
+		if result.RowsAffected != 1 {
+			return 0, gorm.ErrRecordNotFound
+		}
+		return data.ID, nil
+	}
+	if err := s.sqlDB.Create(&data).Error; err != nil {
+		return 0, err
+	}
+	return data.ID, nil
 }

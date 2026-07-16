@@ -2,6 +2,7 @@ package handler
 
 import (
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/utils"
 	"net/http"
 
@@ -17,6 +18,9 @@ type Response struct {
 
 // 成功返回
 func Success(c *gin.Context, data interface{}) {
+	if requesttx.Stage(c, requesttx.Outcome{HTTPCode: http.StatusOK, BusinessCode: 1, Message: "ok", Data: data}) {
+		return
+	}
 	c.JSON(http.StatusOK, Response{
 		1,
 		data,
@@ -28,6 +32,9 @@ func Success(c *gin.Context, data interface{}) {
 // 失败返回
 func Fail(c *gin.Context, httpCode int, code int, msg string) {
 	msg = utils.Lang(c, msg, nil)
+	if requesttx.Stage(c, requesttx.Outcome{HTTPCode: httpCode, BusinessCode: code, Message: msg}) {
+		return
+	}
 	c.JSON(httpCode, Response{
 		code,
 		nil,
