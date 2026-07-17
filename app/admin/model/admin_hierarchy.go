@@ -77,6 +77,15 @@ func (h *AdminHierarchy) lockHierarchy(ctx context.Context, tx *gorm.DB) error {
 	return nil
 }
 
+// LockHierarchy serializes non-hierarchy owner assignments with hierarchy
+// mutations. Callers must acquire it before locking user or owner-log rows.
+func (h *AdminHierarchy) LockHierarchy(ctx context.Context, tx *gorm.DB) error {
+	if err := data_scope.ValidateTablePrefix(h.prefix); err != nil {
+		return err
+	}
+	return h.lockHierarchy(ctx, tx)
+}
+
 func (h *AdminHierarchy) adminRowExists(ctx context.Context, tx *gorm.DB, id int32) error {
 	var count int64
 	if err := tx.WithContext(ctx).Table(h.adminTable()).Where("id = ?", id).Count(&count).Error; err != nil {

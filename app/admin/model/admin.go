@@ -15,24 +15,30 @@ import (
 )
 
 type Admin struct {
-	ID            int32    `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                             // ID
-	ParentID      *int32   `gorm:"column:parent_id;type:int(11) unsigned;default:null;comment:父级管理员ID;index:idx_parent_id" json:"parent_id"` // 父级管理员ID
-	Username      string   `gorm:"column:username;not null;comment:用户名" json:"username"`                                                     // 用户名
-	Nickname      string   `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                      // 昵称
-	Avatar        string   `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                          // 头像
-	Email         string   `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                            // 邮箱
-	Mobile        string   `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                          // 手机
-	LoginFailure  int32    `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                        // 登录失败次数
-	LastLoginTime int64    `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                             // 上次登录时间
-	LastLoginIP   string   `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                        // 上次登录IP
-	Password      string   `gorm:"column:password;not null;comment:密码" json:"password"`                                                      // 密码
-	Salt          string   `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                             // 密码盐
-	Motto         string   `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                            // 签名
-	Status        string   `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`     // 状态:enable=启用,disable=禁用
-	UpdateTime    int64    `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                        // 更新时间
-	CreateTime    int64    `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                        // 创建时间
-	GroupArr      []int32  `gorm:"-" json:"group_arr"`
-	GroupNameArr  []string `gorm:"-" json:"group_name_arr"`
+	ID            int32         `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                             // ID
+	ParentID      *int32        `gorm:"column:parent_id;type:int(11) unsigned;default:null;comment:父级管理员ID;index:idx_parent_id" json:"parent_id"` // 父级管理员ID
+	Username      string        `gorm:"column:username;not null;comment:用户名" json:"username"`                                                     // 用户名
+	Nickname      string        `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                      // 昵称
+	Avatar        string        `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                          // 头像
+	Email         string        `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                            // 邮箱
+	Mobile        string        `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                          // 手机
+	LoginFailure  int32         `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                        // 登录失败次数
+	LastLoginTime int64         `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                             // 上次登录时间
+	LastLoginIP   string        `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                        // 上次登录IP
+	Password      string        `gorm:"column:password;not null;comment:密码" json:"password"`                                                      // 密码
+	Salt          string        `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                             // 密码盐
+	Motto         string        `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                            // 签名
+	Status        string        `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`     // 状态:enable=启用,disable=禁用
+	UpdateTime    int64         `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                        // 更新时间
+	CreateTime    int64         `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                        // 创建时间
+	GroupArr      []int32       `gorm:"-" json:"group_arr"`
+	GroupNameArr  []string      `gorm:"-" json:"group_name_arr"`
+	Parent        *AdminSummary `gorm:"-" json:"parent,omitempty"`
+}
+
+type AdminSummary struct {
+	ID       int32  `json:"id"`
+	Nickname string `json:"nickname"`
 }
 
 type AdminModel struct {
@@ -108,6 +114,9 @@ func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 	if err := s.DealData(ctx, &data); err != nil {
 		return data, err
 	}
+	if err := s.loadParentSummaries(ctx, s.DBFor(ctx), []*Admin{&data}); err != nil {
+		return data, err
+	}
 	return data, nil
 }
 
@@ -133,12 +142,49 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 		return
 	}
 	err = db.Omit("password", "salt", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	if err != nil {
+		return
+	}
+	if err = s.loadParentSummaries(ctx, db, list); err != nil {
+		return
+	}
 	for _, v := range list {
 		if err = s.DealData(ctx, v); err != nil {
 			return
 		}
 	}
 	return
+}
+
+func (s *AdminModel) loadParentSummaries(ctx *gin.Context, db *gorm.DB, admins []*Admin) error {
+	ids := make([]int32, 0, len(admins))
+	seen := make(map[int32]struct{}, len(admins))
+	for _, admin := range admins {
+		if admin == nil || admin.ParentID == nil || *admin.ParentID <= 0 {
+			continue
+		}
+		if _, ok := seen[*admin.ParentID]; !ok {
+			seen[*admin.ParentID] = struct{}{}
+			ids = append(ids, *admin.ParentID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var parents []AdminSummary
+	if err := db.Session(&gorm.Session{NewDB: true}).Model(&Admin{}).Scopes(s.scoped(ctx)).Select("id", "nickname").Where("id IN ?", ids).Find(&parents).Error; err != nil {
+		return err
+	}
+	byID := make(map[int32]*AdminSummary, len(parents))
+	for i := range parents {
+		byID[parents[i].ID] = &parents[i]
+	}
+	for _, admin := range admins {
+		if admin != nil && admin.ParentID != nil {
+			admin.Parent = byID[*admin.ParentID]
+		}
+	}
+	return nil
 }
 
 func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {

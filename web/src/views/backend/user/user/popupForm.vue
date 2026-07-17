@@ -53,6 +53,18 @@
                             remoteUrl: '/admin/user.Group/index',
                         }"
                     />
+                    <FormItem
+                        type="remoteSelect"
+                        :label="t('user.user.Superior agent')"
+                        v-model.number="baTable.form.items!.admin_id"
+                        prop="admin_id"
+                        :placeholder="t('user.user.Superior agent')"
+                        :input-attr="{
+                            params: { isTree: true },
+                            field: 'nickname',
+                            remoteUrl: '/admin/auth.Admin/index',
+                        }"
+                    />
                     <FormItem :label="t('user.user.avatar')" type="image" v-model="baTable.form.items!.avatar" />
                     <el-form-item prop="email" :label="t('user.user.email')">
                         <el-input

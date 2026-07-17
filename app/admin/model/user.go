@@ -142,9 +142,22 @@ func (s *UserModel) Add(ctx *gin.Context, user *User) error {
 	if err != nil {
 		return err
 	}
-	user.AdminID = actor.AdminID
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if ctx == nil || ctx.Request == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		if err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx); err != nil {
+			return err
+		}
+		ownerID := user.AdminID
+		if ownerID == 0 {
+			ownerID = actor.AdminID
+		}
+		if err := s.validateUserOwner(ctx, tx, ownerID); err != nil {
+			return err
+		}
+		user.AdminID = ownerID
 		// Creating a user owned by the actor only makes sense if the closure table
 		// contains the actor's self-row; otherwise the new row would be invisible.
 		if !actor.Unrestricted {
@@ -185,8 +198,31 @@ func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
 		updates["password"] = utils.EncryptPassword(password, salt)
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if ctx == nil || ctx.Request == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		if err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx); err != nil {
+			return err
+		}
 		if err := tx.Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 			return cErr.BadRequest("Account not exist")
+		}
+		var current User
+		if err := tx.Model(&User{}).Scopes(s.scoped(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
+			return err
+		}
+		if current.AdminID <= 0 || user.AdminID <= 0 {
+			return cErr.BadRequest("invalid administrator owner")
+		}
+		ownerChanged := current.AdminID != user.AdminID
+		if ownerChanged {
+			if err := s.validateUserOwner(ctx, tx, user.AdminID); err != nil {
+				return err
+			}
+			if err := s.validateUserLogOwners(tx, current.ID, current.AdminID); err != nil {
+				return err
+			}
+			updates["admin_id"] = user.AdminID
 		}
 		result := tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
 		if result.Error != nil {
@@ -195,8 +231,54 @@ func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
 		if result.RowsAffected != 1 {
 			return gorm.ErrRecordNotFound
 		}
+		if ownerChanged {
+			if err := s.syncUserLogOwners(tx, current.ID, user.AdminID); err != nil {
+				return err
+			}
+			if err := s.validateUserLogOwners(tx, current.ID, user.AdminID); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
+}
+
+func (s *UserModel) validateUserOwner(ctx *gin.Context, tx *gorm.DB, ownerID int32) error {
+	if err := data_scope.OwnerInScope(ctx, tx, s.enforcer, s.config.Database.Prefix, ownerID); err != nil {
+		return err
+	}
+	var enabled int64
+	if err := tx.Table(s.config.Database.Prefix+"admin").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ?", ownerID, "enable").Count(&enabled).Error; err != nil {
+		return err
+	}
+	if enabled != 1 {
+		return cErr.BadRequest("administrator owner is disabled")
+	}
+	return nil
+}
+
+func (s *UserModel) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log", s.config.Database.Prefix + "user_score_log"} {
+		var logs []struct{ AdminID *int32 }
+		if err := tx.Table(table).Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
+			return err
+		}
+		for _, log := range logs {
+			if log.AdminID == nil || *log.AdminID != ownerID {
+				return cErr.BadRequest("user log owner mismatch")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *UserModel) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log", s.config.Database.Prefix + "user_score_log"} {
+		if err := tx.Table(table).Where("user_id = ?", userID).Update("admin_id", ownerID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {

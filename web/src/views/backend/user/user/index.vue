@@ -106,10 +106,6 @@ const baTable = new baTableClass(
     }
 )
 
-baTable.before.onSubmit = ({ items }: { items: anyObj }) => {
-    delete items.admin_id
-}
-
 baTable.mount()
 baTable.getData()
 

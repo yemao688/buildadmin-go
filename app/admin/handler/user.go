@@ -9,6 +9,7 @@ import (
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
 	"io"
+	"math"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +51,7 @@ func (h *UserHandler) Index(ctx *gin.Context) {
 }
 
 type User struct {
+	AdminID  int32  `json:"admin_id"`
 	GroupID  int32  `json:"group_id"`
 	Username string `json:"username" binding:"required"`
 	Nickname string `json:"nickname" binding:"required"`
@@ -74,6 +76,17 @@ func (v User) GetMessages() validate.ValidatorMessages {
 }
 
 func (h *UserHandler) Add(ctx *gin.Context) {
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest("invalid request body"))
+		return
+	}
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	adminID, hasAdminID, err := requestedAdminID(bodyBytes)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	var params User
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
@@ -89,12 +102,15 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		params.Birthday = "0000-00-00"
 	}
 	copier.Copy(&user, params)
+	if hasAdminID {
+		user.AdminID = adminID
+	}
 	birthday, _ := utils.ParseTimeShort(params.Birthday)
 	user.Birthday = birthday
 	user.Salt = random.Build("alnum", 16)
 	user.Password = utils.EncryptPassword(params.Password, user.Salt)
 
-	err := h.userM.Add(ctx, &user)
+	err = h.userM.Add(ctx, &user)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -174,13 +190,24 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	adminID, hasAdminID, err := requestedAdminID(bodyBytes)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	user, err := h.userM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+	currentAdminID := user.AdminID
 
 	copier.Copy(&user, params)
+	if hasAdminID {
+		user.AdminID = adminID
+	} else {
+		user.AdminID = currentAdminID
+	}
 	birthday, _ := utils.ParseTimeShort(params.Birthday)
 	user.Birthday = birthday
 
@@ -190,6 +217,25 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+}
+
+func requestedAdminID(body []byte) (int32, bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return 0, false, cErr.BadRequest("invalid request body")
+	}
+	value, present := raw["admin_id"]
+	if !present {
+		return 0, false, nil
+	}
+	if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return 0, true, cErr.BadRequest("admin_id must be a positive administrator id")
+	}
+	var id int64
+	if err := json.Unmarshal(value, &id); err != nil || id <= 0 || id > math.MaxInt32 {
+		return 0, true, cErr.BadRequest("admin_id must be a positive administrator id")
+	}
+	return int32(id), true, nil
 }
 
 func (h *UserHandler) Del(ctx *gin.Context) {
