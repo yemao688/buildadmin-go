@@ -207,6 +207,43 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	assert.NotContains(t, out, ".Save(&demo)")
 }
 
+func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {
+	out := renderModelString(t, ModelData{
+		Namespace:         "model",
+		Name:              "order_item",
+		ClassName:         "OrderItem",
+		ModelVar:          "orderItem",
+		Pk:                "id",
+		PkGoField:         "ID",
+		DataScopePolicy:   data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
+		EditableColumns:   []string{"name"},
+		EditableColumnsGo: `"name"`,
+	})
+
+	assert.Contains(t, out, `TableName:        config.Database.Prefix + "order_item"`)
+	assert.NotContains(t, out, `config.Database.Prefix + "orderItem"`)
+}
+
+func TestPrepareGenerationData_CommonModelImportPath(t *testing.T) {
+	table := model.Table{
+		Name:           "order_item",
+		IsCommonModel:  1,
+		ModelFile:      "app/common/model/OrderItem.go",
+		ControllerFile: "app/admin/handler/OrderItem.go",
+	}
+	fields := []model.Field{{Name: "id", Type: "int", PrimaryKey: true}}
+	getTableName := func(name string, full bool) string {
+		if full {
+			return "ba_" + name
+		}
+		return name
+	}
+
+	_, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	require.NoError(t, err)
+	assert.Equal(t, "go-build-admin/app/common/model", handlerData.ModelImportPath)
+}
+
 func TestModelTemplate_DataScopeNone(t *testing.T) {
 	out := renderModelString(t, ModelData{
 		Namespace:         "model",

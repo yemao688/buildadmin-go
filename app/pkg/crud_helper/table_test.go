@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
+	"go-build-admin/app/admin/model"
 	"os"
 	"strings"
 	"testing"
@@ -26,6 +27,16 @@ func TestAlter(t *testing.T) {
 	} else {
 		fmt.Println("成功")
 	}
+}
+
+func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
+	nullable, err := getDDlFieldData(model.Field{Name: "nickname", Type: "varchar", Length: 64, Null: true})
+	require.NoError(t, err)
+	assert.NotContains(t, nullable, "NOT NULL")
+
+	notNullable, err := getDDlFieldData(model.Field{Name: "status", Type: "int", Null: false})
+	require.NoError(t, err)
+	assert.Contains(t, notNullable, "NOT NULL")
 }
 
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {

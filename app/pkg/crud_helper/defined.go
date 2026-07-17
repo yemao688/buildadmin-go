@@ -248,13 +248,14 @@ type NameInfo struct {
 // var updateTimeField = "update_time"
 
 type HandlerData struct {
-	Namespace      string //包名
-	ClassName      string //类名
-	ModelNamespace string //模型包名
-	ModelName      string //模型类名
-	ModelVar       string //模型变量名
-	TableComment   string //表备注
-	ValidateParam  string //表单参数
+	Namespace       string //包名
+	ClassName       string //类名
+	ModelNamespace  string //模型包名
+	ModelImportPath string //模型完整导入路径
+	ModelName       string //模型类名
+	ModelVar        string //模型变量名
+	TableComment    string //表备注
+	ValidateParam   string //表单参数
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
@@ -270,7 +271,7 @@ const handlerTemp = `
 package {{.Namespace}}
 
 import (
-	"go-build-admin/app/admin/{{.ModelNamespace}}"
+	"{{.ModelImportPath}}"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/pkg/validator"
 
@@ -413,7 +414,7 @@ type {{.ClassName}}Model struct {
 func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
 		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "{{.ModelVar}}",
+			TableName:        config.Database.Prefix + "{{.Name}}",
 			Key:              "{{.Pk}}",
 			QuickSearchField: "name",
 			sqlDB:            sqlDB,

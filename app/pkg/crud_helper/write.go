@@ -2,12 +2,14 @@ package crud_helper
 
 import (
 	"bytes"
+	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -297,6 +299,10 @@ func writeFile(path string, content string) error {
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {
+	logicalTableName := strings.Join(append(slices.Clone(webLangDir.Path), webLangDir.LastName), "_")
+	if IsProtectedTable(logicalTableName) {
+		return fmt.Errorf("crud generation is forbidden for protected table %q", logicalTableName)
+	}
 	langTsContent := ""
 	for k, v := range langEnData {
 		quote := getQuote(v)

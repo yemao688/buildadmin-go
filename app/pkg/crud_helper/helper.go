@@ -74,6 +74,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData := HandlerData{}
 	handlerData.Namespace = handlerFile.Namespace
 	handlerData.ModelNamespace = modelData.Namespace
+	handlerData.ModelImportPath = "go-build-admin/app/" + module + "/" + modelData.Namespace
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]

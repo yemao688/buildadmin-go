@@ -51,6 +51,14 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	if helper.IsProtectedTable(params.Table.Name) {
+		FailByErr(ctx, cErr.BadRequest(fmt.Sprintf("crud generation is forbidden for protected table %q", params.Table.Name)))
+		return
+	}
+	if err := h.rejectFirstGenerationOverwrite(params.Table); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	//记录日志
 	record := model.CrudLog{}
@@ -187,6 +195,10 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	if helper.IsProtectedTable(crudLog.Tablename, crudLog.Table.Name) {
+		FailByErr(ctx, cErr.BadRequest(fmt.Sprintf("crud deletion is forbidden for protected table %q", crudLog.Tablename)))
+		return
+	}
 
 	h.log.Info("删除web页面文件start")
 	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
@@ -243,6 +255,37 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, map[string]interface{}{})
+}
+
+// rejectFirstGenerationOverwrite protects files that were not produced by
+// this generator. The log check is deliberately unscoped: any prior CRUD log
+// means this is a regeneration, while a per-admin lookup would be unsafe.
+func (h *CrudHandler) rejectFirstGenerationOverwrite(table model.Table) error {
+	module := "admin"
+	if table.IsCommonModel != 0 {
+		module = "common"
+	}
+	modelFile, err := helper.ParseNameData(module, table.Name, "model", table.ModelFile)
+	if err != nil {
+		return err
+	}
+	handlerFile, err := helper.ParseNameData("admin", table.Name, "handler", table.ControllerFile)
+	if err != nil {
+		return err
+	}
+	modelExists := utils.PathExists(modelFile.ParseFile)
+	handlerExists := utils.PathExists(handlerFile.ParseFile)
+	if !modelExists && !handlerExists {
+		return nil
+	}
+	hasLog, err := h.crudLogM.HasAnyByTableName(table.Name)
+	if err != nil {
+		return err
+	}
+	if !hasLog {
+		return cErr.BadRequest(fmt.Sprintf("refusing to overwrite existing CRUD files for table %q without a CRUD log", table.Name))
+	}
+	return nil
 }
 
 // 获取文件路径数据

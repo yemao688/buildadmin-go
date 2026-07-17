@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -171,6 +172,21 @@ func (s *CrudLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog CrudLog, err error) {
 	err = s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
 	return
+}
+
+// HasAnyByTableName intentionally bypasses data scope. It is used only to
+// distinguish a first generation from regeneration; exposing the log row is
+// not required. A scoped lookup would let another administrator overwrite a
+// handwritten file merely because somebody else generated that table.
+func (s *CrudLogModel) HasAnyByTableName(table string) (bool, error) {
+	prefix := strings.TrimSuffix(s.TableName, "crud_log")
+	names := []string{table, strings.TrimPrefix(table, prefix)}
+	if prefix != "" {
+		names = append(names, prefix+strings.TrimPrefix(table, prefix))
+	}
+	var count int64
+	err := s.sqlDB.Model(&CrudLog{}).Where("table_name IN ?", names).Count(&count).Error
+	return count > 0, err
 }
 
 func (s *CrudLogModel) GetOne(ctx *gin.Context, id int32) (crudLog CrudLog, err error) {

@@ -8,6 +8,35 @@ import (
 	"strings"
 )
 
+// protectedTableNames must not be handled by the generic CRUD generator. These
+// tables contain handwritten security and lifecycle semantics.
+var protectedTableNames = []string{
+	"admin", "admin_closure", "admin_log", "admin_rule",
+	"user", "user_money_log", "user_score_log", "user_rule", "user_group",
+	"attachment", "crud_log", "data_recycle_log", "sensitive_data_log",
+	"security_rule", "table",
+}
+
+// IsProtectedTable accepts either a logical table name or a prefixed database
+// table name (for example, admin and ba_admin).
+func IsProtectedTable(tableNames ...string) bool {
+	for _, tableName := range tableNames {
+		name := strings.ToLower(strings.TrimSpace(tableName))
+		for _, protected := range protectedTableNames {
+			if name == protected || strings.HasSuffix(name, "_"+protected) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ProtectedTableNames returns a copy for callers and tests that need to expose
+// the effective deny-list without allowing it to be mutated.
+func ProtectedTableNames() []string {
+	return slices.Clone(protectedTableNames)
+}
+
 // DataScopeResolveOptions customizes data-scope resolution during CRUD
 // generation. It mirrors the contract options but accepts model.Field metadata
 // for validation and an optional index prover.

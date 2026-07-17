@@ -255,7 +255,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 	// 	fieldTemplData.SortRule = "NOT NULL"
 	// }
 
-	if field.Null {
+	if !field.Null {
 		fieldTemplData.Null = "NOT NULL"
 	}
 
