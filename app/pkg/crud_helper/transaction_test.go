@@ -38,6 +38,11 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 }
 
 func TestQuarantineRestoresAllFiles(t *testing.T) {
+	assertQuarantineRestore(t)
+}
+
+func assertQuarantineRestore(t *testing.T) {
+	t.Helper()
 	dir, err := os.MkdirTemp(utils.RootPath(), ".crud-test-")
 	if err != nil {
 		t.Fatal(err)
