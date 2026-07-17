@@ -16,13 +16,14 @@ import (
 
 	"golang.org/x/tools/imports"
 	"gorm.io/gen"
+	"gorm.io/gorm"
 )
 
-func writeModelFile(tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (string, error) {
+func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
-	structContent, err := getGenerateStruct(fullTableName, tableName)
+	structContent, err := getGenerateStruct(db, fullTableName, tableName)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +43,7 @@ func writeModelFile(tablePk string, fullTableName string, tableName string, mode
 	return structContent, nil
 }
 
-func getGenerateStruct(fullTableName string, tableName string) (string, error) {
+func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string) (string, error) {
 	g := gen.NewGenerator(gen.Config{
 		OutPath: "./",
 		Mode:    gen.WithoutContext | gen.WithDefaultQuery,
@@ -59,7 +60,7 @@ func getGenerateStruct(fullTableName string, tableName string) (string, error) {
 		//if you need unit tests for query code, set WithUnitTest true
 		// WithUnitTest: true,
 	})
-	g.UseDB(gormDb)
+	g.UseDB(db)
 	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true))
 
 	var buf bytes.Buffer
@@ -209,7 +210,7 @@ func writeRouter(name string) error {
 	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)` + "\n"
 
 	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
-	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
+	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
 }
 
 func RemoveRouter(name string) error {
@@ -242,7 +243,7 @@ func RemoveRouter(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(utils.RootPath(), "router", "router.go"), []byte(newStr), 0644)
+	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
 }
 
 func writeProvider(dir string, name string) error {
@@ -257,7 +258,7 @@ func writeProvider(dir string, name string) error {
 
 	lastIndex := strings.LastIndex(string(content), ")")
 	content = []byte(string(content)[:lastIndex] + "\n	New" + name + ",\n)")
-	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(content), 0644)
+	return writeFile(filepath.Join(utils.RootPath(), dir, "provider.go"), string(content))
 }
 
 // 移除生成的相应代码
@@ -271,7 +272,7 @@ func RemoveProvider(dir string, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(utils.RootPath(), dir, "provider.go"), []byte(newContent), 0644)
+	return writeFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
 }
 
 func formatGoCode(code string) (string, error) {
@@ -295,7 +296,28 @@ func writeFile(path string, content string) error {
 			return err
 		}
 	}
-	return os.WriteFile(path, []byte(content), 0644)
+	tmp, err := os.CreateTemp(dir, ".crud-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(0644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {

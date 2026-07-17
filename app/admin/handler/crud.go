@@ -52,6 +52,12 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	release, err := helper.TryAcquireGenerationLock()
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest(err.Error()))
+		return
+	}
+	defer release()
 	if err := requireCrudRoot(ctx); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -199,6 +205,12 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
+	release, err := helper.TryAcquireGenerationLock()
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest(err.Error()))
+		return
+	}
+	defer release()
 	if err := requireCrudRoot(ctx); err != nil {
 		FailByErr(ctx, err)
 		return

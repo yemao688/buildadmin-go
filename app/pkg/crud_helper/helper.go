@@ -16,8 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var gormDb *gorm.DB
-
 // 生成表
 func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
@@ -123,7 +121,6 @@ func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
-	gormDb = db
 	fullTableName := getTableName(table.Name, true)
 	modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
 	if err != nil {
@@ -194,7 +191,7 @@ func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig
 		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
 			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
 				columns, _ := getColumns(field.Form.RemoteTable)
-				parseJoinData(columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate)
+				parseJoinData(db, columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate)
 			}
 		}
 
@@ -254,7 +251,7 @@ func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig
 	}
 
 	// 写入模型代码
-	structContent, err := writeModelFile(tablePk, fullTableName, tableName, modelData, modelFile)
+	structContent, err := writeModelFile(db, tablePk, fullTableName, tableName, modelData, modelFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -787,12 +784,12 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 }
 
 // 关联表数据解析
-func parseJoinData(columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
+func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
 	joinFields := ParseTableColumns(columns, true)
 	tableName := getTableName(field.Form.RemoteTable, false)
 	fullTableName := getTableName(field.Form.RemoteTable, true)
 	//检查关联模型代码文件
-	rootFileName, err := checkJoinMoel(joinFields, field, tableName, fullTableName)
+	rootFileName, err := checkJoinMoel(db, joinFields, field, tableName, fullTableName)
 	if err != nil {
 		return err
 	}
@@ -912,7 +909,7 @@ func parseJoinData(columns []model.Column, dictEn *map[string]string, dictZhCn *
 }
 
 // 关联表是否存在，不存在创建
-func checkJoinMoel(fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
+func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
 	rootFileName := ""
 
 	path := filepath.Join(utils.RootPath(), field.Form.RemoteModel)
@@ -962,7 +959,9 @@ func checkJoinMoel(fields []model.Field, field model.Field, tableName, fullTable
 					"field": joinFieldsMap[weighKey],
 				}, false)
 			}
-			writeModelFile(joinTablePk, fullTableName, tableName, joinModelData, joinModelFile)
+			if _, err := writeModelFile(db, joinTablePk, fullTableName, tableName, joinModelData, joinModelFile); err != nil {
+				return "", err
+			}
 		}
 	}
 	return rootFileName, nil
