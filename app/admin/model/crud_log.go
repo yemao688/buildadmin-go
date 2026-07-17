@@ -269,3 +269,23 @@ func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, 
 	}
 	return data.ID, nil
 }
+
+// RecordCrudError marks a generation as failed and preserves the failing
+// stage/message for operators. It intentionally uses the same scoped update
+// path as normal status transitions.
+func (s *CrudLogModel) RecordCrudError(ctx *gin.Context, id int32, message string) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	result := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).Updates(map[string]interface{}{
+		"status":  "error",
+		"comment": message,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}

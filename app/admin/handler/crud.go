@@ -74,6 +74,17 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	manifest, err := helper.BuildFileManifest(params.Table)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	backupPaths := append(append([]string{}, manifest.Generated...), manifest.Shared...)
+	snapshot, err := helper.NewFileSnapshot(backupPaths)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	//记录日志
 	record := model.CrudLog{}
@@ -82,8 +93,20 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	record.Status = "start"
 	crudLogId, err := h.crudLogM.RecordCrudStatus(ctx, record)
 	if err != nil {
+		_ = snapshot.Cleanup()
 		FailByErr(ctx, err)
 		return
+	}
+	failGeneration := func(stage string, cause error) {
+		message := fmt.Sprintf("stage=%s: %v", stage, cause)
+		if restoreErr := snapshot.Restore(); restoreErr != nil {
+			message += "; restore failed: " + restoreErr.Error()
+		}
+		_ = snapshot.Cleanup()
+		if statusErr := h.crudLogM.RecordCrudError(ctx, crudLogId, message); statusErr != nil {
+			h.log.Error("更新crud日志error状态失败:" + statusErr.Error())
+		}
+		FailByErr(ctx, fmt.Errorf("%s: %w", stage, cause))
 	}
 	h.log.Info("创建crud日志start:" + fmt.Sprintf("%+v", record))
 	h.log.Info("请求参数Type:" + fmt.Sprintf("%+v", params.Type))
@@ -99,15 +122,21 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}
 
 	// 处理表设计
+	// MySQL DDL is not reliably transactional here; file rollback below cannot
+	// undo a dropped/altered table. Core-table protection and input validation
+	// reduce that irreversibility risk.
 	if params.Type == "create" || record.Table.Rebuild == "Yes" {
 		//数据表存在则删除
-		h.tableM.DelTable(record.Table.Name)
+		if err := h.tableM.DelTable(record.Table.Name); err != nil {
+			failGeneration("drop table", err)
+			return
+		}
 	}
 	h.log.Info("开始处理表设计")
 	err = helper.HandleTableDesign(h.tableM.DB(), getTableName(record.Table.Name, true), params.Table, params.Fields)
 	if err != nil {
 		h.log.Error("处理表设计error:" + err.Error())
-		FailByErr(ctx, err)
+		failGeneration("table design", err)
 		return
 	}
 
@@ -116,12 +145,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	webViewsDir, tableComment, err := helper.GenerateFile(params.Table, params.Fields, getTableName, getColumns, h.tableM.DB())
 	if err != nil {
 		h.log.Error("生成文件error:" + err.Error())
-		record.ID = crudLogId
-		record.Status = "error"
-		if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
-			h.log.Error("更新crud日志error状态失败:" + statusErr.Error())
-		}
-		FailByErr(ctx, err)
+		failGeneration("file generation", err)
 		return
 	}
 	h.log.Info("webViewsDir数据:" + fmt.Sprintf("%+v", webViewsDir))
@@ -130,20 +154,24 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	h.log.Info("开始生成菜单")
 	if err := helper.CreateMenu(h.adminRuleM, webViewsDir, tableComment); err != nil {
 		h.log.Error("生成菜单error:" + err.Error())
-		FailByErr(ctx, err)
+		failGeneration("menu generation", err)
 		return
 	}
 
 	h.log.Info("wire注入")
 	if err := h.execWire(ctx); err != nil {
-		FailByErr(ctx, err)
+		failGeneration("wire", err)
 		return
 	}
 
 	record.ID = crudLogId
 	record.Status = "success"
 	if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
-		h.log.Error("更新crud日志success状态失败:" + statusErr.Error())
+		failGeneration("success log update", statusErr)
+		return
+	}
+	if err := snapshot.Cleanup(); err != nil {
+		h.log.Error("清理生成备份失败:" + err.Error())
 	}
 	h.log.Info("创建crud日志end:" + fmt.Sprintf("%+v", record))
 
@@ -229,92 +257,99 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		return
 	}
 
-	h.log.Info("删除web页面文件start")
+	manifest, err := helper.BuildFileManifest(model.Table(crudLog.Table))
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	for _, file := range manifest.Generated {
+		if _, err := os.Stat(file); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	}
+	sharedSnapshot, err := helper.NewFileSnapshot(manifest.Shared)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	quarantine, err := helper.NewQuarantine(manifest.Generated)
+	if err != nil {
+		_ = sharedSnapshot.Cleanup()
+		FailByErr(ctx, err)
+		return
+	}
+	rollbackDelete := func(stage string, cause error) {
+		message := fmt.Sprintf("%s: %v", stage, cause)
+		if err := quarantine.Restore(); err != nil {
+			message += "; quarantine restore failed: " + err.Error()
+		}
+		if err := sharedSnapshot.Restore(); err != nil {
+			message += "; shared-file restore failed: " + err.Error()
+		}
+		_ = quarantine.Commit()
+		_ = sharedSnapshot.Cleanup()
+		FailByErr(ctx, fmt.Errorf("%s", message))
+	}
+
 	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
-	webViewsDir := helper.ParseWebDirNameData(crudLog.Table.Name, "views", crudLog.Table.WebViewsDir)
 	module := "admin"
 	if crudLog.Table.IsCommonModel != 0 {
 		module = "common"
 	}
 	modelFile, err := helper.ParseNameData(module, crudLog.Table.Name, "model", crudLog.Table.ModelFile)
 	if err != nil {
-		FailByErr(ctx, err)
+		rollbackDelete("model manifest", err)
 		return
 	}
 	handlerFile, err := helper.ParseNameData("admin", crudLog.Table.Name, "handler", crudLog.Table.ControllerFile)
 	if err != nil {
-		FailByErr(ctx, err)
+		rollbackDelete("handler manifest", err)
 		return
-	}
-	files := []string{
-		filepath.Join(utils.RootPath(), webLangDir.LangDir, "en", webLangDir.LastName+".ts"),
-		filepath.Join(utils.RootPath(), webLangDir.LangDir, "zh-cn", webLangDir.LastName+".ts"),
-		filepath.Join(utils.RootPath(), webViewsDir.Views, "index.vue"),
-		filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"),
-		modelFile.ParseFile,
-		handlerFile.ParseFile,
-		// crudLog.Table.ValidateFile,
-	}
-	for _, file := range files[:2] {
-		if err := helper.ValidateGeneratedAbsolutePath(file, "web/src/lang"); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-	for _, file := range files[2:4] {
-		if err := helper.ValidateGeneratedAbsolutePath(file, "web/src/views"); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-	if err := helper.ValidateGeneratedAbsolutePath(modelFile.ParseFile, map[bool]string{true: "app/common/model", false: "app/admin/model"}[crudLog.Table.IsCommonModel != 0]); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	if err := helper.ValidateGeneratedAbsolutePath(handlerFile.ParseFile, "app/admin/handler"); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	for _, v := range files {
-		_, err := os.Stat(v)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-		err = os.Remove(v)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-
-		dir := filepath.Dir(v)
-		filesystem.DelEmptyDir(dir)
-	}
-
-	// 删除菜单
-	h.log.Info("删除菜单")
-	path := helper.GetMenuName(webLangDir)
-	h.adminRuleM.Delete(path, true)
-
-	record := model.CrudLog{
-		ID:     param.ID,
-		Status: "delete",
-	}
-	if _, statusErr := h.crudLogM.RecordCrudStatus(ctx, record); statusErr != nil {
-		h.log.Error("更新crud日志delete状态失败:" + statusErr.Error())
 	}
 
 	h.log.Info("删除provider和路由")
 	dirPath := filepath.Dir(handlerFile.ParseFile)
-	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Handler")
-
+	if err := helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Handler"); err != nil {
+		rollbackDelete("remove handler provider", err)
+		return
+	}
 	dirPath = filepath.Dir(modelFile.ParseFile)
-	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Model")
-
-	helper.RemoveRouter(crudLog.Table.Name)
-
+	if err := helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Model"); err != nil {
+		rollbackDelete("remove model provider", err)
+		return
+	}
+	if err := helper.RemoveRouter(crudLog.Table.Name); err != nil {
+		rollbackDelete("remove router", err)
+		return
+	}
 	if err := h.execWire(ctx); err != nil {
+		rollbackDelete("wire", err)
+		return
+	}
+
+	// 删除菜单放在代码/Wire成功之后；菜单事务失败时文件仍可恢复。
+	h.log.Info("删除菜单")
+	if err := h.adminRuleM.Delete(helper.GetMenuName(webLangDir), true); err != nil {
+		rollbackDelete("delete menu", err)
+		return
+	}
+	if err := quarantine.Commit(); err != nil {
+		_ = quarantine.Restore()
+		_ = sharedSnapshot.Restore()
+		_ = sharedSnapshot.Cleanup()
+		FailByErr(ctx, err)
+		return
+	}
+	if err := sharedSnapshot.Cleanup(); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	record := model.CrudLog{ID: param.ID, Status: "delete"}
+	if _, err := h.crudLogM.RecordCrudStatus(ctx, record); err != nil {
+		if statusErr := h.crudLogM.RecordCrudError(ctx, param.ID, "stage=delete log update: "+err.Error()); statusErr != nil {
+			h.log.Error("更新crud日志error状态失败:" + statusErr.Error())
+		}
 		FailByErr(ctx, err)
 		return
 	}
