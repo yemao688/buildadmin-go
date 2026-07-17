@@ -5,6 +5,7 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	helper "go-build-admin/app/pkg/crud_helper"
+	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/conf"
@@ -49,6 +50,14 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+	if err := requireCrudRoot(ctx); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if err := helper.ValidateGenerationInput(params.Table, params.Fields); err != nil {
+		FailByErr(ctx, err)
 		return
 	}
 	if helper.IsProtectedTable(params.Table.Name) {
@@ -190,6 +199,10 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
+	if err := requireCrudRoot(ctx); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	crudLog, err := h.crudLogM.GetOne(ctx, param.ID)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -199,17 +212,56 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest(fmt.Sprintf("crud deletion is forbidden for protected table %q", crudLog.Tablename)))
 		return
 	}
+	if err := helper.ValidateGenerationInput(model.Table(crudLog.Table), []model.Field(crudLog.Fields)); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	h.log.Info("删除web页面文件start")
 	webLangDir := helper.ParseWebDirNameData(crudLog.Table.Name, "lang", crudLog.Table.WebViewsDir)
+	webViewsDir := helper.ParseWebDirNameData(crudLog.Table.Name, "views", crudLog.Table.WebViewsDir)
+	module := "admin"
+	if crudLog.Table.IsCommonModel != 0 {
+		module = "common"
+	}
+	modelFile, err := helper.ParseNameData(module, crudLog.Table.Name, "model", crudLog.Table.ModelFile)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	handlerFile, err := helper.ParseNameData("admin", crudLog.Table.Name, "handler", crudLog.Table.ControllerFile)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	files := []string{
-		webLangDir.LangDir + "/en/" + webLangDir.LastName + ".ts",
-		webLangDir.LangDir + "/zh-cn/" + webLangDir.LastName + ".ts",
-		crudLog.Table.WebViewsDir + "/index.vue",
-		crudLog.Table.WebViewsDir + "/popupForm.vue",
-		crudLog.Table.ControllerFile,
-		crudLog.Table.ModelFile,
+		filepath.Join(utils.RootPath(), webLangDir.LangDir, "en", webLangDir.LastName+".ts"),
+		filepath.Join(utils.RootPath(), webLangDir.LangDir, "zh-cn", webLangDir.LastName+".ts"),
+		filepath.Join(utils.RootPath(), webViewsDir.Views, "index.vue"),
+		filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"),
+		modelFile.ParseFile,
+		handlerFile.ParseFile,
 		// crudLog.Table.ValidateFile,
+	}
+	for _, file := range files[:2] {
+		if err := helper.ValidateGeneratedAbsolutePath(file, "web/src/lang"); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	}
+	for _, file := range files[2:4] {
+		if err := helper.ValidateGeneratedAbsolutePath(file, "web/src/views"); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	}
+	if err := helper.ValidateGeneratedAbsolutePath(modelFile.ParseFile, map[bool]string{true: "app/common/model", false: "app/admin/model"}[crudLog.Table.IsCommonModel != 0]); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if err := helper.ValidateGeneratedAbsolutePath(handlerFile.ParseFile, "app/admin/handler"); err != nil {
+		FailByErr(ctx, err)
+		return
 	}
 
 	for _, v := range files {
@@ -242,10 +294,10 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 	}
 
 	h.log.Info("删除provider和路由")
-	dirPath := filepath.Dir(crudLog.Table.ControllerFile)
+	dirPath := filepath.Dir(handlerFile.ParseFile)
 	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Handler")
 
-	dirPath = filepath.Dir(crudLog.Table.ModelFile)
+	dirPath = filepath.Dir(modelFile.ParseFile)
 	helper.RemoveProvider(dirPath, utils.SnakeToCamel(crudLog.Table.Name, true)+"Model")
 
 	helper.RemoveRouter(crudLog.Table.Name)
@@ -255,6 +307,15 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, map[string]interface{}{})
+}
+
+func requireCrudRoot(ctx *gin.Context) error {
+	value, ok := ctx.Get(data_scope.ActorContextKey)
+	actor, actorOK := value.(data_scope.Actor)
+	if !ok || !actorOK || !actor.Unrestricted {
+		return cErr.ForbiddenRequest("CRUD file and schema changes require a root administrator")
+	}
+	return nil
 }
 
 // rejectFirstGenerationOverwrite protects files that were not produced by

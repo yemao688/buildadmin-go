@@ -20,6 +20,9 @@ var gormDb *gorm.DB
 
 // 生成表
 func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+	if err := ValidateGenerationInput(table, fields); err != nil {
+		return WebDir{}, "", err
+	}
 	return GenerateFileWithDataScope(table, fields, table.DataScope, getTableName, getColumns, db)
 }
 
@@ -117,6 +120,9 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
 // configuration. A nil dsConfig preserves legacy auto-detection behavior.
 func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+	if err := ValidateGenerationInput(table, fields); err != nil {
+		return WebDir{}, "", err
+	}
 	gormDb = db
 	fullTableName := getTableName(table.Name, true)
 	modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
@@ -356,6 +362,9 @@ func getCommnet(comment string) string {
 func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
 	var pathArr []string
 	if file != "" {
+		if err := validateRelativePathInput(file); err != nil {
+			return NameInfo{}, err
+		}
 		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
 		file = strings.ReplaceAll(file, "/", "/")
@@ -392,6 +401,9 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		namespace = pathArr[len(pathArr)-1]
 	}
 	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(pathArr...), lastName+".go")
+	if err := validateAbsolutePathUnderRoots(parseFile, filepath.Join("app", module, moduleType)); err != nil {
+		return NameInfo{}, err
+	}
 	rootFileName := filepath.Join("app", module, moduleType, filepath.Join(pathArr...))
 
 	info := NameInfo{
@@ -425,6 +437,9 @@ func TrimPrefix(slice1, slice2 []string) ([]string, []string) {
 func ParseWebDirNameData(tableName string, moduleType string, file string) WebDir {
 	var pathArr []string
 	if file != "" {
+		if err := validateRelativePathInput(file); err != nil {
+			return WebDir{}
+		}
 		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
 		file = strings.ReplaceAll(file, "/", "/")
@@ -462,10 +477,16 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 
 	if moduleType == "views" {
 		webDir.Views = filepath.Join("web/src/views/backend", strings.Join(pathArr, "/"), lastName)
+		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.Views), "web/src/views") != nil {
+			return WebDir{}
+		}
 	} else if moduleType == "lang" {
 		webDir.Lang = append(webDir.Lang, pathArr...)
 		webDir.Lang = append(webDir.Lang, lastName)
 		webDir.LangDir = filepath.Join("web/src/lang/backend", strings.Join(pathArr, "/"))
+		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangDir), "web/src/lang") != nil {
+			return WebDir{}
+		}
 	}
 	return webDir
 }

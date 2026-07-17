@@ -44,11 +44,17 @@ type FieldTemplData struct {
 
 // 创建表或更新表
 func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fields []model.Field) error {
+	if err := ValidateGenerationInput(table, fields); err != nil {
+		return err
+	}
+	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+		return err
+	}
 	comment := table.Comment
 	pk := getPk(fields)
 	if db.Migrator().HasTable(fullTableName) {
 		//更新表
-		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + comment + "'").Error; err != nil {
+		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
 			return err
 		}
 		designChange := table.DesignChange
@@ -135,7 +141,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 			Comment:   "",
 		}
 		if comment != "" {
-			sqlData.Comment = "COMMENT='" + comment + "'"
+			sqlData.Comment = formatComment(comment)
 		}
 
 		for _, v := range fields {
@@ -197,6 +203,9 @@ func EnsureDataScopeIndex(db *gorm.DB, fullTableName, ownerColumn, pk string) er
 		return err
 	}
 	indexName := "idx_" + ownerColumn
+	if err := ValidateIndexName(indexName); err != nil {
+		return err
+	}
 	var sameNameFirstColumn string
 	if err := db.Raw(
 		"SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1 LIMIT 1",
@@ -235,6 +244,9 @@ func searchField(fields []model.Field, name string) model.Field {
 }
 
 func getDDlFieldData(field model.Field) (string, error) {
+	if err := ValidateField(field); err != nil {
+		return "", err
+	}
 
 	dateType := analyseFieldDataType(field)
 	dateType = strings.TrimSuffix(dateType, "(0)")
@@ -271,7 +283,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 		} else if field.Default == "null" {
 			fieldTemplData.DefaultValue = "DEFAULT NULL"
 		} else {
-			fieldTemplData.DefaultValue = "DEFAULT '" + field.Default + "'"
+			fieldTemplData.DefaultValue = formatDefault(field.Default)
 		}
 	}
 
@@ -280,7 +292,7 @@ func getDDlFieldData(field model.Field) (string, error) {
 	}
 
 	if field.Comment != "" {
-		fieldTemplData.Comment = "COMMENT '" + field.Comment + "'"
+		fieldTemplData.Comment = formatComment(field.Comment)
 	}
 
 	var buf bytes.Buffer
