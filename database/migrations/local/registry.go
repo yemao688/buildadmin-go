@@ -27,5 +27,6 @@ func Migrations(official []core.OfficialMigration) []core.LocalMigration {
 		{Sequence: 8, ID: "legacy-target-state", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260720000000, "Version230"}}, Up: version230, VerifySchema: verifyLegacyTargetContract, VerifyUpgradeData: verifyLegacyTargetContract, PostSeedVerify: postSeed},
 		{Sequence: 9, ID: "security-commit-state", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260721000000, "Version231"}}, Up: version231, VerifySchema: verifyCommitContract, VerifyUpgradeData: verifyCommitContract, PostSeedVerify: postSeed},
 		{Sequence: 10, ID: "security-rule-normalization", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260722000000, "Version232"}}, Up: version232, VerifySchema: verifySecurityRuleContract, VerifyUpgradeData: verifySecurityRuleContract, PostSeedVerify: postSeed},
+		{Sequence: 11, ID: "canonical-column-order", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0011, VerifySchema: verifyCanonicalColumnOrder, VerifyUpgradeData: verifyCanonicalColumnOrder, PostSeedVerify: postSeed},
 	}
 }

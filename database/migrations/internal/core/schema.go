@@ -62,15 +62,18 @@ func IndexFirstColumn(db *gorm.DB, table, index string) (string, error) {
 }
 
 type MigrationColumn struct {
+	Ordinal    int     `gorm:"column:ordinal_position"`
 	ColumnType string  `gorm:"column:column_type"`
 	Nullable   string  `gorm:"column:is_nullable"`
 	Default    *string `gorm:"column:column_default"`
+	Comment    string  `gorm:"column:column_comment"`
 }
 
 func MigrationColumnInfo(db *gorm.DB, table, column string) (MigrationColumn, bool, error) {
-	var columnType, nullable string
+	var ordinal int
+	var columnType, nullable, comment string
 	var defaultValue sql.NullString
-	err := db.Raw("SELECT column_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, column).Row().Scan(&columnType, &nullable, &defaultValue)
+	err := db.Raw("SELECT ordinal_position, column_type, is_nullable, column_default, column_comment FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, column).Row().Scan(&ordinal, &columnType, &nullable, &defaultValue, &comment)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MigrationColumn{}, false, nil
 	}
@@ -82,7 +85,7 @@ func MigrationColumnInfo(db *gorm.DB, table, column string) (MigrationColumn, bo
 		value := defaultValue.String
 		defaultPtr = &value
 	}
-	return MigrationColumn{ColumnType: columnType, Nullable: nullable, Default: defaultPtr}, true, nil
+	return MigrationColumn{Ordinal: ordinal, ColumnType: columnType, Nullable: nullable, Default: defaultPtr, Comment: comment}, true, nil
 }
 
 func MigrationIndexInfo(db *gorm.DB, table, index string) (bool, string, error) {

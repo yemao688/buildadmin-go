@@ -132,7 +132,7 @@ func localPostSeedVerify(db *gorm.DB, config *conf.Configuration) error {
 	if err := rejectKnownLegacyInstallerRules(db, core.TableName(config, "security_data_recycle"), core.TableName(config, "security_sensitive_data")); err != nil {
 		return err
 	}
-	return nil
+	return verifyCanonicalColumnOrder(db, config)
 }
 
 func rejectKnownLegacyInstallerRules(db *gorm.DB, recycle, sensitive string) error {

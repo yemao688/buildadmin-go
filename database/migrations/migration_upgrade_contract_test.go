@@ -123,7 +123,7 @@ func managedSchema() []managedSchemaTable {
 	return []managedSchemaTable{
 		{logical: "admin", columns: []string{"status", "parent_id", "password"}, indexes: []managedSchemaIndex{{"idx_parent_id", []string{"parent_id"}}}},
 		{logical: "user", columns: []string{"status", "admin_id", "password"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
-		{logical: "attachment", columns: []string{"admin_id", "name"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
+		{logical: "attachment", columns: []string{"admin_id", "user_id", "topic", "name"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
 		{logical: "admin_log", columns: []string{"admin_id"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
 		{logical: "crud_log", columns: []string{"admin_id", "connection", "comment", "sync"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
 		{logical: "user_money_log", columns: []string{"admin_id", "money"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
@@ -145,12 +145,12 @@ func managedSchema() []managedSchemaTable {
 }
 
 func schemaSummary(db *gorm.DB, cfg *conf.Configuration) ([]string, error) {
-	return schemaSummaryWithOrdinal(db, cfg, false)
+	return schemaSummaryWithOrdinal(db, cfg, true)
 }
 
-// schemaSummaryWithOrdinal is used for fresh snapshots only.  Upgraded
-// databases intentionally retain historical column order, so ordinal data is
-// not part of the fresh/upgrade equivalence comparison.
+// schemaSummaryWithOrdinal includes ordinal data for local canonical columns.
+// Official columns such as connection retain their historical placement and
+// therefore remain type/schema checked without becoming an order contract.
 func schemaSummaryWithOrdinal(db *gorm.DB, cfg *conf.Configuration, includeOrdinal bool) ([]string, error) {
 	var summary []string
 	for _, managed := range managedSchema() {
@@ -158,7 +158,14 @@ func schemaSummaryWithOrdinal(db *gorm.DB, cfg *conf.Configuration, includeOrdin
 		for _, columnName := range managed.columns {
 			var column string
 			selectExpr := "CONCAT(column_name,':',column_type,':',is_nullable,':',COALESCE(column_default,'<NULL>'))"
-			if includeOrdinal {
+			canonical := map[string]map[string]bool{
+				"admin": {"parent_id": true}, "attachment": {"admin_id": true, "user_id": true, "topic": true},
+				"user": {"admin_id": true}, "user_money_log": {"admin_id": true}, "user_score_log": {"admin_id": true},
+				"admin_log": {"admin_id": true}, "crud_log": {"admin_id": true}, "security_data_recycle": {"admin_id": true}, "security_sensitive_data": {"admin_id": true},
+				"security_data_recycle_log":   {"admin_id": true, "target_admin_id": true, "legacy_unrecoverable": true, "is_committed": true},
+				"security_sensitive_data_log": {"admin_id": true, "target_admin_id": true, "legacy_unrecoverable": true, "is_committed": true},
+			}
+			if includeOrdinal && canonical[managed.logical][columnName] {
 				selectExpr = "CONCAT(ordinal_position,':'," + selectExpr + ")"
 			}
 			result := db.Raw("SELECT "+selectExpr+" FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, columnName).Scan(&column)
@@ -264,7 +271,7 @@ func TestTrackedVersion222OfficialAndSentinel(t *testing.T) {
 	require.Equal(t, InstallStrictUpgrade, result.recovery)
 	require.Equal(t, 3, result.official)
 	require.Zero(t, result.adopted)
-	require.Equal(t, 10, result.local)
+	require.Equal(t, 11, result.local)
 	require.False(t, result.seeded)
 	require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, result.events)
 	for _, migration := range OfficialMigrations()[3:] {
@@ -300,7 +307,7 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ValidateOfficialLedgerSchema(upgradeDB, upgradeCfg))
 	require.Equal(t, 3, upgradeResult.official)
-	require.Equal(t, 10, upgradeResult.local)
+	require.Equal(t, 11, upgradeResult.local)
 	require.Zero(t, upgradeResult.adopted)
 	require.False(t, upgradeResult.seeded)
 	require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, upgradeResult.events)
@@ -309,6 +316,7 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	assertFreshSnapshotOrdinals(t, freshDB, freshCfg)
 	upgradeSummary, err := schemaSummary(upgradeDB, upgradeCfg)
 	require.NoError(t, err)
+	assertFreshSnapshotOrdinals(t, upgradeDB, upgradeCfg)
 	require.NotEmpty(t, freshSummary)
 	require.NotEmpty(t, upgradeSummary)
 	for _, table := range []string{"ba_admin/", "ba_user/", "ba_admin_closure/", "ba_security_data_recycle/", "ba_go_migrations/"} {
@@ -364,7 +372,7 @@ func TestTrackedMixed223To232Aliases(t *testing.T) {
 	require.Equal(t, int64(1), aliasCount)
 	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("version=? AND migration_name=? AND end_time IS NULL", locals[1].LegacyAliases[0].Version, locals[1].LegacyAliases[0].Name).Count(&aliasCount).Error)
 	require.Equal(t, int64(1), aliasCount)
-	for _, local := range locals[2:] {
+	for _, local := range locals[2:10] {
 		require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("version=?", local.LegacyAliases[0].Version).Count(&aliasCount).Error)
 		require.Zero(t, aliasCount)
 	}
