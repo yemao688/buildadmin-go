@@ -324,8 +324,8 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 		lines = append(lines, onlyUpgrade...)
 		t.Fatalf("fresh/upgrade schema summary differs:\n%s", strings.Join(lines, "\n"))
 	}
-	require.NoError(t, localPostSeedVerify(freshDB, freshCfg))
-	require.NoError(t, localPostSeedVerify(upgradeDB, upgradeCfg))
+	require.NoError(t, LocalMigrations()[0].PostSeedVerify(freshDB, freshCfg))
+	require.NoError(t, LocalMigrations()[0].PostSeedVerify(upgradeDB, upgradeCfg))
 }
 
 func TestTrackedMixed223To232Aliases(t *testing.T) {
@@ -395,7 +395,7 @@ func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 			require.Zero(t, result.adopted)
 			require.Equal(t, len(LocalMigrations()), result.local)
 			require.True(t, result.seeded)
-			require.NoError(t, localPostSeedVerify(db, cfg))
+			require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
 		})
 	}
 

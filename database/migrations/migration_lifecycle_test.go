@@ -179,7 +179,7 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	require.Equal(t, int64(len(OfficialMigrations())+1), completed)
 	require.NoError(t, db.Table(tableName(cfg, "go_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	require.Equal(t, int64(len(LocalMigrations())), completed)
-	require.NoError(t, localPostSeedVerify(db, cfg))
+	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -210,7 +210,7 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 		require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, result.events)
 	}
 	require.Equal(t, 1, section.max)
-	require.NoError(t, localPostSeedVerify(db, cfg))
+	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
 
 	var count int64
 	require.NoError(t, db.Table(tableName(cfg, "security_data_recycle")).Where("id=5").Count(&count).Error)

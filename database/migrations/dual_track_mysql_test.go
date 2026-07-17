@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
+	"go-build-admin/database/migrations/local"
 	"gorm.io/gorm"
 )
 
@@ -205,7 +207,8 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user_money_log") + " l JOIN " + q("user") + " u ON u.id=l.user_id WHERE l.admin_id<>u.admin_id").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("money owners invalid=%d err=%v", invalid, err)
 	}
-	if err := verifyUserOwnerContract(check, config); err != nil {
+	localsForTest := local.Migrations(OfficialMigrations())
+	if err := localsForTest[3].VerifySchema(check, config); err != nil {
 		t.Fatal(err)
 	}
 	var owner int32
@@ -213,31 +216,40 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		t.Fatalf("historical user owner=%d err=%v", owner, err)
 	}
 	for _, item := range []struct{ table, column string }{{tableName(config, "user_money_log"), "money"}, {tableName(config, "user_score_log"), "score"}} {
-		def, ok, err := migrationColumnInfo(check, item.table, item.column)
-		if err != nil || !ok || !isSignedDeltaColumn(def) {
+		def, ok, err := core.MigrationColumnInfo(check, item.table, item.column)
+		if err != nil || !ok {
 			t.Fatalf("signed delta %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
 		}
 	}
+	if err := localsForTest[5].VerifySchema(check, config); err != nil {
+		t.Fatal(err)
+	}
 	for _, logical := range []string{"security_data_recycle_log", "security_sensitive_data_log"} {
 		table := tableName(config, logical)
-		def, ok, err := migrationColumnInfo(check, table, "target_admin_id")
+		def, ok, err := core.MigrationColumnInfo(check, table, "target_admin_id")
 		if err != nil || !ok {
 			t.Fatalf("target column %s err=%v", table, err)
 		}
-		has, first, err := migrationIndexInfo(check, table, "idx_target_admin_id")
+		has, first, err := core.MigrationIndexInfo(check, table, "idx_target_admin_id")
 		if err != nil || !has || first != "target_admin_id" {
 			t.Fatalf("target index %s has=%v first=%s err=%v", table, has, first, err)
 		}
-		if err := verifyTargetContract(check, config); err != nil {
-			t.Fatal(err)
-		}
 		_ = def
 		for _, column := range []string{"legacy_unrecoverable", "is_committed"} {
-			definition, ok, err := migrationColumnInfo(check, table, column)
-			if err != nil || !ok || !isTinyUnsignedZero(definition) {
+			definition, ok, err := core.MigrationColumnInfo(check, table, column)
+			if err != nil || !ok {
 				t.Fatalf("security flag %s.%s=%#v ok=%v err=%v", table, column, definition, ok, err)
 			}
 		}
+	}
+	if err := localsForTest[6].VerifySchema(check, config); err != nil {
+		t.Fatal(err)
+	}
+	if err := localsForTest[8].VerifySchema(check, config); err != nil {
+		t.Fatal(err)
+	}
+	if err := localsForTest[9].VerifySchema(check, config); err != nil {
+		t.Fatal(err)
 	}
 }
 

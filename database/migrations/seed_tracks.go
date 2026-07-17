@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/local"
 	"gorm.io/gorm"
 )
 
@@ -17,13 +18,7 @@ func RunFreshSeed(db *gorm.DB, config *conf.Configuration, locals []LocalMigrati
 		if err := NewInstall(tx).InsertData(); err != nil {
 			return fmt.Errorf("official seed baseline: %w", err)
 		}
-		if err := normalizeFreshOwnership(tx, config); err != nil {
-			return fmt.Errorf("local seed overlay: %w", err)
-		}
-		if err := normalizeFreshSecuritySeed(tx, config); err != nil {
-			return fmt.Errorf("local seed overlay: %w", err)
-		}
-		if err := EnsureAdminClosureSelfRows(tx, config); err != nil {
+		if err := local.ApplyFreshOverlay(tx, config); err != nil {
 			return fmt.Errorf("local seed overlay: %w", err)
 		}
 		for _, local := range locals {

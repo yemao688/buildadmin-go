@@ -1,222 +1,34 @@
 package migrations
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/gorm"
 )
 
-// WithMigrationLock binds every callback query to the same dedicated connection.
-func WithMigrationLock(db *gorm.DB, name string, timeout time.Duration, fn func(*gorm.DB) error) (err error) {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	conn, err := sqlDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	var got int
-	if err = conn.QueryRowContext(context.Background(), "SELECT GET_LOCK(?, ?)", name, int(timeout/time.Second)).Scan(&got); err != nil {
-		return err
-	}
-	if got != 1 {
-		return fmt.Errorf("could not acquire migration lock %q", name)
-	}
-	defer func() {
-		releaseErr := releaseMigrationLock(conn, name)
-		if err == nil && releaseErr != nil {
-			err = releaseErr
-		}
-	}()
-	// A non-nil context forces GORM to clone the Statement before pinning ConnPool;
-	// mutating the caller's Statement would corrupt concurrent runners.
-	callbackDB := db.Session(&gorm.Session{NewDB: true, Context: context.Background()})
-	callbackDB.Statement.ConnPool = conn
-	return fn(callbackDB)
-}
-
-func releaseMigrationLock(conn *sql.Conn, name string) error {
-	var released sql.NullInt64
-	if err := conn.QueryRowContext(context.Background(), "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
-		return err
-	}
-	return validateMigrationLockRelease(released)
-}
-
 func validateMigrationLockRelease(released sql.NullInt64) error {
-	if !released.Valid || released.Int64 != 1 {
-		return fmt.Errorf("migration lock was not released")
-	}
-	return nil
+	return core.ValidateMigrationLockRelease(released)
 }
 
-// RunLocalMigrations is dormant infrastructure: callers explicitly opt into it.
-// A pending row with the same immutable revision is retried; any identity mismatch fails closed.
+func WithMigrationLock(db *gorm.DB, name string, timeout time.Duration, fn func(*gorm.DB) error) error {
+	return core.WithMigrationLock(db, name, timeout, fn)
+}
+
 func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, local []LocalMigration) (int, error) {
-	if err := ValidateLocalMigrations(local, official); err != nil {
-		return 0, err
-	}
-	if err := ValidatePrefix(config); err != nil {
-		return 0, err
-	}
-	completedOfficial := func(key OfficialKey) error {
-		var r migrationRecord
-		q := db.Table(tableName(config, "migrations")).Where("version = ?", key.Version).First(&r)
-		if q.Error != nil {
-			return q.Error
-		}
-		if r.MigrationName != key.Name || r.EndTime == nil {
-			return fmt.Errorf("required official migration %d/%s is incomplete or collides", key.Version, key.Name)
-		}
-		return nil
-	}
-	count := 0
-	for _, m := range local {
-		for _, key := range m.RequiresOfficial {
-			if err := completedOfficial(key); err != nil {
-				return count, err
-			}
-		}
-		var record LocalMigrationRecord
-		q := db.Table(tableName(config, "go_migrations")).Where("sequence = ?", m.Sequence).First(&record)
-		exists := q.Error == nil
-		if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
-			return count, q.Error
-		}
-		if exists && (record.MigrationID != m.ID || record.Revision != m.Revision) {
-			return count, fmt.Errorf("local sequence %d collision", m.Sequence)
-		}
-		if !exists {
-			q = db.Table(tableName(config, "go_migrations")).Where("migration_id = ?", m.ID).First(&record)
-			if q.Error == nil && (record.Sequence != m.Sequence || record.Revision != m.Revision) {
-				return count, fmt.Errorf("local migration %s collision", m.ID)
-			}
-			if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
-				return count, q.Error
-			}
-			if q.Error == gorm.ErrRecordNotFound {
-				if err := InsertPendingLocalMigration(db, config, m, nil); err != nil {
-					return count, err
-				}
-			}
-		} else if record.EndTime != nil {
-			if m.VerifySchema != nil {
-				if err := m.VerifySchema(db, config); err != nil {
-					return count, err
-				}
-			}
-			if m.VerifyUpgradeData != nil {
-				if err := m.VerifyUpgradeData(db, config); err != nil {
-					return count, err
-				}
-			}
-			continue
-		}
-		if err := m.Up(db, config); err != nil {
-			return count, err
-		}
-		if m.VerifySchema != nil {
-			if err := m.VerifySchema(db, config); err != nil {
-				return count, err
-			}
-		}
-		if m.VerifyUpgradeData != nil {
-			if err := m.VerifyUpgradeData(db, config); err != nil {
-				return count, err
-			}
-		}
-		if err := CompleteLocalMigration(db, config, m); err != nil {
-			return count, err
-		}
-		count++
-	}
-	return count, nil
+	return core.RunLocalMigrations(db, config, official, local)
 }
 
-// BootstrapOfficialLedger creates only the legacy ledger contract. Fresh
-// databases normally receive it from the current-model snapshot; this helper
-// is also needed when an old database has lost the table.
 func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
-	if err := ValidatePrefix(config); err != nil {
-		return err
-	}
-	return db.Exec("CREATE TABLE IF NOT EXISTS " + quoteIdentifier(tableName(config, "migrations")) + " (" +
-		"`version` BIGINT UNSIGNED NOT NULL, `migration_name` VARCHAR(100) NULL DEFAULT NULL, " +
-		"`start_time` TIMESTAMP NULL DEFAULT NULL, `end_time` TIMESTAMP NULL DEFAULT NULL, `breakpoint` TINYINT(1) NOT NULL DEFAULT 0, " +
-		"PRIMARY KEY (`version`)) ENGINE=InnoDB").Error
+	return core.BootstrapOfficialLedger(db, config)
 }
 
 func ValidateOfficialLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
-	if err := ValidatePrefix(config); err != nil {
-		return err
-	}
-	var engine string
-	if err := db.Raw("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?", tableName(config, "migrations")).Scan(&engine).Error; err != nil {
-		return err
-	}
-	if engine != "InnoDB" {
-		return fmt.Errorf("official migrations ledger engine=%q", engine)
-	}
-	var columns []struct{ Name, Type, Nullable string }
-	if err := db.Raw("SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", tableName(config, "migrations")).Scan(&columns).Error; err != nil {
-		return err
-	}
-	want := []struct{ name, typ, nullable string }{{"version", "bigint", "NO"}, {"migration_name", "varchar(100)", "YES"}, {"start_time", "timestamp", "YES"}, {"end_time", "timestamp", "YES"}, {"breakpoint", "tinyint(1)", "NO"}}
-	if len(columns) != len(want) {
-		return fmt.Errorf("official migrations ledger column count=%d", len(columns))
-	}
-	for i, column := range columns {
-		if column.Name != want[i].name || (i == 0 && column.Type != "bigint" && column.Type != "bigint unsigned") || (i != 0 && column.Type != want[i].typ) || column.Nullable != want[i].nullable {
-			return fmt.Errorf("official migrations ledger schema mismatch at %s", column.Name)
-		}
-	}
-	return nil
+	return core.ValidateOfficialLedgerSchema(db, config)
 }
 
 func RunOfficialMigrations(db *gorm.DB, config *conf.Configuration, list []OfficialMigration) (int, error) {
-	if err := ValidateOfficialMigrations(list); err != nil {
-		return 0, err
-	}
-	if err := ValidateOfficialLedgerSchema(db, config); err != nil {
-		return 0, err
-	}
-	count := 0
-	for _, migration := range list {
-		var record migrationRecord
-		result := db.Table(tableName(config, "migrations")).Where("version = ?", migration.Key.Version).First(&record)
-		if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
-			return count, fmt.Errorf("query official %s: %w", migration.Key.Name, result.Error)
-		}
-		exists := result.Error == nil
-		if exists && record.MigrationName != migration.Key.Name {
-			return count, fmt.Errorf("official version %d name collision (db=%s, code=%s)", migration.Key.Version, record.MigrationName, migration.Key.Name)
-		}
-		if exists && record.EndTime != nil {
-			continue
-		}
-		start := time.Now()
-		if err := migration.Up(db, config); err != nil {
-			return count, fmt.Errorf("official migration %s failed: %w", migration.Key.Name, err)
-		}
-		end := time.Now()
-		if exists {
-			result = db.Table(tableName(config, "migrations")).Where("version = ? AND migration_name = ? AND end_time IS NULL", migration.Key.Version, migration.Key.Name).Updates(map[string]any{"start_time": start, "end_time": end})
-		} else {
-			result = db.Exec("INSERT INTO "+quoteIdentifier(tableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, ?, ?, ?)", migration.Key.Version, migration.Key.Name, start, end, false)
-		}
-		if result.Error != nil {
-			return count, fmt.Errorf("record official %s: %w", migration.Key.Name, result.Error)
-		}
-		if exists && result.RowsAffected != 1 {
-			return count, fmt.Errorf("official %s completion affected %d rows", migration.Key.Name, result.RowsAffected)
-		}
-		count++
-	}
-	return count, nil
+	return core.RunOfficialMigrations(db, config, list)
 }

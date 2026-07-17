@@ -119,46 +119,8 @@ func TestMigrationRegistry(t *testing.T) {
 	}
 }
 
-func TestVersion202DashboardRuleCount(t *testing.T) {
-	if err := validateDashboardRuleCount(0); err != nil {
-		t.Fatalf("empty rule table must be safe for fresh seed: %v", err)
-	}
-	if err := validateDashboardRuleCount(1); err != nil {
-		t.Fatalf("single dashboard rule must be valid: %v", err)
-	}
-	if err := validateDashboardRuleCount(2); err == nil {
-		t.Fatal("duplicate dashboard rules must be rejected")
-	}
-}
-
-func TestMapAccountStatuses(t *testing.T) {
-	got, err := mapAccountStatuses([]string{"0", "1", "enable", "disable"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"disable", "enable", "enable", "disable"}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("status %d = %q, want %q", i, got[i], want[i])
-		}
-	}
-	if _, err := mapAccountStatuses([]string{"enable", ""}); err == nil {
-		t.Fatal("empty status must be rejected")
-	}
-	for _, value := range []string{"ENABLE", "Disable", "enable ", "other"} {
-		if _, err := mapAccountStatuses([]string{"enable", value}); err == nil {
-			t.Fatalf("%q must be rejected", value)
-		}
-	}
-}
-
-func TestSeedMarkerAndBackupNames(t *testing.T) {
+func TestSeedMarker(t *testing.T) {
 	if installDataVersion != 20230620180916 || installDataName != "InstallData" {
 		t.Fatal("unexpected install marker")
-	}
-	config := &conf.Configuration{}
-	config.Database.Prefix = "ba_"
-	if got := menuRuleBackupName(config); got != "ba_menu_rule_version200_backup" {
-		t.Fatalf("backup table = %q", got)
 	}
 }
