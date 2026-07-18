@@ -67,6 +67,16 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	}
 }
 
+func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
+	provider := "/tmp/relation/provider.go"
+	current := FileManifest{Shared: []string{provider}}
+	historical := model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{provider}}}
+	manifest := historicalDeleteManifest(current, historical)
+	if len(manifest.Generated) != 1 || manifest.Generated[0] != provider || len(manifest.Shared) != 0 {
+		t.Fatalf("historical classification changed: %+v", manifest)
+	}
+}
+
 func TestCompileFailureRestoresSnapshot(t *testing.T) {
 	path := t.TempDir() + "/generated.go"
 	if err := os.WriteFile(path, []byte("original"), 0644); err != nil {

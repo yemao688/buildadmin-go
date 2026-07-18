@@ -89,6 +89,12 @@ type Table struct {
 	Rebuild              string             `json:"rebuild"`                  //是否重建
 	Empty                bool               `json:"empty"`                    //表格是否有数据,后台增加
 	GeneratedFiles       []string           `json:"generatedFiles,omitempty"` //最近一次成功生成的文件清单
+	Manifest             *CRUDFileManifest  `json:"manifest,omitempty" gorm:"-"`
+}
+
+type CRUDFileManifest struct {
+	Generated []string `json:"generated"`
+	Shared    []string `json:"shared"`
 }
 
 type TableAttr struct {

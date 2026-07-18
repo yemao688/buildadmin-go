@@ -100,6 +100,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target manifest differs from the latest successful generation; use crud:delete first or keep the original paths", opts.Table.Name)
 	}
 	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
+	opts.Table.Manifest = &model.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
 	snapshot, err := NewFileSnapshot(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	if err != nil {
 		return nil, err
@@ -241,18 +242,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	if len(log.Table.GeneratedFiles) > 0 {
-		shared := make(map[string]bool, len(manifest.Shared))
-		for _, path := range manifest.Shared {
-			shared[path] = true
-		}
-		manifest.Generated = nil
-		for _, path := range log.Table.GeneratedFiles {
-			if !shared[path] {
-				manifest.Generated = append(manifest.Generated, path)
-			}
-		}
-	}
+	manifest = historicalDeleteManifest(manifest, model.Table(log.Table))
 	quarantine, err := NewQuarantine(manifest.Generated)
 	if err != nil {
 		return err
@@ -263,6 +253,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
+	var menuSnapshot []model.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := quarantine.Restore(); restoreErr != nil {
@@ -273,6 +264,9 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		}
 		_ = quarantine.Commit()
 		_ = shared.Cleanup()
+		if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
+			message += "; menu restore failed: " + restoreErr.Error()
+		}
 		_ = recordCrudError(db, cfg, log.ID, message)
 		return fmt.Errorf("%s", message)
 	}
@@ -287,6 +281,11 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	handlerFile, err := ParseNameData("admin", log.Table.Name, "handler", log.Table.ControllerFile)
 	if err != nil {
 		return fail("handler manifest", err)
+	}
+	menuName := GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir))
+	menuSnapshot, err = snapshotMenuRules(db, cfg, menuName)
+	if err != nil {
+		return fail("menu snapshot", err)
 	}
 	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
 		return fail("remove handler provider", err)
@@ -303,7 +302,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := runProjectBuild(); err != nil {
 		return fail("compile", err)
 	}
-	if err := model.NewAdminRuleModel(db, cfg).Delete(GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)), true); err != nil {
+	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
 	if err := shared.Cleanup(); err != nil {
@@ -320,6 +319,47 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := updateCrudStatus(db, cfg, log.ID, "delete"); err != nil {
 		_ = recordCrudError(db, cfg, log.ID, "stage=delete log update: "+err.Error())
 		return err
+	}
+	return nil
+}
+
+func historicalDeleteManifest(current FileManifest, table model.Table) FileManifest {
+	if table.Manifest != nil {
+		return FileManifest{Generated: uniquePaths(append([]string{}, table.Manifest.Generated...)), Shared: uniquePaths(append([]string{}, table.Manifest.Shared...))}
+	}
+	if len(table.GeneratedFiles) == 0 {
+		return current
+	}
+	shared := make(map[string]bool, len(current.Shared))
+	for _, path := range current.Shared {
+		shared[path] = true
+	}
+	result := FileManifest{Shared: append([]string{}, current.Shared...)}
+	for _, path := range table.GeneratedFiles {
+		if !shared[path] {
+			result.Generated = append(result.Generated, path)
+		}
+	}
+	return result
+}
+
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {
+	var rows []model.AdminRule
+	err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
+	return rows, err
+}
+
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRule) error {
+	for _, row := range rows {
+		var count int64
+		if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("id=?", row.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			if err := db.Table(cfg.Database.Prefix + "admin_rule").Create(&row).Error; err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

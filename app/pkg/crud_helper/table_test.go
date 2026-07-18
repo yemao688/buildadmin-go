@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"fmt"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/conf"
 	"os"
 	"strings"
 	"testing"
@@ -71,6 +72,36 @@ func TestActualPrimaryKeyMySQL(t *testing.T) {
 	primaryKey, err := actualPrimaryKey(db, tableName)
 	require.NoError(t, err)
 	assert.Equal(t, "order_id", primaryKey)
+}
+
+func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
+	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping menu snapshot integration test")
+	}
+	db, err := gorm.Open(mysql.Open(dsn))
+	require.NoError(t, err)
+	cfg := &conf.Configuration{}
+	cfg.Database.Prefix = "ba_"
+	menuName := fmt.Sprintf("oracle_menu_snapshot_%d", time.Now().UnixNano())
+	rows := []model.AdminRule{
+		{Name: menuName, Path: menuName, Title: "snapshot", Type: "menu", Status: "1"},
+		{Name: menuName + "/index", Path: menuName + "/index", Title: "view", Type: "button", Status: "1"},
+	}
+	for i := range rows {
+		require.NoError(t, db.Table("ba_admin_rule").Create(&rows[i]).Error)
+	}
+	t.Cleanup(func() {
+		_ = db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error
+	})
+	snapshot, err := snapshotMenuRules(db, cfg, menuName)
+	require.NoError(t, err)
+	require.Len(t, snapshot, 2)
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error)
+	require.NoError(t, restoreMenuRules(db, cfg, snapshot))
+	var count int64
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Count(&count).Error)
+	assert.Equal(t, int64(2), count)
 }
 
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
