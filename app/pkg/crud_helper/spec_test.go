@@ -67,3 +67,44 @@ fields:
 		t.Fatal("unsafe type was accepted")
 	}
 }
+
+func TestLoadSpecNormalizesNullKeys(t *testing.T) {
+	path := writeSpecTest(t, `name: null_keys
+fields:
+  - name: id
+    type: int
+    primaryKey: true
+  - name: unquoted_true
+    type: varchar
+    length: 8
+    null: true
+  - name: unquoted_false
+    type: varchar
+    length: 8
+    null: false
+  - name: omitted
+    type: varchar
+    length: 8
+  - name: quoted_true
+    type: varchar
+    length: 8
+    'null': true
+  - name: tilde_false
+    type: varchar
+    length: 8
+    ~: false
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []bool{false, true, false, false, true, false}
+	if len(opts.Fields) != len(want) {
+		t.Fatalf("field count = %d, want %d", len(opts.Fields), len(want))
+	}
+	for i, field := range opts.Fields {
+		if field.Null != want[i] {
+			t.Errorf("field %q Null=%v, want %v", field.Name, field.Null, want[i])
+		}
+	}
+}

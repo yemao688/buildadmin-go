@@ -21,6 +21,7 @@ require (
 	golang.org/x/text v0.40.0
 	golang.org/x/tools v0.48.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.5.6
 	gorm.io/gen v0.3.26
 	gorm.io/gorm v1.25.9

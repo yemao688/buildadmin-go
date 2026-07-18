@@ -1,6 +1,7 @@
 package crud_helper
 
 import (
+	"bytes"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 type specFile struct {
@@ -69,10 +71,22 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read spec %q: %w", path, err)
+	}
+	var document yaml.Node
+	if err := yaml.Unmarshal(content, &document); err != nil {
+		return nil, fmt.Errorf("parse spec %q: %w", path, err)
+	}
+	normalizeNullKeys(&document)
+	normalized, err := yaml.Marshal(&document)
+	if err != nil {
+		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
+	}
 	v := viper.New()
-	v.SetConfigFile(path)
 	v.SetConfigType("yaml")
-	if err := v.ReadInConfig(); err != nil {
+	if err := v.ReadConfig(bytes.NewReader(normalized)); err != nil {
 		return nil, fmt.Errorf("parse spec %q: %w", path, err)
 	}
 	var raw specFile
@@ -152,6 +166,29 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
 	return options, nil
+}
+
+// normalizeNullKeys fixes YAML's special null key token before Viper sees it.
+// Without this pass, an unquoted `null:` key can disappear during mapstructure
+// decoding even though its value is a valid boolean.
+func normalizeNullKeys(node *yaml.Node) {
+	if node == nil {
+		return
+	}
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			key := node.Content[i]
+			if key.Kind == yaml.ScalarNode && key.Tag == "!!null" && (key.Value == "null" || key.Value == "~") {
+				key.Tag = "!!str"
+				key.Value = "null"
+			}
+			normalizeNullKeys(node.Content[i+1])
+		}
+		return
+	}
+	for _, child := range node.Content {
+		normalizeNullKeys(child)
+	}
 }
 
 func inferDesignType(typ string) string {
