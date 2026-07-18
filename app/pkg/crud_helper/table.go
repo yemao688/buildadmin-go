@@ -84,7 +84,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 					return err
 				}
 				fieldData = strings.ReplaceAll(fieldData, "'"+v.OldName+"'", "'"+v.OldName+"'"+" `"+v.NewName+"`")
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` CHANGE " + fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` CHANGE " + trimDDLFragment(fieldData)).Error; err != nil {
 					return err
 				}
 
@@ -113,7 +113,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				if err != nil {
 					return err
 				}
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + trimDDLFragment(fieldData)).Error; err != nil {
 					return err
 				}
 
@@ -131,7 +131,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				if err != nil {
 					return err
 				}
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD  " + fieldData).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD  " + trimDDLFragment(fieldData)).Error; err != nil {
 					return err
 				}
 			}
@@ -264,6 +264,13 @@ func EnsureDataScopeIndex(db *gorm.DB, fullTableName, ownerColumn, pk string) er
 	return db.Exec("CREATE INDEX `" + indexName + "` ON `" + fullTableName + "` (`" + ownerColumn + "`)").Error
 }
 
+// trimDDLFragment removes the trailing comma and whitespace that FieldTempl
+// appends for CREATE TABLE field lists. ALTER statements (CHANGE/MODIFY/ADD/
+// FIRST/AFTER) require a bare fragment.
+func trimDDLFragment(fieldData string) string {
+	return strings.TrimSuffix(strings.TrimRight(fieldData, " \t\r\n"), ",")
+}
+
 func searchField(fields []model.Field, name string) model.Field {
 	findField := model.Field{}
 	for _, field := range fields {
@@ -359,6 +366,7 @@ func updateFieldOrder(db *gorm.DB, fullTableName string, fields []model.Field, d
 			if err != nil {
 				return err
 			}
+			fieldData = trimDDLFragment(fieldData)
 
 			if v.After == "FIRST FIELD" {
 				fieldData += " FIRST"
