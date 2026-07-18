@@ -53,6 +53,9 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 			return err
 		}
 	}
+	if err := validatePrimaryKeyTypes(fields); err != nil {
+		return err
+	}
 	for _, change := range table.DesignChange {
 		for _, name := range []string{change.OldName, change.NewName, change.After} {
 			if name != "" && name != "FIRST FIELD" {
@@ -65,9 +68,26 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 	return nil
 }
 
+func validatePrimaryKeyTypes(fields []model.Field) error {
+	for _, field := range fields {
+		if !field.PrimaryKey {
+			continue
+		}
+		if _, err := primaryKeyGoType(field); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ValidateField(field model.Field) error {
 	if err := data_scope.ValidateIdentifier(field.Name); err != nil {
 		return fmt.Errorf("invalid field name %q: %w", field.Name, err)
+	}
+	if field.PrimaryKey {
+		if _, err := primaryKeyGoType(field); err != nil {
+			return err
+		}
 	}
 	typeValue := field.DataType
 	if typeValue == "" {

@@ -22,6 +22,10 @@ type CommonModel interface {
 	Table() string
 }
 
+type modelKeyInfo interface {
+	PrimaryKeyName() string
+}
+
 type scopedModel interface {
 	ScopeDB(*gin.Context, *gorm.DB) *gorm.DB
 }
@@ -56,7 +60,8 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 	if len(m) != 2 {
 		return false
 	}
-	idVal, hasID := m["id"]
+	primaryKey := h.primaryKey()
+	idVal, hasID := m[primaryKey]
 	if !hasID {
 		return false
 	}
@@ -64,7 +69,7 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 	var fieldName string
 	var fieldValue any
 	for k, v := range m {
-		if k != "id" {
+		if k != primaryKey {
 			fieldName = k
 			fieldValue = v
 			break
@@ -96,7 +101,7 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 		db = scoped.ScopeDB(ctx, db)
 	}
 	res := db.Table(h.currentM.Table()).
-		Where("id = ?", id).
+		Where(primaryKey+" = ?", idVal).
 		Updates(updates)
 	if res.Error != nil {
 		FailByErr(ctx, res.Error)
@@ -113,7 +118,8 @@ func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 func (h *Base) One(ctx *gin.Context) {
-	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
+	primaryKey := h.primaryKey()
+	id := ctx.Request.FormValue(primaryKey)
 	result := map[string]interface{}{}
 	db := h.currentM.DB()
 	if scoped, ok := h.currentM.(interface {
@@ -124,7 +130,7 @@ func (h *Base) One(ctx *gin.Context) {
 	if scoped, ok := h.currentM.(scopedModel); ok {
 		db = scoped.ScopeDB(ctx, db)
 	}
-	err := db.Table(h.currentM.Table()).Where("id=?", id).Take(&result).Error
+	err := db.Table(h.currentM.Table()).Where(primaryKey+"=?", id).Take(&result).Error
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -132,6 +138,13 @@ func (h *Base) One(ctx *gin.Context) {
 	Success(ctx, map[string]interface{}{
 		"row": result,
 	})
+}
+
+func (h *Base) primaryKey() string {
+	if info, ok := h.currentM.(modelKeyInfo); ok && info.PrimaryKeyName() != "" {
+		return info.PrimaryKeyName()
+	}
+	return "id"
 }
 
 func (h *Base) Sortable(ctx *gin.Context) {

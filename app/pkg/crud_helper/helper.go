@@ -64,6 +64,11 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.Name = tableName
 	modelData.ClassName = modelFile.LastName
 	modelData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	pkField := searchField(fields, tablePk)
+	modelData.PkGoType, err = primaryKeyGoType(pkField)
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
 
 	modelData.Append = []string{}
 	modelData.Methods = []string{}
@@ -79,6 +84,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	handlerData.PkGoType = modelData.PkGoType
 	handlerData.TableComment = tableComment
 
 	handlerData.Import = []string{}
@@ -191,7 +197,9 @@ func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig
 		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
 			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
 				columns, _ := getColumns(field.Form.RemoteTable)
-				parseJoinData(db, columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate)
+				if err := parseJoinData(db, columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate); err != nil {
+					return WebDir{}, "", err
+				}
 			}
 		}
 
@@ -270,6 +278,20 @@ func pkGoField(pk string) string {
 		return "ID"
 	}
 	return utils.SnakeToCamel(pk, true)
+}
+
+func primaryKeyGoType(field model.Field) (string, error) {
+	base := strings.ToLower(analyseFieldType(field))
+	switch base {
+	case "int", "mediumint":
+		return "int32", nil
+	case "bigint":
+		return "int64", nil
+	case "varchar", "char":
+		return "string", nil
+	default:
+		return "", fmt.Errorf("unsupported primary key type %q for field %q; supported types are int, mediumint, bigint, varchar, and char", base, field.Name)
+	}
 }
 
 // buildIndexProver returns a prover that checks information_schema.STATISTICS for
@@ -923,41 +945,19 @@ func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableNa
 
 		_, err = os.Stat(filepath.Join(utils.RootPath(), joinModelFile.RootFileName))
 		if os.IsNotExist(err) {
-			joinModelData := ModelData{}
-
-			joinModelData.Namespace = joinModelFile.Namespace
-			joinModelData.Name = tableName
-			joinModelData.ClassName = joinModelFile.LastName
-			joinModelData.ModelVar = strings.ToLower(string(joinModelFile.LastName[0])) + joinModelFile.LastName[1:]
-
-			joinModelData.Append = []string{}
-			joinModelData.Methods = []string{}
-			joinModelData.FieldType = map[string]string{}
-			joinModelData.BeforeInsertMixins = map[string]string{}
-			joinModelData.RelationMethodList = map[string]string{}
-
-			joinTablePk := "id"
-			joinFieldsMap := map[string]string{}
+			joinTable := model.Table{Name: tableName, ModelFile: field.Form.RemoteModel}
+			joinGetTableName := func(name string, full bool) string {
+				if full {
+					return fullTableName
+				}
+				return name
+			}
+			joinModelData, _, _, _, _, _, _, _, joinTablePk, _, _, err := prepareGenerationData(joinTable, fields, nil, joinGetTableName, buildIndexProver(db, fullTableName))
+			if err != nil {
+				return "", err
+			}
 			for _, v := range fields {
-				joinFieldsMap[v.Name] = v.DesignType
-				if v.PrimaryKey {
-					joinTablePk = v.Name
-				}
-				parseModelMethods(field, &joinModelData)
-			}
-
-			weighKey := ""
-			for k, v := range joinFieldsMap {
-				if v == "weigh" {
-					weighKey = k
-					break
-				}
-			}
-
-			if weighKey != "" {
-				joinModelData.AfterInsert = assembleStub("mixins/model/afterInsert", map[string]string{
-					"field": joinFieldsMap[weighKey],
-				}, false)
+				parseModelMethods(v, &joinModelData)
 			}
 			if _, err := writeModelFile(db, joinTablePk, fullTableName, tableName, joinModelData, joinModelFile); err != nil {
 				return "", err

@@ -118,6 +118,9 @@ func ResolveDataScope(cfg *data_scope.Config, fields []model.Field, opts DataSco
 	if err != nil {
 		return ResolvedDataScope{}, err
 	}
+	if cfg.Mode == data_scope.ModeRequired && cfg.OwnerColumn != "id" && (cfg.AssignOnCreate == nil || !*cfg.AssignOnCreate) {
+		return ResolvedDataScope{}, fmt.Errorf("data_scope: required owner %q must set assignOnCreate=true for CRUD resources with Add", cfg.OwnerColumn)
+	}
 
 	return ResolvedDataScope{
 		Policy:         resolved.Policy(),

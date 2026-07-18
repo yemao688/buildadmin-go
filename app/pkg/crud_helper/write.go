@@ -154,6 +154,9 @@ func excludeParamFields(validateContent string, exclude []string) string {
 
 // renderModel renders the model template to a string for tests.
 func renderModel(modelData ModelData) (string, error) {
+	if modelData.PkGoType == "" {
+		modelData.PkGoType = "int32"
+	}
 	return render("", modelTemp, modelData)
 }
 

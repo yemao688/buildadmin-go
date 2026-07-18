@@ -254,6 +254,7 @@ type HandlerData struct {
 	ModelImportPath string //模型完整导入路径
 	ModelName       string //模型类名
 	ModelVar        string //模型变量名
+	PkGoType        string //主键Go类型
 	TableComment    string //表备注
 	ValidateParam   string //表单参数
 
@@ -330,8 +331,11 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 		return
 	}
 
+	type {{.ClassName}}IDs struct {
+		ID {{.PkGoType}} ` + "`json:\"id\" binding:\"required\"`" + `
+	}
 	var params = struct {
-		IDS
+		{{.ClassName}}IDs
 		{{.ClassName}}Param
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -355,7 +359,9 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 }
 
 func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
-	var param validate.Ids
+	var param struct {
+		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
+	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
 		FailByErr(ctx, validate.GetError(param, err))
 		return
@@ -374,6 +380,7 @@ type ModelData struct {
 	Name       string //表名
 	ClassName  string //类名
 	Pk         string //主键
+	PkGoType   string //主键Go类型
 	PkGoField  string //主键Go字段名
 	ModelVar   string //结构体变量
 	StructTemp string //结构体
@@ -449,10 +456,10 @@ func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id int32) ({{.ModelVar}} {{.ClassName}}, err error) {
+func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} {{.ClassName}}, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
-	err = db.Where("id=?", id).First(&{{.ModelVar}}).Error
+	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
 	return
 }
 
@@ -551,13 +558,13 @@ func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
 	})
 }
 
-func normalize{{.ClassName}}IDs(ids interface{}) ([]int32, error) {
-	raw, ok := ids.([]int32)
+func normalize{{.ClassName}}IDs(ids interface{}) ([]{{.PkGoType}}, error) {
+	raw, ok := ids.([]{{.PkGoType}})
 	if !ok {
 		return nil, fmt.Errorf("invalid {{.Pk}} ids type %T", ids)
 	}
-	seen := make(map[int32]struct{}, len(raw))
-	result := make([]int32, 0, len(raw))
+	seen := make(map[{{.PkGoType}}]struct{}, len(raw))
+	result := make([]{{.PkGoType}}, 0, len(raw))
 	for _, id := range raw {
 		if _, exists := seen[id]; exists {
 			continue

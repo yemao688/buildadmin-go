@@ -19,6 +19,10 @@ func (s *BaseModel) Table() string {
 	return s.TableName
 }
 
+func (s *BaseModel) PrimaryKeyName() string {
+	return s.Key
+}
+
 func (s *BaseModel) TableInfo() TableInfo {
 	return TableInfo{
 		TableName:        s.TableName,

@@ -84,12 +84,13 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		},
 		{
 			name:        "required custom owner operator_admin_id with proven index",
-			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id"},
+			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id", AssignOnCreate: ptr(true)},
 			fields:      []model.Field{newField("id", "int", true), newField("operator_admin_id", "int", false)},
 			prove:       proveAll,
 			wantMode:    data_scope.ModeRequired,
 			wantOwner:   "operator_admin_id",
 			wantGoField: "OperatorAdminID",
+			wantAssign:  true,
 			wantIndex:   IndexProven,
 		},
 		{
@@ -222,6 +223,69 @@ func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {
 
 	assert.Contains(t, out, `TableName:        config.Database.Prefix + "order_item"`)
 	assert.NotContains(t, out, `config.Database.Prefix + "orderItem"`)
+}
+
+func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
+	table := getTestTableData()
+	table.Name = "big_order"
+	table.ModelFile = "app/admin/model/BigOrder.go"
+	table.ControllerFile = "app/admin/handler/BigOrder.go"
+	fields := []model.Field{
+		{Name: "order_id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
+		{Name: "name", Type: "varchar", DesignType: "string"},
+	}
+	getTableName := func(name string, full bool) string {
+		if full {
+			return "ba_" + name
+		}
+		return name
+	}
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	require.NoError(t, err)
+	modelData.Pk = "order_id"
+	className := modelData.ClassName
+	modelData.StructTemp = strings.Replace(
+		compileDemoStruct(className, "", "", ""),
+		"\tID int32 `gorm:\"column:id;primaryKey;autoIncrement:true\" json:\"id\"`\n",
+		"\tOrderId int64 `gorm:\"column:order_id;primaryKey\" json:\"order_id\"`\n",
+		1,
+	)
+	modelCode, err := renderModel(modelData)
+	require.NoError(t, err)
+	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	require.NoError(t, err)
+	assert.Contains(t, modelCode, "GetOne(ctx *gin.Context, id int64)")
+	assert.Contains(t, modelCode, `Where("order_id=?", id)`)
+	assert.Contains(t, modelCode, "normalize"+className+"IDs(ids interface{}) ([]int64, error)")
+	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
+}
+
+func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
+	out := renderModelString(t, ModelData{
+		Namespace: "model", Name: "token", ClassName: "Token", ModelVar: "token",
+		Pk: "token", PkGoType: "string", PkGoField: "Token", DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
+		EditableColumns: []string{"name"}, EditableColumnsGo: `"name"`,
+	})
+	assert.Contains(t, out, "normalizeTokenIDs(ids interface{}) ([]string, error)")
+	assert.Contains(t, out, "raw, ok := ids.([]string)")
+}
+
+func TestValidateGenerationInputRejectsTextPrimaryKey(t *testing.T) {
+	err := ValidateGenerationInput(model.Table{Name: "text_key"}, []model.Field{{Name: "token", Type: "text", PrimaryKey: true}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported primary key type")
+}
+
+func TestRelatedModelWithoutAdminIDResolvesModeNone(t *testing.T) {
+	resolved, err := ResolveDataScope(nil, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "name", Type: "varchar"}}, DataScopeResolveOptions{ProveIndex: proveAll})
+	require.NoError(t, err)
+	assert.Equal(t, data_scope.ModeNone, resolved.Policy.Mode)
+}
+
+func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {
+	_, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(false)}, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "owner_id", Type: "int"}}, DataScopeResolveOptions{ProveIndex: proveAll})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "assignOnCreate=true")
 }
 
 func TestPrepareGenerationData_CommonModelImportPath(t *testing.T) {
@@ -357,7 +421,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 		},
 		{
 			name:  "custom owner",
-			cfg:   &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id"},
+			cfg:   &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id", AssignOnCreate: ptr(true)},
 			owner: "operator_admin_id",
 			ownerField: model.Field{
 				Name: "operator_admin_id", Type: "int", DesignType: "number",
@@ -448,10 +512,10 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 		},
 		{
 			name:        "required_custom_owner",
-			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id"},
+			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id", AssignOnCreate: ptr(true)},
 			ownerCol:    "operator_admin_id",
 			ownerGo:     "OperatorAdminID",
-			assign:      false,
+			assign:      true,
 			structOwner: "operator_admin_id",
 		},
 		{
