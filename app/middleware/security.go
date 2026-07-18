@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -227,11 +228,36 @@ var atomicRoutes = map[AtomicRoute]struct{}{
 	{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete}:    {},
 }
 
+// atomicRoutesMu guards atomicRoutes: CRUD generation registers capabilities
+// at request time while normal traffic reads them concurrently.
+var atomicRoutesMu sync.RWMutex
+
+// normalizeAtomicRoute lowercases route/action so generated CamelCase
+// controllers (e.g. userOrder) match the lowercased lookup path.
+func normalizeAtomicRoute(route AtomicRoute) AtomicRoute {
+	return AtomicRoute{
+		Route:  strings.ToLower(route.Route),
+		Action: strings.ToLower(route.Action),
+		Method: route.Method,
+	}
+}
+
 // RegisterAtomicRoute lets router construction be the source of truth for
 // capability registration. Seed entries remain for deployments that construct
 // Security in isolation (and for compatibility tests).
 func RegisterAtomicRoute(route AtomicRoute) {
-	atomicRoutes[route] = struct{}{}
+	atomicRoutesMu.Lock()
+	defer atomicRoutesMu.Unlock()
+	atomicRoutes[normalizeAtomicRoute(route)] = struct{}{}
+}
+
+// UnregisterAtomicRoute removes a runtime-registered capability. Used when a
+// generation fails after routes were registered, and when a CRUD module is
+// deleted in the current process.
+func UnregisterAtomicRoute(route AtomicRoute) {
+	atomicRoutesMu.Lock()
+	defer atomicRoutesMu.Unlock()
+	delete(atomicRoutes, normalizeAtomicRoute(route))
 }
 
 func normalizeRouteAction(fullPath string) (string, string, bool) {
@@ -249,7 +275,9 @@ func AtomicRouteCapability(c *gin.Context) (AtomicRoute, bool) {
 		return AtomicRoute{}, false
 	}
 	cap := AtomicRoute{Route: route, Action: action, Method: c.Request.Method}
+	atomicRoutesMu.RLock()
 	_, ok = atomicRoutes[cap]
+	atomicRoutesMu.RUnlock()
 	return cap, ok
 }
 
