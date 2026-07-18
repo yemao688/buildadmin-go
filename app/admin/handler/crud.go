@@ -64,6 +64,10 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 			action := route[strings.LastIndex(route, "/")+1:]
 			middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
 		},
+		UnregisterAtomicRoute: func(method, route string) {
+			action := route[strings.LastIndex(route, "/")+1:]
+			middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
+		},
 	}); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -118,7 +122,10 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	if err := helper.DeleteFromSpec(h.tableM.DB(), h.config, crudLog.Tablename); err != nil {
+	if err := helper.DeleteFromSpecWithHooks(h.tableM.DB(), h.config, crudLog.Tablename, func(method, route string) {
+		action := route[strings.LastIndex(route, "/")+1:]
+		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
+	}); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

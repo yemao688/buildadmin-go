@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -19,13 +20,14 @@ import (
 // Authorization is deliberately outside this service: HTTP callers must check
 // their actor, while CLI callers have no gin.Context.
 type GenerateOptions struct {
-	Table               model.Table
-	Fields              []model.Field
-	Type                string
-	SkipMenu            bool
-	AdminID             int32
-	Menu                *MenuOptions
-	RegisterAtomicRoute func(method, path string)
+	Table                 model.Table
+	Fields                []model.Field
+	Type                  string
+	SkipMenu              bool
+	AdminID               int32
+	Menu                  *MenuOptions
+	RegisterAtomicRoute   func(method, path string)
+	UnregisterAtomicRoute func(method, path string)
 }
 
 type MenuOptions struct {
@@ -38,6 +40,11 @@ type GenerateResult struct {
 	LogID int32
 }
 
+type atomicRouteRegistration struct {
+	method string
+	path   string
+}
+
 // GenerateFromSpec performs the complete generation transaction-like
 // orchestration. File changes are recoverable; MySQL DDL is not transactional.
 func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (result *GenerateResult, retErr error) {
@@ -46,6 +53,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	var fail func(string, error) (*GenerateResult, error)
+	registeredRoutes := []atomicRouteRegistration{}
 	defer release()
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -109,6 +117,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		if len(createdMenuIDs) > 0 {
 			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
 		}
+		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
 		return nil, fmt.Errorf("%s: %w", stage, cause)
 	}
 
@@ -121,6 +130,13 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 	}
 	if opts.Type == "alter" && tableExists(db, cfg, opts.Table.Name) {
+		actualPK, err := actualPrimaryKey(db, getTableName(opts.Table.Name, true))
+		if err != nil {
+			return fail("read primary key", err)
+		}
+		if !strings.EqualFold(actualPK, getPk(opts.Fields)) {
+			return fail("primary key drift", fmt.Errorf("alter does not support primary key changes: database=%q spec=%q; use rebuild or perform a manual migration", actualPK, getPk(opts.Fields)))
+		}
 		current, err := getColumns(opts.Table.Name)
 		if err != nil {
 			return fail("read existing columns", err)
@@ -130,7 +146,14 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := HandleTableDesign(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields); err != nil {
 		return fail("table design", err)
 	}
-	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, opts.RegisterAtomicRoute)
+	register := opts.RegisterAtomicRoute
+	if register != nil {
+		register = func(method, path string) {
+			registeredRoutes = append(registeredRoutes, atomicRouteRegistration{method: method, path: path})
+			opts.RegisterAtomicRoute(method, path)
+		}
+	}
+	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, register)
 	if err != nil {
 		return fail("file generation", err)
 	}
@@ -152,6 +175,15 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID}, nil
 }
 
+func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {
+	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+		return "", err
+	}
+	var key string
+	err := db.Raw("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY' ORDER BY SEQ_IN_INDEX LIMIT 1", fullTableName).Scan(&key).Error
+	return key, err
+}
+
 func validateGenerationMode(generationType, rebuild string, exists bool, tableName string) error {
 	if generationType != "create" && generationType != "alter" {
 		return fmt.Errorf("unsupported CRUD generation type %q; use create or alter", generationType)
@@ -164,7 +196,11 @@ func validateGenerationMode(generationType, rebuild string, exists bool, tableNa
 
 // DeleteFromSpec performs deletion without an HTTP context. The caller is
 // responsible for authorization before invoking this service.
-func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) (retErr error) {
+func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) error {
+	return DeleteFromSpecWithHooks(db, cfg, tableName, nil)
+}
+
+func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName string, unregister func(method, path string)) (retErr error) {
 	release, err := TryAcquireGenerationLock()
 	if err != nil {
 		return err
@@ -272,6 +308,11 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) (ret
 	if err := shared.Cleanup(); err != nil {
 		return err
 	}
+	if unregister != nil {
+		for _, route := range atomicRoutesForName(handlerFile.LastName) {
+			unregister(route.method, route.path)
+		}
+	}
 	if err := updateCrudStatus(db, cfg, log.ID, "delete"); err != nil {
 		_ = recordCrudError(db, cfg, log.ID, "stage=delete log update: "+err.Error())
 		return err
@@ -301,14 +342,50 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 }
 
 func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
-	for _, path := range manifest.Generated {
-		if fileExists(path) {
-			if log == nil || !containsPath(log.Table.GeneratedFiles, path) {
-				return false
-			}
+	if log == nil {
+		return true
+	}
+	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
+	previous := normalizedPathSet(log.Table.GeneratedFiles)
+	if len(current) != len(previous) {
+		return false
+	}
+	for path := range current {
+		if !previous[path] {
+			return false
 		}
 	}
 	return true
+}
+
+func normalizedPathSet(paths []string) map[string]bool {
+	result := make(map[string]bool, len(paths))
+	for _, path := range paths {
+		result[filepath.Clean(path)] = true
+	}
+	return result
+}
+
+func atomicRoutesForName(name string) []atomicRouteRegistration {
+	if strings.Contains(name, "_") {
+		name = utils.SnakeToCamel(name, false)
+	} else if name != "" {
+		name = strings.ToLower(name[:1]) + name[1:]
+	}
+	return []atomicRouteRegistration{
+		{method: "POST", path: name + "/add"},
+		{method: "POST", path: name + "/edit"},
+		{method: "DELETE", path: name + "/del"},
+	}
+}
+
+func unregisterAtomicRoutes(unregister func(method, path string), routes []atomicRouteRegistration) {
+	if unregister == nil {
+		return
+	}
+	for i := len(routes) - 1; i >= 0; i-- {
+		unregister(routes[i].method, routes[i].path)
+	}
 }
 
 func containsPath(paths []string, target string) bool {

@@ -45,12 +45,15 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := FileManifest{Generated: []string{path}}
-	if manifestAllows(manifest, nil) {
-		t.Fatal("missing success manifest must reject overwrite")
+	if !manifestAllows(manifest, nil) {
+		t.Fatal("first generation without a success manifest should be allowed")
 	}
 	log := &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{path}}}
 	if !manifestAllows(manifest, log) {
 		t.Fatal("latest success manifest should allow its own target")
+	}
+	if manifestAllows(FileManifest{Generated: []string{path, path + ".new"}}, log) {
+		t.Fatal("manifest path migration should be rejected")
 	}
 }
 
@@ -79,5 +82,14 @@ func TestCompileFailureRestoresSnapshot(t *testing.T) {
 func TestGenerationPanicErrorIsReadable(t *testing.T) {
 	if got := generationPanicError("migrator panic").Error(); got != "panic: migrator panic" {
 		t.Fatalf("panic error = %q", got)
+	}
+}
+
+func TestFailedGenerationUnregistersRegisteredRoutes(t *testing.T) {
+	routes := []atomicRouteRegistration{{method: "POST", path: "demo/add"}, {method: "DELETE", path: "demo/del"}}
+	var got []atomicRouteRegistration
+	unregisterAtomicRoutes(func(method, path string) { got = append(got, atomicRouteRegistration{method: method, path: path}) }, routes)
+	if len(got) != 2 || got[0].path != "demo/del" || got[1].path != "demo/add" {
+		t.Fatalf("unexpected unregister order: %+v", got)
 	}
 }

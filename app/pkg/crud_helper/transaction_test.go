@@ -1,6 +1,7 @@
 package crud_helper
 
 import (
+	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
@@ -39,6 +40,28 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 
 func TestQuarantineRestoresAllFiles(t *testing.T) {
 	assertQuarantineRestore(t)
+}
+
+func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T) {
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation_manifest_test")
+	provider := filepath.Join(dir, "provider.go")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(provider, []byte("package model\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	manifest, err := BuildFileManifestForFields(model.Table{Name: "orders"}, []model.Field{{Form: model.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_test/Owner.go", RelationFields: "name"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range manifest.Shared {
+		if path == provider {
+			return
+		}
+	}
+	t.Fatalf("existing relation provider %q was not snapshotted: %v", provider, manifest.Shared)
 }
 
 func assertQuarantineRestore(t *testing.T) {

@@ -52,6 +52,9 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 		if err := ValidateField(field); err != nil {
 			return err
 		}
+		if err := validateRelationField(field); err != nil {
+			return err
+		}
 	}
 	if len(fields) == 0 {
 		return fmt.Errorf("at least one field is required")
@@ -81,6 +84,43 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 					return fmt.Errorf("invalid design-change identifier %q: %w", name, err)
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func validateRelationField(field model.Field) error {
+	if field.Form.RemoteModel != "" && field.Form.RemoteTable == "" {
+		return fmt.Errorf("remote model for field %q requires remote table", field.Name)
+	}
+	if field.Form.RemoteTable != "" {
+		if err := data_scope.ValidateIdentifier(field.Form.RemoteTable); err != nil {
+			return fmt.Errorf("invalid remote table for field %q: %w", field.Name, err)
+		}
+	}
+	if field.Form.RemotePk != "" {
+		if err := data_scope.ValidateIdentifier(field.Form.RemotePk); err != nil {
+			return fmt.Errorf("invalid remote primary key for field %q: %w", field.Name, err)
+		}
+	}
+	if field.Form.RelationFields != "" {
+		for _, name := range strings.Split(field.Form.RelationFields, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			if err := data_scope.ValidateIdentifier(name); err != nil {
+				return fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
+			}
+		}
+	}
+	if field.Form.RemoteModel != "" && field.Form.RemoteTable != "" {
+		parsed, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		if err != nil {
+			return fmt.Errorf("invalid remote model for field %q: %w", field.Name, err)
+		}
+		if err := ValidateGeneratedAbsolutePath(parsed.ParseFile, "app/admin/model", "app/common/model"); err != nil {
+			return fmt.Errorf("remote model for field %q escapes model roots: %w", field.Name, err)
 		}
 	}
 	return nil

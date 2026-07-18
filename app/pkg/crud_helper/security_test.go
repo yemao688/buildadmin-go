@@ -44,6 +44,18 @@ func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
 	}
 }
 
+func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
+	field := model.Field{
+		Name: "owner_id", Type: "int", Form: model.FormAttr{
+			RemoteTable: "owner", RemoteModel: "app/admin/model/../handler/Evil.go", RelationFields: "name",
+		},
+	}
+	err := ValidateGenerationInput(model.Table{Name: "orders"}, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, field})
+	if err == nil {
+		t.Fatal("remote model path traversal was accepted")
+	}
+}
+
 func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
 	for _, path := range []string{"../outside.go", "/tmp/outside.go", `..\\outside.go`} {
 		if err := ValidatePathUnderRoots(path, "app/admin/model"); err == nil {

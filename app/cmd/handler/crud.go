@@ -39,6 +39,10 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		action := path[strings.LastIndex(path, "/")+1:]
 		middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
 	}
+	opts.UnregisterAtomicRoute = func(method, path string) {
+		action := path[strings.LastIndex(path, "/")+1:]
+		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
+	}
 	result, err := helper.GenerateFromSpec(h.db, h.config, *opts)
 	if err != nil {
 		return fmt.Errorf("CRUD generation error: %w", err)
@@ -54,7 +58,10 @@ func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: crud:delete <tableName>")
 	}
-	if err := helper.DeleteFromSpec(h.db, h.config, args[0]); err != nil {
+	if err := helper.DeleteFromSpecWithHooks(h.db, h.config, args[0], func(method, path string) {
+		action := path[strings.LastIndex(path, "/")+1:]
+		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
+	}); err != nil {
 		return fmt.Errorf("CRUD deletion error: %w", err)
 	}
 	cmd.Printf("CRUD deletion success: %s\n", args[0])

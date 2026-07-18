@@ -58,6 +58,21 @@ func TestHasColumnMySQL(t *testing.T) {
 	assert.False(t, exists)
 }
 
+func TestActualPrimaryKeyMySQL(t *testing.T) {
+	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping primary key integration test")
+	}
+	db, err := gorm.Open(mysql.Open(dsn))
+	require.NoError(t, err)
+	tableName := fmt.Sprintf("crud_primary_key_%d", time.Now().UnixNano())
+	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (order_id INT PRIMARY KEY, name VARCHAR(32))").Error)
+	t.Cleanup(func() { _ = db.Exec("DROP TABLE IF EXISTS `" + tableName + "`").Error })
+	primaryKey, err := actualPrimaryKey(db, tableName)
+	require.NoError(t, err)
+	assert.Equal(t, "order_id", primaryKey)
+}
+
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {

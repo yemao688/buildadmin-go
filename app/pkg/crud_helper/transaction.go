@@ -79,8 +79,21 @@ func BuildFileManifestForFields(table model.Table, fields []model.Field) (FileMa
 			manifest.Generated = append(manifest.Generated, join.ParseFile)
 		}
 		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
-		if !fileExists(provider) {
+		if fileExists(provider) {
 			manifest.Shared = append(manifest.Shared, provider)
+		} else {
+			manifest.Generated = append(manifest.Generated, provider)
+		}
+	}
+	manifest.Generated = uniquePaths(manifest.Generated)
+	manifest.Shared = uniquePaths(manifest.Shared)
+	modelRoot := "app/admin/model"
+	if table.IsCommonModel != 0 {
+		modelRoot = "app/common/model"
+	}
+	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", modelRoot, "app/admin/model", "app/admin/handler", "app/common/model", "app", "router", "cmd/app"); err != nil {
+			return FileManifest{}, err
 		}
 	}
 	return manifest, nil
