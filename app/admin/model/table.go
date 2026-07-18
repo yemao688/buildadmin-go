@@ -1,6 +1,7 @@
 package model
 
 import (
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"strings"
 
@@ -179,7 +180,10 @@ func (s *TableModel) ChangeComment(tableName string, comment string) error {
 // 删除数据表
 func (s *TableModel) DelTable(tableName string) error {
 	tableName = s.Name(tableName, true)
-	err := s.sqlDB.Exec("DROP TABLE IF EXISTS `?`", tableName).Error
+	if err := data_scope.ValidateIdentifier(tableName); err != nil {
+		return err
+	}
+	err := s.sqlDB.Exec("DROP TABLE IF EXISTS `" + tableName + "`").Error
 	return err
 }
 

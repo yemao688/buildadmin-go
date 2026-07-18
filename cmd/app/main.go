@@ -86,7 +86,8 @@ func main() {
 	})
 
 	if err := rootCmd.Execute(); err != nil {
-		panic(err)
+		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
 	}
 }
 

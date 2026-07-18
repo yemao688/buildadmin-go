@@ -15,36 +15,48 @@ func GetMenuName(webDir WebDir) string {
 
 // 创建菜单
 func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComment string) error {
+	return CreateMenuWithOptions(adminRuleM, webViewsDir, tableComment, nil)
+}
+
+func CreateMenuWithOptions(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) error {
 	menuName := GetMenuName(webViewsDir)
 	adminRule := model.AdminRule{}
 	result := adminRuleM.DB().Where("name=?", menuName).First(&adminRule)
 	if result.RowsAffected == 0 {
 		var pid int32
-		for _, v := range webViewsDir.Path {
-			parentRule := model.AdminRule{}
-			result = adminRuleM.DB().Where("name=?", v).First(&parentRule)
-			if result.RowsAffected == 1 {
-				pid = parentRule.ID
-				continue
-			}
+		if options != nil {
+			pid = options.Parent
+		}
+		if options == nil || options.Parent == 0 {
+			for _, v := range webViewsDir.Path {
+				parentRule := model.AdminRule{}
+				result = adminRuleM.DB().Where("name=?", v).First(&parentRule)
+				if result.RowsAffected == 1 {
+					pid = parentRule.ID
+					continue
+				}
 
-			newRule := model.AdminRule{
-				Pid:   pid,
-				Type:  "menu_dir",
-				Title: v,
-				Name:  v,
-				Path:  v,
+				newRule := model.AdminRule{
+					Pid:   pid,
+					Type:  "menu_dir",
+					Title: v,
+					Name:  v,
+					Path:  v,
+				}
+				if err := adminRuleM.DB().Create(&newRule).Error; err != nil {
+					return err
+				}
+				pid = newRule.ID
 			}
-			if err := adminRuleM.DB().Create(&newRule).Error; err != nil {
-				return err
-			}
-			pid = newRule.ID
 		}
 
 		//建立菜单
 		title := webViewsDir.OriginalLastName
 		if tableComment != "" {
 			title = tableComment
+		}
+		if options != nil && options.Title != "" {
+			title = options.Title
 		}
 
 		component := strings.ReplaceAll(webViewsDir.Views, "\\", "/")

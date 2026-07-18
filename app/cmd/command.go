@@ -9,20 +9,54 @@ import (
 type Command struct {
 	exampleH *handler.ExampleHandler
 	migrateH *handler.MigrateHandler
+	crudH    *handler.CrudHandler
 }
 
 // NewCommand .
 func NewCommand(
 	exampleH *handler.ExampleHandler,
 	migrateH *handler.MigrateHandler,
+	crudH *handler.CrudHandler,
 ) *Command {
 	return &Command{
 		exampleH: exampleH,
 		migrateH: migrateH,
+		crudH:    crudH,
 	}
 }
 
 func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
+	generateCmd := &cobra.Command{
+		Use:           "crud:generate <spec.yaml>",
+		Short:         "根据 YAML spec 生成 CRUD",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := newCmd()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.crudH.Generate(cmd, args)
+		},
+	}
+	generateCmd.Flags().Bool("skip-menu", false, "skip menu creation")
+	deleteCmd := &cobra.Command{
+		Use:           "crud:delete <tableName>",
+		Short:         "删除 CRUD 文件",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := newCmd()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.crudH.Delete(cmd, args)
+		},
+	}
 	rootCmd.AddCommand(
 		&cobra.Command{
 			Use:   "example",
@@ -51,5 +85,7 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 				command.migrateH.Run(cmd, args)
 			},
 		},
+		generateCmd,
+		deleteCmd,
 	)
 }

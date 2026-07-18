@@ -8,4 +8,5 @@ import (
 var ProviderSet = wire.NewSet(
 	NewExampleHandler,
 	NewMigrateHandler,
+	NewCrudHandler,
 )

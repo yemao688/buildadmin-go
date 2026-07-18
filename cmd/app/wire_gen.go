@@ -112,7 +112,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 func wireCommand(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*cmd.Command, func(), error) {
 	exampleHandler := handler3.NewExampleHandler(zapLogger)
 	migrateHandler := handler3.NewMigrateHandler(zapLogger, configuration)
-	command := cmd.NewCommand(exampleHandler, migrateHandler)
+	crudHandler := handler3.NewCrudHandler(zapLogger, configuration)
+	command := cmd.NewCommand(exampleHandler, migrateHandler, crudHandler)
 	return command, func() {
 	}, nil
 }

@@ -1,0 +1,44 @@
+# AI CRUD playbook example. Paths are optional and default to the standard
+# admin model/handler and backend view locations.
+name: user_order
+comment: 用户订单
+type: create
+dataScope:
+  mode: auto
+menu:
+  title: 用户订单
+  parent: 0
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    comment: 主键
+  - name: admin_id
+    type: bigint
+    null: false
+    comment: 管理员ID
+  - name: order_no
+    type: varchar
+    length: 64
+    null: false
+    comment: 订单号
+  - name: amount
+    type: decimal
+    length: 10
+    precision: 2
+    null: false
+    default: "0.00"
+    comment: 金额
+  - name: status
+    type: tinyint
+    null: false
+    default: "0"
+    comment: 状态:0=待处理,1=已完成
+  - name: create_time
+    type: bigint
+    null: false
+    designType: timestamp
+    comment: 创建时间

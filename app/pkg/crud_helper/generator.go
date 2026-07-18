@@ -21,6 +21,12 @@ type GenerateOptions struct {
 	Type     string
 	SkipMenu bool
 	AdminID  int32
+	Menu     *MenuOptions
+}
+
+type MenuOptions struct {
+	Title  string
+	Parent int32
 }
 
 type GenerateResult struct {
@@ -94,7 +100,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return fail("file generation", err)
 	}
 	if !opts.SkipMenu {
-		if err := CreateMenu(model.NewAdminRuleModel(db, cfg), webViewsDir, tableComment); err != nil {
+		if err := CreateMenuWithOptions(model.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu); err != nil {
 			return fail("menu generation", err)
 		}
 	}
@@ -166,10 +172,10 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 	if err != nil {
 		return fail("handler manifest", err)
 	}
-	if err := RemoveProvider(filepath.Dir(handlerFile.ParseFile), utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
+	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
 		return fail("remove handler provider", err)
 	}
-	if err := RemoveProvider(filepath.Dir(modelFile.ParseFile), utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
+	if err := RemoveProvider(modelFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
 		return fail("remove model provider", err)
 	}
 	if err := RemoveRouter(log.Table.Name); err != nil {
