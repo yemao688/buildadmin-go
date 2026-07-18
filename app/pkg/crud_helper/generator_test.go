@@ -75,3 +75,9 @@ func TestCompileFailureRestoresSnapshot(t *testing.T) {
 		t.Fatalf("snapshot was not restored: %q, %v", content, err)
 	}
 }
+
+func TestGenerationPanicErrorIsReadable(t *testing.T) {
+	if got := generationPanicError("migrator panic").Error(); got != "panic: migrator panic" {
+		t.Fatalf("panic error = %q", got)
+	}
+}

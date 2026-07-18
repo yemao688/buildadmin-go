@@ -40,12 +40,23 @@ type GenerateResult struct {
 
 // GenerateFromSpec performs the complete generation transaction-like
 // orchestration. File changes are recoverable; MySQL DDL is not transactional.
-func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (*GenerateResult, error) {
+func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (result *GenerateResult, retErr error) {
 	release, err := TryAcquireGenerationLock()
 	if err != nil {
 		return nil, err
 	}
+	var fail func(string, error) (*GenerateResult, error)
 	defer release()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicErr := generationPanicError(recovered)
+			if fail != nil {
+				result, retErr = fail("panic", panicErr)
+			} else {
+				retErr = panicErr
+			}
+		}
+	}()
 	if IsProtectedTable(opts.Table.Name) {
 		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", opts.Table.Name)
 	}
@@ -89,7 +100,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	createdMenuIDs := []int32{}
-	fail := func(stage string, cause error) (*GenerateResult, error) {
+	fail = func(stage string, cause error) (*GenerateResult, error) {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
 			message += "; restore failed: " + restoreErr.Error()
@@ -153,12 +164,23 @@ func validateGenerationMode(generationType, rebuild string, exists bool, tableNa
 
 // DeleteFromSpec performs deletion without an HTTP context. The caller is
 // responsible for authorization before invoking this service.
-func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) error {
+func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) (retErr error) {
 	release, err := TryAcquireGenerationLock()
 	if err != nil {
 		return err
 	}
+	var fail func(string, error) error
 	defer release()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			panicErr := generationPanicError(recovered)
+			if fail != nil {
+				retErr = fail("panic", panicErr)
+			} else {
+				retErr = panicErr
+			}
+		}
+	}()
 	if db == nil || cfg == nil {
 		return fmt.Errorf("crud deletion requires database and configuration")
 	}
@@ -202,7 +224,7 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 		_ = quarantine.Commit()
 		return err
 	}
-	fail := func(stage string, cause error) error {
+	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := quarantine.Restore(); restoreErr != nil {
 			message += "; quarantine restore failed: " + restoreErr.Error()
@@ -384,4 +406,8 @@ func buildAndRestoreOnFailure(snapshot *FileSnapshot, builder func() error) erro
 		return err
 	}
 	return nil
+}
+
+func generationPanicError(recovered any) error {
+	return fmt.Errorf("panic: %v", recovered)
 }

@@ -69,7 +69,11 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				continue
 			}
 
-			if slices.Contains([]string{"change-field-name", "del-field"}, v.Type) && !db.Migrator().HasColumn(fullTableName, v.OldName) {
+			columnExists, err := hasColumn(db, fullTableName, v.OldName)
+			if err != nil {
+				return err
+			}
+			if slices.Contains([]string{"change-field-name", "del-field"}, v.Type) && !columnExists {
 				return cErr.BadRequest(v.OldName + " not exist")
 			}
 
@@ -97,7 +101,11 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 			}
 
 			if v.Type == "change-field-attr" {
-				if !db.Migrator().HasColumn(fullTableName, v.OldName) {
+				columnExists, err := hasColumn(db, fullTableName, v.OldName)
+				if err != nil {
+					return err
+				}
+				if !columnExists {
 					return cErr.BadRequest(v.OldName + " not exist")
 				}
 				oldField := searchField(fields, v.OldName)
@@ -110,7 +118,11 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 				}
 
 			} else if v.Type == "add-field" {
-				if db.Migrator().HasColumn(fullTableName, v.NewName) {
+				columnExists, err := hasColumn(db, fullTableName, v.NewName)
+				if err != nil {
+					return err
+				}
+				if columnExists {
 					return cErr.BadRequest(v.NewName + " is exist")
 				}
 
@@ -171,6 +183,26 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 	pk = getPk(fields)
 	ownerCol := resolveOwnerColumn(table.DataScope, fields)
 	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+}
+
+func hasColumn(db *gorm.DB, fullTableName, column string) (bool, error) {
+	if db == nil {
+		return false, fmt.Errorf("database is required")
+	}
+	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+		return false, err
+	}
+	if err := data_scope.ValidateIdentifier(column); err != nil {
+		return false, err
+	}
+	var count int64
+	if err := db.Raw(
+		"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+		fullTableName, column,
+	).Scan(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // HandleTableDesignWithDataScope creates or updates the table and ensures an

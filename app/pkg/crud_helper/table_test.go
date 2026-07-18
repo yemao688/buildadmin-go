@@ -39,6 +39,25 @@ func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
 	assert.Contains(t, notNullable, "NOT NULL")
 }
 
+func TestHasColumnMySQL(t *testing.T) {
+	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping hasColumn integration test")
+	}
+	db, err := gorm.Open(mysql.Open(dsn))
+	require.NoError(t, err)
+	tableName := fmt.Sprintf("crud_has_column_%d", time.Now().UnixNano())
+	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (id INT PRIMARY KEY, name VARCHAR(32))").Error)
+	t.Cleanup(func() { _ = db.Exec("DROP TABLE IF EXISTS `" + tableName + "`").Error })
+
+	exists, err := hasColumn(db, tableName, "name")
+	require.NoError(t, err)
+	assert.True(t, exists)
+	exists, err = hasColumn(db, tableName, "missing")
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {
