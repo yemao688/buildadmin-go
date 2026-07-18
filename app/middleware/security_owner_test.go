@@ -29,6 +29,15 @@ func TestExtractOwnerIDUsesCustomColumn(t *testing.T) {
 	}
 }
 
+func TestNormalizePrimaryKeyValueSupportsInt64AndString(t *testing.T) {
+	if got, err := normalizePrimaryKeyValue(int64(1 << 40)); err != nil || got != "1099511627776" {
+		t.Fatalf("int64 primary key = %q, err=%v", got, err)
+	}
+	if got, err := normalizePrimaryKeyValue("order-uuid"); err != nil || got != "order-uuid" {
+		t.Fatalf("string primary key = %q, err=%v", got, err)
+	}
+}
+
 func TestSecurityScopeUsesCustomOwner(t *testing.T) {
 	e := &ownerRecordingEnforcer{}
 	ctx, _ := gin.CreateTestContext(nil)

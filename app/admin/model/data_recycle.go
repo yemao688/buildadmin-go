@@ -84,6 +84,9 @@ func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error
 		return err
 	}
 	data.AdminID = actor.AdminID
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil, data.OwnerColumn)
 		if err != nil {
@@ -101,6 +104,9 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 	if _, err := s.enforcer.Actor(ctx); err != nil {
 		return err
 	}
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
 	updates := map[string]any{
 		"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
 		"data_table": data.DataTable, "primary_key": data.PrimaryKey, "status": data.Status,
@@ -108,6 +114,25 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 	}
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		var current SecurityDataRecycle
+		if err := tx.Model(&SecurityDataRecycle{}).Where("id=?", data.ID).Take(&current).Error; err != nil {
+			return err
+		}
+		currentOwner := current.OwnerColumn
+		if currentOwner == "" {
+			currentOwner = "admin_id"
+		}
+		requestedOwner := data.OwnerColumn
+		if requestedOwner == "" {
+			requestedOwner = "admin_id"
+		}
+		var logCount int64
+		if err := tx.Table(s.config.Database.Prefix+"security_data_recycle_log").Where("recycle_id=?", data.ID).Count(&logCount).Error; err != nil {
+			return err
+		}
+		if err := validateRuleIdentityChange(logCount > 0, current.PrimaryKey, currentOwner, data.PrimaryKey, requestedOwner); err != nil {
+			return err
+		}
 		policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil, data.OwnerColumn)
 		if err != nil {
 			return err

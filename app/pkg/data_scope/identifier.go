@@ -79,6 +79,9 @@ func ValidateRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fiel
 // policies retain their exact behavior; generated/custom tables default to
 // admin_id and may explicitly declare another validated owner column.
 func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string, ownerColumns ...string) (RulePolicy, error) {
+	if primary == "" {
+		primary = "id"
+	}
 	policy, policyErr := TablePolicyFor(logical)
 	owner := "admin_id"
 	if len(ownerColumns) > 0 && ownerColumns[0] != "" {
@@ -111,15 +114,19 @@ func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, field
 	if primary != policy.PrimaryKey {
 		return RulePolicy{}, fmt.Errorf("%w: rule primary key does not match policy", ErrInvalidIdentifier)
 	}
-	if err := ValidateSecurityField(primary); err == nil {
-		return RulePolicy{}, fmt.Errorf("%w: primary key is not a sensitive field", ErrInvalidIdentifier)
-	}
 	table, err := ResolveBusinessTable(db, prefix, logical)
 	if err != nil {
 		return RulePolicy{}, err
 	}
 	if err := ResolveBusinessColumn(db, table, owner); err != nil {
 		return RulePolicy{}, fmt.Errorf("owner column %s.%s is invalid: %w", table, owner, err)
+	}
+	actualPrimary, err := ResolveBusinessPrimaryKey(db, table)
+	if err != nil {
+		return RulePolicy{}, err
+	}
+	if actualPrimary != primary {
+		return RulePolicy{}, fmt.Errorf("rule primary key %q does not match target table primary key %q", primary, actualPrimary)
 	}
 	allowed := policy.AuditFields
 	if kind == "sensitive" {
@@ -137,6 +144,24 @@ func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, field
 		}
 	}
 	return RulePolicy{Table: policy, TableName: table}, nil
+}
+
+// ResolveBusinessPrimaryKey returns the first column of the target table's
+// PRIMARY index. The rule may explicitly name it; this check prevents a rule
+// from directing audit/restore operations at an arbitrary non-key column.
+func ResolveBusinessPrimaryKey(db *gorm.DB, table string) (string, error) {
+	var primary string
+	err := db.Raw("SELECT COLUMN_NAME FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name=? AND index_name='PRIMARY' AND seq_in_index=1 LIMIT 1", table).Scan(&primary).Error
+	if err != nil {
+		return "", err
+	}
+	if primary == "" {
+		return "", fmt.Errorf("business table %s has no primary key", table)
+	}
+	if err := ValidateBusinessIdentifier(primary); err != nil {
+		return "", err
+	}
+	return primary, nil
 }
 
 // ResolveBusinessTable validates a logical, unprefixed business table and

@@ -147,6 +147,12 @@ func (s *SensitiveDataLogModel) Rollback(ctx *gin.Context, ids interface{}) erro
 			if err := tx.Table(s.config.Database.Prefix+"security_sensitive_data").Where("id=?", v.SensitiveID).Take(&rule).Error; err != nil {
 				return fmt.Errorf("sensitive rule %d unavailable: %w", v.SensitiveID, err)
 			}
+			if rule.PrimaryKey == "" {
+				rule.PrimaryKey = "id"
+			}
+			if v.PrimaryKey != rule.PrimaryKey {
+				return fmt.Errorf("sensitive log primary key does not match historical rule")
+			}
 			policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, v.DataTable, "sensitive", rule.PrimaryKey, nil, rule.OwnerColumn)
 			if err != nil {
 				return fmt.Errorf("invalid sensitive owner policy: %w", err)

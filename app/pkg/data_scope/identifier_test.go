@@ -25,3 +25,11 @@ func TestStaticPolicyRejectsSensitiveFields(t *testing.T) {
 		}
 	}
 }
+
+func TestCustomPrimaryKeyIdentifierIsAllowed(t *testing.T) {
+	for _, field := range []string{"order_no", "uuid"} {
+		if err := ValidateSecurityField(field); err != nil {
+			t.Fatalf("custom primary key %q rejected: %v", field, err)
+		}
+	}
+}

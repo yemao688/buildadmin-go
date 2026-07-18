@@ -159,6 +159,12 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 			if err := tx.Table(s.config.Database.Prefix+"security_data_recycle").Where("id=?", v.RecycleID).Take(&rule).Error; err != nil {
 				return fmt.Errorf("recycle rule %d unavailable: %w", v.RecycleID, err)
 			}
+			if rule.PrimaryKey == "" {
+				rule.PrimaryKey = "id"
+			}
+			if v.PrimaryKey != rule.PrimaryKey {
+				return fmt.Errorf("recycle log primary key does not match historical rule")
+			}
 			policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, v.DataTable, "recycle", rule.PrimaryKey, nil, rule.OwnerColumn)
 			if err != nil {
 				return fmt.Errorf("invalid recycle owner policy: %w", err)

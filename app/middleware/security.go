@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/unknwon/com"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -70,6 +69,39 @@ func extractOwnerID(row map[string]any, column string) (int32, error) {
 		return 0, fmt.Errorf("target owner missing")
 	}
 	return int32(owner), nil
+}
+
+func normalizePrimaryKeyValue(value any) (string, error) {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return "", fmt.Errorf("empty primary key")
+		}
+		return v, nil
+	case []byte:
+		return normalizePrimaryKeyValue(string(v))
+	case json.Number:
+		return string(v), nil
+	case int:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int32:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
+	case uint:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint64:
+		return strconv.FormatUint(v, 10), nil
+	case float64:
+		if v != float64(int64(v)) {
+			return "", fmt.Errorf("non-integral primary key")
+		}
+		return strconv.FormatInt(int64(v), 10), nil
+	default:
+		return "", fmt.Errorf("unsupported primary key type %T", value)
+	}
 }
 
 var errBusinessRollback = errors.New("requesttx: business response requested rollback")
@@ -402,16 +434,16 @@ func (m *Security) workHandler() gin.HandlerFunc {
 			}
 
 			var params = struct {
-				Ids []int32 `form:"ids[]" binding:"required"`
+				Ids []string `form:"ids[]" binding:"required"`
 			}{}
 			if err := c.ShouldBindQuery(&params); err != nil || len(params.Ids) == 0 {
 				abort(http.StatusBadRequest, "invalid ids")
 				return
 			}
-			seenIDs := make(map[int32]struct{}, len(params.Ids))
-			normalizedIDs := make([]int32, 0, len(params.Ids))
+			seenIDs := make(map[string]struct{}, len(params.Ids))
+			normalizedIDs := make([]string, 0, len(params.Ids))
 			for _, id := range params.Ids {
-				if id <= 0 {
+				if id == "" {
 					abort(http.StatusBadRequest, "ids must be positive")
 					return
 				}
@@ -443,14 +475,14 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				abort(http.StatusForbidden, "target scope incomplete")
 				return
 			}
-			matched := make(map[int32]struct{}, len(rows))
+			matched := make(map[string]struct{}, len(rows))
 			for _, row := range rows {
-				id, err := strconv.ParseInt(fmt.Sprintf("%v", row[recycle.PrimaryKey]), 10, 32)
+				id, err := normalizePrimaryKeyValue(row[recycle.PrimaryKey])
 				if err != nil {
 					abort(http.StatusInternalServerError, "invalid target primary key")
 					return
 				}
-				matched[int32(id)] = struct{}{}
+				matched[id] = struct{}{}
 			}
 			for _, id := range normalizedIDs {
 				if _, ok := matched[id]; !ok {
@@ -535,11 +567,18 @@ func (m *Security) workHandler() gin.HandlerFunc {
 
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 			var params map[string]interface{}
-			if err := json.Unmarshal(body, &params); err != nil {
+			decoder := json.NewDecoder(bytes.NewReader(body))
+			decoder.UseNumber()
+			if err := decoder.Decode(&params); err != nil {
 				abort(http.StatusBadRequest, "invalid request body")
 				return
 			}
-			if _, ok := params["id"]; !ok {
+			primaryParam := sensitive.PrimaryKey
+			if primaryParam == "" {
+				primaryParam = "id"
+			}
+			primaryValue, ok := params[primaryParam]
+			if !ok {
 				c.Next()
 				return
 			}
@@ -556,7 +595,7 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				return
 			}
 			row := map[string]any{}
-			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&row).Error
+			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", primaryValue).Take(&row).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
 				abort(http.StatusInternalServerError, "target lookup failed")
@@ -586,6 +625,18 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				abort(http.StatusInternalServerError, "target owner missing")
 				return
 			}
+			idText, idErr := normalizePrimaryKeyValue(primaryValue)
+			if idErr != nil {
+				abort(http.StatusInternalServerError, "invalid target primary key")
+				return
+			}
+			idValue, idErr := strconv.ParseInt(idText, 10, 32)
+			if idErr != nil {
+				// id_value is the existing int32 audit column. Never truncate an
+				// int64 or string key; a future schema migration must add text storage.
+				abort(http.StatusInternalServerError, "string or oversized primary keys require text audit storage")
+				return
+			}
 
 			// Let the business handler perform the write first. The transaction
 			// wrapper keeps the before snapshot locked and this same DB reads the
@@ -595,7 +646,7 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				return
 			}
 			afterRow := map[string]any{}
-			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&afterRow).Error
+			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Where("`"+sensitive.PrimaryKey+"`=?", primaryValue).Take(&afterRow).Error
 			if err != nil {
 				abort(http.StatusInternalServerError, "after-state lookup failed")
 				return
@@ -604,7 +655,6 @@ func (m *Security) workHandler() gin.HandlerFunc {
 			for k, v := range dataFields {
 				beforeV, oldOk := row[k]
 				afterV, newOk := afterRow[k]
-				idValue := com.StrTo(fmt.Sprintf("%v", params["id"])).MustInt()
 				if oldOk && newOk && normalizeAuditValue(beforeV) != normalizeAuditValue(afterV) {
 					sensitiveDataLogs = append(sensitiveDataLogs, model.SecuritySensitiveDataLog{
 						AdminID: actor.AdminID, TargetAdminID: targetOwner, IsCommitted: 1,

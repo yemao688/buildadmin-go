@@ -123,6 +123,9 @@ func (s *SensitiveDataModel) Add(ctx *gin.Context, data SecuritySensitiveData) e
 		return err
 	}
 	data.AdminID = actor.AdminID
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
 	var fields map[string]string
 	if err := json.Unmarshal([]byte(data.DataFields), &fields); err != nil {
 		return err
@@ -148,6 +151,9 @@ func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SecuritySensitiveData) 
 	if _, err := s.enforcer.Actor(ctx); err != nil {
 		return err
 	}
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
 	var fields map[string]string
 	if err := json.Unmarshal([]byte(data.DataFields), &fields); err != nil {
 		return err
@@ -163,6 +169,25 @@ func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SecuritySensitiveData) 
 	}
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		var current SecuritySensitiveData
+		if err := tx.Model(&SecuritySensitiveData{}).Where("id=?", data.ID).Take(&current).Error; err != nil {
+			return err
+		}
+		currentOwner := current.OwnerColumn
+		if currentOwner == "" {
+			currentOwner = "admin_id"
+		}
+		requestedOwner := data.OwnerColumn
+		if requestedOwner == "" {
+			requestedOwner = "admin_id"
+		}
+		var logCount int64
+		if err := tx.Table(s.config.Database.Prefix+"security_sensitive_data_log").Where("sensitive_id=?", data.ID).Count(&logCount).Error; err != nil {
+			return err
+		}
+		if err := validateRuleIdentityChange(logCount > 0, current.PrimaryKey, currentOwner, data.PrimaryKey, requestedOwner); err != nil {
+			return err
+		}
 		policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "sensitive", data.PrimaryKey, fieldNames, data.OwnerColumn)
 		if err != nil {
 			return err
