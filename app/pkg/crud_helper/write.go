@@ -229,12 +229,9 @@ func writeRouter(name string) error {
 	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)` + "\n"
 
 	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
-	atomic := "\t\t{Route: \"" + nameVar + "/add\", Action: \"add\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "/edit\", Action: \"edit\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "/del\", Action: \"del\", Method: http.MethodDelete},\n"
 	marker := "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
 	if !strings.Contains(newStr, "Route: \""+nameVar+"/add\"") {
-		newStr = strings.Replace(newStr, marker, atomic+marker, 1)
+		newStr = injectAtomicCapabilities(newStr, nameVar, marker)
 	}
 	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
 }
@@ -264,12 +261,27 @@ func RemoveRouter(name string) error {
 
 	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
 	newStr = strings.Replace(string(newStr), route, "", -1)
+	newStr = removeAtomicCapabilities(newStr, nameVar)
 
 	newStr, err = formatGoCode(newStr)
 	if err != nil {
 		return err
 	}
 	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
+}
+
+func atomicCapabilityLines(nameVar string) string {
+	return "\t\t{Route: \"" + nameVar + "/add\", Action: \"add\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "/edit\", Action: \"edit\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "/del\", Action: \"del\", Method: http.MethodDelete},\n"
+}
+
+func injectAtomicCapabilities(content, nameVar, marker string) string {
+	return strings.Replace(content, marker, atomicCapabilityLines(nameVar)+marker, 1)
+}
+
+func removeAtomicCapabilities(content, nameVar string) string {
+	return strings.ReplaceAll(content, atomicCapabilityLines(nameVar), "")
 }
 
 func writeProvider(dir string, name string) error {
