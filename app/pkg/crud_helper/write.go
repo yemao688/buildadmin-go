@@ -285,9 +285,20 @@ func removeAtomicCapabilities(content, nameVar string) string {
 }
 
 func writeProvider(dir string, name string) error {
-	content, err := os.ReadFile(filepath.Join(utils.RootPath(), dir, "provider.go"))
-	if err != nil {
+	providerPath := filepath.Join(utils.RootPath(), dir, "provider.go")
+	if err := ValidateGeneratedAbsolutePath(providerPath, "app/admin/model", "app/common/model", "app/admin/handler"); err != nil {
 		return err
+	}
+	content, err := os.ReadFile(providerPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		pkg := filepath.Base(dir)
+		content = []byte("package " + pkg + "\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet()\n")
+		if err := writeFile(providerPath, string(content)); err != nil {
+			return err
+		}
 	}
 	//判断是否已经生成过
 	if strings.Contains(string(content), "New"+name) {
@@ -296,7 +307,7 @@ func writeProvider(dir string, name string) error {
 
 	lastIndex := strings.LastIndex(string(content), ")")
 	content = []byte(string(content)[:lastIndex] + "\n	New" + name + ",\n)")
-	return writeFile(filepath.Join(utils.RootPath(), dir, "provider.go"), string(content))
+	return writeFile(providerPath, string(content))
 }
 
 // 移除生成的相应代码

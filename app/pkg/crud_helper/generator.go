@@ -94,7 +94,10 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name); err != nil {
 		return nil, err
 	} else if !manifestAllows(manifest, success) {
-		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target is not in the latest successful generation manifest", opts.Table.Name)
+		if success == nil {
+			return nil, fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
+		}
+		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target manifest differs from the latest successful generation; use crud:delete first or keep the original paths", opts.Table.Name)
 	}
 	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
 	snapshot, err := NewFileSnapshot(append(append([]string{}, manifest.Generated...), manifest.Shared...))
@@ -270,6 +273,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		}
 		_ = quarantine.Commit()
 		_ = shared.Cleanup()
+		_ = recordCrudError(db, cfg, log.ID, message)
 		return fmt.Errorf("%s", message)
 	}
 	module := "admin"
@@ -302,11 +306,11 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := model.NewAdminRuleModel(db, cfg).Delete(GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)), true); err != nil {
 		return fail("delete menu", err)
 	}
-	if err := quarantine.Commit(); err != nil {
-		return fail("quarantine cleanup", err)
-	}
 	if err := shared.Cleanup(); err != nil {
-		return err
+		return fail("shared cleanup", fmt.Errorf("cleanup directory %q: %w", shared.dir, err))
+	}
+	if err := quarantine.Commit(); err != nil {
+		return fail("quarantine cleanup", fmt.Errorf("cleanup directory %q: %w", quarantine.dir, err))
 	}
 	if unregister != nil {
 		for _, route := range atomicRoutesForName(handlerFile.LastName) {
@@ -343,7 +347,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 
 func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
 	if log == nil {
-		return true
+		return len(manifestConflicts(manifest)) == 0
 	}
 	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	previous := normalizedPathSet(log.Table.GeneratedFiles)
@@ -356,6 +360,16 @@ func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
 		}
 	}
 	return true
+}
+
+func manifestConflicts(manifest FileManifest) []string {
+	conflicts := []string{}
+	for _, path := range manifest.Generated {
+		if fileExists(path) {
+			conflicts = append(conflicts, filepath.Clean(path))
+		}
+	}
+	return conflicts
 }
 
 func normalizedPathSet(paths []string) map[string]bool {

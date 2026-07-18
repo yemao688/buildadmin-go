@@ -41,12 +41,22 @@ func TestAlterChangesOnlyAddAndModify(t *testing.T) {
 
 func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	path := t.TempDir() + "/model.go"
-	if err := os.WriteFile(path, []byte("package model"), 0644); err != nil {
-		t.Fatal(err)
-	}
 	manifest := FileManifest{Generated: []string{path}}
 	if !manifestAllows(manifest, nil) {
 		t.Fatal("first generation without a success manifest should be allowed")
+	}
+	if err := os.WriteFile(path, []byte("package model"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if manifestAllows(manifest, nil) {
+		t.Fatal("first generation must reject an existing target")
+	}
+	handlerPath := path + ".handler"
+	if err := os.WriteFile(handlerPath, []byte("package handler"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil) {
+		t.Fatal("first generation must reject existing model and handler targets")
 	}
 	log := &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{path}}}
 	if !manifestAllows(manifest, log) {
