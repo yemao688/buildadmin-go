@@ -1,6 +1,7 @@
 package data_scope
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -15,6 +16,11 @@ type TablePolicy struct {
 	OwnerColumn    string
 	AuditFields    map[string]struct{}
 	RollbackFields map[string]struct{}
+}
+
+type RulePolicy struct {
+	Table     TablePolicy
+	TableName string
 }
 
 var tablePolicies = map[string]TablePolicy{
@@ -62,25 +68,58 @@ func ValidateSecurityField(field string) error {
 }
 
 func ValidateRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string) (string, error) {
-	policy, err := TablePolicyFor(logical)
+	resolved, err := ResolveRulePolicy(db, prefix, logical, kind, primary, fields)
 	if err != nil {
 		return "", err
 	}
-	if kind == "recycle" && !policy.Recycle || kind == "sensitive" && !policy.Sensitive {
-		return "", fmt.Errorf("%w: %s is not enabled for %s", ErrInvalidIdentifier, logical, kind)
+	return resolved.TableName, nil
+}
+
+// ResolveRulePolicy resolves the persisted owner override. Static legacy
+// policies retain their exact behavior; generated/custom tables default to
+// admin_id and may explicitly declare another validated owner column.
+func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string, ownerColumns ...string) (RulePolicy, error) {
+	policy, policyErr := TablePolicyFor(logical)
+	owner := "admin_id"
+	if len(ownerColumns) > 0 && ownerColumns[0] != "" {
+		owner = ownerColumns[0]
 	}
-	if primary != policy.PrimaryKey || policy.OwnerColumn != "admin_id" {
-		return "", fmt.Errorf("%w: rule columns do not match static policy", ErrInvalidIdentifier)
+	if policyErr != nil {
+		if !errors.Is(policyErr, ErrInvalidIdentifier) {
+			return RulePolicy{}, policyErr
+		}
+		policy = TablePolicy{Recycle: kind == "recycle", Sensitive: kind == "sensitive", PrimaryKey: primary, OwnerColumn: owner}
+		policy.AuditFields = make(map[string]struct{}, len(fields))
+		policy.RollbackFields = make(map[string]struct{}, len(fields))
+		for _, field := range fields {
+			policy.AuditFields[field] = struct{}{}
+			policy.RollbackFields[field] = struct{}{}
+		}
+		if !policy.Recycle && !policy.Sensitive {
+			return RulePolicy{}, policyErr
+		}
+	} else if owner != policy.OwnerColumn {
+		return RulePolicy{}, fmt.Errorf("%w: static table policy owner must remain %s", ErrInvalidIdentifier, policy.OwnerColumn)
+	}
+	if err := ValidateBusinessIdentifier(owner); err != nil {
+		return RulePolicy{}, fmt.Errorf("invalid owner column: %w", err)
+	}
+	policy.OwnerColumn = owner
+	if kind == "recycle" && !policy.Recycle || kind == "sensitive" && !policy.Sensitive {
+		return RulePolicy{}, fmt.Errorf("%w: %s is not enabled for %s", ErrInvalidIdentifier, logical, kind)
+	}
+	if primary != policy.PrimaryKey {
+		return RulePolicy{}, fmt.Errorf("%w: rule primary key does not match policy", ErrInvalidIdentifier)
 	}
 	if err := ValidateSecurityField(primary); err == nil {
-		return "", fmt.Errorf("%w: primary key is not a sensitive field", ErrInvalidIdentifier)
+		return RulePolicy{}, fmt.Errorf("%w: primary key is not a sensitive field", ErrInvalidIdentifier)
 	}
 	table, err := ResolveBusinessTable(db, prefix, logical)
 	if err != nil {
-		return "", err
+		return RulePolicy{}, err
 	}
-	if err := ResolveBusinessColumn(db, table, policy.OwnerColumn); err != nil {
-		return "", err
+	if err := ResolveBusinessColumn(db, table, owner); err != nil {
+		return RulePolicy{}, fmt.Errorf("owner column %s.%s is invalid: %w", table, owner, err)
 	}
 	allowed := policy.AuditFields
 	if kind == "sensitive" {
@@ -88,28 +127,25 @@ func ValidateRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fiel
 	}
 	for _, field := range fields {
 		if err := ValidateSecurityField(field); err != nil {
-			return "", err
+			return RulePolicy{}, err
 		}
 		if _, ok := allowed[field]; !ok {
-			return "", fmt.Errorf("%w: field %q is not allowed by static policy", ErrInvalidIdentifier, field)
+			return RulePolicy{}, fmt.Errorf("%w: field %q is not allowed by policy", ErrInvalidIdentifier, field)
 		}
 		if err := ResolveBusinessColumn(db, table, field); err != nil {
-			return "", err
+			return RulePolicy{}, err
 		}
 	}
-	return table, nil
+	return RulePolicy{Table: policy, TableName: table}, nil
 }
 
 // ResolveBusinessTable validates a logical, unprefixed business table and
-// proves that it exists and carries the owner column required for scoped use.
+// proves that it exists. ResolveRulePolicy separately proves its owner column.
 func ResolveBusinessTable(db *gorm.DB, prefix, logical string) (string, error) {
 	if err := ValidateTablePrefix(prefix); err != nil {
 		return "", err
 	}
 	if err := ValidateBusinessIdentifier(logical); err != nil {
-		return "", err
-	}
-	if _, err := TablePolicyFor(logical); err != nil {
 		return "", err
 	}
 	full := prefix + logical
@@ -119,15 +155,6 @@ func ResolveBusinessTable(db *gorm.DB, prefix, logical string) (string, error) {
 	}
 	if count != 1 {
 		return "", fmt.Errorf("business table %s does not exist", full)
-	}
-	if err := ValidateBusinessIdentifier("admin_id"); err != nil {
-		return "", err
-	}
-	if err := db.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='admin_id'", full).Scan(&count).Error; err != nil {
-		return "", err
-	}
-	if count != 1 {
-		return "", fmt.Errorf("business table %s has no admin_id owner", full)
 	}
 	return full, nil
 }

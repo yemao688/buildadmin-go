@@ -12,11 +12,12 @@ import (
 // SecurityDataRecycle 回收规则表
 type SecurityDataRecycle struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	AdminID      int32  `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`              // ID
-	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                       // 规则名称
-	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`            // 控制器
-	ControllerAs string `gorm:"column:controller_as;not null;comment:控制器别名" json:"controller_as"`    // 控制器别名
-	DataTable    string `gorm:"column:data_table;not null;comment:对应数据表" json:"data_table"`          // 对应数据表
+	AdminID      int32  `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`           // ID
+	Name         string `gorm:"column:name;not null;comment:规则名称" json:"name"`                    // 规则名称
+	Controller   string `gorm:"column:controller;not null;comment:控制器" json:"controller"`         // 控制器
+	ControllerAs string `gorm:"column:controller_as;not null;comment:控制器别名" json:"controller_as"` // 控制器别名
+	DataTable    string `gorm:"column:data_table;not null;comment:对应数据表" json:"data_table"`       // 对应数据表
+	OwnerColumn  string `gorm:"column:owner_column;not null;default:admin_id;comment:目标表所有者字段" json:"owner_column"`
 	PrimaryKey   string `gorm:"column:primary_key;not null;comment:数据表主键" json:"primary_key"`        // 数据表主键
 	Status       string `gorm:"column:status;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"` // 状态:0=禁用,1=启用
 	Connection   string `gorm:"column:connection;not null;default:'';comment:数据库连接配置标识" json:"connection"`
@@ -84,9 +85,11 @@ func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error
 	}
 	data.AdminID = actor.AdminID
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if _, err := data_scope.ValidateRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil); err != nil {
+		policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil, data.OwnerColumn)
+		if err != nil {
 			return err
 		}
+		data.OwnerColumn = policy.Table.OwnerColumn
 		return tx.Create(&data).Error
 	})
 }
@@ -105,9 +108,12 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 	}
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		if _, err := data_scope.ValidateRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil); err != nil {
+		policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil, data.OwnerColumn)
+		if err != nil {
 			return err
 		}
+		data.OwnerColumn = policy.Table.OwnerColumn
+		updates["owner_column"] = data.OwnerColumn
 		result = tx.Model(&SecurityDataRecycle{}).Scopes(s.scoped(ctx)).Where("id = ?", data.ID).Updates(updates)
 		return result.Error
 	}); err != nil {

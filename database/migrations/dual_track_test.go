@@ -22,7 +22,7 @@ func TestDualTrackValidation(t *testing.T) {
 
 func TestPhase2RegistrySplit(t *testing.T) {
 	official, local := OfficialMigrations(), LocalMigrations()
-	if len(official) != 6 || len(local) != 11 {
+	if len(official) != 6 || len(local) != 12 {
 		t.Fatalf("official=%d local=%d", len(official), len(local))
 	}
 	if err := ValidateOfficialMigrations(official); err != nil {
@@ -31,7 +31,7 @@ func TestPhase2RegistrySplit(t *testing.T) {
 	if err := ValidateLocalMigrations(local, official); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"account-status-protocol", "admin-hierarchy", "attachment-owner-index", "user-ownership", "security-ownership", "signed-balance-deltas", "security-target-owner", "legacy-target-state", "security-commit-state", "security-rule-normalization", "canonical-column-order"}
+	want := []string{"account-status-protocol", "admin-hierarchy", "attachment-owner-index", "user-ownership", "security-ownership", "signed-balance-deltas", "security-target-owner", "legacy-target-state", "security-commit-state", "security-rule-normalization", "canonical-column-order", "security-owner-column"}
 	for i, migration := range local {
 		if migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil || migration.PostSeedVerify == nil {
 			t.Fatalf("invalid local registry entry %d: %#v", i, migration)

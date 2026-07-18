@@ -66,16 +66,6 @@ func (s *DataRecycleLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.D
 // targetHasAdminID reports whether the named target table has an admin_id
 // column. It is used to fail-closed restore/rollback operations that would
 // otherwise modify rows whose owner cannot be determined.
-func (s *DataRecycleLogModel) targetHasAdminID(tx *gorm.DB, dataTable string) (bool, error) {
-	var count int64
-	err := tx.Raw(
-		"SELECT COUNT(*) FROM information_schema.columns "+
-			"WHERE table_schema = DATABASE() AND table_name = ? AND column_name = 'admin_id'",
-		s.config.Database.Prefix+dataTable,
-	).Scan(&count).Error
-	return count > 0, err
-}
-
 func (s *DataRecycleLogModel) hasLegacyUnrecoverable(tx *gorm.DB) (bool, error) {
 	var count int64
 	err := tx.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='legacy_unrecoverable'", s.TableName).Scan(&count).Error
@@ -165,12 +155,13 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 			}
 
 			// Fail-closed: refuse to restore into tables that cannot carry ownership.
-			hasAdminID, err := s.targetHasAdminID(tx, v.DataTable)
-			if err != nil {
-				return err
+			var rule SecurityDataRecycle
+			if err := tx.Table(s.config.Database.Prefix+"security_data_recycle").Where("id=?", v.RecycleID).Take(&rule).Error; err != nil {
+				return fmt.Errorf("recycle rule %d unavailable: %w", v.RecycleID, err)
 			}
-			if !hasAdminID {
-				return fmt.Errorf("target table %s lacks admin_id, cannot restore safely", v.DataTable)
+			policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, v.DataTable, "recycle", rule.PrimaryKey, nil, rule.OwnerColumn)
+			if err != nil {
+				return fmt.Errorf("invalid recycle owner policy: %w", err)
 			}
 			if v.TargetAdminID <= 0 {
 				return fmt.Errorf("recycle log %d has no target owner", v.ID)
@@ -178,7 +169,7 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 			if err := data_scope.OwnerInScope(ctx, tx, s.enforcer, s.config.Database.Prefix, v.TargetAdminID); err != nil {
 				return err
 			}
-			data["admin_id"] = v.TargetAdminID
+			data[policy.Table.OwnerColumn] = v.TargetAdminID
 
 			if err := tx.Table(targetTable).Create(data).Error; err != nil {
 				return err

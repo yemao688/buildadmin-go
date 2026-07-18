@@ -30,6 +30,48 @@ type Security struct {
 	enforcer data_scope.Enforcer
 }
 
+func securityScope(ctx *gin.Context, db *gorm.DB, enforcer data_scope.Enforcer, table, ownerColumn string) *gorm.DB {
+	if enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	return enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: table, Column: ownerColumn})
+}
+
+func extractOwnerID(row map[string]any, column string) (int32, error) {
+	value, ok := row[column]
+	if !ok {
+		return 0, fmt.Errorf("target owner column %s missing", column)
+	}
+	var owner int64
+	switch v := value.(type) {
+	case int:
+		owner = int64(v)
+	case int32:
+		owner = int64(v)
+	case int64:
+		owner = v
+	case uint:
+		owner = int64(v)
+	case uint32:
+		owner = int64(v)
+	case uint64:
+		if v > uint64(^uint32(0)) {
+			return 0, fmt.Errorf("target owner out of range")
+		}
+		owner = int64(v)
+	case float64:
+		owner = int64(v)
+	default:
+		return 0, fmt.Errorf("target owner column %s has unsupported type", column)
+	}
+	if owner <= 0 || owner > int64(^uint32(0)>>1) {
+		return 0, fmt.Errorf("target owner missing")
+	}
+	return int32(owner), nil
+}
+
 var errBusinessRollback = errors.New("requesttx: business response requested rollback")
 var errMissingOutcome = errors.New("requesttx: protected handler produced no staged outcome")
 var errDirectResponse = errors.New("requesttx: direct response bypassed staging")
@@ -308,13 +350,8 @@ func (m *Security) workHandler() gin.HandlerFunc {
 			}
 			c.AbortWithStatusJSON(httpCode, gin.H{"error": message})
 		}
-		scope := func(db *gorm.DB, table string) *gorm.DB {
-			if m.enforcer == nil {
-				tx := db.Session(&gorm.Session{})
-				_ = tx.AddError(data_scope.ErrScopedAccessDenied)
-				return tx
-			}
-			return m.enforcer.Scope(c, db, data_scope.OwnerRef{TableAlias: table, Column: "admin_id"})
+		scope := func(db *gorm.DB, table, ownerColumn string) *gorm.DB {
+			return securityScope(c, db, m.enforcer, table, ownerColumn)
 		}
 		getPath := func(c *gin.Context) string {
 			route, _, ok := normalizeRouteAction(c.FullPath())
@@ -391,11 +428,12 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				db = m.sqlDB
 			}
 			resolvedTable, err := data_scope.ResolveBusinessTable(db, m.config.Database.Prefix, recycle.DataTable)
-			if err != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, recycle.PrimaryKey) != nil {
+			policy, policyErr := data_scope.ResolveRulePolicy(db, m.config.Database.Prefix, recycle.DataTable, "recycle", recycle.PrimaryKey, nil, recycle.OwnerColumn)
+			if err != nil || policyErr != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, recycle.PrimaryKey) != nil {
 				abort(http.StatusInternalServerError, "invalid security rule identifier")
 				return
 			}
-			err = scope(db.Table(resolvedTable), resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+recycle.PrimaryKey+"` IN ?", normalizedIDs).Find(&rows).Error
+			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+recycle.PrimaryKey+"` IN ?", normalizedIDs).Find(&rows).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
 				abort(http.StatusInternalServerError, "target lookup failed")
@@ -429,18 +467,8 @@ func (m *Security) workHandler() gin.HandlerFunc {
 					abort(http.StatusInternalServerError, "snapshot failed")
 					return
 				}
-				var targetOwner int32
-				switch vOwner := v["admin_id"].(type) {
-				case int32:
-					targetOwner = vOwner
-				case int64:
-					targetOwner = int32(vOwner)
-				case uint64:
-					targetOwner = int32(vOwner)
-				case float64:
-					targetOwner = int32(vOwner)
-				}
-				if targetOwner <= 0 {
+				targetOwner, ownerErr := extractOwnerID(v, policy.Table.OwnerColumn)
+				if ownerErr != nil {
 					abort(http.StatusInternalServerError, "target owner missing")
 					return
 				}
@@ -522,12 +550,13 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				db = m.sqlDB
 			}
 			resolvedTable, err := data_scope.ResolveBusinessTable(db, m.config.Database.Prefix, sensitive.DataTable)
-			if err != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, sensitive.PrimaryKey) != nil {
+			policy, policyErr := data_scope.ResolveRulePolicy(db, m.config.Database.Prefix, sensitive.DataTable, "sensitive", sensitive.PrimaryKey, nil, sensitive.OwnerColumn)
+			if err != nil || policyErr != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, sensitive.PrimaryKey) != nil {
 				abort(http.StatusInternalServerError, "invalid security rule identifier")
 				return
 			}
 			row := map[string]any{}
-			err = scope(db.Table(resolvedTable), resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&row).Error
+			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&row).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
 				abort(http.StatusInternalServerError, "target lookup failed")
@@ -552,18 +581,8 @@ func (m *Security) workHandler() gin.HandlerFunc {
 					return
 				}
 			}
-			var targetOwner int32
-			switch owner := row["admin_id"].(type) {
-			case int32:
-				targetOwner = owner
-			case int64:
-				targetOwner = int32(owner)
-			case uint64:
-				targetOwner = int32(owner)
-			case float64:
-				targetOwner = int32(owner)
-			}
-			if targetOwner <= 0 {
+			targetOwner, ownerErr := extractOwnerID(row, policy.Table.OwnerColumn)
+			if ownerErr != nil {
 				abort(http.StatusInternalServerError, "target owner missing")
 				return
 			}
@@ -576,7 +595,7 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				return
 			}
 			afterRow := map[string]any{}
-			err = scope(db.Table(resolvedTable), resolvedTable).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&afterRow).Error
+			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Where("`"+sensitive.PrimaryKey+"`=?", params["id"]).Take(&afterRow).Error
 			if err != nil {
 				abort(http.StatusInternalServerError, "after-state lookup failed")
 				return

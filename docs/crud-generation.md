@@ -45,6 +45,8 @@ fields:                   # 必填，至少一个
     type: bigint          # 必填；白名单：bigint/int/smallint/mediumint/tinyint/
                           #   varchar/char/text/tinytext/mediumtext/longtext/
                           #   decimal/double/float/datetime/timestamp/date/time/enum/set
+                          # 主键类型映射：int/mediumint→int32，bigint→int64，varchar/char→string；
+                          # 其他类型作主键会被拒绝生成
     length: 0             # varchar/decimal 用；decimal 配合 precision
     precision: 0
     primaryKey: true
@@ -63,7 +65,7 @@ fields:                   # 必填，至少一个
 
 - **默认 `mode: auto`**：表含 `admin_id` 列时，该列成为 owner，生成的 List/Add/Edit/Del 自动按管理员层级（admin_closure）隔离数据；新记录自动归属当前操作管理员。业务模块一般用它，并在 fields 里显式声明 `admin_id`（bigint, NOT NULL）。
 - `mode: none`：全局资源，不做数据隔离（字典、配置类）。
-- `mode: required`：自定义 owner 列（配合 `ownerColumn`/`assignOnCreate`）；`assignOnCreate: false` 时必须有专用创建逻辑，否则产生无 owner 孤儿数据。
+- `mode: required`：自定义 owner 列（配合 `ownerColumn`/`assignOnCreate`）。有通用 Add 路径的资源**必须** `assignOnCreate: true`；`false` 会被生成器拒绝（防无 owner 孤儿数据，admin 类专用资源除外）。
 - owner 列若非主键，生成链路自动创建 `idx_<owner>` 索引。
 
 ## 护栏（链路已内置，违反会直接失败）

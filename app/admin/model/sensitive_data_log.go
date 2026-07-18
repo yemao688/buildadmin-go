@@ -66,19 +66,6 @@ func (s *SensitiveDataLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm
 	}
 }
 
-// targetHasAdminID reports whether the named target table has an admin_id
-// column. It is used to fail-closed restore/rollback operations that would
-// otherwise modify rows whose owner cannot be determined.
-func (s *SensitiveDataLogModel) targetHasAdminID(tx *gorm.DB, dataTable string) (bool, error) {
-	var count int64
-	err := tx.Raw(
-		"SELECT COUNT(*) FROM information_schema.columns "+
-			"WHERE table_schema = DATABASE() AND table_name = ? AND column_name = 'admin_id'",
-		s.config.Database.Prefix+dataTable,
-	).Scan(&count).Error
-	return count > 0, err
-}
-
 func (s *SensitiveDataLogModel) hasLegacyUnrecoverable(tx *gorm.DB) (bool, error) {
 	var count int64
 	err := tx.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='legacy_unrecoverable'", s.TableName).Scan(&count).Error
@@ -156,17 +143,18 @@ func (s *SensitiveDataLogModel) Rollback(ctx *gin.Context, ids interface{}) erro
 				return fmt.Errorf("invalid sensitive target identifier")
 			}
 			// Fail-closed: refuse to rollback tables that cannot prove row ownership.
-			hasAdminID, err := s.targetHasAdminID(tx, v.DataTable)
-			if err != nil {
-				return err
+			var rule SecuritySensitiveData
+			if err := tx.Table(s.config.Database.Prefix+"security_sensitive_data").Where("id=?", v.SensitiveID).Take(&rule).Error; err != nil {
+				return fmt.Errorf("sensitive rule %d unavailable: %w", v.SensitiveID, err)
 			}
-			if !hasAdminID {
-				return fmt.Errorf("target table %s lacks admin_id, cannot rollback safely", v.DataTable)
+			policy, err := data_scope.ResolveRulePolicy(tx, s.config.Database.Prefix, v.DataTable, "sensitive", rule.PrimaryKey, nil, rule.OwnerColumn)
+			if err != nil {
+				return fmt.Errorf("invalid sensitive owner policy: %w", err)
 			}
 
 			var rowAdminID int32
-			targetScoped := s.enforcer.Scope(ctx, tx.Table(targetTable), data_scope.OwnerRef{TableAlias: targetTable, Column: "admin_id"})
-			if err := targetScoped.Select("admin_id").Where("`"+v.PrimaryKey+"`=?", v.IDValue).Take(&rowAdminID).Error; err != nil {
+			targetScoped := s.enforcer.Scope(ctx, tx.Table(targetTable), data_scope.OwnerRef{TableAlias: targetTable, Column: policy.Table.OwnerColumn})
+			if err := targetScoped.Select(policy.Table.OwnerColumn).Where("`"+v.PrimaryKey+"`=?", v.IDValue).Take(&rowAdminID).Error; err != nil {
 				return err
 			}
 			if v.TargetAdminID <= 0 || rowAdminID != v.TargetAdminID {
@@ -179,8 +167,8 @@ func (s *SensitiveDataLogModel) Rollback(ctx *gin.Context, ids interface{}) erro
 			// Use a fresh scoped session for the conditional write. Reusing the
 			// session after the ownership probe can retain the probe statement's
 			// RowsAffected value and make a skipped UPDATE look successful.
-			targetUpdate := s.enforcer.Scope(ctx, tx.Table(targetTable), data_scope.OwnerRef{TableAlias: targetTable, Column: "admin_id"})
-			result := targetUpdate.Where("`"+v.PrimaryKey+"`=? AND admin_id=? AND `"+v.DataField+"`=?", v.IDValue, v.TargetAdminID, v.After).UpdateColumn(v.DataField, v.Before)
+			targetUpdate := s.enforcer.Scope(ctx, tx.Table(targetTable), data_scope.OwnerRef{TableAlias: targetTable, Column: policy.Table.OwnerColumn})
+			result := targetUpdate.Where("`"+v.PrimaryKey+"`=? AND `"+policy.Table.OwnerColumn+"`=? AND `"+v.DataField+"`=?", v.IDValue, v.TargetAdminID, v.After).UpdateColumn(v.DataField, v.Before)
 			if result.Error != nil {
 				return result.Error
 			}
