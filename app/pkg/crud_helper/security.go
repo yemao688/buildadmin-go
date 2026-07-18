@@ -53,6 +53,24 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 			return err
 		}
 	}
+	if len(fields) == 0 {
+		return fmt.Errorf("at least one field is required")
+	}
+	primaryKeys := 0
+	names := map[string]string{}
+	for _, field := range fields {
+		key := strings.ToLower(field.Name)
+		if previous, exists := names[key]; exists {
+			return fmt.Errorf("duplicate field name %q (conflicts with %q)", field.Name, previous)
+		}
+		names[key] = field.Name
+		if field.PrimaryKey {
+			primaryKeys++
+		}
+	}
+	if primaryKeys != 1 {
+		return fmt.Errorf("exactly one primary key field is required, got %d", primaryKeys)
+	}
 	if err := validatePrimaryKeyTypes(fields); err != nil {
 		return err
 	}

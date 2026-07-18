@@ -109,7 +109,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 
 	re := regexp.MustCompile(`gorm:"[^"]*" `)
 	validateContent = re.ReplaceAllString(validateContent, "")
-	handlerData.ValidateParam = excludeParamFields(validateContent, handlerData.ExcludeParamFields)
+	handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
 
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
@@ -128,13 +128,23 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err := writeRouter(handlerData.ClassName); err != nil {
 		return err
 	}
+	if handlerData.RegisterAtomicRoute != nil {
+		name := strings.ToLower(handlerData.ClassName[:1]) + handlerData.ClassName[1:]
+		handlerData.RegisterAtomicRoute("POST", name+"/add")
+		handlerData.RegisterAtomicRoute("POST", name+"/edit")
+		handlerData.RegisterAtomicRoute("DELETE", name+"/del")
+	}
 	return nil
 }
 
 func excludeParamFields(validateContent string, exclude []string) string {
+	return excludeParamFieldsWithPrimaryKey(validateContent, exclude, "id")
+}
+
+func excludeParamFieldsWithPrimaryKey(validateContent string, exclude []string, primaryKey string) string {
 	var newLines []string
 	lines := strings.Split(validateContent, "\n")
-	excludedFields := []string{"id"}
+	excludedFields := []string{primaryKey}
 	excludedFields = append(excludedFields, exclude...)
 	for _, line := range lines {
 		skip := false
@@ -157,18 +167,24 @@ func renderModel(modelData ModelData) (string, error) {
 	if modelData.PkGoType == "" {
 		modelData.PkGoType = "int32"
 	}
+	if modelData.DataScopeOwnerGoField != "" && modelData.DataScopeOwnerGoType == "" {
+		modelData.DataScopeOwnerGoType = "int32"
+	}
 	return render("", modelTemp, modelData)
 }
 
 // renderHandler renders the handler template to a string for tests. It mirrors
 // the validate-param derivation in writeHandlerFile without touching the disk.
 func renderHandler(handlerData HandlerData, structContent string) (string, error) {
+	if handlerData.PkJSONName == "" {
+		handlerData.PkJSONName = "id"
+	}
 	index := strings.Index(structContent, "struct {")
 	if index != -1 {
 		validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
 		re := regexp.MustCompile(`gorm:"[^"]*" `)
 		validateContent = re.ReplaceAllString(validateContent, "")
-		handlerData.ValidateParam = excludeParamFields(validateContent, handlerData.ExcludeParamFields)
+		handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
 	}
 	return render("", handlerTemp, handlerData)
 }
@@ -213,6 +229,13 @@ func writeRouter(name string) error {
 	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)` + "\n"
 
 	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
+	atomic := "\t\t{Route: \"" + nameVar + "/add\", Action: \"add\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "/edit\", Action: \"edit\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "/del\", Action: \"del\", Method: http.MethodDelete},\n"
+	marker := "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
+	if !strings.Contains(newStr, "Route: \""+nameVar+"/add\"") {
+		newStr = strings.Replace(newStr, marker, atomic+marker, 1)
+	}
 	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
 }
 

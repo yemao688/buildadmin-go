@@ -19,7 +19,7 @@ func TestValidateGenerationInputRejectsInjectedIdentifiersAndTypes(t *testing.T)
 }
 
 func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testing.T) {
-	field := model.Field{Name: "title", DataType: "varchar(64)", Default: "O'Reilly", Comment: "Bob's title"}
+	field := model.Field{Name: "title", DataType: "varchar(64)", Default: "O'Reilly", Comment: "Bob's title", PrimaryKey: true}
 	if err := ValidateGenerationInput(model.Table{Name: "orders", Comment: "customer's orders"}, []model.Field{field}); err != nil {
 		t.Fatal(err)
 	}
@@ -28,6 +28,19 @@ func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testi
 	}
 	if got := formatComment(field.Comment); got != "COMMENT 'Bob''s title'" {
 		t.Fatalf("comment escaping = %q", got)
+	}
+}
+
+func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
+	base := model.Table{Name: "orders"}
+	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int"}}); err == nil {
+		t.Fatal("missing primary key was accepted")
+	}
+	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "ID", Type: "varchar"}}); err == nil {
+		t.Fatal("case-insensitive duplicate field was accepted")
+	}
+	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "other", Type: "int", PrimaryKey: true}}); err == nil {
+		t.Fatal("multiple primary keys were accepted")
 	}
 }
 

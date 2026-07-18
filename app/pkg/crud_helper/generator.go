@@ -1,6 +1,7 @@
 package crud_helper
 
 import (
+	"context"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/conf"
@@ -8,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -16,12 +19,13 @@ import (
 // Authorization is deliberately outside this service: HTTP callers must check
 // their actor, while CLI callers have no gin.Context.
 type GenerateOptions struct {
-	Table    model.Table
-	Fields   []model.Field
-	Type     string
-	SkipMenu bool
-	AdminID  int32
-	Menu     *MenuOptions
+	Table               model.Table
+	Fields              []model.Field
+	Type                string
+	SkipMenu            bool
+	AdminID             int32
+	Menu                *MenuOptions
+	RegisterAtomicRoute func(method, path string)
 }
 
 type MenuOptions struct {
@@ -42,29 +46,38 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	defer release()
-	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
-		return nil, err
-	}
 	if IsProtectedTable(opts.Table.Name) {
 		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", opts.Table.Name)
+	}
+	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
+		return nil, err
 	}
 	if db == nil || cfg == nil {
 		return nil, fmt.Errorf("crud generation requires database and configuration")
 	}
 	if opts.AdminID <= 0 {
-		// CLI has no actor context; use the conventional root audit owner while
-		// leaving authorization entirely to the caller.
 		opts.AdminID = 1
 	}
-	manifest, err := BuildFileManifest(opts.Table)
+	var adminCount int64
+	if err := db.Table(cfg.Database.Prefix+"admin").Where("id=?", opts.AdminID).Count(&adminCount).Error; err != nil {
+		return nil, fmt.Errorf("validate admin-id %d: %w", opts.AdminID, err)
+	}
+	if adminCount != 1 {
+		return nil, fmt.Errorf("admin-id %d does not exist", opts.AdminID)
+	}
+	manifest, err := BuildFileManifestForFields(opts.Table, opts.Fields)
 	if err != nil {
 		return nil, err
 	}
-	if exists, err := hasCrudLog(db, cfg, opts.Table.Name); err != nil {
+	if err := validateGenerationMode(opts.Type, opts.Table.Rebuild, tableExists(db, cfg, opts.Table.Name), opts.Table.Name); err != nil {
 		return nil, err
-	} else if !exists && (fileExists(manifest.Generated[4]) || fileExists(manifest.Generated[5])) {
-		return nil, fmt.Errorf("refusing to overwrite existing CRUD files for table %q without a CRUD log", opts.Table.Name)
 	}
+	if success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name); err != nil {
+		return nil, err
+	} else if !manifestAllows(manifest, success) {
+		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target is not in the latest successful generation manifest", opts.Table.Name)
+	}
+	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
 	snapshot, err := NewFileSnapshot(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	if err != nil {
 		return nil, err
@@ -75,42 +88,67 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
+	createdMenuIDs := []int32{}
 	fail := func(stage string, cause error) (*GenerateResult, error) {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
 			message += "; restore failed: " + restoreErr.Error()
 		}
 		_ = recordCrudError(db, cfg, logID, message)
+		if len(createdMenuIDs) > 0 {
+			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
+		}
 		return nil, fmt.Errorf("%s: %w", stage, cause)
 	}
 
 	tableM := model.NewTableModel(cfg, db)
 	getTableName := func(name string, full bool) string { return tableM.Name(name, full) }
 	getColumns := func(name string) ([]model.Column, error) { return tableM.GetColumns(name) }
-	if opts.Type == "create" || opts.Table.Rebuild == "Yes" {
+	if opts.Type == "create" && opts.Table.Rebuild == "Yes" {
 		if err := tableM.DelTable(opts.Table.Name); err != nil {
 			return fail("drop table", err)
 		}
 	}
+	if opts.Type == "alter" && tableExists(db, cfg, opts.Table.Name) {
+		current, err := getColumns(opts.Table.Name)
+		if err != nil {
+			return fail("read existing columns", err)
+		}
+		opts.Table.DesignChange = deriveAlterChanges(current, opts.Fields)
+	}
 	if err := HandleTableDesign(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields); err != nil {
 		return fail("table design", err)
 	}
-	webViewsDir, tableComment, err := GenerateFile(opts.Table, opts.Fields, getTableName, getColumns, db)
+	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, opts.RegisterAtomicRoute)
 	if err != nil {
 		return fail("file generation", err)
 	}
 	if !opts.SkipMenu {
-		if err := CreateMenuWithOptions(model.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu); err != nil {
+		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu)
+		if err != nil {
 			return fail("menu generation", err)
 		}
 	}
 	if err := runWire(); err != nil {
 		return fail("wire", err)
 	}
+	if err := runProjectBuild(); err != nil {
+		return fail("compile", err)
+	}
 	if err := updateCrudStatus(db, cfg, logID, "success"); err != nil {
 		return fail("success log update", err)
 	}
 	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID}, nil
+}
+
+func validateGenerationMode(generationType, rebuild string, exists bool, tableName string) error {
+	if generationType != "create" && generationType != "alter" {
+		return fmt.Errorf("unsupported CRUD generation type %q; use create or alter", generationType)
+	}
+	if generationType == "create" && exists && rebuild != "Yes" {
+		return fmt.Errorf("create for existing table %q refused; use type: alter or explicit rebuild: Yes (this will DROP the table)", tableName)
+	}
+	return nil
 }
 
 // DeleteFromSpec performs deletion without an HTTP context. The caller is
@@ -124,19 +162,35 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 	if db == nil || cfg == nil {
 		return fmt.Errorf("crud deletion requires database and configuration")
 	}
-	var log model.CrudLog
-	if err := db.Table(crudLogTable(cfg)).Where("table_name=?", tableName).Order("create_time desc").Take(&log).Error; err != nil {
+	logPtr, err := latestSuccessfulCrudLog(db, cfg, tableName)
+	if err != nil {
 		return err
 	}
+	if logPtr == nil {
+		return fmt.Errorf("no successful CRUD generation manifest for table %q", tableName)
+	}
+	log := *logPtr
 	if IsProtectedTable(log.Tablename, log.Table.Name) {
 		return fmt.Errorf("crud deletion is forbidden for protected table %q", log.Tablename)
 	}
 	if err := ValidateGenerationInput(model.Table(log.Table), []model.Field(log.Fields)); err != nil {
 		return err
 	}
-	manifest, err := BuildFileManifest(model.Table(log.Table))
+	manifest, err := BuildFileManifestForFields(model.Table(log.Table), []model.Field(log.Fields))
 	if err != nil {
 		return err
+	}
+	if len(log.Table.GeneratedFiles) > 0 {
+		shared := make(map[string]bool, len(manifest.Shared))
+		for _, path := range manifest.Shared {
+			shared[path] = true
+		}
+		manifest.Generated = nil
+		for _, path := range log.Table.GeneratedFiles {
+			if !shared[path] {
+				manifest.Generated = append(manifest.Generated, path)
+			}
+		}
 	}
 	quarantine, err := NewQuarantine(manifest.Generated)
 	if err != nil {
@@ -184,6 +238,9 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 	if err := runWire(); err != nil {
 		return fail("wire", err)
 	}
+	if err := runProjectBuild(); err != nil {
+		return fail("compile", err)
+	}
 	if err := model.NewAdminRuleModel(db, cfg).Delete(GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)), true); err != nil {
 		return fail("delete menu", err)
 	}
@@ -206,6 +263,55 @@ func hasCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (bool, error
 	var count int64
 	err := db.Table(crudLogTable(cfg)).Where("table_name=?", table).Count(&count).Error
 	return count > 0, err
+}
+
+func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
+	return db.Migrator().HasTable(cfg.Database.Prefix + table)
+}
+
+func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*model.CrudLog, error) {
+	var log model.CrudLog
+	err := db.Table(crudLogTable(cfg)).Where("table_name=? AND status=?", table, "success").Order("create_time desc, id desc").Take(&log).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	return &log, err
+}
+
+func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
+	for _, path := range manifest.Generated {
+		if fileExists(path) {
+			if log == nil || !containsPath(log.Table.GeneratedFiles, path) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func containsPath(paths []string, target string) bool {
+	for _, path := range paths {
+		if path == target {
+			return true
+		}
+	}
+	return false
+}
+
+func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.ChangeField {
+	existing := make(map[string]bool, len(columns))
+	for _, column := range columns {
+		existing[strings.ToLower(column.COLUMN_NAME)] = true
+	}
+	changes := make([]model.ChangeField, 0, len(fields))
+	for _, field := range fields {
+		changeType := "add-field"
+		if existing[strings.ToLower(field.Name)] {
+			changeType = "change-field-attr"
+		}
+		changes = append(changes, model.ChangeField{Type: changeType, OldName: field.Name, NewName: field.Name, Sync: true})
+	}
+	return changes
 }
 
 func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (int32, error) {
@@ -247,4 +353,35 @@ func runWire() error {
 	cmd := exec.Command("wire")
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
 	return cmd.Run()
+}
+
+var runProjectBuild = buildProject
+
+func buildProject() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "./...")
+	cmd.Dir = utils.RootPath()
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return fmt.Errorf("go build ./... timed out after 2m")
+	}
+	if err != nil {
+		const maxOutput = 4096
+		if len(output) > maxOutput {
+			output = append(output[:maxOutput], []byte("... [output truncated]")...)
+		}
+		return fmt.Errorf("go build ./...: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func buildAndRestoreOnFailure(snapshot *FileSnapshot, builder func() error) error {
+	if err := builder(); err != nil {
+		if restoreErr := snapshot.Restore(); restoreErr != nil {
+			return fmt.Errorf("%w; restore failed: %v", err, restoreErr)
+		}
+		return err
+	}
+	return nil
 }

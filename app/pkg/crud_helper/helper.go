@@ -21,7 +21,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
-	return GenerateFileWithDataScope(table, fields, table.DataScope, getTableName, getColumns, db)
+	return GenerateFileWithRouteRegistrar(table, fields, table.DataScope, getTableName, getColumns, db, nil)
 }
 
 // prepareGenerationData resolves data-scope policy and initializes the model/handler
@@ -85,6 +85,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
 	handlerData.PkGoType = modelData.PkGoType
+	handlerData.PkJSONName = tablePk
 	handlerData.TableComment = tableComment
 
 	handlerData.Import = []string{}
@@ -104,6 +105,13 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.PkGoField = pkGoField(tablePk)
 	modelData.DataScopePolicy = ds.Policy
 	modelData.DataScopeOwnerGoField = ds.OwnerGoField
+	if ds.OwnerColumn != "" {
+		ownerType, err := ownerGoType(searchField(fields, ds.OwnerColumn))
+		if err != nil {
+			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		}
+		modelData.DataScopeOwnerGoType = ownerType
+	}
 	effectiveFormFields := slices.Clone(table.FormFields)
 	if ds.OwnerColumn != "" {
 		effectiveFormFields = slices.DeleteFunc(effectiveFormFields, func(s string) bool {
@@ -124,6 +132,10 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
 // configuration. A nil dsConfig preserves legacy auto-detection behavior.
 func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+	return GenerateFileWithRouteRegistrar(table, fields, dsConfig, getTableName, getColumns, db, nil)
+}
+
+func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string)) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -132,6 +144,7 @@ func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig
 	if err != nil {
 		return WebDir{}, "", err
 	}
+	handlerData.RegisterAtomicRoute = registrar
 	table.FormFields = slices.Clone(modelData.EffectiveFormFields)
 	quickSearchFieldZhCnTitle := []string{}
 
@@ -291,6 +304,18 @@ func primaryKeyGoType(field model.Field) (string, error) {
 		return "string", nil
 	default:
 		return "", fmt.Errorf("unsupported primary key type %q for field %q; supported types are int, mediumint, bigint, varchar, and char", base, field.Name)
+	}
+}
+
+func ownerGoType(field model.Field) (string, error) {
+	base := strings.ToLower(analyseFieldType(field))
+	switch base {
+	case "tinyint", "smallint", "mediumint", "int", "integer":
+		return "int32", nil
+	case "bigint":
+		return "int64", nil
+	default:
+		return "", fmt.Errorf("unsupported data-scope owner type %q for field %q", base, field.Name)
 	}
 }
 

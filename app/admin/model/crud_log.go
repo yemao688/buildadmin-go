@@ -71,23 +71,24 @@ type ChangeField struct {
 }
 
 type Table struct {
-	DataScope            *data_scope.Config `json:"dataScope,omitempty"`  //数据权限配置
-	Name                 string             `json:"name"`                 //数据表名
-	Comment              string             `json:"comment"`              //数据表注释
-	QuickSearchField     []string           `json:"quickSearchField"`     //表格快速搜索字段
-	DefaultSortField     string             `json:"defaultSortField"`     //表格默认排序字段
-	FormFields           []string           `json:"formFields"`           //作为表单项的字段
-	ColumnFields         []string           `json:"columnFields"`         //作为表格列的字段
-	DefaultSortType      string             `json:"defaultSortType"`      //排序方式
-	GenerateRelativePath string             `json:"generateRelativePath"` //生成代码的相对位置
-	IsCommonModel        int                `json:"isCommonModel"`        //是否公共模型
-	ModelFile            string             `json:"modelFile"`            //生成的数据模型位置
-	ControllerFile       string             `json:"controllerFile"`       //生成的控制器位置
-	ValidateFile         string             `json:"validateFile"`         //生成的验证器位置
-	WebViewsDir          string             `json:"webViewsDir"`          //WEB端视图目录
-	DesignChange         []ChangeField      `json:"designChange"`         //表设计变更
-	Rebuild              string             `json:"rebuild"`              //是否重建
-	Empty                bool               `json:"empty"`                //表格是否有数据,后台增加
+	DataScope            *data_scope.Config `json:"dataScope,omitempty"`      //数据权限配置
+	Name                 string             `json:"name"`                     //数据表名
+	Comment              string             `json:"comment"`                  //数据表注释
+	QuickSearchField     []string           `json:"quickSearchField"`         //表格快速搜索字段
+	DefaultSortField     string             `json:"defaultSortField"`         //表格默认排序字段
+	FormFields           []string           `json:"formFields"`               //作为表单项的字段
+	ColumnFields         []string           `json:"columnFields"`             //作为表格列的字段
+	DefaultSortType      string             `json:"defaultSortType"`          //排序方式
+	GenerateRelativePath string             `json:"generateRelativePath"`     //生成代码的相对位置
+	IsCommonModel        int                `json:"isCommonModel"`            //是否公共模型
+	ModelFile            string             `json:"modelFile"`                //生成的数据模型位置
+	ControllerFile       string             `json:"controllerFile"`           //生成的控制器位置
+	ValidateFile         string             `json:"validateFile"`             //生成的验证器位置
+	WebViewsDir          string             `json:"webViewsDir"`              //WEB端视图目录
+	DesignChange         []ChangeField      `json:"designChange"`             //表设计变更
+	Rebuild              string             `json:"rebuild"`                  //是否重建
+	Empty                bool               `json:"empty"`                    //表格是否有数据,后台增加
+	GeneratedFiles       []string           `json:"generatedFiles,omitempty"` //最近一次成功生成的文件清单
 }
 
 type TableAttr struct {

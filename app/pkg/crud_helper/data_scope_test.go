@@ -201,7 +201,7 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	assert.Contains(t, out, "func (s *DemoModel) scopedDB")
 	assert.Contains(t, out, "func (s *DemoModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}")
-	assert.Contains(t, out, "demo.AdminID = actor.AdminID")
+	assert.Contains(t, out, "demo.AdminID = int32(actor.AdminID)")
 	assert.Contains(t, out, `Where("id = ?", demo.ID)`)
 	assert.Contains(t, out, "RowsAffected")
 	assert.NotContains(t, out, "LimitAdminIds")
@@ -260,6 +260,32 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
 }
 
+func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
+	table := model.Table{Name: "big_owner", ModelFile: "app/admin/model/BigOwner.go", ControllerFile: "app/admin/handler/BigOwner.go", FormFields: []string{"name"}}
+	fields := []model.Field{
+		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
+		{Name: "admin_id", Type: "bigint", DesignType: "number"},
+		{Name: "name", Type: "varchar", DesignType: "string"},
+	}
+	getTableName := func(name string, full bool) string {
+		if full {
+			return "ba_" + name
+		}
+		return name
+	}
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	require.NoError(t, err)
+	assert.Equal(t, "int64", modelData.DataScopeOwnerGoType)
+	modelData.Pk = "id"
+	modelData.StructTemp = strings.Replace(compileDemoStruct(modelData.ClassName, "admin_id", "AdminID", "admin_id"), "AdminID int32", "AdminID int64", 1)
+	modelCode, err := renderModel(modelData)
+	require.NoError(t, err)
+	assert.Contains(t, modelCode, "AdminID = int64(actor.AdminID)")
+	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	require.NoError(t, err)
+	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode))
+}
+
 func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
 	out := renderModelString(t, ModelData{
 		Namespace: "model", Name: "token", ClassName: "Token", ModelVar: "token",
@@ -280,6 +306,13 @@ func TestRelatedModelWithoutAdminIDResolvesModeNone(t *testing.T) {
 	resolved, err := ResolveDataScope(nil, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "name", Type: "varchar"}}, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.NoError(t, err)
 	assert.Equal(t, data_scope.ModeNone, resolved.Policy.Mode)
+}
+
+func TestCommonModelBaseSupportsRequestTransactions(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join(repoRoot(t), "app", "common", "model", "base.go"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "func (s *BaseModel) DBFor")
+	assert.Contains(t, string(content), "func (s *BaseModel) Transaction")
 }
 
 func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {

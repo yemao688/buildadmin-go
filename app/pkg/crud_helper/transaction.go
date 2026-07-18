@@ -62,6 +62,30 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 	return manifest, nil
 }
 
+func BuildFileManifestForFields(table model.Table, fields []model.Field) (FileManifest, error) {
+	manifest, err := BuildFileManifest(table)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	for _, field := range fields {
+		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
+			continue
+		}
+		join, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		if err != nil {
+			return FileManifest{}, err
+		}
+		if !fileExists(join.ParseFile) {
+			manifest.Generated = append(manifest.Generated, join.ParseFile)
+		}
+		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
+		if !fileExists(provider) {
+			manifest.Shared = append(manifest.Shared, provider)
+		}
+	}
+	return manifest, nil
+}
+
 type FileSnapshot struct {
 	dir     string
 	entries []snapshotEntry

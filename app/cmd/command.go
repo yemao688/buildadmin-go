@@ -42,6 +42,7 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 		},
 	}
 	generateCmd.Flags().Bool("skip-menu", false, "skip menu creation")
+	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	deleteCmd := &cobra.Command{
 		Use:           "crud:delete <tableName>",
 		Short:         "删除 CRUD 文件",

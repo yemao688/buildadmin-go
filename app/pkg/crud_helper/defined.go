@@ -248,15 +248,17 @@ type NameInfo struct {
 // var updateTimeField = "update_time"
 
 type HandlerData struct {
-	Namespace       string //包名
-	ClassName       string //类名
-	ModelNamespace  string //模型包名
-	ModelImportPath string //模型完整导入路径
-	ModelName       string //模型类名
-	ModelVar        string //模型变量名
-	PkGoType        string //主键Go类型
-	TableComment    string //表备注
-	ValidateParam   string //表单参数
+	Namespace           string //包名
+	ClassName           string //类名
+	ModelNamespace      string //模型包名
+	ModelImportPath     string //模型完整导入路径
+	ModelName           string //模型类名
+	ModelVar            string //模型变量名
+	PkGoType            string //主键Go类型
+	PkJSONName          string //主键JSON字段名
+	RegisterAtomicRoute func(method, path string)
+	TableComment        string //表备注
+	ValidateParam       string //表单参数
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
@@ -332,7 +334,7 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 	}
 
 	type {{.ClassName}}IDs struct {
-		ID {{.PkGoType}} ` + "`json:\"id\" binding:\"required\"`" + `
+		ID {{.PkGoType}} ` + "`json:\"{{.PkJSONName}}\" binding:\"required\"`" + `
 	}
 	var params = struct {
 		{{.ClassName}}IDs
@@ -398,6 +400,7 @@ type ModelData struct {
 
 	DataScopePolicy       data_scope.ResourcePolicy
 	DataScopeOwnerGoField string
+	DataScopeOwnerGoType  string
 	EffectiveFormFields   []string
 	EditableColumns       []string
 	EditableColumnsGo     string
@@ -491,7 +494,7 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 			return err
 		}
 		if s.Policy.AssignOnCreate {
-			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = actor.AdminID
+			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
 		}
 		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
 			return err

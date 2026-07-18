@@ -15,6 +15,7 @@ var protectedTableNames = []string{
 	"user", "user_money_log", "user_score_log", "user_rule", "user_group",
 	"attachment", "crud_log", "data_recycle_log", "sensitive_data_log",
 	"security_rule", "table",
+	"security_data_recycle", "security_sensitive_data", "admin_group", "admin_group_access", "config",
 }
 
 // IsProtectedTable accepts either a logical table name or a prefixed database

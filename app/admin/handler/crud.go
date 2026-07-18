@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	"go-build-admin/app/middleware"
 	helper "go-build-admin/app/pkg/crud_helper"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
@@ -59,6 +60,10 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}
 	if _, err := helper.GenerateFromSpec(h.tableM.DB(), h.config, helper.GenerateOptions{
 		Table: params.Table, Fields: params.Fields, Type: params.Type, AdminID: adminID,
+		RegisterAtomicRoute: func(method, route string) {
+			action := route[strings.LastIndex(route, "/")+1:]
+			middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
+		},
 	}); err != nil {
 		FailByErr(ctx, err)
 		return

@@ -21,7 +21,8 @@ func TestProtectedTableNamesAreStable(t *testing.T) {
 		"user": true, "user_money_log": true, "user_score_log": true, "user_rule": true,
 		"user_group": true, "attachment": true, "crud_log": true,
 		"data_recycle_log": true, "sensitive_data_log": true, "security_rule": true,
-		"table": true,
+		"table": true, "security_data_recycle": true, "security_sensitive_data": true,
+		"admin_group": true, "admin_group_access": true, "config": true,
 	}
 	got := ProtectedTableNames()
 	if len(got) != len(want) {

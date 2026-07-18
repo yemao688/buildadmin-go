@@ -2,9 +2,11 @@ package handler
 
 import (
 	"fmt"
+	"go-build-admin/app/middleware"
 	helper "go-build-admin/app/pkg/crud_helper"
 	"go-build-admin/conf"
 	"go-build-admin/service/db"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -32,6 +34,11 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load CRUD spec error: %w", err)
 	}
 	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
+	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
+	opts.RegisterAtomicRoute = func(method, path string) {
+		action := path[strings.LastIndex(path, "/")+1:]
+		middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
+	}
 	result, err := helper.GenerateFromSpec(h.db, h.config, *opts)
 	if err != nil {
 		return fmt.Errorf("CRUD generation error: %w", err)

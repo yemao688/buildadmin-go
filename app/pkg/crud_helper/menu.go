@@ -19,6 +19,12 @@ func CreateMenu(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComme
 }
 
 func CreateMenuWithOptions(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) error {
+	_, err := CreateMenuWithOptionsAndRecord(adminRuleM, webViewsDir, tableComment, options)
+	return err
+}
+
+func CreateMenuWithOptionsAndRecord(adminRuleM *model.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) ([]int32, error) {
+	created := []int32{}
 	menuName := GetMenuName(webViewsDir)
 	adminRule := model.AdminRule{}
 	result := adminRuleM.DB().Where("name=?", menuName).First(&adminRule)
@@ -44,9 +50,10 @@ func CreateMenuWithOptions(adminRuleM *model.AdminRuleModel, webViewsDir WebDir,
 					Path:  v,
 				}
 				if err := adminRuleM.DB().Create(&newRule).Error; err != nil {
-					return err
+					return created, err
 				}
 				pid = newRule.ID
+				created = append(created, newRule.ID)
 			}
 		}
 
@@ -72,8 +79,9 @@ func CreateMenuWithOptions(adminRuleM *model.AdminRuleModel, webViewsDir WebDir,
 			Status:    "1",
 		}
 		if err := adminRuleM.DB().Create(&menuRule).Error; err != nil {
-			return err
+			return created, err
 		}
+		created = append(created, menuRule.ID)
 
 		for _, v := range menuChildren {
 			var err error
@@ -88,19 +96,23 @@ func CreateMenuWithOptions(adminRuleM *model.AdminRuleModel, webViewsDir WebDir,
 					"Status": v.Status,
 				}).Error
 			} else {
-				err = adminRuleM.DB().Create(&model.AdminRule{
+				newRule := &model.AdminRule{
 					Pid:    menuRule.ID,
 					Type:   v.Type,
 					Title:  v.Title,
 					Name:   name,
 					Status: v.Status,
-				}).Error
+				}
+				err = adminRuleM.DB().Create(newRule).Error
+				if err == nil {
+					created = append(created, newRule.ID)
+				}
 			}
 
 			if err != nil {
-				return err
+				return created, err
 			}
 		}
 	}
-	return nil
+	return created, nil
 }
