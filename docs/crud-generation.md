@@ -15,8 +15,12 @@ go build ./...
 ```
 
 - 退出码：`0` 成功；`1` 失败（stderr 单行错误，直接可读）。**不要用输出文本判断成败，看退出码。**
-- spec 入版本库：再生成 = 修改 spec 重跑命令（已生成的文件允许被覆盖；非本链生成的手写文件会被拒绝覆盖）。
-- 跳过菜单创建：加 `--skip-menu`。
+- 生成链自带编译门禁：wire 后自动执行 `go build ./...`，失败自动恢复文件并报错。
+- spec 入版本库。**修改已有模块**：把 spec 改为 `type: alter` 再重跑（只增改列，绝不隐式删列；spec 里缺少的现有列会被保留）。
+- **`type: create` 遇到已存在的表会直接失败**——这是防数据丢失护栏。确需 DROP 重建时显式写 `rebuild: "Yes"`（破坏性，先确认表无业务数据）。
+- 覆盖保护：只有目标文件与"最近一次成功生成的 manifest"完全一致才允许覆盖；手写核心文件永远拒绝。
+- 跳过菜单创建：加 `--skip-menu`（菜单默认创建）。
+- 审计归属：`--admin-id <id>`（默认 1），生成前校验该管理员必须存在。
 
 ```bash
 # 删除模块（文件进 quarantine，provider/router/wire 全部成功后才真删，失败自动恢复）
@@ -29,7 +33,9 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ```yaml
 name: user_order          # 必填，逻辑表名（snake_case；物理表自动加 mysql.prefix，通常 ba_）
 comment: 用户订单          # 表注释 / 菜单默认标题
-type: create              # 可选，默认 create
+type: create              # 可选，默认 create=新建（表已存在则失败）；
+                          #   alter=修改已有表（增改列、不删列）
+rebuild: "No"             # 仅 "Yes" 时允许 create DROP 重建（破坏性）
 dataScope:                # 可选，默认 { mode: auto }
   mode: auto              # auto|required|none（见下方"数据权限约定"）
   ownerColumn: admin_id   # required 模式下的 owner 列
@@ -37,7 +43,7 @@ dataScope:                # 可选，默认 { mode: auto }
 formFields: [order_no]    # 可选，默认 = 所有非主键字段
 columnFields: [id]        # 可选，默认 = 所有字段
 quickSearchField: [order_no]  # 可选
-menu:                     # 可选；缺省不创建菜单
+menu:                     # 可选；只配置标题/父级；菜单总是创建，除非 --skip-menu
   title: 用户订单
   parent: 0               # admin_rule 父节点 id，0=顶级
 fields:                   # 必填，至少一个
@@ -92,7 +98,7 @@ fields:                   # 必填，至少一个
 
 - 远程关联下拉：编辑生成的 `popupForm.vue`，把字段改为 `remoteSelect`。
 - 列表关联展示：在生成的 model `List` 中按现有 scope 模式加 JOIN。
-- 改字段：编辑 spec 后重跑 `crud:generate`（设计变更走 ALTER TABLE）。
+- 改字段：编辑 spec 字段后把 `type` 改为 `alter` 重跑（ADD/MODIFY 列；删列需人工处理）。
 
 ## 验证清单（生成后必做）
 
@@ -106,6 +112,7 @@ fields:                   # 必填，至少一个
 |---|---|
 | `another generation is in progress` | 另一生成/删除进行中，稍后重试 |
 | `protected table` | 表名命中核心表清单，换表名 |
-| `already exists and is not tracked` | 目标文件是手写代码；换模块名或先 `crud:delete` 对应记录 |
+| `table already exists`（create 被拒） | 改 `type: alter` 迭代；或确认无数据后 `rebuild: "Yes"` 重建 |
+| 覆盖被拒绝（非 success manifest 路径） | 目标是手写/历史文件；换模块名或先 `crud:delete` 对应记录 |
 | 退出码 1 + 单行错误 | 按 stderr 错误修正 spec 重跑；文件系统已自动恢复 |
-| Wire 失败 | 运行 `go generate ./cmd/app` 手工重试并查看具体错误 |
+| Wire/编译门禁失败 | 生成物已自动回滚；按错误中的构建输出修正后重试，或手工 `go generate ./cmd/app` 诊断 |

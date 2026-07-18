@@ -1,5 +1,6 @@
 # AI CRUD playbook example. Paths are optional and default to the standard
 # admin model/handler and backend view locations.
+# First run uses type: create; to iterate fields later, switch to type: alter.
 name: user_order
 comment: 用户订单
 type: create
