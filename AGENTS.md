@@ -28,6 +28,17 @@ pnpm build                             # emits web/dist/
 - Before finishing backend work, run affected package tests plus `go build ./...`. For frontend work run `pnpm lint`, `pnpm typecheck`, then `pnpm build`.
 - There is no repository CI workflow, task runner, Makefile, or configured Go linter; do not invent wrapper commands.
 
+## CRUD module generation (AI-driven)
+
+When asked to "generate a module" (e.g. 用户订单), do NOT hand-write model/handler/vue scaffolding. Drive the built-in chain:
+
+```bash
+go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/app --conf config.yaml crud:delete <table_name>
+```
+
+Write the YAML spec into `crud_specs/` first (schema and example: `crud_specs/user_order.yaml`). Full playbook: `docs/crud-generation.md` — read it before generating. Exit code 0 = success, 1 = failure (stderr has the reason); files auto-restore on failure, but MySQL DDL is not rollbackable. Protected core tables (admin, user, rules, logs...) are refused.
+
 ## Generated and deployed files
 
 - Never hand-edit `cmd/app/wire_gen.go`. After provider or `cmd/app/wire.go` changes, run `go generate ./cmd/app` (or Wire from `cmd/app/`).
