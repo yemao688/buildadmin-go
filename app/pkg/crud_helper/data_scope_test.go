@@ -260,6 +260,31 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
 }
 
+func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
+	table := model.Table{Name: "ai_gate_base", ModelFile: "app/admin/model/ai_gate_base.go", ControllerFile: "app/admin/handler/ai_gate_base.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
+	fields := []model.Field{
+		{Name: "id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
+		{Name: "name", Type: "varchar", DesignType: "string"},
+	}
+	getTableName := func(name string, full bool) string {
+		if full {
+			return "ba_" + name
+		}
+		return name
+	}
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	require.NoError(t, err)
+	modelData.Pk = "id"
+	modelData.StructTemp = compileDemoStruct(modelData.ClassName, "", "", "")
+	modelCode, err := renderModel(modelData)
+	require.NoError(t, err)
+	assert.Contains(t, modelCode, `Select("name")`)
+	assert.NotContains(t, modelCode, ".Select()")
+	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	require.NoError(t, err)
+	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode))
+}
+
 func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
 	table := model.Table{Name: "big_owner", ModelFile: "app/admin/model/BigOwner.go", ControllerFile: "app/admin/handler/BigOwner.go", FormFields: []string{"name"}}
 	fields := []model.Field{

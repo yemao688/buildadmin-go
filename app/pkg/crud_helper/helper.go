@@ -967,7 +967,18 @@ func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableNa
 		rootFileName = joinModelFile.RootFileName
 
 		if _, err := os.Stat(joinModelFile.ParseFile); os.IsNotExist(err) {
-			joinTable := model.Table{Name: tableName, ModelFile: field.Form.RemoteModel}
+			formFields := make([]string, 0, len(fields))
+			columnFields := make([]string, 0, len(fields))
+			for _, joinField := range fields {
+				columnFields = append(columnFields, joinField.Name)
+				if !joinField.PrimaryKey {
+					formFields = append(formFields, joinField.Name)
+				}
+			}
+			joinTable := model.Table{
+				Name: tableName, ModelFile: field.Form.RemoteModel,
+				FormFields: formFields, ColumnFields: columnFields,
+			}
 			joinGetTableName := func(name string, full bool) string {
 				if full {
 					return fullTableName
