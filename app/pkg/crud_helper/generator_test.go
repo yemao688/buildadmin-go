@@ -4,6 +4,7 @@ import (
 	"errors"
 	"go-build-admin/app/admin/model"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -129,5 +130,12 @@ func TestFailedGenerationUnregistersRegisteredRoutes(t *testing.T) {
 	unregisterAtomicRoutes(func(method, path string) { got = append(got, atomicRouteRegistration{method: method, path: path}) }, routes)
 	if len(got) != 2 || got[0].path != "demo/del" || got[1].path != "demo/add" {
 		t.Fatalf("unexpected unregister order: %+v", got)
+	}
+}
+
+func TestWireErrorIncludesOutput(t *testing.T) {
+	err := formatWireError(errors.New("exit status 1"), []byte("wire: undefined provider\n"))
+	if !strings.Contains(err.Error(), "undefined provider") {
+		t.Fatalf("wire error omitted diagnostic output: %v", err)
 	}
 }

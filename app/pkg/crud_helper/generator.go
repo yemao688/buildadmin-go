@@ -271,7 +271,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
 			message += "; menu restore failed: " + restoreErr.Error()
 		}
-		_ = recordCrudError(db, cfg, log.ID, message)
+		_ = recordCrudDeleteError(db, cfg, log.ID, message)
 		return fmt.Errorf("%s", message)
 	}
 	module := "admin"
@@ -296,6 +296,9 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	}
 	if err := RemoveProvider(modelFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
 		return fail("remove model provider", err)
+	}
+	if err := removeAssociatedModelProviders([]model.Field(log.Fields), manifest); err != nil {
+		return fail("remove associated model providers", err)
 	}
 	if err := RemoveRouter(log.Table.Name); err != nil {
 		return fail("remove router", err)
@@ -378,6 +381,28 @@ func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRu
 			if err := db.Table(cfg.Database.Prefix + "admin_rule").Create(&row).Error; err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func removeAssociatedModelProviders(fields []model.Field, manifest FileManifest) error {
+	seen := map[string]bool{}
+	for _, field := range fields {
+		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
+			continue
+		}
+		join, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		if err != nil {
+			return err
+		}
+		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
+		if !containsPath(manifest.Shared, provider) || seen[provider] {
+			continue
+		}
+		seen[provider] = true
+		if err := RemoveProvider(join.RootFileName, join.LastName+"Model"); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -516,15 +541,38 @@ func recordCrudError(db *gorm.DB, cfg *conf.Configuration, id int32, message str
 	return nil
 }
 
+func recordCrudDeleteError(db *gorm.DB, cfg *conf.Configuration, id int32, message string) error {
+	result := db.Table(crudLogTable(cfg)).Where("id=?", id).Update("comment", "delete failed: "+message)
+	return result.Error
+}
+
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-func runWire() error {
+var runWire = executeWire
+
+func executeWire() error {
 	cmd := exec.Command("wire")
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	const maxOutput = 4096
+	if len(output) > maxOutput {
+		output = append(output[:maxOutput], []byte("... [output truncated]")...)
+	}
+	return formatWireError(err, output)
+}
+
+func formatWireError(err error, output []byte) error {
+	const maxOutput = 4096
+	if len(output) > maxOutput {
+		output = append(output[:maxOutput], []byte("... [output truncated]")...)
+	}
+	return fmt.Errorf("wire: %w: %s", err, strings.TrimSpace(string(output)))
 }
 
 var runProjectBuild = buildProject
