@@ -959,17 +959,14 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
 	rootFileName := ""
 
-	path := filepath.Join(utils.RootPath(), field.Form.RemoteModel)
-	_, err := os.Stat(path)
-	if field.Form.RemoteModel == "" || os.IsNotExist(err) {
-		joinModelFile, err := ParseNameData("admin", tableName, "model", field.Form.RemoteModel)
-		if err != nil {
-			return "", err
-		}
+	joinModelFile, err := ParseNameData("admin", tableName, "model", field.Form.RemoteModel)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(joinModelFile.ParseFile); os.IsNotExist(err) {
 		rootFileName = joinModelFile.RootFileName
 
-		_, err = os.Stat(filepath.Join(utils.RootPath(), joinModelFile.RootFileName))
-		if os.IsNotExist(err) {
+		if _, err := os.Stat(joinModelFile.ParseFile); os.IsNotExist(err) {
 			joinTable := model.Table{Name: tableName, ModelFile: field.Form.RemoteModel}
 			joinGetTableName := func(name string, full bool) string {
 				if full {

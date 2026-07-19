@@ -49,6 +49,32 @@ fields:
 	}
 }
 
+func TestLoadSpecBindsLowercaseRemoteRelationKeys(t *testing.T) {
+	path := writeSpecTest(t, `name: child
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: base_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remotetable: ai_gate_base
+      remotepk: id
+      remotefield: name
+      remotemodel: ai_gate_base
+      relationfields: name
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := opts.Fields[1].Form
+	if form.RemoteTable != "ai_gate_base" || form.RemotePk != "id" || form.RemoteField != "name" || form.RemoteModel != "ai_gate_base" || form.RelationFields != "name" {
+		t.Fatalf("remote relation binding failed: %+v", form)
+	}
+}
+
 func TestLoadSpecRejectsUnsafeField(t *testing.T) {
 	path := writeSpecTest(t, `name: demo
 fields:

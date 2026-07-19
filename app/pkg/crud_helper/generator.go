@@ -243,6 +243,10 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		return err
 	}
 	manifest = historicalDeleteManifest(manifest, model.Table(log.Table))
+	manifest, err = prepareDeleteManifest(manifest)
+	if err != nil {
+		return err
+	}
 	quarantine, err := NewQuarantine(manifest.Generated)
 	if err != nil {
 		return err
@@ -321,6 +325,21 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		return err
 	}
 	return nil
+}
+
+func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
+	generated := make([]string, 0, len(manifest.Generated))
+	for _, path := range uniquePaths(manifest.Generated) {
+		if fileExists(path) {
+			generated = append(generated, path)
+		}
+	}
+	for _, path := range uniquePaths(manifest.Shared) {
+		if !fileExists(path) {
+			return FileManifest{}, fmt.Errorf("required shared manifest file is missing: %s", path)
+		}
+	}
+	return FileManifest{Generated: generated, Shared: uniquePaths(manifest.Shared)}, nil
 }
 
 func historicalDeleteManifest(current FileManifest, table model.Table) FileManifest {

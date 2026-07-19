@@ -77,6 +77,24 @@ func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T
 	}
 }
 
+func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.T) {
+	generated := t.TempDir() + "/missing.go"
+	shared := t.TempDir() + "/provider.go"
+	if err := os.WriteFile(shared, []byte("package model"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := prepareDeleteManifest(FileManifest{Generated: []string{generated}, Shared: []string{shared}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Generated) != 0 || len(manifest.Shared) != 1 {
+		t.Fatalf("unexpected prepared manifest: %+v", manifest)
+	}
+	if _, err := prepareDeleteManifest(FileManifest{Shared: []string{generated}}); err == nil {
+		t.Fatal("missing shared file should fail deletion")
+	}
+}
+
 func TestCompileFailureRestoresSnapshot(t *testing.T) {
 	path := t.TempDir() + "/generated.go"
 	if err := os.WriteFile(path, []byte("original"), 0644); err != nil {

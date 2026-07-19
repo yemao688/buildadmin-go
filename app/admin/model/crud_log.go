@@ -120,13 +120,13 @@ type FormAttr struct {
 	FileMulti   string `json:"file-multi"`   //文件多选上传
 	Step        int    `json:"step"`         //步进值
 
-	RemotePk         string `json:"remote-pk"`         //远程下拉value字段
-	RemoteField      string `json:"remote-field"`      //远程下拉label字段
-	RemoteTable      string `json:"remote-table"`      //关联数据表
-	RemoteController string `json:"remote-controller"` //关联表的控制器
-	RemoteModel      string `json:"remote-model"`      //关联表的模型
-	RemoteUrl        string `json:"remote-url"`        //远程下拉URL
-	RelationFields   string `json:"relation-fields"`   //关联表显示字段
+	RemotePk         string `json:"remote-pk" mapstructure:"remotePk"`                 //远程下拉value字段
+	RemoteField      string `json:"remote-field" mapstructure:"remoteField"`           //远程下拉label字段
+	RemoteTable      string `json:"remote-table" mapstructure:"remoteTable"`           //关联数据表
+	RemoteController string `json:"remote-controller" mapstructure:"remoteController"` //关联表的控制器
+	RemoteModel      string `json:"remote-model" mapstructure:"remoteModel"`           //关联表的模型
+	RemoteUrl        string `json:"remote-url" mapstructure:"remoteUrl"`               //远程下拉URL
+	RelationFields   string `json:"relation-fields" mapstructure:"relationFields"`     //关联表显示字段
 }
 
 type Field struct {
