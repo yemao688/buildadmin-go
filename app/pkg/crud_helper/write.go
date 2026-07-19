@@ -464,9 +464,9 @@ func renderFormFile(formVueData FormVueData, fields []model.Field, webTranslate 
 			for _, item := range field.Form.Validator {
 				message := ""
 				if field.Form.ValidatorMsg != "" {
-					message = ", message: '" + field.Form.ValidatorMsg + "'"
+					message = ", message: " + strconv.Quote(field.Form.ValidatorMsg)
 				}
-				formValidatorRules[field.Name] = append(formValidatorRules[field.Name], "buildValidatorData({ name: '"+item+"', title: t('"+webTranslate+field.Name+"')"+message+" })")
+				formValidatorRules[field.Name] = append(formValidatorRules[field.Name], "buildValidatorData({ name: "+strconv.Quote(item)+", title: t("+strconv.Quote(webTranslate+field.Name)+")"+message+" })")
 			}
 		}
 	}

@@ -242,7 +242,10 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	manifest = historicalDeleteManifest(manifest, model.Table(log.Table))
+	manifest, err = historicalDeleteManifest(manifest, model.Table(log.Table))
+	if err != nil {
+		return err
+	}
 	manifest, err = prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
@@ -331,38 +334,114 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 }
 
 func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
+	var err error
+	manifest, err = normalizeDeleteManifest(manifest)
+	if err != nil {
+		return FileManifest{}, err
+	}
 	generated := make([]string, 0, len(manifest.Generated))
-	for _, path := range uniquePaths(manifest.Generated) {
+	for _, path := range manifest.Generated {
 		if fileExists(path) {
+			if info, statErr := os.Stat(path); statErr != nil || !info.Mode().IsRegular() {
+				return FileManifest{}, fmt.Errorf("generated manifest target is not a regular file: %s", path)
+			}
 			generated = append(generated, path)
 		}
 	}
-	for _, path := range uniquePaths(manifest.Shared) {
+	for _, path := range manifest.Shared {
 		if !fileExists(path) {
 			return FileManifest{}, fmt.Errorf("required shared manifest file is missing: %s", path)
 		}
+		info, statErr := os.Stat(path)
+		if statErr != nil || !info.Mode().IsRegular() {
+			return FileManifest{}, fmt.Errorf("shared manifest target is not a regular file: %s", path)
+		}
 	}
-	return FileManifest{Generated: generated, Shared: uniquePaths(manifest.Shared)}, nil
+	return FileManifest{Generated: generated, Shared: manifest.Shared}, nil
 }
 
-func historicalDeleteManifest(current FileManifest, table model.Table) FileManifest {
+func historicalDeleteManifest(current FileManifest, table model.Table) (FileManifest, error) {
+	var result FileManifest
 	if table.Manifest != nil {
-		return FileManifest{Generated: uniquePaths(append([]string{}, table.Manifest.Generated...)), Shared: uniquePaths(append([]string{}, table.Manifest.Shared...))}
+		result = FileManifest{Generated: append([]string{}, table.Manifest.Generated...), Shared: append([]string{}, table.Manifest.Shared...)}
+		return normalizeDeleteManifest(result)
 	}
 	if len(table.GeneratedFiles) == 0 {
-		return current
+		return normalizeDeleteManifest(current)
 	}
 	shared := make(map[string]bool, len(current.Shared))
 	for _, path := range current.Shared {
 		shared[path] = true
 	}
-	result := FileManifest{Shared: append([]string{}, current.Shared...)}
+	result = FileManifest{Shared: append([]string{}, current.Shared...)}
 	for _, path := range table.GeneratedFiles {
 		if !shared[path] {
 			result.Generated = append(result.Generated, path)
 		}
 	}
-	return result
+	return normalizeDeleteManifest(result)
+}
+
+// normalizeDeleteManifest is deliberately applied to both current and legacy
+// manifests. A manifest is persisted input, not trusted generator output.
+func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
+	normalize := func(paths []string, validate func(string) error) ([]string, error) {
+		result := make([]string, 0, len(paths))
+		seen := map[string]bool{}
+		for _, raw := range paths {
+			if raw == "" || strings.IndexByte(raw, 0) >= 0 {
+				return nil, fmt.Errorf("invalid empty or NUL manifest path")
+			}
+			candidate := raw
+			if !filepath.IsAbs(filepath.FromSlash(candidate)) {
+				candidate = filepath.Join(utils.RootPath(), filepath.FromSlash(candidate))
+			}
+			abs, err := filepath.Abs(filepath.Clean(candidate))
+			if err != nil {
+				return nil, err
+			}
+			if err := validate(abs); err != nil {
+				return nil, fmt.Errorf("manifest path %q rejected: %w", raw, err)
+			}
+			if !seen[abs] {
+				seen[abs] = true
+				result = append(result, abs)
+			}
+		}
+		return result, nil
+	}
+	generated, err := normalize(manifest.Generated, func(path string) error {
+		return ValidateGeneratedAbsolutePath(path,
+			"web/src/lang", "web/src/views",
+			"app/admin/model", "app/common/model", "app/admin/handler",
+		)
+	})
+	if err != nil {
+		return FileManifest{}, err
+	}
+	shared, err := normalize(manifest.Shared, validateSharedManifestPath)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	return FileManifest{Generated: generated, Shared: shared}, nil
+}
+
+func validateSharedManifestPath(path string) error {
+	root := utils.RootPath()
+	for _, allowed := range []string{
+		filepath.Join(root, "router", "router.go"),
+		filepath.Join(root, "cmd", "app", "wire_gen.go"),
+	} {
+		if path == allowed {
+			return nil
+		}
+	}
+	if filepath.Base(path) != "provider.go" {
+		return fmt.Errorf("shared manifest target must be provider.go, router/router.go, or cmd/app/wire_gen.go")
+	}
+	return ValidateGeneratedAbsolutePath(path,
+		"app/admin/model", "app/common/model", "app/admin/handler",
+	)
 }
 
 func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {

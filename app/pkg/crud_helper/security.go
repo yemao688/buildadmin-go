@@ -5,6 +5,7 @@ import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/utils"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -159,6 +160,94 @@ func ValidateField(field model.Field) error {
 	}
 	if err := validateSQLString(field.Comment); err != nil {
 		return fmt.Errorf("invalid comment for field %q: %w", field.Name, err)
+	}
+	if err := validateFrontendField(field); err != nil {
+		return err
+	}
+	return nil
+}
+
+var frontendIdentifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var frontendPathRE = regexp.MustCompile(`^[A-Za-z0-9_./\\-]+$`)
+var validatorRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*(\([^\r\n()'";]*\))?$`)
+
+// Remote is an object-literal fragment in the established designer format;
+// keep it data-only because it cannot be JSON encoded without changing format.
+var frontendObjectRE = regexp.MustCompile(`^[A-Za-z0-9_$\s:'".,/{}\[\]-]+$`)
+
+func validateFrontendField(field model.Field) error {
+	if field.Form.RemoteField != "" && !frontendIdentifierRE.MatchString(field.Form.RemoteField) {
+		return fmt.Errorf("invalid remote field %q", field.Form.RemoteField)
+	}
+	if field.Form.RemoteController != "" {
+		if strings.Contains(field.Form.RemoteController, "..") || !frontendPathRE.MatchString(field.Form.RemoteController) {
+			return fmt.Errorf("invalid remote controller %q", field.Form.RemoteController)
+		}
+	}
+	if err := validateFrontendURL(field.Form.RemoteUrl); err != nil {
+		return fmt.Errorf("invalid remote URL for field %q: %w", field.Name, err)
+	}
+	for _, rule := range field.Form.Validator {
+		if !validatorRE.MatchString(rule) {
+			return fmt.Errorf("invalid validator %q for field %q", rule, field.Name)
+		}
+	}
+	if err := validateFrontendMessage(field.Form.ValidatorMsg); err != nil {
+		return fmt.Errorf("field %q: %w", field.Name, err)
+	}
+	for label, value := range map[string]string{
+		"table label": field.Table.Label, "table operator": field.Table.Operator,
+		"table render": field.Table.Render, "table sortable": field.Table.Sortable,
+		"table show": field.Table.Show, "table search render": field.Table.ComSearchRender,
+		"table time format": field.Table.TimeFormat,
+	} {
+		if err := validateFrontendText(value, label); err != nil {
+			return fmt.Errorf("field %q: %w", field.Name, err)
+		}
+	}
+	if err := validateFrontendText(field.Table.Remote, "table remote config"); err != nil {
+		return fmt.Errorf("field %q: %w", field.Name, err)
+	}
+	if field.Table.Remote != "" && !frontendObjectRE.MatchString(field.Table.Remote) {
+		return fmt.Errorf("field %q: invalid table remote config", field.Name)
+	}
+	return nil
+}
+
+func validateFrontendText(value, label string) error {
+	if strings.IndexByte(value, 0) >= 0 || strings.ContainsAny(value, "\r\n`") {
+		return fmt.Errorf("invalid %s", label)
+	}
+	return nil
+}
+
+func validateFrontendMessage(value string) error {
+	if strings.IndexByte(value, 0) >= 0 || strings.ContainsAny(value, "`") {
+		return fmt.Errorf("invalid validator message")
+	}
+	return nil
+}
+
+func validateFrontendURL(value string) error {
+	if value == "" || strings.ContainsAny(value, "\r\n'\"`") {
+		if value == "" {
+			return nil
+		}
+		return fmt.Errorf("URL contains forbidden characters")
+	}
+	lower := strings.ToLower(value)
+	if strings.HasPrefix(lower, "javascript:") || strings.HasPrefix(lower, "data:") {
+		return fmt.Errorf("URL scheme is not allowed")
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("must be a site-relative path or an http(s) URL")
+	}
+	if u.Scheme == "" && u.Host == "" && u.Path != "" {
+		return nil
+	}
+	if (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("must be a site-relative path or an http(s) URL")
 	}
 	return nil
 }

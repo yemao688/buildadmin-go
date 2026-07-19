@@ -3,7 +3,9 @@ package crud_helper
 import (
 	"errors"
 	"go-build-admin/app/admin/model"
+	"go-build-admin/utils"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -69,18 +71,26 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 }
 
 func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
-	provider := "/tmp/relation/provider.go"
+	provider := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation", "provider.go")
 	current := FileManifest{Shared: []string{provider}}
 	historical := model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{provider}}}
-	manifest := historicalDeleteManifest(current, historical)
+	manifest, err := historicalDeleteManifest(current, historical)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(manifest.Generated) != 1 || manifest.Generated[0] != provider || len(manifest.Shared) != 0 {
 		t.Fatalf("historical classification changed: %+v", manifest)
 	}
 }
 
 func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.T) {
-	generated := t.TempDir() + "/missing.go"
-	shared := t.TempDir() + "/provider.go"
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", ".crud-helper-test")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	generated := filepath.Join(dir, "missing.go")
+	shared := filepath.Join(dir, "provider.go")
 	if err := os.WriteFile(shared, []byte("package model"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +103,36 @@ func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.
 	}
 	if _, err := prepareDeleteManifest(FileManifest{Shared: []string{generated}}); err == nil {
 		t.Fatal("missing shared file should fail deletion")
+	}
+}
+
+func TestHistoricalManifestRejectsPathOutsideAllowedRoots(t *testing.T) {
+	for _, path := range []string{"../../etc/passwd", "/tmp/evil.go"} {
+		if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{path}}}); err == nil {
+			t.Errorf("historical path %q was accepted", path)
+		}
+	}
+}
+
+func TestHistoricalManifestEnforcesGeneratedAndSharedPathClasses(t *testing.T) {
+	root := utils.RootPath()
+	validGenerated := filepath.Join(root, "app", "admin", "model", "orders.go")
+	validShared := filepath.Join(root, "app", "admin", "model", "provider.go")
+	if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{
+		Generated: []string{validGenerated},
+		Shared:    []string{validShared},
+	}}); err != nil {
+		t.Fatalf("valid historical manifest was rejected: %v", err)
+	}
+
+	for _, manifest := range []*model.CRUDFileManifest{
+		{Generated: []string{filepath.Join(root, "app", "middleware", "security.go")}},
+		{Shared: []string{filepath.Join(root, "app", "admin", "model", "admin.go")}},
+		{Shared: []string{filepath.Join(root, "router", "unexpected.go")}},
+	} {
+		if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: manifest}); err == nil {
+			t.Errorf("historical manifest path class was accepted: %+v", manifest)
+		}
 	}
 }
 

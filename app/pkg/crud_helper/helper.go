@@ -779,7 +779,7 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 
 	columnStr := ""
 	if field.Table.Label == "" {
-		columnStr += buildTableColumnKey("label", "t('"+webTranslate+translationPrefix+field.Name+"')")
+		columnStr += buildTableColumnKey("label", "t("+strconv.Quote(webTranslate+translationPrefix+field.Name)+")")
 	} else {
 		columnStr += buildTableColumnKey("label", field.Table.Label)
 	}
@@ -1120,13 +1120,15 @@ func buildTableColumnKey(key string, val string) string {
 	key = formatObjectKey(key)
 	if val == "false" || val == "true" {
 		itemJson = " " + key + ": " + val + ","
-	} else if slices.Contains([]string{"label", "width", "buttons"}, key) || strings.HasPrefix(val, "t('") || strings.HasPrefix(val, "t(\"") {
+	} else if key == "width" || key == "buttons" || translationCallRE.MatchString(val) {
 		itemJson = " " + key + ": " + val + ","
 	} else {
-		itemJson = " " + key + ": '" + val + "',"
+		itemJson = " " + key + ": " + strconv.Quote(val) + ","
 	}
 	return itemJson
 }
+
+var translationCallRE = regexp.MustCompile(`^t\(("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\)$`)
 
 func formatObjectKey(keyName string) string {
 	re := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]+$`)
