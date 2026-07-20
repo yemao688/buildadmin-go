@@ -1,0 +1,46 @@
+name: country_currency
+comment: 全局货币
+type: alter
+dataScope:
+  mode: none
+quickSearchField: [code, name]
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    comment: 主键
+  - name: code
+    type: varchar
+    length: 20
+    null: false
+    comment: 货币代码
+  - name: name
+    type: varchar
+    length: 50
+    null: false
+    comment: 货币名称
+  - name: symbol
+    type: varchar
+    length: 20
+    null: false
+    comment: 货币符号
+  - name: rate
+    type: decimal
+    length: 20
+    precision: 8
+    null: false
+    default: "1"
+    comment: 汇率
+  - name: status
+    type: tinyint
+    null: false
+    default: "1"
+    comment: 状态:0=禁用,1=启用
+  - name: weigh
+    type: int
+    null: false
+    default: "0"
+    comment: 权重

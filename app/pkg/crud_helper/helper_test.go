@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-build-admin/app/pkg/data_scope"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -45,17 +46,16 @@ func TestParseNameData(t *testing.T) {
 }
 
 func TestParseWebDirNameData(t *testing.T) {
-	tableName := "test1"
-	table := getTestTableData()
-	webFile := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
-	content, _ := json.MarshalIndent(webFile, "", " ")
-	fmt.Println(string(content))
+	testTable := getTestTableData()
+	testViews := ParseWebDirNameData("test1", "views", testTable.WebViewsDir)
+	testLang := ParseWebDirNameData("test1", "lang", testTable.WebViewsDir)
+	require.Equal(t, "web/src/views/backend/test1", filepath.ToSlash(testViews.Views))
+	require.Equal(t, "web/src/lang/backend/en/test1.ts", filepath.ToSlash(testLang.LangFile("en")))
 
-	webLangDir := ParseWebDirNameData(tableName, "lang", table.WebViewsDir)
-	content, _ = json.MarshalIndent(webLangDir, "", "  ")
-	fmt.Println(string(content))
-
-	fmt.Println(strings.Join(webLangDir.Lang, ".") + ".")
+	nestedViews := ParseWebDirNameData("country_language_content", "views", "web/src/views/backend/country/language/content")
+	nestedLang := ParseWebDirNameData("country_language_content", "lang", "web/src/views/backend/country/language/content")
+	require.Equal(t, "web/src/views/backend/country/language/content", filepath.ToSlash(nestedViews.Views))
+	require.Equal(t, "web/src/lang/backend/zh-cn/country/language/content.ts", filepath.ToSlash(nestedLang.LangFile("zh-cn")))
 }
 
 func TestFieldsMap(t *testing.T) {
@@ -139,6 +139,36 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 	handlerCode, err := renderHandler(handlerData, structContent)
 	require.NoError(t, err)
 	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
+}
+
+func TestModelQuickSearchFieldRendering(t *testing.T) {
+	modelData := ModelData{
+		Namespace:        "model",
+		ClassName:        "CountryLanguageContent",
+		Name:             "country_language_content",
+		Pk:               "id",
+		QuickSearchField: "group,key",
+		StructTemp:       "type CountryLanguageContent struct{}",
+		DataScopePolicy:  data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
+	}
+
+	content, err := renderRawModel(modelData)
+	require.NoError(t, err)
+	require.Contains(t, content, `QuickSearchField: "group,key"`)
+	require.NotContains(t, content, `QuickSearchField: "name"`)
+
+	table := getTestTableData()
+	table.QuickSearchField = nil
+	fields := getCompileFields("")
+	getTableName := func(tableName string, fullName bool) string {
+		if fullName {
+			return "ba_" + tableName
+		}
+		return tableName
+	}
+	prepared, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	require.NoError(t, err)
+	require.Equal(t, "id", prepared.QuickSearchField)
 }
 
 func TestGetQuote(t *testing.T) {

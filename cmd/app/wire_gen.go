@@ -13,6 +13,7 @@ import (
 	"go-build-admin/app/cmd"
 	handler3 "go-build-admin/app/cmd/handler"
 	model2 "go-build-admin/app/common/model"
+	"go-build-admin/app/common/model/country"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/captcha"
@@ -54,8 +55,9 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	testBuildModel := model.NewTestBuildModel(gormDB, configuration)
 	testBuildHandler := handler.NewTestBuildHandler(zapLogger, testBuildModel)
 	configModel := model.NewConfigModel(gormDB, configuration)
+	service := country.NewService(gormDB, configuration)
 	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
-	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, clickCaptcha)
+	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, service, clickCaptcha)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleModel)
 	userModel := model.NewUserModel(gormDB, configuration, closureEnforcer)
 	userHandler := handler.NewUserHandler(zapLogger, userModel)
@@ -95,11 +97,17 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger, areaModel, uploadHelper)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper)
 	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, modelUserModel, modelAuthModel)
-	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel)
+	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel, service)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, modelAuthModel, clickCaptcha, captchaCaptcha)
 	demoHandler := handler2.NewDemoHandler(zapLogger)
-	engine := router.InitRouter(lumberjackLogger, login, security, userLogin, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, moduleHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler, demoHandler)
+	countryLanguageModel := model.NewCountryLanguageModel(gormDB, configuration, closureEnforcer)
+	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageModel)
+	countryLanguageContentModel := model.NewCountryLanguageContentModel(gormDB, configuration, closureEnforcer)
+	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentModel)
+	countryCurrencyModel := model.NewCountryCurrencyModel(gormDB, configuration, closureEnforcer)
+	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyModel)
+	engine := router.InitRouter(lumberjackLogger, login, security, userLogin, record, adminHandler, adminInfoHandler, adminGroupHandler, adminRuleHandler, adminLogHandler, testBuildHandler, indexHandler, dashboardHandler, userHandler, userGroupHandler, userRuleHandler, userMoneyLogHandler, userScoreLogHandler, attachmentHandler, crudHandler, crudLogHandler, configHandler, moduleHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, ajaxHandler, accountHandler, handlerAjaxHandler, commonHandler, emsHandler, handlerIndexHandler, installHandler, handlerUserHandler, demoHandler, countryLanguageHandler, countryLanguageContentHandler, countryCurrencyHandler)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

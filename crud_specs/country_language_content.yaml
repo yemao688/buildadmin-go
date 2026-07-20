@@ -1,0 +1,38 @@
+name: country_language_content
+comment: 全局语言内容
+type: alter
+dataScope:
+  mode: none
+quickSearchField: [group, key]
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    comment: 主键
+  - name: lan
+    type: varchar
+    length: 20
+    null: false
+    comment: 语言代码
+  - name: group
+    type: varchar
+    length: 50
+    null: false
+    comment: 分组
+  - name: key
+    type: varchar
+    length: 100
+    null: false
+    comment: 键
+  - name: type
+    type: tinyint
+    null: false
+    default: "0"
+    comment: 类型:0=文本,1=富文本,2=图片
+  - name: value
+    type: longtext
+    null: true
+    comment: 值

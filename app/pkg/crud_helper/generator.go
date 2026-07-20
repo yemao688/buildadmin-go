@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -392,7 +393,7 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 			if raw == "" || strings.IndexByte(raw, 0) >= 0 {
 				return nil, fmt.Errorf("invalid empty or NUL manifest path")
 			}
-			candidate := raw
+			candidate := canonicalManifestLangPath(raw)
 			if !filepath.IsAbs(filepath.FromSlash(candidate)) {
 				candidate = filepath.Join(utils.RootPath(), filepath.FromSlash(candidate))
 			}
@@ -525,6 +526,45 @@ func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
 	return true
 }
 
+// canonicalManifestLangPath migrates only the legacy backend language layout.
+// Other generated paths, and locale-first paths, are returned unchanged.
+func canonicalManifestLangPath(path string) string {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	root := filepath.Clean(utils.RootPath())
+	isAbs := filepath.IsAbs(clean)
+	rel := clean
+	if isAbs {
+		var err error
+		rel, err = filepath.Rel(root, clean)
+		if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+			return clean
+		}
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	const backendPrefix = "web/src/lang/backend"
+	prefix := strings.Split(backendPrefix, "/")
+	if len(parts) < len(prefix)+3 || !slices.Equal(parts[:len(prefix)], prefix) {
+		return clean
+	}
+	rest := parts[len(prefix):]
+	if rest[0] == "en" || rest[0] == "zh-cn" {
+		return clean
+	}
+	localeIndex := len(rest) - 2
+	if rest[localeIndex] != "en" && rest[localeIndex] != "zh-cn" {
+		return clean
+	}
+	canonical := append([]string{}, prefix...)
+	canonical = append(canonical, rest[localeIndex])
+	canonical = append(canonical, rest[:localeIndex]...)
+	canonical = append(canonical, rest[localeIndex+1:]...)
+	result := filepath.Join(canonical...)
+	if isAbs {
+		return filepath.Join(root, result)
+	}
+	return result
+}
+
 func manifestConflicts(manifest FileManifest) []string {
 	conflicts := []string{}
 	for _, path := range manifest.Generated {
@@ -538,7 +578,7 @@ func manifestConflicts(manifest FileManifest) []string {
 func normalizedPathSet(paths []string) map[string]bool {
 	result := make(map[string]bool, len(paths))
 	for _, path := range paths {
-		result[filepath.Clean(path)] = true
+		result[filepath.Clean(canonicalManifestLangPath(path))] = true
 	}
 	return result
 }

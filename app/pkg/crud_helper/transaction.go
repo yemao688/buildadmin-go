@@ -35,8 +35,8 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 	lang := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
 	manifest := FileManifest{
 		Generated: []string{
-			filepath.Join(utils.RootPath(), lang.LangDir, "en", lang.LastName+".ts"),
-			filepath.Join(utils.RootPath(), lang.LangDir, "zh-cn", lang.LastName+".ts"),
+			filepath.Join(utils.RootPath(), lang.LangFile("en")),
+			filepath.Join(utils.RootPath(), lang.LangFile("zh-cn")),
 			filepath.Join(utils.RootPath(), views.Views, "index.vue"),
 			filepath.Join(utils.RootPath(), views.Views, "popupForm.vue"),
 			modelFile.ParseFile,

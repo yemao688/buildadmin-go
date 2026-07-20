@@ -91,7 +91,7 @@ fields:                   # 必填，至少一个
 | 路由 | `router/router.go`（自动注入） |
 | Wire | `cmd/app/wire_gen.go`（自动重新生成，勿手改） |
 | 前端 | `web/src/views/backend/<module>/index.vue`、`popupForm.vue` |
-| 语言包 | `web/src/lang/`（只读，重新生成会覆盖） |
+| 语言包 | `web/src/lang/backend/{locale}/{module...}.ts`（路由自动按需加载；只读，重新生成会覆盖） |
 | 菜单 | `admin_rule` 表 |
 
 生成后常见人工/AI 定制：
@@ -99,6 +99,7 @@ fields:                   # 必填，至少一个
 - 远程关联下拉：编辑生成的 `popupForm.vue`，把字段改为 `remoteSelect`。
 - 列表关联展示：在生成的 model `List` 中按现有 scope 模式加 JOIN。
 - 改字段：编辑 spec 字段后把 `type` 改为 `alter` 重跑（ADD/MODIFY 列；删列需人工处理）。
+- autoload 仅用于例外映射；已定制的生成视图/语言文件在未来执行 `alter` 前必须先保护 diff，再合回定制内容。
 
 ## 验证清单（生成后必做）
 

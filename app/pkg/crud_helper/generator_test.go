@@ -70,6 +70,101 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	}
 }
 
+func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
+	tests := []struct {
+		name         string
+		viewsPath    string
+		enLanguage   string
+		zhCNLanguage string
+	}{
+		{"country_language_content", "web/src/views/backend/country/language/content", "country/language/content.ts", "country/language/content.ts"},
+		{"test1", "web/src/views/backend/test1", "test1.ts", "test1.ts"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			manifest, err := BuildFileManifest(model.Table{
+				Name:           tc.name,
+				ModelFile:      "app/admin/model/" + tc.name + ".go",
+				ControllerFile: "app/admin/handler/" + tc.name + ".go",
+				WebViewsDir:    tc.viewsPath,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectedBase := filepath.Join(utils.RootPath(), "web/src/lang/backend")
+			expected := []string{
+				filepath.Join(expectedBase, "en", tc.enLanguage),
+				filepath.Join(expectedBase, "zh-cn", tc.zhCNLanguage),
+			}
+			if manifest.Generated[0] != expected[0] {
+				t.Fatalf("unexpected en language path: %s, want %s", manifest.Generated[0], expected[0])
+			}
+			if manifest.Generated[1] != expected[1] {
+				t.Fatalf("unexpected zh-cn language path: %s, want %s", manifest.Generated[1], expected[1])
+			}
+		})
+	}
+}
+
+func TestCanonicalManifestLangPath(t *testing.T) {
+	root := utils.RootPath()
+	cases := []struct {
+		name, input, want string
+	}{
+		{"legacy nested", filepath.Join(root, "web/src/lang/backend/country/en/language.ts"), filepath.Join(root, "web/src/lang/backend/en/country/language.ts")},
+		{"new nested", filepath.Join(root, "web/src/lang/backend/en/country/language.ts"), filepath.Join(root, "web/src/lang/backend/en/country/language.ts")},
+		{"module named en", filepath.Join(root, "web/src/lang/backend/en/en/language.ts"), filepath.Join(root, "web/src/lang/backend/en/en/language.ts")},
+		{"non language", filepath.Join(root, "web/src/views/backend/country/en/language.ts"), filepath.Join(root, "web/src/views/backend/country/en/language.ts")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := canonicalManifestLangPath(tc.input); got != tc.want {
+				t.Fatalf("canonicalManifestLangPath(%q) = %q, want %q", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
+	root := utils.RootPath()
+	newPath := filepath.Join(root, "web/src/lang/backend/en/country/language.ts")
+	oldPath := filepath.Join(root, "web/src/lang/backend/country/en/language.ts")
+	log := &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
+	if !manifestAllows(FileManifest{Generated: []string{newPath}}, log) {
+		t.Fatal("legacy language manifest should match locale-first path")
+	}
+	nonLangOld := filepath.Join(root, "web/src/views/backend/old/country/language.ts")
+	nonLangNew := filepath.Join(root, "web/src/views/backend/new/country/language.ts")
+	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
+		t.Fatal("non-language path migration should remain rejected")
+	}
+}
+
+func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
+	root := utils.RootPath()
+	newPath := filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete/country.ts")
+	oldPath := filepath.Join(root, "web/src/lang/backend/.crud-helper-delete/en/country.ts")
+	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newPath, []byte("export default {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete"))
+
+	manifest, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{oldPath}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := prepareDeleteManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prepared.Generated) != 1 || prepared.Generated[0] != newPath {
+		t.Fatalf("historical delete did not resolve new language path: %+v", prepared)
+	}
+}
+
 func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
 	provider := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation", "provider.go")
 	current := FileManifest{Shared: []string{provider}}

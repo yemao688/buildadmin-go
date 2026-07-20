@@ -3,6 +3,7 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	"go-build-admin/app/common/model/country"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
@@ -19,11 +20,12 @@ type IndexHandler struct {
 	log          *zap.Logger
 	authM        *model.AuthModel
 	configM      *model.ConfigModel
+	country      *country.Service
 	clickCaptcha *clickcaptcha.ClickCaptcha
 }
 
-func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel, configM *model.ConfigModel, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
-	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, clickCaptcha: clickCaptcha}
+func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel, configM *model.ConfigModel, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
+	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, country: countryService, clickCaptcha: clickCaptcha}
 }
 
 func (h *IndexHandler) Index(ctx *gin.Context) {
@@ -41,6 +43,15 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	languages, err := h.country.EnabledLanguages(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	languageTabs := make([]map[string]string, 0, len(languages))
+	for _, language := range languages {
+		languageTabs = append(languageTabs, map[string]string{"lan": language.Lan, "remark": language.Remark})
+	}
 
 	Success(ctx, map[string]any{
 		"adminInfo": map[string]any{
@@ -51,7 +62,8 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"last_login_time": utils.FormatFromUnixTime(adminInfo.LastLoginTime),
 			"super":           h.authM.IsSuperAdmin(info.Id),
 		},
-		"menus": menus,
+		"menus":        menus,
+		"languageTabs": languageTabs,
 		"siteConfig": map[string]any{
 			"siteName":         basicConfig["site_name"],
 			"version":          basicConfig["version"],

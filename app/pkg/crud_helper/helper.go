@@ -64,6 +64,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.Name = tableName
 	modelData.ClassName = modelFile.LastName
 	modelData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	modelData.QuickSearchField = strings.Join(table.QuickSearchField, ",")
 	pkField := searchField(fields, tablePk)
 	modelData.PkGoType, err = primaryKeyGoType(pkField)
 	if err != nil {
@@ -411,7 +412,6 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		}
 		file = strings.TrimSuffix(file, ".go")
 		file = strings.ReplaceAll(file, ".", "/")
-		file = strings.ReplaceAll(file, "/", "/")
 		file = strings.ReplaceAll(file, "\\", "/")
 
 		redundantDir := []string{"app", module, moduleType}
@@ -422,7 +422,6 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 			pathArr = parseNamePresets[moduleType+"/"+tableName]
 		} else {
 			tableName = strings.ReplaceAll(tableName, ".", "/")
-			tableName = strings.ReplaceAll(tableName, "/", "/")
 			tableName = strings.ReplaceAll(tableName, "\\", "/")
 			pathArr = strings.Split(tableName, "/")
 		}
@@ -527,8 +526,8 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 	} else if moduleType == "lang" {
 		webDir.Lang = append(webDir.Lang, pathArr...)
 		webDir.Lang = append(webDir.Lang, lastName)
-		webDir.LangDir = filepath.Join("web/src/lang/backend", strings.Join(pathArr, "/"))
-		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangDir), "web/src/lang") != nil {
+		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangFile("en")), "web/src/lang") != nil ||
+			validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangFile("zh-cn")), "web/src/lang") != nil {
 			return WebDir{}
 		}
 	}

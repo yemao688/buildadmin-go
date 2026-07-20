@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
+	"path/filepath"
 )
 
 // 内部保留词
@@ -209,7 +210,12 @@ type WebDir struct {
 	Path             []string
 	Views            string
 	Lang             []string
-	LangDir          string
+}
+
+func (w WebDir) LangFile(locale string) string {
+	parts := append([]string{"web", "src", "lang", "backend", locale}, w.Path...)
+	parts = append(parts, w.LastName+".ts")
+	return filepath.Join(parts...)
 }
 
 // 当designType为以下值时: 1. 出入库字符串到数组转换,2. 默认值转数组
@@ -378,14 +384,15 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 `
 
 type ModelData struct {
-	Namespace  string //包名
-	Name       string //表名
-	ClassName  string //类名
-	Pk         string //主键
-	PkGoType   string //主键Go类型
-	PkGoField  string //主键Go字段名
-	ModelVar   string //结构体变量
-	StructTemp string //结构体
+	Namespace        string //包名
+	Name             string //表名
+	ClassName        string //类名
+	Pk               string //主键
+	PkGoType         string //主键Go类型
+	PkGoField        string //主键Go字段名
+	ModelVar         string //结构体变量
+	QuickSearchField string //快速搜索字段
+	StructTemp       string //结构体
 
 	Append             []string
 	Methods            []string
@@ -426,7 +433,7 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 		BaseModel: BaseModel{
 			TableName:        config.Database.Prefix + "{{.Name}}",
 			Key:              "{{.Pk}}",
-			QuickSearchField: "name",
+			QuickSearchField: "{{.QuickSearchField}}",
 			sqlDB:            sqlDB,
 		},
 		Policy: data_scope.ResourcePolicy{

@@ -1,6 +1,8 @@
 package model
 
 import (
+	"go-build-admin/app/common/model/country"
+
 	"github.com/google/wire"
 )
 
@@ -12,4 +14,5 @@ var ProviderSet = wire.NewSet(
 	NewUserScoreLogModel,
 	NewUserModel,
 	NewAuthModel,
+	country.NewService,
 )

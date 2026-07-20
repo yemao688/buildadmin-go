@@ -3,6 +3,7 @@ package handler
 import (
 	adminModel "go-build-admin/app/admin/model"
 	"go-build-admin/app/common/model"
+	"go-build-admin/app/common/model/country"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
 	"go-build-admin/conf"
@@ -18,10 +19,11 @@ type IndexHandler struct {
 	authM   *model.AuthModel
 	config  *conf.Configuration
 	configM *adminModel.ConfigModel
+	country *country.Service
 }
 
-func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *adminModel.ConfigModel) *IndexHandler {
-	return &IndexHandler{log: log, authM: authM, config: config, configM: configM}
+func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *adminModel.ConfigModel, countryService *country.Service) *IndexHandler {
+	return &IndexHandler{log: log, authM: authM, config: config, configM: configM, country: countryService}
 }
 
 // 前台和会员中心的初始化请求
@@ -65,6 +67,16 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	languages, err := h.country.EnabledLanguages(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	currencies, err := h.country.EnabledCurrencies(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	Success(ctx, map[string]any{
 		"site": map[string]any{
@@ -78,6 +90,8 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		"userInfo":         userInfo,
 		"rules":            rules,
 		"menus":            menus,
+		"language":         languages,
+		"currency":         currencies,
 	})
 }
 

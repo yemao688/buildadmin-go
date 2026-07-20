@@ -23,4 +23,10 @@ var ProviderSet = wire.NewSet(
 	NewUserRuleModel,
 	NewUserScoreLogModel,
 	NewUserModel,
+
+	NewCountryLanguageModel,
+
+	NewCountryLanguageContentModel,
+
+	NewCountryCurrencyModel,
 )

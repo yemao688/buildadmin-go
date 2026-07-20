@@ -381,7 +381,7 @@ func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebD
 		langTsContent += Tab(1) + keyStr + ": " + quote + v + quote + ",\n"
 	}
 	langTsContent = "export default {\n" + langTsContent + "}\n"
-	path := filepath.Join(utils.RootPath(), webLangDir.LangDir, lang, webLangDir.LastName+".ts")
+	path := filepath.Join(utils.RootPath(), webLangDir.LangFile(lang))
 	return writeFile(path, langTsContent)
 }
 
