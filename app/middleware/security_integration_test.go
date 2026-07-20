@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -42,7 +44,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	require.NoError(t, err)
 	f := &securityFixture{db: db, sqlDB: sqlDB, prefix: prefix, root: 1}
 	f.config = &conf.Configuration{Database: conf.Database{Prefix: prefix}}
-	tables := []string{"admin", "admin_closure", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log", "user"}
+	tables := []string{"admin", "admin_closure", "admin_hierarchy_lock", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log", "user"}
 	for _, name := range tables {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + name + "`")
 	}
@@ -58,6 +60,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	stmts := []string{
 		"CREATE TABLE " + q("admin") + " (id INT PRIMARY KEY, parent_id INT NULL, username VARCHAR(64) NOT NULL)",
 		"CREATE TABLE " + q("admin_closure") + " (ancestor_id INT NOT NULL, descendant_id INT NOT NULL, depth INT NOT NULL, PRIMARY KEY (ancestor_id, descendant_id))",
+		"CREATE TABLE " + q("admin_hierarchy_lock") + " (id TINYINT UNSIGNED PRIMARY KEY)",
 		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT NOT NULL, name VARCHAR(64) NOT NULL, username VARCHAR(64) NOT NULL, birthday VARCHAR(32) NOT NULL DEFAULT '', value INT NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("security_data_recycle") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, name VARCHAR(64) NOT NULL, controller VARCHAR(64) NOT NULL, controller_as VARCHAR(64) NOT NULL, data_table VARCHAR(64) NOT NULL, owner_column VARCHAR(64) NOT NULL DEFAULT 'admin_id', primary_key VARCHAR(64) NOT NULL, status VARCHAR(8) NOT NULL, connection VARCHAR(64) NOT NULL DEFAULT '', update_time BIGINT NOT NULL DEFAULT 0, create_time BIGINT NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("security_data_recycle_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, target_admin_id INT NOT NULL, recycle_id INT NOT NULL, data LONGTEXT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, is_restore INT NOT NULL DEFAULT 0, is_committed INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, create_time BIGINT NOT NULL DEFAULT 0, legacy_unrecoverable INT NOT NULL DEFAULT 0)",
@@ -68,6 +71,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 		require.NoError(t, db.Exec(stmt).Error)
 	}
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin")+" VALUES (1,NULL,'root'),(2,1,'self'),(3,1,'sibling'),(4,2,'child')").Error)
+	require.NoError(t, db.Exec("INSERT INTO "+q("admin_hierarchy_lock")+" (id) VALUES (1)").Error)
 	closure := "(1,1,0),(1,2,1),(1,3,1),(1,4,2),(2,2,0),(2,4,1),(3,3,0),(4,4,0)"
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin_closure")+" (ancestor_id,descendant_id,depth) VALUES "+closure).Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (10,2,'owned','old','',1),(11,4,'child','old-child','',2),(12,3,'sibling','old-sibling','',3)").Error)
@@ -290,6 +294,54 @@ func TestSecurityMySQLPostOutcomesAndFailures(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	f.db.Table(q).Where("id=10 AND username='new'").Count(&logs)
 	require.Equal(t, int64(1), logs)
+}
+
+func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *testing.T) {
+	f := newSecurityFixture(t)
+	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
+		tx := requesttx.DB(c.Request.Context())
+		require.NoError(t, model.NewAdminHierarchy(f.config).LockHierarchy(c.Request.Context(), tx))
+		require.NoError(t, tx.Exec("UPDATE `"+f.prefix+"user` SET username='relocked' WHERE id=10").Error)
+		stage(c, 1, "ok")
+	})
+
+	rec := f.request(t, r, http.MethodPost, "/admin/auth.Admin/edit", `{"id":10,"username":"relocked"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var username string
+	require.NoError(t, f.db.Table(f.table("user")).Select("username").Where("id=10").Scan(&username).Error)
+	require.Equal(t, "relocked", username)
+}
+
+func TestSecurityMySQLSensitivePostCancellationInterruptsHierarchyLock(t *testing.T) {
+	f := newSecurityFixture(t)
+	holder := f.db.Begin()
+	require.NoError(t, holder.Error)
+	defer holder.Rollback()
+	require.NoError(t, holder.Exec("SELECT id FROM "+f.table("admin_hierarchy_lock")+" WHERE id=1 FOR UPDATE").Error)
+
+	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
+		t.Fatal("request reached business handler while hierarchy lock was held")
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/edit", strings.NewReader(`{"id":10,"username":"canceled"}`)).WithContext(ctx)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		r.ServeHTTP(rec, req)
+		close(done)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+		require.Less(t, time.Since(start), 2*time.Second)
+	case <-time.After(5 * time.Second):
+		t.Fatal("request did not exit after context cancellation")
+	}
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
 func TestSecurityMySQLFailClosedWriterAndPanic(t *testing.T) {

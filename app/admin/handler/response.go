@@ -1,12 +1,16 @@
 package handler
 
 import (
+	"context"
+	"database/sql/driver"
+	"errors"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 type Response struct {
@@ -80,20 +84,30 @@ func RollbackResponse(c *gin.Context, err error) bool {
 	return true
 }
 
-func writeError(c *gin.Context, err error) {
+func errorOutcome(err error) requesttx.Outcome {
 	if v, ok := err.(*cErr.Error); ok {
-		writeResponse(c, requesttx.Outcome{HTTPCode: v.HttpCode(), BusinessCode: v.ErrorCode(), Message: v.Error()})
-		return
+		return requesttx.Outcome{HTTPCode: v.HttpCode(), BusinessCode: v.ErrorCode(), Message: v.Error()}
 	}
-	writeResponse(c, requesttx.Outcome{HTTPCode: http.StatusBadRequest, BusinessCode: cErr.DefaultError, Message: err.Error()})
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, driver.ErrBadConn) {
+		return requesttx.Outcome{HTTPCode: http.StatusInternalServerError, BusinessCode: cErr.ServerError, Message: "internal database error"}
+	}
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		message := "internal database error"
+		if mysqlErr.Number == 1205 || mysqlErr.Number == 1213 {
+			message = "database lock timeout or deadlock, please retry"
+		}
+		return requesttx.Outcome{HTTPCode: http.StatusInternalServerError, BusinessCode: cErr.ServerError, Message: message}
+	}
+	return requesttx.Outcome{HTTPCode: http.StatusBadRequest, BusinessCode: cErr.DefaultError, Message: err.Error()}
+}
+
+func writeError(c *gin.Context, err error) {
+	writeResponse(c, errorOutcome(err))
 }
 
 // 失败返回
 func FailByErr(c *gin.Context, err error) {
-	v, ok := err.(*cErr.Error)
-	if ok {
-		JsonReturn(c, v.HttpCode(), v.ErrorCode(), v.Error(), nil)
-	} else {
-		JsonReturn(c, http.StatusBadRequest, cErr.DefaultError, err.Error(), nil)
-	}
+	outcome := errorOutcome(err)
+	JsonReturn(c, outcome.HTTPCode, outcome.BusinessCode, outcome.Message, outcome.Data)
 }

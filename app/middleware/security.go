@@ -348,7 +348,7 @@ func (m *Security) Handler() gin.HandlerFunc {
 				}
 			}()
 			txErr = m.sqlDB.Transaction(func(tx *gorm.DB) error {
-				bound := requesttx.Bind(c.Request.Context(), tx)
+				bound := requesttx.Bind(c.Request.Context(), tx.WithContext(c.Request.Context()))
 				c.Request = c.Request.WithContext(bound)
 				m.workHandler()(c)
 				outcome, hasOutcome = requesttx.PeekOutcome(c.Request.Context())
@@ -493,6 +493,13 @@ func (m *Security) workHandler() gin.HandlerFunc {
 				abort(http.StatusInternalServerError, "invalid security rule identifier")
 				return
 			}
+			if requesttx.Active(c.Request.Context()) {
+				if err := model.NewAdminHierarchy(m.config).LockHierarchy(c.Request.Context(), db); err != nil {
+					m.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
+					abort(http.StatusInternalServerError, "security lock failed")
+					return
+				}
+			}
 			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+recycle.PrimaryKey+"` IN ?", normalizedIDs).Find(&rows).Error
 			if err != nil {
 				m.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
@@ -621,6 +628,13 @@ func (m *Security) workHandler() gin.HandlerFunc {
 			if err != nil || policyErr != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, sensitive.PrimaryKey) != nil {
 				abort(http.StatusInternalServerError, "invalid security rule identifier")
 				return
+			}
+			if requesttx.Active(c.Request.Context()) {
+				if err := model.NewAdminHierarchy(m.config).LockHierarchy(c.Request.Context(), db); err != nil {
+					m.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
+					abort(http.StatusInternalServerError, "security lock failed")
+					return
+				}
 			}
 			row := map[string]any{}
 			err = scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+sensitive.PrimaryKey+"`=?", primaryValue).Take(&row).Error

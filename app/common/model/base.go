@@ -3,6 +3,8 @@ package model
 import (
 	"context"
 	"go-build-admin/app/pkg/requesttx"
+
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -17,7 +19,15 @@ func (s *BaseModel) DB() *gorm.DB {
 	return s.sqlDB
 }
 
+func requestContext(ctx context.Context) context.Context {
+	if ginCtx, ok := ctx.(*gin.Context); ok && ginCtx.Request != nil {
+		return ginCtx.Request.Context()
+	}
+	return ctx
+}
+
 func (s *BaseModel) DBFor(ctx context.Context) *gorm.DB {
+	ctx = requestContext(ctx)
 	if db := requesttx.DB(ctx); db != nil {
 		return db
 	}
@@ -25,6 +35,7 @@ func (s *BaseModel) DBFor(ctx context.Context) *gorm.DB {
 }
 
 func (s *BaseModel) Transaction(ctx context.Context, fn func(*gorm.DB) error) error {
+	ctx = requestContext(ctx)
 	return requesttx.Transaction(requesttx.WithDB(ctx, s.sqlDB), fn)
 }
 
