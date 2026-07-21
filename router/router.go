@@ -61,6 +61,8 @@ func InitRouter(
 	countryCurrencyHandler *admin.CountryCurrencyHandler,
 ) *gin.Engine {
 	router := gin.New()
+	registerHealthRoute(router)
+
 	// 跨域处理
 	router.Use(middleware.Cors(), recordM.Handler())
 	router.Use(
@@ -327,4 +329,10 @@ func registerAdminLogRoutes(adminRouter gin.IRoutes, handler *admin.AdminLogHand
 
 func registerPublicAccountRoutes(router *gin.Engine, accountHandler gin.HandlerFunc) {
 	router.POST("/api/account/retrievePassword", accountHandler)
+}
+
+func registerHealthRoute(router *gin.Engine) {
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 }

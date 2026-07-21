@@ -29,7 +29,7 @@ import (
 var (
 	rootPath = utils.RootPath()
 
-	Version      string
+	Version      = "dev"
 	configPath   string
 	config       *conf.Configuration
 	loggerWriter *lumberjack.Logger
@@ -47,6 +47,11 @@ func init() {
 }
 
 func main() {
+	if versionRequested(os.Args[1:]) {
+		fmt.Println(Version)
+		return
+	}
+
 	rootCmd := &cobra.Command{
 		Use: "app",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -91,6 +96,15 @@ func main() {
 	}
 }
 
+func versionRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--version" || arg == "-version" {
+			return true
+		}
+	}
+	return false
+}
+
 func initConfig() {
 	if err := utils.EnsureConfigFile(rootPath); err != nil {
 		panic(fmt.Errorf("ensure config failed: %s ", err))
@@ -109,23 +123,59 @@ func initConfig() {
 		panic(fmt.Errorf("read config failed: %s \n", err))
 	}
 
-	if err := v.Unmarshal(&config); err != nil {
-		fmt.Println(err)
+	var nextConfig conf.Configuration
+	if err := v.Unmarshal(&nextConfig); err != nil {
+		panic(fmt.Errorf("unmarshal config failed: %w", err))
 	}
+	if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
+		panic(fmt.Errorf("apply config app.time_zone failed: %w", err))
+	}
+	config = &nextConfig
 
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
 		fmt.Println("config file changed:", in.Name)
 		defer func() {
 			if err := recover(); err != nil {
-				logger.Error("config file changed err:", zap.Any("err", err))
+				logConfigChangeError(fmt.Errorf("config file changed err: %v", err))
 				fmt.Println(err)
 			}
 		}()
-		if err := v.Unmarshal(&config); err != nil {
-			fmt.Println(err)
+		var nextConfig conf.Configuration
+		if err := v.Unmarshal(&nextConfig); err != nil {
+			logConfigChangeError(fmt.Errorf("unmarshal config failed: %w", err))
+			return
 		}
+		if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
+			logConfigChangeError(fmt.Errorf("apply config app.time_zone failed: %w", err))
+			return
+		}
+		config = &nextConfig
 	})
+}
+
+// applyTimeZone validates the configured location before changing the process-wide default.
+// An omitted time zone uses UTC so behavior does not depend on the host environment.
+func applyTimeZone(timeZone string) error {
+	if timeZone == "" {
+		timeZone = "UTC"
+	}
+
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return fmt.Errorf("invalid time zone %q: %w", timeZone, err)
+	}
+
+	time.Local = location
+	return nil
+}
+
+func logConfigChangeError(err error) {
+	if logger != nil {
+		logger.Error("config file changed", zap.Error(err))
+		return
+	}
+	log.Print(err)
 }
 
 func initLogger() {

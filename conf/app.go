@@ -4,6 +4,7 @@ type App struct {
 	Env                string `mapstructure:"env" json:"env" yaml:"env"`
 	Port               string `mapstructure:"port" json:"port" yaml:"port"`
 	AppName            string `mapstructure:"app_name" json:"app_name" yaml:"app_name"`
+	TimeZone           string `mapstructure:"time_zone" json:"time_zone" yaml:"time_zone"`
 	CorsRequestDomain  string `mapstructure:"cors_request_domain" json:"cors_request_domain" yaml:"cors_request_domain"`
 	AdminLoginCaptcha  bool   `mapstructure:"admin_login_captcha" json:"admin_login_captcha" yaml:"admin_login_captcha"`
 	UserLoginRetry     int    `mapstructure:"user_login_retry" json:"user_login_retry" yaml:"user_login_retry"`

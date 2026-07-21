@@ -1,0 +1,16 @@
+.git
+.gitignore
+.DS_Store
+.idea
+.vscode
+.env
+web/node_modules
+web/dist
+conf/config*.yaml
+storage
+static/install
+static/install.lock
+static/npm-install-test
+*.log
+tmp
+dist-ssr

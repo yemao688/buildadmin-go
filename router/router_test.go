@@ -42,3 +42,16 @@ func TestAdminLogDeleteRoute(t *testing.T) {
 		t.Fatal("admin log delete route is not registered")
 	}
 }
+
+func TestHealthRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	registerHealthRoute(router)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.JSONEq(t, `{"status":"ok"}`, recorder.Body.String())
+}

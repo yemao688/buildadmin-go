@@ -42,6 +42,10 @@ go install github.com/air-verse/air@latest
 
    Vite 默认监听 `9988`，开发 API 地址为 `http://localhost:9989`。
 
+## Docker Compose 部署
+
+发布入口：发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `static/`），再执行 `make push`；Docker 只打包根 `static/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、`conf/config.yaml` 和 `storage/`，然后执行 `docker compose pull && docker compose up -d`。从 `conf/config.example.yaml` 复制生成 `conf/config.yaml`，并在应用 YAML 中设置 `app.time_zone`；`app.port` 保持 `9989`。首次安装在本地完成，详细流程见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+
 ## 常用命令
 
 ```bash
@@ -66,7 +70,7 @@ router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 双轨迁移、迁移模型与内部迁移基础设施
 conf/                配置模板和本地化资源
 web/                 Vue/Vite 前端源码
-static/              安装器和部署后的静态资源
+static/              发布到镜像中的前端和运行时静态资源
 crud_specs/          AI CRUD 生成 YAML
 docs/                开发文档
 tests/               测试支持代码
