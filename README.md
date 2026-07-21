@@ -14,6 +14,10 @@
 go install github.com/air-verse/air@latest
 ```
 
+## 框架使用与升级
+
+本仓库是 `git@github.com:yemao688/buildadmin-go.git` 框架源仓库，发布分支为 `v2`。请先在 GitHub fork：自己的 fork 作为 `origin`，本仓库作为 `upstream`；业务长期开发在自己的 `master`。框架更新时，将 `upstream/v2` merge 到 `master`，验证后 push `origin/master`，不要 rebase 或 force push。完整的 fork、安装、CRUD 和升级流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。
+
 ## 快速开始
 
 1. 在项目根目录启动后端：
