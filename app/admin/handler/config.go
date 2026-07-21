@@ -3,6 +3,7 @@ package handler
 import (
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
@@ -26,6 +27,40 @@ type ConfigHandler struct {
 	configM *model.ConfigModel
 }
 
+type configJSONItem struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func decodeConfigJSON(field, value string) ([]configJSONItem, error) {
+	if strings.TrimSpace(value) == "" {
+		return []configJSONItem{}, nil
+	}
+	items := []configJSONItem{}
+	if err := json.Unmarshal([]byte(value), &items); err != nil {
+		return nil, fmt.Errorf("%s: %w", field, err)
+	}
+	if items == nil {
+		items = []configJSONItem{}
+	}
+	return items, nil
+}
+
+func (h *ConfigHandler) configJSON(ctx *gin.Context, name string) ([]configJSONItem, error) {
+	value, err := h.configM.GetValueByName(ctx, name)
+	return decodeConfigValue(name, value, err)
+}
+
+func decodeConfigValue(field, value string, err error) ([]configJSONItem, error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return []configJSONItem{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", field, err)
+	}
+	return decodeConfigJSON(field, value)
+}
+
 func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigModel) *ConfigHandler {
 	return &ConfigHandler{
 		Base: Base{currentM: configM},
@@ -33,14 +68,8 @@ func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *mode
 }
 
 func (h *ConfigHandler) Index(ctx *gin.Context) {
-	type Item struct {
-		Key   string `json:"key"`
-		Value string `json:"value"`
-	}
-
-	value, _ := h.configM.GetValueByName(ctx, "config_group")
-	configGroupItems := []Item{}
-	if err := json.Unmarshal([]byte(value), &configGroupItems); err != nil {
+	configGroupItems, err := h.configJSON(ctx, "config_group")
+	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -63,7 +92,11 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 		}
 	}
 
-	all, _ := h.configM.List(ctx)
+	all, err := h.configM.List(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	for _, v := range all {
 		if _, ok := list[v.Group]; ok {
 			title := utils.Lang(ctx, v.Title, nil)
@@ -89,9 +122,8 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 		}
 	}
 
-	value, _ = h.configM.GetValueByName(ctx, "config_quick_entrance")
-	quickEntranceItems := []Item{}
-	if err := json.Unmarshal([]byte(value), &quickEntranceItems); err != nil {
+	quickEntranceItems, err := h.configJSON(ctx, "config_quick_entrance")
+	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
