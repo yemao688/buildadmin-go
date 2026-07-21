@@ -1,76 +1,95 @@
-# 前序准备
- * go 版本1.21.8
- * 安装air
-    - ```go install github.com/air-verse/air@latest```
-    - 参考https://github.com/cosmtrek/air/blob/master/README-zh_cn.md
- * 安装wire
-    - ```go install github.com/google/wire/cmd/wire@latest``` 
-    - 参考https://github.com/google/wire
- * 数据库Mysql
- * NodeJs >= 16.14.2
- * Npm >= 8.5.0
+# Go BuildAdmin
 
-# 启动安装服务
-   ```
-   #其中 go-build-admin 为项目根目录
-   cd go-build-admin 
+这是一个将 **BuildAdmin PHP 生态及其业务行为迁移到 Go** 的管理后台框架：后端使用 Go，前端基于 BuildAdmin v2.3.7。项目目标是让开发者和 AI agent 快速开发管理后台业务。它不是 PHP 的逐行翻译，而是在保持兼容性和业务语义的基础上，采用强类型的 Go、Gin、GORM 和 Wire 实现。
 
-   #  根目录下运行
+## 技术栈与要求
+
+- Go：以 `go.mod` 的 `go 1.25.x` 为准。
+- 数据库：MySQL。
+- 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
+- 包管理：`pnpm`，不要使用 npm。
+- 可选工具：Air 用于后端开发热重载；Wire 通过 `go generate ./cmd/app` 按项目声明运行。
+
+```bash
+go install github.com/air-verse/air@latest
+```
+
+## 快速开始
+
+1. 在项目根目录启动后端：
+
+   ```bash
    air
-   ```
-   接下来访问 http://127.0.0.1:9989/install,根据引导完成安装即可
-# 目录结构
-   ```
-   Server 端
-   ├─app（应用目录）
-   │  ├─admin
-   │  ├─api
-   │  ├─cmd  (配置命令)
-   │  ├─common
-   │  └─middleware (中间件)
-   │
-   ├─cmd（main.go 文件）
-   │  └─app
-   │     ├─app.go  
-   │     ├─main.go  (入口文件)
-   │     ├─wire_gen.go(wire生成文件无需修改)
-   │     └─wire.go
-   │
-   ├─conf（配置目录）
-   │  ├─localize (多语言)
-   │  ├─config.example.yaml (完整配置模板，纳入版本控制)
-   │  └─config.yaml (安装器生成的运行配置，不纳入版本控制)
-   │
-   ├─database（数据库迁移文件）
-   │
-   ├─router（路由）
-   │
-   ├─static（静态文件及前端页面）
-   │  ├─npm-install-test（npm install 测试项目）
-   │  ├─install（安装器源代码，安装后请删除）
-   │  ├─fonts（一些字体）
-   │  └─images（一些图片）
-   │
-   │─storage（上传的文件保存在这里）
-   │  ├─default（图片）
-   │  └─logs（日志）
-   │
-   ├─tests（测试文件）
-   │
-   ├─utils（工具库）
-   │
-   ├─web（WEB端源代码，见下文详叙）
-   |
-   │  .air.toml（air配置文件）
-   │  .gitignore
-   │  .go.mod
-   │  README.md
+   # 或：go run ./cmd/app --conf config.yaml
    ```
 
-# 特别鸣谢
-前端使用的是buildAdmin的前端,做了部分修改,使用请参考https://www.buildadmin.com/
+   后端默认监听 `9989`。
+2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会从 `conf/config.example.yaml` 创建运行配置 `conf/config.yaml`，并执行其中配置的迁移命令。运行配置含凭据，不要提交。
+3. 如果不使用 Web 安装器，可复制配置模板、按环境填写后直接执行数据库迁移：
 
+   ```bash
+   cp conf/config.example.yaml conf/config.yaml
+   go run ./cmd/app --conf config.yaml migrate
+   ```
 
-注意:
-crud生成代码需修改根目录.air.toml文件delay的时间,这样代码变更后不会马上编译
-生成的代码对时间字段处理,需修改前端传的时间格式或者更改字段类型
+4. 启动前端（必须在 `web/` 目录执行）：
+
+   ```bash
+   cd web
+   pnpm install --frozen-lockfile
+   pnpm dev
+   ```
+
+   Vite 默认监听 `9988`，开发 API 地址为 `http://localhost:9989`。
+
+## 常用命令
+
+```bash
+# 项目根目录
+go build ./...
+go test ./path/to/package -run '^TestName$'
+go run ./cmd/app --conf config.yaml migrate
+go generate ./cmd/app                 # Wire 相关变更后
+
+# web/ 目录
+pnpm lint
+pnpm typecheck
+pnpm build
+```
+
+## 目录结构
+
+```text
+app/                 业务、命令、公共组件与中间件
+cmd/app/             应用入口及 Wire wiring
+router/              Gin 路由注册（/admin 与 /api）
+database/migrations/ 双轨迁移、迁移模型与内部迁移基础设施
+conf/                配置模板和本地化资源
+web/                 Vue/Vite 前端源码
+static/              安装器和部署后的静态资源
+crud_specs/          AI CRUD 生成 YAML
+docs/                开发文档
+tests/               测试支持代码
+storage/             运行时上传文件和日志
+```
+
+## AI 驱动 CRUD 模块生成
+
+生成业务模块前，先阅读 [`docs/crud-generation.md`](docs/crud-generation.md)，再将规范写入 `crud_specs/`，使用内置链路，不要手写 model、handler 或 Vue 脚手架：
+
+```bash
+go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/app --conf config.yaml crud:delete <table_name>
+```
+
+生成失败时文件会自动恢复，但 MySQL DDL 不可回滚；执行前请检查数据库副作用和备份策略。
+
+## 迁移、生成文件与测试注意事项
+
+- 迁移采用 `database/migrations/official/` 与 `database/migrations/local/` 两条轨道，共享 `database/migrations/internal/` 基础设施，由 `app/cmd/handler/migrate.go` 按注册表执行；历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
+- MySQL 集成测试会修改数据库，需要 `BUILDADMIN_TEST_MYSQL_DSN` 和一次性数据库；测试覆盖和运行约束见 [`AGENTS.md`](AGENTS.md)。
+
+## 鸣谢
+
+感谢 [BuildAdmin](https://www.buildadmin.com/) 提供 PHP 生态和前端基础；本项目以前端 BuildAdmin v2.3.7 为基础并做了适配。
