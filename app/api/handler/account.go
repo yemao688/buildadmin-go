@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/common/model"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 type AccountHandler struct {
@@ -91,7 +93,9 @@ func (h *AccountHandler) Profile(ctx *gin.Context) {
 		data["username"] = params.Username
 		data["nickname"] = params.Nickname
 		data["gender"] = params.Gender
-		data["birthday"] = (params.Birthday)[:10]
+		if params.Birthday != "" {
+			data["birthday"] = params.Birthday[:10]
+		}
 		data["motto"] = params.Motto
 
 		if err := h.userM.Update(ctx, userAuth.Id, data); err != nil {
@@ -222,8 +226,12 @@ func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 
 	if params.Type == "email" {
 		_, err := h.userM.IsExist(ctx, "email", params.Email, userAuth.Id)
-		if err != nil {
+		if err == nil {
 			FailByErr(ctx, cErr.BadRequest("The email phone has been bound to another account"))
+			return
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			FailByErr(ctx, err)
 			return
 		}
 		h.userM.Update(ctx, user.ID, map[string]any{
@@ -231,8 +239,12 @@ func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 		})
 	} else if params.Type == "mobile" {
 		_, err := h.userM.IsExist(ctx, "mobile", params.Mobile, userAuth.Id)
-		if err != nil {
+		if err == nil {
 			FailByErr(ctx, cErr.BadRequest("The mobile phone has been bound to another account"))
+			return
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			FailByErr(ctx, err)
 			return
 		}
 		h.userM.Update(ctx, user.ID, map[string]any{
@@ -305,7 +317,7 @@ func (h *AccountHandler) Balance(ctx *gin.Context) {
 }
 
 type RetrieveParam struct {
-	Type     string `json:"type"`
+	Type     string `json:"type" binding:"required,oneof=email mobile"`
 	Account  string `json:"account" binding:"required"`
 	Captcha  string `json:"captcha" binding:"required"`
 	Password string `json:"password" binding:"required,password"`
@@ -313,9 +325,11 @@ type RetrieveParam struct {
 
 func (v RetrieveParam) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
-		"account.required":  "account required",
-		"captcha.required":  "captcha required",
-		"password.required": "password required",
+		"Type.required":     "type required",
+		"Type.oneof":        "type invalid",
+		"Account.required":  "account required",
+		"Captcha.required":  "captcha required",
+		"Password.required": "password required",
 	}
 }
 
@@ -330,9 +344,9 @@ func (h *AccountHandler) RetrievePassword(ctx *gin.Context) {
 	var err error
 	user := model.User{}
 	if params.Type == "email" {
-		user, err = h.userM.GetOneByEmail(ctx, "email")
+		user, err = h.userM.GetOneByEmail(ctx, params.Account)
 	} else {
-		user, err = h.userM.GetOneByMobile(ctx, "mobile")
+		user, err = h.userM.GetOneByMobile(ctx, params.Account)
 	}
 
 	if err != nil {

@@ -166,7 +166,7 @@ func InitRouter(
 	adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
 	adminRouter.POST("auth.Rule/sortable", adminRuleHandler.Sortable)
 
-	adminRouter.GET("auth.AdminLog/index", adminLogHandler.Index)
+	registerAdminLogRoutes(adminRouter, adminLogHandler)
 
 	adminRouter.GET("user.User/index", userHandler.Index)
 	adminRouter.POST("user.User/add", userHandler.Add)
@@ -263,7 +263,7 @@ func InitRouter(
 	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
 
 	//-----------------------api 接口部分--------------------//
-	router.POST("/api/account/RetrievePassword", apiAccountHandler.RetrievePassword)
+	registerPublicAccountRoutes(router, apiAccountHandler.RetrievePassword)
 	router.POST("/api/ajax/area", apiAjaxHandler.Area)
 	router.POST("/api/ajax/buildSuffixSvg", apiAjaxHandler.BuildSuffixSvg)
 	router.POST("/api/Ems/send", apiEmsHandler.Send)
@@ -299,14 +299,11 @@ func InitRouter(
 
 	admin.CollectRoutes(router)
 
-
 	adminRouter.GET("countryCurrency/index", countryCurrencyHandler.Index)
 	adminRouter.POST("countryCurrency/add", countryCurrencyHandler.Add)
 	adminRouter.GET("countryCurrency/edit", countryCurrencyHandler.One)
 	adminRouter.POST("countryCurrency/edit", countryCurrencyHandler.Edit)
 	adminRouter.DELETE("countryCurrency/del", countryCurrencyHandler.Del)
-
-
 
 	adminRouter.GET("countryLanguageContent/index", countryLanguageContentHandler.Index)
 	adminRouter.POST("countryLanguageContent/add", countryLanguageContentHandler.Add)
@@ -314,14 +311,20 @@ func InitRouter(
 	adminRouter.POST("countryLanguageContent/edit", countryLanguageContentHandler.Edit)
 	adminRouter.DELETE("countryLanguageContent/del", countryLanguageContentHandler.Del)
 
-
-
 	adminRouter.GET("countryLanguage/index", countryLanguageHandler.Index)
 	adminRouter.POST("countryLanguage/add", countryLanguageHandler.Add)
 	adminRouter.GET("countryLanguage/edit", countryLanguageHandler.One)
 	adminRouter.POST("countryLanguage/edit", countryLanguageHandler.Edit)
 	adminRouter.DELETE("countryLanguage/del", countryLanguageHandler.Del)
 
-
 	return router
+}
+
+func registerAdminLogRoutes(adminRouter gin.IRoutes, handler *admin.AdminLogHandler) {
+	adminRouter.GET("auth.AdminLog/index", handler.Index)
+	adminRouter.DELETE("auth.AdminLog/del", handler.Del)
+}
+
+func registerPublicAccountRoutes(router *gin.Engine, accountHandler gin.HandlerFunc) {
+	router.POST("/api/account/retrievePassword", accountHandler)
 }

@@ -8,8 +8,10 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"go.uber.org/zap"
 )
 
@@ -42,6 +44,39 @@ func (v Login) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{}
 }
 
+func userRegisterCaptchaID(params Login) string {
+	if params.RegisterType == "email" {
+		return params.Email + "user_register"
+	}
+	return params.Mobile + "user_register"
+}
+
+type userRegisterValidation struct {
+	RegisterType string `json:"registerType" binding:"required,oneof=email mobile"`
+	Username     string `json:"username" binding:"required,min=3,max=16"`
+	Password     string `json:"password" binding:"required,password"`
+	Email        string `json:"email" binding:"required_if=RegisterType email,omitempty,email"`
+	Mobile       string `json:"mobile" binding:"required_if=RegisterType mobile,omitempty,phone"`
+	Captcha      string `json:"captcha" binding:"required"`
+}
+
+func (v userRegisterValidation) GetMessages() validate.ValidatorMessages {
+	return validate.ValidatorMessages{
+		"RegisterType.required": "registerType required",
+		"RegisterType.oneof":    "registerType invalid",
+		"Username.required":     "username required",
+		"Username.min":          "username invalid",
+		"Username.max":          "username invalid",
+		"Password.required":     "password required",
+		"Password.password":     "password invalid",
+		"Email.required_if":     "email required",
+		"Email.email":           "email invalid",
+		"Mobile.required_if":    "mobile required",
+		"Mobile.phone":          "mobile invalid",
+		"Captcha.required":      "captcha required",
+	}
+}
+
 func (h *UserHandler) CheckIn(ctx *gin.Context) {
 	openMemberCenter := h.config.App.OpenMemberCenter
 	if !openMemberCenter {
@@ -51,13 +86,16 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 
 	//检查登陆
 	if _, ok := h.authM.IsLogin(ctx); ok {
-		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode))
+		FailByErrWithData(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode), map[string]string{
+			"type": "logged in",
+		})
 		return
 	}
 
 	if ctx.Request.Method != http.MethodPost {
-		Success(ctx, map[string][]string{
-			"accountVerificationType": {"mobile", "email"},
+		Success(ctx, map[string]interface{}{
+			"accountVerificationType": []string{"mobile", "email"},
+			"userLoginCaptchaSwitch":  h.config.App.UserLoginCaptcha,
 		})
 		return
 	}
@@ -68,8 +106,13 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 		return
 	}
 
+	if params.Tab != "login" && params.Tab != "register" {
+		FailByErr(ctx, cErr.BadRequest("tab invalid"))
+		return
+	}
+
 	if params.Tab == "login" {
-		if !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
+		if h.config.App.UserLoginCaptcha && !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
 			FailByErr(ctx, cErr.BadRequest("Captcha error"))
 			return
 		}
@@ -87,12 +130,24 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 		return
 
 	} else if params.Tab == "register" {
-		registerType := ""
-		if params.RegisterType == "email" {
-			registerType = "email" + "user_register"
-		} else {
-			registerType = "mobile" + "user_register"
+		registerParams := userRegisterValidation{
+			RegisterType: params.RegisterType,
+			Username:     params.Username,
+			Password:     params.Password,
+			Email:        params.Email,
+			Mobile:       params.Mobile,
+			Captcha:      params.Captcha,
 		}
+		if err := binding.Validator.ValidateStruct(registerParams); err != nil {
+			FailByErr(ctx, validate.GetError(registerParams, err))
+			return
+		}
+		if !regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`).MatchString(params.Username) {
+			FailByErr(ctx, cErr.BadRequest("username invalid"))
+			return
+		}
+
+		registerType := userRegisterCaptchaID(params)
 
 		if !h.captcha.Check(params.Captcha, registerType) {
 			FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))

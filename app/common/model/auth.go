@@ -100,14 +100,9 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	phoneRegex := regexp.MustCompile(`^1[3-9]\d{9}$`)
 	if phoneRegex.MatchString(username) {
 		accountType = "mobile"
-	}
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
-	if emailRegex.MatchString(username) {
+	} else if emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`); emailRegex.MatchString(username) {
 		accountType = "email"
-	}
-
-	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`)
-	if usernameRegex.MatchString(username) {
+	} else if usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`); usernameRegex.MatchString(username) {
 		accountType = "username"
 	}
 
@@ -116,8 +111,11 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	user := User{}
-	err := s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user).Error
-	if err != nil {
+	result := s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
 		return nil, cErr.BadRequest("Account not exist")
 	}
 
@@ -154,7 +152,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, err
 	}
 
-	err = s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
+	err := s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": time.Now().Unix(),
 		"last_login_ip":   ctx.ClientIP(),
@@ -191,24 +189,32 @@ func (s *AuthModel) FilterData(user User) map[string]any {
 }
 
 func (s *AuthModel) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
-	existUser := User{}
 	if username != "" {
-		err := s.sqlDB.Model(&User{}).Where("username=?", username).Scan(&existUser).Error
+		exists, err := s.accountExists("username", username)
 		if err != nil {
+			return nil, err
+		}
+		if exists {
 			return nil, cErr.BadRequest("Username is exist!")
 		}
 	}
 
 	if email != "" {
-		err := s.sqlDB.Model(&User{}).Where("email=?", email).Scan(&existUser).Error
+		exists, err := s.accountExists("email", email)
 		if err != nil {
+			return nil, err
+		}
+		if exists {
 			return nil, cErr.BadRequest("Email is exist!")
 		}
 	}
 
 	if mobile != "" {
-		err := s.sqlDB.Model(&User{}).Where("mobile=?", mobile).Scan(&existUser).Error
+		exists, err := s.accountExists("mobile", mobile)
 		if err != nil {
+			return nil, err
+		}
+		if exists {
 			return nil, cErr.BadRequest("Mobile is exist!")
 		}
 	}
@@ -257,6 +263,15 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 	userInfo["token"] = token
 	userInfo["refresh_token"] = ""
 	return userInfo, nil
+}
+
+func (s *AuthModel) accountExists(field, value string) (bool, error) {
+	var user User
+	result := s.sqlDB.Model(&User{}).Where(field+"=?", value).Scan(&user)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
 }
 
 func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {

@@ -1,7 +1,8 @@
 package utils
 
 // AccountStatusEnabled reports whether an admin/user status is allowed to
-// authenticate. Matching is exact: collation-folded or padded values are off.
+// authenticate. PHP only rejects the explicit disabled value; this preserves
+// compatibility with legacy 0/1 and other non-disable values.
 func AccountStatusEnabled(status string) bool {
-	return status == "enable"
+	return status != "disable"
 }

@@ -65,6 +65,10 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	if !slices.Contains([]string{"user_register", "user_change_email", "user_retrieve_pwd", "user_email_verify"}, params.Event) {
+		FailByErr(ctx, cErr.BadRequest("event invalid"))
+		return
+	}
 
 	mailConfig, err := h.configM.GetKVByGroup(ctx, "mail")
 	if err != nil {

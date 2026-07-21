@@ -58,7 +58,9 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		// 若是从前台会员中心内发出的请求，要求必须登录，否则会员中心异常
 		requiredLogin := ctx.Query("requiredLogin")
 		if requiredLogin == "1" {
-			FailByErr(ctx, cErr.BadRequest("Please login first", 303))
+			FailByErrWithData(ctx, cErr.BadRequest("Please login first", 303), map[string]string{
+				"type": "need login",
+			})
 			return
 		}
 	}

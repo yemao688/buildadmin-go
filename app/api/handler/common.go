@@ -5,7 +5,9 @@ import (
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
+	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/app/pkg/token"
+	"go-build-admin/utils"
 	"image/png"
 	"net/http"
 
@@ -22,6 +24,25 @@ type CommonHandler struct {
 
 func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper) *CommonHandler {
 	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper}
+}
+
+func FailByErrWithData(c *gin.Context, err error, data interface{}) {
+	v, ok := err.(*cErr.Error)
+	if !ok {
+		FailByErr(c, err)
+		return
+	}
+
+	msg := utils.Lang(c, v.Error(), nil)
+	if requesttx.Stage(c, requesttx.Outcome{
+		HTTPCode:     v.HttpCode(),
+		BusinessCode: v.ErrorCode(),
+		Message:      msg,
+		Data:         data,
+	}) {
+		return
+	}
+	c.JSON(v.HttpCode(), Response{v.ErrorCode(), data, msg, 0})
 }
 
 // 图形验证码
@@ -99,6 +120,11 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 	result, err := h.tokenHelper.Get(params.RefreshToken)
 	if err != nil {
 		FailByErr(ctx, cErr.BadRequest("Login expired, please login again."))
+		return
+	}
+
+	if result.Type != "admin-refresh" && result.Type != "user-refresh" {
+		FailByErr(ctx, cErr.BadRequest("Invalid token"))
 		return
 	}
 

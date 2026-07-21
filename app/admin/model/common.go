@@ -11,7 +11,7 @@ func IsSuperAdmin(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		adminAuth := header.GetAdminAuth(ctx)
 		if !adminAuth.IsSuperAdmin {
-			db.Where(" admin_id = ? ", 1)
+			return db.Where("admin_id = ?", adminAuth.Id)
 		}
 		return db
 	}
