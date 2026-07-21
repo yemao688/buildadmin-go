@@ -47,6 +47,22 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 	})
 }
 
+func (h *AjaxHandler) AliossCallback(ctx *gin.Context) {
+	var params model.OSSCallback
+	if err := ctx.ShouldBind(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	auth := header.GetAdminAuth(ctx)
+	result, err := h.uploadHelper.CompleteOSS(params, auth.Id, 0)
+	if err != nil {
+		h.log.Error("AliOSS callback failed", zap.Error(err))
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, map[string]any{"file": result})
+}
+
 // 省份地区数据
 func (h *AjaxHandler) Area(ctx *gin.Context) {
 	result, err := h.areaM.List(ctx)

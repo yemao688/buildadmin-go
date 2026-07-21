@@ -251,6 +251,7 @@ func InitRouter(
 
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
+	adminRouter.POST("Alioss/callback", ajaxHandler.AliossCallback)
 	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
 	adminRouter.GET("ajax/getTableList", ajaxHandler.GetTableList)
 	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
@@ -292,6 +293,7 @@ func InitRouter(
 	apiRouter.GET("account/balance", apiAccountHandler.Balance)
 
 	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
+	apiRouter.POST("Alioss/callback", apiAjaxHandler.AliossCallback)
 	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	router.Static("/assets", filepath.Join(rootDir, "static/assets"))

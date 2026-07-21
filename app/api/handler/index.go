@@ -80,13 +80,18 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
+	uploadConfig, err := model.UploadSiteConfig(ctx, h.configM, h.config)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	Success(ctx, map[string]any{
 		"site": map[string]any{
 			"siteName":     basicConfig["site_name"],
 			"recordNumber": basicConfig["record_number"],
 			"version":      basicConfig["version"],
 			"cdnUrl":       utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
-			"upload":       h.config.Upload,
+			"upload":       uploadConfig,
 		},
 		"openMemberCenter": true,
 		"userInfo":         userInfo,

@@ -77,7 +77,11 @@ func (s *AttachmentModel) GetOne(ctx *gin.Context, id int32) (attachment Attachm
 
 func (s *AttachmentModel) DealData(ctx *gin.Context, data *Attachment) (*Attachment, error) {
 	data.Suffix = strings.TrimLeft(filepath.Ext(data.URL), ".")
-	data.FullUrl = utils.FullUrl(data.URL, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
+	if data.Storage == "alioss" {
+		data.FullUrl = NewAliossStorage(s.sqlDB, s.config).URL(data.URL)
+	} else {
+		data.FullUrl = utils.FullUrl(data.URL, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
+	}
 	return data, nil
 }
 
@@ -156,7 +160,11 @@ func (s *AttachmentModel) Del(ctx *gin.Context, ids interface{}) error {
 		return err
 	}
 	for _, v := range list {
-		if utils.PathExists(utils.RootPath() + v.URL) {
+		if v.Storage == "alioss" {
+			if err := NewAliossStorage(s.sqlDB, s.config).Delete(v.URL); err != nil {
+				return err
+			}
+		} else if utils.PathExists(utils.RootPath() + v.URL) {
 			if removeErr := os.Remove(utils.RootPath() + v.URL); removeErr != nil {
 				return removeErr
 			}

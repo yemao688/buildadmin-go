@@ -10,6 +10,7 @@ var ProviderSet = wire.NewSet(
 	NewAreaModel,
 	NewAttachmentModel,
 	NewUploadHelper,
+	NewAliossStorage,
 	NewUserMoneyLogModel,
 	NewUserScoreLogModel,
 	NewUserModel,
