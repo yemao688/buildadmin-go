@@ -1,11 +1,13 @@
 package local
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
+	"go-build-admin/database/migrations/model"
 
 	"gorm.io/gorm"
 )
@@ -24,7 +26,32 @@ func ApplyFreshOverlay(db *gorm.DB, config *conf.Configuration) error {
 	if err := normalizeFreshSecuritySeed(db, config); err != nil {
 		return err
 	}
+	if err := ensureFreshUploadConfigGroup(db, config); err != nil {
+		return err
+	}
 	return EnsureAdminClosureSelfRows(db, config)
+}
+
+func ensureFreshUploadConfigGroup(db *gorm.DB, config *conf.Configuration) error {
+	table := core.TableName(config, "config")
+	if !core.TableExists(db, table) {
+		return nil
+	}
+	var group model.Config
+	if err := db.Table(table).Where("name = ?", "config_group").Take(&group).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return err
+	}
+	changed, value, err := appendUploadConfigGroup(group.Value)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	return db.Table(table).Where("id = ?", group.ID).Update("value", value).Error
 }
 
 func normalizeFreshSecuritySeed(db *gorm.DB, config *conf.Configuration) error {

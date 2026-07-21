@@ -15,21 +15,13 @@ func version0014(db *gorm.DB, config *conf.Configuration) error {
 	}
 	var group model.Config
 	if err := db.Table(table).Where("name = ?", "config_group").Take(&group).Error; err == nil {
-		var items []map[string]string
-		if json.Unmarshal([]byte(group.Value), &items) == nil {
-			seen := false
-			for _, item := range items {
-				if item["key"] == "upload" {
-					seen = true
-					break
-				}
-			}
-			if !seen {
-				items = append(items, map[string]string{"key": "upload", "value": "Upload"})
-				raw, _ := json.Marshal(items)
-				if err := db.Table(table).Where("id = ?", group.ID).Update("value", string(raw)).Error; err != nil {
-					return err
-				}
+		changed, value, err := appendUploadConfigGroup(group.Value)
+		if err != nil {
+			return err
+		}
+		if changed {
+			if err := db.Table(table).Where("id = ?", group.ID).Update("value", value).Error; err != nil {
+				return err
 			}
 		}
 	}
@@ -46,6 +38,24 @@ func version0014(db *gorm.DB, config *conf.Configuration) error {
 		}
 	}
 	return nil
+}
+
+func appendUploadConfigGroup(value string) (bool, string, error) {
+	var items []map[string]string
+	if err := json.Unmarshal([]byte(value), &items); err != nil {
+		return false, value, nil
+	}
+	for _, item := range items {
+		if item["key"] == "upload" {
+			return false, value, nil
+		}
+	}
+	items = append(items, map[string]string{"key": "upload", "value": "Upload"})
+	raw, err := json.Marshal(items)
+	if err != nil {
+		return false, value, err
+	}
+	return true, string(raw), nil
 }
 
 func aliossConfigRows() []model.Config {

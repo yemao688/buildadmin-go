@@ -2,7 +2,13 @@ package local
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"testing"
+
+	"go-build-admin/conf"
+	"go-build-admin/database/migrations/model"
+	"gorm.io/gorm/schema"
 )
 
 func TestAliossConfigRowsMatchInstallMetadata(t *testing.T) {
@@ -34,5 +40,62 @@ func TestAliossConfigRowsMatchInstallMetadata(t *testing.T) {
 	}
 	if err := json.Unmarshal([]byte(rows[4].Content), &content); err != nil || len(content) != 38 {
 		t.Fatalf("region content count=%d err=%v", len(content), err)
+	}
+}
+
+func TestAppendUploadConfigGroupIsIdempotent(t *testing.T) {
+	original := `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"}]`
+	changed, value, err := appendUploadConfigGroup(original)
+	if err != nil || !changed {
+		t.Fatalf("append changed=%v err=%v", changed, err)
+	}
+	if value != `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"upload","value":"Upload"}]` {
+		t.Fatalf("value=%s", value)
+	}
+	changed, value, err = appendUploadConfigGroup(value)
+	if err != nil || changed || value != `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"upload","value":"Upload"}]` {
+		t.Fatalf("second append changed=%v value=%s err=%v", changed, value, err)
+	}
+}
+
+func TestAppendUploadConfigGroupLeavesInvalidJSONUntouched(t *testing.T) {
+	changed, value, err := appendUploadConfigGroup("not-json")
+	if err != nil || changed || value != "not-json" {
+		t.Fatalf("changed=%v value=%q err=%v", changed, value, err)
+	}
+}
+
+func TestFreshOverlayAddsUploadConfigGroup(t *testing.T) {
+	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
+		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
+	}
+	db := getDB()
+	if db == nil {
+		t.Fatal("failed to open MySQL test database")
+	}
+	prefix := fmt.Sprintf("fresh_upload_group_%d_", os.Getpid())
+	cfg := &conf.Configuration{Database: conf.Database{Prefix: prefix}}
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
+	table := prefix + "config"
+	t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS `" + table + "`") })
+	if err := db.AutoMigrate(&model.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.Config{ID: 1, Name: "config_group", Value: `[{"key":"basics","value":"Basics"}]`}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureFreshUploadConfigGroup(db, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureFreshUploadConfigGroup(db, cfg); err != nil {
+		t.Fatal(err)
+	}
+	var value string
+	if err := db.Table(table).Where("id = 1").Pluck("value", &value).Error; err != nil {
+		t.Fatal(err)
+	}
+	changed, expected, err := appendUploadConfigGroup(`[{"key":"basics","value":"Basics"}]`)
+	if err != nil || !changed || value != expected {
+		t.Fatalf("value=%s expected=%s changed=%v err=%v", value, expected, changed, err)
 	}
 }
