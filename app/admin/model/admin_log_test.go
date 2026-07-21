@@ -158,6 +158,15 @@ func TestAdminLogAddNilParamsSerializesObject(t *testing.T) {
 	}
 }
 
+func TestAdminLogAddWithNilModelOrDBDoesNotPanic(t *testing.T) {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/add", nil)
+
+	var nilModel *AdminLogModel
+	nilModel.Add(ctx, nil)
+	(&AdminLogModel{}).Add(ctx, nil)
+}
+
 func newAdminLogTestDB(t *testing.T, name string) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+name+"?mode=memory&cache=shared"), &gorm.Config{

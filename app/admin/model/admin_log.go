@@ -91,6 +91,9 @@ func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, total int64, er
 }
 
 func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
+	if s == nil || s.sqlDB == nil || ctx == nil || ctx.Request == nil || ctx.Request.URL == nil {
+		return
+	}
 	url := ctx.Request.URL.Path
 	// 排除列表、选择器和登出请求；写入其它管理操作（包括 POST/DELETE）。
 	if skipAdminLogURL(url) {

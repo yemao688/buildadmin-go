@@ -38,7 +38,8 @@ func (m *Record) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("Timestamp", time.Now().Unix())
 		params := make(map[string]interface{})
-		if c.Request.Method == http.MethodPost || c.Request.Method == http.MethodDelete {
+		shouldRecord := isAdminLogMethod(c.Request.Method) && isAdminLogRoute(c.Request.URL.Path)
+		if shouldRecord {
 			var bodyBytes []byte
 			if c.Request.Body != nil {
 				bodyBytes, _ = io.ReadAll(c.Request.Body)
@@ -47,10 +48,18 @@ func (m *Record) Handler() gin.HandlerFunc {
 			mergeRequestParams(c.Request, bodyBytes, params)
 		}
 		c.Next()
-		if (c.Request.Method == http.MethodPost || c.Request.Method == http.MethodDelete) && m.config.App.AutoWriteAdminLog {
+		if shouldRecord && m.config.App.AutoWriteAdminLog {
 			m.adminLogM.Add(c, params)
 		}
 	}
+}
+
+func isAdminLogMethod(method string) bool {
+	return method == http.MethodPost || method == http.MethodDelete
+}
+
+func isAdminLogRoute(path string) bool {
+	return path == "/admin" || strings.HasPrefix(path, "/admin/")
 }
 
 // mergeRequestParams keeps the request body available to downstream handlers while

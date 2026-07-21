@@ -65,8 +65,8 @@ func TestRecordAlwaysRecordsEmptyAndInvalidJSON(t *testing.T) {
 			record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 			router := gin.New()
 			router.Use(record.Handler())
-			router.Handle(test.method, "/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-			request := httptest.NewRequest(test.method, "/test", strings.NewReader(test.body))
+			router.Handle(test.method, "/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			request := httptest.NewRequest(test.method, "/admin/test", strings.NewReader(test.body))
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 			if response.Code != http.StatusNoContent {
@@ -88,9 +88,9 @@ func TestRecordCollectsDeleteQueryArrays(t *testing.T) {
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
 	router.Use(record.Handler())
-	router.DELETE("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.DELETE("/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 
-	request := httptest.NewRequest(http.MethodDelete, "/test?ids[]=1&ids[]=2", nil)
+	request := httptest.NewRequest(http.MethodDelete, "/admin/test?ids[]=1&ids[]=2", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 
@@ -109,9 +109,42 @@ func TestRecordDoesNotRecordGet(t *testing.T) {
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
 	router.Use(record.Handler())
-	router.GET("/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/test", nil))
+	router.GET("/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/admin/test", nil))
 	if spy.calls != 0 {
 		t.Fatalf("Add calls = %d, want 0", spy.calls)
+	}
+}
+
+func TestRecordOnlyRecordsAdminWriteRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, test := range []struct {
+		name   string
+		method string
+		path   string
+		calls  int
+	}{
+		{name: "admin post", method: http.MethodPost, path: "/admin/test", calls: 1},
+		{name: "admin delete", method: http.MethodDelete, path: "/admin/test", calls: 1},
+		{name: "install post", method: http.MethodPost, path: "/api/install/manualInstall"},
+		{name: "api post", method: http.MethodPost, path: "/api/demo/index"},
+		{name: "admin get", method: http.MethodGet, path: "/admin/test"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			spy := &recordLogSpy{}
+			record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
+			router := gin.New()
+			router.Use(record.Handler())
+			router.Handle(test.method, test.path, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, httptest.NewRequest(test.method, test.path, strings.NewReader(`{"name":"alice"}`)))
+			if response.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+			}
+			if spy.calls != test.calls {
+				t.Fatalf("Add calls = %d, want %d", spy.calls, test.calls)
+			}
+		})
 	}
 }
