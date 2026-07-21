@@ -30,5 +30,6 @@ func Migrations(official []core.OfficialMigration) []core.LocalMigration {
 		{Sequence: 11, ID: "canonical-column-order", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0011, VerifySchema: verifyCanonicalColumnOrder, VerifyUpgradeData: verifyCanonicalColumnOrder, PostSeedVerify: postSeed},
 		{Sequence: 12, ID: "security-owner-column", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0012, VerifySchema: verifyOwnerColumnContract, VerifyUpgradeData: verifyOwnerColumnContract, PostSeedVerify: postSeed},
 		{Sequence: 13, ID: "country-dictionary", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0013, VerifySchema: verifyCountryDictionaryContract, VerifyUpgradeData: verifyCountryDictionaryContract, PostSeedVerify: postSeed},
+		{Sequence: 14, ID: "alioss-config", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0014, PostSeedVerify: postSeed},
 	}
 }

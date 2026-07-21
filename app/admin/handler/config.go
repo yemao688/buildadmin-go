@@ -67,6 +67,10 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 	for _, v := range all {
 		if _, ok := list[v.Group]; ok {
 			title := utils.Lang(ctx, v.Title, nil)
+			value := v.GetValueAttr()
+			if v.Name == "upload_secret_key" {
+				value = ""
+			}
 			list[v.Group].List = append(list[v.Group].List, map[string]any{
 				"id":           v.ID,
 				"name":         v.Name,
@@ -74,7 +78,7 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 				"title":        title,
 				"tip":          v.Tip,
 				"type":         v.Type,
-				"value":        v.GetValueAttr(),
+				"value":        value,
 				"content":      v.GetContentAttr(),
 				"rule":         v.Rule,
 				"extend":       v.GetExtendAttr(),
@@ -168,6 +172,9 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 		}
 		for _, v := range all {
 			if value, ok := params[v.Name]; ok {
+				if v.Name == "upload_secret_key" && fmt.Sprintf("%v", value) == "" {
+					continue
+				}
 				newValue := v.SetValueAttr(value, v.Type)
 				result := tx.Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
 				if result.Error != nil {

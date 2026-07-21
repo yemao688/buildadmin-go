@@ -3,6 +3,7 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
@@ -53,6 +54,11 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		languageTabs = append(languageTabs, map[string]string{"lan": language.Lan, "remark": language.Remark})
 	}
 
+	uploadConfig, err := commonModel.UploadSiteConfig(ctx, h.configM, h.config)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	Success(ctx, map[string]any{
 		"adminInfo": map[string]any{
 			"id":              adminInfo.ID,
@@ -69,7 +75,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"version":          basicConfig["version"],
 			"cdnUrl":           utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
 			"apiUrl":           h.config.App.ApiUrl,
-			"upload":           h.config.Upload,
+			"upload":           uploadConfig,
 			"cdnUrlParams":     h.config.App.CdnUrlParams,
 			"userLoginCaptcha": h.config.App.UserLoginCaptcha,
 		},
