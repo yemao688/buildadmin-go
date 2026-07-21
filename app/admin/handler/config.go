@@ -32,6 +32,21 @@ type configJSONItem struct {
 	Value string `json:"value"`
 }
 
+func updateConfigValue(currentValue, newValue string, update func() (int64, error)) error {
+	if newValue == currentValue {
+		return nil
+	}
+
+	rowsAffected, err := update()
+	if err != nil {
+		return err
+	}
+	if rowsAffected != 1 {
+		return fmt.Errorf("config update failed: rows affected mismatch")
+	}
+	return nil
+}
+
 func decodeConfigJSON(field, value string) ([]configJSONItem, error) {
 	if strings.TrimSpace(value) == "" {
 		return []configJSONItem{}, nil
@@ -208,12 +223,11 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 					continue
 				}
 				newValue := v.SetValueAttr(value, v.Type)
-				result := tx.Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
-				if result.Error != nil {
-					return result.Error
-				}
-				if result.RowsAffected != 1 {
-					return fmt.Errorf("config update failed: rows affected mismatch")
+				if err := updateConfigValue(v.Value, newValue, func() (int64, error) {
+					result := tx.Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
+					return result.RowsAffected, result.Error
+				}); err != nil {
+					return err
 				}
 			}
 		}
