@@ -26,7 +26,6 @@ var ProviderSet = wire.NewSet(
 
 	NewCountryLanguageModel,
 
-	NewCountryLanguageContentModel,
-
 	NewCountryCurrencyModel,
+	NewCountryLanguageContentModel,
 )

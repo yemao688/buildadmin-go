@@ -57,8 +57,8 @@ func InitRouter(
 	apiDemoHandler *api.DemoHandler,
 
 	countryLanguageHandler *admin.CountryLanguageHandler,
-	countryLanguageContentHandler *admin.CountryLanguageContentHandler,
 	countryCurrencyHandler *admin.CountryCurrencyHandler,
+	countryLanguageContentHandler *admin.CountryLanguageContentHandler,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
@@ -135,12 +135,12 @@ func InitRouter(
 		{Route: "countryLanguage/add", Action: "add", Method: http.MethodPost},
 		{Route: "countryLanguage/edit", Action: "edit", Method: http.MethodPost},
 		{Route: "countryLanguage/del", Action: "del", Method: http.MethodDelete},
-		{Route: "countryLanguageContent/add", Action: "add", Method: http.MethodPost},
-		{Route: "countryLanguageContent/edit", Action: "edit", Method: http.MethodPost},
-		{Route: "countryLanguageContent/del", Action: "del", Method: http.MethodDelete},
 		{Route: "countryCurrency/add", Action: "add", Method: http.MethodPost},
 		{Route: "countryCurrency/edit", Action: "edit", Method: http.MethodPost},
 		{Route: "countryCurrency/del", Action: "del", Method: http.MethodDelete},
+		{Route: "countryLanguageContent/add", Action: "add", Method: http.MethodPost},
+		{Route: "countryLanguageContent/edit", Action: "edit", Method: http.MethodPost},
+		{Route: "countryLanguageContent/del", Action: "del", Method: http.MethodDelete},
 	} {
 		middleware.RegisterAtomicRoute(capability)
 	}
@@ -303,17 +303,19 @@ func InitRouter(
 
 	admin.CollectRoutes(router)
 
-	adminRouter.GET("countryCurrency/index", countryCurrencyHandler.Index)
-	adminRouter.POST("countryCurrency/add", countryCurrencyHandler.Add)
-	adminRouter.GET("countryCurrency/edit", countryCurrencyHandler.One)
-	adminRouter.POST("countryCurrency/edit", countryCurrencyHandler.Edit)
-	adminRouter.DELETE("countryCurrency/del", countryCurrencyHandler.Del)
 
 	adminRouter.GET("countryLanguageContent/index", countryLanguageContentHandler.Index)
 	adminRouter.POST("countryLanguageContent/add", countryLanguageContentHandler.Add)
 	adminRouter.GET("countryLanguageContent/edit", countryLanguageContentHandler.One)
 	adminRouter.POST("countryLanguageContent/edit", countryLanguageContentHandler.Edit)
 	adminRouter.DELETE("countryLanguageContent/del", countryLanguageContentHandler.Del)
+
+
+	adminRouter.GET("countryCurrency/index", countryCurrencyHandler.Index)
+	adminRouter.POST("countryCurrency/add", countryCurrencyHandler.Add)
+	adminRouter.GET("countryCurrency/edit", countryCurrencyHandler.One)
+	adminRouter.POST("countryCurrency/edit", countryCurrencyHandler.Edit)
+	adminRouter.DELETE("countryCurrency/del", countryCurrencyHandler.Del)
 
 	adminRouter.GET("countryLanguage/index", countryLanguageHandler.Index)
 	adminRouter.POST("countryLanguage/add", countryLanguageHandler.Add)

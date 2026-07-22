@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// CountryLanguageContent 全局语言内容
+// CountryLanguageContent 语言文本管理
 type CountryLanguageContent struct {
 	ID    int64  `gorm:"column:id;primaryKey;autoIncrement:true;comment:主键" json:"id"` // 主键
 	Lan   string `gorm:"column:lan;not null;comment:语言代码" json:"lan"`                  // 语言代码

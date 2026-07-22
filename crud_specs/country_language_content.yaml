@@ -1,6 +1,9 @@
 name: country_language_content
-comment: 全局语言内容
+comment: 语言文本管理
 type: alter
+webViewsDir: web/src/views/backend/country/languageContent
+menu:
+  title: 语言文本管理
 dataScope:
   mode: none
 quickSearchField: [group, key]
