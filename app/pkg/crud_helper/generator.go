@@ -646,7 +646,15 @@ func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.Ch
 }
 
 func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (int32, error) {
-	record := model.CrudLog{AdminID: opts.AdminID, Tablename: opts.Table.Name, Table: model.JSON_TABLE(opts.Table), Fields: model.JSON_FIELDS(opts.Fields), Status: "start"}
+	record := model.CrudLog{
+		AdminID:    opts.AdminID,
+		Tablename:  opts.Table.Name,
+		Comment:    opts.Table.Comment,
+		Connection: opts.Table.DatabaseConnection,
+		Table:      model.JSON_TABLE(opts.Table),
+		Fields:     model.JSON_FIELDS(opts.Fields),
+		Status:     "start",
+	}
 	if err := db.Table(crudLogTable(cfg)).Create(&record).Error; err != nil {
 		return 0, err
 	}

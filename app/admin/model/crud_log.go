@@ -74,6 +74,7 @@ type Table struct {
 	DataScope            *data_scope.Config `json:"dataScope,omitempty"`      //数据权限配置
 	Name                 string             `json:"name"`                     //数据表名
 	Comment              string             `json:"comment"`                  //数据表注释
+	DatabaseConnection   string             `json:"databaseConnection"`       //数据库连接配置标识
 	QuickSearchField     []string           `json:"quickSearchField"`         //表格快速搜索字段
 	DefaultSortField     string             `json:"defaultSortField"`         //表格默认排序字段
 	FormFields           []string           `json:"formFields"`               //作为表单项的字段
