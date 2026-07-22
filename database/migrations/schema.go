@@ -3,21 +3,22 @@ package migrations
 import (
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
+	"go-build-admin/database/migrations/official"
 
 	"gorm.io/gorm"
 )
 
-const installDataVersion = core.InstallDataVersion
-const installDataName = core.InstallDataName
+const installDataVersion = official.InstallDataVersion
+const installDataName = official.InstallDataName
 
-type InstallRecoveryState = core.InstallRecoveryState
+type InstallRecoveryState = official.InstallRecoveryState
 type migrationRecord = core.MigrationRecord
 type migrationColumn = core.MigrationColumn
 
 const (
-	InstallFresh         = core.InstallFresh
-	InstallInterrupted   = core.InstallInterrupted
-	InstallStrictUpgrade = core.InstallStrictUpgrade
+	InstallFresh         = official.InstallFresh
+	InstallInterrupted   = official.InstallInterrupted
+	InstallStrictUpgrade = official.InstallStrictUpgrade
 )
 
 func ValidatePrefix(config *conf.Configuration) error { return core.ValidatePrefix(config) }
@@ -48,23 +49,23 @@ func migrationIndexInfo(db *gorm.DB, table, index string) (bool, string, error) 
 	return core.MigrationIndexInfo(db, table, index)
 }
 func MarkSeedPending(db *gorm.DB, config *conf.Configuration) error {
-	return core.MarkSeedPending(db, config)
+	return official.MarkSeedPending(db, config)
 }
 func SeedPending(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	return core.SeedPending(db, config)
+	return official.SeedPending(db, config)
 }
 func MarkSeedCompleted(db *gorm.DB, config *conf.Configuration) error {
-	return core.MarkSeedCompleted(db, config)
+	return official.MarkSeedCompleted(db, config)
 }
 func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallRecoveryState, error) {
-	return core.DecideInstallRecovery(db, config)
+	return official.DecideInstallRecovery(db, config)
 }
 func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	return core.IsFreshDatabase(db, config)
+	return official.IsFreshDatabase(db, config)
 }
 func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	return core.SeedCurrentData(db, config)
+	return official.SeedCurrentData(db, config)
 }
 func ValidateCurrentSchema(db *gorm.DB, config *conf.Configuration) error {
-	return core.ValidateCurrentSchema(db, config)
+	return official.ValidateCurrentSchema(db, config)
 }

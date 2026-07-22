@@ -83,6 +83,9 @@ func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []Offi
 	return RunTrackedMigrations(db, config, "go_migrations", tracked, TrackedRunnerOptions{TrackName: "local"})
 }
 
+// Official ledger operations remain here with the shared runner: moving them
+// into official would make core depend on the official package through the
+// local dependency gate and introduce an import cycle.
 func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err

@@ -1,4 +1,4 @@
-package core
+package official
 
 import (
 	"errors"
@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/gorm"
 )
 
 func MarkSeedPending(db *gorm.DB, config *conf.Configuration) error {
-	if err := ValidatePrefix(config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return err
 	}
 	db = db.Session(&gorm.Session{NewDB: true})
-	table := TableName(config, "migrations")
-	var record MigrationRecord
+	table := core.TableName(config, "migrations")
+	var record core.MigrationRecord
 	result := db.Table(table).Where("version = ?", InstallDataVersion).First(&record)
 	if result.Error == nil {
 		if record.MigrationName != InstallDataName {
@@ -30,16 +31,16 @@ func MarkSeedPending(db *gorm.DB, config *conf.Configuration) error {
 		return result.Error
 	}
 	now := time.Now()
-	return db.Exec("INSERT INTO "+QuoteIdentifier(TableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, ?, NULL, ?)", InstallDataVersion, InstallDataName, now, false).Error
+	return db.Exec("INSERT INTO "+core.QuoteIdentifier(core.TableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, ?, NULL, ?)", InstallDataVersion, InstallDataName, now, false).Error
 }
 
 func SeedPending(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	if err := ValidatePrefix(config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return false, err
 	}
 	db = db.Session(&gorm.Session{NewDB: true})
-	var record MigrationRecord
-	result := db.Table(TableName(config, "migrations")).Where("version = ?", InstallDataVersion).First(&record)
+	var record core.MigrationRecord
+	result := db.Table(core.TableName(config, "migrations")).Where("version = ?", InstallDataVersion).First(&record)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
@@ -53,12 +54,12 @@ func SeedPending(db *gorm.DB, config *conf.Configuration) (bool, error) {
 }
 
 func MarkSeedCompleted(db *gorm.DB, config *conf.Configuration) error {
-	if err := ValidatePrefix(config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return err
 	}
 	db = db.Session(&gorm.Session{NewDB: true})
 	now := time.Now()
-	result := db.Table(TableName(config, "migrations")).Where("version = ? AND migration_name = ?", InstallDataVersion, InstallDataName).Updates(map[string]any{"end_time": now, "start_time": now})
+	result := db.Table(core.TableName(config, "migrations")).Where("version = ? AND migration_name = ?", InstallDataVersion, InstallDataName).Updates(map[string]any{"end_time": now, "start_time": now})
 	if result.Error != nil {
 		return result.Error
 	}

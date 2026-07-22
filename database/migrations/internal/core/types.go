@@ -23,9 +23,11 @@ type OfficialMigration struct {
 }
 
 type LocalMigration struct {
-	Sequence          uint64
-	ID                string
-	Revision          uint64
+	Sequence uint64
+	ID       string
+	Revision uint64
+	// RequiresOfficial is retained in the core track contract because the
+	// local runner enforces official completion before executing local Up.
 	RequiresOfficial  []OfficialKey
 	Up                MigrationFn
 	VerifySchema      func(*gorm.DB, *conf.Configuration) error

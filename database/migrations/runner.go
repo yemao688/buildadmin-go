@@ -20,15 +20,3 @@ func WithMigrationLock(db *gorm.DB, name string, timeout time.Duration, fn func(
 func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, local []LocalMigration) (int, error) {
 	return core.RunLocalMigrations(db, config, official, local)
 }
-
-func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
-	return core.BootstrapOfficialLedger(db, config)
-}
-
-func ValidateOfficialLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
-	return core.ValidateOfficialLedgerSchema(db, config)
-}
-
-func RunOfficialMigrations(db *gorm.DB, config *conf.Configuration, list []OfficialMigration) (int, error) {
-	return core.RunOfficialMigrations(db, config, list)
-}

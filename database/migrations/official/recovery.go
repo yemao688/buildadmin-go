@@ -1,4 +1,4 @@
-package core
+package official
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/gorm"
 )
 
@@ -23,18 +24,18 @@ const (
 )
 
 func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallRecoveryState, error) {
-	if err := ValidatePrefix(config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return "", err
 	}
-	ledgerExists, err := LegacyTableExists(db, TableName(config, "migrations"))
+	ledgerExists, err := core.LegacyTableExists(db, core.TableName(config, "migrations"))
 	if err != nil {
 		return "", err
 	}
 	markerPending := false
 	markerFound := false
 	if ledgerExists {
-		var marker MigrationRecord
-		result := db.Table(TableName(config, "migrations")).Where("version = ?", InstallDataVersion).First(&marker)
+		var marker core.MigrationRecord
+		result := db.Table(core.TableName(config, "migrations")).Where("version = ?", InstallDataVersion).First(&marker)
 		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return "", result.Error
 		}
@@ -46,10 +47,11 @@ func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallReco
 			markerPending = marker.EndTime == nil
 		}
 	}
-	businessTables := []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "menu_rule", "admin", "area", "attachment", "captcha", "config", "crud_log", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"}
+	// Keep this list synchronized with orchestrator.go's AutoMigrate model list.
+	businessTables := []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "admin", "admin_closure", "admin_hierarchy_lock", "area", "attachment", "captcha", "config", "country_language", "country_language_content", "country_currency", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"}
 	businessExists := false
 	for _, name := range businessTables {
-		ok, err := LegacyTableExists(db, TableName(config, name))
+		ok, err := core.LegacyTableExists(db, core.TableName(config, name))
 		if err != nil {
 			return "", err
 		}
@@ -76,7 +78,7 @@ func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
 }
 
 func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	if err := ValidatePrefix(config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return false, err
 	}
 	checks := []struct{ table, column, value string }{
@@ -85,12 +87,12 @@ func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
 		{"user_group", "id", "1"}, {"user", "id", "1"},
 	}
 	for _, check := range checks {
-		t := TableName(config, check.table)
-		if !TableExists(db, t) {
+		t := core.TableName(config, check.table)
+		if !core.TableExists(db, t) {
 			return false, nil
 		}
 		var count int64
-		if err := db.Table(t).Where(QuoteIdentifier(check.column)+" = ?", check.value).Count(&count).Error; err != nil {
+		if err := db.Table(t).Where(core.QuoteIdentifier(check.column)+" = ?", check.value).Count(&count).Error; err != nil {
 			return false, err
 		}
 		if count != 1 {
@@ -101,8 +103,8 @@ func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
 }
 
 func ValidateCurrentSchema(db *gorm.DB, config *conf.Configuration) error {
-	t := TableName(config, "user_rule")
-	if !TableExists(db, t) || !ColumnExists(db, t, "no_login_valid") {
+	t := core.TableName(config, "user_rule")
+	if !core.TableExists(db, t) || !core.ColumnExists(db, t, "no_login_valid") {
 		return fmt.Errorf("%s.no_login_valid is missing after AutoMigrate", t)
 	}
 	var columnType string
