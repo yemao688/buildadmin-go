@@ -29,6 +29,11 @@ func ApplyFreshOverlay(db *gorm.DB, config *conf.Configuration) error {
 	if err := ensureFreshUploadConfigGroup(db, config); err != nil {
 		return err
 	}
+	// 新装流程中 version0013 先于安装种子运行,彼时 admin_rule 为空,
+	// country 菜单必须在官方默认菜单种好之后补种。
+	if err := seedCountryMenus(db, config); err != nil {
+		return err
+	}
 	return EnsureAdminClosureSelfRows(db, config)
 }
 
