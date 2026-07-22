@@ -53,7 +53,11 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields := []model.Field{{Form: model.FormAttr{RemoteTable: "assoc", RemoteModel: "app/admin/model/assoc_provider_test/Assoc.go", RelationFields: "name"}}}
-	if err := removeAssociatedModelProviders(fields, FileManifest{Shared: []string{provider}}); err != nil {
+	manifest := FileManifest{
+		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "assoc_provider_test", "assoc.go")},
+		Shared:    []string{provider},
+	}
+	if err := removeAssociatedModelProviders(fields, manifest); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := os.ReadFile(provider)
@@ -62,5 +66,30 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 	}
 	if strings.Contains(string(updated), "NewAssocModel") || !strings.Contains(string(updated), "NewChildModel") {
 		t.Fatalf("associated provider entry removal incorrect: %s", updated)
+	}
+}
+
+// 关联既有核心模型(如 ba_admin)时,不得从共享 provider.go 中移除其注册,
+// 否则 wire 将因缺少核心模型 provider 而失败。
+func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
+	provider := filepath.Join(utils.RootPath(), "app", "admin", "model", "provider.go")
+	before, err := os.ReadFile(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := []model.Field{{Form: model.FormAttr{RemoteTable: "ba_admin", RemoteModel: "app/admin/model/admin.go", RelationFields: "username"}}}
+	manifest := FileManifest{
+		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "test.go")},
+		Shared:    []string{provider},
+	}
+	if err := removeAssociatedModelProviders(fields, manifest); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("core model provider.go must remain untouched")
 	}
 }

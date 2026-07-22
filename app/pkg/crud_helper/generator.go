@@ -491,6 +491,12 @@ func removeAssociatedModelProviders(fields []model.Field, manifest FileManifest)
 		if err != nil {
 			return err
 		}
+		// 仅当关联模型文件本身是本次 CRUD 生成的产物时才移除其 provider
+		// 条目;指向既有核心模型(如 ba_admin 的 admin.go)的关联只复用
+		// 共享 provider.go,删除会误伤核心模型的 provider 注册。
+		if !containsPath(manifest.Generated, join.ParseFile) {
+			continue
+		}
 		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
 		if !containsPath(manifest.Shared, provider) || seen[provider] {
 			continue
