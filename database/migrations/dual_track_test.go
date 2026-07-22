@@ -74,7 +74,7 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 }
 
 func TestLocalRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
-	if (LocalMigrationRecord{}).TableName() != "go_migrations" {
+	if (LocalMigrationRecord{}).TableName() != "local_migrations" {
 		t.Fatal("unexpected model table name")
 	}
 }

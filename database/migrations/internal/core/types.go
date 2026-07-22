@@ -43,7 +43,7 @@ type LocalMigrationRecord struct {
 	AdoptedFrom *string    `gorm:"column:adopted_from"`
 }
 
-func (LocalMigrationRecord) TableName() string { return "go_migrations" }
+func (LocalMigrationRecord) TableName() string { return "local_migrations" }
 
 func ValidateOfficialMigrations(list []OfficialMigration) error {
 	var previous int64

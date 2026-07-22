@@ -80,7 +80,7 @@ func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []Offi
 		}
 		tracked = append(tracked, TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up, VerifySchema: m.VerifySchema, VerifyData: m.VerifyUpgradeData})
 	}
-	return RunTrackedMigrations(db, config, "go_migrations", tracked, TrackedRunnerOptions{TrackName: "local"})
+	return RunTrackedMigrations(db, config, "local_migrations", tracked, TrackedRunnerOptions{TrackName: "local"})
 }
 
 // Official ledger operations remain here with the shared runner: moving them

@@ -140,7 +140,7 @@ func managedSchema() []managedSchemaTable {
 		{logical: "security_sensitive_data", columns: []string{"id", "admin_id", "name", "controller", "controller_as", "data_table", "primary_key", "data_fields", "connection"}, indexes: []managedSchemaIndex{{"idx_admin_id", []string{"admin_id"}}}},
 		{logical: "config", columns: []string{"id", "name", "value"}},
 		{logical: "admin_rule", columns: []string{"id", "name", "path"}},
-		{logical: "go_migrations", columns: []string{"sequence", "migration_id", "revision", "start_time", "end_time", "adopted_from"}, indexes: []managedSchemaIndex{{"PRIMARY", []string{"sequence"}}, {"uq_go_migrations_id", []string{"migration_id"}}}},
+		{logical: "local_migrations", columns: []string{"sequence", "migration_id", "revision", "start_time", "end_time", "adopted_from"}, indexes: []managedSchemaIndex{{"PRIMARY", []string{"sequence"}}, {"uq_local_migrations_id", []string{"migration_id"}}}},
 	}
 }
 
@@ -315,7 +315,7 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	assertFreshSnapshotOrdinals(t, upgradeDB, upgradeCfg)
 	require.NotEmpty(t, freshSummary)
 	require.NotEmpty(t, upgradeSummary)
-	for _, table := range []string{"ba_admin/", "ba_user/", "ba_admin_closure/", "ba_security_data_recycle/", "ba_go_migrations/"} {
+	for _, table := range []string{"ba_admin/", "ba_user/", "ba_admin_closure/", "ba_security_data_recycle/", "ba_local_migrations/"} {
 		require.True(t, strings.Contains(strings.Join(freshSummary, "\n"), table), table)
 		require.True(t, strings.Contains(strings.Join(upgradeSummary, "\n"), table), table)
 	}

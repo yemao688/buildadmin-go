@@ -23,10 +23,10 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	}
 	config := &conf.Configuration{}
 	config.Database.Prefix = "phase1_"
-	if err := db.Exec("DROP TABLE IF EXISTS `phase1_go_migrations`").Error; err != nil {
+	if err := db.Exec("DROP TABLE IF EXISTS `phase1_local_migrations`").Error; err != nil {
 		t.Fatal(err)
 	}
-	defer db.Exec("DROP TABLE IF EXISTS `phase1_go_migrations`")
+	defer db.Exec("DROP TABLE IF EXISTS `phase1_local_migrations`")
 	if err := BootstrapLocalLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(config, "go_migrations")))
+		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(config, "local_migrations")))
 		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(config, "migrations")))
 	})
 	for _, migration := range OfficialMigrations() {
@@ -196,7 +196,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	}
 	check := db.Session(&gorm.Session{NewDB: true})
 	var completed int64
-	if err := check.Table(tableName(config, "go_migrations")).Where("sequence BETWEEN 4 AND 9 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 6 {
+	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 4 AND 9 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 6 {
 		t.Fatalf("completed local 0004-0009=%d err=%v", completed, err)
 	}
 	var invalid int64
@@ -266,7 +266,7 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 	requireNoError(BootstrapOfficialLedger(db, cfg))
 	requireNoError(BootstrapLocalLedger(db, cfg))
 	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "go_migrations")))
+		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "local_migrations")))
 		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "migrations")))
 	})
 	key := OfficialKey{Version: time.Now().UnixNano(), Name: "RetryOfficial"}
@@ -309,7 +309,7 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	}
 	config := &conf.Configuration{}
 	config.Database.Prefix = "matrix_"
-	for _, table := range []string{"matrix_go_migrations", "matrix_migrations"} {
+	for _, table := range []string{"matrix_local_migrations", "matrix_migrations"} {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
 			t.Fatal(err)
 		}
@@ -321,13 +321,13 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if err := BootstrapLocalLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("ALTER TABLE `matrix_go_migrations` ADD `unexpected` INT NULL").Error; err != nil {
+	if err := db.Exec("ALTER TABLE `matrix_local_migrations` ADD `unexpected` INT NULL").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateLocalLedgerSchema(db, config); err == nil {
 		t.Fatal("unexpected ledger column accepted")
 	}
-	if err := db.Exec("ALTER TABLE `matrix_go_migrations` DROP COLUMN `unexpected`").Error; err != nil {
+	if err := db.Exec("ALTER TABLE `matrix_local_migrations` DROP COLUMN `unexpected`").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateLocalLedgerSchema(db, config); err != nil {
@@ -450,7 +450,7 @@ func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 	variants := []string{"engine", "signed-revision", "timestamp", "default", "missing-unique", "wrong-unique"}
 	for i, variant := range variants {
 		config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("negative_%d_", i)}}
-		table := config.Database.Prefix + "go_migrations"
+		table := config.Database.Prefix + "local_migrations"
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
 			t.Fatal(err)
 		}
@@ -479,7 +479,7 @@ func createLedgerVariant(db *gorm.DB, table, variant string) error {
 	if variant == "default" {
 		start += " DEFAULT CURRENT_TIMESTAMP(6)"
 	}
-	unique := "UNIQUE KEY `uq_go_migrations_id` (`migration_id`)"
+	unique := "UNIQUE KEY `uq_local_migrations_id` (`migration_id`)"
 	if variant == "missing-unique" {
 		unique = ""
 	}

@@ -181,7 +181,7 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	// The official ledger also contains the completed InstallData seed marker.
 	require.Equal(t, int64(len(OfficialMigrations())+1), completed)
-	require.NoError(t, db.Table(tableName(cfg, "go_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
+	require.NoError(t, db.Table(tableName(cfg, "local_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	require.Equal(t, int64(len(LocalMigrations())), completed)
 	require.NoError(t, LocalVerifyCurrent(db, cfg))
 
