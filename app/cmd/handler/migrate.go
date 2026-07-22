@@ -30,7 +30,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		cmd.Printf("database migrate error: %v\n", err)
 		return
 	}
-	cmd.Printf("executed %d migrations (%d official, %d local, %d adopted)", report.Official+report.Local, report.Official, report.Local, report.Adopted)
+	cmd.Printf("executed %d migrations (%d official, %d local, %d business, %d adopted)", report.Official+report.Local+report.Business, report.Official, report.Local, report.Business, report.Adopted)
 	if report.Seeded {
 		cmd.Print(" (seeded)")
 	}

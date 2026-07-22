@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/business"
 	"go-build-admin/database/migrations/model"
 	"gorm.io/gorm"
 )
@@ -12,6 +13,7 @@ import (
 type Report struct {
 	Official int
 	Local    int
+	Business int
 	Adopted  int
 	Seeded   bool
 }
@@ -52,7 +54,17 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err := ValidateLocalLedgerSchema(pinned, config); err != nil {
 			return fmt.Errorf("local ledger schema: %w", err)
 		}
+		if err := BootstrapBusinessLedger(pinned, config); err != nil {
+			return fmt.Errorf("business ledger bootstrap: %w", err)
+		}
+		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+			return fmt.Errorf("business ledger schema: %w", err)
+		}
 		official, locals := OfficialMigrations(), LocalMigrations()
+		businessMigrations, err := business.Migrations()
+		if err != nil {
+			return fmt.Errorf("business migration registry: %w", err)
+		}
 		if err := PreflightLegacyAliases(pinned, config, LegacyVersionAliases()); err != nil {
 			return fmt.Errorf("legacy alias preflight: %w", err)
 		}
@@ -83,6 +95,10 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		report.Local, err = RunLocalMigrations(pinned, config, official, locals)
 		if err != nil {
 			return fmt.Errorf("local migration: %w", err)
+		}
+		report.Business, err = RunBusinessMigrations(pinned, config, businessMigrations)
+		if err != nil {
+			return fmt.Errorf("business migration: %w", err)
 		}
 		if report.Seeded {
 			if err := RunPostSeedVerify(pinned, config, locals); err != nil {

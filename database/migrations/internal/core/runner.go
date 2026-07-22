@@ -71,67 +71,16 @@ func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []Offi
 		}
 		return nil
 	}
-	count := 0
+	tracked := make([]TrackedMigration, 0, len(local))
 	for _, m := range local {
 		for _, key := range m.RequiresOfficial {
 			if err := completedOfficial(key); err != nil {
-				return count, err
+				return 0, err
 			}
 		}
-		var record LocalMigrationRecord
-		q := db.Table(TableName(config, "go_migrations")).Where("sequence = ?", m.Sequence).First(&record)
-		exists := q.Error == nil
-		if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
-			return count, q.Error
-		}
-		if exists && (record.MigrationID != m.ID || record.Revision != m.Revision) {
-			return count, fmt.Errorf("local sequence %d collision", m.Sequence)
-		}
-		if !exists {
-			q = db.Table(TableName(config, "go_migrations")).Where("migration_id = ?", m.ID).First(&record)
-			if q.Error == nil && (record.Sequence != m.Sequence || record.Revision != m.Revision) {
-				return count, fmt.Errorf("local migration %s collision", m.ID)
-			}
-			if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
-				return count, q.Error
-			}
-			if q.Error == gorm.ErrRecordNotFound {
-				if err := InsertPendingLocalMigration(db, config, m, nil); err != nil {
-					return count, err
-				}
-			}
-		} else if record.EndTime != nil {
-			if m.VerifySchema != nil {
-				if err := m.VerifySchema(db, config); err != nil {
-					return count, err
-				}
-			}
-			if m.VerifyUpgradeData != nil {
-				if err := m.VerifyUpgradeData(db, config); err != nil {
-					return count, err
-				}
-			}
-			continue
-		}
-		if err := m.Up(db, config); err != nil {
-			return count, err
-		}
-		if m.VerifySchema != nil {
-			if err := m.VerifySchema(db, config); err != nil {
-				return count, err
-			}
-		}
-		if m.VerifyUpgradeData != nil {
-			if err := m.VerifyUpgradeData(db, config); err != nil {
-				return count, err
-			}
-		}
-		if err := CompleteLocalMigration(db, config, m); err != nil {
-			return count, err
-		}
-		count++
+		tracked = append(tracked, TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up, VerifySchema: m.VerifySchema, VerifyData: m.VerifyUpgradeData})
 	}
-	return count, nil
+	return RunTrackedMigrations(db, config, "go_migrations", tracked, TrackedRunnerOptions{TrackName: "local"})
 }
 
 func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
