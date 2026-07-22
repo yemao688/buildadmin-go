@@ -1,58 +1,83 @@
 package terminal
 
 import (
-	"bufio"
-	"fmt"
-	"os"
-	"os/exec"
+	"go-build-admin/conf"
 	"testing"
 )
 
-func TestNpm(t *testing.T) {
-	// cmd := exec.Command("npm", "run", "build")
-
-	cmd := exec.Command("cmd", "/C", "npm run build")
-	cmd.Dir = "D:\\godata\\go-build-admin\\web"
-
-	// cmd := exec.Command("wire")
-	// cmd.Dir = "D:\\godata\\go-build-admin\\cmd\\app"
-
-	// 创建管道以捕获标准输出和标准错误
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("error creating stdout pipe: %s", err.Error())
-		return
+func newTestTerminal() *Terminal {
+	cfg := &conf.Configuration{}
+	cfg.Terminal.Commands = map[string]map[string]conf.Command{
+		"npx": {
+			"prettier": {Cwd: "web", Command: "npx prettier --write %s"},
+		},
+		"version": {
+			"node": {Cwd: "", Command: "node -v"},
+		},
 	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fmt.Printf("error creating stderr pipe: %s", err.Error())
-		return
+	return &Terminal{config: cfg}
+}
+
+func TestGetCommandPlaceholder(t *testing.T) {
+	term := newTestTerminal()
+
+	cmd, ok := term.GetCommand("npx.prettier", "./src/views/backend/test")
+	if !ok {
+		t.Fatal("npx.prettier should resolve")
+	}
+	want := "npx prettier --write './src/views/backend/test'"
+	if cmd.Command != want {
+		t.Fatalf("got %q, want %q", cmd.Command, want)
+	}
+}
+
+func TestGetCommandPlaceholderEscapesInjection(t *testing.T) {
+	term := newTestTerminal()
+
+	cmd, ok := term.GetCommand("npx.prettier", "./x'; rm -rf /; echo '")
+	if !ok {
+		t.Fatal("npx.prettier should resolve")
+	}
+	want := `npx prettier --write './x'\''; rm -rf /; echo '\'''`
+	if cmd.Command != want {
+		t.Fatalf("got %q, want %q", cmd.Command, want)
+	}
+}
+
+func TestGetCommandPlaceholderTildeSeparatedArgs(t *testing.T) {
+	term := newTestTerminal()
+	term.config.Terminal.Commands["fmt"] = map[string]conf.Command{
+		"two": {Cwd: "", Command: "echo %s %s"},
 	}
 
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("error starting command: %s", err.Error())
-		return
+	cmd, ok := term.GetCommand("fmt.two", "a~~b c")
+	if !ok {
+		t.Fatal("fmt.two should resolve")
 	}
+	want := "echo 'a' 'b c'"
+	if cmd.Command != want {
+		t.Fatalf("got %q, want %q", cmd.Command, want)
+	}
+}
 
-	// 读取并打印标准输出
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
+func TestGetCommandWithoutPlaceholderIgnoresExtend(t *testing.T) {
+	term := newTestTerminal()
 
-	// 读取并打印标准错误
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			fmt.Fprintln(os.Stderr, scanner.Text())
-		}
-	}()
+	cmd, ok := term.GetCommand("version.node", "anything")
+	if !ok {
+		t.Fatal("version.node should resolve")
+	}
+	if cmd.Command != "node -v" {
+		t.Fatalf("got %q", cmd.Command)
+	}
+}
 
-	// 等待命令完成
-	if err := cmd.Wait(); err != nil {
-		fmt.Printf("error waiting for command: %s", err.Error())
-		return
+func TestGetCommandUnknownKey(t *testing.T) {
+	term := newTestTerminal()
+	if _, ok := term.GetCommand("npx.missing", ""); ok {
+		t.Fatal("unknown sub key must not resolve")
+	}
+	if _, ok := term.GetCommand("npx", ""); ok {
+		t.Fatal("key without dot must not resolve")
 	}
 }

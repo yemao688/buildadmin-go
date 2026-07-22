@@ -53,7 +53,9 @@ func NewTerminal(config *conf.Configuration, log *zap.Logger, authM *model.AuthM
 }
 
 // 获取命令 key必须有符号.
-func (t *Terminal) GetCommand(key string) (conf.Command, bool) {
+// extend 为命令占位符参数:命令中含 % 时,按上游 BuildAdmin 语义将 extend
+// 以 ~~ 分隔、逐项 shell 转义后 sprintf 进命令(如 npx.prettier 的 %s)。
+func (t *Terminal) GetCommand(key string, extend string) (conf.Command, bool) {
 	command := conf.Command{}
 	if key == "" {
 		return command, false
@@ -73,8 +75,22 @@ func (t *Terminal) GetCommand(key string) (conf.Command, bool) {
 		return command, false
 	}
 
+	if strings.Contains(command.Command, "%") {
+		args := strings.Split(extend, "~~")
+		quoted := make([]interface{}, len(args))
+		for i, arg := range args {
+			quoted[i] = shellQuote(arg)
+		}
+		command.Command = fmt.Sprintf(command.Command, quoted...)
+	}
+
 	command.Cwd = filepath.Join(utils.RootPath(), command.Cwd)
 	return command, true
+}
+
+// shellQuote 等价于 PHP escapeshellarg 的 POSIX 实现
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 type OutputFunc func(string)
@@ -107,7 +123,7 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 		flusher.Flush()
 	}
 
-	command, ok := t.GetCommand(commandKey)
+	command, ok := t.GetCommand(commandKey, extend)
 	if !ok {
 		t.ExecError(output, "The command was not allowed to be executed")
 		return
@@ -255,7 +271,7 @@ func (t *Terminal) OutputFlag(flag string) string {
  * 执行一个命令并以字符串的方式返回执行输出
  */
 func (t *Terminal) GetCommandOutput(commandKey string) (string, bool) {
-	command, ok := t.GetCommand(commandKey)
+	command, ok := t.GetCommand(commandKey, "")
 	if !ok {
 		return "", false
 	}

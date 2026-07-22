@@ -1,6 +1,7 @@
 package model
 
 import (
+	"database/sql"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"strings"
@@ -109,7 +110,7 @@ type Column struct {
 	IS_NULLABLE    string
 	COLUMN_TYPE    string
 	DATA_TYPE      string
-	COLUMN_DEFAULT string
+	COLUMN_DEFAULT sql.NullString
 	COLUMN_KEY     string
 	EXTRA          string
 }

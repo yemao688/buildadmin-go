@@ -110,15 +110,37 @@ type TableAttr struct {
 	Remote          string `json:"remote"`          //关联表格列属性
 }
 
+// BoolOrString 兼容上游前端对多选开关可能传入布尔值或字符串的情况:
+// true 归一化为 "1",false 归一化为 "",字符串按原样保留。
+type BoolOrString string
+
+func (b *BoolOrString) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*b = BoolOrString(s)
+		return nil
+	}
+	var v bool
+	if err := json.Unmarshal(data, &v); err != nil {
+		return fmt.Errorf("select-multi 类字段只接受布尔或字符串: %w", err)
+	}
+	if v {
+		*b = "1"
+	} else {
+		*b = ""
+	}
+	return nil
+}
+
 type FormAttr struct {
 	Validator    []string `json:"validator"`    //验证规则
 	ValidatorMsg string   `json:"validatorMsg"` //验证错误提示
 
-	Rows        int    `json:"rows"`         //富文本行数
-	SelectMulti string `json:"select-multi"` //下拉框多选
-	ImageMulti  string `json:"image-multi"`  //图片多选上传
-	FileMulti   string `json:"file-multi"`   //文件多选上传
-	Step        int    `json:"step"`         //步进值
+	Rows        int          `json:"rows"`         //富文本行数
+	SelectMulti BoolOrString `json:"select-multi"` //下拉框多选
+	ImageMulti  BoolOrString `json:"image-multi"`  //图片多选上传
+	FileMulti   BoolOrString `json:"file-multi"`   //文件多选上传
+	Step        int          `json:"step"`         //步进值
 
 	RemotePk         string `json:"remote-pk" mapstructure:"remotePk"`                 //远程下拉value字段
 	RemoteField      string `json:"remote-field" mapstructure:"remoteField"`           //远程下拉label字段
@@ -137,6 +159,7 @@ type Field struct {
 	Length            int       `json:"length"`            //长度
 	Precision         int       `json:"precision"`         //小数点
 	Default           string    `json:"default"`           //字段默认值
+	DefaultType       string    `json:"defaultType"`       //默认值类型:NONE/NULL/EMPTY STRING/INPUT
 	Null              bool      `json:"null"`              //允许NULL
 	PrimaryKey        bool      `json:"primaryKey"`        //主键
 	Unsigned          bool      `json:"unsigned"`          //无符号

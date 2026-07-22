@@ -314,7 +314,20 @@ func getDDlFieldData(field model.Field) (string, error) {
 		fieldTemplData.DataSet = field.DataType
 	}
 
-	if field.Default != "" && field.Default != "none" {
+	if field.DefaultType != "" {
+		// 优先按上游 defaultType 语义生成默认值子句
+		switch field.DefaultType {
+		case "EMPTY STRING":
+			if dateType != "text" {
+				fieldTemplData.DefaultValue = "DEFAULT ''"
+			}
+		case "NULL":
+			fieldTemplData.DefaultValue = "DEFAULT NULL"
+		case "INPUT":
+			fieldTemplData.DefaultValue = formatDefault(field.Default)
+		}
+	} else if field.Default != "" && field.Default != "none" {
+		// 兼容旧的哨兵值写法(无 defaultType 的场景)
 		if field.Default == "empty string" {
 			if dateType != "text" {
 				fieldTemplData.DefaultValue = "DEFAULT ''"
@@ -484,10 +497,17 @@ func ParseTableColumns(columns []model.Column, analyseField bool) []model.Field 
 			isNullAble = true
 		}
 		field.Null = isNullAble
-		if isNullAble {
-			field.Default = "null"
+
+		// 默认值类型,语义对齐上游 BuildAdmin v2
+		if isNullAble && !v.COLUMN_DEFAULT.Valid {
+			field.DefaultType = "NULL"
+		} else if v.COLUMN_DEFAULT.Valid && v.COLUMN_DEFAULT.String == "" && (v.DATA_TYPE == "varchar" || v.DATA_TYPE == "char") {
+			field.DefaultType = "EMPTY STRING"
+		} else if !isNullAble && !v.COLUMN_DEFAULT.Valid {
+			field.DefaultType = "NONE"
 		} else {
-			field.Default = v.COLUMN_DEFAULT
+			field.DefaultType = "INPUT"
+			field.Default = v.COLUMN_DEFAULT.String
 		}
 
 		primaryKey := false

@@ -185,6 +185,10 @@ terminal:
       ni:
         cwd: 'web'
         command: 'nr build'
+    npx:
+      prettier:
+        cwd: 'web'
+        command: 'npx prettier --write %s'
     set-registry:
       npm: 
         cwd: ''

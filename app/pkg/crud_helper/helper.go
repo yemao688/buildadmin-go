@@ -709,34 +709,48 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 	return fieldHtml
 }
 
+// getFieldDefault 生成 index.vue defaultItems 的单项,语义对齐上游
+// BuildAdmin v2 Crud::getFormField 的默认值处理。返回空字符串表示不生成该项。
 func getFieldDefault(field model.Field) string {
-	defaultValue := ""
-	// 默认值
-	if field.Default != "" && field.Default != "empty string" {
-
-		defaultValue = field.Name + ":'" + field.Default + "'"
-	}
-
-	if field.Default == "null" {
-		defaultValue = field.Name + ": null"
-	}
-
-	if field.Default == "0" && slices.Contains([]string{"radio", "checkbox", "select", "selects"}, field.DesignType) {
-		defaultValue = field.Name + ": '0'"
-	}
-
+	// array 类型固定为空数组
 	if field.DesignType == "array" {
-		defaultValue = field.Name + ": []"
+		return field.Name + ": []"
 	}
 
-	if slices.Contains(dtStringToArray, field.DesignType) && field.Default != "" && strings.Contains(field.Default, ",") {
-		defaultValue = field.Name + ":" + buildSimpleArray(strings.Split(field.Default, ","))
+	// editor 始终生成默认值项
+	if field.DesignType == "editor" {
+		def := ""
+		if field.DefaultType == "INPUT" {
+			def = field.Default
+		}
+		return field.Name + ":" + getQuote(def) + def + getQuote(def)
 	}
 
-	if slices.Contains([]string{"weigh", "number", "float"}, field.DesignType) {
-		defaultValue = field.Name + ":" + field.Default
+	// 仅 INPUT 类型的默认值进入 defaultItems
+	if field.DefaultType != "INPUT" {
+		return ""
 	}
-	return defaultValue
+
+	// 多值字符串拆分为数组
+	if slices.Contains(dtStringToArray, field.DesignType) && strings.Contains(field.Default, ",") {
+		return field.Name + ":" + buildSimpleArray(strings.Split(field.Default, ","))
+	}
+
+	// 数字类型输出原始数值;0 为无意义默认值
+	if slices.Contains([]string{"number", "float"}, field.DesignType) {
+		num, err := strconv.ParseFloat(field.Default, 64)
+		if err != nil || num == 0 {
+			return ""
+		}
+		return field.Name + ":" + strconv.FormatFloat(num, 'f', -1, 64)
+	}
+
+	// switch/remoteSelect 的 0 为无意义默认值
+	if slices.Contains([]string{"switch", "remoteSelect"}, field.DesignType) && field.Default == "0" {
+		return ""
+	}
+
+	return field.Name + ":" + getQuote(field.Default) + field.Default + getQuote(field.Default)
 }
 
 func GetRemotePk(fullTableName string, field model.Field) string {
