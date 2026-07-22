@@ -177,6 +177,14 @@ func (s *UserModel) Add(ctx *gin.Context, user *User) error {
 	})
 }
 
+func (s *UserModel) UsernameExists(ctx *gin.Context, username string) (bool, error) {
+	err := s.DBFor(ctx).Where("username=?", username).Take(&User{}).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
 	updates := map[string]interface{}{
 		"group_id":  user.GroupID,

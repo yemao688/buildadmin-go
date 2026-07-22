@@ -92,6 +92,15 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
+	usernameExists, err := h.userM.UsernameExists(ctx, params.Username)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if usernameExists {
+		FailByErr(ctx, cErr.BadRequest("Account exist"))
+		return
+	}
 	if params.Password == "" {
 		FailByErr(ctx, cErr.BadRequest("Please input correct password"))
 		return
