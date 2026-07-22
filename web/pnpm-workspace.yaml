@@ -1,6 +1,7 @@
 shamefullyHoist: true
 allowBuilds:
   '@parcel/watcher': true
+  es5-ext: false
   esbuild: true
   v-code-diff: true
   vue-demi: true
