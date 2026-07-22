@@ -972,6 +972,15 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
 	rootFileName := ""
 
+	// 对齐上游：remote-model 按原路径已存在（如 app/common/model/user.go）时
+	// 直接使用，不再按 admin 模块推导路径重建
+	if field.Form.RemoteModel != "" {
+		direct := strings.ReplaceAll(field.Form.RemoteModel, "\\", "/")
+		if _, err := os.Stat(filepath.Join(utils.RootPath(), direct)); err == nil {
+			return "", nil
+		}
+	}
+
 	joinModelFile, err := ParseNameData("admin", tableName, "model", field.Form.RemoteModel)
 	if err != nil {
 		return "", err

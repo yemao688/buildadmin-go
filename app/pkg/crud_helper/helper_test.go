@@ -3,7 +3,9 @@ package crud_helper
 import (
 	"encoding/json"
 	"fmt"
+	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/utils"
 	"os"
 	"path/filepath"
 	"slices"
@@ -107,6 +109,37 @@ func TestGetDictData(t *testing.T) {
 	zh, _ := json.MarshalIndent(langZhData, "", "  ")
 	fmt.Println(string(zh))
 	fmt.Println(quickSearchFieldZhCnTitle)
+}
+
+// TestCheckJoinModelKeepsExistingRemoteModel verifies that a remote-model path
+// pointing at an existing file (e.g. app/common/model/user.go) is used as-is
+// instead of being re-derived under app/admin/model/common/model/ and rebuilt.
+func TestCheckJoinModelKeepsExistingRemoteModel(t *testing.T) {
+	existing := filepath.Join(utils.RootPath(), "app", "common", "model", "tmp_joinmodel_check_test.go")
+	if err := os.WriteFile(existing, []byte("package model\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(existing) })
+
+	field := model.Field{
+		Name:       "user_ids",
+		DesignType: "remoteSelects",
+		Form: model.FormAttr{
+			RemoteTable: "user",
+			RemoteModel: "app/common/model/tmp_joinmodel_check_test.go",
+		},
+	}
+	rootFileName, err := checkJoinMoel(nil, nil, field, "user", "ba_user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rootFileName != "" {
+		t.Fatalf("existing remote model must not be rebuilt, got rootFileName %q", rootFileName)
+	}
+	mangled := filepath.Join(utils.RootPath(), "app", "admin", "model", "common", "model", "tmp_joinmodel_check_test.go")
+	if _, err := os.Stat(mangled); !os.IsNotExist(err) {
+		t.Fatalf("remote model was rebuilt under the wrong admin path: %s", mangled)
+	}
 }
 
 // TestGenerate_UsesTableDataScope verifies that GenerateFile reads the data-scope
