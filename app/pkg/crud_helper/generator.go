@@ -89,6 +89,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
+	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
 	if err := validateGenerationMode(opts.Type, opts.Table.Rebuild, tableExists(db, cfg, opts.Table.Name), opts.Table.Name); err != nil {
 		return nil, err
 	}
@@ -187,6 +188,20 @@ func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {
 	var key string
 	err := db.Raw("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY' ORDER BY SEQ_IN_INDEX LIMIT 1", fullTableName).Scan(&key).Error
 	return key, err
+}
+
+// normalizeGenerationType 将上游前端的生成类型映射为内部模式:
+// create 为新建;log/db/sql 为基于已有记录或已有数据表的再生成,
+// rebuild=Yes 时等价 create(删表重建),否则按 alter 就地变更。
+func normalizeGenerationType(generationType, rebuild string) string {
+	switch generationType {
+	case "log", "db", "sql":
+		if rebuild == "Yes" {
+			return "create"
+		}
+		return "alter"
+	}
+	return generationType
 }
 
 func validateGenerationMode(generationType, rebuild string, exists bool, tableName string) error {

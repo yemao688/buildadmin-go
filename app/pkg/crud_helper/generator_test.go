@@ -23,6 +23,28 @@ func TestDeleteQuarantinePathIsReusableByService(t *testing.T) {
 	assertQuarantineRestore(t)
 }
 
+func TestNormalizeGenerationType(t *testing.T) {
+	cases := []struct {
+		in, rebuild, want string
+	}{
+		{"create", "", "create"},
+		{"create", "Yes", "create"},
+		{"alter", "", "alter"},
+		{"log", "Yes", "create"},
+		{"log", "No", "alter"},
+		{"log", "", "alter"},
+		{"db", "Yes", "create"},
+		{"db", "", "alter"},
+		{"sql", "Yes", "create"},
+		{"sql", "", "alter"},
+	}
+	for _, tc := range cases {
+		if got := normalizeGenerationType(tc.in, tc.rebuild); got != tc.want {
+			t.Fatalf("normalizeGenerationType(%q, %q) = %q, want %q", tc.in, tc.rebuild, got, tc.want)
+		}
+	}
+}
+
 func TestCreateExistingTableRequiresExplicitRebuild(t *testing.T) {
 	if err := validateGenerationMode("create", "", true, "orders"); err == nil {
 		t.Fatal("create on an existing table must be rejected")
