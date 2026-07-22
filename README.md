@@ -71,7 +71,7 @@ pnpm build
 app/                 业务、命令、公共组件与中间件
 cmd/app/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
-database/migrations/ 双轨迁移、迁移模型与内部迁移基础设施
+database/migrations/ 三轨迁移（official/local/business）、迁移模型与内部迁移基础设施
 conf/                配置模板和本地化资源
 web/                 Vue/Vite 前端源码
 static/              发布到镜像中的前端和运行时静态资源
@@ -94,9 +94,42 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移、生成文件与测试注意事项
 
-- 迁移采用 `database/migrations/official/` 与 `database/migrations/local/` 两条轨道，共享 `database/migrations/internal/` 基础设施，由 `app/cmd/handler/migrate.go` 按注册表执行；历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 迁移采用三条轨道：`database/migrations/official/` 跟随上游 BuildAdmin 更新，`database/migrations/local/` 承载框架自身的 6 条语义迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试会修改数据库，需要 `BUILDADMIN_TEST_MYSQL_DSN` 和一次性数据库；测试覆盖和运行约束见 [`AGENTS.md`](AGENTS.md)。
+
+## 业务开发最佳实践
+
+### 表设计：按业务分类加前缀
+
+业务表用 `<分类>_<实体>` 命名，表、菜单和生成代码会自然归类，简单明了：
+
+- 运营类：`ops_banner`、`ops_support`、`ops_help`
+- 订单类：`order_recharge`、`order_withdraw`
+- 用户类：`user_wallet`、`user_level`
+
+三段式表名（如 `country_language_content`）在 CRUD 规范里把最后一段写成驼峰：设置 `webViewsDir: country/languageContent`（参考 `crud_specs/country_language_content.yaml`），菜单名、视图目录和路由都保持单层简洁，而表名仍是可读的蛇形命名。
+
+**每次 CRUD 生成后立刻提交一次 commit。** 生成会同时改动 model、handler、provider 装配、路由、菜单和 Vue 脚手架，一模一 commit 便于审查，也能保证 `crud:delete`/重新生成往返字节级一致；不要把手工改动混进生成提交。
+
+### 业务迁移：只加文件，不动框架
+
+业务表结构变更写进 `database/migrations/business/`：新增一个 Go 文件，在 `init()` 里调用 `business.Register(...)` 即可，编排器会自动发现并执行，记录到独立的 `business_migrations` 账本，与框架的 official/local 互不冲突。契约（幂等、前缀安全、按业务键判重等）见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `local/`。
+
+### 权限体系：直接在 admin 上建模，不要新建认证表
+
+后台权限体系已经完整，多级代理/员工体系不需要新表：
+
+- 超级管理员、总代理、代理、员工等角色 = `admin` 记录 + `admin_group` 角色组分配；
+- 上下级关系 = `admin.parent_id`（配 `admin_closure` 闭包表，层级查询现成）；
+- 数据权限隔离 = 各业务表的 `admin_id` 属主列（框架迁移已建立并回填）。
+
+`admin` 表字段允许微调：加业务字段、删掉用不到的字段都可以，但每个字段变更都要配一条 business 迁移（破坏性列变更不能依赖 AutoMigrate）。`user` 表同理：做前台会员业务时可以任意改造字段、删除闲置字段，并同步调整后台会员页面（`web/src/views/backend/user/`）。
+
+### 前台随意改，后台不要动
+
+- `web/src/views/frontend/`（用户端前台）**只是示例**，可以重构成任何业务门户样式，随便改；
+- `web/src/views/backend/`（管理后台）**不要改样式**：保持与框架一致才能干净地合并后续框架更新；业务后台页面走 CRUD 生成，遵循生成器的既有模式。
 
 ## 鸣谢
 

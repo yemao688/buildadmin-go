@@ -64,6 +64,18 @@ Exit code 0 means success and 1 means failure (reason on stderr). Files auto-res
 - `go run ./cmd/generate` is hazardous: it uses a hard-coded local MySQL DSN and can overwrite generated models relative to the current directory. Inspect it before use.
 - `database/migrations/model/*.gen.go` drives the fresh-snapshot AutoMigrate; preserve its tags and migration contracts. `pnpm dev` regenerates `web/types/tableRenderer.d.ts` and i18n Ally language indexes; edit the TypeScript sources under `web/src/lang/` instead. Frontend builds remain in `web/dist/`, while deployment may copy assets into ignored `static/` paths.
 
+## Framework usage best practices (projects built on this framework)
+
+These rules apply when the repository is used as a framework for a business project, not only when developing the framework itself.
+
+- **Table naming: group business tables by category prefix.** Use `<category>_<entity>` so tables, menus, and generated code self-organize: 运营类 `ops_banner`/`ops_support`/`ops_help`, 订单类 `order_recharge`/`order_withdraw`, 用户类 `user_wallet`/`user_level`. Simple names, clear ownership.
+- **Three-segment table names: camelCase the tail in CRUD specs.** For a table like `country_language_content`, do not generate `views/.../language_content`; set `webViewsDir: country/languageContent` in the spec (see `crud_specs/country_language_content.yaml`) so the menu name, views directory, and route all stay flat and clean (`country/languageContent`), while the table keeps its readable snake_case name.
+- **Commit after every CRUD generation.** Generation touches the model, handler, provider wiring, router, menu rows, and Vue scaffold together; one commit per module makes the change reviewable and keeps `crud:delete`/regenerate round-trips byte-identical. Never mix hand edits into a generation commit.
+- **Business schema changes go to the business migration track.** Add one Go file under `database/migrations/business/` calling `business.Register(...)` from `init()` (contract: `database/migrations/business/README.md`). Never add project tables to `official/` or `local/`. Ups must be idempotent, prefix-safe, dedupe by business keys, and must not infer seed state from table emptiness or `id=1`.
+- **The permission system is complete — build role hierarchies on `admin` + role groups.** 超级管理员 / 总代理 / 代理 / 员工 style agent systems are implemented with `admin` rows + `admin_group` role assignments + `admin.parent_id` (hierarchy with the `admin_closure` table) — no new auth tables needed. `admin` fields may be fine-tuned (add business columns, drop unused ones); pair every such change with a business-track migration, since destructive column changes must not rely on AutoMigrate.
+- **The `user` table is yours to shape.** For frontend-member business you may modify any `user` field, delete unused fields, and adjust the backend member pages (`web/src/views/backend/user`) to match; same migration discipline as `admin`.
+- **Frontend portal (`web/src/views/frontend/`) is an example — restyle freely.** Rebuild it into any business-facing portal. Do **not** restyle the admin backend (`web/src/views/backend/`) or alter the admin design system: backend consistency is what lets the project keep merging framework updates cleanly; business admin pages come from the CRUD generator and follow its patterns.
+
 ## Installation and test risks
 
 - Web installation creates `conf/config.yaml` and invokes the configured `terminal.commands.migrate.run`; keep that command able to run Cobra `migrate`. The installer is served at `/install` on port 9989.
