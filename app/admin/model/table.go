@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
+	"slices"
 	"strings"
 
 	"gorm.io/gorm"
@@ -62,7 +63,9 @@ type TableListItem struct {
 }
 
 // 获取数据表列表（v2.3.7 前端格式）
-func (s *TableModel) GetTableListV2(quickSearch string) []TableListItem {
+// 对齐上游 Ajax::getTableList：samePrefix 默认仅返回同前缀表，table 值去除
+// 表前缀（前端据此组合关联字段名，如 admin_id），excludeTable 为无前缀表名。
+func (s *TableModel) GetTableListV2(quickSearch string, samePrefix bool, excludeTable []string) []TableListItem {
 	type Table struct {
 		TABLE_NAME    string
 		TABLE_COMMENT string
@@ -74,15 +77,23 @@ func (s *TableModel) GetTableListV2(quickSearch string) []TableListItem {
 	if err := s.sqlDB.Raw(query, s.config.Database.Database).Scan(&tableList).Error; err != nil {
 		return result
 	}
+	prefix := s.config.Database.Prefix
 	for _, v := range tableList {
 		if quickSearch != "" && !strings.Contains(v.TABLE_NAME, quickSearch) && !strings.Contains(v.TABLE_COMMENT, quickSearch) {
 			continue
 		}
+		name := StripTablePrefix(v.TABLE_NAME, prefix)
+		if samePrefix && name == v.TABLE_NAME {
+			continue
+		}
+		if slices.Contains(excludeTable, name) {
+			continue
+		}
 		item := TableListItem{
-			Table:      v.TABLE_NAME,
+			Table:      name,
 			Comment:    v.TABLE_NAME + " - " + v.TABLE_COMMENT,
 			Connection: "mysql",
-			Prefix:     s.config.Database.Prefix,
+			Prefix:     prefix,
 		}
 		if v.TABLE_COMMENT == "" {
 			item.Comment = v.TABLE_NAME
@@ -90,6 +101,14 @@ func (s *TableModel) GetTableListV2(quickSearch string) []TableListItem {
 		result = append(result, item)
 	}
 	return result
+}
+
+// StripTablePrefix 去除表名前缀（大小写不敏感，对齐上游 preg_replace('/^prefix/i')）。
+func StripTablePrefix(tableName, prefix string) string {
+	if prefix != "" && len(tableName) >= len(prefix) && strings.EqualFold(tableName[:len(prefix)], prefix) {
+		return tableName[len(prefix):]
+	}
+	return tableName
 }
 
 // 获取表主键字段

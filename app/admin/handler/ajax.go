@@ -97,7 +97,11 @@ func (h *AjaxHandler) GetTablePk(ctx *gin.Context) {
 
 func (h *AjaxHandler) GetTableList(ctx *gin.Context) {
 	quickSearch := ctx.Request.FormValue("quickSearch")
-	result := h.tableM.GetTableListV2(quickSearch)
+	// 对齐上游：samePrefix 默认仅返回项目同前缀数据表
+	samePrefix := ctx.Request.FormValue("samePrefix") != "0" && ctx.Request.FormValue("samePrefix") != "false"
+	excludeTable := ctx.Request.URL.Query()["excludeTable[]"]
+	excludeTable = append(excludeTable, ctx.Request.URL.Query()["excludeTable"]...)
+	result := h.tableM.GetTableListV2(quickSearch, samePrefix, excludeTable)
 	Success(ctx, map[string]any{
 		"list": result,
 	})
