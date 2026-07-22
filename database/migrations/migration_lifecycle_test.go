@@ -122,6 +122,17 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if err := ReconcileLegacyData(db, cfg); err != nil {
 		return result, err
 	}
+	event("seed")
+	pending, err := SeedPending(db, cfg)
+	if err != nil {
+		return result, err
+	}
+	if pending {
+		result.seeded = true
+		if err := RunOfficialFreshSeed(db, cfg); err != nil {
+			return result, err
+		}
+	}
 	event("adoption")
 	result.adopted, err = AdoptCompletedLegacyAliases(db, cfg, locals)
 	if err != nil {
@@ -132,20 +143,15 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if err != nil {
 		return result, err
 	}
+	if result.seeded {
+		event("post-seed-verify")
+		if err := RunPostSeedVerify(db, cfg, locals); err != nil {
+			return result, err
+		}
+	}
 	event("schema")
 	if err := ValidateCurrentSchema(db, cfg); err != nil {
 		return result, err
-	}
-	event("seed")
-	pending, err := SeedPending(db, cfg)
-	if err != nil {
-		return result, err
-	}
-	if pending {
-		result.seeded = true
-		if err := RunFreshSeed(db, cfg, locals); err != nil {
-			return result, err
-		}
 	}
 	return result, nil
 }

@@ -43,10 +43,11 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO `"+tableName(cfg, "security_sensitive_data")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (1,0,'会员数据','user/User.php','auth/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\",\"password\":\"密码\"}'),(2,0,'会员数据','user/User.php','user/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\"}')").Error)
 	failing := []LocalMigration{{ID: "failing-overlay", PostSeedVerify: func(*gorm.DB, *conf.Configuration) error { return fmt.Errorf("simulated snapshot interruption") }}}
 	lockName := fmt.Sprintf("fresh-seed-%d", os.Getpid())
-	require.Error(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunFreshSeed(pinned, cfg, failing) }))
+	require.NoError(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunOfficialFreshSeed(pinned, cfg) }))
+	require.Error(t, RunPostSeedVerify(db, cfg, failing))
 	pending, err := SeedPending(db, cfg)
 	require.NoError(t, err)
-	require.True(t, pending)
+	require.False(t, pending)
 	var baselineRows int64
 	require.NoError(t, db.Table(tableName(cfg, "admin")).Count(&baselineRows).Error)
 	require.Zero(t, baselineRows)
@@ -54,7 +55,7 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.Equal(t, int64(2), baselineRows)
 	require.NoError(t, db.Table(tableName(cfg, "security_sensitive_data")).Count(&baselineRows).Error)
 	require.Equal(t, int64(2), baselineRows)
-	require.NoError(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunFreshSeed(pinned, cfg, LocalMigrations()) }))
+	require.NoError(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunOfficialFreshSeed(pinned, cfg) }))
 	pending, err = SeedPending(db, cfg)
 	require.NoError(t, err)
 	require.False(t, pending)

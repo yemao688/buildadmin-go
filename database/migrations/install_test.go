@@ -89,7 +89,7 @@ func TestInstall(t *testing.T) {
 	if err := MarkSeedPending(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}
-	if err := RunFreshSeed(db, seedConfig, LocalMigrations()); err != nil {
+	if err := RunOfficialFreshSeed(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
