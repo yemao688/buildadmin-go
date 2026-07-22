@@ -58,6 +58,14 @@ func TestParseWebDirNameData(t *testing.T) {
 	nestedLang := ParseWebDirNameData("country_language_content", "lang", "web/src/views/backend/country/language/content")
 	require.Equal(t, "web/src/views/backend/country/language/content", filepath.ToSlash(nestedViews.Views))
 	require.Equal(t, "web/src/lang/backend/zh-cn/country/language/content.ts", filepath.ToSlash(nestedLang.LangFile("zh-cn")))
+
+	// 对齐上游 lcfirst:显式路径的驼峰末段必须保留,
+	// 使 views 目录与菜单名(OriginalLastName)一致
+	camelViews := ParseWebDirNameData("country_language_content", "views", "web/src/views/backend/country/languageContent")
+	camelLang := ParseWebDirNameData("country_language_content", "lang", "web/src/views/backend/country/languageContent")
+	require.Equal(t, "web/src/views/backend/country/languageContent", filepath.ToSlash(camelViews.Views))
+	require.Equal(t, "web/src/lang/backend/zh-cn/country/languageContent.ts", filepath.ToSlash(camelLang.LangFile("zh-cn")))
+	require.Equal(t, "country/languageContent", GetMenuName(camelViews))
 }
 
 func TestFieldsMap(t *testing.T) {

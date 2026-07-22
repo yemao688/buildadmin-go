@@ -521,8 +521,18 @@ func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
 }
 
 func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*model.CrudLog, error) {
+	// 已被后续 delete 消费的 success 记录不再约束重新生成,
+	// 否则删除后换新路径重新生成会被旧 manifest 拒绝
+	var lastDeleteID int32
+	if err := db.Table(crudLogTable(cfg)).Where("table_name=? AND status=?", table, "delete").Order("id desc").Limit(1).Pluck("id", &lastDeleteID).Error; err != nil {
+		return nil, err
+	}
+	query := db.Table(crudLogTable(cfg)).Where("table_name=? AND status=?", table, "success")
+	if lastDeleteID > 0 {
+		query = query.Where("id > ?", lastDeleteID)
+	}
 	var log model.CrudLog
-	err := db.Table(crudLogTable(cfg)).Where("table_name=? AND status=?", table, "success").Order("create_time desc, id desc").Take(&log).Error
+	err := query.Order("create_time desc, id desc").Take(&log).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
 	}

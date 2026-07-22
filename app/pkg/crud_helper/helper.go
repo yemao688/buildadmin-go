@@ -506,7 +506,13 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 	}
 
 	originalLastName := pathArr[len(pathArr)-1]
-	lastName := strings.ToLower(originalLastName)
+	// 对齐上游:lastName 仅首字母小写(lcfirst),保留驼峰;
+	// 否则显式路径 country/languageContent 的 views 目录会被压成 languagecontent,
+	// 与菜单名(取 OriginalLastName)不一致
+	lastName := originalLastName
+	if lastName != "" {
+		lastName = strings.ToLower(lastName[:1]) + lastName[1:]
+	}
 	pathArr = pathArr[:len(pathArr)-1]
 	for k, v := range pathArr {
 		pathArr[k] = strings.ToLower(v)
