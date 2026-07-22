@@ -28,4 +28,5 @@ var ProviderSet = wire.NewSet(
 
 	NewCountryCurrencyModel,
 	NewCountryLanguageContentModel,
+	NewTestModel,
 )

@@ -59,6 +59,7 @@ func InitRouter(
 	countryLanguageHandler *admin.CountryLanguageHandler,
 	countryCurrencyHandler *admin.CountryCurrencyHandler,
 	countryLanguageContentHandler *admin.CountryLanguageContentHandler,
+	testHandler *admin.TestHandler,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
@@ -141,6 +142,9 @@ func InitRouter(
 		{Route: "countryLanguageContent/add", Action: "add", Method: http.MethodPost},
 		{Route: "countryLanguageContent/edit", Action: "edit", Method: http.MethodPost},
 		{Route: "countryLanguageContent/del", Action: "del", Method: http.MethodDelete},
+		{Route: "test/add", Action: "add", Method: http.MethodPost},
+		{Route: "test/edit", Action: "edit", Method: http.MethodPost},
+		{Route: "test/del", Action: "del", Method: http.MethodDelete},
 	} {
 		middleware.RegisterAtomicRoute(capability)
 	}
@@ -302,6 +306,14 @@ func InitRouter(
 	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
 
 	admin.CollectRoutes(router)
+
+
+	adminRouter.GET("test/index", testHandler.Index)
+	adminRouter.POST("test/add", testHandler.Add)
+	adminRouter.GET("test/edit", testHandler.One)
+	adminRouter.POST("test/edit", testHandler.Edit)
+	adminRouter.DELETE("test/del", testHandler.Del)
+
 
 
 	adminRouter.GET("countryLanguageContent/index", countryLanguageContentHandler.Index)
