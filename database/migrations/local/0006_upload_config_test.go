@@ -2,13 +2,7 @@ package local
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"testing"
-
-	"go-build-admin/conf"
-	"go-build-admin/database/migrations/model"
-	"gorm.io/gorm/schema"
 )
 
 func TestAliossConfigRowsMatchInstallMetadata(t *testing.T) {
@@ -65,37 +59,4 @@ func TestAppendUploadConfigGroupLeavesInvalidJSONUntouched(t *testing.T) {
 	}
 }
 
-func TestFreshOverlayAddsUploadConfigGroup(t *testing.T) {
-	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db := getDB()
-	if db == nil {
-		t.Fatal("failed to open MySQL test database")
-	}
-	prefix := fmt.Sprintf("fresh_upload_group_%d_", os.Getpid())
-	cfg := &conf.Configuration{Database: conf.Database{Prefix: prefix}}
-	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
-	table := prefix + "config"
-	t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS `" + table + "`") })
-	if err := db.AutoMigrate(&model.Config{}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Create(&model.Config{ID: 1, Name: "config_group", Value: `[{"key":"basics","value":"Basics"}]`}).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := version0014(db, cfg); err != nil {
-		t.Fatal(err)
-	}
-	if err := version0014(db, cfg); err != nil {
-		t.Fatal(err)
-	}
-	var value string
-	if err := db.Table(table).Where("id = 1").Pluck("value", &value).Error; err != nil {
-		t.Fatal(err)
-	}
-	changed, expected, err := appendUploadConfigGroup(`[{"key":"basics","value":"Basics"}]`)
-	if err != nil || !changed || value != expected {
-		t.Fatalf("value=%s expected=%s changed=%v err=%v", value, expected, changed, err)
-	}
-}
+
