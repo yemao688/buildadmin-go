@@ -233,7 +233,7 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Select("id", "table_name", "status", "create_time").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
