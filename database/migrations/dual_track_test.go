@@ -22,7 +22,7 @@ func TestDualTrackValidation(t *testing.T) {
 
 func TestPhase2RegistrySplit(t *testing.T) {
 	official, local := OfficialMigrations(), LocalMigrations()
-	if len(official) != 6 || len(local) != 14 {
+	if len(official) != 6 || len(local) != 6 {
 		t.Fatalf("official=%d local=%d", len(official), len(local))
 	}
 	if err := ValidateOfficialMigrations(official); err != nil {
@@ -31,9 +31,9 @@ func TestPhase2RegistrySplit(t *testing.T) {
 	if err := ValidateLocalMigrations(local, official); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"account-status-protocol", "admin-hierarchy", "attachment-owner-index", "user-ownership", "security-ownership", "signed-balance-deltas", "security-target-owner", "legacy-target-state", "security-commit-state", "security-rule-normalization", "canonical-column-order", "security-owner-column", "country-dictionary", "alioss-config"}
+	want := []string{"account-status-protocol", "admin-hierarchy", "ownership-and-audit-integrity", "security-rule-normalization", "country-dictionary", "upload-config"}
 	for i, migration := range local {
-		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || migration.PostSeedVerify == nil || (i < 13 && (migration.VerifySchema == nil || migration.VerifyUpgradeData == nil)) {
+		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || (i < 5 && (migration.VerifySchema == nil || migration.VerifyUpgradeData == nil)) {
 			t.Fatalf("invalid local registry entry %d: %#v", i, migration)
 		}
 	}
@@ -70,20 +70,6 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 		if name != "one" && err == nil {
 			t.Fatalf("%s release accepted", name)
 		}
-	}
-}
-
-func TestLegacyAliasesAreExactAndCopied(t *testing.T) {
-	aliases := LegacyVersionAliases()
-	if len(aliases) != 10 || aliases[0] != (OfficialKey{20260714120000, "Version223"}) || aliases[9] != (OfficialKey{20260722000000, "Version232"}) {
-		t.Fatalf("unexpected aliases: %#v", aliases)
-	}
-	aliases[0].Name = "changed"
-	if LegacyVersionAliases()[0].Name != "Version223" {
-		t.Fatal("alias registry was mutable")
-	}
-	if err := ValidateLegacyAliases(LegacyVersionAliases()); err != nil {
-		t.Fatal(err)
 	}
 }
 

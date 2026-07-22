@@ -84,10 +84,10 @@ func TestFreshOverlayAddsUploadConfigGroup(t *testing.T) {
 	if err := db.Create(&model.Config{ID: 1, Name: "config_group", Value: `[{"key":"basics","value":"Basics"}]`}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureFreshUploadConfigGroup(db, cfg); err != nil {
+	if err := version0014(db, cfg); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureFreshUploadConfigGroup(db, cfg); err != nil {
+	if err := version0014(db, cfg); err != nil {
 		t.Fatal(err)
 	}
 	var value string

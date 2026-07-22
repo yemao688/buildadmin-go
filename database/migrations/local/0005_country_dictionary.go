@@ -63,24 +63,13 @@ func version0013(db *gorm.DB, config *conf.Configuration) error {
 			return fmt.Errorf("create country dictionary unique index %s: %w", index.name, err)
 		}
 	}
-	// 菜单种子只能在安装种子之后执行:官方 Install.AdminRule 以 id=1 是否存在
-	// 来判断是否种默认菜单,若此时 admin_rule 仍为空(新装流程,本地迁移先于
-	// 安装种子运行),提前插入 country 菜单会让默认菜单树被整体跳过。
-	// 新装路径由 ApplyFreshOverlay 在安装种子之后补种。
-	var ruleCount int64
-	if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(core.TableName(config, "admin_rule"))).Scan(&ruleCount).Error; err != nil {
-		return err
-	}
-	if ruleCount == 0 {
-		return nil
-	}
 	return seedCountryMenus(db, config)
 }
 
 // seedCountryMenus 为 country 字典模块种下后台菜单(幂等,按 name 判重):
 // 国家管理(country 目录)下平级三个菜单——货币管理、语言管理、语言文本管理,
 // 菜单 name 与提交的生成代码位置一致(country/languageContent 为单级)。
-// 升级路径由 version0013 调用,新装路径由 ApplyFreshOverlay 调用。
+// 新装和升级路径均由 version0013 调用。
 func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
 

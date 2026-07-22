@@ -14,7 +14,6 @@ type Report struct {
 	Official int
 	Local    int
 	Business int
-	Adopted  int
 	Seeded   bool
 }
 
@@ -65,12 +64,6 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err != nil {
 			return fmt.Errorf("business migration registry: %w", err)
 		}
-		if err := PreflightLegacyAliases(pinned, config, LegacyVersionAliases()); err != nil {
-			return fmt.Errorf("legacy alias preflight: %w", err)
-		}
-		if _, err := ResolveOfficialAliasCollisions(pinned, config, official, locals); err != nil {
-			return fmt.Errorf("legacy alias collision: %w", err)
-		}
 		report.Official, err = RunOfficialMigrations(pinned, config, official)
 		if err != nil {
 			return fmt.Errorf("official migration: %w", err)
@@ -88,10 +81,6 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 			}
 			report.Seeded = true
 		}
-		report.Adopted, err = AdoptCompletedLegacyAliases(pinned, config, locals)
-		if err != nil {
-			return fmt.Errorf("legacy adoption: %w", err)
-		}
 		report.Local, err = RunLocalMigrations(pinned, config, official, locals)
 		if err != nil {
 			return fmt.Errorf("local migration: %w", err)
@@ -100,10 +89,8 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err != nil {
 			return fmt.Errorf("business migration: %w", err)
 		}
-		if report.Seeded {
-			if err := RunPostSeedVerify(pinned, config, locals); err != nil {
-				return err
-			}
+		if err := LocalVerifyCurrent(pinned, config); err != nil {
+			return fmt.Errorf("local current validation: %w", err)
 		}
 		if err := ValidateCurrentSchema(pinned, config); err != nil {
 			return fmt.Errorf("database schema validation: %w", err)

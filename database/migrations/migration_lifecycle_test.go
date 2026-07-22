@@ -38,10 +38,10 @@ func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB,
 }
 
 type migrationLifecycleResult struct {
-	recovery                 InstallRecoveryState
-	official, adopted, local int
-	seeded                   bool
-	events                   []string
+	recovery        InstallRecoveryState
+	official, local int
+	seeded          bool
+	events          []string
 }
 
 type migrationCriticalSection struct {
@@ -105,12 +105,15 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if err := ValidateLocalLedgerSchema(db, cfg); err != nil {
 		return result, err
 	}
-	official, locals := OfficialMigrations(), LocalMigrations()
-	event("preflight")
-	if err := PreflightLegacyAliases(db, cfg, LegacyVersionAliases()); err != nil {
+	if err := BootstrapBusinessLedger(db, cfg); err != nil {
 		return result, err
 	}
-	if _, err := ResolveOfficialAliasCollisions(db, cfg, official, locals); err != nil {
+	if err := ValidateBusinessLedgerSchema(db, cfg); err != nil {
+		return result, err
+	}
+	official, locals := OfficialMigrations(), LocalMigrations()
+	business, err := BusinessMigrations()
+	if err != nil {
 		return result, err
 	}
 	event("official")
@@ -133,21 +136,17 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 			return result, err
 		}
 	}
-	event("adoption")
-	result.adopted, err = AdoptCompletedLegacyAliases(db, cfg, locals)
-	if err != nil {
-		return result, err
-	}
 	event("local")
 	result.local, err = RunLocalMigrations(db, cfg, official, locals)
 	if err != nil {
 		return result, err
 	}
-	if result.seeded {
-		event("post-seed-verify")
-		if err := RunPostSeedVerify(db, cfg, locals); err != nil {
-			return result, err
-		}
+	event("business")
+	if _, err := RunBusinessMigrations(db, cfg, business); err != nil {
+		return result, err
+	}
+	if err := LocalVerifyCurrent(db, cfg); err != nil {
+		return result, err
 	}
 	event("schema")
 	if err := ValidateCurrentSchema(db, cfg); err != nil {
@@ -174,10 +173,9 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	}))
 	require.Equal(t, InstallFresh, first.recovery)
 	require.Equal(t, len(OfficialMigrations()), first.official)
-	require.Zero(t, first.adopted)
 	require.Equal(t, len(LocalMigrations()), first.local)
 	require.True(t, first.seeded)
-	require.Equal(t, []string{"neutral-prep", "recovery", "snapshot", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, first.events)
+	require.Equal(t, []string{"neutral-prep", "recovery", "snapshot", "ledgers", "official", "reconcile", "seed", "local", "business", "schema"}, first.events)
 
 	var completed int64
 	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
@@ -185,7 +183,7 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	require.Equal(t, int64(len(OfficialMigrations())+1), completed)
 	require.NoError(t, db.Table(tableName(cfg, "go_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	require.Equal(t, int64(len(LocalMigrations())), completed)
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
+	require.NoError(t, LocalVerifyCurrent(db, cfg))
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -210,13 +208,12 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	for result := range results {
 		require.Equal(t, InstallStrictUpgrade, result.recovery)
 		require.Zero(t, result.official)
-		require.Zero(t, result.adopted)
 		require.Zero(t, result.local)
 		require.False(t, result.seeded)
-		require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, result.events)
+		require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "official", "reconcile", "seed", "local", "business", "schema"}, result.events)
 	}
 	require.Equal(t, 1, section.max)
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
+	require.NoError(t, LocalVerifyCurrent(db, cfg))
 
 	var count int64
 	require.NoError(t, db.Table(tableName(cfg, "security_data_recycle")).Where("id=5").Count(&count).Error)

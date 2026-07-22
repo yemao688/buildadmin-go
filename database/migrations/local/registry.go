@@ -1,7 +1,9 @@
 package local
 
 import (
+	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
+	"gorm.io/gorm"
 )
 
 func officialKeysThrough(official []core.OfficialMigration, version int64) []core.OfficialKey {
@@ -15,21 +17,50 @@ func officialKeysThrough(official []core.OfficialMigration, version int64) []cor
 }
 
 func Migrations(official []core.OfficialMigration) []core.LocalMigration {
-	postSeed := localPostSeedVerify
+	requiresOfficial := officialKeysThrough(official, 20250412134127)
 	return []core.LocalMigration{
-		{Sequence: 1, ID: "account-status-protocol", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260714120000, "Version223"}}, Up: local0001Up, VerifySchema: verifyStatusContract, VerifyUpgradeData: verifyStatusContract, PostSeedVerify: postSeed},
-		{Sequence: 2, ID: "admin-hierarchy", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260714130000, "Version224"}}, Up: version224, VerifySchema: verifyHierarchyContract, VerifyUpgradeData: verifyHierarchyContract, PostSeedVerify: postSeed},
-		{Sequence: 3, ID: "attachment-owner-index", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260715000000, "Version225"}}, Up: version225, VerifySchema: verifyAttachmentContract, VerifyUpgradeData: verifyAttachmentContract, PostSeedVerify: postSeed},
-		{Sequence: 4, ID: "user-ownership", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260716000000, "Version226"}}, Up: version226, VerifySchema: verifyUserOwnerContract, VerifyUpgradeData: verifyUserOwnerContract, PostSeedVerify: postSeed},
-		{Sequence: 5, ID: "security-ownership", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260717000000, "Version227"}}, Up: version227, VerifySchema: verifySecurityOwnerContract, VerifyUpgradeData: verifySecurityOwnerContract, PostSeedVerify: postSeed},
-		{Sequence: 6, ID: "signed-balance-deltas", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260718000000, "Version228"}}, Up: version228, VerifySchema: verifySignedDeltaContract, VerifyUpgradeData: verifySignedDeltaContract, PostSeedVerify: postSeed},
-		{Sequence: 7, ID: "security-target-owner", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260719000000, "Version229"}}, Up: version229, VerifySchema: verifyTargetContract, VerifyUpgradeData: verifyTargetContract, PostSeedVerify: postSeed},
-		{Sequence: 8, ID: "legacy-target-state", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260720000000, "Version230"}}, Up: version230, VerifySchema: verifyLegacyTargetContract, VerifyUpgradeData: verifyLegacyTargetContract, PostSeedVerify: postSeed},
-		{Sequence: 9, ID: "security-commit-state", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260721000000, "Version231"}}, Up: version231, VerifySchema: verifyCommitContract, VerifyUpgradeData: verifyCommitContract, PostSeedVerify: postSeed},
-		{Sequence: 10, ID: "security-rule-normalization", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), LegacyAliases: []core.OfficialKey{{20260722000000, "Version232"}}, Up: version232, VerifySchema: verifySecurityRuleContract, VerifyUpgradeData: verifySecurityRuleContract, PostSeedVerify: postSeed},
-		{Sequence: 11, ID: "canonical-column-order", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0011, VerifySchema: verifyCanonicalColumnOrder, VerifyUpgradeData: verifyCanonicalColumnOrder, PostSeedVerify: postSeed},
-		{Sequence: 12, ID: "security-owner-column", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0012, VerifySchema: verifyOwnerColumnContract, VerifyUpgradeData: verifyOwnerColumnContract, PostSeedVerify: postSeed},
-		{Sequence: 13, ID: "country-dictionary", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0013, VerifySchema: verifyCountryDictionaryContract, VerifyUpgradeData: verifyCountryDictionaryContract, PostSeedVerify: postSeed},
-		{Sequence: 14, ID: "alioss-config", Revision: 1, RequiresOfficial: officialKeysThrough(official, 20250412134127), Up: version0014, PostSeedVerify: postSeed},
+		{Sequence: 1, ID: "account-status-protocol", Revision: 1, RequiresOfficial: requiresOfficial, Up: local0001Up, VerifySchema: verifyStatusContract, VerifyUpgradeData: verifyStatusContract},
+		{Sequence: 2, ID: "admin-hierarchy", Revision: 1, RequiresOfficial: requiresOfficial, Up: version224, VerifySchema: verifyHierarchyContract, VerifyUpgradeData: verifyHierarchyContract},
+		{Sequence: 3, ID: "ownership-and-audit-integrity", Revision: 1, RequiresOfficial: requiresOfficial, Up: ownershipAndAuditIntegrity, VerifySchema: verifyOwnershipAndAuditIntegrity, VerifyUpgradeData: verifyOwnershipAndAuditIntegrity},
+		{Sequence: 4, ID: "security-rule-normalization", Revision: 1, RequiresOfficial: requiresOfficial, Up: securityRuleNormalization, VerifySchema: verifySecurityRuleContract, VerifyUpgradeData: verifySecurityRuleContract},
+		{Sequence: 5, ID: "country-dictionary", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0013, VerifySchema: verifyCountryDictionaryContract, VerifyUpgradeData: verifyCountryDictionaryContract},
+		{Sequence: 6, ID: "upload-config", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0014},
 	}
+}
+
+func ownershipAndAuditIntegrity(db *gorm.DB, config *conf.Configuration) error {
+	for _, migration := range []func(*gorm.DB, *conf.Configuration) error{version225, version226, version227, version228, version229, version230, version231, version0012} {
+		if err := migration(db, config); err != nil {
+			return err
+		}
+	}
+	return normalizeFreshOwnership(db, config)
+}
+
+func verifyOwnershipAndAuditIntegrity(db *gorm.DB, config *conf.Configuration) error {
+	for _, verify := range []func(*gorm.DB, *conf.Configuration) error{verifyAttachmentContract, verifyUserOwnerContract, verifySecurityOwnerContract, verifySignedDeltaContract, verifyTargetContract, verifyLegacyTargetContract, verifyCommitContract, verifyOwnerColumnContract} {
+		if err := verify(db, config); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func securityRuleNormalization(db *gorm.DB, config *conf.Configuration) error {
+	if err := version232(db, config); err != nil {
+		return err
+	}
+	recycle := core.TableName(config, "security_data_recycle")
+	if core.TableExists(db, recycle) {
+		if err := convergeSecurityRule(db, recycle, 1, 5, "会员", "user/User.php", "user", "id", "user/user", "auth/user", ""); err != nil {
+			return err
+		}
+	}
+	sensitive := core.TableName(config, "security_sensitive_data")
+	if core.TableExists(db, sensitive) {
+		if err := convergeSecurityRule(db, sensitive, 1, 2, "会员数据", "user/User.php", "user", "id", "user/user", "auth/user", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`); err != nil {
+			return err
+		}
+	}
+	return nil
 }

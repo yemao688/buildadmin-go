@@ -270,10 +270,8 @@ func TestTrackedVersion222OfficialAndSentinel(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, InstallStrictUpgrade, result.recovery)
 	require.Equal(t, 3, result.official)
-	require.Zero(t, result.adopted)
-	require.Equal(t, 11, result.local)
+	require.Equal(t, len(LocalMigrations()), result.local)
 	require.False(t, result.seeded)
-	require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, result.events)
 	for _, migration := range OfficialMigrations()[3:] {
 		var name string
 		var endTime *time.Time
@@ -307,10 +305,8 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ValidateOfficialLedgerSchema(upgradeDB, upgradeCfg))
 	require.Equal(t, 3, upgradeResult.official)
-	require.Equal(t, 11, upgradeResult.local)
-	require.Zero(t, upgradeResult.adopted)
+	require.Equal(t, len(LocalMigrations()), upgradeResult.local)
 	require.False(t, upgradeResult.seeded)
-	require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "preflight", "official", "reconcile", "adoption", "local", "schema", "seed"}, upgradeResult.events)
 	freshSummary, err := schemaSummary(freshDB, freshCfg)
 	require.NoError(t, err)
 	assertFreshSnapshotOrdinals(t, freshDB, freshCfg)
@@ -332,50 +328,8 @@ func TestFreshAndTrackedUpgradeContractsEquivalent(t *testing.T) {
 		lines = append(lines, onlyUpgrade...)
 		t.Fatalf("fresh/upgrade schema summary differs:\n%s", strings.Join(lines, "\n"))
 	}
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(freshDB, freshCfg))
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(upgradeDB, upgradeCfg))
-}
-
-func TestTrackedMixed223To232Aliases(t *testing.T) {
-	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, cfg := loadTrackedBuildAdmin(t, "ba_")
-	require.NoError(t, ValidateOfficialLedgerSchema(db, cfg))
-	runTrackedOfficialTo222(t, db, cfg)
-	locals := LocalMigrations()
-	// Establish real completed contracts for the completed alias and the
-	// DDL-applied-without-record branch before the dual-track lifecycle.
-	require.NoError(t, locals[0].Up(db, cfg))
-	require.NoError(t, locals[2].Up(db, cfg))
-	require.NoError(t, BootstrapLocalLedger(db, cfg))
-	completedAt := time.Now().Add(-time.Minute)
-	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(cfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,?,?,0)", locals[0].LegacyAliases[0].Version, locals[0].LegacyAliases[0].Name, completedAt, completedAt).Error)
-	require.NoError(t, db.Exec("INSERT INTO "+quoteIdentifier(tableName(cfg, "migrations"))+" (version,migration_name,start_time,end_time,breakpoint) VALUES (?,?,NOW(6),NULL,0)", locals[1].LegacyAliases[0].Version, locals[1].LegacyAliases[0].Name).Error)
-	section := &migrationCriticalSection{}
-	result, err := runMigrationLifecycle(db, cfg, section)
-	require.NoError(t, err)
-	require.Equal(t, InstallStrictUpgrade, result.recovery)
-	require.Equal(t, len(LocalMigrations())-1, result.local)
-	require.Equal(t, 1, result.adopted)
-	require.False(t, result.seeded)
-	for _, local := range locals {
-		var completed int64
-		require.NoError(t, db.Table(tableName(cfg, "go_migrations")).Where("sequence=? AND end_time IS NOT NULL", local.Sequence).Count(&completed).Error)
-		require.Equal(t, int64(1), completed, local.ID)
-	}
-	var adoptedFrom string
-	require.NoError(t, db.Table(tableName(cfg, "go_migrations")).Where("sequence=?", locals[0].Sequence).Pluck("adopted_from", &adoptedFrom).Error)
-	require.Equal(t, fmt.Sprintf("%d/%s", locals[0].LegacyAliases[0].Version, locals[0].LegacyAliases[0].Name), adoptedFrom)
-	var aliasCount int64
-	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("version=? AND migration_name=?", locals[0].LegacyAliases[0].Version, locals[0].LegacyAliases[0].Name).Count(&aliasCount).Error)
-	require.Equal(t, int64(1), aliasCount)
-	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("version=? AND migration_name=? AND end_time IS NULL", locals[1].LegacyAliases[0].Version, locals[1].LegacyAliases[0].Name).Count(&aliasCount).Error)
-	require.Equal(t, int64(1), aliasCount)
-	for _, local := range locals[2:10] {
-		require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("version=?", local.LegacyAliases[0].Version).Count(&aliasCount).Error)
-		require.Zero(t, aliasCount)
-	}
+	require.NoError(t, LocalVerifyCurrent(freshDB, freshCfg))
+	require.NoError(t, LocalVerifyCurrent(upgradeDB, upgradeCfg))
 }
 
 func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
@@ -400,10 +354,9 @@ func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, InstallInterrupted, result.recovery)
 			require.Equal(t, len(OfficialMigrations()), result.official)
-			require.Zero(t, result.adopted)
 			require.Equal(t, len(LocalMigrations()), result.local)
 			require.True(t, result.seeded)
-			require.NoError(t, LocalMigrations()[0].PostSeedVerify(db, cfg))
+			require.NoError(t, LocalVerifyCurrent(db, cfg))
 		})
 	}
 
@@ -417,7 +370,6 @@ func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, InstallStrictUpgrade, result.recovery)
 		require.Zero(t, result.official)
-		require.Zero(t, result.adopted)
 		require.Equal(t, len(LocalMigrations()), result.local)
 		require.False(t, result.seeded)
 	})

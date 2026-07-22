@@ -9,6 +9,13 @@ import (
 	"gorm.io/gorm"
 )
 
+func local0001Up(db *gorm.DB, config *conf.Configuration) error {
+	if err := bridgeAdminStatusSchema(db, config); err != nil {
+		return err
+	}
+	return version223(db, config)
+}
+
 func version223(db *gorm.DB, config *conf.Configuration) error {
 	tables := []string{core.TableName(config, "admin"), core.TableName(config, "user")}
 	values := make([][]string, len(tables))

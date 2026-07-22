@@ -30,8 +30,6 @@ type LocalMigration struct {
 	Up                MigrationFn
 	VerifySchema      func(*gorm.DB, *conf.Configuration) error
 	VerifyUpgradeData func(*gorm.DB, *conf.Configuration) error
-	PostSeedVerify    func(*gorm.DB, *conf.Configuration) error
-	LegacyAliases     []OfficialKey
 }
 
 type LocalMigrationRecord struct {

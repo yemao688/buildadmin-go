@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -441,41 +440,6 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 		t.Fatal("completed official rejected:", err)
 	}
 
-	aliasConfig := &conf.Configuration{}
-	aliasConfig.Database.Prefix = "alias_"
-	for _, table := range []string{"alias_go_migrations", "alias_migrations"} {
-		db.Exec("DROP TABLE IF EXISTS `" + table + "`")
-		defer db.Exec("DROP TABLE IF EXISTS `" + table + "`")
-	}
-	if err := db.Exec("CREATE TABLE `alias_migrations` (`version` BIGINT NOT NULL PRIMARY KEY, `migration_name` VARCHAR(100), `start_time` TIMESTAMP NULL, `end_time` TIMESTAMP NULL) ENGINE=InnoDB").Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := BootstrapLocalLedger(db, aliasConfig); err != nil {
-		t.Fatal(err)
-	}
-	alias := LegacyVersionAliases()[:4]
-	if err := db.Exec("INSERT INTO `alias_migrations` VALUES (?, 'Version223', NOW(6), NULL), (?, 'Version224', NOW(6), NOW(6)), (?, 'Wrong', NOW(6), NOW(6))", alias[0].Version, alias[1].Version, alias[2].Version).Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Table("alias_go_migrations").Create(&LocalMigrationRecord{Sequence: 99, MigrationID: "sentinel", Revision: 1, StartTime: time.Now()}).Error; err != nil {
-		t.Fatal(err)
-	}
-	var before, after []LocalMigrationRecord
-	var beforeOfficial, afterOfficial []migrationRecord
-	db.Table("alias_migrations").Order("version").Find(&beforeOfficial)
-	db.Table("alias_go_migrations").Order("sequence").Find(&before)
-	got, err := InspectLegacyAliases(db, aliasConfig, alias)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got[0].Status != LegacyAliasPending || got[1].Status != LegacyAliasCompleted || got[2].Status != LegacyAliasNameCollision || got[3].Status != LegacyAliasMissing {
-		t.Fatalf("alias statuses=%#v", got)
-	}
-	db.Table("alias_migrations").Order("version").Find(&afterOfficial)
-	db.Table("alias_go_migrations").Order("sequence").Find(&after)
-	if !reflect.DeepEqual(beforeOfficial, afterOfficial) || !reflect.DeepEqual(before, after) {
-		t.Fatal("alias inspection changed local ledger")
-	}
 }
 
 func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {

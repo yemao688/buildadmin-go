@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
-	"go-build-admin/database/migrations/local"
 	"go-build-admin/database/migrations/model"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -41,10 +40,8 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.NoError(t, MarkSeedPending(db, cfg))
 	require.NoError(t, db.Exec("INSERT INTO `"+tableName(cfg, "security_data_recycle")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (1,0,'会员','user/User.php','auth/user','user','id'),(5,0,'会员','user/User.php','user/user','user','id')").Error)
 	require.NoError(t, db.Exec("INSERT INTO `"+tableName(cfg, "security_sensitive_data")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (1,0,'会员数据','user/User.php','auth/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\",\"password\":\"密码\"}'),(2,0,'会员数据','user/User.php','user/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\"}')").Error)
-	failing := []LocalMigration{{ID: "failing-overlay", PostSeedVerify: func(*gorm.DB, *conf.Configuration) error { return fmt.Errorf("simulated snapshot interruption") }}}
 	lockName := fmt.Sprintf("fresh-seed-%d", os.Getpid())
 	require.NoError(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunOfficialFreshSeed(pinned, cfg) }))
-	require.Error(t, RunPostSeedVerify(db, cfg, failing))
 	pending, err := SeedPending(db, cfg)
 	require.NoError(t, err)
 	require.False(t, pending)
@@ -68,7 +65,7 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.Zero(t, baselineRows)
 	require.NoError(t, queryDB().Table(tableName(cfg, "security_sensitive_data")).Where("id=2").Count(&baselineRows).Error)
 	require.Equal(t, int64(1), baselineRows)
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db.Session(&gorm.Session{NewDB: true}), cfg))
+	require.NoError(t, LocalVerifyCurrent(db.Session(&gorm.Session{NewDB: true}), cfg))
 }
 
 func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
@@ -87,8 +84,8 @@ func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})
-	// A current snapshot with empty security rule rows is a valid 0010 upgrade state.
-	require.NoError(t, LocalMigrations()[9].VerifyUpgradeData(db.Session(&gorm.Session{NewDB: true}), cfg))
+	// A current snapshot with empty security rule rows is a valid upgrade state.
+	require.NoError(t, LocalMigrations()[3].VerifyUpgradeData(db.Session(&gorm.Session{NewDB: true}), cfg))
 	require.NoError(t, NewInstall(db).InsertData())
 	type recycleRow struct {
 		ID, AdminID                                    int32
@@ -108,7 +105,9 @@ func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
 	require.Len(t, sensitive, 3)
 	expectedSensitive := []sensitiveRow{{1, 0, "管理员数据", "auth/Admin.php", "auth/admin", "admin", "id", `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`}, {2, 0, "会员数据", "user/User.php", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`}, {3, 0, "管理员权限", "auth/Group.php", "auth/group", "admin_group", "id", `{"rules":"权限规则ID"}`}}
 	require.Equal(t, expectedSensitive, sensitive)
-	require.NoError(t, local.ApplyFreshOverlay(db, cfg))
+	require.NoError(t, LocalMigrations()[3].Up(db, cfg))
+	require.NoError(t, LocalMigrations()[4].Up(db, cfg))
+	require.NoError(t, LocalMigrations()[5].Up(db, cfg))
 	var count int64
 	require.NoError(t, db.Session(&gorm.Session{NewDB: true}).Table(tableName(cfg, "security_data_recycle")).Count(&count).Error)
 	require.Equal(t, int64(1), count)
@@ -121,5 +120,5 @@ func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
 	var fields string
 	require.NoError(t, db.Session(&gorm.Session{NewDB: true}).Table(tableName(cfg, "security_sensitive_data")).Where("id=2").Pluck("data_fields", &fields).Error)
 	require.NotContains(t, fields, "password")
-	require.NoError(t, LocalMigrations()[0].PostSeedVerify(db.Session(&gorm.Session{NewDB: true}), cfg))
+	require.NoError(t, LocalVerifyCurrent(db.Session(&gorm.Session{NewDB: true}), cfg))
 }

@@ -274,6 +274,105 @@ func verifySecurityRuleContract(db *gorm.DB, config *conf.Configuration) error {
 	return nil
 }
 
+func verifyOwnerColumnContract(db *gorm.DB, config *conf.Configuration) error {
+	for _, logical := range []string{"security_data_recycle", "security_sensitive_data"} {
+		table := core.TableName(config, logical)
+		if !core.TableExists(db, table) {
+			continue
+		}
+		if !core.ColumnExists(db, table, "owner_column") {
+			return fmt.Errorf("%s.owner_column missing", table)
+		}
+	}
+	return nil
+}
+
+// VerifyCurrent validates the cross-table invariants after all local and business migrations.
+func VerifyCurrent(db *gorm.DB, config *conf.Configuration) error {
+	root, err := migrationRootID(db, config)
+	if err != nil {
+		return err
+	}
+	if err := validateMigrationOwners(db, core.TableName(config, "user"), core.TableName(config, "admin")); err != nil {
+		return err
+	}
+	if err := validateClosureSelfRows(db, config); err != nil {
+		return err
+	}
+	if err := verifySecuritySeedIdentity(db, config, root); err != nil {
+		return err
+	}
+	return rejectKnownLegacyInstallerRules(db, core.TableName(config, "security_data_recycle"), core.TableName(config, "security_sensitive_data"))
+}
+
+func rejectKnownLegacyInstallerRules(db *gorm.DB, recycle, sensitive string) error {
+	for _, rule := range []struct {
+		id                             int
+		name, controller, route, table string
+	}{
+		{1, "管理员", "auth/Admin.php", "auth/admin", "admin"}, {2, "管理员日志", "auth/AdminLog.php", "auth/adminlog", "admin_log"}, {3, "菜单规则", "auth/Menu.php", "auth/rule", "admin_rule"}, {4, "系统配置项", "routine/Config.php", "routine/config", "config"}, {5, "会员", "user/User.php", "auth/user", "user"}, {6, "数据回收规则", "security/DataRecycle.php", "auth/datarecycle", "security_data_recycle"},
+	} {
+		var count int64
+		if err := db.Table(recycle).Where("id=? AND name=? AND controller=? AND controller_as=? AND data_table=? AND primary_key=?", rule.id, rule.name, rule.controller, rule.route, rule.table, "id").Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("known Version232 recycle installer rule remains: %s id=%d", recycle, rule.id)
+		}
+	}
+	for _, rule := range []struct {
+		id                                     int
+		name, controller, route, table, fields string
+	}{
+		{1, "管理员数据", "auth/Admin.php", "auth/admin", "admin", `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`}, {2, "会员数据", "user/User.php", "user/user", "user", version232SensitiveUserOldFields}, {2, "会员数据", "user/User.php", "auth/user", "user", version232SensitiveUserOldFields}, {3, "管理员权限", "auth/Group.php", "auth/group", "admin_group", `{"rules":"权限规则ID"}`},
+	} {
+		var count int64
+		if err := db.Table(sensitive).Where("id=? AND name=? AND controller=? AND controller_as=? AND data_table=? AND primary_key=? AND data_fields=?", rule.id, rule.name, rule.controller, rule.route, rule.table, "id", rule.fields).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("known Version232 sensitive installer rule remains: %s id=%d", sensitive, rule.id)
+		}
+	}
+	return nil
+}
+
+func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration, root int32) error {
+	for _, check := range []struct{ table, id, name, controllerAs, dataTable string }{{"security_data_recycle", "5", "会员", "user/user", "user"}, {"security_sensitive_data", "2", "会员数据", "user/user", "user"}} {
+		table := core.TableName(config, check.table)
+		if err := requireTable(db, table); err != nil {
+			return err
+		}
+		var row struct {
+			AdminID                       int32
+			Name, ControllerAs, DataTable string
+		}
+		if err := db.Table(table).Where("id = ?", check.id).First(&row).Error; err != nil {
+			return err
+		}
+		var duplicates int64
+		if err := db.Table(table).Where("name=? AND controller=? AND controller_as=? AND data_table=? AND primary_key=?", check.name, "user/User.php", check.controllerAs, check.dataTable, "id").Count(&duplicates).Error; err != nil {
+			return err
+		}
+		if duplicates != 1 {
+			return fmt.Errorf("%s final installer identity count=%d", table, duplicates)
+		}
+		if row.AdminID != root || row.Name != check.name || row.ControllerAs != check.controllerAs || row.DataTable != check.dataTable {
+			return fmt.Errorf("%s seed %s has unexpected identity or owner", table, check.id)
+		}
+		if check.table == "security_sensitive_data" {
+			var fields string
+			if err := db.Table(table).Where("id=?", check.id).Pluck("data_fields", &fields).Error; err != nil {
+				return err
+			}
+			if strings.Contains(fields, "password") {
+				return fmt.Errorf("%s final seed still exposes password", table)
+			}
+		}
+	}
+	return nil
+}
+
 func requireTable(db *gorm.DB, table string) error {
 	ok, err := core.LegacyTableExists(db, table)
 	if err != nil {

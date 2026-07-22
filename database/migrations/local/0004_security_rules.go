@@ -1,6 +1,7 @@
 package local
 
 import (
+	"fmt"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
 	"go-build-admin/database/migrations/model"
@@ -9,6 +10,40 @@ import (
 )
 
 const version232SensitiveUserOldFields = `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`
+
+func convergeSecurityRule(db *gorm.DB, table string, sourceID, targetID int, name, controller, dataTable, primaryKey, finalRoute, sourceRoute, finalFields string) error {
+	identity := "name = ? AND controller = ? AND data_table = ? AND primary_key = ?"
+	var sourceCount, targetCount, duplicateCount int64
+	if err := db.Table(table).Where("id = ? AND (controller_as = ? OR controller_as = ?)", sourceID, sourceRoute, finalRoute).Where(identity, name, controller, dataTable, primaryKey).Count(&sourceCount).Error; err != nil {
+		return err
+	}
+	if err := db.Table(table).Where("id = ?", targetID).Count(&targetCount).Error; err != nil {
+		return err
+	}
+	if err := db.Table(table).Where("id <> ? AND "+identity, targetID, name, controller, dataTable, primaryKey).Count(&duplicateCount).Error; err != nil {
+		return err
+	}
+	if duplicateCount > 1 || (duplicateCount == 1 && sourceCount == 0) {
+		return fmt.Errorf("duplicate installer identity in %s", table)
+	}
+	if targetCount == 0 && sourceCount == 1 {
+		if err := db.Table(table).Where("id = ? AND "+identity, sourceID, name, controller, dataTable, primaryKey).Update("id", targetID).Error; err != nil {
+			return err
+		}
+	} else if targetCount == 1 && sourceCount == 1 && sourceID != targetID {
+		if err := db.Exec("DELETE FROM "+core.QuoteIdentifier(table)+" WHERE id = ? AND "+identity, sourceID, name, controller, dataTable, primaryKey).Error; err != nil {
+			return err
+		}
+	}
+	if targetCount == 0 && sourceCount == 0 {
+		return fmt.Errorf("installer identity missing in %s", table)
+	}
+	updates := map[string]any{"controller_as": finalRoute}
+	if finalFields != "" {
+		updates["data_fields"] = finalFields
+	}
+	return db.Table(table).Where("id = ? AND "+identity, targetID, name, controller, dataTable, primaryKey).Updates(updates).Error
+}
 
 func version232(db *gorm.DB, config *conf.Configuration) error {
 	if err := core.ValidatePrefix(config); err != nil {

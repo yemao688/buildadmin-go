@@ -13,3 +13,7 @@ func LocalMigrations() []LocalMigration {
 func EnsureAdminClosureSelfRows(db *gorm.DB, config *conf.Configuration) error {
 	return local.EnsureAdminClosureSelfRows(db, config)
 }
+
+func LocalVerifyCurrent(db *gorm.DB, config *conf.Configuration) error {
+	return local.VerifyCurrent(db, config)
+}

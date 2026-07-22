@@ -107,18 +107,6 @@ func TestVersion232LegacySensitiveUserSignatureIsRejectedAndAdoptionFailsClosed(
 	// The complete minimum Version231/232 flags are present, so rejection must
 	// come from the concrete legacy seed signature rather than missing schema.
 	require.Error(t, verifySecurityRuleContract(db.Session(&gorm.Session{NewDB: true}), cfg))
-	require.NoError(t, core.BootstrapOfficialLedger(db, cfg))
-	require.NoError(t, core.BootstrapLocalLedger(db, cfg))
-	finished := time.Now().Add(-time.Minute)
-	require.NoError(t, db.Table(core.TableName(cfg, "migrations")).Create(&core.MigrationRecord{Version: 20260722000000, MigrationName: "Version232", StartTime: finished, EndTime: &finished}).Error)
-	local := Migrations(nil)[9]
-	count, err := core.AdoptCompletedLegacyAliases(db, cfg, []core.LocalMigration{local})
-	require.Error(t, err)
-	require.Zero(t, count)
-	var ledgerCount int64
-	require.NoError(t, db.Table(core.TableName(cfg, "go_migrations")).Where("sequence = ?", local.Sequence).Count(&ledgerCount).Error)
-	require.Zero(t, ledgerCount)
-
 	require.NoError(t, version232(db, cfg))
 	require.NoError(t, verifySecurityRuleContract(db.Session(&gorm.Session{NewDB: true}), cfg))
 	var fields string
