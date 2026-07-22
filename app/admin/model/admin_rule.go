@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"errors"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 	"slices"
@@ -134,12 +135,18 @@ func (s *AdminRuleModel) GetRulePIds(ids []string, contexts ...*gin.Context) ([]
 }
 
 // crud 删除菜单
+// 对齐上游 Menu::delete:菜单不存在时视为已删除(幂等);删除后递归清理
+// 已无子级的父级目录。
 func (s *AdminRuleModel) Delete(path string, recursion bool) error {
 	return s.Transaction(context.Background(), func(tx *gorm.DB) error {
 		var deleteRule func(string) error
 		deleteRule = func(name string) error {
 			var adminRule AdminRule
-			if err := tx.Where(" name = ? ", name).Take(&adminRule).Error; err != nil {
+			err := tx.Where(" name = ? ", name).Take(&adminRule).Error
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			if err != nil {
 				return err
 			}
 			var list []AdminRule
@@ -153,12 +160,23 @@ func (s *AdminRuleModel) Delete(path string, recursion bool) error {
 					}
 				}
 			}
-			result := tx.Model(&AdminRule{}).Where(" name = ? ", name).Delete(nil)
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return cErr.BadRequest("delete failed: rows affected mismatch")
+			if len(list) == 0 || recursion {
+				if err := tx.Model(&AdminRule{}).Where(" id = ? ", adminRule.ID).Delete(nil).Error; err != nil {
+					return err
+				}
+				// 父级目录已无子级时一并删除
+				var parent AdminRule
+				if err := tx.Take(&parent, adminRule.Pid).Error; err == nil {
+					var childCount int64
+					if err := tx.Model(&AdminRule{}).Where(" pid = ? ", parent.ID).Count(&childCount).Error; err != nil {
+						return err
+					}
+					if childCount == 0 {
+						return deleteRule(parent.Name)
+					}
+				} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
 			}
 			return nil
 		}
