@@ -26,6 +26,37 @@ func TestAtomicCapabilitiesAreRemovedWithRouter(t *testing.T) {
 	}
 }
 
+func TestProviderEntryRoundTrip(t *testing.T) {
+	original := "package model\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFooModel,\n\n\tNewBarModel,\n)"
+	lastIndex := strings.LastIndex(original, ")")
+	added := original[:lastIndex] + "\tNewTestModel,\n)"
+	if strings.Contains(added, ",\n\n\n\tNewTestModel") {
+		t.Fatalf("insert produced a double blank line:\n%s", added)
+	}
+	removed, err := removeProviderEntry(added, "TestModel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != original {
+		t.Fatalf("provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
+	}
+}
+
+func TestRouterEntryRoundTrip(t *testing.T) {
+	original := "package router\n\nfunc InitRouter(\n\tcountryCurrencyHandler *admin.CountryCurrencyHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n\tadminRouter.GET(\"countryCurrency/index\", countryCurrencyHandler.Index)\n}\n"
+	added := insertRouterEntry(original, "Test")
+	if !strings.Contains(added, "testHandler *admin.TestHandler,") {
+		t.Fatalf("router entry was not injected:\n%s", added)
+	}
+	removed, err := removeRouterEntry(added, "Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed != original {
+		t.Fatalf("router round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
+	}
+}
+
 func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "provider_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })

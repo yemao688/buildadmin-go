@@ -215,10 +215,15 @@ func writeRouter(name string) error {
 		return nil
 	}
 
+	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), insertRouterEntry(string(content), name))
+}
+
+// insertRouterEntry 把模块的 handler 参数、REST 路由和原子能力注入 router.go 内容。
+func insertRouterEntry(content, name string) string {
 	nameVar := utils.SnakeToCamel(name, false)
 	paramContent := "	" + nameVar + "Handler *admin." + name + "Handler,\n) *gin.Engine {"
 
-	newStr := strings.Replace(string(content), ") *gin.Engine {", paramContent, -1)
+	newStr := strings.Replace(content, ") *gin.Engine {", paramContent, -1)
 
 	routerContent := "admin.CollectRoutes(router)\n\n"
 	routerContent += `
@@ -233,7 +238,7 @@ func writeRouter(name string) error {
 	if !strings.Contains(newStr, "Route: \""+nameVar+"/add\"") {
 		newStr = injectAtomicCapabilities(newStr, nameVar, marker)
 	}
-	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
+	return newStr
 }
 
 func RemoveRouter(name string) error {
@@ -242,32 +247,48 @@ func RemoveRouter(name string) error {
 		return err
 	}
 
-	nameVar := utils.SnakeToCamel(name, false)
-	paramContent := nameVar + "Handler *admin." + strings.ToUpper(nameVar[:1]) + nameVar[1:] + "Handler,"
-
-	newStr := strings.Replace(string(content), paramContent, "", -1)
-
-	route := `adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)`
-	newStr = strings.Replace(string(newStr), route, "", -1)
-
-	route = `adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)`
-	newStr = strings.Replace(string(newStr), route, "", -1)
-
-	route = `adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)`
-	newStr = strings.Replace(string(newStr), route, "", -1)
-
-	route = `adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)`
-	newStr = strings.Replace(string(newStr), route, "", -1)
-
-	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
-	newStr = strings.Replace(string(newStr), route, "", -1)
-	newStr = removeAtomicCapabilities(newStr, nameVar)
-
-	newStr, err = formatGoCode(newStr)
+	newStr, err := removeRouterEntry(string(content), name)
 	if err != nil {
 		return err
 	}
 	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
+}
+
+// removeRouterEntry 移除 insertRouterEntry 注入的内容。handler 参数按整行
+// （前导换行 + 缩进）删除，避免留下空行；并保留文件原有的末尾换行状态，
+// 使“生成后删除”能把文件恢复为原样。
+func removeRouterEntry(content, name string) (string, error) {
+	nameVar := utils.SnakeToCamel(name, false)
+	hadTrailingNewline := strings.HasSuffix(content, "\n")
+
+	paramContent := nameVar + "Handler *admin." + strings.ToUpper(nameVar[:1]) + nameVar[1:] + "Handler,"
+	newStr := strings.Replace(content, "\n\t"+paramContent, "", -1)
+	newStr = strings.Replace(newStr, paramContent, "", -1)
+
+	route := `adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)`
+	newStr = strings.Replace(newStr, route, "", -1)
+
+	route = `adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)`
+	newStr = strings.Replace(newStr, route, "", -1)
+
+	route = `adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)`
+	newStr = strings.Replace(newStr, route, "", -1)
+
+	route = `adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)`
+	newStr = strings.Replace(newStr, route, "", -1)
+
+	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
+	newStr = strings.Replace(newStr, route, "", -1)
+	newStr = removeAtomicCapabilities(newStr, nameVar)
+
+	newStr, err := formatGoCode(newStr)
+	if err != nil {
+		return "", err
+	}
+	if !hadTrailingNewline {
+		newStr = strings.TrimSuffix(newStr, "\n")
+	}
+	return newStr, nil
 }
 
 func atomicCapabilityLines(nameVar string) string {
@@ -306,7 +327,7 @@ func writeProvider(dir string, name string) error {
 	}
 
 	lastIndex := strings.LastIndex(string(content), ")")
-	content = []byte(string(content)[:lastIndex] + "\n	New" + name + ",\n)")
+	content = []byte(string(content)[:lastIndex] + "	New" + name + ",\n)")
 	return writeFile(providerPath, string(content))
 }
 
@@ -316,12 +337,27 @@ func RemoveProvider(dir string, name string) error {
 	if err != nil {
 		return err
 	}
-	newContent := strings.ReplaceAll(string(content), "New"+name+",", "")
-	newContent, err = formatGoCode(newContent)
+	newContent, err := removeProviderEntry(string(content), name)
 	if err != nil {
 		return err
 	}
 	return writeFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
+}
+
+// removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行），并保留
+// 文件原有的末尾换行状态，使“生成后删除”能把文件恢复为原样。
+func removeProviderEntry(content, name string) (string, error) {
+	hadTrailingNewline := strings.HasSuffix(content, "\n")
+	newContent := strings.ReplaceAll(content, "\tNew"+name+",\n", "")
+	newContent = strings.ReplaceAll(newContent, "New"+name+",", "")
+	newContent, err := formatGoCode(newContent)
+	if err != nil {
+		return "", err
+	}
+	if !hadTrailingNewline {
+		newContent = strings.TrimSuffix(newContent, "\n")
+	}
+	return newContent, nil
 }
 
 func formatGoCode(code string) (string, error) {
