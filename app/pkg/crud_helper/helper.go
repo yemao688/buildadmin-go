@@ -761,27 +761,43 @@ func GetRemotePk(fullTableName string, field model.Field) string {
 	return name + "." + field.Form.RemotePk
 }
 
+// GetRemoteSelectUrl 对齐上游:crud 来源且指定了控制器时由控制器推导 URL,
+// 否则使用手动填写的 remote-url。Go 的 handler 文件是扁平的(如 user.go),
+// 无法从路径推出路由名(user.User),因此优先从 router/router.go 的注册
+// 信息反查,查不到再按路径回退推导。
 func GetRemoteSelectUrl(field model.Field) string {
-
-	if field.Form.RemoteUrl != "" {
-		return field.Form.RemoteUrl
-	}
-
-	url := ""
-	if field.Form.RemoteController != "" {
-		redundantDir := []string{"app", "admin", "controller"}
-		pathArr := strings.Split(field.Form.RemoteController, "/")
+	if field.Form.RemoteSourceConfigType != "custom" && field.Form.RemoteController != "" {
+		if url := routeIndexURLForController(field.Form.RemoteController); url != "" {
+			return url
+		}
+		controller := strings.TrimSuffix(strings.ReplaceAll(field.Form.RemoteController, "\\", "/"), ".go")
+		redundantDir := []string{"app", "admin", "handler"}
+		pathArr := strings.Split(controller, "/")
 		_, pathArr = TrimPrefix(redundantDir, pathArr)
-		if len(pathArr) == 1 {
-			url = pathArr[0]
+		if url := strings.Join(pathArr, "."); url != "" {
+			return "/admin/" + url + "/index"
 		}
-
-		if len(pathArr) > 1 {
-			url = strings.Join(pathArr, ".")
-		}
-		url = "/admin/" + url + "/index"
 	}
-	return url
+	return field.Form.RemoteUrl
+}
+
+// routeIndexURLForController 由控制器文件(如 app/admin/handler/user.go)推导
+// handler 变量名(userHandler),并在 router.go 中查找其注册的 index 路由。
+func routeIndexURLForController(controller string) string {
+	stem := strings.TrimSuffix(filepath.Base(strings.ReplaceAll(controller, "\\", "/")), ".go")
+	if stem == "" {
+		return ""
+	}
+	handlerVar := utils.SnakeToCamel(stem, false) + "Handler"
+	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
+	if err != nil {
+		return ""
+	}
+	re := regexp.MustCompile(`adminRouter\.GET\("([^"]+)/index",\s*` + regexp.QuoteMeta(handlerVar) + `\.Index\)`)
+	if m := re.FindSubmatch(data); m != nil {
+		return "/admin/" + string(m[1]) + "/index"
+	}
+	return ""
 }
 
 func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePrefix string, translationPrefix string, webTranslate string) string {

@@ -111,6 +111,28 @@ func TestGetDictData(t *testing.T) {
 	fmt.Println(quickSearchFieldZhCnTitle)
 }
 
+// TestGetRemoteSelectUrl 对齐上游:crud 来源时 URL 由控制器推导;Go 扁平
+// handler 文件需通过 router.go 反查真实路由名(user.go -> user.User)。
+func TestGetRemoteSelectUrl(t *testing.T) {
+	cases := []struct {
+		name  string
+		field model.Field
+		want  string
+	}{
+		{"user controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
+		{"nested-style controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/admin_group.go", RemoteSourceConfigType: "crud"}}, "/admin/auth.Group/index"},
+		{"backslash path", model.Field{Form: model.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
+		{"manual url wins for custom source", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
+		{"unknown controller falls back to path derivation", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no_such_handler/index"},
+		{"empty controller uses remote url", model.Field{Form: model.FormAttr{RemoteUrl: "/admin/foo/index", RemoteSourceConfigType: "crud"}}, "/admin/foo/index"},
+	}
+	for _, c := range cases {
+		if got := GetRemoteSelectUrl(c.field); got != c.want {
+			t.Errorf("%s: GetRemoteSelectUrl() = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 // TestCheckJoinModelKeepsExistingRemoteModel verifies that a remote-model path
 // pointing at an existing file (e.g. app/common/model/user.go) is used as-is
 // instead of being re-derived under app/admin/model/common/model/ and rebuilt.

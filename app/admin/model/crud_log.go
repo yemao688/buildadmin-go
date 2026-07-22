@@ -143,13 +143,14 @@ type FormAttr struct {
 	FileMulti   BoolOrString `json:"file-multi"`   //文件多选上传
 	Step        int          `json:"step"`         //步进值
 
-	RemotePk         string `json:"remote-pk" mapstructure:"remotePk"`                 //远程下拉value字段
-	RemoteField      string `json:"remote-field" mapstructure:"remoteField"`           //远程下拉label字段
-	RemoteTable      string `json:"remote-table" mapstructure:"remoteTable"`           //关联数据表
-	RemoteController string `json:"remote-controller" mapstructure:"remoteController"` //关联表的控制器
-	RemoteModel      string `json:"remote-model" mapstructure:"remoteModel"`           //关联表的模型
-	RemoteUrl        string `json:"remote-url" mapstructure:"remoteUrl"`               //远程下拉URL
-	RelationFields   string `json:"relation-fields" mapstructure:"relationFields"`     //关联表显示字段
+	RemotePk               string `json:"remote-pk" mapstructure:"remotePk"`                           //远程下拉value字段
+	RemoteField            string `json:"remote-field" mapstructure:"remoteField"`                     //远程下拉label字段
+	RemoteTable            string `json:"remote-table" mapstructure:"remoteTable"`                     //关联数据表
+	RemoteController       string `json:"remote-controller" mapstructure:"remoteController"`           //关联表的控制器
+	RemoteModel            string `json:"remote-model" mapstructure:"remoteModel"`                     //关联表的模型
+	RemoteUrl              string `json:"remote-url" mapstructure:"remoteUrl"`                         //远程下拉URL
+	RemoteSourceConfigType string `json:"remote-source-config-type" mapstructure:"remoteSourceConfigType"` //远程下拉来源类型(crud/custom)
+	RelationFields         string `json:"relation-fields" mapstructure:"relationFields"`               //关联表显示字段
 }
 
 type Field struct {
