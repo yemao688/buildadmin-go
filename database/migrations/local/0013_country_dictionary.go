@@ -63,6 +63,66 @@ func version0013(db *gorm.DB, config *conf.Configuration) error {
 			return fmt.Errorf("create country dictionary unique index %s: %w", index.name, err)
 		}
 	}
+	return seedCountryMenus(db, config)
+}
+
+// seedCountryMenus 为 country 字典模块种下后台菜单(幂等,按 name 判重):
+// 国家管理(country 目录)下平级三个菜单——货币管理、语言管理、语言文本管理,
+// 菜单 name 与提交的生成代码位置一致(country/languageContent 为单级)。
+func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
+	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
+
+	ruleID := func(name string) (int32, error) {
+		var id int32
+		err := db.Raw("SELECT id FROM "+table+" WHERE name = ?", name).Scan(&id).Error
+		return id, err
+	}
+	ensure := func(pid int32, ruleType, title, name, path, menuType, component string, weigh int) error {
+		var count int64
+		if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE name = ?", name).Scan(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			return nil
+		}
+		return db.Exec("INSERT INTO "+table+" (pid, type, title, name, path, menu_type, component, weigh, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1')",
+			pid, ruleType, title, name, path, menuType, component, weigh).Error
+	}
+
+	if err := ensure(0, "menu_dir", "国家管理", "country", "country", "", "", 0); err != nil {
+		return fmt.Errorf("seed country menu dir: %w", err)
+	}
+	countryID, err := ruleID("country")
+	if err != nil {
+		return err
+	}
+
+	// weigh desc 排序:货币管理 > 语言管理 > 语言文本管理
+	menus := []struct {
+		title, name string
+		weigh       int
+	}{
+		{"货币管理", "country/currency", 3},
+		{"语言管理", "country/language", 2},
+		{"语言文本管理", "country/languageContent", 1},
+	}
+	buttons := []struct{ title, suffix string }{
+		{"查看", "/index"}, {"添加", "/add"}, {"编辑", "/edit"}, {"删除", "/del"}, {"快速排序", "/sortable"},
+	}
+	for _, menu := range menus {
+		if err := ensure(countryID, "menu", menu.title, menu.name, menu.name, "tab", "/src/views/backend/"+menu.name+"/index.vue", menu.weigh); err != nil {
+			return fmt.Errorf("seed country menu %s: %w", menu.name, err)
+		}
+		menuID, err := ruleID(menu.name)
+		if err != nil {
+			return err
+		}
+		for _, button := range buttons {
+			if err := ensure(menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
+				return fmt.Errorf("seed country menu button %s%s: %w", menu.name, button.suffix, err)
+			}
+		}
+	}
 	return nil
 }
 
