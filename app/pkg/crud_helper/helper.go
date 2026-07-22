@@ -970,7 +970,7 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 			}
 			itemJson := buildTableColumnKey("pk", remoteTableName+"."+primaryKey)
 			itemJson += buildTableColumnKey("field", labelFieldName)
-			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(joinField))
+			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(field))
 			itemJson += buildTableColumnKey("multiple", "true")
 			joinField.Table.Remote = itemJson
 
