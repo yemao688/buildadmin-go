@@ -90,7 +90,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
-	if err := validateGenerationMode(opts.Type, opts.Table.Rebuild, tableExists(db, cfg, opts.Table.Name), opts.Table.Name); err != nil {
+	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
 	}
 	if success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name); err != nil {
@@ -130,7 +130,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	tableM := model.NewTableModel(cfg, db)
 	getTableName := func(name string, full bool) string { return tableM.Name(name, full) }
 	getColumns := func(name string) ([]model.Column, error) { return tableM.GetColumns(name) }
-	if opts.Type == "create" && opts.Table.Rebuild == "Yes" {
+	// 对齐上游:type=create 时若数据表已存在则先删除重建;
+	// 破坏性确认由前端 generateCheck 弹窗完成,服务端不再拒绝
+	if opts.Type == "create" && tableExists(db, cfg, opts.Table.Name) {
 		if err := tableM.DelTable(opts.Table.Name); err != nil {
 			return fail("drop table", err)
 		}
@@ -204,12 +206,9 @@ func normalizeGenerationType(generationType, rebuild string) string {
 	return generationType
 }
 
-func validateGenerationMode(generationType, rebuild string, exists bool, tableName string) error {
+func validateGenerationMode(generationType string) error {
 	if generationType != "create" && generationType != "alter" {
 		return fmt.Errorf("unsupported CRUD generation type %q; use create or alter", generationType)
-	}
-	if generationType == "create" && exists && rebuild != "Yes" {
-		return fmt.Errorf("create for existing table %q refused; use type: alter or explicit rebuild: Yes (this will DROP the table)", tableName)
 	}
 	return nil
 }

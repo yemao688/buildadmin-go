@@ -45,15 +45,17 @@ func TestNormalizeGenerationType(t *testing.T) {
 	}
 }
 
-func TestCreateExistingTableRequiresExplicitRebuild(t *testing.T) {
-	if err := validateGenerationMode("create", "", true, "orders"); err == nil {
-		t.Fatal("create on an existing table must be rejected")
-	}
-	if err := validateGenerationMode("create", "Yes", true, "orders"); err != nil {
+// 对齐上游:type=create 对已存在的数据表直接删表重建(前端 generateCheck
+// 已弹窗确认),服务端仅校验生成类型本身。
+func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
+	if err := validateGenerationMode("create"); err != nil {
 		t.Fatal(err)
 	}
-	if err := validateGenerationMode("alter", "", true, "orders"); err != nil {
+	if err := validateGenerationMode("alter"); err != nil {
 		t.Fatal(err)
+	}
+	if err := validateGenerationMode("log"); err == nil {
+		t.Fatal("unsupported generation type must be rejected")
 	}
 }
 
