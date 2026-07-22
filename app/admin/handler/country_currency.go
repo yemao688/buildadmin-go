@@ -37,12 +37,12 @@ func (h *CountryCurrencyHandler) Index(ctx *gin.Context) {
 }
 
 type CountryCurrencyParam struct {
-	Code   string  `json:"code"`   // 货币代码
-	Name   string  `json:"name"`   // 货币名称
-	Symbol string  `json:"symbol"` // 货币符号
-	Rate   float64 `json:"rate"`   // 汇率
-	Status int32   `json:"status"` // 状态:0=禁用,1=启用
-	Weigh  int32   `json:"weigh"`  // 权重
+	Code   string               `json:"code"`   // 货币代码
+	Name   string               `json:"name"`   // 货币名称
+	Symbol string               `json:"symbol"` // 货币符号
+	Rate   validate.FlexFloat64 `json:"rate"`   // 汇率
+	Status validate.FlexInt32   `json:"status"` // 状态:0=禁用,1=启用
+	Weigh  validate.FlexInt32   `json:"weigh"`  // 权重
 }
 
 func (h *CountryCurrencyHandler) Add(ctx *gin.Context) {

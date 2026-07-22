@@ -809,6 +809,10 @@ func FailByErr(ctx *gin.Context, err error)         {}
 `,
 		"app/admin/validate/validate.go": `package validate
 
+type FlexInt32 int32
+type FlexInt64 int64
+type FlexFloat64 float64
+
 type Ids struct {
 	Ids interface{}
 }

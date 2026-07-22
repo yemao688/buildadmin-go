@@ -124,3 +124,11 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 		t.Fatal("core model provider.go must remain untouched")
 	}
 }
+
+func TestRewriteFlexNumericParamFields(t *testing.T) {
+	input := "type DemoParam struct {\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
+	want := "type DemoParam struct {\n\tCount validate.FlexInt32 `json:\"count\"`\n\tTotal validate.FlexInt64 `json:\"total\"`\n\tRate validate.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
+	if got := rewriteFlexNumericParamFields(input); got != want {
+		t.Fatalf("unexpected rewritten fields:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
