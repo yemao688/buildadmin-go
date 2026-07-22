@@ -48,6 +48,9 @@ func TestRouterEntryRoundTrip(t *testing.T) {
 	if !strings.Contains(added, "testHandler *admin.TestHandler,") {
 		t.Fatalf("router entry was not injected:\n%s", added)
 	}
+	if !strings.Contains(added, `adminRouter.POST("test/sortable", testHandler.Sortable)`) {
+		t.Fatalf("sortable route was not injected:\n%s", added)
+	}
 	removed, err := removeRouterEntry(added, "Test")
 	if err != nil {
 		t.Fatal(err)

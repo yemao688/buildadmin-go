@@ -411,12 +411,16 @@ type ModelData struct {
 	EffectiveFormFields   []string
 	EditableColumns       []string
 	EditableColumnsGo     string
+	HasCreateTime         bool
+	HasUpdateTime         bool
 }
 
 const modelTemp = `package {{.Namespace}}
 
 import (
 	"fmt"
+	{{if or .HasCreateTime .HasUpdateTime}}"time"
+	{{end}}
 	"go-build-admin/app/pkg/data_scope"
 )
 
@@ -509,6 +513,9 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		{{if .HasCreateTime}}{{.ModelVar}}.CreateTime = time.Now().Unix()
+		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.UpdateTime = time.Now().Unix()
+		{{end}}
 		return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
 	})
 }
@@ -525,6 +532,8 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
+		{{if .HasUpdateTime}}{{.ModelVar}}.UpdateTime = time.Now().Unix()
+		{{end}}
 
 	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
 	if err := res.Error; err != nil {

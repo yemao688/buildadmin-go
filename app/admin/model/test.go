@@ -2,6 +2,8 @@ package model
 
 import (
 	"fmt"
+	"time"
+
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 
@@ -99,6 +101,9 @@ func (s *TestModel) Add(ctx *gin.Context, test Test) error {
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		test.CreateTime = time.Now().Unix()
+		test.UpdateTime = time.Now().Unix()
+
 		return tx.Table(s.TableName).Create(&test).Error
 	})
 }
@@ -115,8 +120,9 @@ func (s *TestModel) Edit(ctx *gin.Context, test Test) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
+		test.UpdateTime = time.Now().Unix()
 
-		res := tx.Table(s.TableName).Model(&test).Where("id = ?", test.ID).Select("status", "weigh").Updates(&test)
+		res := tx.Table(s.TableName).Model(&test).Where("id = ?", test.ID).Select("status", "weigh", "update_time").Updates(&test)
 		if err := res.Error; err != nil {
 			return err
 		}

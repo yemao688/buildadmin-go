@@ -313,6 +313,7 @@ func InitRouter(
 	adminRouter.GET("test/edit", testHandler.One)
 	adminRouter.POST("test/edit", testHandler.Edit)
 	adminRouter.DELETE("test/del", testHandler.Del)
+	adminRouter.POST("test/sortable", testHandler.Sortable)
 
 
 
@@ -321,6 +322,7 @@ func InitRouter(
 	adminRouter.GET("countryLanguageContent/edit", countryLanguageContentHandler.One)
 	adminRouter.POST("countryLanguageContent/edit", countryLanguageContentHandler.Edit)
 	adminRouter.DELETE("countryLanguageContent/del", countryLanguageContentHandler.Del)
+	adminRouter.POST("countryLanguageContent/sortable", countryLanguageContentHandler.Sortable)
 
 
 	adminRouter.GET("countryCurrency/index", countryCurrencyHandler.Index)
@@ -328,12 +330,14 @@ func InitRouter(
 	adminRouter.GET("countryCurrency/edit", countryCurrencyHandler.One)
 	adminRouter.POST("countryCurrency/edit", countryCurrencyHandler.Edit)
 	adminRouter.DELETE("countryCurrency/del", countryCurrencyHandler.Del)
+	adminRouter.POST("countryCurrency/sortable", countryCurrencyHandler.Sortable)
 
 	adminRouter.GET("countryLanguage/index", countryLanguageHandler.Index)
 	adminRouter.POST("countryLanguage/add", countryLanguageHandler.Add)
 	adminRouter.GET("countryLanguage/edit", countryLanguageHandler.One)
 	adminRouter.POST("countryLanguage/edit", countryLanguageHandler.Edit)
 	adminRouter.DELETE("countryLanguage/del", countryLanguageHandler.Del)
+	adminRouter.POST("countryLanguage/sortable", countryLanguageHandler.Sortable)
 
 	return router
 }

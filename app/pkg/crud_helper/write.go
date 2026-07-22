@@ -28,6 +28,7 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 		return "", err
 	}
 	modelData.StructTemp = structContent
+	prepareModelTimestampData(&modelData)
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
@@ -171,7 +172,17 @@ func renderModel(modelData ModelData) (string, error) {
 	if modelData.DataScopeOwnerGoField != "" && modelData.DataScopeOwnerGoType == "" {
 		modelData.DataScopeOwnerGoType = "int32"
 	}
+	prepareModelTimestampData(&modelData)
 	return render("", modelTemp, modelData)
+}
+
+func prepareModelTimestampData(modelData *ModelData) {
+	modelData.HasCreateTime = strings.Contains(modelData.StructTemp, "CreateTime int64")
+	modelData.HasUpdateTime = strings.Contains(modelData.StructTemp, "UpdateTime int64")
+	if modelData.HasUpdateTime && !slices.Contains(modelData.EditableColumns, "update_time") {
+		modelData.EditableColumns = append(modelData.EditableColumns, "update_time")
+		modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
+	}
 }
 
 // renderHandler renders the handler template to a string for tests. It mirrors
@@ -246,7 +257,8 @@ func insertRouterEntry(content, name string) string {
 	adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)
 	adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)
 	adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)
-	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)` + "\n"
+	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)
+	adminRouter.POST("` + nameVar + `/sortable", ` + nameVar + `Handler.Sortable)` + "\n"
 
 	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
 	marker := "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
@@ -293,6 +305,9 @@ func removeRouterEntry(content, name string) (string, error) {
 	newStr = strings.Replace(newStr, route, "", -1)
 
 	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
+	newStr = strings.Replace(newStr, route, "", -1)
+
+	route = `adminRouter.POST("` + nameVar + `/sortable", ` + nameVar + `Handler.Sortable)`
 	newStr = strings.Replace(newStr, route, "", -1)
 	newStr = removeAtomicCapabilities(newStr, nameVar)
 

@@ -278,7 +278,7 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 	modelData.StructTemp = compileDemoStruct(modelData.ClassName, "", "", "")
 	modelCode, err := renderModel(modelData)
 	require.NoError(t, err)
-	assert.Contains(t, modelCode, `Select("name")`)
+	assert.Contains(t, modelCode, `Select("name", "update_time")`)
 	assert.NotContains(t, modelCode, ".Select()")
 	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
 	require.NoError(t, err)
