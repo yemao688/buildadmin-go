@@ -18,15 +18,30 @@ var protectedTableNames = []string{
 	"security_data_recycle", "security_sensitive_data", "admin_group", "admin_group_access", "config",
 }
 
-// IsProtectedTable accepts either a logical table name or a prefixed database
-// table name (for example, admin and ba_admin).
+// IsProtectedTable reports whether any of the given logical table names is a
+// protected core table. Matching is exact: business tables that merely end
+// with a protected name (for example, seller_user or ops_config) are not
+// protected. Callers holding prefixed physical names must use
+// IsProtectedTableWithPrefix so the configured prefix is stripped first.
 func IsProtectedTable(tableNames ...string) bool {
+	return IsProtectedTableWithPrefix("", tableNames...)
+}
+
+// IsProtectedTableWithPrefix strips the configured table prefix (for example,
+// ba_) from each name before applying the same exact match as
+// IsProtectedTable. It accepts logical and physical names interchangeably:
+// user, ba_user, and seller_user with prefix ba_ resolve to protected,
+// protected, and not protected respectively. An empty prefix performs no
+// stripping, so unknown prefixes never widen the match beyond exact names.
+func IsProtectedTableWithPrefix(prefix string, tableNames ...string) bool {
+	prefix = strings.ToLower(strings.TrimSpace(prefix))
 	for _, tableName := range tableNames {
 		name := strings.ToLower(strings.TrimSpace(tableName))
-		for _, protected := range protectedTableNames {
-			if name == protected || strings.HasSuffix(name, "_"+protected) {
-				return true
-			}
+		if prefix != "" {
+			name = strings.TrimPrefix(name, prefix)
+		}
+		if slices.Contains(protectedTableNames, name) {
+			return true
 		}
 	}
 	return false

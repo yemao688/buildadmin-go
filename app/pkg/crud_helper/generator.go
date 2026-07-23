@@ -247,7 +247,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		return fmt.Errorf("no successful CRUD generation manifest for table %q", tableName)
 	}
 	log := *logPtr
-	if IsProtectedTable(log.Tablename, log.Table.Name) {
+	if IsProtectedTableWithPrefix(cfg.Database.Prefix, log.Tablename, log.Table.Name) {
 		return fmt.Errorf("crud deletion is forbidden for protected table %q", log.Tablename)
 	}
 	if err := ValidateGenerationInput(model.Table(log.Table), []model.Field(log.Fields)); err != nil {

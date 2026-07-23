@@ -11,8 +11,8 @@ import (
 )
 
 func TestGenerateFromSpecRejectsProtectedTableBeforeDependencies(t *testing.T) {
-	_, err := GenerateFromSpec(nil, nil, GenerateOptions{Table: model.Table{Name: "ba_admin"}})
-	if err == nil || err.Error() != `crud generation is forbidden for protected table "ba_admin"` {
+	_, err := GenerateFromSpec(nil, nil, GenerateOptions{Table: model.Table{Name: "admin"}})
+	if err == nil || err.Error() != `crud generation is forbidden for protected table "admin"` {
 		t.Fatalf("error = %v", err)
 	}
 }
