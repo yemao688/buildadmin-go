@@ -99,7 +99,16 @@ func (s *CountryLanguageModel) Add(ctx *gin.Context, countryLanguage CountryLang
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		return tx.Table(s.TableName).Create(&countryLanguage).Error
+		if err := tx.Table(s.TableName).Create(&countryLanguage).Error; err != nil {
+			return err
+		}
+		if countryLanguage.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("id = ?", countryLanguage.ID).Update("weigh", countryLanguage.ID).Error; err != nil {
+				return err
+			}
+			countryLanguage.Weigh = int32(countryLanguage.ID)
+		}
+		return nil
 	})
 }
 

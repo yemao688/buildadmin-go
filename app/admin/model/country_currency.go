@@ -100,7 +100,16 @@ func (s *CountryCurrencyModel) Add(ctx *gin.Context, countryCurrency CountryCurr
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		return tx.Table(s.TableName).Create(&countryCurrency).Error
+		if err := tx.Table(s.TableName).Create(&countryCurrency).Error; err != nil {
+			return err
+		}
+		if countryCurrency.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("id = ?", countryCurrency.ID).Update("weigh", countryCurrency.ID).Error; err != nil {
+				return err
+			}
+			countryCurrency.Weigh = int32(countryCurrency.ID)
+		}
+		return nil
 	})
 }
 

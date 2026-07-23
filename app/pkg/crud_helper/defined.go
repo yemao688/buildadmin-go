@@ -413,6 +413,7 @@ type ModelData struct {
 	EditableColumnsGo     string
 	HasCreateTime         bool
 	HasUpdateTime         bool
+	HasWeigh              bool
 }
 
 const modelTemp = `package {{.Namespace}}
@@ -516,7 +517,16 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 		{{if .HasCreateTime}}{{.ModelVar}}.CreateTime = time.Now().Unix()
 		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.UpdateTime = time.Now().Unix()
 		{{end}}
-		return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
+		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+			return err
+		}
+		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+		}
+		{{end}}return nil
 	})
 }
 

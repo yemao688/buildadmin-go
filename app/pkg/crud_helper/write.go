@@ -179,6 +179,7 @@ func renderModel(modelData ModelData) (string, error) {
 func prepareModelTimestampData(modelData *ModelData) {
 	modelData.HasCreateTime = strings.Contains(modelData.StructTemp, "CreateTime int64")
 	modelData.HasUpdateTime = strings.Contains(modelData.StructTemp, "UpdateTime int64")
+	modelData.HasWeigh = regexp.MustCompile(`(?m)^\s*Weigh\s+int32\s+`).MatchString(modelData.StructTemp)
 	if modelData.HasUpdateTime && !slices.Contains(modelData.EditableColumns, "update_time") {
 		modelData.EditableColumns = append(modelData.EditableColumns, "update_time")
 		modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)

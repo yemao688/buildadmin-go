@@ -135,3 +135,32 @@ func TestRewriteFlexNumericParamFields(t *testing.T) {
 		t.Fatalf("unexpected rewritten fields:\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
 }
+
+func TestModelTemplateAddsWeighFromIntegerPrimaryKey(t *testing.T) {
+	withWeigh := `type Demo struct {
+	ID int32 ` + "`json:\"id\"`" + `
+	Weigh int32 ` + "`json:\"weigh\"`" + `
+}
+`
+	withoutWeigh := `type Demo struct {
+	ID int32 ` + "`json:\"id\"`" + `
+}
+`
+	data := ModelData{Namespace: "model", ClassName: "Demo", ModelVar: "demo", Pk: "id", PkGoField: "ID", StructTemp: withWeigh}
+	withCode, err := renderModel(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(withCode, "if demo.Weigh == 0") || !strings.Contains(withCode, `Update("weigh", demo.ID)`) || !strings.Contains(withCode, "demo.Weigh = int32(demo.ID)") {
+		t.Fatalf("weigh post-insert hook missing:\n%s", withCode)
+	}
+
+	data.StructTemp = withoutWeigh
+	withoutCode, err := renderModel(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(withoutCode, "demo.Weigh") || strings.Contains(withoutCode, `Update("weigh", demo.ID)`) {
+		t.Fatalf("weigh post-insert hook emitted without a weigh field:\n%s", withoutCode)
+	}
+}

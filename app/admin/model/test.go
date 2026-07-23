@@ -104,7 +104,16 @@ func (s *TestModel) Add(ctx *gin.Context, test Test) error {
 		test.CreateTime = time.Now().Unix()
 		test.UpdateTime = time.Now().Unix()
 
-		return tx.Table(s.TableName).Create(&test).Error
+		if err := tx.Table(s.TableName).Create(&test).Error; err != nil {
+			return err
+		}
+		if test.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("id = ?", test.ID).Update("weigh", test.ID).Error; err != nil {
+				return err
+			}
+			test.Weigh = int32(test.ID)
+		}
+		return nil
 	})
 }
 
