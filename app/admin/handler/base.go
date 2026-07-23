@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -160,14 +162,14 @@ func (h *Base) Sortable(ctx *gin.Context) {
 		return
 	}
 
-	if err := Sortable(ctx, h.currentM, params.Move, params.Target, params.Direction); err != nil {
+	if err := Sortable(ctx, h.currentM, params.Move, params.Target, params.Direction, params.Order); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
 }
 
-func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction string) error {
+func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction string, orderValues ...string) error {
 	table := m1.Table()
 	pkField := "id"
 	moveID := fmt.Sprintf("%v", moveId)
@@ -185,71 +187,114 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		return m1.DB().Transaction(fn)
 	}
 	return transaction(func(tx *gorm.DB) error {
-		if scoped, ok := m1.(scopedModel); ok {
-			tx = scoped.ScopeDB(ctx, tx)
+		scopedDB := func(db *gorm.DB) *gorm.DB {
+			if scoped, ok := m1.(scopedModel); ok {
+				return scoped.ScopeDB(ctx, db)
+			}
+			return db
 		}
-		var rows []FullRow
-		if err := tx.Table(table).Order("weigh desc, id desc").Scan(&rows).Error; err != nil {
+		var moveRow, targetRow FullRow
+		if err := scopedDB(tx).Table(table).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return cErr.BadRequest("Record not found")
+			}
 			return err
 		}
-
-		newWeigh := int32(len(rows))
-		weightMap := map[int32]int32{}
-		for _, r := range rows {
-			weightMap[r.Id] = newWeigh
-			newWeigh--
-		}
-
-		moveIdx, targetIdx := -1, -1
-		for i, r := range rows {
-			if fmt.Sprintf("%d", r.Id) == moveID {
-				moveIdx = i
+		if err := scopedDB(tx).Table(table).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return cErr.BadRequest("Record not found")
 			}
-			if fmt.Sprintf("%d", r.Id) == targetID {
-				targetIdx = i
-			}
+			return err
 		}
-		if moveIdx == -1 || targetIdx == -1 {
+		if moveID == targetID || direction == "" {
 			return cErr.BadRequest("Record not found")
 		}
 
-		movedRow := rows[moveIdx]
-		remaining := make([]FullRow, 0, len(rows)-1)
-		remaining = append(remaining, rows[:moveIdx]...)
-		remaining = append(remaining, rows[moveIdx+1:]...)
-
-		insertIdx := 0
-		if direction == "down" {
-			tempTargetIdx := -1
-			for i, r := range remaining {
-				if fmt.Sprintf("%d", r.Id) == targetID {
-					tempTargetIdx = i
-					break
-				}
-			}
-			insertIdx = tempTargetIdx + 1
-		} else {
-			for i, r := range remaining {
-				if fmt.Sprintf("%d", r.Id) == targetID {
-					insertIdx = i
-					break
-				}
-			}
+		order := "weigh,desc"
+		if len(orderValues) > 0 {
+			order = orderValues[0]
+		}
+		orderParts := strings.Split(order, ",")
+		orderField := strings.TrimSpace(orderParts[0])
+		orderDirection := "asc"
+		if len(orderParts) > 1 && strings.TrimSpace(orderParts[1]) != "" {
+			orderDirection = strings.ToLower(strings.TrimSpace(orderParts[1]))
+		}
+		if orderField != "weigh" {
+			return cErr.BadRequest(utils.Lang(ctx, "Please use the weigh field to sort before operating", nil))
+		}
+		if orderDirection != "desc" {
+			orderDirection = "asc"
 		}
 
-		newOrder := make([]FullRow, 0, len(rows))
-		newOrder = append(newOrder, remaining[:insertIdx]...)
-		newOrder = append(newOrder, movedRow)
-		newOrder = append(newOrder, remaining[insertIdx:]...)
+		weigh := targetRow.Weigh
+		updateMethod := "inc"
+		if orderDirection == "desc" {
+			updateMethod = "inc"
+			if direction == "up" {
+				updateMethod = "dec"
+			}
+		} else if direction == "up" {
+			updateMethod = "inc"
+		} else {
+			updateMethod = "dec"
+		}
 
-		newWeigh = int32(len(newOrder))
-		for _, r := range newOrder {
-			if weightMap[r.Id] != newWeigh {
-				if err := tx.Table(table).Where(pkField+" = ?", r.Id).Update("weigh", newWeigh).Error; err != nil {
+		var weighRowIDs []int32
+		if err := scopedDB(tx).Table(table).
+			Where("weigh = ?", weigh).
+			Order("weigh "+orderDirection+", id desc").
+			Pluck(pkField, &weighRowIDs).Error; err != nil {
+			return err
+		}
+		weighRowsCount := int32(len(weighRowIDs))
+
+		shift := gorm.Expr("weigh + ?", weighRowsCount)
+		if updateMethod == "dec" {
+			shift = gorm.Expr("weigh - ?", weighRowsCount)
+		}
+		shiftQuery := scopedDB(tx).Table(table).Where("id <> ?", moveID)
+		if updateMethod == "dec" {
+			shiftQuery = shiftQuery.Where("weigh < ?", weigh)
+		} else {
+			shiftQuery = shiftQuery.Where("weigh > ?", weigh)
+		}
+		if err := shiftQuery.UpdateColumn("weigh", shift).Error; err != nil {
+			return err
+		}
+
+		if direction == "down" {
+			slices.Reverse(weighRowIDs)
+		}
+		moveComplete := int32(0)
+		for key, rowID := range weighRowIDs {
+			var weighRow FullRow
+			if err := scopedDB(tx).Table(table).Where(pkField+" = ?", rowID).Take(&weighRow).Error; err != nil {
+				return err
+			}
+			if fmt.Sprintf("%d", weighRow.Id) == moveID {
+				continue
+			}
+
+			rowWeighVal := weighRow.Weigh + int32(key)
+			if updateMethod == "dec" {
+				rowWeighVal = weighRow.Weigh - int32(key)
+			}
+			if fmt.Sprintf("%d", weighRow.Id) == targetID {
+				moveComplete = 1
+				moveRow.Weigh = rowWeighVal
+				if err := scopedDB(tx).Table(table).Where(pkField+" = ?", moveRow.Id).Update("weigh", moveRow.Weigh).Error; err != nil {
 					return err
 				}
 			}
-			newWeigh--
+			if updateMethod == "dec" {
+				rowWeighVal -= moveComplete
+			} else {
+				rowWeighVal += moveComplete
+			}
+			if err := scopedDB(tx).Table(table).Where(pkField+" = ?", weighRow.Id).Update("weigh", rowWeighVal).Error; err != nil {
+				return err
+			}
 		}
 		return nil
 	})
