@@ -66,6 +66,19 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			Id:       tokenData.UserID,
 			Token:    tokenStr,
 		}
+		if err := m.authM.ValidateUserToken(c, tokenData.UserID, c.ClientIP()); err != nil {
+			if v, ok := err.(*cErr.Error); ok {
+				msg := utils.Lang(c, v.Error(), nil)
+				c.JSON(http.StatusOK, map[string]interface{}{
+					"code": v.ErrorCode(),
+					"data": map[string]any{"type": "need login"},
+					"msg":  msg,
+					"time": 0,
+				})
+			}
+			c.Abort()
+			return
+		}
 		c.Set("UserAuth", authParam)
 	}
 }

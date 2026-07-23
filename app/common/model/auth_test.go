@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -74,6 +75,46 @@ func TestAuthLoginUsesMobileBeforeUsername(t *testing.T) {
 
 	_, err := m.Login(authTestContext(), user.Mobile, "password", false)
 	require.NoError(t, err)
+}
+
+func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
+	m, db := newAuthTestModel(t)
+	m.config.App.UserLoginRetry = 2
+	user := User{
+		Username:      "cooldown_user",
+		Password:      utils.EncryptPassword("correct", "cooldown-salt"),
+		Salt:          "cooldown-salt",
+		Status:        "enable",
+		LoginFailure:  2,
+		LastLoginTime: time.Now().Unix() - 86400,
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	_, err := m.Login(authTestContext(), user.Username, "wrong", false)
+	require.EqualError(t, err, "Password is incorrect")
+	var updated User
+	require.NoError(t, db.First(&updated, user.ID).Error)
+	require.Equal(t, int32(1), updated.LoginFailure)
+}
+
+func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
+	m, db := newAuthTestModel(t)
+	salt := "response-salt"
+	user := User{
+		Username: "response_user",
+		Password: utils.EncryptPassword("password", salt),
+		Salt:     salt,
+		Status:   "enable",
+	}
+	require.NoError(t, db.Create(&user).Error)
+	ctx := authTestContext()
+	ctx.Request.RemoteAddr = "203.0.113.9:1234"
+
+	result, err := m.Login(ctx, user.Username, "password", false)
+	require.NoError(t, err)
+	data := result.(map[string]any)
+	require.Equal(t, "203.0.113.9", data["last_login_ip"])
+	require.NotZero(t, data["last_login_time"])
 }
 
 func TestAuthRegisterRejectsExistingContactFields(t *testing.T) {

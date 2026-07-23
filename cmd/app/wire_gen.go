@@ -96,7 +96,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	captchaCaptcha := captcha.NewCaptcha(gormDB)
 	accountHandler := handler2.NewAccountHandler(zapLogger, modelAuthModel, modelUserModel, modelUserScoreLogModel, modelUserMoneyLogModel, captchaCaptcha)
 	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger, areaModel, uploadHelper)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper, configuration)
 	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, modelUserModel, modelAuthModel)
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel, service)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)

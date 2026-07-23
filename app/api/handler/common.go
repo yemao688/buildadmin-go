@@ -7,6 +7,7 @@ import (
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/app/pkg/token"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"image/png"
 	"net/http"
@@ -20,10 +21,11 @@ type CommonHandler struct {
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	captcha      *captcha.Captcha
 	tokenHelper  *token.TokenHelper
+	config       *conf.Configuration
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper) *CommonHandler {
-	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper}
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, config *conf.Configuration) *CommonHandler {
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, config: config}
 }
 
 func FailByErrWithData(c *gin.Context, err error, data interface{}) {
@@ -135,8 +137,10 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 			FailByErr(ctx, cErr.BadRequest("Invalid token"))
 			return
 		}
-		h.tokenHelper.Delete(batoken)
-		h.tokenHelper.Set(newToken, "admin", result.UserID, 86400)
+		if err := h.tokenHelper.Set(newToken, "admin", result.UserID, h.config.App.UserTokenKeepTime); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 
 	} else if result.Type == "user-refresh" {
 		baUserToken := ctx.GetHeader("ba-user-token")
@@ -144,8 +148,10 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 			FailByErr(ctx, cErr.BadRequest("Invalid token"))
 			return
 		}
-		h.tokenHelper.Delete(baUserToken)
-		h.tokenHelper.Set(newToken, "user", result.UserID, 86400)
+		if err := h.tokenHelper.Set(newToken, "user", result.UserID, h.config.App.UserTokenKeepTime); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 	}
 
 	Success(ctx, map[string]any{

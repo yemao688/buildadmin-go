@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	cErr "go-build-admin/app/pkg/error"
@@ -94,6 +95,24 @@ func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (User, error) {
 	return user, err
 }
 
+func (s *AuthModel) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
+	var user User
+	if err := s.sqlDB.Where("id=?", id).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return cErr.BadRequest("Account not exist")
+		}
+		return err
+	}
+	if user.Status != "enable" {
+		return cErr.BadRequest("Account disabled")
+	}
+	return s.sqlDB.Model(&User{}).Where("id=?", id).Updates(map[string]any{
+		"login_failure":   0,
+		"last_login_time": time.Now().Unix(),
+		"last_login_ip":   ip,
+	}).Error
+}
+
 func (s *AuthModel) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
 	// 判断账户类型
 	accountType := ""
@@ -124,8 +143,22 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	retry := s.config.App.UserLoginRetry
-	if retry > 0 && user.LoginFailure >= int32(retry) && (time.Now().Unix()-user.LastLoginTime < 86400) {
-		return nil, cErr.BadRequest("Please try again after 1 day")
+	if retry > 0 && user.LastLoginTime > 0 {
+		now := time.Now().Unix()
+		if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
+			if err := s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]any{
+				"login_failure": 0,
+			}).Error; err != nil {
+				return nil, err
+			}
+			result = s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user)
+			if result.Error != nil {
+				return nil, result.Error
+			}
+		}
+		if user.LoginFailure >= int32(retry) {
+			return nil, cErr.BadRequest("Please try again after 1 day")
+		}
 	}
 
 	if user.Password != utils.EncryptPassword(password, user.Salt) {
@@ -152,11 +185,16 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, err
 	}
 
+	loginTime := time.Now().Unix()
+	loginIP := ctx.ClientIP()
 	err := s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
-		"last_login_time": time.Now().Unix(),
-		"last_login_ip":   ctx.ClientIP(),
+		"last_login_time": loginTime,
+		"last_login_ip":   loginIP,
 	}).Error
+	user.LoginFailure = 0
+	user.LastLoginTime = loginTime
+	user.LastLoginIP = loginIP
 
 	userInfo := s.FilterData(user)
 	userInfo["token"] = token
@@ -183,7 +221,7 @@ func (s *AuthModel) FilterData(user User) map[string]any {
 		"score":           user.Score,
 		"join_time":       user.JoinTime,
 		"motto":           user.Motto,
-		"last_login_time": time.Now().Unix(),
+		"last_login_time": user.LastLoginTime,
 		"last_login_ip":   user.LastLoginIP,
 	}
 }

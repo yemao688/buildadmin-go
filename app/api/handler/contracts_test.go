@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
+	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"golang.org/x/text/language"
 )
@@ -20,18 +21,21 @@ import (
 type handlerContractTokenDriver struct {
 	gotType  string
 	setCount int
+	expires  []int64
+	deleted  int
 	get      *token.Token
 	getErr   error
 }
 
-func (d *handlerContractTokenDriver) Set(_ string, typ string, _ int32, _ int64) error {
+func (d *handlerContractTokenDriver) Set(_ string, typ string, _ int32, expire int64) error {
 	d.gotType = typ
 	d.setCount++
+	d.expires = append(d.expires, expire)
 	return nil
 }
 func (d *handlerContractTokenDriver) Get(string) (*token.Token, error) { return d.get, d.getErr }
 func (d *handlerContractTokenDriver) Check(string, string, int32) bool { return false }
-func (d *handlerContractTokenDriver) Delete(string) error              { return nil }
+func (d *handlerContractTokenDriver) Delete(string) error              { d.deleted++; return nil }
 func (d *handlerContractTokenDriver) Clear(string, int32) error        { return nil }
 
 func decodeHandlerResponse(t *testing.T, recorder *httptest.ResponseRecorder) Response {
@@ -101,4 +105,24 @@ func TestRefreshTokenRejectsUnknownTypeWithoutCreatingToken(t *testing.T) {
 	require.Equal(t, 400, response.Code)
 	require.Equal(t, "Invalid Token!", response.Msg)
 	require.Zero(t, driver.setCount)
+}
+
+func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user-refresh", UserID: 1}}
+	config := &conf.Configuration{}
+	config.App.UserTokenKeepTime = 259200
+	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}, config: config}
+	router := newContractTestRouter()
+	router.POST("/", h.RefreshToken)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"refreshToken":"refresh"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("ba-user-token", "old-token")
+	router.ServeHTTP(recorder, request)
+
+	response := decodeHandlerResponse(t, recorder)
+	require.Equal(t, 1, response.Code)
+	require.Equal(t, []int64{259200}, driver.expires)
+	require.Zero(t, driver.deleted)
 }
