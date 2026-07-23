@@ -21,10 +21,10 @@ app:
   cdn_url_params: ''
   version: 'v2.3.7' #版本号
   api_url: 'https://buildadmin.com' #接口地址
-  
+
 
 #点选验证码配置
-click_captcha: 
+click_captcha:
   #模式:text=文字,icon=图标(若只有icon则适用于国际化站点)
   mode: 'text,icon'
   #长度
@@ -86,39 +86,39 @@ terminal:
   install_service_port: '9989'
   commands:
     migrate:
-      run: 
+      run:
         cwd: 'cmd/app'
         command: 'go run . --conf config.yaml migrate run'
-      rollback: 
+      rollback:
         cwd: ''
         command: ''
-      breakpoint: 
+      breakpoint:
         cwd: ''
         command: ''
     install:
-      yarn: 
+      yarn:
         cwd: ''
         command: 'npm install -g yarn'
-      pnpm: 
+      pnpm:
         cwd: ''
         command: 'npm install -g pnpm'
-      ni: 
+      ni:
         cwd: ''
         command: 'npm install -g @antfu/ni'
     version:
       npm:
         cwd: ''
         command: 'npm -v'
-      cnpm: 
+      cnpm:
         cwd: ''
         command: 'cnpm -v'
-      yarn: 
+      yarn:
         cwd: ''
         command: 'yarn -v'
-      pnpm: 
+      pnpm:
         cwd: ''
         command: 'pnpm -v'
-      node: 
+      node:
         cwd: ''
         command: 'node -v'
     test:
@@ -190,19 +190,19 @@ terminal:
         cwd: 'web'
         command: 'npx prettier --write %s'
     set-registry:
-      npm: 
+      npm:
         cwd: ''
         command: 'npm config set registry https://registry.npmjs.org/ && npm config get registry'
-      taobao: 
+      taobao:
         cwd: ''
-        command: 'npm config set registry https://registry.npm.taobao.org/ && npm config get registry'
+        command: 'npm config set registry https://registry.npmmirror.com/ && npm config get registry'
       rednpm:
         cwd: ''
         command: 'npm config set registry http://registry.mirror.cqupt.edu.cn/ && npm config get registry'
     ping:
-      baidu: 
+      baidu:
         cwd: ''
         command: 'ping baidu.com'
-      localhost: 
+      localhost:
         cwd: ''
         command: 'ping 127.0.0.1 -n 6'
