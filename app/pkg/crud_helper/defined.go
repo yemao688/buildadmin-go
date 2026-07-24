@@ -435,6 +435,10 @@ type {{.ClassName}}Model struct {
 	Enforcer data_scope.Enforcer
 }
 
+func (s *{{.ClassName}}Model) NewRow() any {
+	return &{{.ClassName}}{}
+}
+
 func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
 		BaseModel: BaseModel{

@@ -601,9 +601,28 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 
 func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 	overrides := make(map[string]string)
-	for _, field := range fields {
-		if strings.ToLower(analyseFieldType(field)) == "time" {
-			overrides[field.Name] = "string"
+	for _, rawField := range fields {
+		field := analyseField(rawField)
+		dbType := strings.ToLower(analyseFieldType(field))
+		switch {
+		case dbType == "time":
+			if field.DesignType == "time" {
+				overrides[field.Name] = "validate.FlexClock"
+			} else {
+				overrides[field.Name] = "string"
+			}
+		case slices.Contains(dtStringToArray, field.DesignType):
+			overrides[field.Name] = "validate.CommaJoined"
+		case field.DesignType == "array":
+			overrides[field.Name] = "validate.KeyValueArray"
+		case field.DesignType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
+			overrides[field.Name] = "validate.FlexDateTime"
+		case field.DesignType == "date" && dbType == "date":
+			overrides[field.Name] = "validate.FlexDate"
+		case field.DesignType == "time" && dbType == "time":
+			overrides[field.Name] = "validate.FlexClock"
+		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
+			overrides[field.Name] = "validate.FlexUnixTime"
 		}
 	}
 	return overrides

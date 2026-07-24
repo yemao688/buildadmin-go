@@ -227,22 +227,39 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 	}
 }
 
-func TestModelFieldTypeOverridesUseSQLTimeOnly(t *testing.T) {
+func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	fields := []model.Field{
-		{Name: "clock", DataType: "time", DesignType: "string"},
-		{Name: "clock_upper", DataType: "TIME", DesignType: "datetime"},
-		{Name: "created_at", DataType: "datetime", DesignType: "time"},
-		{Name: "published_at", DataType: "timestamp", DesignType: "time"},
-		{Name: "day", DataType: "date", DesignType: "time"},
+		{Name: "flags", DataType: "set", DesignType: "checkbox"},
+		{Name: "options", DataType: "text", DesignType: "array"},
+		{Name: "created_at", DataType: "datetime", DesignType: "datetime"},
+		{Name: "published_at", DataType: "timestamp", DesignType: "datetime"},
+		{Name: "day", DataType: "date", DesignType: "date"},
+		{Name: "clock", DataType: "time", DesignType: "time"},
+		{Name: "clock_native", DataType: "TIME", DesignType: "string"},
+		{Name: "unix_at", DataType: "bigint", DesignType: "timestamp"},
+		{Name: "mismatch", DataType: "datetime", DesignType: "string"},
 	}
 	got := buildModelFieldTypeOverrides(fields)
-	if len(got) != 2 || got["clock"] != "string" || got["clock_upper"] != "string" {
-		t.Fatalf("SQL TIME overrides = %#v, want only TIME columns as string", got)
+	want := map[string]string{
+		"flags":        "validate.CommaJoined",
+		"options":      "validate.KeyValueArray",
+		"created_at":   "validate.FlexDateTime",
+		"published_at": "validate.FlexDateTime",
+		"day":          "validate.FlexDate",
+		"clock":        "validate.FlexClock",
+		"clock_native": "string",
+		"unix_at":      "validate.FlexUnixTime",
 	}
-	for _, name := range []string{"created_at", "published_at", "day"} {
-		if _, ok := got[name]; ok {
-			t.Fatalf("non-TIME column %q was overridden", name)
+	if len(got) != len(want) {
+		t.Fatalf("overrides = %#v, want %#v", got, want)
+	}
+	for name, typeName := range want {
+		if got[name] != typeName {
+			t.Errorf("%s override = %q, want %q", name, got[name], typeName)
 		}
+	}
+	if _, ok := got["mismatch"]; ok {
+		t.Fatal("unrelated mismatched design type was overridden")
 	}
 }
 
@@ -277,6 +294,23 @@ func TestModelTemplateAddsWeighFromIntegerPrimaryKey(t *testing.T) {
 	withWeigh := `type Demo struct {
 	ID int32 ` + "`json:\"id\"`" + `
 	Weigh int32 ` + "`json:\"weigh\"`" + `
+}
+
+func TestModelTemplateAddsRowFactory(t *testing.T) {
+	data := ModelData{
+		Namespace:  "model",
+		ClassName:  "Demo",
+		ModelVar:   "demo",
+		Pk:         "id",
+		StructTemp: "type Demo struct{}",
+	}
+	code, err := renderModel(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(code, "func (s *DemoModel) NewRow() any") || !strings.Contains(code, "return &Demo{}") {
+		t.Fatalf("row factory missing from model template:\n%s", code)
+	}
 }
 `
 	withoutWeigh := `type Demo struct {

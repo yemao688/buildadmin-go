@@ -28,6 +28,10 @@ type modelKeyInfo interface {
 	PrimaryKeyName() string
 }
 
+type rowFactory interface {
+	NewRow() any
+}
+
 type scopedModel interface {
 	ScopeDB(*gin.Context, *gorm.DB) *gorm.DB
 }
@@ -122,7 +126,7 @@ func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
 func (h *Base) One(ctx *gin.Context) {
 	primaryKey := h.primaryKey()
 	id := ctx.Request.FormValue(primaryKey)
-	result := map[string]interface{}{}
+	result, scanTarget := oneRow(h.currentM)
 	db := h.currentM.DB()
 	if scoped, ok := h.currentM.(interface {
 		DBFor(context.Context) *gorm.DB
@@ -132,7 +136,7 @@ func (h *Base) One(ctx *gin.Context) {
 	if scoped, ok := h.currentM.(scopedModel); ok {
 		db = scoped.ScopeDB(ctx, db)
 	}
-	err := db.Table(h.currentM.Table()).Where(primaryKey+"=?", id).Take(&result).Error
+	err := db.Table(h.currentM.Table()).Where(primaryKey+"=?", id).Take(scanTarget).Error
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -140,6 +144,16 @@ func (h *Base) One(ctx *gin.Context) {
 	Success(ctx, map[string]interface{}{
 		"row": result,
 	})
+}
+
+func oneRow(m CommonModel) (result any, scanTarget any) {
+	if factory, ok := m.(rowFactory); ok {
+		if row := factory.NewRow(); row != nil {
+			return row, row
+		}
+	}
+	row := map[string]interface{}{}
+	return row, &row
 }
 
 func (h *Base) primaryKey() string {

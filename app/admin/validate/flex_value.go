@@ -2,6 +2,7 @@ package validate
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -15,6 +16,26 @@ type FlexDateTime time.Time
 type FlexDate time.Time
 type FlexClock string
 type FlexUnixTime int64
+
+func (v CommaJoined) MarshalJSON() ([]byte, error) {
+	if v == "" {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(strings.Split(string(v), ","))
+}
+
+func (v *CommaJoined) Scan(value any) error {
+	text, err := scanString(value)
+	if err != nil {
+		return err
+	}
+	*v = CommaJoined(text)
+	return nil
+}
+
+func (v CommaJoined) Value() (driver.Value, error) {
+	return string(v), nil
+}
 
 func (v *CommaJoined) UnmarshalJSON(data []byte) error {
 	text := strings.TrimSpace(string(data))
@@ -77,6 +98,33 @@ func commaScalar(data []byte) (string, error) {
 type keyValueItem struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+func (v KeyValueArray) MarshalJSON() ([]byte, error) {
+	if v == "" {
+		return []byte("[]"), nil
+	}
+	var items []json.RawMessage
+	if err := json.Unmarshal([]byte(v), &items); err != nil {
+		return nil, fmt.Errorf("invalid key/value array: %w", err)
+	}
+	if items == nil {
+		return nil, fmt.Errorf("invalid key/value array: expected JSON array")
+	}
+	return json.Marshal(items)
+}
+
+func (v *KeyValueArray) Scan(value any) error {
+	text, err := scanString(value)
+	if err != nil {
+		return err
+	}
+	*v = KeyValueArray(text)
+	return nil
+}
+
+func (v KeyValueArray) Value() (driver.Value, error) {
+	return string(v), nil
 }
 
 func (v *KeyValueArray) UnmarshalJSON(data []byte) error {
@@ -161,6 +209,31 @@ func (v *FlexDateTime) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (v FlexDateTime) MarshalJSON() ([]byte, error) {
+	value := time.Time(v)
+	if value.IsZero() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(value.In(time.Local).Format("2006-01-02 15:04:05"))
+}
+
+func (v *FlexDateTime) Scan(value any) error {
+	parsed, err := scanFlexDateTime(value, "2006-01-02 15:04:05", time.RFC3339)
+	if err != nil {
+		return err
+	}
+	*v = FlexDateTime(parsed)
+	return nil
+}
+
+func (v FlexDateTime) Value() (driver.Value, error) {
+	value := time.Time(v)
+	if value.IsZero() {
+		return nil, nil
+	}
+	return value, nil
+}
+
 func (v *FlexDate) UnmarshalJSON(data []byte) error {
 	value, err := parseFlexTime(data, "2006-01-02")
 	if err != nil {
@@ -168,6 +241,31 @@ func (v *FlexDate) UnmarshalJSON(data []byte) error {
 	}
 	*v = FlexDate(value)
 	return nil
+}
+
+func (v FlexDate) MarshalJSON() ([]byte, error) {
+	value := time.Time(v)
+	if value.IsZero() {
+		return []byte("null"), nil
+	}
+	return json.Marshal(value.In(time.Local).Format("2006-01-02"))
+}
+
+func (v *FlexDate) Scan(value any) error {
+	parsed, err := scanFlexDateTime(value, "2006-01-02")
+	if err != nil {
+		return err
+	}
+	*v = FlexDate(parsed)
+	return nil
+}
+
+func (v FlexDate) Value() (driver.Value, error) {
+	value := time.Time(v)
+	if value.IsZero() {
+		return nil, nil
+	}
+	return value, nil
 }
 
 func (v *FlexClock) UnmarshalJSON(data []byte) error {
@@ -196,6 +294,31 @@ func (v *FlexClock) UnmarshalJSON(data []byte) error {
 	}
 	*v = FlexClock(parsed.Format("15:04:05"))
 	return nil
+}
+
+func (v FlexClock) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(v))
+}
+
+func (v *FlexClock) Scan(value any) error {
+	text, err := scanString(value)
+	if err != nil {
+		return err
+	}
+	if text == "" {
+		*v = ""
+		return nil
+	}
+	var parsed FlexClock
+	if err := parsed.UnmarshalJSON([]byte(strconv.Quote(text))); err != nil {
+		return err
+	}
+	*v = parsed
+	return nil
+}
+
+func (v FlexClock) Value() (driver.Value, error) {
+	return string(v), nil
 }
 
 func isASCIIDigit(value byte) bool {
@@ -241,4 +364,102 @@ func (v *FlexUnixTime) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return fmt.Errorf("invalid unix time value %q", value)
+}
+
+func (v FlexUnixTime) MarshalJSON() ([]byte, error) {
+	if v == 0 {
+		return []byte("null"), nil
+	}
+	return json.Marshal(time.Unix(int64(v), 0).In(time.Local).Format("2006-01-02 15:04:05"))
+}
+
+func (v *FlexUnixTime) Scan(value any) error {
+	switch value := value.(type) {
+	case nil:
+		*v = 0
+		return nil
+	case time.Time:
+		*v = FlexUnixTime(value.Unix())
+		return nil
+	case int64:
+		*v = FlexUnixTime(value)
+		return nil
+	case int32:
+		*v = FlexUnixTime(value)
+		return nil
+	case int:
+		*v = FlexUnixTime(value)
+		return nil
+	case string, []byte:
+		text, err := scanString(value)
+		if err != nil {
+			return err
+		}
+		if text == "" {
+			*v = 0
+			return nil
+		}
+		if unix, err := strconv.ParseInt(text, 10, 64); err == nil {
+			*v = FlexUnixTime(unix)
+			return nil
+		}
+		parsed, err := parseStringFlexTime(text, "2006-01-02 15:04:05", time.RFC3339)
+		if err != nil {
+			return err
+		}
+		*v = FlexUnixTime(parsed.Unix())
+		return nil
+	default:
+		return fmt.Errorf("unsupported unix time scan value %T", value)
+	}
+}
+
+func (v FlexUnixTime) Value() (driver.Value, error) {
+	return int64(v), nil
+}
+
+func scanString(value any) (string, error) {
+	switch value := value.(type) {
+	case nil:
+		return "", nil
+	case string:
+		return value, nil
+	case []byte:
+		return string(value), nil
+	default:
+		return "", fmt.Errorf("unsupported string scan value %T", value)
+	}
+}
+
+func scanFlexDateTime(value any, layouts ...string) (time.Time, error) {
+	if value == nil {
+		return time.Time{}, nil
+	}
+	if parsed, ok := value.(time.Time); ok {
+		return parsed, nil
+	}
+	text, err := scanString(value)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if text == "" {
+		return time.Time{}, nil
+	}
+	return parseStringFlexTime(text, layouts...)
+}
+
+func parseStringFlexTime(value string, layouts ...string) (time.Time, error) {
+	for _, layout := range layouts {
+		var parsed time.Time
+		var err error
+		if layout == time.RFC3339 {
+			parsed, err = time.Parse(layout, value)
+		} else {
+			parsed, err = time.ParseInLocation(layout, value, time.Local)
+		}
+		if err == nil {
+			return parsed, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("invalid time value %q", value)
 }

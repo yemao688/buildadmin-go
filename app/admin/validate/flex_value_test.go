@@ -192,6 +192,131 @@ func TestFlexUnixTime(t *testing.T) {
 	}
 }
 
+func TestFlexJSONOutput(t *testing.T) {
+	local := time.FixedZone("test-local", 8*60*60)
+	original := time.Local
+	time.Local = local
+	t.Cleanup(func() { time.Local = original })
+
+	when := FlexDateTime(time.Date(2026, 7, 25, 12, 34, 56, 0, local))
+	date := FlexDate(time.Date(2026, 7, 25, 0, 0, 0, 0, local))
+	unix := FlexUnixTime(time.Time(when).Unix())
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{"comma empty", CommaJoined(""), `[]`},
+		{"comma values", CommaJoined("a,b"), `["a","b"]`},
+		{"key value empty", KeyValueArray(""), `[]`},
+		{"key value values", KeyValueArray(`[{"key":"k","value":"v"}]`), `[{"key":"k","value":"v"}]`},
+		{"datetime zero", FlexDateTime{}, `null`},
+		{"datetime value", when, `"2026-07-25 12:34:56"`},
+		{"date zero", FlexDate{}, `null`},
+		{"date value", date, `"2026-07-25"`},
+		{"clock empty", FlexClock(""), `""`},
+		{"clock value", FlexClock("12:34:56"), `"12:34:56"`},
+		{"unix zero", FlexUnixTime(0), `null`},
+		{"unix value", unix, `"2026-07-25 12:34:56"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := json.Marshal(test.value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != test.want {
+				t.Fatalf("got %s, want %s", got, test.want)
+			}
+		})
+	}
+	if _, err := json.Marshal(KeyValueArray(`{"invalid":true}`)); err == nil {
+		t.Fatal("malformed non-array key/value storage must fail to marshal")
+	}
+	if _, err := json.Marshal(KeyValueArray("null")); err == nil {
+		t.Fatal("null key/value storage must fail to marshal")
+	}
+}
+
+func TestFlexSQLScanAndValue(t *testing.T) {
+	local := time.FixedZone("test-local", 8*60*60)
+	original := time.Local
+	time.Local = local
+	t.Cleanup(func() { time.Local = original })
+
+	when := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
+	var dateTime FlexDateTime
+	for _, input := range []any{when, "2026-07-25 12:34:56", []byte("2026-07-25 12:34:56"), nil} {
+		if err := dateTime.Scan(input); err != nil {
+			t.Fatalf("FlexDateTime.Scan(%T): %v", input, err)
+		}
+	}
+	if !time.Time(dateTime).IsZero() {
+		t.Fatal("nil FlexDateTime scan must reset to zero")
+	}
+	if err := dateTime.Scan("2026-07-25 12:34:56"); err != nil || !time.Time(dateTime).Equal(when) {
+		t.Fatalf("FlexDateTime scan = %v, err %v", dateTime, err)
+	}
+
+	var date FlexDate
+	if err := date.Scan([]byte("2026-07-25")); err != nil || time.Time(date).Format("2006-01-02") != "2026-07-25" {
+		t.Fatalf("FlexDate scan = %v, err %v", date, err)
+	}
+	var clock FlexClock
+	if err := clock.Scan([]byte("12:34:56")); err != nil || clock != "12:34:56" {
+		t.Fatalf("FlexClock scan = %q, err %v", clock, err)
+	}
+	var comma CommaJoined
+	if err := comma.Scan([]byte("a,b")); err != nil || comma != "a,b" {
+		t.Fatalf("CommaJoined scan = %q, err %v", comma, err)
+	}
+	var options KeyValueArray
+	if err := options.Scan(`[ {"key":"k","value":"v"} ]`); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := json.Marshal(options); string(got) != `[{"key":"k","value":"v"}]` {
+		t.Fatalf("KeyValueArray scan output = %s", got)
+	}
+	var unix FlexUnixTime
+	if err := unix.Scan(when); err != nil || unix != FlexUnixTime(when.Unix()) {
+		t.Fatalf("FlexUnixTime time scan = %d, err %v", unix, err)
+	}
+	if err := unix.Scan([]byte("2026-07-25 12:34:56")); err != nil || unix != FlexUnixTime(when.Unix()) {
+		t.Fatalf("FlexUnixTime string scan = %d, err %v", unix, err)
+	}
+	if _, err := dateTime.Value(); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := date.Value(); err != nil || value == nil {
+		t.Fatalf("FlexDate.Value() = %v, err %v", value, err)
+	}
+	if value, err := comma.Value(); err != nil || value != "a,b" {
+		t.Fatalf("CommaJoined.Value() = %v, err %v", value, err)
+	}
+	if value, err := options.Value(); err != nil || value != `[ {"key":"k","value":"v"} ]` {
+		t.Fatalf("KeyValueArray.Value() = %v, err %v", value, err)
+	}
+	if _, err := clock.Value(); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := (FlexClock("")).Value(); err != nil || value != "" {
+		t.Fatalf("empty FlexClock.Value() = %v, err %v", value, err)
+	}
+	if value, err := unix.Value(); err != nil || value != int64(when.Unix()) {
+		t.Fatalf("FlexUnixTime.Value() = %v, err %v", value, err)
+	}
+	if value, err := (FlexUnixTime(0)).Value(); err != nil || value != int64(0) {
+		t.Fatalf("zero FlexUnixTime.Value() = %v, err %v", value, err)
+	}
+	var zero FlexDateTime
+	if value, err := zero.Value(); err != nil || value != nil {
+		t.Fatalf("zero FlexDateTime.Value() = %v, err %v", value, err)
+	}
+	if err := clock.Scan(true); err == nil {
+		t.Fatal("unsupported clock scan type must fail")
+	}
+}
+
 type FlexValueInput struct {
 	Tags     CommaJoined   `json:"tags"`
 	Options  KeyValueArray `json:"options"`
@@ -202,12 +327,12 @@ type FlexValueInput struct {
 }
 
 type FlexValueModel struct {
-	Tags     string
-	Options  string
-	When     time.Time
-	Date     time.Time
-	Clock    string
-	UnixTime int64
+	Tags     CommaJoined
+	Options  KeyValueArray
+	When     FlexDateTime
+	Date     FlexDate
+	Clock    FlexClock
+	UnixTime FlexUnixTime
 }
 
 func TestFlexValueCopierRoundTrip(t *testing.T) {
@@ -222,7 +347,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	}
 	wantWhen := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
 	wantDate := time.Date(2026, 7, 25, 0, 0, 0, 0, local)
-	wantClock := "12:34:56"
+	wantClock := FlexClock("12:34:56")
 
 	model := FlexValueModel{}
 	if err := copier.Copy(&model, &input); err != nil {
@@ -231,8 +356,8 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	if model.Tags != "a,2" || model.Options != `[{"key":"k","value":"v"}]` || model.UnixTime != 123 {
 		t.Fatalf("unexpected copied scalar values: %+v", model)
 	}
-	assertFlexTime(t, "model.When", model.When, wantWhen)
-	assertFlexTime(t, "model.Date", model.Date, wantDate)
+	assertFlexTime(t, "model.When", time.Time(model.When), wantWhen)
+	assertFlexTime(t, "model.Date", time.Time(model.Date), wantDate)
 	if model.Clock != wantClock {
 		t.Fatalf("model.Clock = %q, want %q", model.Clock, wantClock)
 	}
@@ -245,12 +370,12 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	edit.FlexValueInput = input
 	updated := struct {
 		ID       int64
-		Tags     string
-		Options  string
-		When     time.Time
-		Date     time.Time
-		Clock    string
-		UnixTime int64
+		Tags     CommaJoined
+		Options  KeyValueArray
+		When     FlexDateTime
+		Date     FlexDate
+		Clock    FlexClock
+		UnixTime FlexUnixTime
 	}{}
 	if err := copier.Copy(&updated, &edit); err != nil {
 		t.Fatal(err)
@@ -258,8 +383,8 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	if updated.ID != 7 || updated.Tags != "a,2" || updated.Options != `[{"key":"k","value":"v"}]` || updated.UnixTime != 123 {
 		t.Fatalf("unexpected edit copy: %+v", updated)
 	}
-	assertFlexTime(t, "updated.When", updated.When, wantWhen)
-	assertFlexTime(t, "updated.Date", updated.Date, wantDate)
+	assertFlexTime(t, "updated.When", time.Time(updated.When), wantWhen)
+	assertFlexTime(t, "updated.Date", time.Time(updated.Date), wantDate)
 	if updated.Clock != wantClock {
 		t.Fatalf("updated.Clock = %q, want %q", updated.Clock, wantClock)
 	}
