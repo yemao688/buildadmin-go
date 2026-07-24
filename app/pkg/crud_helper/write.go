@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -23,7 +24,7 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
-	structContent, err := getGenerateStruct(db, fullTableName, tableName)
+	structContent, err := getGenerateStruct(db, fullTableName, tableName, modelData.ModelFieldType)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +45,7 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	return structContent, nil
 }
 
-func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string) (string, error) {
+func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fieldTypeOverrides map[string]string) (string, error) {
 	g := gen.NewGenerator(gen.Config{
 		OutPath: "./",
 		Mode:    gen.WithoutContext | gen.WithDefaultQuery,
@@ -62,7 +63,16 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string) (str
 		// WithUnitTest: true,
 	})
 	g.UseDB(db)
-	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true))
+	keys := make([]string, 0, len(fieldTypeOverrides))
+	for columnName := range fieldTypeOverrides {
+		keys = append(keys, columnName)
+	}
+	sort.Strings(keys)
+	options := make([]gen.ModelOpt, 0, len(keys))
+	for _, columnName := range keys {
+		options = append(options, gen.FieldType(columnName, fieldTypeOverrides[columnName]))
+	}
+	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true), options...)
 
 	var buf bytes.Buffer
 	tpl, err := template.New(StructTmpl).Parse(StructTmpl)

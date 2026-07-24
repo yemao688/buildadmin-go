@@ -398,6 +398,7 @@ type ModelData struct {
 	Append             []string
 	Methods            []string
 	FieldType          map[string]string
+	ModelFieldType     map[string]string
 	CreateTime         string
 	UpdateTime         string
 	AutoWriteTimestamp string

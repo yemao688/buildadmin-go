@@ -74,6 +74,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.Append = []string{}
 	modelData.Methods = []string{}
 	modelData.FieldType = map[string]string{}
+	modelData.ModelFieldType = buildModelFieldTypeOverrides(fields)
 	modelData.BeforeInsertMixins = map[string]string{}
 	modelData.RelationMethodList = map[string]string{}
 
@@ -593,6 +594,16 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 			overrides[field.Name] = "validate.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
 			overrides[field.Name] = "validate.FlexUnixTime"
+		}
+	}
+	return overrides
+}
+
+func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
+	overrides := make(map[string]string)
+	for _, field := range fields {
+		if strings.ToLower(analyseFieldType(field)) == "time" {
+			overrides[field.Name] = "string"
 		}
 	}
 	return overrides

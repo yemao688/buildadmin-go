@@ -13,7 +13,7 @@ type CommaJoined string
 type KeyValueArray string
 type FlexDateTime time.Time
 type FlexDate time.Time
-type FlexClock time.Time
+type FlexClock string
 type FlexUnixTime int64
 
 func (v *CommaJoined) UnmarshalJSON(data []byte) error {
@@ -171,15 +171,35 @@ func (v *FlexDate) UnmarshalJSON(data []byte) error {
 }
 
 func (v *FlexClock) UnmarshalJSON(data []byte) error {
-	value, err := parseFlexTime(data, "15:04:05")
+	text := strings.TrimSpace(string(data))
+	if text == "" || text == "null" {
+		*v = ""
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return fmt.Errorf("expected JSON string: %w", err)
+	}
+	if value == "" {
+		*v = ""
+		return nil
+	}
+	if len(value) != len("15:04:05") || value[2] != ':' || value[5] != ':' ||
+		!isASCIIDigit(value[0]) || !isASCIIDigit(value[1]) ||
+		!isASCIIDigit(value[3]) || !isASCIIDigit(value[4]) ||
+		!isASCIIDigit(value[6]) || !isASCIIDigit(value[7]) {
+		return fmt.Errorf("invalid clock value %q", value)
+	}
+	parsed, err := time.Parse("15:04:05", value)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid clock value %q: %w", value, err)
 	}
-	if !value.IsZero() {
-		value = time.Date(1970, time.January, 1, value.Hour(), value.Minute(), value.Second(), value.Nanosecond(), value.Location())
-	}
-	*v = FlexClock(value)
+	*v = FlexClock(parsed.Format("15:04:05"))
 	return nil
+}
+
+func isASCIIDigit(value byte) bool {
+	return value >= '0' && value <= '9'
 }
 
 func (v *FlexUnixTime) UnmarshalJSON(data []byte) error {

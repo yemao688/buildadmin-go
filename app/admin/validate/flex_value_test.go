@@ -94,17 +94,23 @@ func TestFlexTimes(t *testing.T) {
 		name string
 		data string
 		new  func() any
-		want time.Time
+		want any
 		fail bool
 	}{
 		{"datetime local", `"2026-07-25 12:34:56"`, func() any { return new(FlexDateTime) }, time.Date(2026, 7, 25, 12, 34, 56, 0, local), false},
 		{"datetime RFC3339", `"2026-07-25T12:34:56+08:00"`, func() any { return new(FlexDateTime) }, time.Date(2026, 7, 25, 12, 34, 56, 0, local), false},
 		{"date", `"2026-07-25"`, func() any { return new(FlexDate) }, time.Date(2026, 7, 25, 0, 0, 0, 0, local), false},
-		{"clock", `"12:34:56"`, func() any { return new(FlexClock) }, time.Date(1970, 1, 1, 12, 34, 56, 0, local), false},
+		{"clock", `"12:34:56"`, func() any { return new(FlexClock) }, FlexClock("12:34:56"), false},
 		{"datetime null", `null`, func() any { return new(FlexDateTime) }, time.Time{}, false},
 		{"date empty", `""`, func() any { return new(FlexDate) }, time.Time{}, false},
+		{"clock null", `null`, func() any { return new(FlexClock) }, FlexClock(""), false},
+		{"clock empty", `""`, func() any { return new(FlexClock) }, FlexClock(""), false},
 		{"date rejects datetime", `"2026-07-25 12:34:56"`, func() any { return new(FlexDate) }, time.Time{}, true},
 		{"clock rejects RFC3339", `"2026-07-25T12:34:56Z"`, func() any { return new(FlexClock) }, time.Time{}, true},
+		{"clock rejects datetime", `"2026-07-25 12:34:56"`, func() any { return new(FlexClock) }, FlexClock(""), true},
+		{"clock rejects non-string", `123456`, func() any { return new(FlexClock) }, FlexClock(""), true},
+		{"clock rejects invalid hour", `"24:00:00"`, func() any { return new(FlexClock) }, FlexClock(""), true},
+		{"clock rejects fractional seconds", `"12:34:56.1"`, func() any { return new(FlexClock) }, FlexClock(""), true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -119,8 +125,14 @@ func TestFlexTimes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if clock, ok := got.(*FlexClock); ok {
+				if *clock != test.want {
+					t.Fatalf("got %q, want %q", *clock, test.want)
+				}
+				return
+			}
 			value := flexTimeValue(got)
-			if !value.Equal(test.want) {
+			if !value.Equal(test.want.(time.Time)) {
 				t.Fatalf("got %v, want %v", value, test.want)
 			}
 		})
@@ -132,8 +144,6 @@ func flexTimeValue(value any) time.Time {
 	case *FlexDateTime:
 		return time.Time(*value)
 	case *FlexDate:
-		return time.Time(*value)
-	case *FlexClock:
 		return time.Time(*value)
 	default:
 		panic("unexpected flex time type")
@@ -196,7 +206,7 @@ type FlexValueModel struct {
 	Options  string
 	When     time.Time
 	Date     time.Time
-	Clock    time.Time
+	Clock    string
 	UnixTime int64
 }
 
@@ -212,7 +222,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	}
 	wantWhen := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
 	wantDate := time.Date(2026, 7, 25, 0, 0, 0, 0, local)
-	wantClock := time.Date(1970, 1, 1, 12, 34, 56, 0, local)
+	wantClock := "12:34:56"
 
 	model := FlexValueModel{}
 	if err := copier.Copy(&model, &input); err != nil {
@@ -223,7 +233,9 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	}
 	assertFlexTime(t, "model.When", model.When, wantWhen)
 	assertFlexTime(t, "model.Date", model.Date, wantDate)
-	assertFlexTime(t, "model.Clock", model.Clock, wantClock)
+	if model.Clock != wantClock {
+		t.Fatalf("model.Clock = %q, want %q", model.Clock, wantClock)
+	}
 
 	edit := struct {
 		ID int64
@@ -237,7 +249,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 		Options  string
 		When     time.Time
 		Date     time.Time
-		Clock    time.Time
+		Clock    string
 		UnixTime int64
 	}{}
 	if err := copier.Copy(&updated, &edit); err != nil {
@@ -248,7 +260,9 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	}
 	assertFlexTime(t, "updated.When", updated.When, wantWhen)
 	assertFlexTime(t, "updated.Date", updated.Date, wantDate)
-	assertFlexTime(t, "updated.Clock", updated.Clock, wantClock)
+	if updated.Clock != wantClock {
+		t.Fatalf("updated.Clock = %q, want %q", updated.Clock, wantClock)
+	}
 }
 
 func assertFlexTime(t *testing.T, name string, got, want time.Time) {

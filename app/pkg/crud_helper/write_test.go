@@ -227,6 +227,25 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 	}
 }
 
+func TestModelFieldTypeOverridesUseSQLTimeOnly(t *testing.T) {
+	fields := []model.Field{
+		{Name: "clock", DataType: "time", DesignType: "string"},
+		{Name: "clock_upper", DataType: "TIME", DesignType: "datetime"},
+		{Name: "created_at", DataType: "datetime", DesignType: "time"},
+		{Name: "published_at", DataType: "timestamp", DesignType: "time"},
+		{Name: "day", DataType: "date", DesignType: "time"},
+	}
+	got := buildModelFieldTypeOverrides(fields)
+	if len(got) != 2 || got["clock"] != "string" || got["clock_upper"] != "string" {
+		t.Fatalf("SQL TIME overrides = %#v, want only TIME columns as string", got)
+	}
+	for _, name := range []string{"created_at", "published_at", "day"} {
+		if _, ok := got[name]; ok {
+			t.Fatalf("non-TIME column %q was overridden", name)
+		}
+	}
+}
+
 func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 	structContent := "type Demo struct {\n\tFeatureFlags []string `json:\"feature_flags\"`\n}\n"
 	handlerData := HandlerData{

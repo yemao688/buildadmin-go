@@ -122,7 +122,7 @@ fields:
 
 - `checkbox`、`selects`、`remoteSelects`、`city`、`images`、`files` 接受 JSON 标量数组，按顺序转成逗号连接的字符串。
 - `array` 接受 `key`/`value` 字符串对象数组，并保存为规范化 JSON 字符串。
-- `datetime` 接受 `2006-01-02 15:04:05`，并兼容 RFC3339；`date` 只接受日期格式，`time` 只接受时分秒格式；本地格式使用 `time.Local`。
+- `datetime` 接受 `2006-01-02 15:04:05`，并兼容 RFC3339；`date` 只接受日期格式，`time` 只接受严格的 `HH:mm:ss` 字符串。MySQL `TIME` 列生成到 Go 模型时使用 `string`，因为 go-sql-driver/mysql v1.10.0 返回 `TIME` 为 `[]byte`/字符串，即使启用 `parseTime=true` 也无法扫描到 `time.Time`；请求参数仍使用 `validate.FlexClock` 做严格校验并以字符串保存。读侧仍受驱动返回值格式限制，尚未提供额外的时间格式化回显。
 - 整数 `timestamp` 接受 Unix 秒、日期时间或 RFC3339，并保存为 Unix 秒。
 - `switch` 的 JSON 布尔值转换为 `1`/`0`。
 
