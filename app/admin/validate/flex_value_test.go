@@ -100,7 +100,7 @@ func TestFlexTimes(t *testing.T) {
 		{"datetime local", `"2026-07-25 12:34:56"`, func() any { return new(FlexDateTime) }, time.Date(2026, 7, 25, 12, 34, 56, 0, local), false},
 		{"datetime RFC3339", `"2026-07-25T12:34:56+08:00"`, func() any { return new(FlexDateTime) }, time.Date(2026, 7, 25, 12, 34, 56, 0, local), false},
 		{"date", `"2026-07-25"`, func() any { return new(FlexDate) }, time.Date(2026, 7, 25, 0, 0, 0, 0, local), false},
-		{"clock", `"12:34:56"`, func() any { return new(FlexClock) }, time.Date(0, 1, 1, 12, 34, 56, 0, local), false},
+		{"clock", `"12:34:56"`, func() any { return new(FlexClock) }, time.Date(1970, 1, 1, 12, 34, 56, 0, local), false},
 		{"datetime null", `null`, func() any { return new(FlexDateTime) }, time.Time{}, false},
 		{"date empty", `""`, func() any { return new(FlexDate) }, time.Time{}, false},
 		{"date rejects datetime", `"2026-07-25 12:34:56"`, func() any { return new(FlexDate) }, time.Time{}, true},
@@ -212,7 +212,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	}
 	wantWhen := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
 	wantDate := time.Date(2026, 7, 25, 0, 0, 0, 0, local)
-	wantClock := time.Date(0, 1, 1, 12, 34, 56, 0, local)
+	wantClock := time.Date(1970, 1, 1, 12, 34, 56, 0, local)
 
 	model := FlexValueModel{}
 	if err := copier.Copy(&model, &input); err != nil {

@@ -175,6 +175,9 @@ func (v *FlexClock) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	if !value.IsZero() {
+		value = time.Date(1970, time.January, 1, value.Hour(), value.Minute(), value.Second(), value.Nanosecond(), value.Location())
+	}
 	*v = FlexClock(value)
 	return nil
 }
