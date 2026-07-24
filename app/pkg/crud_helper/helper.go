@@ -761,7 +761,7 @@ func getFieldDefault(field model.Field) string {
 
 func GetRemotePk(fullTableName string, field model.Field) string {
 	name := fullTableName
-	if field.Form.RemotePk != "" {
+	if field.Form.RemotePk == "" {
 		return name + ".id"
 	}
 	return name + "." + field.Form.RemotePk
@@ -880,14 +880,7 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 	}
 
 	relationFields := strings.Split(field.Form.RelationFields, ",")
-	relationName := ""
-	if strings.HasSuffix(field.Name, "_ids") || strings.HasSuffix(field.Name, "id") {
-		relationName = strings.ReplaceAll(field.Name, "_ids", "")
-		relationName = strings.ReplaceAll(relationName, "_id", "")
-	} else {
-		relationName = field.Name + "_table"
-	}
-	relationName = utils.SnakeToCamel(relationName, false)
+	relationName := relationNameForField(field.Name)
 
 	if field.DesignType == "remoteSelect" {
 		// 关联预载入方法
@@ -988,6 +981,18 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 
 	}
 	return nil
+}
+
+func relationNameForField(fieldName string) string {
+	relationName := fieldName
+	if strings.HasSuffix(fieldName, "_ids") {
+		relationName = strings.TrimSuffix(fieldName, "_ids")
+	} else if strings.HasSuffix(fieldName, "_id") {
+		relationName = strings.TrimSuffix(fieldName, "_id")
+	} else {
+		relationName += "_table"
+	}
+	return utils.SnakeToCamel(relationName, false)
 }
 
 // 关联表是否存在，不存在创建

@@ -1,119 +1,126 @@
-# CRUD 模块生成 Playbook（AI 驱动）
+# CRUD YAML 生成器 Playbook
 
-本文档教 AI 会话用一条命令完成"用户说要什么模块 → 完整生成链路"。
-当用户说"生成 XX 模块"（如"用户订单"）时，按本流程执行。
+本文档说明 Go CRUD YAML spec 生成器与 bundled PHP BuildAdmin v2.3.7 的字段设计类型、默认值和推断顺序兼容边界。它不是“全运行时 parity”声明：Go 生成器仍使用 Gin/GORM、强类型模型和本仓库自己的路由/迁移实现。
 
 ## 标准流程
 
 ```bash
-# 1. 根据用户需求编写 spec（schema 见下文），保存到 crud_specs/<module>.yaml
-# 2. 执行生成
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml
-# 3. 验证编译
 go build ./...
-# 4. 向用户报告：生成的文件清单（命令 stdout 已列出）、菜单位置、建议的后端定制点
 ```
 
-- 退出码：`0` 成功；`1` 失败（stderr 单行错误，直接可读）。**不要用输出文本判断成败，看退出码。**
-- 生成链自带编译门禁：wire 后自动执行 `go build ./...`，失败自动恢复文件并报错。
-- spec 入版本库。**修改已有模块**：把 spec 改为 `type: alter` 再重跑（只增改列，绝不隐式删列；spec 里缺少的现有列会被保留）。
-- **`type: create` 遇到已存在的表会直接失败**——这是防数据丢失护栏。确需 DROP 重建时显式写 `rebuild: "Yes"`（破坏性，先确认表无业务数据）。
-- 覆盖保护：只有目标文件与"最近一次成功生成的 manifest"完全一致才允许覆盖；手写核心文件永远拒绝。
-- 跳过菜单创建：加 `--skip-menu`（菜单默认创建）。
-- 审计归属：`--admin-id <id>`（默认 1），生成前校验该管理员必须存在。
+退出码 `0` 才表示成功；失败会恢复文件。修改已有模块使用 `type: alter`，不会隐式删除现有列。`create` 遇到已有表会失败；确认无数据时才显式使用 `rebuild: "Yes"`。菜单默认创建，`--skip-menu` 可跳过。`crud:delete <table_name>` 只删除生成物和菜单，不 DROP 表。
 
-```bash
-# 删除模块（文件进 quarantine，provider/router/wire 全部成功后才真删，失败自动恢复）
-go run ./cmd/app --conf config.yaml crud:delete <table_name>
-# 注意：delete 只移除生成物与菜单，不 DROP 数据表；需要时手动 DROP TABLE ba_<table_name>
-```
-
-## spec schema（crud_specs/*.yaml）
+## YAML schema
 
 ```yaml
-name: user_order          # 必填，逻辑表名（snake_case；物理表自动加 mysql.prefix，通常 ba_）
-comment: 用户订单          # 表注释 / 菜单默认标题
-type: create              # 可选，默认 create=新建（表已存在则失败）；
-                          #   alter=修改已有表（增改列、不删列）
-rebuild: "No"             # 仅 "Yes" 时允许 create DROP 重建（破坏性）
-dataScope:                # 可选，默认 { mode: auto }
-  mode: auto              # auto|required|none（见下方"数据权限约定"）
-  ownerColumn: admin_id   # required 模式下的 owner 列
+name: user_order
+comment: 用户订单
+type: create
+rebuild: "No"
+dataScope:
+  mode: auto                 # auto | required | none
+  ownerColumn: admin_id
   assignOnCreate: true
-formFields: [order_no]    # 可选，默认 = 所有非主键字段
-columnFields: [id]        # 可选，默认 = 所有字段
-quickSearchField: [order_no]  # 可选
-menu:                     # 可选；只配置标题/父级；菜单总是创建，除非 --skip-menu
-  title: 用户订单
-  parent: 0               # admin_rule 父节点 id，0=顶级
-fields:                   # 必填，至少一个
+formFields: [order_no]       # 省略时为非主键且未 formBuildExclude 的字段
+columnFields: [id, order_no] # 省略时为全部字段
+quickSearchField: [order_no]
+defaultSortField: id
+defaultSortType: desc
+menu: { title: 用户订单, parent: 0 }
+fields:
   - name: id
-    type: bigint          # 必填；白名单：bigint/int/smallint/mediumint/tinyint/
-                          #   varchar/char/text/tinytext/mediumtext/longtext/
-                          #   decimal/double/float/datetime/timestamp/date/time/enum/set
-                          # 主键类型映射：int/mediumint→int32，bigint→int64，varchar/char→string；
-                          # 其他类型作主键会被拒绝生成
-    length: 0             # varchar/decimal 用；decimal 配合 precision
+    type: bigint
+    dataType: bigint         # enum/set 可写完整定义
+    length: 0
     precision: 0
     primaryKey: true
     autoIncrement: true
-    null: false           # true=允许 NULL；false=生成 NOT NULL
-    unsigned: false
-    default: "0"          # 字符串形式书写
-    designType: pk        # 表单控件类型；缺省按 type 推导：
-                          #   pk|timestamp|datetime|date|time|number|select|textarea|string|...
-    comment: 主键
+    unsigned: true
+    null: false
+    default: "0"
+    comment: ID
+    designType: pk
+    formBuildExclude: true
+    tableBuildExclude: false
+    table:
+      width: 70
+      operator: RANGE
+      sortable: custom
+      render: none
+      timeFormat: yyyy-mm-dd hh:MM:ss
+      label: ""
+      show: ""
+      comSearchRender: string
+      remote: ""
+    form:
+      validator: [required]
+      validatorMsg: ""
+      rows: 3
+      step: 1
+      select-multi: false
+      image-multi: false
+      file-multi: false
+      remote-pk: id
+      remote-field: name
+      remote-table: user
+      remote-controller: app/admin/handler/user.go
+      remote-model: app/common/model/user.go
+      relation-fields: name
+      remote-url: ""
+      remote-source-config-type: crud
 ```
 
-完整可运行示例见 `crud_specs/user_order.yaml`。
+`type` 必填，类型白名单由生成器校验：`bigint/int/smallint/mediumint/tinyint`、`varchar/char`、`text/tinytext/mediumtext/longtext`、`decimal/double/float`、`datetime/timestamp/date/time/year/enum/set`。YAML 属性包括表级 `comment/type/rebuild/dataScope/formFields/columnFields/quickSearchField/defaultSortField/defaultSortType/menu`，字段级 `length/precision/default/null/primaryKey/unsigned/autoIncrement/comment/designType/formBuildExclude/tableBuildExclude/table/form`；form/table 的属性名以 `model.TableAttr`、`model.FormAttr` 为准。
 
-## 数据权限约定（重要）
+显式 `designType` 优先。其余默认处理顺序是：读取 `type`（缺省取 `dataType`）→按下节规则推断→按设计类型补齐非空/非零默认值→派生 `formFields`。显式 `formFields: []` 保持为空；显式 `formBuildExclude: false` 覆盖时间字段默认排除。覆盖默认值时应写非空/非零值；多选关闭可写字符串 `"0"`。
 
-- **默认 `mode: auto`**：表含 `admin_id` 列时，该列成为 owner，生成的 List/Add/Edit/Del 自动按管理员层级（admin_closure）隔离数据；新记录自动归属当前操作管理员。业务模块一般用它，并在 fields 里显式声明 `admin_id`（bigint, NOT NULL）。
-- `mode: none`：全局资源，不做数据隔离（字典、配置类）。
-- `mode: required`：自定义 owner 列（配合 `ownerColumn`/`assignOnCreate`）。有通用 Add 路径的资源**必须** `assignOnCreate: true`；`false` 会被生成器拒绝（防无 owner 孤儿数据，admin 类专用资源除外）。
-- owner 列若非主键，生成链路自动创建 `idx_<owner>` 索引。
+`admin_id` 的管理员昵称/label 不能安全推断，必须显式配置 `designType: remoteSelect` 及 `form.remoteTable`、`remoteField`、`remotePk`、`relationFields` 和 controller/url 等属性。
 
-## 护栏（链路已内置，违反会直接失败）
+## designType 推断（Helper.php 有序规则）
 
-- **核心表禁生成**：`admin`、`admin_closure`、`admin_log`、`admin_rule`、`user`、`user_money_log`、`user_score_log`、`user_rule`、`user_group`、`attachment`、`crud_log`、`data_recycle_log`、`sensitive_data_log`、`security_rule`、`table`。
-- 标识符/类型白名单校验、DDL 注释与默认值转义。
-- 自定义 `modelFile/controllerFile/webViewsDir` 路径必须位于固定根目录内，禁止 `..` 逃逸（AI 一般用默认路径，不要自定义）。
-- 生成/删除全程互斥锁（并发返回 busy）、文件原子写入、失败自动恢复文件。
-- 不可恢复项：MySQL DDL 不可回滚——生成前确认 spec 无误。
+后缀是不区分大小写的字段名结尾匹配，首个规则命中即停止：
 
-## 生成物与定制点
+1. 自增且字段名包含 `id` → `pk`；字段名正好为 `weigh` → `weigh`；`create_time/update_time/createtime/updatetime` → `timestamp`。
+2. `tinyint/int/enum` + `switch/toggle`，或 `tinyint(1)/char(1)/tinyint(1) unsigned` + `switch/toggle` → `switch`。
+3. 文本类型 + `content/editor` → `editor`；`varchar` + `textarea/multiline/rows` → `textarea`；`array` 后缀 → `array`。
+4. `int` + `time/datetime` → `timestamp`；`datetime/timestamp/date/year/time` 类型分别对应同名设计类型。
+5. `select/list/data` → `select`；`selects/multi/lists` → `selects`；`_ids` → `remoteSelects`；`_id` → `remoteSelect`。
+6. `city`、`image/avatar`、`images/avatars`、`file`、`files` → `city/image/images/file/files`。
+7. `tinyint(1)/char(1)/tinyint(1) unsigned` + `status/state/type` → `radio`；`number/int/num` 后缀 → `number`。
+8. 数字类型 `bigint/int/mediumint/smallint/tinyint/decimal/double/float` → `number`；文本 → `textarea`；`enum` → `radio`；`set` → `checkbox`；`color` 后缀 → `color`；最后回退 `string`。
 
-| 生成物 | 位置 |
-|---|---|
-| Model | `app/admin/model/<module>.go`（已含 dataScope 接入） |
-| Handler | `app/admin/handler/<module>.go` |
-| 路由 | `router/router.go`（自动注入） |
-| Wire | `cmd/app/wire_gen.go`（自动重新生成，勿手改） |
-| 前端 | `web/src/views/backend/<module>/index.vue`、`popupForm.vue` |
-| 语言包 | `web/src/lang/backend/{locale}/{module...}.ts`（路由自动按需加载；只读，重新生成会覆盖） |
-| 菜单 | `admin_rule` 表 |
+`spk`、`float`、`password` 是设计器可显式选择的类型，不从普通列猜测；写入 YAML 的 `designType` 即可。该限制避免把业务命名误判为密码或雪花 ID。
 
-生成后常见人工/AI 定制：
+## 29 个 designType 默认矩阵
 
-- 远程关联下拉：编辑生成的 `popupForm.vue`，把字段改为 `remoteSelect`。
-- 列表关联展示：在生成的 model `List` 中按现有 scope 模式加 JOIN。
-- 改字段：编辑 spec 字段后把 `type` 改为 `alter` 重跑（ADD/MODIFY 列；删列需人工处理）。
-- autoload 仅用于例外映射；已定制的生成视图/语言文件在未来执行 `alter` 前必须先保护 diff，再合回定制内容。
+默认只在 YAML 属性为空/为零时补齐，非空/非零显式属性优先：
 
-## 验证清单（生成后必做）
+| 类型 | table 默认值 | form 默认值 |
+|---|---|---|
+| `pk` / `spk` | `width=70/180, operator=RANGE, sortable=custom` | 无 |
+| `weigh` | `operator=RANGE, sortable=custom` | 无 |
+| `switch` | `render=switch, operator=eq, sortable=false` | 无 |
+| `select` / `selects` | `tag/eq/false` / `tags/FIND_IN_SET/false` | 后者多选 |
+| `radio` / `checkbox` | `tag/eq/false` / `tags/FIND_IN_SET/false` | 无 |
+| `remoteSelect` / `remoteSelects` | `tags/LIKE/(string)` / `tags/FIND_IN_SET/(remoteSelect)` | `remotePk=id, remoteField=name`；后者多选 |
+| `string` | `render=none, operator=LIKE, sortable=false` | 无 |
+| `textarea` / `editor` | `operator=false` | `rows=3` / `validator=editorRequired` |
+| `number` / `float` | `render=none, operator=RANGE, sortable=false` | validator `number/float`，`step=1` |
+| `datetime` / `timestamp` | `RANGE, comSearchRender=datetime, sortable=custom, width=160`；后者另有 `render=datetime,timeFormat=yyyy-mm-dd hh:MM:ss` | validator `date` |
+| `date` / `time` / `year` | `RANGE`；date/time 的搜索渲染分别为 `date/time`；sortable custom | date/year validator `date` |
+| `image` / `images` | `render=image/images, operator=false` | 后者多图 |
+| `file` / `files` | `render=none, operator=false` | 后者多文件 |
+| `password` / `array` / `city` | `operator=false` | password validator `password` |
+| `icon` / `color` | `render=icon/color, operator=false` | 无 |
 
-1. `go build ./...`
-2. 如需前端验证：`cd web && pnpm typecheck && pnpm build`（前端命令必须在 `web/` 下用 pnpm）
-3. 报告生成文件清单 + 菜单位置 + 建议定制点。
+生成 `index.vue defaultItems` 时还遵循 PHP/TS：`array` 为 `[]`；editor 始终产生空字符串；checkbox/selects/remoteSelects/city/images/files 的逗号值转数组；number/float 输出非零数字；switch、remoteSelect 的 `0` 不输出；非 `INPUT` 默认类型不输出。
 
-## 故障速查
+## 数据权限、关系与已知边界
 
-| 现象 | 原因/处理 |
-|---|---|
-| `another generation is in progress` | 另一生成/删除进行中，稍后重试 |
-| `protected table` | 表名命中核心表清单，换表名 |
-| `table already exists`（create 被拒） | 改 `type: alter` 迭代；或确认无数据后 `rebuild: "Yes"` 重建 |
-| 覆盖被拒绝（非 success manifest 路径） | 目标是手写/历史文件；换模块名或先 `crud:delete` 对应记录 |
-| 退出码 1 + 单行错误 | 按 stderr 错误修正 spec 重跑；文件系统已自动恢复 |
-| Wire/编译门禁失败 | 生成物已自动回滚；按错误中的构建输出修正后重试，或手工 `go generate ./cmd/app` 诊断 |
+- `dataScope.mode: auto` 检测 `admin_id` 并生成层级隔离；`none` 用于全局资源；`required` 必须配 owner 列，通用 Add 通常必须 `assignOnCreate: true`。
+- remoteSelect 只有 remote table、relation fields 等信息完整时才生成关系模型/预载入代码。Go handler 路由会从仓库注册表反查，不能保证任意外部 PHP controller 的动态 URL 语义。
+- 不承诺 PHP 设计器的动态属性、运行时 SQL join、权限插件或自定义组件完全一致；本生成器提供的是 YAML 输入、字段推断、默认矩阵和仓库级生成护栏的语义对齐。
+- 生成路径必须位于固定根目录；核心表不能生成；DDL 不可回滚。
+
+生成物位于 `app/admin/model/`、`app/admin/handler/`、`web/src/views/backend/` 和 `web/src/lang/backend/`，路由/Wire/菜单自动更新。生成后运行 `go build ./...`；前端验证必须在 `web/` 使用 `pnpm typecheck && pnpm build`。

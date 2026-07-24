@@ -24,7 +24,7 @@ type specFile struct {
 	QuickSearchField []string       `mapstructure:"quickSearchField"`
 	DefaultSortField string         `mapstructure:"defaultSortField"`
 	DefaultSortType  string         `mapstructure:"defaultSortType"`
-	FormFields       []string       `mapstructure:"formFields"`
+	FormFields       *[]string      `mapstructure:"formFields"`
 	ColumnFields     []string       `mapstructure:"columnFields"`
 	DataScope        *specDataScope `mapstructure:"dataScope"`
 	Fields           []specField    `mapstructure:"fields"`
@@ -58,7 +58,7 @@ type specField struct {
 	DesignType        string          `mapstructure:"designType"`
 	Form              model.FormAttr  `mapstructure:"form"`
 	Table             model.TableAttr `mapstructure:"table"`
-	FormBuildExclude  bool            `mapstructure:"formBuildExclude"`
+	FormBuildExclude  *bool           `mapstructure:"formBuildExclude"`
 	TableBuildExclude bool            `mapstructure:"tableBuildExclude"`
 }
 
@@ -102,17 +102,20 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 
 	fields := make([]model.Field, 0, len(raw.Fields))
 	allNames := make([]string, 0, len(raw.Fields))
-	formNames := make([]string, 0, len(raw.Fields))
 	for i, item := range raw.Fields {
 		if item.Name == "" {
 			return nil, fmt.Errorf("field[%d] name is required", i)
 		}
+		formBuildExclude := item.FormBuildExclude != nil && *item.FormBuildExclude
 		field := model.Field{
 			Name: item.Name, Title: item.Title, Type: strings.ToLower(item.Type), DataType: strings.ToLower(item.DataType),
 			Length: item.Length, Precision: item.Precision, Default: item.Default, Null: item.Null,
 			PrimaryKey: item.PrimaryKey, Unsigned: item.Unsigned, AutoIncrement: item.AutoIncrement,
 			Comment: item.Comment, DesignType: item.DesignType, Form: item.Form, Table: item.Table,
-			FormBuildExclude: item.FormBuildExclude, TableBuildExclude: item.TableBuildExclude,
+			FormBuildExclude: formBuildExclude, TableBuildExclude: item.TableBuildExclude,
+		}
+		if item.FormBuildExclude == nil && isCanonicalTimeField(field.Name) {
+			field.FormBuildExclude = true
 		}
 		if field.Type == "" {
 			field.Type = field.DataType
@@ -124,21 +127,27 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 			field.DataType = field.Type
 		}
 		if field.DesignType == "" {
-			field.DesignType = inferDesignType(field.Type)
+			field.DesignType = inferDesignTypeForField(field)
 		}
+		applyDesignTypeDefaults(&field)
 		if err := ValidateField(field); err != nil {
 			return nil, fmt.Errorf("field %q: %w", item.Name, err)
 		}
 		fields = append(fields, field)
 		allNames = append(allNames, field.Name)
-		if !field.PrimaryKey {
-			formNames = append(formNames, field.Name)
-		}
 	}
 
-	formFields := raw.FormFields
-	if len(formFields) == 0 {
-		formFields = formNames
+	formFields := []string(nil)
+	if raw.FormFields != nil {
+		formFields = *raw.FormFields
+	}
+	if raw.FormFields == nil {
+		formFields = make([]string, 0, len(fields))
+		for _, field := range fields {
+			if !field.PrimaryKey && !field.FormBuildExclude {
+				formFields = append(formFields, field.Name)
+			}
+		}
 	}
 	columnFields := raw.ColumnFields
 	if len(columnFields) == 0 {
@@ -191,27 +200,305 @@ func normalizeNullKeys(node *yaml.Node) {
 	}
 }
 
-func inferDesignType(typ string) string {
-	t := strings.ToLower(typ)
-	if strings.Contains(t, "(") {
-		t = t[:strings.IndexByte(t, '(')]
+// inferDesignTypeForField follows Helper.php::$inputTypeRule in order.  The
+// order is significant: suffix rules intentionally beat broad type rules.
+func inferDesignTypeForField(field model.Field) string {
+	name := strings.ToLower(field.Name)
+	typ := strings.ToLower(analyseFieldTypeForSpec(field))
+	columnType := strings.ToLower(field.DataType)
+	if columnType == "" {
+		columnType = strings.ToLower(field.Type)
 	}
-	switch t {
-	case "tinyint":
-		return "number"
-	case "int", "bigint", "smallint", "mediumint", "decimal", "double", "float", "real":
-		return "number"
+
+	if field.AutoIncrement && strings.Contains(name, "id") {
+		return "pk"
+	}
+	if name == "weigh" {
+		return "weigh"
+	}
+	if isCanonicalTimeField(name) {
+		return "timestamp"
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"tinyint", "int", "enum"}, []string{"switch", "toggle"}) ||
+		matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"switch", "toggle"}) {
+		return "switch"
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, []string{"content", "editor"}) {
+		return "editor"
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"varchar"}, []string{"textarea", "multiline", "rows"}) {
+		return "textarea"
+	}
+	if hasSuffix(name, []string{"array"}) {
+		return "array"
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"int"}, []string{"time", "datetime"}) {
+		return "timestamp"
+	}
+	switch typ {
 	case "datetime", "timestamp":
 		return "datetime"
 	case "date":
 		return "date"
+	case "year":
+		return "year"
 	case "time":
 		return "time"
-	case "enum", "set":
+	}
+	if hasSuffix(name, []string{"select", "list", "data"}) {
 		return "select"
-	case "text", "tinytext", "mediumtext", "longtext":
+	}
+	if hasSuffix(name, []string{"selects", "multi", "lists"}) {
+		return "selects"
+	}
+	if hasSuffix(name, []string{"_ids"}) {
+		return "remoteSelects"
+	}
+	if hasSuffix(name, []string{"_id"}) {
+		return "remoteSelect"
+	}
+	if hasSuffix(name, []string{"city"}) {
+		return "city"
+	}
+	if hasSuffix(name, []string{"image", "avatar"}) {
+		return "image"
+	}
+	if hasSuffix(name, []string{"images", "avatars"}) {
+		return "images"
+	}
+	if hasSuffix(name, []string{"file"}) {
+		return "file"
+	}
+	if hasSuffix(name, []string{"files"}) {
+		return "files"
+	}
+	if hasSuffix(name, []string{"icon"}) {
+		return "icon"
+	}
+	if matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"status", "state", "type"}) {
+		return "radio"
+	}
+	if hasSuffix(name, []string{"number", "int", "num"}) {
+		return "number"
+	}
+	if slicesContains([]string{"bigint", "int", "mediumint", "smallint", "tinyint", "decimal", "double", "float"}, typ) {
+		return "number"
+	}
+	if slicesContains([]string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, typ) {
 		return "textarea"
+	}
+	if typ == "enum" {
+		return "radio"
+	}
+	if typ == "set" {
+		return "checkbox"
+	}
+	if hasSuffix(name, []string{"color"}) {
+		return "color"
+	}
+	return "string"
+}
+
+func analyseFieldTypeForSpec(field model.Field) string {
+	typ := field.Type
+	if field.DataType != "" {
+		typ = field.DataType
+	}
+	if i := strings.IndexByte(typ, '('); i >= 0 {
+		typ = typ[:i]
+	}
+	return strings.TrimSpace(typ)
+}
+
+func hasSuffix(name string, suffixes []string) bool {
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesTypeAndSuffix(typ, name string, types, suffixes []string) bool {
+	return slicesContains(types, typ) && hasSuffix(name, suffixes)
+}
+
+func matchesColumnTypeAndSuffix(columnType, name string, types, suffixes []string) bool {
+	return slicesContains(types, columnType) && hasSuffix(name, suffixes)
+}
+
+func slicesContains(values []string, value string) bool {
+	for _, item := range values {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func isCanonicalTimeField(name string) bool {
+	switch strings.ToLower(name) {
+	case "createtime", "updatetime", "create_time", "update_time":
+		return true
 	default:
-		return "string"
+		return false
+	}
+}
+
+func applyTimestampTableDefaults(table *model.TableAttr) {
+	if table.Render == "" {
+		table.Render = "datetime"
+	}
+	if table.Operator == "" {
+		table.Operator = "RANGE"
+	}
+	if table.ComSearchRender == "" {
+		table.ComSearchRender = "datetime"
+	}
+	if table.Width == 0 {
+		table.Width = 160
+	}
+	if table.TimeFormat == "" {
+		table.TimeFormat = "yyyy-mm-dd hh:MM:ss"
+	}
+}
+
+func applyDesignTypeDefaults(field *model.Field) {
+	setTable := func(render, operator, sortable, search string, width int, timeFormat string) {
+		if field.Table.Render == "" {
+			field.Table.Render = render
+		}
+		if field.Table.Operator == "" {
+			field.Table.Operator = operator
+		}
+		if field.Table.Sortable == "" {
+			field.Table.Sortable = sortable
+		}
+		if field.Table.ComSearchRender == "" {
+			field.Table.ComSearchRender = search
+		}
+		if field.Table.Width == 0 {
+			field.Table.Width = width
+		}
+		if field.Table.TimeFormat == "" {
+			field.Table.TimeFormat = timeFormat
+		}
+	}
+	switch field.DesignType {
+	case "pk":
+		setTable("", "RANGE", "custom", "", 70, "")
+	case "spk":
+		setTable("", "RANGE", "custom", "", 180, "")
+	case "weigh":
+		setTable("", "RANGE", "custom", "", 0, "")
+	case "timestamp":
+		setTable("datetime", "RANGE", "custom", "datetime", 160, "yyyy-mm-dd hh:MM:ss")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"date"}
+		}
+	case "string":
+		setTable("none", "LIKE", "false", "", 0, "")
+	case "password":
+		setTable("", "false", "", "", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"password"}
+		}
+	case "number":
+		setTable("none", "RANGE", "false", "", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"number"}
+		}
+		if field.Form.Step == 0 {
+			field.Form.Step = 1
+		}
+	case "float":
+		setTable("none", "RANGE", "false", "", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"float"}
+		}
+		if field.Form.Step == 0 {
+			field.Form.Step = 1
+		}
+	case "radio":
+		setTable("tag", "eq", "false", "", 0, "")
+	case "checkbox":
+		setTable("tags", "FIND_IN_SET", "false", "", 0, "")
+	case "switch":
+		setTable("switch", "eq", "false", "", 0, "")
+	case "textarea":
+		setTable("", "false", "", "", 0, "")
+		if field.Form.Rows == 0 {
+			field.Form.Rows = 3
+		}
+	case "array":
+		setTable("", "false", "", "", 0, "")
+	case "datetime":
+		setTable("", "RANGE", "custom", "datetime", 160, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"date"}
+		}
+	case "year":
+		setTable("", "RANGE", "custom", "", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"date"}
+		}
+	case "date":
+		setTable("", "RANGE", "custom", "date", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"date"}
+		}
+	case "time":
+		setTable("", "RANGE", "custom", "time", 0, "")
+	case "select":
+		setTable("tag", "eq", "false", "", 0, "")
+	case "selects":
+		setTable("tags", "FIND_IN_SET", "false", "", 0, "")
+		if field.Form.SelectMulti == "" {
+			field.Form.SelectMulti = "1"
+		}
+	case "remoteSelect":
+		setTable("tags", "LIKE", "", "string", 0, "")
+		if field.Form.RemotePk == "" {
+			field.Form.RemotePk = "id"
+		}
+		if field.Form.RemoteField == "" {
+			field.Form.RemoteField = "name"
+		}
+	case "remoteSelects":
+		setTable("tags", "FIND_IN_SET", "", "remoteSelect", 0, "")
+		if field.Form.SelectMulti == "" {
+			field.Form.SelectMulti = "1"
+		}
+		if field.Form.RemotePk == "" {
+			field.Form.RemotePk = "id"
+		}
+		if field.Form.RemoteField == "" {
+			field.Form.RemoteField = "name"
+		}
+	case "editor":
+		setTable("", "false", "", "", 0, "")
+		if len(field.Form.Validator) == 0 {
+			field.Form.Validator = []string{"editorRequired"}
+		}
+	case "city":
+		setTable("", "false", "", "", 0, "")
+	case "image":
+		setTable("image", "false", "", "", 0, "")
+	case "images":
+		setTable("images", "false", "", "", 0, "")
+		if field.Form.ImageMulti == "" {
+			field.Form.ImageMulti = "1"
+		}
+	case "file":
+		setTable("none", "false", "", "", 0, "")
+	case "files":
+		setTable("none", "false", "", "", 0, "")
+		if field.Form.FileMulti == "" {
+			field.Form.FileMulti = "1"
+		}
+	case "icon":
+		setTable("icon", "false", "", "", 0, "")
+	case "color":
+		setTable("color", "false", "", "", 0, "")
 	}
 }

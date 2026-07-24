@@ -259,3 +259,104 @@ func TestHandleTableDesign(t *testing.T) {
 	require.NoError(t, err)
 	HandleTableDesign(db, fullTableName, table, fields)
 }
+
+func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
+	cases := []struct {
+		name, typ, dataType, want string
+		auto                      bool
+	}{
+		{"id", "bigint", "", "pk", true}, {"weigh", "int", "", "weigh", false},
+		{"create_time", "int", "", "timestamp", false}, {"enabled_switch", "tinyint", "", "switch", false},
+		{"body_content", "text", "", "editor", false}, {"description_textarea", "varchar", "", "textarea", false},
+		{"tags_array", "varchar", "", "array", false}, {"start_datetime", "int", "", "timestamp", false},
+		{"published_at", "datetime", "", "datetime", false}, {"birthday", "date", "", "date", false},
+		{"birth_year", "year", "", "year", false}, {"alarm_time", "time", "", "time", false},
+		{"kind_select", "varchar", "", "select", false}, {"kind_selects", "varchar", "", "selects", false},
+		{"user_ids", "varchar", "", "remoteSelects", false}, {"user_id", "bigint", "", "remoteSelect", false},
+		{"province_city", "varchar", "", "city", false}, {"cover_image", "varchar", "", "image", false},
+		{"cover_images", "varchar", "", "images", false}, {"download_file", "varchar", "", "file", false},
+		{"download_files", "varchar", "", "files", false}, {"status", "tinyint", "tinyint(1)", "radio", false},
+		{"menu_icon", "varchar", "", "icon", false},
+		{"sort_number", "int", "", "number", false}, {"amount", "decimal", "", "number", false},
+		{"notes", "text", "", "textarea", false}, {"options", "set", "", "checkbox", false},
+		{"theme_color", "varchar", "", "color", false}, {"plain_name", "varchar", "", "string", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := inferDesignTypeForField(model.Field{Name: tc.name, Type: tc.typ, DataType: tc.dataType, AutoIncrement: tc.auto})
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDesignTypeDefaultMatrix(t *testing.T) {
+	cases := map[string]struct {
+		render, operator, sortable, search string
+		width                              int
+	}{
+		"pk": {"", "RANGE", "custom", "", 70}, "spk": {"", "RANGE", "custom", "", 180}, "weigh": {"", "RANGE", "custom", "", 0},
+		"switch": {"switch", "eq", "false", "", 0}, "select": {"tag", "eq", "false", "", 0}, "selects": {"tags", "FIND_IN_SET", "false", "", 0},
+		"radio": {"tag", "eq", "false", "", 0}, "checkbox": {"tags", "FIND_IN_SET", "false", "", 0}, "remoteSelect": {"tags", "LIKE", "", "string", 0}, "remoteSelects": {"tags", "FIND_IN_SET", "", "remoteSelect", 0},
+		"string": {"none", "LIKE", "false", "", 0}, "textarea": {"", "false", "", "", 0}, "editor": {"", "false", "", "", 0}, "number": {"none", "RANGE", "false", "", 0}, "float": {"none", "RANGE", "false", "", 0},
+		"datetime": {"", "RANGE", "custom", "datetime", 160}, "timestamp": {"datetime", "RANGE", "custom", "datetime", 160}, "date": {"", "RANGE", "custom", "date", 0}, "time": {"", "RANGE", "custom", "time", 0}, "year": {"", "RANGE", "custom", "", 0},
+		"image": {"image", "false", "", "", 0}, "images": {"images", "false", "", "", 0}, "file": {"none", "false", "", "", 0}, "files": {"none", "false", "", "", 0}, "password": {"", "false", "", "", 0}, "array": {"", "false", "", "", 0}, "city": {"", "false", "", "", 0}, "icon": {"icon", "false", "", "", 0}, "color": {"color", "false", "", "", 0},
+	}
+	for designType, want := range cases {
+		field := model.Field{DesignType: designType}
+		applyDesignTypeDefaults(&field)
+		if field.Table.Render != want.render || field.Table.Operator != want.operator || field.Table.Sortable != want.sortable || field.Table.ComSearchRender != want.search || field.Table.Width != want.width {
+			t.Errorf("%s defaults = %+v", designType, field.Table)
+		}
+	}
+}
+
+func TestDesignTypeFormDefaultMatrix(t *testing.T) {
+	tests := map[string]model.FormAttr{
+		"password":      {Validator: []string{"password"}},
+		"number":        {Validator: []string{"number"}, Step: 1},
+		"float":         {Validator: []string{"float"}, Step: 1},
+		"textarea":      {Rows: 3},
+		"datetime":      {Validator: []string{"date"}},
+		"timestamp":     {Validator: []string{"date"}},
+		"date":          {Validator: []string{"date"}},
+		"year":          {Validator: []string{"date"}},
+		"selects":       {SelectMulti: "1"},
+		"remoteSelect":  {RemotePk: "id", RemoteField: "name"},
+		"remoteSelects": {SelectMulti: "1", RemotePk: "id", RemoteField: "name"},
+		"editor":        {Validator: []string{"editorRequired"}},
+		"images":        {ImageMulti: "1"},
+		"files":         {FileMulti: "1"},
+	}
+	for designType, want := range tests {
+		t.Run(designType, func(t *testing.T) {
+			field := model.Field{DesignType: designType}
+			applyDesignTypeDefaults(&field)
+			require.Equal(t, want, field.Form)
+		})
+	}
+}
+
+func TestGetRemotePk(t *testing.T) {
+	if got := GetRemotePk("ba_user", model.Field{}); got != "ba_user.id" {
+		t.Fatalf("default pk = %q", got)
+	}
+	if got := GetRemotePk("ba_user", model.Field{Form: model.FormAttr{RemotePk: "uuid"}}); got != "ba_user.uuid" {
+		t.Fatalf("explicit pk = %q", got)
+	}
+}
+
+func TestRelationNameForField(t *testing.T) {
+	cases := map[string]string{
+		"user_id_id": "userId",
+		"paid":       "paidTable",
+		"user_ids":   "user",
+		"user_id":    "user",
+	}
+	for fieldName, want := range cases {
+		if got := relationNameForField(fieldName); got != want {
+			t.Errorf("relationNameForField(%q) = %q, want %q", fieldName, got, want)
+		}
+	}
+}

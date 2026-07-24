@@ -134,3 +134,106 @@ fields:
 		}
 	}
 }
+
+func TestLoadSpecTimestampDefaultsAndFormFieldDerivation(t *testing.T) {
+	path := writeSpecTest(t, `name: timestamp_defaults
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: createTime
+    type: datetime
+  - name: update_time
+    type: datetime
+    formBuildExclude: false
+    table:
+      operator: EQUALS
+      width: 240
+  - name: amount
+    type: bigint
+  - name: internal_note
+    type: varchar
+    formBuildExclude: true
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if opts.Fields[1].DesignType != "timestamp" {
+		t.Fatalf("createTime design type = %q, want timestamp", opts.Fields[1].DesignType)
+	}
+	defaults := opts.Fields[1].Table
+	if defaults.Render != "datetime" || defaults.Operator != "RANGE" || defaults.ComSearchRender != "datetime" || defaults.Width != 160 || defaults.TimeFormat != "yyyy-mm-dd hh:MM:ss" {
+		t.Fatalf("timestamp table defaults = %+v", defaults)
+	}
+	if opts.Fields[2].FormBuildExclude || opts.Fields[2].Table.Operator != "EQUALS" || opts.Fields[2].Table.Width != 240 {
+		t.Fatalf("explicit timestamp overrides = %+v", opts.Fields[2])
+	}
+	if opts.Fields[3].DesignType != "number" {
+		t.Fatalf("bigint design type = %q, want number", opts.Fields[3].DesignType)
+	}
+	if len(opts.Table.FormFields) != 2 || opts.Table.FormFields[0] != "update_time" || opts.Table.FormFields[1] != "amount" {
+		t.Fatalf("derived form fields = %v", opts.Table.FormFields)
+	}
+}
+
+func TestLoadSpecExplicitFormFieldsAreAuthoritative(t *testing.T) {
+	path := writeSpecTest(t, `name: explicit_form_fields
+formFields: []
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: createtime
+    type: datetime
+  - name: hidden
+    type: varchar
+    formBuildExclude: true
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Table.FormFields == nil || len(opts.Table.FormFields) != 0 {
+		t.Fatalf("explicit empty formFields were not preserved: %v", opts.Table.FormFields)
+	}
+}
+
+func TestLoadSpecDefaultsDoNotOverrideExplicitAttributes(t *testing.T) {
+	path := writeSpecTest(t, `name: explicit_attrs
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+  - name: amount_number
+    type: int
+    table:
+      render: custom
+      operator: EQUALS
+      sortable: custom
+      width: 240
+    form:
+      step: 5
+      validator: [required]
+  - name: owner_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remotePk: uuid
+      remoteField: nickname
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	amount := opts.Fields[1]
+	if amount.Table.Render != "custom" || amount.Table.Operator != "EQUALS" || amount.Table.Sortable != "custom" || amount.Table.Width != 240 || amount.Form.Step != 5 || len(amount.Form.Validator) != 1 || amount.Form.Validator[0] != "required" {
+		t.Fatalf("explicit defaults were overwritten: %+v", amount)
+	}
+	remote := opts.Fields[2].Form
+	if remote.RemotePk != "uuid" || remote.RemoteField != "nickname" {
+		t.Fatalf("explicit remote attrs were overwritten: %+v", remote)
+	}
+}
