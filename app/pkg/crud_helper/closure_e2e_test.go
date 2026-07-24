@@ -171,6 +171,7 @@ func TestGeneratedClosureBehavior(t *testing.T) {
 	require.NoError(t, db.Raw("SELECT id, admin_id, name FROM "+resourceTable+" WHERE id = 1").Scan(&edited).Error)
 	require.Equal(t, int32(2), edited.AdminID)
 	require.Equal(t, "", edited.Name)
+	require.NoError(t, model.Edit(ctx, Scopeitems{ID: 1, AdminID: 3, Name: ""}))
 	require.ErrorIs(t, model.Edit(ctx, Scopeitems{ID: 2, AdminID: 2, Name: "blocked"}), gorm.ErrRecordNotFound)
 
 	require.NoError(t, model.Del(ctx, []int32{1, 3, 3}))

@@ -204,8 +204,34 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	assert.Contains(t, out, "demo.AdminID = int32(actor.AdminID)")
 	assert.Contains(t, out, `Where("id = ?", demo.ID)`)
 	assert.Contains(t, out, "RowsAffected")
+	assert.Contains(t, out, "case 0:")
+	assert.Contains(t, out, `tx.Table(s.TableName).Model(&Demo{}).Where("id = ?", demo.ID).Count(&visible).Error`)
+	assert.Contains(t, out, `return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)`)
 	assert.NotContains(t, out, "LimitAdminIds")
 	assert.NotContains(t, out, ".Save(&demo)")
+}
+
+func TestModelTemplate_EditNoOpUsesGeneratedPrimaryKeyAndScopedDB(t *testing.T) {
+	out := renderModelString(t, ModelData{
+		Namespace:         "model",
+		Name:              "order_item",
+		ClassName:         "OrderItem",
+		ModelVar:          "orderItem",
+		Pk:                "order_id",
+		PkGoField:         "OrderId",
+		DataScopePolicy:   data_scope.ResourcePolicy{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id"},
+		EditableColumns:   []string{"name"},
+		EditableColumnsGo: `"name"`,
+	})
+
+	editStart := strings.Index(out, "func (s *OrderItemModel) Edit")
+	if editStart < 0 {
+		t.Fatal("generated Edit method is missing")
+	}
+	edit := out[editStart:]
+	assert.Contains(t, edit, "tx = s.scopeDB(ctx, tx)")
+	assert.Contains(t, edit, `tx.Table(s.TableName).Model(&OrderItem{}).Where("order_id = ?", orderItem.OrderId).Count(&visible).Error`)
+	assert.NotContains(t, edit, `Where("id = ?", orderItem.ID)`)
 }
 
 func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {

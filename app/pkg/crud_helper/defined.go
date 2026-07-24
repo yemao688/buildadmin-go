@@ -555,10 +555,21 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 	if err := res.Error; err != nil {
 		return err
 	}
-	if res.RowsAffected != 1 {
+	switch res.RowsAffected {
+	case 1:
+		return nil
+	case 0:
+		var visible int64
+		if err := tx.Table(s.TableName).Model(&{{.ClassName}}{}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
 		return gorm.ErrRecordNotFound
+	default:
+		return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)
 	}
-	return nil
 	})
 }
 
