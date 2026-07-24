@@ -263,8 +263,9 @@ type HandlerData struct {
 	PkGoType            string //主键Go类型
 	PkJSONName          string //主键JSON字段名
 	RegisterAtomicRoute func(method, path string)
-	TableComment        string //表备注
-	ValidateParam       string //表单参数
+	TableComment        string            //表备注
+	ValidateParam       string            //表单参数
+	ParamTypeOverrides  map[string]string // JSON field name to validation parameter type
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法

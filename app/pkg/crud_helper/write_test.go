@@ -131,8 +131,126 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 func TestRewriteFlexNumericParamFields(t *testing.T) {
 	input := "type DemoParam struct {\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
 	want := "type DemoParam struct {\n\tCount validate.FlexInt32 `json:\"count\"`\n\tTotal validate.FlexInt64 `json:\"total\"`\n\tRate validate.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
-	if got := rewriteFlexNumericParamFields(input); got != want {
+	if got := rewriteFlexNumericParamFields(input, nil); got != want {
 		t.Fatalf("unexpected rewritten fields:\n--- got ---\n%s--- want ---\n%s", got, want)
+	}
+}
+
+func TestRewriteHandlerParamFieldsUsesDesignTypeOverrides(t *testing.T) {
+	input := "type DemoParam struct {\n" +
+		"\tCount int32 `json:\"count\"`\n" +
+		"\tCheckbox []string `json:\"feature_flags\"`\n" +
+		"\tSelects []string `json:\"category_values\"`\n" +
+		"\tRemoteSelects []string `json:\"reviewer_ids\"`\n" +
+		"\tCity string `json:\"region_city\"`\n" +
+		"\tImages []string `json:\"gallery_images\"`\n" +
+		"\tFiles []string `json:\"attachments_files\"`\n" +
+		"\tExtra []string `json:\"extra_data\"`\n" +
+		"\tScheduled string `json:\"scheduled_at\"`\n" +
+		"\tPublished string `json:\"published_on\"`\n" +
+		"\tAt string `json:\"published_at\"`\n" +
+		"\tCreated int64 `json:\"created_at\"`\n" +
+		"\tTitle string `json:\"title_string\"`\n" +
+		"\tPlain string `json:\"plain_text\"`\n" +
+		"}\n"
+	overrides := map[string]string{
+		"count":             "validate.CustomInt",
+		"feature_flags":     "validate.CommaJoined",
+		"category_values":   "validate.CommaJoined",
+		"reviewer_ids":      "validate.CommaJoined",
+		"region_city":       "validate.CommaJoined",
+		"gallery_images":    "validate.CommaJoined",
+		"attachments_files": "validate.CommaJoined",
+		"extra_data":        "validate.KeyValueArray",
+		"scheduled_at":      "validate.FlexDateTime",
+		"published_on":      "validate.FlexDate",
+		"published_at":      "validate.FlexClock",
+		"created_at":        "validate.FlexUnixTime",
+		"title_string":      "validate.CustomString",
+	}
+	wantTypes := map[string]string{
+		"Count":         "validate.CustomInt",
+		"Checkbox":      "validate.CommaJoined",
+		"Selects":       "validate.CommaJoined",
+		"RemoteSelects": "validate.CommaJoined",
+		"City":          "validate.CommaJoined",
+		"Images":        "validate.CommaJoined",
+		"Files":         "validate.CommaJoined",
+		"Extra":         "validate.KeyValueArray",
+		"Scheduled":     "validate.FlexDateTime",
+		"Published":     "validate.FlexDate",
+		"At":            "validate.FlexClock",
+		"Created":       "validate.FlexUnixTime",
+		"Title":         "validate.CustomString",
+	}
+	got := rewriteFlexNumericParamFields(input, overrides)
+	for field, typeName := range wantTypes {
+		if !strings.Contains(got, field+" "+typeName+" `json:") {
+			t.Errorf("%s was not rewritten to %s:\n%s", field, typeName, got)
+		}
+	}
+	if strings.Contains(got, "title_string string") {
+		t.Fatal("override matching must use the JSON name, not the Go field type")
+	}
+	if !strings.Contains(got, "Plain string `json:\"plain_text\"`") {
+		t.Fatalf("ordinary string field was changed:\n%s", got)
+	}
+}
+
+func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
+	cases := []struct {
+		name       string
+		designType string
+		dataType   string
+		want       string
+	}{
+		{"checkbox", "checkbox", "set", "validate.CommaJoined"},
+		{"selects", "selects", "set", "validate.CommaJoined"},
+		{"remoteSelects", "remoteSelects", "varchar", "validate.CommaJoined"},
+		{"city", "city", "varchar", "validate.CommaJoined"},
+		{"images", "images", "text", "validate.CommaJoined"},
+		{"files", "files", "text", "validate.CommaJoined"},
+		{"array", "array", "text", "validate.KeyValueArray"},
+		{"datetime", "datetime", "datetime", "validate.FlexDateTime"},
+		{"date", "date", "date", "validate.FlexDate"},
+		{"time", "time", "time", "validate.FlexClock"},
+		{"timestamp", "timestamp", "bigint", "validate.FlexUnixTime"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			field := analyseField(model.Field{Name: tc.name, DesignType: tc.designType, DataType: tc.dataType})
+			got := buildHandlerParamTypeOverrides([]model.Field{field})
+			if got[tc.name] != tc.want {
+				t.Fatalf("override = %q, want %q (analysed field: %+v)", got[tc.name], tc.want, field)
+			}
+		})
+	}
+}
+
+func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
+	structContent := "type Demo struct {\n\tFeatureFlags []string `json:\"feature_flags\"`\n}\n"
+	handlerData := HandlerData{
+		Namespace:       "admin",
+		ClassName:       "Demo",
+		ModelNamespace:  "model",
+		ModelImportPath: "go-build-admin/app/admin/model",
+		ModelName:       "Demo",
+		ModelVar:        "demo",
+		PkGoType:        "int32",
+		PkJSONName:      "id",
+		ParamTypeOverrides: map[string]string{
+			"feature_flags": "validate.CommaJoined",
+		},
+	}
+	content, err := renderHandler(handlerData, structContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(content, "validate.CommaJoined") != 1 || strings.Count(content, "FeatureFlags validate.CommaJoined") != 1 {
+		t.Fatalf("Add/Edit should share one rewritten parameter type:\n%s", content)
+	}
+	if strings.Count(content, "DemoParam") < 3 {
+		t.Fatalf("expected Add and Edit to use the shared parameter struct:\n%s", content)
 	}
 }
 

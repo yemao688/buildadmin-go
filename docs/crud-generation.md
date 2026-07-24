@@ -116,10 +116,23 @@ fields:
 
 生成 `index.vue defaultItems` 时还遵循 PHP/TS：`array` 为 `[]`；editor 始终产生空字符串；checkbox/selects/remoteSelects/city/images/files 的逗号值转数组；number/float 输出非零数字；switch、remoteSelect 的 `0` 不输出；非 `INPUT` 默认类型不输出。
 
+## 生成 Handler 请求值适配
+
+生成 Handler 的请求绑定层对前端 JSON 值做以下适配：
+
+- `checkbox`、`selects`、`remoteSelects`、`city`、`images`、`files` 接受 JSON 标量数组，按顺序转成逗号连接的字符串。
+- `array` 接受 `key`/`value` 字符串对象数组，并保存为规范化 JSON 字符串。
+- `datetime` 接受 `2006-01-02 15:04:05`，并兼容 RFC3339；`date` 只接受日期格式，`time` 只接受时分秒格式；本地格式使用 `time.Local`。
+- 整数 `timestamp` 接受 Unix 秒、日期时间或 RFC3339，并保存为 Unix 秒。
+- `switch` 的 JSON 布尔值转换为 `1`/`0`。
+
+非法 JSON、对象类型或嵌套数组等不符合字段适配规则的请求值会返回 `400`。
+
 ## 数据权限、关系与已知边界
 
 - `dataScope.mode: auto` 检测 `admin_id` 并生成层级隔离；`none` 用于全局资源；`required` 必须配 owner 列，通用 Add 通常必须 `assignOnCreate: true`。
 - remoteSelect 只有 remote table、relation fields 等信息完整时才生成关系模型/预载入代码。Go handler 路由会从仓库注册表反查，不能保证任意外部 PHP controller 的动态 URL 语义。
+- 当前 Go 的 List/Edit 回显尚未像 PHP getter/cast 那样对称地把逗号字符串、JSON 字符串和 timestamp 转回前端数组或格式化字符串；这是后续读侧工作，不代表完整运行时 parity。
 - 不承诺 PHP 设计器的动态属性、运行时 SQL join、权限插件或自定义组件完全一致；本生成器提供的是 YAML 输入、字段推断、默认矩阵和仓库级生成护栏的语义对齐。
 - 生成路径必须位于固定根目录；核心表不能生成；DDL 不可回滚。
 

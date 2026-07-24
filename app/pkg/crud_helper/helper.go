@@ -93,6 +93,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.Attr = map[string]string{}
 	handlerData.Methods = []string{}
 	handlerData.RelationVisibleFieldList = map[string][]string{}
+	handlerData.ParamTypeOverrides = map[string]string{}
 
 	// 数据权限解析：只有用户显式持久化 ModeNone 时才允许 admin_id 资源走 none。
 	allowNoneExplicit := dsConfig != nil && dsConfig.Mode == data_scope.ModeNone
@@ -173,6 +174,9 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 
 		//分析字段
 		field = analyseField(field)
+		for name, typeName := range buildHandlerParamTypeOverrides([]model.Field{field}) {
+			handlerData.ParamTypeOverrides[name] = typeName
+		}
 
 		getDictData(&langEnData, field, "en", "")
 		getDictData(&langZhData, field, "zh-cn", "")
@@ -569,6 +573,29 @@ func analyseField(field model.Field) model.Field {
 		field.DesignType = field.DesignType + "s"
 	}
 	return field
+}
+
+func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
+	overrides := make(map[string]string)
+	for _, field := range fields {
+		designType := field.DesignType
+		dbType := strings.ToLower(analyseFieldType(field))
+		switch {
+		case slices.Contains(dtStringToArray, designType):
+			overrides[field.Name] = "validate.CommaJoined"
+		case designType == "array":
+			overrides[field.Name] = "validate.KeyValueArray"
+		case designType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
+			overrides[field.Name] = "validate.FlexDateTime"
+		case designType == "date":
+			overrides[field.Name] = "validate.FlexDate"
+		case designType == "time":
+			overrides[field.Name] = "validate.FlexClock"
+		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
+			overrides[field.Name] = "validate.FlexUnixTime"
+		}
+	}
+	return overrides
 }
 
 // 分析字段数据类型

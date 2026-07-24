@@ -110,7 +110,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 
 	re := regexp.MustCompile(`gorm:"[^"]*" `)
 	validateContent = re.ReplaceAllString(validateContent, "")
-	validateContent = rewriteFlexNumericParamFields(validateContent)
+	validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
 	handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
 
 	//渲染文件内容
@@ -197,21 +197,28 @@ func renderHandler(handlerData HandlerData, structContent string) (string, error
 		validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
 		re := regexp.MustCompile(`gorm:"[^"]*" `)
 		validateContent = re.ReplaceAllString(validateContent, "")
-		validateContent = rewriteFlexNumericParamFields(validateContent)
+		validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
 		handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
 	}
 	return render("", handlerTemp, handlerData)
 }
 
-func rewriteFlexNumericParamFields(content string) string {
-	re := regexp.MustCompile("(?m)^(\\s*[A-Za-z]\\w*\\s+)(int32|int64|float64)(\\s+`json:)")
+func rewriteFlexNumericParamFields(content string, overrides map[string]string) string {
+	re := regexp.MustCompile("(?m)^(\\s*[A-Za-z]\\w*\\s+)([^\\s]+)(\\s+.*json:\"([^\"]+)\")")
 	return re.ReplaceAllStringFunc(content, func(line string) string {
 		matches := re.FindStringSubmatch(line)
-		typeName := map[string]string{
-			"int32":   "validate.FlexInt32",
-			"int64":   "validate.FlexInt64",
-			"float64": "validate.FlexFloat64",
-		}[matches[2]]
+		jsonName := strings.Split(matches[4], ",")[0]
+		typeName := overrides[jsonName]
+		if typeName == "" {
+			typeName = map[string]string{
+				"int32":   "validate.FlexInt32",
+				"int64":   "validate.FlexInt64",
+				"float64": "validate.FlexFloat64",
+			}[matches[2]]
+		}
+		if typeName == "" {
+			return line
+		}
 		return matches[1] + typeName + matches[3] + line[len(matches[0]):]
 	})
 }
