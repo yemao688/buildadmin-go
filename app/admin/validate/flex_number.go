@@ -67,6 +67,12 @@ func flexNumberText(data []byte) (string, error) {
 	if text == "" || text == "null" {
 		return "", nil
 	}
+	if text == "true" {
+		return "1", nil
+	}
+	if text == "false" {
+		return "0", nil
+	}
 	if strings.HasPrefix(text, `"`) {
 		var value string
 		if err := json.Unmarshal(data, &value); err != nil {
