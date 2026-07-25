@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -322,6 +323,7 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 		"timestamp":     {Validator: []string{"date"}},
 		"date":          {Validator: []string{"date"}},
 		"year":          {Validator: []string{"date"}},
+		"time":          {},
 		"selects":       {SelectMulti: "1"},
 		"remoteSelect":  {RemotePk: "id", RemoteField: "name"},
 		"remoteSelects": {SelectMulti: "1", RemotePk: "id", RemoteField: "name"},
@@ -338,12 +340,142 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 	}
 }
 
-func TestGetRemotePk(t *testing.T) {
-	if got := GetRemotePk("ba_user", model.Field{}); got != "ba_user.id" {
-		t.Fatalf("default pk = %q", got)
+func TestFractionalStepSurvivesPopupFormRendering(t *testing.T) {
+	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: 0.001}}
+	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
+	content, err := renderFormFile(FormVueData{FormFields: []string{markup}}, []model.Field{field}, "")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := GetRemotePk("ba_user", model.Field{Form: model.FormAttr{RemotePk: "uuid"}}); got != "ba_user.uuid" {
-		t.Fatalf("explicit pk = %q", got)
+	if !strings.Contains(content, `:input-attr="{ step: 0.001 }"`) {
+		t.Fatalf("fractional step missing from popup form: %s", content)
+	}
+}
+
+func TestNumberStepZeroKeepsExistingDefault(t *testing.T) {
+	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: 0}}
+	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
+	if !strings.Contains(markup, `:input-attr="{ step: 1 }"`) {
+		t.Fatalf("zero step default changed: %s", markup)
+	}
+}
+
+func TestNumberStepNegativePreservesExistingEmission(t *testing.T) {
+	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: -0.5}}
+	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
+	if !strings.Contains(markup, `:input-attr="{ step: -0.5 }"`) {
+		t.Fatalf("negative step emission changed: %s", markup)
+	}
+}
+
+func TestGetRemotePk(t *testing.T) {
+	for _, tc := range []struct {
+		field model.Field
+		want  string
+	}{
+		{model.Field{}, "ba_user.id"},
+		{model.Field{Form: model.FormAttr{RemotePk: "uuid"}}, "ba_user.uuid"},
+		{model.Field{Form: model.FormAttr{RemotePk: "owner.uuid"}}, "owner.uuid"},
+		{model.Field{Form: model.FormAttr{RemotePrimaryTableAlias: "owner", RemotePk: "uuid"}}, "owner.uuid"},
+	} {
+		if got := GetRemotePk("ba_user", tc.field); got != tc.want {
+			t.Fatalf("GetRemotePk()=%q want %q", got, tc.want)
+		}
+	}
+}
+
+func TestGetJsonFromAnyEscapesStringsAndSortsNestedValues(t *testing.T) {
+	quotes := "both ' and \" plus \\\n+"
+	key := "key'\"\\path"
+	got := getJsonFromAny(map[string]any{
+		"z": "true", "a": "false", "null": "null", "number": "123", "array": "[1,2]",
+		"translate": `t('x')`, "quotes": quotes, "nested": map[string]any{"n": 2}, "numeric": 3.5, key: "value",
+	})
+	want := `{ a: "false", array: "[1,2]", ` + strconv.Quote(key) + `: "value", nested: { n: 2 }, null: "null", number: "123", numeric: 3.5, quotes: ` + strconv.Quote(quotes) + `, translate: "t('x')", z: "true" }`
+	if got != want {
+		t.Fatalf("getJsonFromAny() = %q, want %q", got, want)
+	}
+}
+
+func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
+	column := getTableColumn(model.Field{Name: "title", Table: model.TableAttr{ComSearchInputAttr: model.ComSearchInputAttrs{"size": "large"}}}, nil, "", "", "")
+	if !strings.Contains(column, `comSearchInputAttr: { size: "large" }`) {
+		t.Fatalf("column = %s", column)
+	}
+}
+
+func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
+	fields := []model.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
+	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "go-build-admin/app/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
+	content, err := renderHandler(handler, "type Orders struct {\n\tID int `json:\"id\"`\n}\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(content, `map[string]bool{"status": true, "enabled": true}`) {
+		t.Fatalf("switch allowlist missing field: %s", content)
+	}
+	if strings.Contains(content, `map[string]bool{"status": true}`) {
+		t.Fatalf("switch allowlist remained status-only: %s", content)
+	}
+}
+
+func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
+	field := model.Field{Name: "owner_id", DesignType: "remoteSelect", Form: model.FormAttr{RemoteTable: "owner", RemotePk: "uuid", RemoteField: "name", RemoteUrl: "/admin/owner/options"}}
+	metadata := buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	column := getTableColumn(model.Field{Name: field.Name, Table: model.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
+	if !strings.Contains(column, `comSearchRender: "remoteSelect"`) || !strings.Contains(column, "remote: {") || strings.Count(column, "comSearchRender:") != 1 {
+		t.Fatalf("remote search column metadata incomplete or duplicated: %s", column)
+	}
+}
+
+func TestBuildEditableColumnsKeepsTableExcludedFormField(t *testing.T) {
+	fields := []model.Field{{Name: "title", Form: model.FormAttr{}}, {Name: "hidden_column", TableBuildExclude: true}, {Name: "hidden_form", FormBuildExclude: true}}
+	got := buildEditableColumns("id", "", []string{"title", "hidden_column", "hidden_form"}, fields)
+	if !slices.Equal(got, []string{"title", "hidden_column"}) {
+		t.Fatalf("editable columns = %v", got)
+	}
+}
+
+func TestCityModelStructIncludesTextAccessor(t *testing.T) {
+	structContent := addCityTextFields("type Orders struct {\n\tRegionCity string `json:\"region_city\"`\n}\n", []string{"region_city"})
+	if !strings.Contains(structContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
+		t.Fatalf("city text accessor missing from struct: %s", structContent)
+	}
+	modelContent, err := renderModel(ModelData{Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: "int32", StructTemp: structContent, DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(modelContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
+		t.Fatalf("city text accessor missing from rendered model: %s", modelContent)
+	}
+}
+
+func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.T) {
+	table := model.Table{Name: "orders", FormFields: []string{"region_city"}, ColumnFields: []string{"id", "region_city"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone}}
+	fields := []model.Field{
+		{Name: "id", Type: "int", PrimaryKey: true, DesignType: "pk"},
+		{Name: "region_city", Type: "varchar", DesignType: "city"},
+	}
+	getTableName := func(name string, full bool) string {
+		if full {
+			return "ba_" + name
+		}
+		return name
+	}
+	modelData, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(modelData.CityTextFields, []string{"region_city"}) {
+		t.Fatalf("city metadata = %v", modelData.CityTextFields)
+	}
+	modelData.StructTemp = addCityTextFields("type Orders struct {\n\tRegionCity string `json:\"region_city\"`\n}\n", modelData.CityTextFields)
+	modelContent, err := renderModel(modelData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(modelContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
+		t.Fatalf("production model output lacks city accessor: %s", modelContent)
 	}
 }
 
@@ -358,5 +490,43 @@ func TestRelationNameForField(t *testing.T) {
 		if got := relationNameForField(fieldName); got != want {
 			t.Errorf("relationNameForField(%q) = %q, want %q", fieldName, got, want)
 		}
+	}
+}
+
+func TestParseWebDirNameDataAutomaticTailAndExplicitUnderscores(t *testing.T) {
+	auto := ParseWebDirNameData("country_language_content", "views", "")
+	if got := GetMenuName(auto); got != "country/languageContent" {
+		t.Fatalf("automatic menu name=%q", got)
+	}
+	explicit := ParseWebDirNameData("ignored", "views", `web/src/views/backend/some_special_dir/orders`)
+	if got := GetMenuName(explicit); got != "some_special_dir/orders" {
+		t.Fatalf("explicit menu name=%q", got)
+	}
+}
+
+func TestParseWebDirNameDataSeparatorsAndInvalidZeroValue(t *testing.T) {
+	forward := ParseWebDirNameData("orders", "views", "web/src/views/backend/ops/orders")
+	backslash := ParseWebDirNameData("orders", "views", `web\src\views\backend\ops\orders`)
+	if GetMenuName(forward) != GetMenuName(backslash) || GetMenuName(forward) != "ops/orders" {
+		t.Fatalf("separator menus differ: %q vs %q", GetMenuName(forward), GetMenuName(backslash))
+	}
+	if got := ParseWebDirNameData("orders", "views", "../escape"); got.Views != "" || got.LastName != "" {
+		t.Fatalf("invalid path did not return zero value: %+v", got)
+	}
+}
+
+func TestParseNameDataPreservesExplicitCamelCaseTail(t *testing.T) {
+	for _, input := range []string{"app/admin/model/country/languageContent.go", "app/admin/model/country/language_content.go"} {
+		info, err := ParseNameData("admin", "ignored", "model", input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if filepath.Base(info.ParseFile) != filepath.Base(input) {
+			t.Fatalf("ParseFile=%q for %q", info.ParseFile, input)
+		}
+	}
+	camel, err := ParseNameData("admin", "ignored", "model", "app/admin/model/country/languageContent.go")
+	if err != nil || camel.LastName != "LanguageContent" {
+		t.Fatalf("camel explicit info=%+v err=%v", camel, err)
 	}
 }

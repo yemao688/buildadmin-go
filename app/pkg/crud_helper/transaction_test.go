@@ -64,6 +64,44 @@ func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T
 	t.Fatalf("existing relation provider %q was not snapshotted: %v", provider, manifest.Shared)
 }
 
+func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *testing.T) {
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation_manifest_absent_test")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	manifest, err := BuildFileManifestForFields(model.Table{Name: "orders"}, []model.Field{{Form: model.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_absent_test/Owner.go", RelationFields: "name"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := filepath.Join(dir, "provider.go")
+	if containsPath(manifest.Generated, provider) || !containsPath(manifest.Shared, provider) {
+		t.Fatalf("relation provider classification = %+v", manifest)
+	}
+}
+
+func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "existing.go")
+	if err := os.WriteFile(path, []byte("original"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := NewFileSnapshot([]string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer snapshot.Cleanup()
+	if err := os.Remove(snapshot.entries[0].backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("changed"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := snapshot.Restore(); err == nil {
+		t.Fatal("missing backup should fail")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "changed" {
+		t.Fatalf("target changed after backup read failure: %q, %v", data, err)
+	}
+}
+
 func assertQuarantineRestore(t *testing.T) {
 	t.Helper()
 	dir, err := os.MkdirTemp(utils.RootPath(), ".crud-test-")

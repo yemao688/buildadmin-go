@@ -58,14 +58,70 @@ func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
 	}
 }
 
+func TestValidateGenerationInputRemotePkAcceptsQualifiedAndUnqualified(t *testing.T) {
+	for _, remotePk := range []string{"uuid", "owner.uuid"} {
+		fields := []model.Field{
+			{Name: "id", Type: "int", PrimaryKey: true},
+			{Name: "owner_id", Type: "int", Form: model.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
+		}
+		if err := ValidateGenerationInput(model.Table{Name: "orders"}, fields); err != nil {
+			t.Errorf("remotePk %q rejected: %v", remotePk, err)
+		}
+	}
+}
+
+func TestValidateGenerationInputRejectsMalformedRemotePk(t *testing.T) {
+	for _, remotePk := range []string{".uuid", "uuid.", "owner..uuid", "a.b.c", "owner.uuid;DROP TABLE users", "owner-id"} {
+		fields := []model.Field{
+			{Name: "id", Type: "int", PrimaryKey: true},
+			{Name: "owner_id", Type: "int", Form: model.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
+		}
+		if err := ValidateGenerationInput(model.Table{Name: "orders"}, fields); err == nil {
+			t.Errorf("malformed remotePk %q was accepted", remotePk)
+		}
+	}
+}
+
 func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
-	for _, path := range []string{"../outside.go", "/tmp/outside.go", `..\\outside.go`} {
+	for _, path := range []string{"../outside.go", "/tmp/outside.go", `..\\outside.go`, `C:\\outside.go`, `dir//file.go`} {
 		if err := ValidatePathUnderRoots(path, "app/admin/model"); err == nil {
 			t.Errorf("path %q was accepted", path)
 		}
 	}
 	if err := ValidateGeneratedAbsolutePath("/tmp/outside.go", "app/admin/model"); err == nil {
 		t.Fatal("absolute path outside root was accepted")
+	}
+}
+
+func TestNormalizeLogicalPathSeparatorsAndUnderscores(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"country.languageContent", "country/languageContent"},
+		{`country\languageContent`, "country/languageContent"},
+		{"some_special_dir/file", "some_special_dir/file"},
+	} {
+		got, err := normalizeLogicalPath(tc.input)
+		if err != nil || got != tc.want {
+			t.Errorf("normalizeLogicalPath(%q)=%q,%v want %q", tc.input, got, err, tc.want)
+		}
+	}
+}
+
+func TestNormalizeLogicalPathRejectsTraversalAbsoluteAndDrivePaths(t *testing.T) {
+	for _, input := range []string{"../escape", `/tmp/escape`, `C:\\escape`, `dir//file`} {
+		if _, err := normalizeLogicalPath(input); err == nil {
+			t.Errorf("path %q was accepted", input)
+		}
+	}
+}
+
+func TestValidateDefaultTypes(t *testing.T) {
+	for _, value := range []string{"NONE", "NULL", "EMPTY STRING", "INPUT"} {
+		if err := ValidateField(model.Field{Name: "value", Type: "varchar", DefaultType: value}); err != nil {
+			t.Errorf("%s rejected: %v", value, err)
+		}
+	}
+	if err := ValidateField(model.Field{Name: "value", Type: "varchar", DefaultType: "OTHER"}); err == nil {
+		t.Fatal("invalid default type accepted")
 	}
 }
 

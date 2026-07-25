@@ -283,6 +283,7 @@ func searchField(fields []model.Field, name string) model.Field {
 }
 
 func getDDlFieldData(field model.Field) (string, error) {
+	normalizeFieldConfiguration(&field)
 	if err := ValidateField(field); err != nil {
 		return "", err
 	}
@@ -318,22 +319,30 @@ func getDDlFieldData(field model.Field) (string, error) {
 		// 优先按上游 defaultType 语义生成默认值子句
 		switch field.DefaultType {
 		case "EMPTY STRING":
-			if dateType != "text" {
+			if !noDefaultValueType(dateType) {
 				fieldTemplData.DefaultValue = "DEFAULT ''"
 			}
 		case "NULL":
-			fieldTemplData.DefaultValue = "DEFAULT NULL"
+			if !noDefaultValueType(dateType) {
+				fieldTemplData.DefaultValue = "DEFAULT NULL"
+			}
 		case "INPUT":
-			fieldTemplData.DefaultValue = formatDefault(field.Default)
+			if !noDefaultValueType(dateType) {
+				fieldTemplData.DefaultValue = formatDefault(field.Default)
+			}
+		case "NONE":
+			fieldTemplData.DefaultValue = ""
 		}
 	} else if field.Default != "" && field.Default != "none" {
 		// 兼容旧的哨兵值写法(无 defaultType 的场景)
 		if field.Default == "empty string" {
-			if dateType != "text" {
+			if !noDefaultValueType(dateType) {
 				fieldTemplData.DefaultValue = "DEFAULT ''"
 			}
 		} else if field.Default == "null" {
-			fieldTemplData.DefaultValue = "DEFAULT NULL"
+			if !noDefaultValueType(dateType) {
+				fieldTemplData.DefaultValue = "DEFAULT NULL"
+			}
 		} else {
 			fieldTemplData.DefaultValue = formatDefault(field.Default)
 		}
@@ -357,6 +366,15 @@ func getDDlFieldData(field model.Field) (string, error) {
 	}
 	return buf.String(), nil
 }
+
+var noDefaultValueTypes = map[string]bool{
+	"text": true, "blob": true, "geometry": true, "geometrycollection": true, "json": true,
+	"linestring": true, "longblob": true, "longtext": true, "mediumblob": true, "mediumtext": true,
+	"multilinestring": true, "multipoint": true, "multipolygon": true, "point": true, "polygon": true,
+	"tinyblob": true,
+}
+
+func noDefaultValueType(dataType string) bool { return noDefaultValueTypes[strings.ToLower(dataType)] }
 
 func updateFieldOrder(db *gorm.DB, fullTableName string, fields []model.Field, designChange []model.ChangeField) error {
 	if len(designChange) == 0 {

@@ -28,14 +28,14 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	if err != nil {
 		return "", err
 	}
-	modelData.StructTemp = structContent
+	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	prepareModelTimestampData(&modelData)
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
 		return "", err
 	}
-	if err := writeFile(modelFile.ParseFile, modelContent); err != nil {
+	if err := writeGoFile(modelFile.ParseFile, modelContent); err != nil {
 		return "", err
 	}
 
@@ -43,6 +43,22 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 		return "", err
 	}
 	return structContent, nil
+}
+
+func addCityTextFields(structContent string, cityFields []string) string {
+	if len(cityFields) == 0 {
+		return structContent
+	}
+	index := strings.LastIndex(structContent, "}")
+	if index < 0 {
+		return structContent
+	}
+	var fields strings.Builder
+	for _, field := range cityFields {
+		goName := utils.SnakeToCamel(field+"_text", true)
+		fields.WriteString("\t" + goName + " string `json:\"" + field + "_text\" gorm:\"-\"`\n")
+	}
+	return structContent[:index] + fields.String() + structContent[index:]
 }
 
 func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fieldTypeOverrides map[string]string) (string, error) {
@@ -129,7 +145,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 		return err
 	}
 	//写入文件
-	if err := writeFile(handlerFile.ParseFile, handlerContent); err != nil {
+	if err := writeGoFile(handlerFile.ParseFile, handlerContent); err != nil {
 		return err
 	}
 	//写入provider
@@ -259,7 +275,7 @@ func writeRouter(name string) error {
 		return nil
 	}
 
-	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), insertRouterEntry(string(content), name))
+	return writeGoFile(filepath.Join(utils.RootPath(), "router", "router.go"), insertRouterEntry(string(content), name))
 }
 
 // insertRouterEntry 把模块的 handler 参数、REST 路由和原子能力注入 router.go 内容。
@@ -296,7 +312,7 @@ func RemoveRouter(name string) error {
 	if err != nil {
 		return err
 	}
-	return writeFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
+	return writeGoFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
 }
 
 // removeRouterEntry 移除 insertRouterEntry 注入的内容。handler 参数按整行
@@ -365,7 +381,7 @@ func writeProvider(dir string, name string) error {
 		}
 		pkg := filepath.Base(dir)
 		content = []byte("package " + pkg + "\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet()\n")
-		if err := writeFile(providerPath, string(content)); err != nil {
+		if err := writeGoFile(providerPath, string(content)); err != nil {
 			return err
 		}
 	}
@@ -376,7 +392,7 @@ func writeProvider(dir string, name string) error {
 
 	lastIndex := strings.LastIndex(string(content), ")")
 	content = []byte(string(content)[:lastIndex] + "	New" + name + ",\n)")
-	return writeFile(providerPath, string(content))
+	return writeGoFile(providerPath, string(content))
 }
 
 // 移除生成的相应代码
@@ -389,7 +405,7 @@ func RemoveProvider(dir string, name string) error {
 	if err != nil {
 		return err
 	}
-	return writeFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
+	return writeGoFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
 }
 
 // removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行），并保留
@@ -451,6 +467,15 @@ func writeFile(path string, content string) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+func writeGoFile(path, content string) error {
+	formatted, err := formatGoCode(content)
+	if err != nil {
+		return err
+	}
+	formatted = strings.TrimRight(formatted, "\n") + "\n"
+	return writeFile(path, formatted)
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {

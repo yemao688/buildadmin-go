@@ -19,13 +19,19 @@ var allowedSQLTypes = map[string]bool{
 	"binary": true, "varbinary": true, "blob": true, "tinyblob": true, "mediumblob": true, "longblob": true,
 	"date": true, "datetime": true, "timestamp": true, "time": true, "year": true,
 	"json": true, "bool": true, "boolean": true,
+	"geometry": true, "geometrycollection": true, "linestring": true, "multilinestring": true,
+	"multipoint": true, "multipolygon": true, "point": true, "polygon": true,
 }
 
 var parameterizedTypeRE = regexp.MustCompile(`^([a-z]+)\(([0-9]+)(,[0-9]+)?\)$`)
 var enumTypeRE = regexp.MustCompile(`^(enum|set)\((?:'[^'\\\x00]*(?:''[^'\\\x00]*)*')(?:,(?:'[^'\\\x00]*(?:''[^'\\\x00]*)*'))*\)$`)
+var windowsDrivePathRE = regexp.MustCompile(`^[A-Za-z]:`)
 
 // ValidateGenerationInput is the shared validation boundary for all DDL input.
 func ValidateGenerationInput(table model.Table, fields []model.Field) error {
+	if err := normalizeTableConfiguration(&table); err != nil {
+		return err
+	}
 	if err := data_scope.ValidateIdentifier(table.Name); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
@@ -49,7 +55,9 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 	if _, err := ParseNameData("admin", table.Name, "handler", table.ControllerFile); err != nil {
 		return err
 	}
-	for _, field := range fields {
+	for i := range fields {
+		normalizeFieldConfiguration(&fields[i])
+		field := fields[i]
 		if err := ValidateField(field); err != nil {
 			return err
 		}
@@ -100,9 +108,18 @@ func validateRelationField(field model.Field) error {
 		}
 	}
 	if field.Form.RemotePk != "" {
-		if err := data_scope.ValidateIdentifier(field.Form.RemotePk); err != nil {
-			return fmt.Errorf("invalid remote primary key for field %q: %w", field.Name, err)
+		parts := strings.Split(field.Form.RemotePk, ".")
+		if len(parts) > 2 {
+			return fmt.Errorf("invalid remote primary key for field %q: expected one identifier or owner.field", field.Name)
 		}
+		for _, part := range parts {
+			if err := data_scope.ValidateIdentifier(part); err != nil {
+				return fmt.Errorf("invalid remote primary key for field %q: %w", field.Name, err)
+			}
+		}
+	}
+	if field.Form.RemotePrimaryTableAlias != "" && !frontendIdentifierRE.MatchString(field.Form.RemotePrimaryTableAlias) {
+		return fmt.Errorf("invalid remote primary table alias %q", field.Form.RemotePrimaryTableAlias)
 	}
 	if field.Form.RelationFields != "" {
 		for _, name := range strings.Split(field.Form.RelationFields, ",") {
@@ -158,6 +175,9 @@ func ValidateField(field model.Field) error {
 	if err := validateSQLString(field.Default); err != nil {
 		return fmt.Errorf("invalid default for field %q: %w", field.Name, err)
 	}
+	if err := validateDefaultType(field); err != nil {
+		return err
+	}
 	if err := validateSQLString(field.Comment); err != nil {
 		return fmt.Errorf("invalid comment for field %q: %w", field.Name, err)
 	}
@@ -205,6 +225,14 @@ func validateFrontendField(field model.Field) error {
 			return fmt.Errorf("field %q: %w", field.Name, err)
 		}
 	}
+	for key, value := range field.Table.ComSearchInputAttr {
+		if err := validateFrontendText(key, "table search input attribute name"); err != nil {
+			return fmt.Errorf("field %q: %w", field.Name, err)
+		}
+		if err := validateSearchInputAttrValue(value); err != nil {
+			return fmt.Errorf("field %q: %w", field.Name, err)
+		}
+	}
 	if err := validateFrontendText(field.Table.Remote, "table remote config"); err != nil {
 		return fmt.Errorf("field %q: %w", field.Name, err)
 	}
@@ -219,6 +247,27 @@ func validateFrontendText(value, label string) error {
 		return fmt.Errorf("invalid %s", label)
 	}
 	return nil
+}
+
+func validateSearchInputAttrValue(value any) error {
+	switch value := value.(type) {
+	case string:
+		return validateFrontendText(value, "table search input attribute")
+	case bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		return nil
+	case map[string]any:
+		for key, nested := range value {
+			if err := validateFrontendText(key, "table search input attribute name"); err != nil {
+				return err
+			}
+			if err := validateSearchInputAttrValue(nested); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("invalid table search input attribute value")
+	}
 }
 
 func validateFrontendMessage(value string) error {
@@ -290,13 +339,70 @@ func ValidatePathUnderRoots(candidate string, roots ...string) error {
 }
 
 func validateRelativePathInput(value string) error {
-	if value == "" || filepath.IsAbs(filepath.FromSlash(value)) {
-		return fmt.Errorf("path must be relative")
+	_, err := normalizeLogicalPath(value)
+	return err
+}
+
+func normalizeLogicalPath(value string) (string, error) {
+	if value == "" || strings.IndexByte(value, 0) >= 0 || filepath.IsAbs(filepath.FromSlash(value)) || windowsDrivePathRE.MatchString(value) {
+		return "", fmt.Errorf("path must be relative")
 	}
-	for _, part := range strings.FieldsFunc(filepath.ToSlash(value), func(r rune) bool { return r == '/' }) {
-		if part == ".." {
-			return fmt.Errorf("path traversal is not allowed")
+	value = strings.TrimSuffix(value, ".go")
+	value = strings.ReplaceAll(value, "\\", "/")
+	value = strings.ReplaceAll(value, ".", "/")
+	parts := strings.Split(value, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return "", fmt.Errorf("path contains an empty or invalid segment")
 		}
+	}
+	return strings.Join(parts, "/"), nil
+}
+
+func validateDefaultType(field model.Field) error {
+	switch field.DefaultType {
+	case "":
+		return nil
+	case "INPUT", "NONE", "NULL", "EMPTY STRING":
+		return nil
+	default:
+		return fmt.Errorf("invalid defaultType %q for field %q", field.DefaultType, field.Name)
+	}
+}
+
+func normalizeFieldConfiguration(field *model.Field) {
+	if field.DefaultType == "NULL" {
+		field.Null = true
+	}
+}
+
+func normalizeTableConfiguration(table *model.Table) error {
+	if table.DatabaseConnection == "" {
+		table.DatabaseConnection = "mysql"
+	}
+	if table.DatabaseConnection != "mysql" {
+		return fmt.Errorf("unknown database connection %q; only \"mysql\" is available", table.DatabaseConnection)
+	}
+	if table.GenerateRelativePath == "" {
+		return nil
+	}
+	relative, err := normalizeLogicalPath(table.GenerateRelativePath)
+	if err != nil {
+		return fmt.Errorf("invalid generateRelativePath: %w", err)
+	}
+	table.GenerateRelativePath = relative
+	modelRoot := "app/admin/model"
+	if table.IsCommonModel != 0 {
+		modelRoot = "app/common/model"
+	}
+	if table.ModelFile == "" {
+		table.ModelFile = modelRoot + "/" + relative + ".go"
+	}
+	if table.ControllerFile == "" {
+		table.ControllerFile = "app/admin/handler/" + relative + ".go"
+	}
+	if table.WebViewsDir == "" {
+		table.WebViewsDir = "web/src/views/backend/" + relative
 	}
 	return nil
 }

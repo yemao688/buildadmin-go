@@ -54,6 +54,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	var fail func(string, error) (*GenerateResult, error)
+	var cleanupSnapshot func() error
 	registeredRoutes := []atomicRouteRegistration{}
 	defer release()
 	defer func() {
@@ -61,6 +62,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			panicErr := generationPanicError(recovered)
 			if fail != nil {
 				result, retErr = fail("panic", panicErr)
+				if cleanupSnapshot != nil {
+					if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
+						retErr = fmt.Errorf("%w; recovery cleanup failed: %v", retErr, cleanupErr)
+					}
+				}
 			} else {
 				retErr = panicErr
 			}
@@ -68,6 +74,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	}()
 	if IsProtectedTable(opts.Table.Name) {
 		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", opts.Table.Name)
+	}
+	if err := normalizeTableConfiguration(&opts.Table); err != nil {
+		return nil, err
 	}
 	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
 		return nil, err
@@ -107,7 +116,23 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
-	defer snapshot.Cleanup()
+	cleanupAllowed := false
+	cleanupSnapshot = func() error {
+		if !cleanupAllowed {
+			return nil
+		}
+		cleanupAllowed = false
+		return snapshot.Cleanup()
+	}
+	defer func() {
+		if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
+			if retErr == nil {
+				retErr = fmt.Errorf("recovery cleanup failed: %w", cleanupErr)
+			} else {
+				retErr = fmt.Errorf("%w; recovery cleanup failed: %v", retErr, cleanupErr)
+			}
+		}
+	}()
 
 	logID, err := createCrudLog(db, cfg, opts)
 	if err != nil {
@@ -117,7 +142,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	fail = func(stage string, cause error) (*GenerateResult, error) {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
-			message += "; restore failed: " + restoreErr.Error()
+			message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, snapshot.dir)
+		} else {
+			cleanupAllowed = true
 		}
 		_ = recordCrudError(db, cfg, logID, message)
 		if len(createdMenuIDs) > 0 {
@@ -180,6 +207,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := updateCrudStatus(db, cfg, logID, "success"); err != nil {
 		return fail("success log update", err)
 	}
+	cleanupAllowed = true
 	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID}, nil
 }
 
@@ -278,14 +306,22 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	var menuSnapshot []model.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
-		if restoreErr := quarantine.Restore(); restoreErr != nil {
-			message += "; quarantine restore failed: " + restoreErr.Error()
+		quarantineRestoreErr := quarantine.Restore()
+		sharedRestoreErr := shared.Restore()
+		if quarantineRestoreErr != nil {
+			message += fmt.Sprintf("; quarantine restore failed: %v; recovery directory preserved: %s", quarantineRestoreErr, quarantine.dir)
 		}
-		if restoreErr := shared.Restore(); restoreErr != nil {
-			message += "; shared-file restore failed: " + restoreErr.Error()
+		if sharedRestoreErr != nil {
+			message += fmt.Sprintf("; shared-file restore failed: %v; recovery directory preserved: %s", sharedRestoreErr, shared.dir)
 		}
-		_ = quarantine.Commit()
-		_ = shared.Cleanup()
+		if quarantineRestoreErr == nil && sharedRestoreErr == nil {
+			if cleanupErr := quarantine.Commit(); cleanupErr != nil {
+				message += fmt.Sprintf("; quarantine cleanup failed: %v; recovery directory preserved: %s", cleanupErr, quarantine.dir)
+			}
+			if cleanupErr := shared.Cleanup(); cleanupErr != nil {
+				message += fmt.Sprintf("; shared cleanup failed: %v; recovery directory preserved: %s", cleanupErr, shared.dir)
+			}
+		}
 		if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
 			message += "; menu restore failed: " + restoreErr.Error()
 		}
@@ -331,10 +367,10 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		return fail("delete menu", err)
 	}
 	if err := shared.Cleanup(); err != nil {
-		return fail("shared cleanup", fmt.Errorf("cleanup directory %q: %w", shared.dir, err))
+		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", shared.dir, err)
 	}
 	if err := quarantine.Commit(); err != nil {
-		return fail("quarantine cleanup", fmt.Errorf("cleanup directory %q: %w", quarantine.dir, err))
+		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", quarantine.dir, err)
 	}
 	if unregister != nil {
 		for _, route := range atomicRoutesForName(handlerFile.LastName) {
@@ -400,6 +436,11 @@ func historicalDeleteManifest(current FileManifest, table model.Table) (FileMani
 // normalizeDeleteManifest is deliberately applied to both current and legacy
 // manifests. A manifest is persisted input, not trusted generator output.
 func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
+	var err error
+	manifest, err = normalizeFileManifest(manifest)
+	if err != nil {
+		return FileManifest{}, err
+	}
 	normalize := func(paths []string, validate func(string) error) ([]string, error) {
 		result := make([]string, 0, len(paths))
 		seen := map[string]bool{}
@@ -438,7 +479,7 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 	if err != nil {
 		return FileManifest{}, err
 	}
-	return FileManifest{Generated: generated, Shared: shared}, nil
+	return normalizeFileManifest(FileManifest{Generated: generated, Shared: shared})
 }
 
 func validateSharedManifestPath(path string) error {

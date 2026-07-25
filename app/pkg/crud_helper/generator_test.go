@@ -130,6 +130,28 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 	}
 }
 
+func TestBuildFileManifestNormalizesPathSeparators(t *testing.T) {
+	forward := model.Table{
+		Name: "country_language_content", ModelFile: "app/admin/model/country/languageContent.go",
+		ControllerFile: "app/admin/handler/country/languageContent.go", WebViewsDir: "web/src/views/backend/country/languageContent",
+	}
+	backslash := forward
+	backslash.ModelFile = `app\admin\model\country\languageContent.go`
+	backslash.ControllerFile = `app\admin\handler\country\languageContent.go`
+	backslash.WebViewsDir = `web\src\views\backend\country\languageContent`
+	one, err := BuildFileManifest(forward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := BuildFileManifest(backslash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(one.Generated, "\n") != strings.Join(two.Generated, "\n") || strings.Join(one.Shared, "\n") != strings.Join(two.Shared, "\n") {
+		t.Fatalf("separator manifests differ:\nforward=%+v\nbackslash=%+v", one, two)
+	}
+}
+
 func TestCanonicalManifestLangPath(t *testing.T) {
 	root := utils.RootPath()
 	cases := []struct {
@@ -197,8 +219,33 @@ func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(manifest.Generated) != 1 || manifest.Generated[0] != provider || len(manifest.Shared) != 0 {
+	if len(manifest.Generated) != 0 || len(manifest.Shared) != 1 || manifest.Shared[0] != provider {
 		t.Fatalf("historical classification changed: %+v", manifest)
+	}
+}
+
+func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
+	root := utils.RootPath()
+	paths := []string{
+		filepath.Join(root, "app", "admin", "model", "legacy", "provider.go"),
+		filepath.Join(root, "router", "router.go"),
+		filepath.Join(root, "cmd", "app", "wire_gen.go"),
+	}
+	manifest, err := normalizeDeleteManifest(FileManifest{Generated: []string{
+		paths[0], paths[1], paths[2],
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Generated) != 0 || len(manifest.Shared) != len(paths) {
+		t.Fatalf("shared shape reclassification = %+v", manifest)
+	}
+	relative, err := normalizeDeleteManifest(FileManifest{Generated: []string{"app/admin/model/legacy/provider.go", "router/router.go", "cmd/app/wire_gen.go"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(relative.Generated) != 0 || len(relative.Shared) != len(paths) {
+		t.Fatalf("relative shared shape reclassification = %+v", relative)
 	}
 }
 

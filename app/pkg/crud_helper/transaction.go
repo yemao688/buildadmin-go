@@ -17,6 +17,9 @@ type FileManifest struct {
 // Wire/provider updates can modify. DDL is intentionally not part of this
 // transaction: MySQL DDL cannot be rolled back reliably.
 func BuildFileManifest(table model.Table) (FileManifest, error) {
+	if err := normalizeTableConfiguration(&table); err != nil {
+		return FileManifest{}, err
+	}
 	module := "admin"
 	modelRoot := "app/admin/model"
 	if table.IsCommonModel != 0 {
@@ -59,7 +62,7 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 			return FileManifest{}, err
 		}
 	}
-	return manifest, nil
+	return normalizeFileManifest(manifest)
 }
 
 func BuildFileManifestForFields(table model.Table, fields []model.Field) (FileManifest, error) {
@@ -79,14 +82,12 @@ func BuildFileManifestForFields(table model.Table, fields []model.Field) (FileMa
 			manifest.Generated = append(manifest.Generated, join.ParseFile)
 		}
 		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
-		if fileExists(provider) {
-			manifest.Shared = append(manifest.Shared, provider)
-		} else {
-			manifest.Generated = append(manifest.Generated, provider)
-		}
+		manifest.Shared = append(manifest.Shared, provider)
 	}
-	manifest.Generated = uniquePaths(manifest.Generated)
-	manifest.Shared = uniquePaths(manifest.Shared)
+	manifest, err = normalizeFileManifest(manifest)
+	if err != nil {
+		return FileManifest{}, err
+	}
 	modelRoot := "app/admin/model"
 	if table.IsCommonModel != 0 {
 		modelRoot = "app/common/model"
@@ -147,20 +148,38 @@ func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
 }
 
 func (s *FileSnapshot) Restore() error {
-	var firstErr error
+	prepared := make([]struct {
+		entry snapshotEntry
+		data  []byte
+	}, 0, len(s.entries))
 	for _, entry := range s.entries {
-		if err := os.Remove(entry.path); err != nil && !os.IsNotExist(err) && firstErr == nil {
-			firstErr = err
+		if !entry.existed {
+			prepared = append(prepared, struct {
+				entry snapshotEntry
+				data  []byte
+			}{entry: entry})
+			continue
 		}
-		if entry.existed {
-			data, err := os.ReadFile(entry.backup)
-			if err == nil {
-				if err = atomicRestore(entry.path, data, entry.mode); err != nil && firstErr == nil {
-					firstErr = err
-				}
-			} else if firstErr == nil {
+		data, err := os.ReadFile(entry.backup)
+		if err != nil {
+			return fmt.Errorf("read snapshot backup %q: %w", entry.backup, err)
+		}
+		prepared = append(prepared, struct {
+			entry snapshotEntry
+			data  []byte
+		}{entry: entry, data: data})
+	}
+	var firstErr error
+	for _, item := range prepared {
+		entry := item.entry
+		if !entry.existed {
+			if err := os.Remove(entry.path); err != nil && !os.IsNotExist(err) && firstErr == nil {
 				firstErr = err
 			}
+			continue
+		}
+		if err := atomicRestore(entry.path, item.data, entry.mode); err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 	return firstErr
@@ -225,6 +244,33 @@ func uniquePaths(paths []string) []string {
 	return result
 }
 
+// normalizeFileManifest is the single classification boundary for manifests,
+// including manifests loaded from older CRUD logs.
+func normalizeFileManifest(manifest FileManifest) (FileManifest, error) {
+	generated := make([]string, 0, len(manifest.Generated))
+	shared := append([]string{}, manifest.Shared...)
+	for _, path := range manifest.Generated {
+		if manifestPathIsShared(path) {
+			shared = append(shared, path)
+		} else {
+			generated = append(generated, path)
+		}
+	}
+	return FileManifest{Generated: uniquePaths(generated), Shared: uniquePaths(shared)}, nil
+}
+
+func manifestPathIsShared(path string) bool {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if !filepath.IsAbs(clean) {
+		clean = filepath.Join(utils.RootPath(), clean)
+	}
+	clean, _ = filepath.Abs(clean)
+	root := filepath.Clean(utils.RootPath())
+	return filepath.Base(clean) == "provider.go" ||
+		clean == filepath.Join(root, "router", "router.go") ||
+		clean == filepath.Join(root, "cmd", "app", "wire_gen.go")
+}
+
 func atomicRestore(path string, data []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -246,5 +292,27 @@ func atomicRestore(path string, data []byte, mode os.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err == nil {
+		return nil
+	}
+	rollback, err := os.CreateTemp(filepath.Dir(path), ".crud-rollback-*")
+	if err != nil {
+		return err
+	}
+	rollbackName := rollback.Name()
+	if err := rollback.Close(); err != nil {
+		_ = os.Remove(rollbackName)
+		return err
+	}
+	_ = os.Remove(rollbackName)
+	if err := os.Rename(path, rollbackName); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		if rollbackErr := os.Rename(rollbackName, path); rollbackErr != nil {
+			return fmt.Errorf("replace %s: %w; rollback failed: %v", path, err, rollbackErr)
+		}
+		return err
+	}
+	return os.Remove(rollbackName)
 }

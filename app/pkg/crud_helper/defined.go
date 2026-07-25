@@ -266,6 +266,7 @@ type HandlerData struct {
 	TableComment        string            //表备注
 	ValidateParam       string            //表单参数
 	ParamTypeOverrides  map[string]string // JSON field name to validation parameter type
+	PartialEditFields   string            // quoted switch fields for partial edits
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
@@ -281,7 +282,7 @@ const handlerTemp = `
 package {{.Namespace}}
 
 import (
-	"{{.ModelImportPath}}"
+	model "{{.ModelImportPath}}"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/pkg/validator"
 
@@ -336,7 +337,7 @@ func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+	if h.MaybePartialEdit(ctx, map[string]bool{ {{.PartialEditFields}} }) {
 		return
 	}
 
@@ -416,6 +417,7 @@ type ModelData struct {
 	HasCreateTime         bool
 	HasUpdateTime         bool
 	HasWeigh              bool
+	CityTextFields        []string
 }
 
 const modelTemp = `package {{.Namespace}}

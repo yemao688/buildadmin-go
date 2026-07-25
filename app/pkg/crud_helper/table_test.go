@@ -40,6 +40,45 @@ func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
 	assert.Contains(t, notNullable, "NOT NULL")
 }
 
+func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
+	for _, tc := range []struct {
+		name, defaultType, value, want string
+	}{
+		{"none", "NONE", "ignored", "NOT NULL"},
+		{"null", "NULL", "", "DEFAULT NULL"},
+		{"empty", "EMPTY STRING", "", "DEFAULT ''"},
+		{"input", "INPUT", "", "DEFAULT ''"},
+		{"legacy_null", "", "null", "DEFAULT NULL"},
+		{"legacy_empty", "", "empty string", "DEFAULT ''"},
+		{"stale_none", "NONE", "stale", "NOT NULL"},
+		{"stale_null", "NULL", "stale", "DEFAULT NULL"},
+		{"stale_empty", "EMPTY STRING", "stale", "DEFAULT ''"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := getDDlFieldData(model.Field{Name: tc.name, Type: "varchar", Length: 32, DefaultType: tc.defaultType, Default: tc.value})
+			require.NoError(t, err)
+			assert.Contains(t, got, tc.want)
+		})
+	}
+}
+
+func TestGetDDLFieldDataNullDefaultIsNullable(t *testing.T) {
+	got, err := getDDlFieldData(model.Field{Name: "value", Type: "varchar", DefaultType: "NULL"})
+	require.NoError(t, err)
+	assert.NotContains(t, got, "NOT NULL")
+	assert.Contains(t, got, "DEFAULT NULL")
+}
+
+func TestGetDDLFieldDataNoDefaultFamilies(t *testing.T) {
+	for dataType := range noDefaultValueTypes {
+		t.Run(dataType, func(t *testing.T) {
+			got, err := getDDlFieldData(model.Field{Name: "value", Type: dataType, DefaultType: "INPUT", Default: "x"})
+			require.NoError(t, err)
+			assert.NotContains(t, got, "DEFAULT")
+		})
+	}
+}
+
 func TestHasColumnMySQL(t *testing.T) {
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
 	if dsn == "" {

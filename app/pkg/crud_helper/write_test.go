@@ -88,7 +88,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 	}
 	fields := []model.Field{{Form: model.FormAttr{RemoteTable: "assoc", RemoteModel: "app/admin/model/assoc_provider_test/Assoc.go", RelationFields: "name"}}}
 	manifest := FileManifest{
-		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "assoc_provider_test", "assoc.go")},
+		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "assoc_provider_test", "Assoc.go")},
 		Shared:    []string{provider},
 	}
 	if err := removeAssociatedModelProviders(fields, manifest); err != nil {
@@ -312,10 +312,12 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 		t.Fatalf("row factory missing from model template:\n%s", code)
 	}
 }
+
 `
 	withoutWeigh := `type Demo struct {
 	ID int32 ` + "`json:\"id\"`" + `
 }
+
 `
 	data := ModelData{Namespace: "model", ClassName: "Demo", ModelVar: "demo", Pk: "id", PkGoField: "ID", StructTemp: withWeigh}
 	withCode, err := renderModel(data)
@@ -333,5 +335,22 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 	}
 	if strings.Contains(withoutCode, "demo.Weigh") || strings.Contains(withoutCode, `Update("weigh", demo.ID)`) {
 		t.Fatalf("weigh post-insert hook emitted without a weigh field:\n%s", withoutCode)
+	}
+}
+
+func TestWriteGoFileNormalizesFormattingAndEOF(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "provider.go")
+	if err := writeGoFile(path, "package provider\n\n\nvar ProviderSet = 1\n\n\n"); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "package provider\n\nvar ProviderSet = 1\n" {
+		t.Fatalf("normalized Go output = %q", content)
+	}
+	if strings.HasSuffix(string(content), "\n\n") {
+		t.Fatal("Go output has multiple trailing newlines")
 	}
 }

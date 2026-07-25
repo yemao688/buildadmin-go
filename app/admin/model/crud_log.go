@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -105,10 +106,86 @@ type TableAttr struct {
 	Render     string `json:"render"`     //渲染方案
 	TimeFormat string `json:"timeFormat"` //格式化方式
 
-	Label           string `json:"label"`           //关联表格列属性
-	Show            string `json:"show"`            //关联表格列属性
-	ComSearchRender string `json:"comSearchRender"` //关联表格列属性
-	Remote          string `json:"remote"`          //关联表格列属性
+	Label              string              `json:"label"`                                                //关联表格列属性
+	Show               string              `json:"show"`                                                 //关联表格列属性
+	ComSearchRender    string              `json:"comSearchRender"`                                      //关联表格列属性
+	ComSearchInputAttr ComSearchInputAttrs `json:"comSearchInputAttr" mapstructure:"comSearchInputAttr"` //公共搜索输入属性
+	Remote             string              `json:"remote"`                                               //关联表格列属性
+}
+
+// ComSearchInputAttrs is the normalized form of the designer's textarea
+// attribute syntax. JSON clients may send either that string or an object.
+type ComSearchInputAttrs map[string]any
+
+func (attrs *ComSearchInputAttrs) UnmarshalJSON(data []byte) error {
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		parsed, err := ParseComSearchInputAttrs(text)
+		if err != nil {
+			return err
+		}
+		*attrs = parsed
+		return nil
+	}
+	var object map[string]any
+	if err := json.Unmarshal(data, &object); err != nil {
+		return fmt.Errorf("comSearchInputAttr must be a string or object: %w", err)
+	}
+	*attrs = ComSearchInputAttrs(object)
+	return nil
+}
+
+// ParseComSearchInputAttrs parses one designer attribute per line. Empty
+// lines are ignored, values retain text after the first '=', and booleans and
+// numbers retain their useful scalar types.
+func ParseComSearchInputAttrs(input string) (ComSearchInputAttrs, error) {
+	result := ComSearchInputAttrs{}
+	input = strings.TrimSpace(strings.ReplaceAll(input, "\r\n", "\n"))
+	if input == "" {
+		return result, nil
+	}
+	for lineNumber, line := range strings.Split(input, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+			return nil, fmt.Errorf("comSearchInputAttr entry %d is malformed: %q", lineNumber+1, line)
+		}
+		key := strings.TrimSpace(parts[0])
+		keyParts := strings.Split(key, ".")
+		for _, part := range keyParts {
+			if part == "" {
+				return nil, fmt.Errorf("comSearchInputAttr entry %d has an empty key segment: %q", lineNumber+1, key)
+			}
+		}
+		value := parseComSearchInputAttrValue(parts[1])
+		if len(keyParts) == 1 {
+			result[key] = value
+			continue
+		}
+		child, ok := result[keyParts[0]].(map[string]any)
+		if !ok {
+			child = map[string]any{}
+			result[keyParts[0]] = child
+		}
+		child[strings.Join(keyParts[1:], ".")] = value
+	}
+	return result, nil
+}
+
+func parseComSearchInputAttrValue(value string) any {
+	if value == "true" {
+		return true
+	}
+	if value == "false" {
+		return false
+	}
+	if number, err := strconv.ParseFloat(value, 64); err == nil {
+		return number
+	}
+	return value
 }
 
 // BoolOrString 兼容上游前端对多选开关可能传入布尔值或字符串的情况:
@@ -141,16 +218,17 @@ type FormAttr struct {
 	SelectMulti BoolOrString `json:"select-multi"` //下拉框多选
 	ImageMulti  BoolOrString `json:"image-multi"`  //图片多选上传
 	FileMulti   BoolOrString `json:"file-multi"`   //文件多选上传
-	Step        int          `json:"step"`         //步进值
+	Step        float64      `json:"step"`         //步进值
 
-	RemotePk               string `json:"remote-pk" mapstructure:"remotePk"`                           //远程下拉value字段
-	RemoteField            string `json:"remote-field" mapstructure:"remoteField"`                     //远程下拉label字段
-	RemoteTable            string `json:"remote-table" mapstructure:"remoteTable"`                     //关联数据表
-	RemoteController       string `json:"remote-controller" mapstructure:"remoteController"`           //关联表的控制器
-	RemoteModel            string `json:"remote-model" mapstructure:"remoteModel"`                     //关联表的模型
-	RemoteUrl              string `json:"remote-url" mapstructure:"remoteUrl"`                         //远程下拉URL
-	RemoteSourceConfigType string `json:"remote-source-config-type" mapstructure:"remoteSourceConfigType"` //远程下拉来源类型(crud/custom)
-	RelationFields         string `json:"relation-fields" mapstructure:"relationFields"`               //关联表显示字段
+	RemotePk                string `json:"remote-pk" mapstructure:"remotePk"`                                 //远程下拉value字段
+	RemoteField             string `json:"remote-field" mapstructure:"remoteField"`                           //远程下拉label字段
+	RemoteTable             string `json:"remote-table" mapstructure:"remoteTable"`                           //关联数据表
+	RemoteController        string `json:"remote-controller" mapstructure:"remoteController"`                 //关联表的控制器
+	RemoteModel             string `json:"remote-model" mapstructure:"remoteModel"`                           //关联表的模型
+	RemoteUrl               string `json:"remote-url" mapstructure:"remoteUrl"`                               //远程下拉URL
+	RemotePrimaryTableAlias string `json:"remote-primary-table-alias" mapstructure:"remotePrimaryTableAlias"` //远程主表别名
+	RemoteSourceConfigType  string `json:"remote-source-config-type" mapstructure:"remoteSourceConfigType"`   //远程下拉来源类型(crud/custom)
+	RelationFields          string `json:"relation-fields" mapstructure:"relationFields"`                     //关联表显示字段
 }
 
 type Field struct {

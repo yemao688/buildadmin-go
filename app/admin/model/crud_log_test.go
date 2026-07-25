@@ -36,3 +36,30 @@ func TestBoolOrStringUnmarshalInvalid(t *testing.T) {
 		t.Fatal("expected error for numeric select-multi")
 	}
 }
+
+func TestTableAttrUnmarshalDesignerSearchInputAttr(t *testing.T) {
+	var payload struct {
+		Table TableAttr `json:"table"`
+	}
+	for _, data := range []string{
+		`{"table":{"comSearchInputAttr":""}}`,
+		`{"table":{"comSearchInputAttr":"size=large\nplaceholder=Search here"}}`,
+	} {
+		if err := json.Unmarshal([]byte(data), &payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if payload.Table.ComSearchInputAttr["size"] != "large" || payload.Table.ComSearchInputAttr["placeholder"] != "Search here" {
+		t.Fatalf("designer attrs = %#v", payload.Table.ComSearchInputAttr)
+	}
+}
+
+func TestTableAttrUnmarshalObjectSearchInputAttr(t *testing.T) {
+	var attrs TableAttr
+	if err := json.Unmarshal([]byte(`{"comSearchInputAttr":{"size":"large","disabled":false}}`), &attrs); err != nil {
+		t.Fatal(err)
+	}
+	if attrs.ComSearchInputAttr["size"] != "large" || attrs.ComSearchInputAttr["disabled"] != false {
+		t.Fatalf("object attrs = %#v", attrs.ComSearchInputAttr)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -77,12 +78,14 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.ModelFieldType = buildModelFieldTypeOverrides(fields)
 	modelData.BeforeInsertMixins = map[string]string{}
 	modelData.RelationMethodList = map[string]string{}
+	modelData.CityTextFields = collectCityTextFields(fields)
 
 	// 控制器数据
 	handlerData := HandlerData{}
 	handlerData.Namespace = handlerFile.Namespace
 	handlerData.ModelNamespace = modelData.Namespace
-	handlerData.ModelImportPath = "go-build-admin/app/" + module + "/" + modelData.Namespace
+	modelImportSegments := append([]string{"go-build-admin", "app", module, "model"}, modelFile.Path...)
+	handlerData.ModelImportPath = strings.Join(modelImportSegments, "/")
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
@@ -95,6 +98,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.Methods = []string{}
 	handlerData.RelationVisibleFieldList = map[string][]string{}
 	handlerData.ParamTypeOverrides = map[string]string{}
+	handlerData.PartialEditFields = buildPartialEditFields(fields)
 
 	// 数据权限解析：只有用户显式持久化 ModeNone 时才允许 admin_id 资源走 none。
 	allowNoneExplicit := dsConfig != nil && dsConfig.Mode == data_scope.ModeNone
@@ -208,7 +212,10 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 		}
 
 		// 表格列
-		if slices.Contains(table.ColumnFields, field.Name) {
+		if slices.Contains(table.ColumnFields, field.Name) && !(field.DesignType == "remoteSelects" && field.Table.ComSearchRender == "remoteSelect" && field.Form.RelationFields != "") {
+			if field.Table.ComSearchRender == "remoteSelect" && field.Form.RemoteTable != "" {
+				field.Table.Remote = buildRemoteSearchMetadata(field, getTableName)
+			}
 			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", webTranslate))
 		}
 
@@ -359,12 +366,36 @@ func buildEditableColumns(pk, ownerColumn string, formFields []string, fields []
 			continue
 		}
 		f := searchField(fields, name)
-		if f.Name != "" && (f.FormBuildExclude || f.TableBuildExclude) {
+		if f.Name != "" && f.FormBuildExclude {
 			continue
 		}
 		result = append(result, name)
 	}
 	return result
+}
+
+func buildRemoteSearchMetadata(field model.Field, getTableName GetTableName) string {
+	remoteField := field.Form.RemoteField
+	if remoteField == "" {
+		remoteField = "name"
+	}
+	remote := buildTableColumnKey("pk", GetRemotePk(getTableName(field.Form.RemoteTable, true), field))
+	remote += buildTableColumnKey("field", remoteField)
+	remote += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(field))
+	if field.DesignType == "remoteSelects" {
+		remote += buildTableColumnKey("multiple", "true")
+	}
+	return remote
+}
+
+func buildPartialEditFields(fields []model.Field) string {
+	partialEditFields := make([]string, 0)
+	for _, field := range fields {
+		if analyseField(field).DesignType == "switch" {
+			partialEditFields = append(partialEditFields, strconv.Quote(field.Name)+": true")
+		}
+	}
+	return strings.Join(partialEditFields, ", ")
 }
 
 func joinQuotedColumns(columns []string) string {
@@ -411,13 +442,16 @@ func getCommnet(comment string) string {
 // 解析文件数据
 func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
 	var pathArr []string
+	explicitPath := file != ""
 	if file != "" {
 		if err := validateRelativePathInput(file); err != nil {
 			return NameInfo{}, err
 		}
-		file = strings.TrimSuffix(file, ".go")
-		file = strings.ReplaceAll(file, ".", "/")
-		file = strings.ReplaceAll(file, "\\", "/")
+		var normalizeErr error
+		file, normalizeErr = normalizeLogicalPath(file)
+		if normalizeErr != nil {
+			return NameInfo{}, normalizeErr
+		}
 
 		redundantDir := []string{"app", module, moduleType}
 		pathArr = strings.Split(file, "/")
@@ -426,17 +460,24 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		if _, ok := parseNamePresets[moduleType+"/"+tableName]; ok {
 			pathArr = parseNamePresets[moduleType+"/"+tableName]
 		} else {
-			tableName = strings.ReplaceAll(tableName, ".", "/")
-			tableName = strings.ReplaceAll(tableName, "\\", "/")
-			pathArr = strings.Split(tableName, "/")
+			normalized, normalizeErr := normalizeLogicalPath(tableName)
+			if normalizeErr != nil {
+				return NameInfo{}, normalizeErr
+			}
+			pathArr = strings.Split(normalized, "/")
 		}
 	}
 
 	originalLastName := pathArr[len(pathArr)-1]
 	lastName := strings.ToLower(originalLastName)
+	if explicitPath {
+		lastName = originalLastName
+	}
 	pathArr = pathArr[:len(pathArr)-1]
 	for k, v := range pathArr {
-		pathArr[k] = strings.ToLower(v)
+		if !explicitPath {
+			pathArr[k] = strings.ToLower(v)
+		}
 	}
 
 	// 类名不能为内部关键字
@@ -488,11 +529,11 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 		if err := validateRelativePathInput(file); err != nil {
 			return WebDir{}
 		}
-		file = strings.TrimSuffix(file, ".go")
-		file = strings.ReplaceAll(file, ".", "/")
-		file = strings.ReplaceAll(file, "/", "/")
-		file = strings.ReplaceAll(file, "\\", "/")
-		file = strings.ReplaceAll(file, "_", "/")
+		var normalizeErr error
+		file, normalizeErr = normalizeLogicalPath(file)
+		if normalizeErr != nil {
+			return WebDir{}
+		}
 
 		redundantDir := []string{"web", "src", "views", "backend"}
 		pathArr = strings.Split(file, "/")
@@ -502,11 +543,18 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 		if _, ok := parseWebDirPresets[moduleType+"/"+tableName]; ok {
 			pathArr = parseWebDirPresets[moduleType+"/"+tableName]
 		} else {
-			tableName = strings.ReplaceAll(tableName, ".", "/")
-			tableName = strings.ReplaceAll(tableName, "/", "/")
-			tableName = strings.ReplaceAll(tableName, "\\", "/")
-			tableName = strings.ReplaceAll(tableName, "_", "/")
-			pathArr = strings.Split(tableName, "/")
+			normalized, normalizeErr := normalizeLogicalPath(tableName)
+			if normalizeErr != nil {
+				return WebDir{}
+			}
+			parts := strings.Split(normalized, "/")
+			if len(parts) == 1 {
+				parts = strings.Split(parts[0], "_")
+			}
+			if len(parts) >= 3 {
+				parts = append(parts[:len(parts)-2], utils.SnakeToCamel(strings.Join(parts[len(parts)-2:], "_"), false))
+			}
+			pathArr = parts
 		}
 	}
 
@@ -747,11 +795,11 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 		fieldHtml += " :input-attr=\"" + getJsonFromArray(attr) + "\""
 
 	} else if field.DesignType == "number" {
-		step := 1
+		step := float64(1)
 		if field.Form.Step != 0 {
 			step = field.Form.Step
 		}
-		fieldHtml += " :input-attr=\"{ step: " + strconv.Itoa(step) + " }\""
+		fieldHtml += " :input-attr=\"{ step: " + formatJSNumber(step) + " }\""
 
 	} else if field.DesignType == "icon" {
 		fieldHtml += " :input-attr=\"" + getJsonFromArray(map[string]string{"placement": "top"}) + "\""
@@ -770,6 +818,10 @@ func getFormField(field model.Field, columnDict map[string]string, webTranslate 
 		}
 	}
 	return fieldHtml
+}
+
+func formatJSNumber(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 // getFieldDefault 生成 index.vue defaultItems 的单项,语义对齐上游
@@ -817,7 +869,13 @@ func getFieldDefault(field model.Field) string {
 }
 
 func GetRemotePk(fullTableName string, field model.Field) string {
+	if strings.Contains(field.Form.RemotePk, ".") {
+		return field.Form.RemotePk
+	}
 	name := fullTableName
+	if field.Form.RemotePrimaryTableAlias != "" {
+		name = field.Form.RemotePrimaryTableAlias
+	}
 	if field.Form.RemotePk == "" {
 		return name + ".id"
 	}
@@ -833,7 +891,10 @@ func GetRemoteSelectUrl(field model.Field) string {
 		if url := routeIndexURLForController(field.Form.RemoteController); url != "" {
 			return url
 		}
-		controller := strings.TrimSuffix(strings.ReplaceAll(field.Form.RemoteController, "\\", "/"), ".go")
+		controller, err := normalizeLogicalPath(field.Form.RemoteController)
+		if err != nil {
+			return field.Form.RemoteUrl
+		}
 		redundantDir := []string{"app", "admin", "handler"}
 		pathArr := strings.Split(controller, "/")
 		_, pathArr = TrimPrefix(redundantDir, pathArr)
@@ -847,7 +908,11 @@ func GetRemoteSelectUrl(field model.Field) string {
 // routeIndexURLForController 由控制器文件(如 app/admin/handler/user.go)推导
 // handler 变量名(userHandler),并在 router.go 中查找其注册的 index 路由。
 func routeIndexURLForController(controller string) string {
-	stem := strings.TrimSuffix(filepath.Base(strings.ReplaceAll(controller, "\\", "/")), ".go")
+	normalized, err := normalizeLogicalPath(controller)
+	if err != nil {
+		return ""
+	}
+	stem := filepath.Base(normalized)
 	if stem == "" {
 		return ""
 	}
@@ -905,6 +970,9 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 	}
 	if field.Table.ComSearchRender != "" {
 		columnStr += buildTableColumnKey("comSearchRender", field.Table.ComSearchRender)
+	}
+	if len(field.Table.ComSearchInputAttr) > 0 {
+		columnStr += " comSearchInputAttr: " + getJsonFromAny(field.Table.ComSearchInputAttr) + ","
 	}
 	if field.Table.Remote != "" {
 		columnStr += " remote: {" + field.Table.Remote + "},"
@@ -1014,17 +1082,13 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 			joinField.Table.Operator = "FIND_IN_SET"
 			joinField.Table.ComSearchRender = "remoteSelect"
 
-			primaryKey := "id"
-			if field.Form.RemotePk != "" {
-				primaryKey = field.Form.RemotePk
-			}
 			remoteTableName := getTableName(field.Form.RemoteTable, true)
 
 			labelFieldName := "name"
 			if field.Form.RemoteField != "" {
 				labelFieldName = field.Form.RemoteField
 			}
-			itemJson := buildTableColumnKey("pk", remoteTableName+"."+primaryKey)
+			itemJson := buildTableColumnKey("pk", GetRemotePk(remoteTableName, field))
 			itemJson += buildTableColumnKey("field", labelFieldName)
 			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(field))
 			itemJson += buildTableColumnKey("multiple", "true")
@@ -1059,7 +1123,13 @@ func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableNa
 	// 对齐上游：remote-model 按原路径已存在（如 app/common/model/user.go）时
 	// 直接使用，不再按 admin 模块推导路径重建
 	if field.Form.RemoteModel != "" {
-		direct := strings.ReplaceAll(field.Form.RemoteModel, "\\", "/")
+		direct, err := normalizeLogicalPath(field.Form.RemoteModel)
+		if err != nil {
+			return "", err
+		}
+		if strings.HasSuffix(field.Form.RemoteModel, ".go") {
+			direct += ".go"
+		}
 		if _, err := os.Stat(filepath.Join(utils.RootPath(), direct)); err == nil {
 			return "", nil
 		}
@@ -1149,12 +1219,25 @@ func parseModelMethods(field model.Field, modelData *ModelData) {
 		}, false))
 	} else if field.DesignType == "city" {
 		modelData.Append = append(modelData.Append, field.Name+"_text")
+		if !slices.Contains(modelData.CityTextFields, field.Name) {
+			modelData.CityTextFields = append(modelData.CityTextFields, field.Name)
+		}
 		modelData.Methods = append(modelData.Methods, assembleStub("mixins/model/getters/cityNames", map[string]string{
 			"field":             fieldName + "Text",
 			"originalFieldName": field.Name,
 		}, false))
 	}
 
+}
+
+func collectCityTextFields(fields []model.Field) []string {
+	result := make([]string, 0)
+	for _, field := range fields {
+		if analyseField(field).DesignType == "city" && !slices.Contains(result, field.Name) {
+			result = append(result, field.Name)
+		}
+	}
+	return result
 }
 
 // 控制器/模型等文件的一些杂项属性解析
@@ -1224,7 +1307,9 @@ func Tab(num int) string {
 func buildTableColumnKey(key string, val string) string {
 	itemJson := ""
 	key = formatObjectKey(key)
-	if val == "false" || val == "true" {
+	if (key == "show" || key == "operator" || key == "sortable") && (val == "0" || val == "1") {
+		itemJson = " " + key + ": " + map[string]string{"0": "false", "1": "true"}[val] + ","
+	} else if val == "false" || val == "true" {
 		itemJson = " " + key + ": " + val + ","
 	} else if key == "width" || key == "buttons" || translationCallRE.MatchString(val) {
 		itemJson = " " + key + ": " + val + ","
@@ -1235,15 +1320,20 @@ func buildTableColumnKey(key string, val string) string {
 }
 
 var translationCallRE = regexp.MustCompile(`^t\(("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')\)$`)
+var objectKeyRE = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func formatObjectKey(keyName string) string {
-	re := regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]+$`)
-
-	if re.MatchString(keyName) {
+	if objectKeyRE.MatchString(keyName) {
 		return keyName
 	}
-	quote := getQuote(keyName)
-	return fmt.Sprintf("%s%s%s", quote, keyName, quote)
+	return strconv.Quote(keyName)
+}
+
+func formatAttributeObjectKey(keyName string) string {
+	if objectKeyRE.MatchString(keyName) {
+		return keyName
+	}
+	return "'" + strings.ReplaceAll(keyName, "'", "\\'") + "'"
 }
 
 func getQuote(value string) string {
@@ -1254,9 +1344,15 @@ func getQuote(value string) string {
 }
 
 func getJsonFromArray(data map[string]string) string {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	jsonStr := ""
-	for k, v := range data {
-		keyStr := " " + formatObjectKey(k) + ": "
+	for _, k := range keys {
+		v := data[k]
+		keyStr := " " + formatAttributeObjectKey(k) + ": "
 		if v == "false" || v == "true" {
 			jsonStr += keyStr + v + ","
 		} else if v == "null" {
@@ -1275,6 +1371,44 @@ func getJsonFromArray(data map[string]string) string {
 		return "{}"
 	}
 	return "{" + strings.TrimRight(jsonStr, ",") + " }"
+}
+
+func getJsonFromAny(data map[string]any) string {
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		value := data[key]
+		var rendered string
+		switch value := value.(type) {
+		case string:
+			rendered = strconv.Quote(value)
+		case bool:
+			rendered = strconv.FormatBool(value)
+		case int:
+			rendered = strconv.Itoa(value)
+		case int8, int16, int32, int64:
+			rendered = fmt.Sprint(value)
+		case uint, uint8, uint16, uint32, uint64:
+			rendered = fmt.Sprint(value)
+		case float32:
+			rendered = strconv.FormatFloat(float64(value), 'f', -1, 32)
+		case float64:
+			rendered = strconv.FormatFloat(value, 'f', -1, 64)
+		case map[string]any:
+			rendered = getJsonFromAny(value)
+		default:
+			rendered = fmt.Sprint(value)
+		}
+		parts = append(parts, " "+formatObjectKey(key)+": "+rendered)
+	}
+	if len(parts) == 0 {
+		return "{}"
+	}
+	return "{" + strings.Join(parts, ",") + " }"
 }
 
 func isNumeric(s string) bool {

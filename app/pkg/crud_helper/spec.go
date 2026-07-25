@@ -13,22 +13,24 @@ import (
 )
 
 type specFile struct {
-	Name             string         `mapstructure:"name"`
-	Comment          string         `mapstructure:"comment"`
-	Type             string         `mapstructure:"type"`
-	ModelFile        string         `mapstructure:"modelFile"`
-	ControllerFile   string         `mapstructure:"controllerFile"`
-	WebViewsDir      string         `mapstructure:"webViewsDir"`
-	IsCommonModel    int            `mapstructure:"isCommonModel"`
-	Rebuild          string         `mapstructure:"rebuild"`
-	QuickSearchField []string       `mapstructure:"quickSearchField"`
-	DefaultSortField string         `mapstructure:"defaultSortField"`
-	DefaultSortType  string         `mapstructure:"defaultSortType"`
-	FormFields       *[]string      `mapstructure:"formFields"`
-	ColumnFields     []string       `mapstructure:"columnFields"`
-	DataScope        *specDataScope `mapstructure:"dataScope"`
-	Fields           []specField    `mapstructure:"fields"`
-	Menu             *specMenu      `mapstructure:"menu"`
+	Name                 string         `mapstructure:"name"`
+	Comment              string         `mapstructure:"comment"`
+	Type                 string         `mapstructure:"type"`
+	ModelFile            string         `mapstructure:"modelFile"`
+	ControllerFile       string         `mapstructure:"controllerFile"`
+	WebViewsDir          string         `mapstructure:"webViewsDir"`
+	GenerateRelativePath string         `mapstructure:"generateRelativePath"`
+	DatabaseConnection   string         `mapstructure:"databaseConnection"`
+	IsCommonModel        int            `mapstructure:"isCommonModel"`
+	Rebuild              string         `mapstructure:"rebuild"`
+	QuickSearchField     []string       `mapstructure:"quickSearchField"`
+	DefaultSortField     string         `mapstructure:"defaultSortField"`
+	DefaultSortType      string         `mapstructure:"defaultSortType"`
+	FormFields           *[]string      `mapstructure:"formFields"`
+	ColumnFields         *[]string      `mapstructure:"columnFields"`
+	DataScope            *specDataScope `mapstructure:"dataScope"`
+	Fields               []specField    `mapstructure:"fields"`
+	Menu                 *specMenu      `mapstructure:"menu"`
 }
 
 type specDataScope struct {
@@ -50,6 +52,7 @@ type specField struct {
 	Length            int             `mapstructure:"length"`
 	Precision         int             `mapstructure:"precision"`
 	Default           string          `mapstructure:"default"`
+	DefaultType       string          `mapstructure:"defaultType"`
 	Null              bool            `mapstructure:"null"`
 	PrimaryKey        bool            `mapstructure:"primaryKey"`
 	Unsigned          bool            `mapstructure:"unsigned"`
@@ -79,7 +82,9 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if err := yaml.Unmarshal(content, &document); err != nil {
 		return nil, fmt.Errorf("parse spec %q: %w", path, err)
 	}
-	normalizeNullKeys(&document)
+	if err := normalizeNullKeys(&document); err != nil {
+		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
+	}
 	normalized, err := yaml.Marshal(&document)
 	if err != nil {
 		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
@@ -107,9 +112,26 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 			return nil, fmt.Errorf("field[%d] name is required", i)
 		}
 		formBuildExclude := item.FormBuildExclude != nil && *item.FormBuildExclude
+		defaultType := strings.ToUpper(strings.TrimSpace(item.DefaultType))
+		if defaultType == "" {
+			switch strings.ToLower(item.Default) {
+			case "null":
+				defaultType = "NULL"
+			case "empty string":
+				defaultType = "EMPTY STRING"
+			case "none":
+				defaultType = "NONE"
+			default:
+				if item.Default == "" {
+					defaultType = "NONE"
+				} else {
+					defaultType = "INPUT"
+				}
+			}
+		}
 		field := model.Field{
 			Name: item.Name, Title: item.Title, Type: strings.ToLower(item.Type), DataType: strings.ToLower(item.DataType),
-			Length: item.Length, Precision: item.Precision, Default: item.Default, Null: item.Null,
+			Length: item.Length, Precision: item.Precision, Default: item.Default, DefaultType: defaultType, Null: item.Null,
 			PrimaryKey: item.PrimaryKey, Unsigned: item.Unsigned, AutoIncrement: item.AutoIncrement,
 			Comment: item.Comment, DesignType: item.DesignType, Form: item.Form, Table: item.Table,
 			FormBuildExclude: formBuildExclude, TableBuildExclude: item.TableBuildExclude,
@@ -130,6 +152,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 			field.DesignType = inferDesignTypeForField(field)
 		}
 		applyDesignTypeDefaults(&field)
+		normalizeFieldConfiguration(&field)
 		if err := ValidateField(field); err != nil {
 			return nil, fmt.Errorf("field %q: %w", item.Name, err)
 		}
@@ -149,8 +172,10 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 			}
 		}
 	}
-	columnFields := raw.ColumnFields
-	if len(columnFields) == 0 {
+	columnFields := []string(nil)
+	if raw.ColumnFields != nil {
+		columnFields = *raw.ColumnFields
+	} else {
 		columnFields = allNames
 	}
 	dataScope := &data_scope.Config{Mode: data_scope.ModeAuto}
@@ -165,7 +190,11 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		Name: raw.Name, Comment: raw.Comment, FormFields: formFields, ColumnFields: columnFields,
 		QuickSearchField: raw.QuickSearchField, DefaultSortField: raw.DefaultSortField, DefaultSortType: raw.DefaultSortType,
 		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
+		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
 		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope,
+	}
+	if err := normalizeTableConfiguration(&table); err != nil {
+		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
 	options := &GenerateOptions{Table: table, Fields: fields, Type: typeName}
 	if raw.Menu != nil {
@@ -180,24 +209,53 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 // normalizeNullKeys fixes YAML's special null key token before Viper sees it.
 // Without this pass, an unquoted `null:` key can disappear during mapstructure
 // decoding even though its value is a valid boolean.
-func normalizeNullKeys(node *yaml.Node) {
+func normalizeNullKeys(node *yaml.Node) error {
 	if node == nil {
-		return
+		return nil
 	}
 	if node.Kind == yaml.MappingNode {
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			key := node.Content[i]
+			value := node.Content[i+1]
 			if key.Kind == yaml.ScalarNode && key.Tag == "!!null" && (key.Value == "null" || key.Value == "~") {
 				key.Tag = "!!str"
 				key.Value = "null"
 			}
-			normalizeNullKeys(node.Content[i+1])
+			if key.Value == "defaultType" && value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
+				value.Tag = "!!str"
+				value.Value = "NULL"
+			}
+			if value.Kind == yaml.ScalarNode && value.Tag == "!!bool" && (key.Value == "selectMulti" || key.Value == "imageMulti" || key.Value == "fileMulti") {
+				value.Tag = "!!str"
+				if value.Value == "true" {
+					value.Value = "1"
+				} else {
+					value.Value = ""
+				}
+			}
+			if key.Value == "comSearchInputAttr" && value.Kind == yaml.ScalarNode {
+				attrs, err := model.ParseComSearchInputAttrs(value.Value)
+				if err != nil {
+					return err
+				}
+				encoded, _ := yaml.Marshal(attrs)
+				var replacement yaml.Node
+				if yaml.Unmarshal(encoded, &replacement) == nil && len(replacement.Content) == 1 {
+					*value = *replacement.Content[0]
+				}
+			}
+			if err := normalizeNullKeys(value); err != nil {
+				return err
+			}
 		}
-		return
+		return nil
 	}
 	for _, child := range node.Content {
-		normalizeNullKeys(child)
+		if err := normalizeNullKeys(child); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // inferDesignTypeForField follows Helper.php::$inputTypeRule in order.  The
