@@ -203,6 +203,92 @@ fields:
 	}
 }
 
+func TestLoadSpecDerivedColumnFieldsRetainRelationBackedFKs(t *testing.T) {
+	path := writeSpecTest(t, `name: relation_columns
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: order_no
+    type: varchar
+    length: 64
+  - name: user_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: nickname_text
+      relationFields: username
+  - name: admin_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: nickname
+      relationFields: username
+  - name: reviewer_ids
+    type: varchar
+    designType: remoteSelects
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: nickname
+      relationFields: nickname
+  - name: status
+    type: varchar
+    length: 16
+  - name: unresolved_owner_id
+    type: bigint
+    designType: remoteSelect
+  - name: unresolved_reviewer_ids
+    type: varchar
+    designType: remoteSelects
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: nickname
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"id", "order_no", "user_id", "admin_id", "reviewer_ids", "status", "unresolved_owner_id", "unresolved_reviewer_ids"}
+	if fmt.Sprint(opts.Table.ColumnFields) != fmt.Sprint(want) {
+		t.Fatalf("derived columnFields = %v, want %v", opts.Table.ColumnFields, want)
+	}
+}
+
+func TestLoadSpecExplicitColumnFieldsRetainRelationFK(t *testing.T) {
+	path := writeSpecTest(t, `name: explicit_relation_fk
+columnFields: [id, user_id]
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: user_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: nickname_text
+      relationFields: username
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"id", "user_id"}
+	if fmt.Sprint(opts.Table.ColumnFields) != fmt.Sprint(want) {
+		t.Fatalf("explicit columnFields = %v, want %v", opts.Table.ColumnFields, want)
+	}
+	if opts.Table.ColumnFields == nil {
+		t.Fatal("explicit columnFields were not preserved")
+	}
+}
+
 func TestLoadSpecCompletenessOptions(t *testing.T) {
 	tests := []struct {
 		name, yaml, wantPath, wantDB string

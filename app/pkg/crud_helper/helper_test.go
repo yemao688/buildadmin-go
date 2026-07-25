@@ -639,6 +639,63 @@ func TestOmittedFKColumnStillGeneratesRelationDisplayAndLoader(t *testing.T) {
 	require.Contains(t, modelData.RelationLoaders, `loadUserRelations`)
 }
 
+func TestRelationFKColumnIsHiddenWithRemoteSearchMetadata(t *testing.T) {
+	path := writeSpecTest(t, `name: relation_loader
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: user_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: nickname_text
+      relationFields: username
+`)
+	opts, err := LoadSpec(path)
+	require.NoError(t, err)
+	require.Contains(t, opts.Table.ColumnFields, "user_id")
+
+	field := opts.Fields[1]
+	field = prepareGeneratedColumnField(field)
+	field.Table.ComSearchRender = "remoteSelect"
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	fkColumn := getTableColumn(field, nil, "", "", "")
+	require.Contains(t, fkColumn, `prop: "user_id"`)
+	require.Contains(t, fkColumn, `show: false`)
+	require.Contains(t, fkColumn, `comSearchRender: "remoteSelect"`)
+	require.NotEmpty(t, field.Table.Remote)
+
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	columns := strings.Join(indexData.TableColumn, "\n")
+	require.Contains(t, columns, `prop: "user.username"`)
+	require.NotContains(t, columns, `prop: "user_id"`)
+	finalizeRelationMetadata(&modelData)
+	require.Contains(t, modelData.RelationFields, `User *OrdersUserRelation `)
+	require.Contains(t, modelData.RelationLoaders, `loadUserRelations`)
+
+	multi := relationTestField("remoteSelects", "username")
+	multi.Form.RemoteTable = "admin"
+	multi.Table.ComSearchRender = "remoteSelect"
+	multi = prepareGeneratedColumnField(multi)
+	multi.Table.Remote = buildRemoteSearchMetadata(multi, func(name string, full bool) string { return "ba_" + name })
+	multiColumn := getTableColumn(multi, nil, "", "", "")
+	require.Contains(t, multiColumn, `show: false`)
+	require.Contains(t, multiColumn, `comSearchRender: "remoteSelect"`)
+}
+
+func TestRelationFKExplicitShowTrueIsPreserved(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	field.Table.Show = "true"
+	prepared := prepareGeneratedColumnField(field)
+	require.Equal(t, "true", prepared.Table.Show)
+}
+
 func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {
 	field := model.Field{
 		Name: "reviewer_admins", Type: "varchar", DataType: "varchar(255)", DesignType: "remoteSelects",

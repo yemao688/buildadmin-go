@@ -404,7 +404,7 @@ func buildOperateColumn(enableDragSort bool) string {
 }
 
 func prepareGeneratedColumnField(field model.Field) model.Field {
-	if field.DesignType == "remoteSelects" && field.Table.ComSearchRender == "remoteSelect" && field.Form.RelationFields != "" {
+	if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) && field.Form.RemoteTable != "" && strings.TrimSpace(field.Form.RelationFields) != "" && field.Table.Show == "" {
 		field.Table.Show = "false"
 	}
 	return field

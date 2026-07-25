@@ -106,7 +106,6 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	}
 
 	fields := make([]model.Field, 0, len(raw.Fields))
-	allNames := make([]string, 0, len(raw.Fields))
 	for i, item := range raw.Fields {
 		if item.Name == "" {
 			return nil, fmt.Errorf("field[%d] name is required", i)
@@ -157,7 +156,6 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 			return nil, fmt.Errorf("field %q: %w", item.Name, err)
 		}
 		fields = append(fields, field)
-		allNames = append(allNames, field.Name)
 	}
 
 	formFields := []string(nil)
@@ -176,7 +174,10 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if raw.ColumnFields != nil {
 		columnFields = *raw.ColumnFields
 	} else {
-		columnFields = allNames
+		columnFields = make([]string, 0, len(fields))
+		for _, field := range fields {
+			columnFields = append(columnFields, field.Name)
+		}
 	}
 	dataScope := &data_scope.Config{Mode: data_scope.ModeAuto}
 	if raw.DataScope != nil {

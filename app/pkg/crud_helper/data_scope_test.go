@@ -183,6 +183,30 @@ func TestResolveDataScope_NoProverFailsClosed(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot prove an index")
 }
 
+func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) {
+	adminIDFields := []model.Field{
+		newField("id", "bigint", true),
+		newField("user_id", "bigint", false),
+		newField("admin_id", "bigint", false),
+	}
+	resolved, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeAuto}, adminIDFields, DataScopeResolveOptions{ProveIndex: proveAll})
+	require.NoError(t, err)
+	assert.Equal(t, data_scope.ModeAuto, resolved.Policy.Mode)
+	assert.Equal(t, "admin_id", resolved.OwnerColumn)
+	assert.True(t, resolved.AssignOnCreate)
+
+	agentOwnerFields := []model.Field{
+		newField("id", "bigint", true),
+		newField("user_id", "bigint", false),
+		newField("agent_admin_id", "bigint", false),
+	}
+	resolved, err = ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeAuto}, agentOwnerFields, DataScopeResolveOptions{ProveIndex: proveAll})
+	require.NoError(t, err)
+	assert.Equal(t, data_scope.ModeNone, resolved.Policy.Mode)
+	assert.Empty(t, resolved.OwnerColumn)
+	assert.False(t, resolved.AssignOnCreate)
+}
+
 func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	out := renderModelString(t, ModelData{
 		Namespace:             "model",

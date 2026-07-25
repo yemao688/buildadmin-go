@@ -37,7 +37,7 @@ go build ./...
 | `defaultSortField` | `string`，默认空 | 默认排序字段。 |
 | `defaultSortType` | `string`，默认空 | 通常为 `asc` 或 `desc`。 |
 | `formFields` | `[]string`，省略时自动推导 | 省略时取非主键且未 `formBuildExclude` 的字段；显式 `[]` 表示没有表单项。 |
-| `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段；显式 `[]` 表示不生成业务表格列。它不表示数据库没有字段。 |
+| `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带有效 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键；生成器会自动隐藏这些原始 FK 列并单独生成 relation display 列。显式 `[]` 表示不生成业务表格列，也会移除对应 FK 搜索。它不表示数据库没有字段。 |
 | `dataScope` | map，默认 `mode: auto` | 数据权限策略，见下文。 |
 | `menu` | map，默认未配置 | 菜单标题和父节点覆盖；菜单默认仍创建，跳过使用 `--skip-menu`。 |
 | `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
@@ -67,7 +67,7 @@ menu:
   parent: 0
 ```
 
-`auto` 检测 owner 字段并应用层级数据范围；`required` 要求明确 owner 列；`none` 用于全局资源。`assignOnCreate` 控制新增时是否写入当前管理员。
+`auto` 只识别精确的 `admin_id` owner 字段并应用层级数据范围；`required` 要求明确 owner 列；`none` 用于全局资源。`assignOnCreate` 控制新增时是否写入当前管理员。
 
 ## 字段契约
 
@@ -252,15 +252,15 @@ form:
   remoteModel: app/admin/model/user.go
 ```
 
-用户订单、充值等代理运营业务通常应使用 `dataScope` 表达代理/管理员归属，而不是增加一个让用户手工选择的可见 `agent_admin_id` 业务字段。常见做法是保留一个 bigint owner column，隐藏它的表单和表格输出，并在新增时由数据范围策略从当前管理员自动赋值：
+用户订单、充值等代理运营业务通常应使用精确 bigint `admin_id` 作为 `dataScope` owner，表达代理/管理员归属；不要再引入一个让用户手工选择的可见 `agent_admin_id` 业务字段。常见做法是保留 owner column，隐藏它的表单输出，并在新增时由数据范围策略从当前管理员自动赋值：
 
 ```yaml
 dataScope:
   mode: required
-  ownerColumn: agent_admin_id
+  ownerColumn: admin_id
   assignOnCreate: true
 fields:
-  - name: agent_admin_id
+  - name: admin_id
     type: bigint
     unsigned: true
     null: false
@@ -272,24 +272,24 @@ fields:
     tableBuildExclude: true
 ```
 
-如果业务确实需要显式选择管理员，才将该字段配置为 `remoteSelect`。本仓库内置管理员选择接口 `/admin/auth.Admin/index` 返回 option label key `nickname`，不是 `username`：
+默认/auto scope 只会识别精确的 `admin_id`，不会把 `agent_admin_id`、`last_admin_id` 之类字段当成 owner。若业务需要自定义 owner 列，显式使用 `dataScope.mode: required` 和对应 `ownerColumn`；若业务确实需要显式选择管理员，才将该字段配置为 `remoteSelect`。owner/admin 归属列通常展示 `username`，而 reviewer 这类独立审批人语义再单独使用 `nickname` 等字段：
 
 ```yaml
-name: agent_admin_id
+name: admin_id
 type: bigint
 unsigned: true
 designType: remoteSelect
 form:
   remoteTable: admin
   remotePk: id
-  remoteField: nickname
-  relationFields: nickname
+  remoteField: username
+  relationFields: username
   remoteSourceConfigType: crud
   remoteController: app/admin/handler/admin.go
   remoteModel: app/admin/model/admin.go
 ```
 
-`dataScope.ownerColumn` 是后台数据范围使用的所有者列，通常与 `assignOnCreate: true` 配合；它不要求在表单中暴露，也不等同于 `remoteField`。`remoteField` 是 option 的显示标签键，`relationFields` 是关联查询/preload 的字段提示，两者可以不同。字段名本身不会自动推断关系；必须填写真实存在的 source route/controller 和关联 model，不能虚构 `remoteUrl`。
+`dataScope.ownerColumn` 是后台数据范围使用的所有者列，通常与 `assignOnCreate: true` 配合；订单/充值这类用户业务默认应优先使用精确 `admin_id`。它不要求在表单中暴露，也不等同于 `remoteField`。`remoteField` 是 option 的显示标签键，`relationFields` 是关联查询/preload 的字段提示，两者可以不同。字段名本身不会自动推断关系；必须填写真实存在的 source route/controller 和关联 model，不能虚构 `remoteUrl`。
 
 例如 `admin_id` 的昵称不能仅凭名称推断，应显式配置：
 
@@ -298,8 +298,8 @@ designType: remoteSelect
 form:
   remoteTable: admin
   remotePk: id
-  remoteField: nickname
-  relationFields: nickname
+  remoteField: username
+  relationFields: username
   remoteSourceConfigType: crud
   remoteController: app/admin/handler/admin.go
 ```
@@ -314,8 +314,8 @@ form:
   form:
     remoteTable: admin
     remotePk: id
-    remoteField: nickname
-    relationFields: nickname
+    remoteField: username
+    relationFields: username
     remoteSourceConfigType: crud
     remoteController: app/admin/handler/admin.go
   table:
@@ -324,7 +324,7 @@ form:
     show: "false"
 ```
 
-这里的 `show: "false"` 是当前受支持的隐藏 FK 合同：保留原始 FK 列在 `columnFields` 里，并显式隐藏它，这样远程公共搜索仍基于 FK 工作，而可见列表列由 relation enrichment 生成。若把该 FK 从 `columnFields` 里完全省略，则不会生成原始 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成。
+当 `remoteSelect`/`remoteSelects` 同时配置了 `remoteTable` 和非空 `relationFields` 时，生成器会自动把原始 FK 列设为 `show: "false"`，保留它在 `columnFields` 中以支持远程公共搜索，并由 relation enrichment 生成可见列表列。显式 `show` 值保持不变，显式 `show: "true"` 仍会显示原始列。若把该 FK 从 `columnFields` 里完全省略，则会同时移除原始 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成；显式 `show: "false"` 仍是受支持的写法。
 
 多字段 relation display 示例：
 
@@ -377,7 +377,7 @@ quickSearchField: [order_no, reviewer_admin_ids]
 defaultSortField: weigh
 defaultSortType: desc
 formFields: [order_no, reviewer_admin_ids, quantity, status, note]
-columnFields: [id, order_no, reviewer_admin_ids, quantity, status, weigh]
+columnFields: [id, order_no, quantity, status, weigh]
 dataScope:
   mode: required
   ownerColumn: admin_id
@@ -404,6 +404,7 @@ fields:
     default: "0"
     comment: 管理员
     designType: remoteSelect
+    formBuildExclude: true
     form:
       remoteTable: admin
       remotePk: id

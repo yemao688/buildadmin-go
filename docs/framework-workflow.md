@@ -204,11 +204,12 @@ git push origin master
 1. 先读根目录 [`AGENTS.md`](../AGENTS.md) 和本指南，再确认真实入口、生成链和路由边界。
 2. 开始前检查当前分支、remote 和工作树：`git branch --show-current`、`git remote -v`、`git status`。
 3. CRUD 必须先读 [`crud-generation.md`](crud-generation.md)，写 `crud_specs/*.yaml`，再运行 `crud:generate`；删除使用 `crud:delete`。
-4. 不手改 `cmd/app/wire_gen.go`、生成的 migration model 或其它 generated 文件；修改来源后重新生成。
-5. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
-6. 不运行危险的 `go run ./cmd/generate`，除非明确检查其实现、DSN 和覆盖范围并得到专门确认。
-7. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
-8. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/app`，前端在 `web/` 执行 pnpm typecheck/build。
+4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
+5. 不手改 `cmd/app/wire_gen.go`、生成的 migration model 或其它 generated 文件；修改来源后重新生成。
+6. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
+7. 不运行危险的 `go run ./cmd/generate`，除非明确检查其实现、DSN 和覆盖范围并得到专门确认。
+8. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
+9. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/app`，前端在 `web/` 执行 pnpm typecheck/build。
 
 ## 危险或错误做法
 
