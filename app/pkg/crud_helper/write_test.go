@@ -255,7 +255,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		{name: "datetime", designType: "datetime", dataType: "datetime", want: "validate.FlexDateTime"},
 		{name: "date", designType: "date", dataType: "date", want: "validate.FlexDate"},
 		{name: "time", designType: "time", dataType: "time", want: "validate.FlexClock"},
-		{name: "create_time", designType: "timestamp", dataType: "bigint", want: "validate.FlexUnixTime"},
+		{name: "create_time", designType: "timestamp", dataType: "bigint", want: ""},
 		{name: "end_time", designType: "timestamp", dataType: "bigint", want: "validate.FlexFormattedUnixTime"},
 	}
 	for _, tc := range cases {
@@ -298,8 +298,8 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 		"day":            "validate.FlexDate",
 		"clock":          "validate.FlexClock",
 		"clock_native":   "string",
-		"create_time":    "validate.FlexUnixTime",
-		"unix_at":        "validate.FlexFormattedUnixTime",
+
+		"unix_at": "validate.FlexFormattedUnixTime",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("overrides = %#v, want %#v", got, want)

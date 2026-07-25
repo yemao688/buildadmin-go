@@ -165,6 +165,7 @@ func TestFlexUnixTime(t *testing.T) {
 	}{
 		{"number", `123`, 123, false},
 		{"number string", `"456"`, 456, false},
+		{"number zero", `0`, 0, false},
 		{"local datetime", `"2026-07-25 12:34:56"`, FlexUnixTime(localTime.Unix()), false},
 		{"RFC3339", `"2026-07-25T12:34:56+08:00"`, FlexUnixTime(localTime.Unix()), false},
 		{"null", `null`, 0, false},

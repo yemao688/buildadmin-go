@@ -132,6 +132,14 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	if ds.OwnerColumn != "" {
 		handlerData.ExcludeParamFields = []string{ds.OwnerColumn}
 	}
+	for _, name := range []string{"create_time", "createtime", "update_time", "updatetime"} {
+		if searchField(fields, name).Name == "" {
+			continue
+		}
+		if !slices.Contains(handlerData.ExcludeParamFields, name) {
+			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, name)
+		}
+	}
 
 	return modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
 }
@@ -630,6 +638,8 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 		designType := field.DesignType
 		dbType := strings.ToLower(analyseFieldType(field))
 		switch {
+		case isCanonicalTimeField(field.Name):
+			// Auto-maintained integer timestamps stay plain int64 in model/handler DTOs.
 		case isBooleanStorageField(field):
 			overrides[field.Name] = "validate.FlexBool"
 		case designType == "year" || dbType == "year":
@@ -657,6 +667,8 @@ func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 		field := analyseField(rawField)
 		dbType := strings.ToLower(analyseFieldType(field))
 		switch {
+		case isCanonicalTimeField(field.Name):
+			// Auto-maintained integer timestamps stay plain int64 (not FlexUnixTime).
 		case isBooleanStorageField(field):
 			overrides[field.Name] = "validate.FlexBool"
 		case field.DesignType == "year" || dbType == "year":
@@ -685,12 +697,9 @@ func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 }
 
 func timestampAdapterType(fieldName string) string {
-	switch strings.ToLower(fieldName) {
-	case "create_time", "update_time", "createtime", "updatetime":
-		return "validate.FlexUnixTime"
-	default:
-		return "validate.FlexFormattedUnixTime"
-	}
+	// Canonical names are skipped before this helper is called.
+	// Non-canonical integer timestamp design fields keep formatted JSON output.
+	return "validate.FlexFormattedUnixTime"
 }
 
 func isBooleanStorageField(field model.Field) bool {

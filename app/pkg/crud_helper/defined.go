@@ -522,9 +522,10 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		{{if .HasCreateTime}}{{.ModelVar}}.CreateTime = time.Now().Unix()
-		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.UpdateTime = time.Now().Unix()
-		{{end}}
+		{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+		{{end}}{{end}}
 		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
 			return err
 		}
@@ -550,7 +551,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
-		{{if .HasUpdateTime}}{{.ModelVar}}.UpdateTime = time.Now().Unix()
+		{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = time.Now().Unix()
 		{{end}}
 
 	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})

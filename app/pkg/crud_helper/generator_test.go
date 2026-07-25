@@ -341,7 +341,21 @@ func TestFailedGenerationUnregistersRegisteredRoutes(t *testing.T) {
 
 func TestWireErrorIncludesOutput(t *testing.T) {
 	err := formatWireError(errors.New("exit status 1"), []byte("wire: undefined provider\n"))
+	if strings.HasPrefix(err.Error(), "wire: wire:") {
+		t.Fatalf("wire error should not duplicate stage prefix: %v", err)
+	}
 	if !strings.Contains(err.Error(), "undefined provider") {
 		t.Fatalf("wire error omitted diagnostic output: %v", err)
+	}
+}
+
+func TestWireErrorWithoutOutputReturnsOriginalError(t *testing.T) {
+	base := errors.New("signal: interrupt")
+	err := formatWireError(base, nil)
+	if !errors.Is(err, base) {
+		t.Fatalf("wire error should preserve original cause: %v", err)
+	}
+	if err.Error() != "signal: interrupt" {
+		t.Fatalf("wire error without output = %q", err.Error())
 	}
 }

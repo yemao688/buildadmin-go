@@ -203,11 +203,31 @@ func renderModel(modelData ModelData) (string, error) {
 }
 
 func prepareModelTimestampData(modelData *ModelData) {
-	modelData.HasCreateTime = strings.Contains(modelData.StructTemp, "CreateTime int64")
-	modelData.HasUpdateTime = strings.Contains(modelData.StructTemp, "UpdateTime int64")
+	modelData.HasCreateTime = false
+	modelData.HasUpdateTime = false
+	modelData.CreateTime = ""
+	modelData.UpdateTime = ""
+	updateJSON := ""
+	// Detect canonical auto timestamps from generated struct field + json tag,
+	// independent of Go type (plain int64 after override skip, or any integer form).
+	fieldRe := regexp.MustCompile(`(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)\s+\S+.*json:"([^"]+)"`)
+	for _, match := range fieldRe.FindAllStringSubmatch(modelData.StructTemp, -1) {
+		goName := match[1]
+		jsonName := strings.Split(match[2], ",")[0]
+		switch strings.ToLower(jsonName) {
+		case "create_time", "createtime":
+			modelData.HasCreateTime = true
+			modelData.CreateTime = goName
+		case "update_time", "updatetime":
+			modelData.HasUpdateTime = true
+			modelData.UpdateTime = goName
+			updateJSON = jsonName
+		}
+	}
 	modelData.HasWeigh = regexp.MustCompile(`(?m)^\s*Weigh\s+int32\s+`).MatchString(modelData.StructTemp)
-	if modelData.HasUpdateTime && !slices.Contains(modelData.EditableColumns, "update_time") {
-		modelData.EditableColumns = append(modelData.EditableColumns, "update_time")
+	if modelData.HasUpdateTime && updateJSON != "" && !slices.Contains(modelData.EditableColumns, updateJSON) {
+		// Keep update column writable so automatic UpdateTime assignment is persisted.
+		modelData.EditableColumns = append(modelData.EditableColumns, updateJSON)
 		modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
 	}
 }

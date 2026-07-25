@@ -232,7 +232,13 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 
 请求适配是 Go 实现：多值字段接收数组并存为逗号字符串，array 使用规范化 JSON，日期/时间使用仓库 validator，switch 的 bool 转为 `1`/`0`。不要把 PHP getter/cast 的全部运行时行为写进 spec 假设。
 
-时间字段的 JSON 契约保持 PHP 生成 CRUD 的格式：`datetime`/原生 SQL `timestamp` 使用 `"YYYY-MM-DD HH:mm:ss"`，`date` 使用 `"YYYY-MM-DD"`，`time` 使用 `"HH:mm:ss"`，可空 `year` 的空值为 `null`，显式 MySQL YEAR `0000` 为 `"0"`，非零年份为四位数字字符串，例如 `"2026"`。PHP/Go 生成 CRUD 的 canonical 自动时间字段 `create_time`、`update_time`、`createtime`、`updatetime` 返回 Unix 整数；其它整数存储的 `timestamp` 设计字段（例如 `end_time`）对应 PHP 生成模型的 `timestamp:Y-m-d H:i:s` cast，因此返回格式化字符串。两类整数时间字段都接受 Unix 值、数字字符串或格式化日期时间作为请求输入；零值仍返回 `null`。
+时间字段的 JSON 契约（本仓库生成 CRUD）：
+- 原生 SQL `datetime`/`timestamp` 字段使用 `FlexDateTime`，JSON 输出本地格式化字符串 `"YYYY-MM-DD HH:mm:ss"`（零值 `null`）。
+- 整数存储的 canonical 自动时间字段 `create_time`/`update_time`/`createtime`/`updatetime` 在生成 model/handler 中保持 `int64`，由生成代码在 Add/Edit 写入 `time.Now().Unix()`，不进入请求 DTO，也不被客户端覆盖。JSON 读取侧为普通整数。
+- 其它整数存储的 `timestamp` 设计字段（例如 `end_time`）使用 `FlexFormattedUnixTime`，JSON 输出本地格式化字符串 `"YYYY-MM-DD HH:mm:ss"`（零值 `null`），对齐 PHP 生成模型对非 auto 整数 timestamp 的 `timestamp:Y-m-d H:i:s` cast。
+- 整数时间字段请求侧仍接受 Unix 数字、数字字符串与格式化日期时间；`FlexDateTime` 请求侧接受格式化日期时间与 RFC3339。
+- `date` 为 `"YYYY-MM-DD"`，`time` 为 `"HH:mm:ss"`，可空 `year` 空值为 `null`，显式 MySQL YEAR `0000` 为 `"0"`，非零年份为四位数字字符串（例如 `"2026"`）。
+- 表格列 `table.timeFormat` 使用前端 `timeFormat` 的 token 语法（例如 `yyyy-mm-dd hh:MM:ss`），与 Element Plus 日期选择器的 `value-format`（例如 `YYYY-MM-DD HH:mm:ss`）不是同一套符号。
 
 ## 有意不支持的键
 

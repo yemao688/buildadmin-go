@@ -752,9 +752,14 @@ func fileExists(path string) bool {
 var runWire = executeWire
 
 func executeWire() error {
-	cmd := exec.Command("wire")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wire")
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
 	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return fmt.Errorf("wire timed out after 5m")
+	}
 	if err == nil {
 		return nil
 	}
@@ -770,7 +775,11 @@ func formatWireError(err error, output []byte) error {
 	if len(output) > maxOutput {
 		output = append(output[:maxOutput], []byte("... [output truncated]")...)
 	}
-	return fmt.Errorf("wire: %w: %s", err, strings.TrimSpace(string(output)))
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return err
+	}
+	return fmt.Errorf("%w: %s", err, trimmed)
 }
 
 var runProjectBuild = buildProject
