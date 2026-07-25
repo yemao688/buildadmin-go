@@ -120,6 +120,66 @@ func TestGetDictData(t *testing.T) {
 	fmt.Println(quickSearchFieldZhCnTitle)
 }
 
+func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
+	tests := []struct {
+		name       string
+		field      model.Field
+		wantKeys   []string
+		wantLabels []string
+	}{
+		{
+			name:       "radio comment dictionary",
+			field:      model.Field{Name: "visibility", Type: "enum", DataType: "enum('opt0','opt1')", DesignType: "radio", Comment: "单选框:opt0=选项一,opt1=选项二"},
+			wantKeys:   []string{"opt0", "opt1"},
+			wantLabels: []string{"选项一", "选项二"},
+		},
+		{
+			name:       "select aligned enum",
+			field:      model.Field{Name: "category", Type: "enum", DataType: "enum('tab','link')", DesignType: "select", Comment: "类型:tab=选项卡,link=链接"},
+			wantKeys:   []string{"tab", "link"},
+			wantLabels: []string{"选项卡", "链接"},
+		},
+		{
+			name:       "checkbox set",
+			field:      model.Field{Name: "features", Type: "set", DataType: "set('feature_a','feature_b')", DesignType: "checkbox", Comment: "功能:feature_a=功能一,feature_b=功能二"},
+			wantKeys:   []string{"feature_a", "feature_b"},
+			wantLabels: []string{"功能一", "功能二"},
+		},
+		{
+			name:       "selects set",
+			field:      model.Field{Name: "categories", Type: "set", DataType: "set('category_a','category_b')", DesignType: "selects", Comment: "分类:category_a=分类一,category_b=分类二"},
+			wantKeys:   []string{"category_a", "category_b"},
+			wantLabels: []string{"分类一", "分类二"},
+		},
+		{
+			name:       "label only",
+			field:      model.Field{Name: "plain", Type: "enum", DataType: "enum('a','b')", DesignType: "radio", Comment: "只有标签"},
+			wantKeys:   []string{"a", "b"},
+			wantLabels: []string{"plain a", "plain b"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := getColumnDict(test.field, "", "")
+			labels := map[string]string{}
+			getDictData(&labels, test.field, "zh-cn", "")
+			for _, key := range test.wantKeys {
+				if _, ok := got[key]; !ok {
+					t.Fatalf("missing option key %q in %#v", key, got)
+				}
+			}
+			for index, key := range test.wantKeys {
+				if len(test.wantLabels) > index && test.name != "label only" && labels[test.field.Name+" "+key] != test.wantLabels[index] {
+					t.Errorf("option %q label = %q, want %q", key, labels[test.field.Name+" "+key], test.wantLabels[index])
+				}
+			}
+			if test.name == "label only" && len(got) != len(test.wantKeys) {
+				t.Fatalf("label-only comment added orphan dictionary entries: %#v", got)
+			}
+		})
+	}
+}
+
 // TestGetRemoteSelectUrl 对齐上游:crud 来源时 URL 由控制器推导;Go 扁平
 // handler 文件需通过 router.go 反查真实路由名(user.go -> user.User)。
 func TestGetRemoteSelectUrl(t *testing.T) {

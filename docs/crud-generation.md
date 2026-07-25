@@ -40,6 +40,8 @@ go build ./...
 | `menu` | map，默认未配置 | 菜单标题和父节点覆盖；菜单默认仍创建，跳过使用 `--skip-menu`。 |
 | `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
 
+对于 `tinyint(1)` 布尔存储字段（包括 YAML 中 `type: tinyint` 且 `length: 1` 的字段），生成的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式，也兼容 `true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`，以保持与 BuildAdmin 前端开关约定一致；非规范值会被拒绝。`char(1)` 不按布尔存储处理。
+
 `generateRelativePath` 只填充缺失的三个路径。每个显式 `modelFile`、`controllerFile`、`webViewsDir` 都覆盖 shorthand：
 
 ```yaml
@@ -202,6 +204,9 @@ Go 没有 PHP-style `validateFile` 输出。当前应用只有一条 DI `*gorm.D
 - `create_time`/`update_time` 使用 `bigint`，由生成 CRUD 代码维护。
 - 组件推断依赖 SQL 类型和后缀：`array`、`list/select/data`、`lists/selects/multi`、`_id`、`_ids` 以及 image/file/icon/color/editor、switch/status 家族都很重要。
 - `comment` 是字段标题和字典来源。字典精确示例：`状态:0=禁用,1=启用`、`菜单类型:tab=选项卡,link=链接,iframe=Iframe`。
+- radio/select 应使用 enum 或 varchar 存储，并让注释键和值对应存储值，例如 `enum('opt0','opt1')` 配合 `单选框:opt0=选项一,opt1=选项二`。enum/set 即使没有 `key=value` 注释也会从列值生成静态键并使用回退标签；varchar/string 没有 `key=value` 注释时只有字段标签，没有静态选项。
+- checkbox/selects 应使用 set 或 varchar 逗号存储，并让每个注释 key 对应一个存储值，例如 `set('feature_a','feature_b')` 配合 `功能:feature_a=功能一,feature_b=功能二`。enum/set 值与注释 key 不一致时仍按 PHP 兼容语义合并，不会被生成器拒绝，因此应主动保持一致。
+- remoteSelect/remoteSelects 使用关系数据，不要为它们伪造静态字典或默认选项。
 - 表注释示例：`会员组表` -> `会员组管理`。
 - v2.2 起清空 number/float/time/select/single-remote 使用 `null`；对应数据库列通常必须允许 NULL，不要改成空字符串或 `0`。
 - 三段表名按 `country_language_content` -> `country/languageContent` 组织 web 路径；明确路径段保留下划线和 camelCase。
@@ -226,6 +231,8 @@ form:
 custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`；例如管理员选择接口 `/admin/auth.Admin/index`。不要填写仓库中未注册的路由。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从仓库 route 注册表反查 handler URL，查不到再按路径回退，因此 PHP controller 的动态 URL、插件权限、自定义组件和全部运行时 join 语义不保证一致。
 
 请求适配是 Go 实现：多值字段接收数组并存为逗号字符串，array 使用规范化 JSON，日期/时间使用仓库 validator，switch 的 bool 转为 `1`/`0`。不要把 PHP getter/cast 的全部运行时行为写进 spec 假设。
+
+时间字段的 JSON 契约保持 PHP 生成 CRUD 的格式：`datetime`/原生 SQL `timestamp` 使用 `"YYYY-MM-DD HH:mm:ss"`，`date` 使用 `"YYYY-MM-DD"`，`time` 使用 `"HH:mm:ss"`，可空 `year` 的空值为 `null`，显式 MySQL YEAR `0000` 为 `"0"`，非零年份为四位数字字符串，例如 `"2026"`。整数时间戳字段的 `FlexUnixTime` 请求可接受 Unix 值或格式化日期时间，但读取 JSON 仍输出 `"YYYY-MM-DD HH:mm:ss"`，不是原始 Unix 数字。前端可以解析 Unix 值；PHP 生成后端返回的是格式化字符串。
 
 ## 有意不支持的键
 

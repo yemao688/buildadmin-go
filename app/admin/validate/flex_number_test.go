@@ -1,9 +1,184 @@
 package validate
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"testing"
 )
+
+func TestFlexBoolJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want FlexBool
+	}{
+		{"true", `true`, true},
+		{"false", `false`, false},
+		{"one", `1`, true},
+		{"zero", `0`, false},
+		{"string one", `"1"`, true},
+		{"string zero", `"0"`, false},
+		{"string true", `"TrUe"`, true},
+		{"string false", `"FALSE"`, false},
+		{"empty", `""`, false},
+		{"null", `null`, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexBool
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("got %v, want %v", got, test.want)
+			}
+		})
+	}
+	for _, test := range []struct {
+		value FlexBool
+		want  string
+	}{{false, "0"}, {true, "1"}} {
+		got, err := json.Marshal(test.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != test.want {
+			t.Fatalf("marshal(%v) = %s, want %s", test.value, got, test.want)
+		}
+	}
+}
+
+func TestFlexBoolRejectsNonCanonicalValues(t *testing.T) {
+	for _, data := range []string{`2`, `-1`, `1.0`, `"yes"`, `{}`, `[]`} {
+		var value FlexBool
+		if err := json.Unmarshal([]byte(data), &value); err == nil {
+			t.Errorf("expected %s to be rejected", data)
+		}
+	}
+}
+
+func TestFlexBoolScanAndValue(t *testing.T) {
+	for _, test := range []struct {
+		input any
+		want  FlexBool
+	}{{nil, false}, {false, false}, {true, true}, {int64(0), false}, {int64(1), true}, {"0", false}, {"1", true}, {[]byte("false"), false}, {[]byte("true"), true}} {
+		var got FlexBool
+		if err := got.Scan(test.input); err != nil {
+			t.Fatalf("scan(%v): %v", test.input, err)
+		}
+		if got != test.want {
+			t.Fatalf("scan(%v) = %v, want %v", test.input, got, test.want)
+		}
+	}
+	for _, input := range []any{int8(2), int16(2), int32(2), int64(2), uint8(2), uint16(2), uint32(2), uint64(2), "yes", []byte("2")} {
+		var got FlexBool
+		if err := got.Scan(input); err == nil {
+			t.Errorf("expected scan(%v) to fail", input)
+		}
+	}
+	for _, test := range []struct {
+		value FlexBool
+		want  driver.Value
+	}{{false, int64(0)}, {true, int64(1)}} {
+		got, err := test.value.Value()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != test.want {
+			t.Fatalf("value(%v) = %v, want %v", test.value, got, test.want)
+		}
+	}
+}
+
+func TestFlexYearJSON(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		data string
+		want FlexYear
+	}{
+		{"string", `"2026"`, FlexYear("2026")},
+		{"number", `2026`, FlexYear("2026")},
+		{"minimum", `"1901"`, FlexYear("1901")},
+		{"maximum", `2155`, FlexYear("2155")},
+		{"explicit numeric zero", `0`, FlexYear("0")},
+		{"explicit string zero", `"0"`, FlexYear("0")},
+		{"zero", `"0000"`, FlexYear("0")},
+		{"empty", `""`, FlexYear("")},
+		{"null", `null`, FlexYear("")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexYear
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+	for _, test := range []struct {
+		value FlexYear
+		want  string
+	}{{FlexYear("2026"), `"2026"`}, {FlexYear("0"), `"0"`}, {FlexYear(""), `null`}} {
+		got, err := json.Marshal(test.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != test.want {
+			t.Fatalf("marshal(%q) = %s, want %s", test.value, got, test.want)
+		}
+	}
+}
+
+func TestFlexYearRejectsInvalidValues(t *testing.T) {
+	for _, data := range []string{`1899`, `1900`, `2156`, `"26"`, `"202A"`, `true`, `{}`, `[]`} {
+		var value FlexYear
+		if err := json.Unmarshal([]byte(data), &value); err == nil {
+			t.Errorf("expected %s to be rejected", data)
+		}
+	}
+}
+
+func TestFlexYearScanAndValue(t *testing.T) {
+	for _, test := range []struct {
+		input any
+		want  FlexYear
+	}{
+		{int64(2026), FlexYear("2026")},
+		{"2026", FlexYear("2026")},
+		{int64(0), FlexYear("0")},
+		{[]byte("0000"), FlexYear("0")},
+		{"0", FlexYear("0")},
+		{"", FlexYear("")},
+		{nil, FlexYear("")},
+	} {
+		var got FlexYear
+		if err := got.Scan(test.input); err != nil {
+			t.Fatalf("scan(%v): %v", test.input, err)
+		}
+		if got != test.want {
+			t.Fatalf("scan(%v) = %q, want %q", test.input, got, test.want)
+		}
+	}
+	for _, input := range []any{int64(2156), "1900", []byte("202A")} {
+		var got FlexYear
+		if err := got.Scan(input); err == nil {
+			t.Errorf("expected scan(%v) to fail", input)
+		}
+	}
+	for _, test := range []struct {
+		value FlexYear
+		want  driver.Value
+	}{{FlexYear("2026"), "2026"}, {FlexYear("0"), "0"}, {FlexYear(""), nil}} {
+		got, err := test.value.Value()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != test.want {
+			t.Fatalf("value(%q) = %v, want %v", test.value, got, test.want)
+		}
+	}
+}
 
 func TestFlexNumbers(t *testing.T) {
 	tests := []struct {

@@ -237,6 +237,7 @@ func rewriteFlexNumericParamFields(content string, overrides map[string]string) 
 		typeName := overrides[jsonName]
 		if typeName == "" {
 			typeName = map[string]string{
+				"bool":    "validate.FlexBool",
 				"int32":   "validate.FlexInt32",
 				"int64":   "validate.FlexInt64",
 				"float64": "validate.FlexFloat64",

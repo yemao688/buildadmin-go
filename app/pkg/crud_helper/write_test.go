@@ -129,8 +129,8 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 }
 
 func TestRewriteFlexNumericParamFields(t *testing.T) {
-	input := "type DemoParam struct {\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
-	want := "type DemoParam struct {\n\tCount validate.FlexInt32 `json:\"count\"`\n\tTotal validate.FlexInt64 `json:\"total\"`\n\tRate validate.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
+	input := "type DemoParam struct {\n\tEnabled bool `json:\"enabled\"`\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
+	want := "type DemoParam struct {\n\tEnabled validate.FlexBool `json:\"enabled\"`\n\tCount validate.FlexInt32 `json:\"count\"`\n\tTotal validate.FlexInt64 `json:\"total\"`\n\tRate validate.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
 	if got := rewriteFlexNumericParamFields(input, nil); got != want {
 		t.Fatalf("unexpected rewritten fields:\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
@@ -202,23 +202,32 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		name       string
 		designType string
 		dataType   string
+		typeName   string
+		length     int
+		defaultTyp string
+		defaultVal string
 		want       string
 	}{
-		{"checkbox", "checkbox", "set", "validate.CommaJoined"},
-		{"selects", "selects", "set", "validate.CommaJoined"},
-		{"remoteSelects", "remoteSelects", "varchar", "validate.CommaJoined"},
-		{"city", "city", "varchar", "validate.CommaJoined"},
-		{"images", "images", "text", "validate.CommaJoined"},
-		{"files", "files", "text", "validate.CommaJoined"},
-		{"array", "array", "text", "validate.KeyValueArray"},
-		{"datetime", "datetime", "datetime", "validate.FlexDateTime"},
-		{"date", "date", "date", "validate.FlexDate"},
-		{"time", "time", "time", "validate.FlexClock"},
-		{"timestamp", "timestamp", "bigint", "validate.FlexUnixTime"},
+		{name: "switch tinyint length", designType: "switch", typeName: "tinyint", length: 1, want: "validate.FlexBool"},
+		{name: "radio tinyint data type", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: "validate.FlexBool"},
+		{name: "year design type", designType: "year", typeName: "year", dataType: "year", want: "validate.FlexYear"},
+		{name: "tinyint input default remains numeric", designType: "number", typeName: "tinyint", defaultTyp: "INPUT", defaultVal: "1", want: ""},
+		{name: "char one is not bool", designType: "radio", typeName: "char", dataType: "char(1)", length: 1, want: ""},
+		{name: "checkbox", designType: "checkbox", dataType: "set", want: "validate.CommaJoined"},
+		{name: "selects", designType: "selects", dataType: "set", want: "validate.CommaJoined"},
+		{name: "remoteSelects", designType: "remoteSelects", dataType: "varchar", want: "validate.CommaJoined"},
+		{name: "city", designType: "city", dataType: "varchar", want: "validate.CommaJoined"},
+		{name: "images", designType: "images", dataType: "text", want: "validate.CommaJoined"},
+		{name: "files", designType: "files", dataType: "text", want: "validate.CommaJoined"},
+		{name: "array", designType: "array", dataType: "text", want: "validate.KeyValueArray"},
+		{name: "datetime", designType: "datetime", dataType: "datetime", want: "validate.FlexDateTime"},
+		{name: "date", designType: "date", dataType: "date", want: "validate.FlexDate"},
+		{name: "time", designType: "time", dataType: "time", want: "validate.FlexClock"},
+		{name: "timestamp", designType: "timestamp", dataType: "bigint", want: "validate.FlexUnixTime"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			field := analyseField(model.Field{Name: tc.name, DesignType: tc.designType, DataType: tc.dataType})
+			field := analyseField(model.Field{Name: tc.name, DesignType: tc.designType, Type: tc.typeName, DataType: tc.dataType, Length: tc.length, DefaultType: tc.defaultTyp, Default: tc.defaultVal})
 			got := buildHandlerParamTypeOverrides([]model.Field{field})
 			if got[tc.name] != tc.want {
 				t.Fatalf("override = %q, want %q (analysed field: %+v)", got[tc.name], tc.want, field)
@@ -229,6 +238,10 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 
 func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	fields := []model.Field{
+		{Name: "enabled", Type: "tinyint", Length: 1, DesignType: "switch"},
+		{Name: "visible", Type: "tinyint", DataType: "tinyint(1)", DesignType: "radio"},
+		{Name: "published_year", Type: "year", DataType: "year", DesignType: "year"},
+		{Name: "char_flag", Type: "char", Length: 1, DesignType: "radio"},
 		{Name: "flags", DataType: "set", DesignType: "checkbox"},
 		{Name: "options", DataType: "text", DesignType: "array"},
 		{Name: "created_at", DataType: "datetime", DesignType: "datetime"},
@@ -241,14 +254,17 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	}
 	got := buildModelFieldTypeOverrides(fields)
 	want := map[string]string{
-		"flags":        "validate.CommaJoined",
-		"options":      "validate.KeyValueArray",
-		"created_at":   "validate.FlexDateTime",
-		"published_at": "validate.FlexDateTime",
-		"day":          "validate.FlexDate",
-		"clock":        "validate.FlexClock",
-		"clock_native": "string",
-		"unix_at":      "validate.FlexUnixTime",
+		"enabled":        "validate.FlexBool",
+		"visible":        "validate.FlexBool",
+		"published_year": "validate.FlexYear",
+		"flags":          "validate.CommaJoined",
+		"options":        "validate.KeyValueArray",
+		"created_at":     "validate.FlexDateTime",
+		"published_at":   "validate.FlexDateTime",
+		"day":            "validate.FlexDate",
+		"clock":          "validate.FlexClock",
+		"clock_native":   "string",
+		"unix_at":        "validate.FlexUnixTime",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("overrides = %#v, want %#v", got, want)
@@ -260,6 +276,9 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	}
 	if _, ok := got["mismatch"]; ok {
 		t.Fatal("unrelated mismatched design type was overridden")
+	}
+	if _, ok := got["char_flag"]; ok {
+		t.Fatal("char(1) must not be treated as boolean storage")
 	}
 }
 

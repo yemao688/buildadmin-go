@@ -630,6 +630,10 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 		designType := field.DesignType
 		dbType := strings.ToLower(analyseFieldType(field))
 		switch {
+		case isBooleanStorageField(field):
+			overrides[field.Name] = "validate.FlexBool"
+		case designType == "year" || dbType == "year":
+			overrides[field.Name] = "validate.FlexYear"
 		case slices.Contains(dtStringToArray, designType):
 			overrides[field.Name] = "validate.CommaJoined"
 		case designType == "array":
@@ -653,6 +657,10 @@ func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 		field := analyseField(rawField)
 		dbType := strings.ToLower(analyseFieldType(field))
 		switch {
+		case isBooleanStorageField(field):
+			overrides[field.Name] = "validate.FlexBool"
+		case field.DesignType == "year" || dbType == "year":
+			overrides[field.Name] = "validate.FlexYear"
 		case dbType == "time":
 			if field.DesignType == "time" {
 				overrides[field.Name] = "validate.FlexClock"
@@ -674,6 +682,20 @@ func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 		}
 	}
 	return overrides
+}
+
+func isBooleanStorageField(field model.Field) bool {
+	if !strings.EqualFold(strings.TrimSpace(field.Type), "tinyint") {
+		return false
+	}
+	dataType := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(field.DataType), " ", ""))
+	if strings.HasPrefix(dataType, "tinyint(1") {
+		return true
+	}
+	if field.Length == 1 {
+		return true
+	}
+	return false
 }
 
 // 分析字段数据类型

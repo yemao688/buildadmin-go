@@ -324,6 +324,7 @@ type FlexValueInput struct {
 	Date     FlexDate      `json:"date"`
 	Clock    FlexClock     `json:"clock"`
 	UnixTime FlexUnixTime  `json:"unix_time"`
+	Year     FlexYear      `json:"year"`
 }
 
 type FlexValueModel struct {
@@ -333,6 +334,7 @@ type FlexValueModel struct {
 	Date     FlexDate
 	Clock    FlexClock
 	UnixTime FlexUnixTime
+	Year     FlexYear
 }
 
 func TestFlexValueCopierRoundTrip(t *testing.T) {
@@ -342,7 +344,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	t.Cleanup(func() { time.Local = original })
 
 	var input FlexValueInput
-	if err := json.Unmarshal([]byte(`{"tags":["a",2],"options":[{"key":"k","value":"v"}],"when":"2026-07-25 12:34:56","date":"2026-07-25","clock":"12:34:56","unix_time":"123"}`), &input); err != nil {
+	if err := json.Unmarshal([]byte(`{"tags":["a",2],"options":[{"key":"k","value":"v"}],"when":"2026-07-25 12:34:56","date":"2026-07-25","clock":"12:34:56","unix_time":"123","year":"2026"}`), &input); err != nil {
 		t.Fatal(err)
 	}
 	wantWhen := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
@@ -353,7 +355,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 	if err := copier.Copy(&model, &input); err != nil {
 		t.Fatal(err)
 	}
-	if model.Tags != "a,2" || model.Options != `[{"key":"k","value":"v"}]` || model.UnixTime != 123 {
+	if model.Tags != "a,2" || model.Options != `[{"key":"k","value":"v"}]` || model.UnixTime != 123 || model.Year != "2026" {
 		t.Fatalf("unexpected copied scalar values: %+v", model)
 	}
 	assertFlexTime(t, "model.When", time.Time(model.When), wantWhen)
@@ -376,17 +378,40 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 		Date     FlexDate
 		Clock    FlexClock
 		UnixTime FlexUnixTime
+		Year     FlexYear
 	}{}
 	if err := copier.Copy(&updated, &edit); err != nil {
 		t.Fatal(err)
 	}
-	if updated.ID != 7 || updated.Tags != "a,2" || updated.Options != `[{"key":"k","value":"v"}]` || updated.UnixTime != 123 {
+	if updated.ID != 7 || updated.Tags != "a,2" || updated.Options != `[{"key":"k","value":"v"}]` || updated.UnixTime != 123 || updated.Year != "2026" {
 		t.Fatalf("unexpected edit copy: %+v", updated)
 	}
 	assertFlexTime(t, "updated.When", time.Time(updated.When), wantWhen)
 	assertFlexTime(t, "updated.Date", time.Time(updated.Date), wantDate)
 	if updated.Clock != wantClock {
 		t.Fatalf("updated.Clock = %q, want %q", updated.Clock, wantClock)
+	}
+}
+
+func TestFlexYearCopierPreservesAbsentAndExplicitZero(t *testing.T) {
+	type input struct{ Year FlexYear }
+	type output struct{ Year FlexYear }
+	for _, test := range []struct {
+		name string
+		in   FlexYear
+	}{
+		{"absent", FlexYear("")},
+		{"explicit zero", FlexYear("0")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var got output
+			if err := copier.Copy(&got, &input{Year: test.in}); err != nil {
+				t.Fatal(err)
+			}
+			if got.Year != test.in {
+				t.Fatalf("copied year = %q, want %q", got.Year, test.in)
+			}
+		})
 	}
 }
 
