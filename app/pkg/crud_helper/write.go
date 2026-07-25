@@ -29,6 +29,7 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 		return "", err
 	}
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
+	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
@@ -59,6 +60,17 @@ func addCityTextFields(structContent string, cityFields []string) string {
 		fields.WriteString("\t" + goName + " string `json:\"" + field + "_text\" gorm:\"-\"`\n")
 	}
 	return structContent[:index] + fields.String() + structContent[index:]
+}
+
+func addRelationFields(structContent, relationFields string) string {
+	if relationFields == "" {
+		return structContent
+	}
+	index := strings.LastIndex(structContent, "}")
+	if index < 0 {
+		return structContent
+	}
+	return structContent[:index] + relationFields + structContent[index:]
 }
 
 func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fieldTypeOverrides map[string]string) (string, error) {
@@ -98,7 +110,13 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fiel
 	if err := tpl.Execute(&buf, data); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return normalizeGeneratedIDInitialisms(buf.String()), nil
+}
+
+var generatedIDFieldRE = regexp.MustCompile(`(?m)^(\s*)([A-Za-z][A-Za-z0-9]*)Ids(\s+)`)
+
+func normalizeGeneratedIDInitialisms(structContent string) string {
+	return generatedIDFieldRE.ReplaceAllString(structContent, `${1}${2}IDs${3}`)
 }
 
 // func buildModelAppend() {
@@ -198,6 +216,10 @@ func renderModel(modelData ModelData) (string, error) {
 	if modelData.DataScopeOwnerGoField != "" && modelData.DataScopeOwnerGoType == "" {
 		modelData.DataScopeOwnerGoType = "int32"
 	}
+	if len(modelData.Relations) > 0 && modelData.RelationStructs == "" {
+		finalizeRelationMetadata(&modelData)
+	}
+	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
 	return render("", modelTemp, modelData)
 }

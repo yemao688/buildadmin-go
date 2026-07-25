@@ -46,6 +46,14 @@ func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
 	}
 }
 
+func TestValidateGenerationInputRejectsDottedRelationQuickSearch(t *testing.T) {
+	table := model.Table{Name: "orders", QuickSearchField: []string{"user.username"}}
+	fields := []model.Field{{Name: "id", Type: "int", PrimaryKey: true}}
+	if err := ValidateGenerationInput(table, fields); err == nil || !strings.Contains(err.Error(), "requires JOIN support") {
+		t.Fatalf("dotted relation quick search error = %v", err)
+	}
+}
+
 func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
 	field := model.Field{
 		Name: "owner_id", Type: "int", Form: model.FormAttr{

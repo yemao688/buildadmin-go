@@ -271,9 +271,8 @@ type HandlerData struct {
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
 
-	Attr                     map[string]string // preExcludeFields quickSearchField withJoinTable defaultSortField
-	Methods                  []string
-	RelationVisibleFieldList map[string][]string
+	Attr    map[string]string // preExcludeFields quickSearchField withJoinTable defaultSortField
+	Methods []string
 
 	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
 }
@@ -381,7 +380,7 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	SuccessWithMessage(ctx, "Deleted successfully")
 }
 `
 
@@ -396,45 +395,83 @@ type ModelData struct {
 	QuickSearchField string //快速搜索字段
 	StructTemp       string //结构体
 
-	Append             []string
-	Methods            []string
-	FieldType          map[string]string
-	ModelFieldType     map[string]string
-	CreateTime         string
-	UpdateTime         string
-	AutoWriteTimestamp string
-	BeforeInsertMixins map[string]string
-	BeforeInsert       string
-	AfterInsert        string
-	RelationMethodList map[string]string
+	Append                    []string
+	Methods                   []string
+	FieldType                 map[string]string
+	ModelFieldType            map[string]string
+	CreateTime                string
+	UpdateTime                string
+	AutoWriteTimestamp        string
+	BeforeInsertMixins        map[string]string
+	BeforeInsert              string
+	AfterInsert               string
+	DataScopePolicy           data_scope.ResourcePolicy
+	DataScopeOwnerGoField     string
+	DataScopeOwnerGoType      string
+	EffectiveFormFields       []string
+	EditableColumns           []string
+	EditableColumnsGo         string
+	HasCreateTime             bool
+	HasUpdateTime             bool
+	HasWeigh                  bool
+	CityTextFields            []string
+	Relations                 []RelationMetadata
+	RelationStructs           string
+	RelationFields            string
+	RelationLoaders           string
+	RelationNeedsTime         bool
+	RelationNeedsMulti        bool
+	RelationNeedsMultiNumeric bool
+}
 
-	DataScopePolicy       data_scope.ResourcePolicy
-	DataScopeOwnerGoField string
-	DataScopeOwnerGoType  string
-	EffectiveFormFields   []string
-	EditableColumns       []string
-	EditableColumnsGo     string
-	HasCreateTime         bool
-	HasUpdateTime         bool
-	HasWeigh              bool
-	CityTextFields        []string
+// RelationMetadata describes the deliberately small DTO generated for one
+// remoteSelect relation. It is kept separate from the remote model so list
+// responses cannot expose unrelated or sensitive remote columns.
+type RelationMetadata struct {
+	FieldName       string
+	RelationName    string
+	RelationGoField string
+	DTOName         string
+	RemoteTable     string
+	RemotePK        string
+	RemotePKGoField string
+	RemotePKType    string
+	RowDTOName      string
+	Multi           bool
+	Fields          []RelationDTOField
+	PayloadFields   []RelationDTOField
+}
+
+type RelationDTOField struct {
+	ColumnName string
+	GoName     string
+	GoType     string
+	JSONName   string
+	Nullable   bool
 }
 
 const modelTemp = `package {{.Namespace}}
 
 import (
 	"fmt"
-	{{if or .HasCreateTime .HasUpdateTime}}"time"
+	{{if or .HasCreateTime .HasUpdateTime .RelationNeedsTime}}"time"
+	{{end}}
+	{{if .RelationNeedsMulti}}"strings"
+	{{end}}
+	{{if .RelationNeedsMultiNumeric}}"strconv"
 	{{end}}
 	"go-build-admin/app/pkg/data_scope"
 )
 
 {{.StructTemp}}
 
+{{.RelationStructs}}
+
 type {{.ClassName}}Model struct {
 	BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
+	config   *conf.Configuration
 }
 
 func (s *{{.ClassName}}Model) NewRow() any {
@@ -455,6 +492,7 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 			AssignOnCreate: {{.DataScopePolicy.AssignOnCreate}},
 		},
 		Enforcer: enforcer,
+		config:   config,
 	}
 }
 
@@ -479,11 +517,20 @@ func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
+{{.RelationLoaders}}
+
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} {{.ClassName}}, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
-	return
+	{{if .Relations}}if err == nil {
+		rows := []{{.ClassName}}{ {{.ModelVar}} }
+		err = s.loadRelations(ctx, &rows)
+		if err == nil {
+			{{.ModelVar}} = rows[0]
+		}
+	}
+	{{end}}return
 }
 
 func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, total int64, err error) {
@@ -501,7 +548,10 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	findDB.Statement.Table = s.TableName
 	findDB = findDB.Where(whereS, whereP...)
 	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	return
+	{{if .Relations}}if err == nil {
+		err = s.loadRelations(ctx, &list)
+	}
+	{{end}}return
 }
 
 func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {

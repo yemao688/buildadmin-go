@@ -25,6 +25,11 @@ func Success(c *gin.Context, data interface{}) {
 	JsonReturn(c, http.StatusOK, 1, "", data)
 }
 
+// SuccessWithMessage returns a successful response with a translated message.
+func SuccessWithMessage(c *gin.Context, message string) {
+	JsonReturn(c, http.StatusOK, 1, message, nil)
+}
+
 // 返回
 func JsonReturn(c *gin.Context, httpCode int, code int, msg string, data interface{}) {
 	outcome := requesttx.Outcome{HTTPCode: httpCode, BusinessCode: code, Message: msg, Data: data}

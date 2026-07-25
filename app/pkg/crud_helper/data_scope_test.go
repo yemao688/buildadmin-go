@@ -831,6 +831,7 @@ type IDS struct {
 func (b *Base) Select(ctx *gin.Context) (any, bool) { return nil, false }
 func (b *Base) MaybePartialEdit(ctx *gin.Context, fields map[string]bool) bool { return false }
 func Success(ctx *gin.Context, data any)            {}
+func SuccessWithMessage(ctx *gin.Context, message string) {}
 func FailByErr(ctx *gin.Context, err error)         {}
 `,
 		"app/admin/validate/validate.go": `package validate

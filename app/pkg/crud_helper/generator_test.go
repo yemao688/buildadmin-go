@@ -45,6 +45,20 @@ func TestNormalizeGenerationType(t *testing.T) {
 	}
 }
 
+func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
+	deleteStart := strings.Index(handlerTemp, "func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {")
+	if deleteStart < 0 {
+		t.Fatal("generated handler template is missing delete handler")
+	}
+	deleteTemplate := handlerTemp[deleteStart:]
+	if !strings.Contains(deleteTemplate, `SuccessWithMessage(ctx, "Deleted successfully")`) {
+		t.Fatal("generated delete handler must return the aligned success message")
+	}
+	if strings.Contains(deleteTemplate, "Success(ctx, \"\")") {
+		t.Fatal("generated delete handler must not use an empty success response")
+	}
+}
+
 // 对齐上游:type=create 对已存在的数据表直接删表重建(前端 generateCheck
 // 已弹窗确认),服务端仅校验生成类型本身。
 func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
-	"go-build-admin/utils"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"slices"
@@ -202,35 +204,35 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 	}
 }
 
-// TestCheckJoinModelKeepsExistingRemoteModel verifies that a remote-model path
-// pointing at an existing file (e.g. app/common/model/user.go) is used as-is
-// instead of being re-derived under app/admin/model/common/model/ and rebuilt.
-func TestCheckJoinModelKeepsExistingRemoteModel(t *testing.T) {
-	existing := filepath.Join(utils.RootPath(), "app", "common", "model", "tmp_joinmodel_check_test.go")
-	if err := os.WriteFile(existing, []byte("package model\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Remove(existing) })
-
+func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
 	field := model.Field{
-		Name:       "user_ids",
+		Name:       "reviewer_admins",
+		Type:       "varchar",
+		DataType:   "varchar(255)",
 		DesignType: "remoteSelects",
-		Form: model.FormAttr{
-			RemoteTable: "user",
-			RemoteModel: "app/common/model/tmp_joinmodel_check_test.go",
-		},
+		Form:       model.FormAttr{RemoteTable: "admin", RemotePk: "id", RemoteField: "nickname", RelationFields: "nickname,email"},
+		Table:      model.TableAttr{ComSearchRender: "remoteSelect", Operator: "FIND_IN_SET", Remote: `pk: "ba_admin.id", field: "nickname", remoteUrl: "/admin/auth.Admin/index", multiple: true`},
 	}
-	rootFileName, err := checkJoinMoel(nil, nil, field, "user", "ba_user")
-	if err != nil {
+	field = analyseField(field)
+	field = prepareGeneratedColumnField(field)
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	modelData := ModelData{ClassName: "Orders"}
+	indexData := IndexVueData{}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	if err := parseJoinData(nil, multiRelationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "reviewer."); err != nil {
 		t.Fatal(err)
 	}
-	if rootFileName != "" {
-		t.Fatalf("existing remote model must not be rebuilt, got rootFileName %q", rootFileName)
+	if len(modelData.Relations) != 1 || !modelData.Relations[0].Multi {
+		t.Fatalf("remoteSelects relation metadata missing: %+v", modelData.Relations)
 	}
-	mangled := filepath.Join(utils.RootPath(), "app", "admin", "model", "common", "model", "tmp_joinmodel_check_test.go")
-	if _, err := os.Stat(mangled); !os.IsNotExist(err) {
-		t.Fatalf("remote model was rebuilt under the wrong admin path: %s", mangled)
-	}
+	columns := strings.Join(indexData.TableColumn, "\n")
+	require.Contains(t, columns, `prop: "reviewerAdminsTable.nickname"`)
+	require.Contains(t, columns, `prop: "reviewerAdminsTable.email"`)
+	require.Contains(t, columns, `operator: false`)
+	rawFK := getTableColumn(field, nil, "", "", "")
+	require.Contains(t, rawFK, `show: false`)
+	require.Contains(t, rawFK, `operator: "FIND_IN_SET"`)
+	require.Contains(t, rawFK, `multiple: true`)
 }
 
 // TestGenerate_UsesTableDataScope verifies that GenerateFile reads the data-scope
@@ -485,6 +487,156 @@ func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
 	column := getTableColumn(model.Field{Name: field.Name, Table: model.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
 	if !strings.Contains(column, `comSearchRender: "remoteSelect"`) || !strings.Contains(column, "remote: {") || strings.Count(column, "comSearchRender:") != 1 {
 		t.Fatalf("remote search column metadata incomplete or duplicated: %s", column)
+	}
+}
+
+func TestRemoteSelectRelationMetadataIsSlimAndRemoteSelectsIsEnriched(t *testing.T) {
+	columns := relationTestColumns()
+	field := relationTestField("remoteSelect", "username")
+	metadata, err := buildRelationMetadata(ParseTableColumns(columns, true), field, "Orders")
+	require.NoError(t, err)
+	require.Equal(t, "OrdersUserRelation", metadata.DTOName)
+	require.Equal(t, []string{"id", "username"}, []string{metadata.Fields[0].JSONName, metadata.Fields[1].JSONName})
+
+	modelData := ModelData{ClassName: "Orders"}
+	indexData := IndexVueData{}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, columns, &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.Len(t, modelData.Relations, 1)
+
+	deferred := relationTestField("remoteSelects", "username")
+	modelData = ModelData{ClassName: "Orders"}
+	require.NoError(t, parseJoinData(nil, columns, &dictEn, &dictZh, nil, &modelData, &indexData, deferred, nil, "user."))
+	require.Len(t, modelData.Relations, 1)
+	require.True(t, modelData.Relations[0].Multi)
+}
+
+func TestRemoteSelectRelationRejectsUnknownColumn(t *testing.T) {
+	field := relationTestField("remoteSelect", "missing_name")
+	_, err := buildRelationMetadata(ParseTableColumns(relationTestColumns(), true), field, "Orders")
+	require.ErrorContains(t, err, `unknown relation field "missing_name"`)
+}
+
+func TestRemoteSelectsRejectsBadStorageAndRelationCollisions(t *testing.T) {
+	badStorage := relationTestField("remoteSelects", "username")
+	badStorage.Type = "bigint"
+	badStorage.DataType = "bigint"
+	_, err := buildRelationMetadata(ParseTableColumns(relationTestColumns(), true), badStorage, "Orders")
+	require.ErrorContains(t, err, "string-family CSV storage")
+
+	modelData := ModelData{ClassName: "Orders"}
+	indexData := IndexVueData{}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	first := relationTestField("remoteSelects", "username")
+	first.Name = "user_ids"
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, first, nil, "user."))
+	second := relationTestField("remoteSelect", "username")
+	second.Name = "user_id"
+	err = parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, second, nil, "user.")
+	require.ErrorContains(t, err, "relation name/DTO collision")
+}
+
+func TestRemoteSelectRelationRenderIncludesSlimLoaderAndCalls(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	metadata, err := buildRelationMetadata(ParseTableColumns(relationTestColumns(), true), field, "Orders")
+	require.NoError(t, err)
+	data := ModelData{
+		Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: "int32",
+		StructTemp: "type Orders struct {\n\tID int32 `gorm:\"column:id\" json:\"id\"`\n}\n",
+		Relations:  []RelationMetadata{metadata},
+	}
+	content, err := renderModel(data)
+	require.NoError(t, err)
+	_, err = parser.ParseFile(token.NewFileSet(), "orders.go", content, parser.AllErrors)
+	require.NoError(t, err)
+	_, err = format.Source([]byte(content))
+	require.NoError(t, err)
+	for _, want := range []string{
+		"type OrdersUserRelation struct",
+		"User *OrdersUserRelation `gorm:\"-\" json:\"user\"`",
+		"config *conf.Configuration",
+		"func (s *OrdersModel) loadUserRelations",
+		"func (s *OrdersModel) loadRelations",
+		"s.loadRelations(ctx, &list)",
+		"s.loadRelations(ctx, &rows)",
+	} {
+		require.Contains(t, content, want)
+	}
+	require.NotContains(t, content, "Password")
+}
+
+func TestRemoteSelectRelationColumnUsesNestedPropWithoutSearchOperator(t *testing.T) {
+	columns := relationTestColumns()
+	field := relationTestField("remoteSelect", "username")
+	indexData := IndexVueData{}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	modelData := ModelData{ClassName: "Orders"}
+	require.NoError(t, parseJoinData(nil, columns, &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `prop: "user.username"`)
+	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `operator: false`)
+
+	field.Table.ComSearchRender = "remoteSelect"
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	fkColumn := getTableColumn(field, nil, "", "", "")
+	require.Contains(t, fkColumn, `prop: "user_id"`)
+	require.Contains(t, fkColumn, `comSearchRender: "remoteSelect"`)
+}
+
+func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {
+	field := model.Field{
+		Name: "reviewer_admins", Type: "varchar", DataType: "varchar(255)", DesignType: "remoteSelects",
+		Form: model.FormAttr{RemoteTable: "admin", RemotePk: "id", RelationFields: "nickname,email"},
+	}
+	metadata, err := buildRelationMetadata(ParseTableColumns(multiRelationTestColumns(), true), field, "Orders")
+	require.NoError(t, err)
+	data := ModelData{
+		Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: "int32",
+		StructTemp: "type Orders struct {\n\tReviewerAdmins string `gorm:\"column:reviewer_admins\" json:\"reviewer_admins\"`\n}\n",
+		Relations:  []RelationMetadata{metadata},
+	}
+	content, err := renderModel(data)
+	require.NoError(t, err)
+	_, err = parser.ParseFile(token.NewFileSet(), "orders.go", content, parser.AllErrors)
+	require.NoError(t, err)
+	_, err = format.Source([]byte(content))
+	require.NoError(t, err)
+	for _, want := range []string{
+		"type OrdersReviewerAdminsTableRelationRow struct",
+		"type OrdersReviewerAdminsTableRelation struct",
+		"Nickname []*string `json:\"nickname\"`",
+		"Email",
+		"[]*string `json:\"email\"`",
+		"strings.Split(raw, \",\")",
+		"valueIndex int",
+		"loadReviewerAdminsTableRelations",
+		"loadRelations(ctx, &list)",
+	} {
+		require.Contains(t, content, want)
+	}
+	require.Contains(t, content, "strconv.ParseInt")
+	require.Contains(t, content, "if token == \"\"")
+}
+
+func relationTestColumns() []model.Column {
+	return []model.Column{
+		{COLUMN_NAME: "id", DATA_TYPE: "int", COLUMN_TYPE: "int", COLUMN_KEY: "PRI"},
+		{COLUMN_NAME: "username", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(64)"},
+		{COLUMN_NAME: "password", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(128)"},
+	}
+}
+
+func multiRelationTestColumns() []model.Column {
+	return []model.Column{
+		{COLUMN_NAME: "id", DATA_TYPE: "int", COLUMN_TYPE: "int", COLUMN_KEY: "PRI"},
+		{COLUMN_NAME: "nickname", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(64)"},
+		{COLUMN_NAME: "email", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(128)"},
+	}
+}
+
+func relationTestField(designType, relationFields string) model.Field {
+	return model.Field{
+		Name: "user_id", Type: "varchar", DataType: "varchar(255)", DesignType: designType,
+		Form: model.FormAttr{RemoteTable: "user", RemotePk: "id", RemoteField: "nickname_text", RelationFields: relationFields},
 	}
 }
 

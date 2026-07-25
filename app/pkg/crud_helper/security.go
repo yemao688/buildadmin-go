@@ -38,6 +38,11 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 	if err := validateSQLString(table.Comment); err != nil {
 		return fmt.Errorf("invalid table comment: %w", err)
 	}
+	for _, field := range table.QuickSearchField {
+		if strings.Contains(field, ".") {
+			return fmt.Errorf("quickSearchField %q requires JOIN support for relation search; dotted relation quick search is deferred", field)
+		}
+	}
 	for _, customPath := range []string{table.ModelFile, table.ControllerFile, table.WebViewsDir, table.ValidateFile} {
 		if customPath != "" {
 			if err := validateRelativePathInput(customPath); err != nil {

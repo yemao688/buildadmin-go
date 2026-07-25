@@ -213,7 +213,79 @@ Go 没有 PHP-style `validateFile` 输出。当前应用只有一条 DI `*gorm.D
 
 ## 关系、请求和边界
 
-远程下拉至少应配置 `remoteTable`、`remotePk`、`remoteField`、`relationFields` 和合适的 source type。Go 会在 CRUD 来源下尝试解析/生成关联 model 文件；当前 relation preload/label 元数据不会自动注入生成的 model/handler 模板，因此不要把 `relationFields` 当作已实现的运行时 preload/label 保证。它仍不模拟 PHP 的任意动态 SQL join 或外部 controller。
+远程下拉至少应配置 `remoteTable`、`remotePk`、`remoteField`、`relationFields` 和合适的 source type。对单值 `remoteSelect` 和多值 `remoteSelects`，`relationFields` 已用于 List/GetOne 的标签 enrichment：生成器会生成只含 remote PK 和这些字段的 slim DTO、主行上的指针关系字段，以及每个关系每页一次的批量查询；不会 preload 整个 remote model，也不会 JOIN 或应用 relation-side data scope。
+
+`remoteField` 是 select endpoint 返回的 option label key；`relationFields` 是生成 nested DTO 和 relation display column 使用的真实远程表列名，两者可以不同。`relationFields` 必须能在生成时从 `remoteTable` 的 introspected columns 中找到，未知列会使生成失败；字段名不会自动推断关系，也不能用概念上的列名替代实际 payload/表列。
+
+`remoteSelects` 的 FK 仍使用 `validate.CommaJoined`，JSON 保留 CSV token 的顺序和重复项。关系对象使用 `relationNameForField` 生成的 key；例如 `reviewer_admins` 对应 `reviewerAdminsTable`。每个 `relationFields` 属性都是与 FK token 一一对应的 nullable 数组，空 CSV 返回空数组，空/非法/溢出/缺失远程记录返回 `null`。例如：
+
+```json
+{
+  "reviewer_admins": ["2", "", "2"],
+  "reviewerAdminsTable": {
+    "nickname": ["代理 A", null, "代理 A"],
+    "email": ["a@example.test", null, "a@example.test"]
+  }
+}
+```
+
+这项 positional contract 有意不同于 PHP `whereIn` 后再按结果顺序回填的有损行为：Go 保留输入顺序和重复项。多值 comSearch 仍针对原始 FK 使用 `FIND_IN_SET`/远程选项按 ID 查询；relation label 不参与 JOIN、relation-column search 或 quick-search。带点号的 `quickSearchField`（例如 `user.username`）会在生成时拒绝，并提示 JOIN 支持尚未实现。
+
+用户相关业务表不要把需要运营人员选择的 `user_id` 留作普通数字字段。应将其显式声明为 `remoteSelect`，指向仓库中已经注册的会员 CRUD 来源。`remoteField` 必须匹配 source route 实际返回的 option label key，而不是凭概念猜测数据库列名。本仓库内置会员选择接口 `/admin/user.User/index` 的 `select=true` 返回 `id` 和 `nickname_text`，因此示例如下：
+
+```yaml
+name: user_id
+type: bigint
+unsigned: true
+designType: remoteSelect
+form:
+  remoteTable: user
+  remotePk: id
+  remoteField: nickname_text
+  relationFields: username
+  remoteSourceConfigType: crud
+  remoteController: app/admin/handler/user.go
+  remoteModel: app/admin/model/user.go
+```
+
+用户订单、充值等代理运营业务通常应使用 `dataScope` 表达代理/管理员归属，而不是增加一个让用户手工选择的可见 `agent_admin_id` 业务字段。常见做法是保留一个 bigint owner column，隐藏它的表单和表格输出，并在新增时由数据范围策略从当前管理员自动赋值：
+
+```yaml
+dataScope:
+  mode: required
+  ownerColumn: agent_admin_id
+  assignOnCreate: true
+fields:
+  - name: agent_admin_id
+    type: bigint
+    unsigned: true
+    null: false
+    defaultType: INPUT
+    default: "0"
+    comment: 管理员归属 ID
+    designType: number
+    formBuildExclude: true
+    tableBuildExclude: true
+```
+
+如果业务确实需要显式选择管理员，才将该字段配置为 `remoteSelect`。本仓库内置管理员选择接口 `/admin/auth.Admin/index` 返回 option label key `nickname`，不是 `username`：
+
+```yaml
+name: agent_admin_id
+type: bigint
+unsigned: true
+designType: remoteSelect
+form:
+  remoteTable: admin
+  remotePk: id
+  remoteField: nickname
+  relationFields: nickname
+  remoteSourceConfigType: crud
+  remoteController: app/admin/handler/admin.go
+  remoteModel: app/admin/model/admin.go
+```
+
+`dataScope.ownerColumn` 是后台数据范围使用的所有者列，通常与 `assignOnCreate: true` 配合；它不要求在表单中暴露，也不等同于 `remoteField`。`remoteField` 是 option 的显示标签键，`relationFields` 是关联查询/preload 的字段提示，两者可以不同。字段名本身不会自动推断关系；必须填写真实存在的 source route/controller 和关联 model，不能虚构 `remoteUrl`。
 
 例如 `admin_id` 的昵称不能仅凭名称推断，应显式配置：
 
@@ -222,8 +294,8 @@ designType: remoteSelect
 form:
   remoteTable: admin
   remotePk: id
-  remoteField: username
-  relationFields: username
+  remoteField: nickname
+  relationFields: nickname
   remoteSourceConfigType: crud
   remoteController: app/admin/handler/admin.go
 ```

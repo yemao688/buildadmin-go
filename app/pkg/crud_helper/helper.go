@@ -77,7 +77,6 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	modelData.FieldType = map[string]string{}
 	modelData.ModelFieldType = buildModelFieldTypeOverrides(fields)
 	modelData.BeforeInsertMixins = map[string]string{}
-	modelData.RelationMethodList = map[string]string{}
 	modelData.CityTextFields = collectCityTextFields(fields)
 
 	// 控制器数据
@@ -96,7 +95,6 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.Import = []string{}
 	handlerData.Attr = map[string]string{}
 	handlerData.Methods = []string{}
-	handlerData.RelationVisibleFieldList = map[string][]string{}
 	handlerData.ParamTypeOverrides = map[string]string{}
 	handlerData.PartialEditFields = buildPartialEditFields(fields)
 
@@ -219,8 +217,10 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 			}
 		}
 
-		// 表格列
-		if slices.Contains(table.ColumnFields, field.Name) && !(field.DesignType == "remoteSelects" && field.Table.ComSearchRender == "remoteSelect" && field.Form.RelationFields != "") {
+		// 表格列。For multi remoteSelects with relation fields, retain the raw FK
+		// search column but hide it; relation display columns are added below.
+		field = prepareGeneratedColumnField(field)
+		if slices.Contains(table.ColumnFields, field.Name) {
 			if field.Table.ComSearchRender == "remoteSelect" && field.Form.RemoteTable != "" {
 				field.Table.Remote = buildRemoteSearchMetadata(field, getTableName)
 			}
@@ -230,7 +230,10 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 		// 关联表数据解析
 		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
 			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
-				columns, _ := getColumns(field.Form.RemoteTable)
+				columns, err := getColumns(field.Form.RemoteTable)
+				if err != nil {
+					return WebDir{}, "", fmt.Errorf("remote relation %q for field %q: %w", field.Form.RemoteTable, field.Name, err)
+				}
 				if err := parseJoinData(db, columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate); err != nil {
 					return WebDir{}, "", err
 				}
@@ -247,6 +250,7 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 			handlerData.Attr["preExcludeFields"] = field.Name
 		}
 	}
+	finalizeRelationMetadata(&modelData)
 
 	// 快速搜索提示
 	langEnData["quick Search Fields"] = strings.Join(table.QuickSearchField, ",")
@@ -394,6 +398,13 @@ func buildRemoteSearchMetadata(field model.Field, getTableName GetTableName) str
 		remote += buildTableColumnKey("multiple", "true")
 	}
 	return remote
+}
+
+func prepareGeneratedColumnField(field model.Field) model.Field {
+	if field.DesignType == "remoteSelects" && field.Table.ComSearchRender == "remoteSelect" && field.Form.RelationFields != "" {
+		field.Table.Show = "false"
+	}
+	return field
 }
 
 func buildPartialEditFields(fields []model.Field) string {
@@ -1030,69 +1041,28 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 	return columnStr
 }
 
-// 关联表数据解析
-func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, getTableName GetTableName, webTranslate string) error {
+// parseJoinData validates and records one slim relation, then adds its nested
+// display columns. Relation labels never use a JOIN or relation-side scope.
+func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, _ *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, _ GetTableName, webTranslate string) error {
+	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
+		return nil
+	}
 	joinFields := ParseTableColumns(columns, true)
-	tableName := getTableName(field.Form.RemoteTable, false)
-	fullTableName := getTableName(field.Form.RemoteTable, true)
-	//检查关联模型代码文件
-	rootFileName, err := checkJoinMoel(db, joinFields, field, tableName, fullTableName)
+	relationFields := strings.Split(field.Form.RelationFields, ",")
+	relationName := relationNameForField(field.Name)
+	relation, err := buildRelationMetadata(joinFields, field, modelData.ClassName)
 	if err != nil {
 		return err
 	}
-	if rootFileName != "" {
-		field.Form.RemoteModel = rootFileName
-	}
-
-	relationFields := strings.Split(field.Form.RelationFields, ",")
-	relationName := relationNameForField(field.Name)
-
-	if field.DesignType == "remoteSelect" {
-		// 关联预载入方法
-		handlerData.Attr[relationName] = relationName
-
-		// 模型方法代码
-		relationPrimaryKey := "id"
-		if field.Form.RemotePk != "" {
-			relationPrimaryKey = field.Form.RemotePk
-		}
-		relationData := map[string]string{
-			"relationMethod":     relationName,
-			"relationMode":       "belongsTo",
-			"relationPrimaryKey": relationPrimaryKey,
-			"relationForeignKey": field.Name,
-			"relationClassName":  "",
-		}
-		modelData.RelationMethodList[relationName] = assembleStub("mixins/model/belongsTo", relationData, false)
-
-		if len(relationFields) > 0 {
-			handlerData.RelationVisibleFieldList[relationData["relationMethod"]] = relationFields
-		}
-	} else if field.DesignType == "remoteSelects" {
-		modelData.Append = append(modelData.Append, relationName)
-
-		primaryKey := "id"
-		if field.Form.RemotePk != "" {
-			primaryKey = field.Form.RemotePk
-		}
-		labelFieldName := "name"
-		if field.Form.RemoteField != "" {
-			labelFieldName = field.Form.RemoteField
-		}
-		methodContent := assembleStub("mixins/model/getters/remoteSelectLabels", map[string]string{
-			"field":          utils.SnakeToCamel(relationName, false),
-			"className":      "",
-			"primaryKey":     primaryKey,
-			"foreignKey":     field.Name,
-			"labelFieldName": labelFieldName,
-		}, false)
-		modelData.Methods = append(modelData.Methods, methodContent)
+	if err := appendRelationMetadata(modelData, relation); err != nil {
+		return err
 	}
 
 	for _, v := range relationFields {
+		v = strings.TrimSpace(v)
 		joinField := searchField(joinFields, v)
-		if field.Name == "" {
-			continue
+		if joinField.Name == "" {
+			return fmt.Errorf("unknown relation field %q on remote table %q for field %q", v, field.Form.RemoteTable, field.Name)
 		}
 
 		relationFieldPrefix := relationName + "."
@@ -1100,48 +1070,437 @@ func parseJoinData(db *gorm.DB, columns []model.Column, dictEn *map[string]strin
 		getDictData(dictEn, joinField, "en", relationFieldLangPrefix)
 		getDictData(dictZhCn, joinField, "zh-cn", relationFieldLangPrefix)
 
-		//不允许双击编辑的字段
 		if joinField.DesignType == "switch" {
 			indexVueData.DblClickNotEditColumn = append(indexVueData.DblClickNotEditColumn, field.Name)
 		}
 
-		// 列字典数据
 		columnDict := getColumnDict(joinField, relationFieldLangPrefix, "")
-
-		//表格列
 		joinField.DesignType = field.DesignType
 		joinField.Table.Render = "tags"
-		if field.DesignType == "remoteSelects" {
-			joinField.Table.Operator = "false"
-			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
-			// 额外生成一个公共搜索，渲染为远程下拉的列
-			joinField.Table.Label = "t('" + webTranslate + relationFieldLangPrefix + joinField.Name + "')"
-			joinField.Name = field.Name
-			joinField.Table.Render = ""
-			joinField.Table.Show = "false"
-			joinField.Table.Operator = "FIND_IN_SET"
-			joinField.Table.ComSearchRender = "remoteSelect"
-
-			remoteTableName := getTableName(field.Form.RemoteTable, true)
-
-			labelFieldName := "name"
-			if field.Form.RemoteField != "" {
-				labelFieldName = field.Form.RemoteField
-			}
-			itemJson := buildTableColumnKey("pk", GetRemotePk(remoteTableName, field))
-			itemJson += buildTableColumnKey("field", labelFieldName)
-			itemJson += buildTableColumnKey("remoteUrl", GetRemoteSelectUrl(field))
-			itemJson += buildTableColumnKey("multiple", "true")
-			joinField.Table.Remote = itemJson
-
-			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, "", relationFieldLangPrefix, webTranslate))
-		} else {
-			joinField.Table.Operator = "LIKE"
-			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
-		}
-
+		joinField.Table.Operator = "false"
+		indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(joinField, columnDict, relationFieldPrefix, relationFieldLangPrefix, webTranslate))
 	}
 	return nil
+}
+
+func buildRelationMetadata(joinFields []model.Field, field model.Field, className string) (RelationMetadata, error) {
+	remoteTable := field.Form.RemoteTable
+	if err := data_scope.ValidateIdentifier(remoteTable); err != nil {
+		return RelationMetadata{}, fmt.Errorf("invalid remote table %q for field %q: %w", remoteTable, field.Name, err)
+	}
+	remotePK := field.Form.RemotePk
+	if remotePK == "" {
+		remotePK = "id"
+	}
+	if err := data_scope.ValidateIdentifier(remotePK); err != nil {
+		return RelationMetadata{}, fmt.Errorf("%s relation %q has unsupported remote primary key %q: %w", field.DesignType, field.Name, remotePK, err)
+	}
+	multi := field.DesignType == "remoteSelects"
+	if multi && !isMultiRelationStorage(field) {
+		return RelationMetadata{}, fmt.Errorf("remoteSelects relation %q requires string-family CSV storage, got %q", field.Name, analyseFieldType(field))
+	}
+	if multi && strings.TrimSpace(field.Form.RelationFields) == "" {
+		return RelationMetadata{}, fmt.Errorf("remoteSelects relation %q requires relationFields for deferred label enrichment", field.Name)
+	}
+	pkColumn := searchField(joinFields, remotePK)
+	if pkColumn.Name == "" {
+		return RelationMetadata{}, fmt.Errorf("remote primary key %q not found on remote table %q for field %q", remotePK, remoteTable, field.Name)
+	}
+
+	relationName := relationNameForField(field.Name)
+	metadata := RelationMetadata{
+		FieldName:       field.Name,
+		RelationName:    relationName,
+		RelationGoField: utils.SnakeToCamel(relationName, true),
+		DTOName:         className + utils.SnakeToCamel(relationName, true) + "Relation",
+		RemoteTable:     remoteTable,
+		RemotePK:        remotePK,
+		RemotePKGoField: generatedGoFieldName(remotePK),
+		RemotePKType:    relationColumnGoTypeFromField(pkColumn),
+		RowDTOName:      className + utils.SnakeToCamel(relationName, true) + "RelationRow",
+		Multi:           multi,
+	}
+	if !slices.Contains([]string{"int32", "int64", "string"}, metadata.RemotePKType) {
+		return RelationMetadata{}, fmt.Errorf("%s relation %q has unsupported remote primary key type %q; supported types are int32, int64, and string", field.DesignType, field.Name, metadata.RemotePKType)
+	}
+	metadata.Fields = append(metadata.Fields, relationDTOField(pkColumn))
+
+	seen := map[string]bool{remotePK: true}
+	for _, rawName := range strings.Split(field.Form.RelationFields, ",") {
+		name := strings.TrimSpace(rawName)
+		if name == "" {
+			return RelationMetadata{}, fmt.Errorf("empty relation field for field %q", field.Name)
+		}
+		if err := data_scope.ValidateIdentifier(name); err != nil {
+			return RelationMetadata{}, fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
+		}
+		joinField := searchField(joinFields, name)
+		if joinField.Name == "" {
+			return RelationMetadata{}, fmt.Errorf("unknown relation field %q on remote table %q for field %q", name, remoteTable, field.Name)
+		}
+		if multi {
+			alreadyPayload := false
+			for _, payloadField := range metadata.PayloadFields {
+				if payloadField.ColumnName == name {
+					alreadyPayload = true
+					break
+				}
+			}
+			if !alreadyPayload {
+				metadata.PayloadFields = append(metadata.PayloadFields, relationDTOField(joinField))
+			}
+		}
+		if !seen[name] {
+			metadata.Fields = append(metadata.Fields, relationDTOField(joinField))
+			seen[name] = true
+		}
+	}
+	if !multi {
+		metadata.PayloadFields = metadata.Fields
+	}
+	return metadata, nil
+}
+
+func isMultiRelationStorage(field model.Field) bool {
+	base := strings.ToLower(analyseFieldType(field))
+	return slices.Contains([]string{"char", "varchar", "text", "tinytext", "mediumtext", "longtext", "set"}, base)
+}
+
+func appendRelationMetadata(modelData *ModelData, relation RelationMetadata) error {
+	for _, existing := range modelData.Relations {
+		if existing.RelationName == relation.RelationName || existing.DTOName == relation.DTOName || (relation.Multi && existing.RowDTOName == relation.RowDTOName) {
+			return fmt.Errorf("relation name/DTO collision for %q on field %q", relation.RelationName, relation.FieldName)
+		}
+	}
+	modelData.Relations = append(modelData.Relations, relation)
+	return nil
+}
+
+func relationDTOField(field model.Field) RelationDTOField {
+	return RelationDTOField{
+		ColumnName: field.Name,
+		GoName:     generatedGoFieldName(field.Name),
+		GoType:     relationColumnGoTypeFromField(field),
+		JSONName:   field.Name,
+		Nullable:   field.Null,
+	}
+}
+
+func relationColumnGoType(field model.Column) string {
+	base := strings.ToLower(field.DATA_TYPE)
+	if base == "" {
+		base = strings.ToLower(field.COLUMN_TYPE)
+		if index := strings.IndexByte(base, '('); index >= 0 {
+			base = base[:index]
+		}
+		base = strings.TrimSpace(strings.TrimSuffix(base, " unsigned"))
+	}
+	switch base {
+	case "tinyint", "smallint", "mediumint", "int", "integer":
+		return "int32"
+	case "bigint":
+		return "int64"
+	case "float", "double", "decimal", "numeric":
+		return "float64"
+	case "bool", "boolean":
+		return "bool"
+	case "date", "datetime", "timestamp", "time":
+		return "time.Time"
+	default:
+		return "string"
+	}
+}
+
+func relationColumnGoTypeFromField(field model.Field) string {
+	column := model.Column{DATA_TYPE: field.Type, COLUMN_TYPE: field.DataType}
+	return relationColumnGoType(column)
+}
+
+func generatedGoFieldName(name string) string {
+	goName := utils.SnakeToCamel(name, true)
+	if strings.HasSuffix(goName, "Ids") {
+		return strings.TrimSuffix(goName, "Ids") + "IDs"
+	}
+	if strings.HasSuffix(goName, "Id") {
+		return strings.TrimSuffix(goName, "Id") + "ID"
+	}
+	return goName
+}
+
+func finalizeRelationMetadata(modelData *ModelData) {
+	modelData.RelationStructs = ""
+	modelData.RelationFields = ""
+	modelData.RelationLoaders = ""
+	modelData.RelationNeedsTime = false
+	modelData.RelationNeedsMulti = false
+	modelData.RelationNeedsMultiNumeric = false
+	if len(modelData.Relations) == 0 {
+		return
+	}
+
+	var structs strings.Builder
+	var fields strings.Builder
+	var loaders strings.Builder
+	for _, relation := range modelData.Relations {
+		fields.WriteString("\t")
+		fields.WriteString(relation.RelationGoField)
+		fields.WriteString(" *")
+		fields.WriteString(relation.DTOName)
+		fields.WriteString(" `gorm:\"-\" json:\"")
+		fields.WriteString(relation.RelationName)
+		fields.WriteString("\"`\n")
+
+		structs.WriteString("type ")
+		if relation.Multi {
+			modelData.RelationNeedsMulti = true
+			if relation.RemotePKType != "string" {
+				modelData.RelationNeedsMultiNumeric = true
+			}
+			structs.WriteString(relation.RowDTOName)
+		} else {
+			structs.WriteString(relation.DTOName)
+		}
+		structs.WriteString(" struct {\n")
+		for _, field := range relation.Fields {
+			structs.WriteString("\t")
+			structs.WriteString(field.GoName)
+			structs.WriteString(" ")
+			if field.Nullable {
+				structs.WriteString("*")
+			}
+			structs.WriteString(field.GoType)
+			structs.WriteString(" `gorm:\"column:")
+			structs.WriteString(field.ColumnName)
+			structs.WriteString("\" json:\"")
+			structs.WriteString(field.JSONName)
+			structs.WriteString("\"`\n")
+			if field.GoType == "time.Time" {
+				modelData.RelationNeedsTime = true
+			}
+		}
+		structs.WriteString("}\n\n")
+		if relation.Multi {
+			structs.WriteString("type ")
+			structs.WriteString(relation.DTOName)
+			structs.WriteString(" struct {\n")
+			for _, field := range relation.PayloadFields {
+				structs.WriteString("\t")
+				structs.WriteString(field.GoName)
+				structs.WriteString(" []*")
+				structs.WriteString(field.GoType)
+				structs.WriteString(" `json:\"")
+				structs.WriteString(field.JSONName)
+				structs.WriteString("\"`\n")
+			}
+			structs.WriteString("}\n\n")
+		}
+
+		loaders.WriteString(renderRelationLoader(*modelData, relation))
+	}
+	loaders.WriteString(renderRelationLoaderAggregator(*modelData))
+	modelData.RelationStructs = structs.String()
+	modelData.RelationFields = fields.String()
+	modelData.RelationLoaders = loaders.String()
+}
+
+func renderRelationLoader(modelData ModelData, relation RelationMetadata) string {
+	if relation.Multi {
+		return renderMultiRelationLoader(modelData, relation)
+	}
+	var b strings.Builder
+	methodName := "load" + relation.RelationGoField + "Relations"
+	rowField := generatedGoFieldName(relation.FieldName)
+	b.WriteString("func (s *")
+	b.WriteString(modelData.ClassName)
+	b.WriteString("Model) ")
+	b.WriteString(methodName)
+	b.WriteString("(ctx *gin.Context, rows *[]")
+	b.WriteString(modelData.ClassName)
+	b.WriteString(") error {\n")
+	b.WriteString("\tif len(*rows) == 0 { return nil }\n")
+	b.WriteString("\tkeys := make([]")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString(", 0, len(*rows))\n")
+	b.WriteString("\tseen := make(map[")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("]struct{}, len(*rows))\n")
+	b.WriteString("\tfor i := range *rows { key := ")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("((*rows)[i].")
+	b.WriteString(rowField)
+	b.WriteString("); if _, ok := seen[key]; ok { continue }; seen[key] = struct{}{}; keys = append(keys, key) }\n")
+	b.WriteString("\tif len(keys) == 0 { return nil }\n")
+	b.WriteString("\trelated := make([]")
+	b.WriteString(relation.DTOName)
+	b.WriteString(", 0)\n")
+	b.WriteString("\tif err := s.DBFor(ctx).Table(s.config.Database.Prefix + ")
+	b.WriteString(strconv.Quote(relation.RemoteTable))
+	b.WriteString(").Select(")
+	for i, field := range relation.Fields {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.Quote(field.ColumnName))
+	}
+	b.WriteString(").Where(")
+	b.WriteString(strconv.Quote(relation.RemotePK + " IN ?"))
+	b.WriteString(", keys).Find(&related).Error; err != nil { return err }\n")
+	b.WriteString("\tbyKey := make(map[")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("]*")
+	b.WriteString(relation.DTOName)
+	b.WriteString(", len(related))\n")
+	b.WriteString("\tfor i := range related { byKey[related[i].")
+	b.WriteString(relation.RemotePKGoField)
+	b.WriteString("] = &related[i] }\n")
+	b.WriteString("\tfor i := range *rows { if relation, ok := byKey[")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("((*rows)[i].")
+	b.WriteString(rowField)
+	b.WriteString(")]; ok { (*rows)[i].")
+	b.WriteString(relation.RelationGoField)
+	b.WriteString(" = relation } }\n")
+	b.WriteString("\treturn nil\n}\n\n")
+	return b.String()
+}
+
+func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) string {
+	var b strings.Builder
+	methodName := "load" + relation.RelationGoField + "Relations"
+	rowField := generatedGoFieldName(relation.FieldName)
+	b.WriteString("func (s *")
+	b.WriteString(modelData.ClassName)
+	b.WriteString("Model) ")
+	b.WriteString(methodName)
+	b.WriteString("(ctx *gin.Context, rows *[]")
+	b.WriteString(modelData.ClassName)
+	b.WriteString(") error {\n")
+	b.WriteString("\ttype relationRef struct { rowIndex int; valueIndex int; key ")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString(" }\n")
+	b.WriteString("\tparseKey := func(token string) (")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString(", bool) {\n")
+	b.WriteString("\t\ttoken = strings.TrimSpace(token)\n")
+	zero := "0"
+	if relation.RemotePKType == "string" {
+		zero = `""`
+	}
+	b.WriteString("\t\tif token == \"\" { return ")
+	b.WriteString(zero)
+	b.WriteString(", false }\n")
+	if relation.RemotePKType == "string" {
+		b.WriteString("\t\treturn token, true\n")
+	} else {
+		bits := "64"
+		if relation.RemotePKType == "int32" {
+			bits = "32"
+		}
+		b.WriteString("\t\tvalue, err := strconv.ParseInt(token, 10, ")
+		b.WriteString(bits)
+		b.WriteString(")\n")
+		b.WriteString("\t\tif err != nil { return ")
+		b.WriteString(zero)
+		b.WriteString(", false }\n")
+		b.WriteString("\t\treturn ")
+		b.WriteString(relation.RemotePKType)
+		b.WriteString("(value), true\n")
+	}
+	b.WriteString("\t}\n")
+	b.WriteString("\tpayloads := make([]*")
+	b.WriteString(relation.DTOName)
+	b.WriteString(", len(*rows))\n")
+	b.WriteString("\trefs := make([]relationRef, 0)\n")
+	b.WriteString("\tkeys := make([]")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString(", 0)\n")
+	b.WriteString("\tseen := make(map[")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("]struct{})\n")
+	b.WriteString("\tfor rowIndex := range *rows {\n")
+	b.WriteString("\t\ttokens := []string{}\n")
+	b.WriteString("\t\tif raw := string((*rows)[rowIndex].")
+	b.WriteString(rowField)
+	b.WriteString("); raw != \"\" { tokens = strings.Split(raw, \",\") }\n")
+	b.WriteString("\t\tpayloads[rowIndex] = &")
+	b.WriteString(relation.DTOName)
+	b.WriteString("{\n")
+	for _, field := range relation.PayloadFields {
+		b.WriteString("\t\t\t")
+		b.WriteString(field.GoName)
+		b.WriteString(": make([]*")
+		b.WriteString(field.GoType)
+		b.WriteString(", len(tokens)),\n")
+	}
+	b.WriteString("\t\t}\n")
+	b.WriteString("\t\tfor valueIndex, token := range tokens { key, ok := parseKey(token); if !ok { continue }; refs = append(refs, relationRef{rowIndex: rowIndex, valueIndex: valueIndex, key: key}); if _, exists := seen[key]; !exists { seen[key] = struct{}{}; keys = append(keys, key) } }\n")
+	b.WriteString("\t}\n")
+	b.WriteString("\tif len(keys) == 0 { for i := range *rows { (*rows)[i].")
+	b.WriteString(relation.RelationGoField)
+	b.WriteString(" = payloads[i] }; return nil }\n")
+	b.WriteString("\trelated := make([]")
+	b.WriteString(relation.RowDTOName)
+	b.WriteString(", 0)\n")
+	b.WriteString("\tif err := s.DBFor(ctx).Table(s.config.Database.Prefix + ")
+	b.WriteString(strconv.Quote(relation.RemoteTable))
+	b.WriteString(").Select(")
+	for i, field := range relation.Fields {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(strconv.Quote(field.ColumnName))
+	}
+	b.WriteString(").Where(")
+	b.WriteString(strconv.Quote(relation.RemotePK + " IN ?"))
+	b.WriteString(", keys).Find(&related).Error; err != nil { return err }\n")
+	b.WriteString("\tbyKey := make(map[")
+	b.WriteString(relation.RemotePKType)
+	b.WriteString("]*")
+	b.WriteString(relation.RowDTOName)
+	b.WriteString(", len(related))\n")
+	b.WriteString("\tfor i := range related { byKey[related[i].")
+	b.WriteString(relation.RemotePKGoField)
+	b.WriteString("] = &related[i] }\n")
+	b.WriteString("\tfor _, ref := range refs { if related, ok := byKey[ref.key]; ok {\n")
+	for _, field := range relation.PayloadFields {
+		b.WriteString("\t\t")
+		b.WriteString("payloads[ref.rowIndex].")
+		b.WriteString(field.GoName)
+		b.WriteString("[ref.valueIndex] = ")
+		if field.Nullable {
+			b.WriteString("related.")
+			b.WriteString(field.GoName)
+		} else {
+			b.WriteString("func() *")
+			b.WriteString(field.GoType)
+			b.WriteString(" { value := related.")
+			b.WriteString(field.GoName)
+			b.WriteString("; return &value }()")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\t} }\n")
+	b.WriteString("\tfor i := range *rows { (*rows)[i].")
+	b.WriteString(relation.RelationGoField)
+	b.WriteString(" = payloads[i] }\n")
+	b.WriteString("\treturn nil\n}\n\n")
+	return b.String()
+}
+
+func renderRelationLoaderAggregator(modelData ModelData) string {
+	var b strings.Builder
+	b.WriteString("func (s *")
+	b.WriteString(modelData.ClassName)
+	b.WriteString("Model) loadRelations(ctx *gin.Context, rows *[]")
+	b.WriteString(modelData.ClassName)
+	b.WriteString(") error {\n")
+	for _, relation := range modelData.Relations {
+		b.WriteString("\tif err := s.load")
+		b.WriteString(relation.RelationGoField)
+		b.WriteString("Relations(ctx, rows); err != nil { return err }\n")
+	}
+	b.WriteString("\treturn nil\n}\n")
+	return b.String()
 }
 
 func relationNameForField(fieldName string) string {
@@ -1154,66 +1513,6 @@ func relationNameForField(fieldName string) string {
 		relationName += "_table"
 	}
 	return utils.SnakeToCamel(relationName, false)
-}
-
-// 关联表是否存在，不存在创建
-func checkJoinMoel(db *gorm.DB, fields []model.Field, field model.Field, tableName, fullTableName string) (string, error) {
-	rootFileName := ""
-
-	// 对齐上游：remote-model 按原路径已存在（如 app/common/model/user.go）时
-	// 直接使用，不再按 admin 模块推导路径重建
-	if field.Form.RemoteModel != "" {
-		direct, err := normalizeLogicalPath(field.Form.RemoteModel)
-		if err != nil {
-			return "", err
-		}
-		if strings.HasSuffix(field.Form.RemoteModel, ".go") {
-			direct += ".go"
-		}
-		if _, err := os.Stat(filepath.Join(utils.RootPath(), direct)); err == nil {
-			return "", nil
-		}
-	}
-
-	joinModelFile, err := ParseNameData("admin", tableName, "model", field.Form.RemoteModel)
-	if err != nil {
-		return "", err
-	}
-	if _, err := os.Stat(joinModelFile.ParseFile); os.IsNotExist(err) {
-		rootFileName = joinModelFile.RootFileName
-
-		if _, err := os.Stat(joinModelFile.ParseFile); os.IsNotExist(err) {
-			formFields := make([]string, 0, len(fields))
-			columnFields := make([]string, 0, len(fields))
-			for _, joinField := range fields {
-				columnFields = append(columnFields, joinField.Name)
-				if !joinField.PrimaryKey {
-					formFields = append(formFields, joinField.Name)
-				}
-			}
-			joinTable := model.Table{
-				Name: tableName, ModelFile: field.Form.RemoteModel,
-				FormFields: formFields, ColumnFields: columnFields,
-			}
-			joinGetTableName := func(name string, full bool) string {
-				if full {
-					return fullTableName
-				}
-				return name
-			}
-			joinModelData, _, _, _, _, _, _, _, joinTablePk, _, _, err := prepareGenerationData(joinTable, fields, nil, joinGetTableName, buildIndexProver(db, fullTableName))
-			if err != nil {
-				return "", err
-			}
-			for _, v := range fields {
-				parseModelMethods(v, &joinModelData)
-			}
-			if _, err := writeModelFile(db, joinTablePk, fullTableName, tableName, joinModelData, joinModelFile); err != nil {
-				return "", err
-			}
-		}
-	}
-	return rootFileName, nil
 }
 
 // 解析模型方法（设置器、获取器等）
