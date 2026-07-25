@@ -645,7 +645,7 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 		case designType == "time":
 			overrides[field.Name] = "validate.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
-			overrides[field.Name] = "validate.FlexUnixTime"
+			overrides[field.Name] = timestampAdapterType(field.Name)
 		}
 	}
 	return overrides
@@ -678,10 +678,19 @@ func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
 		case field.DesignType == "time" && dbType == "time":
 			overrides[field.Name] = "validate.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
-			overrides[field.Name] = "validate.FlexUnixTime"
+			overrides[field.Name] = timestampAdapterType(field.Name)
 		}
 	}
 	return overrides
+}
+
+func timestampAdapterType(fieldName string) string {
+	switch strings.ToLower(fieldName) {
+	case "create_time", "update_time", "createtime", "updatetime":
+		return "validate.FlexUnixTime"
+	default:
+		return "validate.FlexFormattedUnixTime"
+	}
 }
 
 func isBooleanStorageField(field model.Field) bool {

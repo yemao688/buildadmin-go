@@ -391,8 +391,12 @@ func writeProvider(dir string, name string) error {
 		return nil
 	}
 
+	hadTrailingNewline := strings.HasSuffix(string(content), "\n")
 	lastIndex := strings.LastIndex(string(content), ")")
 	content = []byte(string(content)[:lastIndex] + "	New" + name + ",\n)")
+	if hadTrailingNewline {
+		content = append(content, '\n')
+	}
 	return writeGoFile(providerPath, string(content))
 }
 
@@ -471,11 +475,15 @@ func writeFile(path string, content string) error {
 }
 
 func writeGoFile(path, content string) error {
+	hadTrailingNewline := strings.HasSuffix(content, "\n")
 	formatted, err := formatGoCode(content)
 	if err != nil {
 		return err
 	}
-	formatted = strings.TrimRight(formatted, "\n") + "\n"
+	formatted = strings.TrimRight(formatted, "\n")
+	if hadTrailingNewline {
+		formatted += "\n"
+	}
 	return writeFile(path, formatted)
 }
 

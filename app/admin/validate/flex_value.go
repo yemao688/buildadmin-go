@@ -16,6 +16,7 @@ type FlexDateTime time.Time
 type FlexDate time.Time
 type FlexClock string
 type FlexUnixTime int64
+type FlexFormattedUnixTime int64
 
 func (v CommaJoined) MarshalJSON() ([]byte, error) {
 	if v == "" {
@@ -370,7 +371,7 @@ func (v FlexUnixTime) MarshalJSON() ([]byte, error) {
 	if v == 0 {
 		return []byte("null"), nil
 	}
-	return json.Marshal(time.Unix(int64(v), 0).In(time.Local).Format("2006-01-02 15:04:05"))
+	return json.Marshal(int64(v))
 }
 
 func (v *FlexUnixTime) Scan(value any) error {
@@ -415,6 +416,35 @@ func (v *FlexUnixTime) Scan(value any) error {
 }
 
 func (v FlexUnixTime) Value() (driver.Value, error) {
+	return int64(v), nil
+}
+
+func (v *FlexFormattedUnixTime) UnmarshalJSON(data []byte) error {
+	var unix FlexUnixTime
+	if err := unix.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	*v = FlexFormattedUnixTime(unix)
+	return nil
+}
+
+func (v FlexFormattedUnixTime) MarshalJSON() ([]byte, error) {
+	if v == 0 {
+		return []byte("null"), nil
+	}
+	return json.Marshal(time.Unix(int64(v), 0).In(time.Local).Format("2006-01-02 15:04:05"))
+}
+
+func (v *FlexFormattedUnixTime) Scan(value any) error {
+	var unix FlexUnixTime
+	if err := unix.Scan(value); err != nil {
+		return err
+	}
+	*v = FlexFormattedUnixTime(unix)
+	return nil
+}
+
+func (v FlexFormattedUnixTime) Value() (driver.Value, error) {
 	return int64(v), nil
 }
 

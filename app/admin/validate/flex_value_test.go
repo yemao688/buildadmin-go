@@ -217,7 +217,9 @@ func TestFlexJSONOutput(t *testing.T) {
 		{"clock empty", FlexClock(""), `""`},
 		{"clock value", FlexClock("12:34:56"), `"12:34:56"`},
 		{"unix zero", FlexUnixTime(0), `null`},
-		{"unix value", unix, `"2026-07-25 12:34:56"`},
+		{"unix value", unix, `1784954096`},
+		{"formatted unix zero", FlexFormattedUnixTime(0), `null`},
+		{"formatted unix value", FlexFormattedUnixTime(unix), `"2026-07-25 12:34:56"`},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -235,6 +237,28 @@ func TestFlexJSONOutput(t *testing.T) {
 	}
 	if _, err := json.Marshal(KeyValueArray("null")); err == nil {
 		t.Fatal("null key/value storage must fail to marshal")
+	}
+}
+
+func TestFlexFormattedUnixTimeReusesUnixInputAndStorage(t *testing.T) {
+	local := time.FixedZone("test-local", 8*60*60)
+	original := time.Local
+	time.Local = local
+	t.Cleanup(func() { time.Local = original })
+
+	want := FlexFormattedUnixTime(time.Date(2026, 7, 25, 12, 34, 56, 0, local).Unix())
+	for _, input := range []string{`123`, `"456"`, `"2026-07-25 12:34:56"`, `"2026-07-25T12:34:56+08:00"`} {
+		var got FlexFormattedUnixTime
+		if err := json.Unmarshal([]byte(input), &got); err != nil {
+			t.Fatalf("UnmarshalJSON(%s): %v", input, err)
+		}
+	}
+	var got FlexFormattedUnixTime
+	if err := got.Scan([]byte("2026-07-25 12:34:56")); err != nil || got != want {
+		t.Fatalf("Scan = %d, err %v; want %d", got, err, want)
+	}
+	if value, err := got.Value(); err != nil || value != int64(want) {
+		t.Fatalf("Value = %v, err %v; want %d", value, err, want)
 	}
 }
 

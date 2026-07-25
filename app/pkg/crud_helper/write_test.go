@@ -75,6 +75,38 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 	}
 }
 
+func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "provider_eof_test")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	provider := filepath.Join(dir, "provider.go")
+	base := "package provider_eof_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingModel,\n)"
+	for _, original := range []string{base, base + "\n"} {
+		t.Run(map[bool]string{false: "without trailing newline", true: "with trailing newline"}[strings.HasSuffix(original, "\n")], func(t *testing.T) {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(provider, []byte(original), 0644); err != nil {
+				t.Fatal(err)
+			}
+			for cycle := 0; cycle < 3; cycle++ {
+				if err := writeProvider("app/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+					t.Fatal(err)
+				}
+				if err := RemoveProvider("app/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+					t.Fatal(err)
+				}
+				got, err := os.ReadFile(provider)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != original {
+					t.Fatalf("cycle %d changed provider EOF/content: got %q, want %q", cycle, got, original)
+				}
+			}
+		})
+	}
+}
+
 func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "assoc_provider_test")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -223,7 +255,8 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		{name: "datetime", designType: "datetime", dataType: "datetime", want: "validate.FlexDateTime"},
 		{name: "date", designType: "date", dataType: "date", want: "validate.FlexDate"},
 		{name: "time", designType: "time", dataType: "time", want: "validate.FlexClock"},
-		{name: "timestamp", designType: "timestamp", dataType: "bigint", want: "validate.FlexUnixTime"},
+		{name: "create_time", designType: "timestamp", dataType: "bigint", want: "validate.FlexUnixTime"},
+		{name: "end_time", designType: "timestamp", dataType: "bigint", want: "validate.FlexFormattedUnixTime"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -249,6 +282,7 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 		{Name: "day", DataType: "date", DesignType: "date"},
 		{Name: "clock", DataType: "time", DesignType: "time"},
 		{Name: "clock_native", DataType: "TIME", DesignType: "string"},
+		{Name: "create_time", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "unix_at", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "mismatch", DataType: "datetime", DesignType: "string"},
 	}
@@ -264,7 +298,8 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 		"day":            "validate.FlexDate",
 		"clock":          "validate.FlexClock",
 		"clock_native":   "string",
-		"unix_at":        "validate.FlexUnixTime",
+		"create_time":    "validate.FlexUnixTime",
+		"unix_at":        "validate.FlexFormattedUnixTime",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("overrides = %#v, want %#v", got, want)
