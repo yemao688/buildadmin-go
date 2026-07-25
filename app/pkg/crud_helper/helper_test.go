@@ -490,6 +490,11 @@ func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
 	}
 }
 
+func TestBuildOperateColumnKeepsFixedRight(t *testing.T) {
+	require.Equal(t, ` label: t('Operate'), align: 'center', width: 100, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false`, buildOperateColumn(false))
+	require.Equal(t, ` label: t('Operate'), align: 'center', width: 140, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false`, buildOperateColumn(true))
+}
+
 func TestRemoteSelectRelationMetadataIsSlimAndRemoteSelectsIsEnriched(t *testing.T) {
 	columns := relationTestColumns()
 	field := relationTestField("remoteSelect", "username")
@@ -580,6 +585,58 @@ func TestRemoteSelectRelationColumnUsesNestedPropWithoutSearchOperator(t *testin
 	fkColumn := getTableColumn(field, nil, "", "", "")
 	require.Contains(t, fkColumn, `prop: "user_id"`)
 	require.Contains(t, fkColumn, `comSearchRender: "remoteSelect"`)
+}
+
+func TestParseJoinDataSingleRelationFieldUsesLiteralLabel(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	field.Table.Label = "上级代理"
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `label: "上级代理"`)
+}
+
+func TestParseJoinDataMultipleRelationFieldsIgnoreSharedLabel(t *testing.T) {
+	field := relationTestField("remoteSelects", "nickname,email")
+	field.Form.RemoteTable = "admin"
+	field.Table.Label = "上级代理"
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, multiRelationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "reviewer."))
+	columns := strings.Join(indexData.TableColumn, "\n")
+	require.NotContains(t, columns, `label: "上级代理"`)
+	require.Contains(t, columns, `label: t("reviewer.user__nickname")`)
+	require.Contains(t, columns, `label: t("reviewer.user__email")`)
+}
+
+func TestParseJoinDataWithoutLabelKeepsDefaultTranslation(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `label: t("user.user__username")`)
+}
+
+func TestOmittedFKColumnStillGeneratesRelationDisplayAndLoader(t *testing.T) {
+	table := model.Table{ColumnFields: []string{"id"}}
+	field := relationTestField("remoteSelect", "username")
+	field.Table.ComSearchRender = "remoteSelect"
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	if slices.Contains(table.ColumnFields, field.Name) {
+		indexData.TableColumn = append(indexData.TableColumn, getTableColumn(field, nil, "", "", "user."))
+	}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	columns := strings.Join(indexData.TableColumn, "\n")
+	require.Contains(t, columns, `prop: "user.username"`)
+	require.NotContains(t, columns, `prop: "user_id"`)
+	finalizeRelationMetadata(&modelData)
+	require.Contains(t, modelData.RelationFields, `User *OrdersUserRelation `)
+	require.Contains(t, modelData.RelationLoaders, `loadUserRelations`)
 }
 
 func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {

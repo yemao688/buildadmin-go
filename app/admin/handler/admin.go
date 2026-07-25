@@ -514,9 +514,15 @@ func buildAdminTreeOptions(admins []*model.Admin) []map[string]any {
 
 	options := make([]map[string]any, 0, len(flat))
 	for _, l := range flat {
+		admin := findAdminByID(admins, int32(l.GetId()))
+		username := ""
+		if admin != nil {
+			username = admin.Username + "(ID:" + strconv.Itoa(int(admin.ID)) + ")"
+		}
 		options = append(options, map[string]any{
 			"id":       l.GetId(),
 			"nickname": l.GetTitle(),
+			"username": username,
 		})
 	}
 	return options
@@ -528,7 +534,17 @@ func buildFlatAdminOptions(admins []*model.Admin) []map[string]any {
 		options = append(options, map[string]any{
 			"id":       a.ID,
 			"nickname": a.Nickname + "(ID:" + strconv.Itoa(int(a.ID)) + ")",
+			"username": a.Username + "(ID:" + strconv.Itoa(int(a.ID)) + ")",
 		})
 	}
 	return options
+}
+
+func findAdminByID(admins []*model.Admin, id int32) *model.Admin {
+	for _, admin := range admins {
+		if admin != nil && admin.ID == id {
+			return admin
+		}
+	}
+	return nil
 }

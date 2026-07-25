@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"testing"
 
 	"go-build-admin/app/pkg/data_scope"
@@ -85,6 +86,8 @@ func adminTestContextID(t *testing.T, id int32, unrestricted bool) *gin.Context 
 	return ctx
 }
 
+func ptr(v int32) *int32 { return &v }
+
 func TestAdminModelScopedFailClosed(t *testing.T) {
 	db := openAdminTestDB(t)
 	m := NewAdminModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
@@ -116,6 +119,31 @@ func TestAdminModelActorRequiresRealRequest(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(nil)
 	if _, err := m.actor(ctx); !errors.Is(err, data_scope.ErrScopedAccessDenied) {
 		t.Fatalf("nil request should fail closed, got %v", err)
+	}
+}
+
+func TestLoadParentSummariesSelectsUsername(t *testing.T) {
+	db := openAdminTestDB(t)
+	m := NewAdminModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	ctx := adminTestContext(t, true)
+	child := &Admin{ID: 10, ParentID: ptr(5)}
+
+	var captured []string
+	callbackName := "capture_admin_parent_summary_select"
+	if err := db.Callback().Query().Before("gorm:query").Register(callbackName, func(tx *gorm.DB) {
+		captured = append([]string(nil), tx.Statement.Selects...)
+	}); err != nil {
+		t.Fatalf("register callback: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Callback().Query().Remove(callbackName)
+	})
+
+	if err := m.loadParentSummaries(ctx, db, []*Admin{child}); err != nil {
+		t.Fatalf("loadParentSummaries: %v", err)
+	}
+	if !slices.Contains(captured, "id") || !slices.Contains(captured, "nickname") || !slices.Contains(captured, "username") {
+		t.Fatalf("captured selects = %v, want id/nickname/username", captured)
 	}
 }
 

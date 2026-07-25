@@ -64,7 +64,7 @@
                         :input-attr="{
                             params: { isTree: true, exclude_id: baTable.form.items!.id },
                             disabled: adminInfo.id == baTable.form.items!.id && !adminInfo.super,
-                            field: 'nickname',
+                            field: 'username',
                             remoteUrl: baTable.api.actionUrl.get('index'),
                             placeholder: t('Click select'),
                             emptyValues: ['', null, undefined, 0],

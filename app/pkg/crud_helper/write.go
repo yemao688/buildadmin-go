@@ -359,11 +359,9 @@ func RemoveRouter(name string) error {
 }
 
 // removeRouterEntry 移除 insertRouterEntry 注入的内容。handler 参数按整行
-// （前导换行 + 缩进）删除，避免留下空行；并保留文件原有的末尾换行状态，
-// 使“生成后删除”能把文件恢复为原样。
+// （前导换行 + 缩进）删除，避免留下空行。
 func removeRouterEntry(content, name string) (string, error) {
 	nameVar := utils.SnakeToCamel(name, false)
-	hadTrailingNewline := strings.HasSuffix(content, "\n")
 
 	paramContent := nameVar + "Handler *admin." + strings.ToUpper(nameVar[:1]) + nameVar[1:] + "Handler,"
 	newStr := strings.Replace(content, "\n\t"+paramContent, "", -1)
@@ -392,10 +390,7 @@ func removeRouterEntry(content, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !hadTrailingNewline {
-		newStr = strings.TrimSuffix(newStr, "\n")
-	}
-	return newStr, nil
+	return canonicalizeGoContent(newStr), nil
 }
 
 func atomicCapabilityLines(nameVar string) string {
@@ -433,12 +428,8 @@ func writeProvider(dir string, name string) error {
 		return nil
 	}
 
-	hadTrailingNewline := strings.HasSuffix(string(content), "\n")
 	lastIndex := strings.LastIndex(string(content), ")")
 	content = []byte(string(content)[:lastIndex] + "	New" + name + ",\n)")
-	if hadTrailingNewline {
-		content = append(content, '\n')
-	}
 	return writeGoFile(providerPath, string(content))
 }
 
@@ -455,20 +446,15 @@ func RemoveProvider(dir string, name string) error {
 	return writeGoFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
 }
 
-// removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行），并保留
-// 文件原有的末尾换行状态，使“生成后删除”能把文件恢复为原样。
+// removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行）。
 func removeProviderEntry(content, name string) (string, error) {
-	hadTrailingNewline := strings.HasSuffix(content, "\n")
 	newContent := strings.ReplaceAll(content, "\tNew"+name+",\n", "")
 	newContent = strings.ReplaceAll(newContent, "New"+name+",", "")
 	newContent, err := formatGoCode(newContent)
 	if err != nil {
 		return "", err
 	}
-	if !hadTrailingNewline {
-		newContent = strings.TrimSuffix(newContent, "\n")
-	}
-	return newContent, nil
+	return canonicalizeGoContent(newContent), nil
 }
 
 func formatGoCode(code string) (string, error) {
@@ -517,16 +503,15 @@ func writeFile(path string, content string) error {
 }
 
 func writeGoFile(path, content string) error {
-	hadTrailingNewline := strings.HasSuffix(content, "\n")
 	formatted, err := formatGoCode(content)
 	if err != nil {
 		return err
 	}
-	formatted = strings.TrimRight(formatted, "\n")
-	if hadTrailingNewline {
-		formatted += "\n"
-	}
-	return writeFile(path, formatted)
+	return writeFile(path, canonicalizeGoContent(formatted))
+}
+
+func canonicalizeGoContent(content string) string {
+	return strings.TrimRight(content, "\n") + "\n"
 }
 
 func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {

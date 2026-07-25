@@ -5,6 +5,7 @@ import (
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestAtomicCapabilitiesAreRemovedWithRouter(t *testing.T) {
 }
 
 func TestProviderEntryRoundTrip(t *testing.T) {
-	original := "package model\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFooModel,\n\n\tNewBarModel,\n)"
+	original := "package model\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFooModel,\n\n\tNewBarModel,\n)\n"
 	lastIndex := strings.LastIndex(original, ")")
 	added := original[:lastIndex] + "\tNewTestModel,\n)"
 	if strings.Contains(added, ",\n\n\n\tNewTestModel") {
@@ -80,13 +81,35 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	provider := filepath.Join(dir, "provider.go")
 	base := "package provider_eof_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingModel,\n)"
-	for _, original := range []string{base, base + "\n"} {
-		t.Run(map[bool]string{false: "without trailing newline", true: "with trailing newline"}[strings.HasSuffix(original, "\n")], func(t *testing.T) {
+	canonical := base + "\n"
+	for _, original := range []string{base, canonical, canonical + "\n\n"} {
+		t.Run(strings.ReplaceAll(strconv.Quote(original), "\\n", "\\\n"), func(t *testing.T) {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(provider, []byte(original), 0644); err != nil {
 				t.Fatal(err)
+			}
+			if err := writeProvider("app/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+				t.Fatal(err)
+			}
+			added, err := os.ReadFile(provider)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertExactlyOneTrailingLF(t, string(added))
+			if !strings.Contains(string(added), "\tNewOwnerModel,\n") {
+				t.Fatalf("provider entry missing after add: %q", added)
+			}
+			if err := RemoveProvider("app/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(provider)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != canonical {
+				t.Fatalf("first remove did not normalize provider: got %q, want %q", got, canonical)
 			}
 			for cycle := 0; cycle < 3; cycle++ {
 				if err := writeProvider("app/admin/model/provider_eof_test", "OwnerModel"); err != nil {
@@ -99,11 +122,33 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(got) != original {
-					t.Fatalf("cycle %d changed provider EOF/content: got %q, want %q", cycle, got, original)
+				assertExactlyOneTrailingLF(t, string(got))
+				if string(got) != canonical {
+					t.Fatalf("cycle %d changed provider EOF/content: got %q, want %q", cycle, got, canonical)
 				}
 			}
 		})
+	}
+}
+
+func TestRemoveRouterEntryNormalizesSharedGoEOF(t *testing.T) {
+	original := "package router\n\nfunc InitRouter(\n\ttestHandler *admin.TestHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n\tadminRouter.GET(\"test/index\", testHandler.Index)\n\tadminRouter.POST(\"test/add\", testHandler.Add)\n\tadminRouter.GET(\"test/edit\", testHandler.One)\n\tadminRouter.POST(\"test/edit\", testHandler.Edit)\n\tadminRouter.DELETE(\"test/del\", testHandler.Del)\n\tadminRouter.POST(\"test/sortable\", testHandler.Sortable)\n}\n"
+	trimmed := strings.TrimSuffix(original, "\n")
+	removed, err := removeRouterEntry(trimmed, "Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertExactlyOneTrailingLF(t, removed)
+	if removed != "package router\n\nfunc InitRouter() *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n}\n" {
+		t.Fatalf("shared router content did not normalize canonically: %q", removed)
+	}
+	removedAgain, err := removeRouterEntry(removed, "Test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertExactlyOneTrailingLF(t, removedAgain)
+	if removedAgain != removed {
+		t.Fatalf("shared router removal is not stable: got %q, want %q", removedAgain, removed)
 	}
 }
 
@@ -404,7 +449,12 @@ func TestWriteGoFileNormalizesFormattingAndEOF(t *testing.T) {
 	if string(content) != "package provider\n\nvar ProviderSet = 1\n" {
 		t.Fatalf("normalized Go output = %q", content)
 	}
-	if strings.HasSuffix(string(content), "\n\n") {
-		t.Fatal("Go output has multiple trailing newlines")
+	assertExactlyOneTrailingLF(t, string(content))
+}
+
+func assertExactlyOneTrailingLF(t *testing.T, content string) {
+	t.Helper()
+	if !strings.HasSuffix(content, "\n") || strings.HasSuffix(content, "\n\n") {
+		t.Fatalf("content does not end with exactly one trailing LF: %q", content)
 	}
 }

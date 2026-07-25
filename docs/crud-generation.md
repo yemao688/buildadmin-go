@@ -13,6 +13,8 @@ go build ./...
 
 退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 
+所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 `provider.go`、`router.go` 这类 add/remove 回写场景；不要依赖“无结尾换行”或多个空行的历史状态。
+
 已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
 
 ## 顶层 YAML 契约
@@ -136,6 +138,8 @@ comSearchInputAttr:
 ```
 
 输出按键排序，并安全转义字符串、非标识符键和第一个 `=` 后的内容；不要把字符串 `"true"`、`"null"`、数字样式文本、数组或 `t('...')` 当成 JavaScript。当前 Go JSON binding 同时接受 string/object；空 textarea 是合法空 map。
+
+Go 生成器的操作列有一个有意不同于 PHP 的前端改进：末列固定为 Element Plus `fixed: 'right'`，避免后台宽表横向滚动时操作按钮脱离视口。
 
 ### `form` 属性
 
@@ -299,6 +303,49 @@ form:
   remoteSourceConfigType: crud
   remoteController: app/admin/handler/admin.go
 ```
+
+`table.label` 只在 `relationFields` 恰好一个字段时复用到这个可见 relation display 列；多个 relation display 列不会共享同一个标题，因为那会把不同 payload 字段伪装成同名列。比如“上级代理”这种单列昵称展示可以这样写：
+
+```yaml
+- name: parent_admin_id
+  type: bigint
+  unsigned: true
+  designType: remoteSelect
+  form:
+    remoteTable: admin
+    remotePk: id
+    remoteField: nickname
+    relationFields: nickname
+    remoteSourceConfigType: crud
+    remoteController: app/admin/handler/admin.go
+  table:
+    label: 上级代理
+    comSearchRender: remoteSelect
+    show: "false"
+```
+
+这里的 `show: "false"` 是当前受支持的隐藏 FK 合同：保留原始 FK 列在 `columnFields` 里，并显式隐藏它，这样远程公共搜索仍基于 FK 工作，而可见列表列由 relation enrichment 生成。若把该 FK 从 `columnFields` 里完全省略，则不会生成原始 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成。
+
+多字段 relation display 示例：
+
+```yaml
+- name: reviewer_admin_ids
+  type: varchar
+  length: 255
+  designType: remoteSelects
+  form:
+    remoteTable: admin
+    remotePk: id
+    remoteField: nickname
+    relationFields: nickname,email
+    remoteSourceConfigType: crud
+    remoteController: app/admin/handler/admin.go
+  table:
+    comSearchRender: remoteSelect
+    show: "false"
+```
+
+这个场景下不会把同一个 `table.label` 同时套到 `nickname` 和 `email` 两列；未显式设置 label 时，各 relation display 列继续使用自己的默认翻译键。
 
 custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`；例如管理员选择接口 `/admin/auth.Admin/index`。不要填写仓库中未注册的路由。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从仓库 route 注册表反查 handler URL，查不到再按路径回退，因此 PHP controller 的动态 URL、插件权限、自定义组件和全部运行时 join 语义不保证一致。
 

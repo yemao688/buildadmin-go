@@ -120,8 +120,8 @@ func TestIsMovingUnderSelf(t *testing.T) {
 
 func TestBuildAdminTreeOptions(t *testing.T) {
 	admins := []*model.Admin{
-		{ID: 1, Nickname: "Root"},
-		{ID: 2, Nickname: "Child", ParentID: ptr(1)},
+		{ID: 1, Nickname: "Root", Username: "root_user"},
+		{ID: 2, Nickname: "Child", Username: "child_user", ParentID: ptr(1)},
 	}
 
 	opts := buildAdminTreeOptions(admins)
@@ -134,11 +134,18 @@ func TestBuildAdminTreeOptions(t *testing.T) {
 		id := o["id"].(int)
 		seen[id] = true
 		text := o["nickname"].(string)
+		username := o["username"].(string)
 		if id == 1 && strings.Contains(text, "├") {
 			t.Errorf("root option should not be prefixed: %s", text)
 		}
+		if id == 1 && username != "root_user(ID:1)" {
+			t.Errorf("root username = %q", username)
+		}
 		if id == 2 && !strings.Contains(text, "Child(ID:2)") {
 			t.Errorf("unexpected child label: %s", text)
+		}
+		if id == 2 && username != "child_user(ID:2)" {
+			t.Errorf("child username = %q", username)
 		}
 	}
 	if !seen[1] || !seen[2] {
@@ -148,7 +155,7 @@ func TestBuildAdminTreeOptions(t *testing.T) {
 
 func TestBuildFlatAdminOptions(t *testing.T) {
 	admins := []*model.Admin{
-		{ID: 3, Nickname: "A"},
+		{ID: 3, Nickname: "A", Username: "alpha"},
 	}
 	opts := buildFlatAdminOptions(admins)
 	if len(opts) != 1 {
@@ -159,6 +166,9 @@ func TestBuildFlatAdminOptions(t *testing.T) {
 	}
 	if opts[0]["nickname"].(string) != "A(ID:3)" {
 		t.Fatalf("nickname = %s", opts[0]["nickname"])
+	}
+	if opts[0]["username"].(string) != "alpha(ID:3)" {
+		t.Fatalf("username = %s", opts[0]["username"])
 	}
 }
 

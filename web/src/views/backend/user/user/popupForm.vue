@@ -61,7 +61,7 @@
                         :placeholder="t('user.user.Superior agent')"
                         :input-attr="{
                             params: { isTree: true },
-                            field: 'nickname',
+                            field: 'username',
                             remoteUrl: '/admin/auth.Admin/index',
                         }"
                     />

@@ -266,12 +266,7 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 	}
 
 	// 表格的操作列
-	width := "100"
-	if indexVueData.EnableDragSort == "true" {
-		width = "140"
-	}
-	operateColumn := " label: t('Operate'), align: 'center', width: " + width + ", render: 'buttons', buttons: optButtons, operator: false"
-	indexVueData.TableColumn = append(indexVueData.TableColumn, operateColumn)
+	indexVueData.TableColumn = append(indexVueData.TableColumn, buildOperateColumn(indexVueData.EnableDragSort == "true"))
 	if indexVueData.EnableDragSort == "true" {
 		indexVueData.OptButtons = append([]string{"weigh-sort"}, indexVueData.OptButtons...)
 	}
@@ -398,6 +393,14 @@ func buildRemoteSearchMetadata(field model.Field, getTableName GetTableName) str
 		remote += buildTableColumnKey("multiple", "true")
 	}
 	return remote
+}
+
+func buildOperateColumn(enableDragSort bool) string {
+	width := "100"
+	if enableDragSort {
+		width = "140"
+	}
+	return " label: t('Operate'), align: 'center', width: " + width + ", fixed: 'right', render: 'buttons', buttons: optButtons, operator: false"
 }
 
 func prepareGeneratedColumnField(field model.Field) model.Field {
@@ -1063,6 +1066,9 @@ func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string
 		joinField := searchField(joinFields, v)
 		if joinField.Name == "" {
 			return fmt.Errorf("unknown relation field %q on remote table %q for field %q", v, field.Form.RemoteTable, field.Name)
+		}
+		if len(relationFields) == 1 && field.Table.Label != "" {
+			joinField.Table.Label = field.Table.Label
 		}
 
 		relationFieldPrefix := relationName + "."

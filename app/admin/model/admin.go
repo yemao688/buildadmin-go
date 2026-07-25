@@ -39,6 +39,7 @@ type Admin struct {
 type AdminSummary struct {
 	ID       int32  `json:"id"`
 	Nickname string `json:"nickname"`
+	Username string `json:"username"`
 }
 
 type AdminModel struct {
@@ -172,7 +173,7 @@ func (s *AdminModel) loadParentSummaries(ctx *gin.Context, db *gorm.DB, admins [
 		return nil
 	}
 	var parents []AdminSummary
-	if err := db.Session(&gorm.Session{NewDB: true}).Model(&Admin{}).Scopes(s.scoped(ctx)).Select("id", "nickname").Where("id IN ?", ids).Find(&parents).Error; err != nil {
+	if err := db.Session(&gorm.Session{NewDB: true}).Model(&Admin{}).Scopes(s.scoped(ctx)).Select("id", "nickname", "username").Where("id IN ?", ids).Find(&parents).Error; err != nil {
 		return err
 	}
 	byID := make(map[int32]*AdminSummary, len(parents))
