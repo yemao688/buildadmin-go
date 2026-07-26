@@ -1,10 +1,27 @@
 # Repository Notes
 
-## Project identity and porting principles
+## 仓库身份自检（每次会话先做）
 
-- 本仓库是把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go 的框架，不是逐行翻译 PHP。
-- 需要理解行为时先查上游语义，再结合本仓库实现；不要盲抄 PHP。Go 代码以强类型、Gin/GORM、显式错误处理和仓库既有模式为准。
-- 任何兼容性差异都必须配套测试、迁移或文档说明。状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
+本文件会被框架源仓库和所有业务 fork 原样继承。开始任何工作前，先判断你在哪一类仓库：
+
+1. 仓库根存在 `PROJECT.md` → **业务仓库**，安装、升级、协作与代码边界规则见 `docs/framework-workflow.md`。
+2. `git remote -v` 中任一 remote 指向 `yemao688/buildadmin-go` 且当前分支是 `v2` → **框架源仓库**，框架维护规则另见 `docs/framework-maintenance.md`。
+3. 两者都不满足（例如 remote 未配置或被改名）→ 向用户确认，不要默认。
+
+## 术语与读者
+
+| 术语 | 含义 |
+|---|---|
+| 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v2` |
+| 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支通常为 `master` |
+| PHP 上游 | BuildAdmin PHP 原版项目，仅框架维护时需要参考 |
+
+全仓库文档禁止裸用"上游"，必须带限定词。本文未标注读者的章节对两类仓库同时生效；标注"仅框架维护者"的内容在业务仓库中不适用。
+
+## Project identity and status semantics
+
+- 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.7。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
+- 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
 - 账户状态迁移由 `database/migrations/local/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 
 ## Toolchain and boundaries
@@ -60,15 +77,15 @@ Every business table should carry `create_time` and `update_time` as `bigint`; t
 
 ## Migrations and generated/deployed files
 
-- The migration system has three tracks: `database/migrations/official/` contains upstream migrations and the official install seed (follow upstream updates; never rewrite upstream identities), `database/migrations/local/` contains six Go framework semantic migrations, and `database/migrations/business/` is the framework-user extension track registered with `Register`/`init` and recorded in the independent `business_migrations` ledger. Its contract is documented in `database/migrations/business/README.md`.
-- Preserve the migrate order: prefix validation → migration lock → upstream-compatible preflight → install/recovery decision → fresh-snapshot AutoMigrate → three ledger bootstrap/validation steps → official migrations → reconciliation → official seed (fresh/recovery only) → local migrations → business migrations → `local.VerifyCurrent` → current schema validation.
-- Migration `Up` functions must be idempotent, prefix-safe, and deduplicate by business keys. Do not use table-empty or `id=1` checks to infer official seed state; seed-owned writes are reliable only after the official seed, which the orchestrator guarantees before local/business `Up` functions run.
-- The development database has undergone the approved epoch reset; the local ledger was rebuilt once and renamed to `local_migrations` (formerly `go_migrations`). Official upstream identities remain immutable. Every migration remains prefix-safe (`mysql.prefix` is variable; never hard-code `ba_`). Destructive renames, type changes, and backfills must not rely on AutoMigrate.
+- The migration system has three tracks: `database/migrations/official/` contains PHP 上游 migrations and the official install seed (never rewrite their identities), `database/migrations/local/` contains six Go framework semantic migrations (仅框架维护者可改), and `database/migrations/business/` is the business-repository extension track registered with `Register`/`init` and recorded in the independent `business_migrations` ledger. Its contract is documented in `database/migrations/business/README.md`.
+- Migration `Up` functions must be idempotent, prefix-safe, and deduplicate by business keys. Do not use table-empty or `id=1` checks to infer official seed state; the orchestrator guarantees the official seed runs before local/business `Up` functions.
+- 迁移编排顺序、official/local 维护契约和 epoch reset 历史仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
+- Every migration is prefix-safe (`mysql.prefix` is variable; never hard-code `ba_`). Destructive renames, type changes, and backfills must not rely on AutoMigrate.
 - Never hand-edit `cmd/app/wire_gen.go`; after provider or `cmd/app/wire.go` changes run `go generate ./cmd/app`.
 - `go run ./cmd/generate` is hazardous: it uses a hard-coded local MySQL DSN and can overwrite generated models relative to the current directory. Inspect it before use.
 - `database/migrations/model/*.gen.go` drives the fresh-snapshot AutoMigrate; preserve its tags and migration contracts. `pnpm dev` regenerates `web/types/tableRenderer.d.ts` and i18n Ally language indexes; edit the TypeScript sources under `web/src/lang/` instead. Frontend builds remain in `web/dist/`, while deployment may copy assets into ignored `static/` paths.
 
-## Framework usage best practices (projects built on this framework)
+## Framework usage best practices (business repositories)
 
 These rules apply when the repository is used as a framework for a business project, not only when developing the framework itself.
 
@@ -76,6 +93,7 @@ These rules apply when the repository is used as a framework for a business proj
 - **Three-segment table names: camelCase the tail in CRUD specs.** For a table like `country_language_content`, do not generate `views/.../language_content`; set `webViewsDir: country/languageContent` in the spec (see `crud_specs/country_language_content.yaml`) so the menu name, views directory, and route all stay flat and clean (`country/languageContent`), while the table keeps its readable snake_case name.
 - **Commit after every CRUD generation.** Generation touches the model, handler, provider wiring, router, menu rows, and Vue scaffold together; one commit per module makes the change reviewable and keeps `crud:delete`/regenerate round-trips byte-identical. Never mix hand edits into a generation commit.
 - **Business schema changes go to the business migration track.** Add one Go file under `database/migrations/business/` calling `business.Register(...)` from `init()` (contract: `database/migrations/business/README.md`). Never add project tables to `official/` or `local/`. Ups must be idempotent, prefix-safe, dedupe by business keys, and must not infer seed state from table emptiness or `id=1`.
+- **业务仓库中的 AI 禁止改动框架轨道与框架级文档。** 不向 `official/`、`local/` 添加或修改迁移；不按业务需要改写框架级文档（含本文的维护条款与 `docs/framework-maintenance.md`）。这些文件保持与框架上游一致，业务仓库才能干净地合并框架升级。
 - **The permission system is complete — build role hierarchies on `admin` + role groups.** 超级管理员 / 总代理 / 代理 / 员工 style agent systems are implemented with `admin` rows + `admin_group` role assignments + `admin.parent_id` (hierarchy with the `admin_closure` table) — no new auth tables needed. `admin` fields may be fine-tuned (add business columns, drop unused ones); pair every such change with a business-track migration, since destructive column changes must not rely on AutoMigrate.
 - **The `user` table is yours to shape.** For frontend-member business you may modify any `user` field, delete unused fields, and adjust the backend member pages (`web/src/views/backend/user`) to match; same migration discipline as `admin`.
 - **Frontend portal (`web/src/views/frontend/`) is an example — restyle freely.** Rebuild it into any business-facing portal. Do **not** restyle the admin backend (`web/src/views/backend/`) or alter the admin design system: backend consistency is what lets the project keep merging framework updates cleanly; business admin pages come from the CRUD generator and follow its patterns.
