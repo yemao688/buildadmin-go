@@ -45,7 +45,9 @@ pnpm build                             # emits web/dist/
 
 ## CRUD module generation (AI-driven)
 
-When asked to generate a module, read `docs/crud-generation.md`, create `crud_specs/<module>.yaml`, then run:
+YAML contract, field/designType rules, relation and time-field JSON contracts: [`docs/crud-generation.md`](docs/crud-generation.md). Read it before writing any spec.
+
+When asked to generate a module, read that doc, create `crud_specs/<module>.yaml`, then run:
 
 ```bash
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
@@ -53,6 +55,8 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ```
 
 Exit code 0 means success and 1 means failure (reason on stderr). Files auto-restore on failure, but MySQL DDL is not rollbackable. Protected core tables are refused.
+
+Every business table should carry `create_time` and `update_time` as `bigint`; the generated CRUD code maintains both and they stay out of the request DTO.
 
 ## Migrations and generated/deployed files
 
