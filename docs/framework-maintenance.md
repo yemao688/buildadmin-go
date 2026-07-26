@@ -49,7 +49,7 @@ prefix validation → migration lock → upstream-compatible preflight
 以下事实**只对框架源仓库的开发数据库成立**，不得推广到任何业务仓库环境：
 
 - 框架开发数据库已经历批准的 epoch reset；local 账本重建过一次，并由 `go_migrations` 更名为 `local_migrations`。
-- 官方上游迁移身份始终保持不可变。
+- 官方迁移身份始终保持不可变。
 - 账户状态迁移由 `database/migrations/local/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
 
 业务仓库的首次安装会按当前快照正常建立全部账本，不存在"需要补做 epoch reset"的情况。

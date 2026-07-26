@@ -99,7 +99,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移、生成文件与测试注意事项
 
-- 迁移采用三条轨道：`database/migrations/official/` 跟随上游 BuildAdmin 更新，`database/migrations/local/` 承载框架自身的 6 条语义迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 迁移采用三条轨道：`database/migrations/official/` 跟随 PHP 上游更新，`database/migrations/local/` 承载框架自身的 6 条语义迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试会修改数据库，需要 `BUILDADMIN_TEST_MYSQL_DSN` 和一次性数据库；测试覆盖和运行约束见 [`AGENTS.md`](AGENTS.md)。
 

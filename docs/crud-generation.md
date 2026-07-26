@@ -1,6 +1,6 @@
 # CRUD YAML 生成指南
 
-本文是 Go CRUD 生成器的 YAML 契约。它对齐 BuildAdmin v2.3.7 的手工 CRUD 设计器和官方数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM、Wire、路由、数据权限和迁移实现。
+本文是 Go CRUD 生成器的 YAML 契约，对框架源仓库和业务仓库同时生效。它对齐 BuildAdmin v2.3.7 的手工 CRUD 设计器和官方数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM、Wire、路由、数据权限和迁移实现。
 
 ## 概述与标准流程
 
@@ -26,7 +26,7 @@ go build ./...
 | `name`                 | `string`，必填             | 业务表名，必须是安全的下划线标识符，也是自动命名来源。                                                                                                                                                                   |
 | `comment`              | `string`，默认空           | 表注释。以 `表` 结尾时，管理名称转为 `管理`，如 `会员组表` -> `会员组管理`。                                                                                                                                             |
 | `type`                 | `string`，默认 `create`    | `create` 或 `alter`。日志/数据库/SQL 兼容值会按 `rebuild` 归一化。                                                                                                                                                       |
-| `rebuild`              | `string`，默认空           | 上游值通常为 `No`/`Yes`；继续生成时 `Yes` 选择重建，否则选择 alter。                                                                                                                                                     |
+| `rebuild`              | `string`，默认空           | PHP 上游生成器选项值通常为 `No`/`Yes`；继续生成时 `Yes` 选择重建，否则选择 alter。                                                                                                                                                     |
 | `generateRelativePath` | `string`，默认空           | 生成位置 shorthand，接受点号、`/`、`\\`，为缺失的 model、handler、views 路径提供默认值；路径规则和示例见下文“路径和数据库”。                                                                                             |
 | `modelFile`            | `string`，默认自动推导     | model 文件逻辑路径，通常在 `app/admin/model` 或 `app/common/model`。显式值优先。                                                                                                                                         |
 | `controllerFile`       | `string`，默认自动推导     | Go handler 文件逻辑路径，是 PHP controller 的对应物。显式值优先。                                                                                                                                                        |
