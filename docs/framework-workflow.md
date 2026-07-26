@@ -1,6 +1,6 @@
-# 框架源仓库使用指南
+# 业务项目使用与升级指南
 
-本文面向使用 `buildadmin-go` 开发业务的普通开发者和 AI agent。本仓库是框架源仓库：`git@github.com:yemao688/buildadmin-go.git`，框架发布分支是 `v2`。
+本文面向**业务仓库**（fork 自框架源仓库的业务项目）的普通开发者和 AI agent。框架源仓库是 `git@github.com:yemao688/buildadmin-go.git`，框架发布分支是 `v2`；参与框架本身开发请改读 [`framework-maintenance.md`](framework-maintenance.md)。
 
 ## 三方关系
 
@@ -73,6 +73,16 @@ git push -u origin master
 ```
 
 此后长期在自己的 `master` 上开发，业务提交正常 push 到 `origin/master`。
+
+### 3. 创建 `PROJECT.md`（业务身份标记）
+
+在仓库根创建 `PROJECT.md`，声明本仓库是业务项目。它是 AI agent 判断"当前是业务仓库"的首要标记（见根目录 `AGENTS.md` 的"仓库身份自检"）。复制模板、填写业务名后提交：
+
+```bash
+cp docs/templates/PROJECT.md PROJECT.md
+# 编辑 PROJECT.md，把 <业务名> 替换为实际业务名
+git add PROJECT.md && git commit -m "docs: declare project identity"
+```
 
 ## 本地安装与日常开发
 
@@ -201,7 +211,7 @@ git push origin master
 
 ## AI agent 协议
 
-1. 先读根目录 [`AGENTS.md`](../AGENTS.md) 和本指南，再确认真实入口、生成链和路由边界。
+1. 先读根目录 [`AGENTS.md`](../AGENTS.md) 完成仓库身份自检，再读本指南；确认真实入口、生成链和路由边界后再动手。
 2. 开始前检查当前分支、remote 和工作树：`git branch --show-current`、`git remote -v`、`git status`。
 3. CRUD 必须先读 [`crud-generation.md`](crud-generation.md)，写 `crud_specs/*.yaml`，再运行 `crud:generate`；删除使用 `crud:delete`。
 4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
