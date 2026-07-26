@@ -21,6 +21,15 @@
 - 任何兼容性差异都必须配套测试、迁移或文档说明。
 - `database/migrations/official/` 跟随 PHP 上游更新；官方迁移身份（ID、名称、内容）一经发布**永不重写**，兼容问题只能用新增迁移解决。
 
+### PHP 上游参考实现路径
+
+PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 git 忽略，**只有框架维护者本地存在**，业务仓库没有）。对照 CRUD 生成器行为时查这些文件：
+
+- PHP designer: `.slim/source/buildadmin/web/src/views/backend/crud/design.vue`
+- PHP designer field defaults: `.slim/source/buildadmin/web/src/views/backend/crud/index.ts`
+- PHP CRUD controller: `.slim/source/buildadmin/app/admin/controller/crud/Crud.php`
+- PHP CRUD helper/default rules: `.slim/source/buildadmin/app/admin/library/crud/Helper.php`
+
 ## 迁移维护契约
 
 三轨职责（完整契约见根目录 `AGENTS.md` 和 [`../database/migrations/business/README.md`](../database/migrations/business/README.md)）：

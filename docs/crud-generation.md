@@ -318,7 +318,7 @@ modelFile: app/admin/model/custom/model.go
 # webViewsDir -> web/src/views/backend/country/languageContent
 ```
 
-Go 没有 PHP-style `validateFile` 输出。当前应用只有一条 DI `*gorm.DB`，所以 `databaseConnection` 省略、空值和 `mysql` 都是 `mysql`；`postgres`、`analytics` 等未知值失败，不要暗示支持多 DB。
+当前应用只有一条 DI `*gorm.DB`，所以 `databaseConnection` 省略、空值和 `mysql` 都是 `mysql`；`postgres`、`analytics` 等未知值失败，不要暗示支持多 DB。
 
 ## 关系
 
@@ -586,13 +586,13 @@ fields:
 
 ## 参考
 
+以下资料对框架源仓库和业务仓库都可用：
+
 - Official database specification: <https://doc.buildadmin.com/senior/databaseSpecification.html>
 - Official CRUD guidance: <https://doc.buildadmin.com/senior/CRUD.html>
 - Official v2.2 null/default note: <https://doc.buildadmin.com/guide/other/incompatibleUpdate/v220.html>
-- PHP designer: `.slim/source/buildadmin/web/src/views/backend/crud/design.vue`
-- PHP designer field defaults: `.slim/source/buildadmin/web/src/views/backend/crud/index.ts`
-- PHP CRUD controller: `.slim/source/buildadmin/app/admin/controller/crud/Crud.php`
-- PHP CRUD helper/default rules: `.slim/source/buildadmin/app/admin/library/crud/Helper.php`
 - Go YAML loader: `app/pkg/crud_helper/spec.go`
 - Go validation/path contract: `app/pkg/crud_helper/security.go`
 - Go generation/runtime: `app/pkg/crud_helper/helper.go`, `app/pkg/crud_helper/table.go`
+
+PHP 上游的 CRUD 设计器与生成器源码路径仅框架维护者需要，见 [`framework-maintenance.md`](framework-maintenance.md)。
