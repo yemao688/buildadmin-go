@@ -5,8 +5,9 @@
 本文件会被框架源仓库和所有业务 fork 原样继承。开始任何工作前，先判断你在哪一类仓库：
 
 1. 仓库根存在 `PROJECT.md` → **业务仓库**，安装、升级、协作与代码边界规则见 `docs/framework-workflow.md`。
-2. `git remote -v` 中任一 remote 指向 `yemao688/buildadmin-go` 且当前分支是 `v2` → **框架源仓库**，框架维护规则另见 `docs/framework-maintenance.md`。
-3. 两者都不满足（例如 remote 未配置或被改名）→ 向用户确认，不要默认。
+2. `git remote -v` 中 `origin` 指向 `yemao688/buildadmin-go` → **框架源仓库**（业务 fork 的 `origin` 应指向用户自己的 fork），框架维护规则另见 `docs/framework-maintenance.md`。
+3. `origin` 指向别处、但有其它 remote（如 `upstream`）指向 `yemao688/buildadmin-go` → **业务仓库**（尚未创建 `PROJECT.md`），按 `docs/framework-workflow.md` 工作，并提醒用户补建 `PROJECT.md`。
+4. 以上都不满足（例如 remote 未配置或被改名）→ 向用户确认，不要默认。
 
 ## 术语与读者
 
