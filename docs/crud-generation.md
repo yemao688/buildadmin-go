@@ -102,12 +102,23 @@ fields:
 | `defaultSortField`     | `string`，默认空           | 默认排序字段。                                                                                                                                                                                                           |
 | `defaultSortType`      | `string`，默认空           | 通常为 `asc` 或 `desc`。                                                                                                                                                                                                 |
 | `formFields`           | `[]string`，省略时自动推导 | 省略时取非主键且未 `formBuildExclude` 的字段；显式 `[]` 表示没有表单项。                                                                                                                                                 |
-| `columnFields`         | `[]string`，省略时自动推导 | 省略时取全部字段，包括带有效 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键；FK 自动隐藏和 relation display 规则见下文"关系"。显式 `[]` 表示不生成业务表格列，也会移除对应 FK 搜索。它不表示数据库没有字段。 |
+| `columnFields`         | `[]string`，省略时自动推导 | 省略时取全部字段，包括带有效 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键；建议显式设置以控制列表显示（见下文"显式控制列表列"），FK 自动隐藏和 relation display 规则见下文"关系"。显式 `[]` 表示不生成业务表格列，也会移除对应 FK 搜索。它不表示数据库没有字段。 |
 | `dataScope`            | map，默认 `mode: auto`     | 数据权限策略，见下文。                                                                                                                                                                                                   |
 | `menu`                 | map，默认未配置            | 菜单标题和父节点覆盖；菜单默认仍创建，跳过使用 `--skip-menu`。                                                                                                                                                           |
 | `fields`               | `[]map`，必填              | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。                                                                                                                                                               |
 
 `formFields` 和 `columnFields` 都必须区分"省略"和显式空列表，分别写 `formFields: []`、`columnFields: []`。
+
+### 显式控制列表列（`columnFields`）
+
+建议始终显式设置 `columnFields`，明确哪些字段出现在后台列表页。省略时生成器把**全部字段**放进列表，敏感值和纯表单字段会一起出现在列表里。只在表单出现、不应进列表的字段——`password` 设计类型、密钥/令牌、长备注、大段 `content` 文本等——只写进 `formFields`，不写进 `columnFields`：
+
+```yaml
+formFields: [username, password, nickname, status]
+columnFields: [id, username, nickname, status] # password 只进表单，不进列表
+```
+
+文末"完整示例"演示了同一模式：`note` 只在 `formFields` 中，不进列表。注意带 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键例外：它们应保留在 `columnFields` 里以获得 FK 搜索和 relation display 列，原始 FK 列会被自动隐藏（规则见"关系"）。
 
 ## `dataScope` 与 `menu`
 
