@@ -43,6 +43,7 @@ go build ./...
 name: ops_banner
 comment: 轮播图表
 type: create
+generateRelativePath: ops.banner
 fields:
   - name: id
     type: bigint
@@ -79,7 +80,7 @@ fields:
     comment: 更新时间
 ```
 
-`default: "1"` 省略 `defaultType` 时按 `INPUT` 处理；`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码维护，不进入请求 DTO。完整功能示例见文末"完整示例"。
+`default: "1"` 省略 `defaultType` 时按 `INPUT` 处理；`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码维护，不进入请求 DTO。`generateRelativePath: ops.banner` 把菜单、路由、views 目录、model/handler 路径固定为两级 `ops/banner`，业务表建议始终显式设置（规则见"路径和数据库"）。完整功能示例见文末"完整示例"。
 
 ## 顶层 YAML 契约
 
@@ -91,7 +92,7 @@ fields:
 | `comment`              | `string`，默认空           | 表注释。以 `表` 结尾时，管理名称转为 `管理`，如 `会员组表` -> `会员组管理`。                                                                                                                                             |
 | `type`                 | `string`，默认 `create`    | `create` 或 `alter`。日志/数据库/SQL 兼容值会按 `rebuild` 归一化。                                                                                                                                                       |
 | `rebuild`              | `string`，默认空           | PHP 上游生成器选项值通常为 `No`/`Yes`；继续生成时 `Yes` 选择重建，否则选择 alter。                                                                                                                                       |
-| `generateRelativePath` | `string`，默认空           | 生成位置 shorthand，接受点号、`/`、`\\`，为缺失的 model、handler、views 路径提供默认值；路径规则和示例见下文"路径和数据库"。                                                                                             |
+| `generateRelativePath` | `string`，默认空           | 生成位置 shorthand，接受点号、`/`、`\\`，为缺失的 model、handler、views 路径提供默认值。业务表建议显式设置为 `<分类>.<实体驼峰>`（如 `seller.moneyLog`），路径规则和示例见下文"路径和数据库"。                  |
 | `modelFile`            | `string`，默认自动推导     | model 文件逻辑路径，通常在 `app/admin/model` 或 `app/common/model`。显式值优先。                                                                                                                                         |
 | `controllerFile`       | `string`，默认自动推导     | Go handler 文件逻辑路径，是 PHP controller 的对应物。显式值优先。                                                                                                                                                        |
 | `webViewsDir`          | `string`，默认自动推导     | `web/src/views/backend` 下的视图目录。显式值优先。                                                                                                                                                                       |
@@ -303,7 +304,8 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 - 文件创建、snapshot、quarantine、删除使用平台原生 `filepath.Join`。
 - 拒绝 `..`、绝对路径、Windows drive prefix（如 `C:\\...`）、空段和无效段，包括 `a//b`、`a..b`。
 - 显式路径段保留下划线：`some_special_dir/orders` 不会拆成多层目录。
-- 自动从三段表名生成 web 目录时，最后两段合成 camelCase 尾部：`country_language_content` -> `country/languageContent`。显式路径和 shorthand 的 camelCase filename/type 保持原样。
+- 自动从三段及以上表名生成 web 目录时，最后两段合成 camelCase 尾部：`country_language_content` -> `country/languageContent`。显式路径和 shorthand 的 camelCase filename/type 保持原样。
+- **建议所有业务表显式设置 `generateRelativePath`**，格式为 `<分类>.<实体驼峰>`：`seller_money_log` 写 `seller.moneyLog`，`order_recharge` 写 `order.recharge`。这样菜单名、路由、views 目录、model/handler 路径五处输出固定为两级 `seller/moneyLog`。不要再往下拆分子目录（`seller.money.log` 会变成 `seller/money/log` 三层结构，菜单和路由同样变深）。省略时生成器按表名下划线拆分自动推导：三段及以上表名把最后两段合成 camelCase 尾部（`seller_money_log` 自动也得 `seller/moneyLog`），但四段及以上会推导出更深层子目录（`seller_money_log_detail` -> `seller/money/logDetail`）；显式设置让五处命名一目了然，不受自动规则调整影响。
 - `generateRelativePath` 只填充缺失的三个路径；每个显式 `modelFile`、`controllerFile`、`webViewsDir` 都覆盖 shorthand。Go `handler` 是 PHP controller 等价物。
 
 ```yaml

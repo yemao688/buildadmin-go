@@ -113,7 +113,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 - 订单类：`order_recharge`、`order_withdraw`
 - 用户类：`user_wallet`、`user_level`
 
-三段式表名（如 `country_language_content`）在 CRUD 规范里把最后一段写成驼峰：设置 `webViewsDir: country/languageContent`（参考 `crud_specs/country_language_content.yaml`），菜单名、视图目录和路由都保持单层简洁，而表名仍是可读的蛇形命名。
+多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，格式 `<分类>.<实体驼峰>`：`seller_money_log` 写 `seller.moneyLog`，`country_language_content` 写 `country.languageContent`。菜单名、视图目录、路由和 model/handler 路径都固定为两级扁平结构（`seller/moneyLog`），不会随表名下划线拆出更深的子目录，而表名仍是可读的蛇形命名。`webViewsDir`（参考 `crud_specs/country_language_content.yaml`）是单路径覆盖项，需要单独调整 views 目录时再用。
 
 **每次 CRUD 生成后立刻提交一次 commit。** 生成会同时改动 model、handler、provider 装配、路由、菜单和 Vue 脚手架，一模一 commit 便于审查，也能保证 `crud:delete`/重新生成往返字节级一致；不要把手工改动混进生成提交。
 
