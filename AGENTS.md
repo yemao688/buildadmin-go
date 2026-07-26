@@ -59,6 +59,7 @@ pnpm build                             # emits web/dist/
 ```
 
 - Backend changes: run affected package tests and `go build ./...`. Frontend changes: run `pnpm lint`, `pnpm typecheck`, then `pnpm build` from `web/`.
+- `pnpm lint` uses the flat config `web/eslint.config.mjs`, a 1:1 port of the PHP upstream v2.3.7 `web/.eslintrc.js` ruleset (lenient: most rules off, findings are warn-level). Warnings on pre-existing code (`vue/no-required-prop-with-default`, `no-unused-vars`, `indent`) are upstream-inherited noise — ignore them; do not touch existing source or tighten the config to silence them. Only act on warnings introduced by your own new/changed code.
 - Do not require default `go test ./...` or `go vet`; choose affected tests because some tests and generators need MySQL or have incomplete application DI. There is no repository CI workflow, task runner, Makefile, or configured Go linter.
 
 ## CRUD module generation (AI-driven)
