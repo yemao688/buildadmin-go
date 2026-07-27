@@ -11,12 +11,13 @@ import (
 )
 
 type Migration struct {
-	Sequence     uint64
-	ID           string
-	Revision     uint64
-	Up           func(*gorm.DB, *conf.Configuration) error
-	VerifySchema func(*gorm.DB, *conf.Configuration) error
-	VerifyData   func(*gorm.DB, *conf.Configuration) error
+	Sequence       uint64
+	ID             string
+	Revision       uint64
+	Up             func(*gorm.DB, *conf.Configuration) error
+	VerifyBaseline func(*gorm.DB, *conf.Configuration) error
+	VerifySchema   func(*gorm.DB, *conf.Configuration) error
+	VerifyData     func(*gorm.DB, *conf.Configuration) error
 }
 
 var (

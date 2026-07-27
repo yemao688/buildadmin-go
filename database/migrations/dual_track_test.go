@@ -33,7 +33,7 @@ func TestPhase2RegistrySplit(t *testing.T) {
 	}
 	want := []string{"account-status-protocol", "admin-hierarchy", "ownership-and-audit-integrity", "security-rule-normalization", "country-dictionary", "upload-config"}
 	for i, migration := range local {
-		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || (i < 5 && (migration.VerifySchema == nil || migration.VerifyUpgradeData == nil)) {
+		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || (i < 5 && (migration.VerifySchema == nil || migration.VerifyUpgradeData == nil)) || (i == 2 && migration.VerifyBaseline == nil) {
 			t.Fatalf("invalid local registry entry %d: %#v", i, migration)
 		}
 	}

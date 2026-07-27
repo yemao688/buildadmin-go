@@ -21,7 +21,7 @@ func Migrations(official []core.OfficialMigration) []core.LocalMigration {
 	return []core.LocalMigration{
 		{Sequence: 1, ID: "account-status-protocol", Revision: 1, RequiresOfficial: requiresOfficial, Up: local0001Up, VerifySchema: verifyStatusContract, VerifyUpgradeData: verifyStatusContract},
 		{Sequence: 2, ID: "admin-hierarchy", Revision: 1, RequiresOfficial: requiresOfficial, Up: version224, VerifySchema: verifyHierarchyContract, VerifyUpgradeData: verifyHierarchyContract},
-		{Sequence: 3, ID: "ownership-and-audit-integrity", Revision: 1, RequiresOfficial: requiresOfficial, Up: ownershipAndAuditIntegrity, VerifySchema: verifyOwnershipAndAuditIntegrity, VerifyUpgradeData: verifyOwnershipAndAuditIntegrity},
+		{Sequence: 3, ID: "ownership-and-audit-integrity", Revision: 1, RequiresOfficial: requiresOfficial, Up: ownershipAndAuditIntegrity, VerifyBaseline: verifySignedDeltaContract, VerifySchema: verifyOwnershipAndAuditIntegrity, VerifyUpgradeData: verifyOwnershipAndAuditIntegrity},
 		{Sequence: 4, ID: "security-rule-normalization", Revision: 1, RequiresOfficial: requiresOfficial, Up: securityRuleNormalization, VerifySchema: verifySecurityRuleContract, VerifyUpgradeData: verifySecurityRuleContract},
 		{Sequence: 5, ID: "country-dictionary", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0013, VerifySchema: verifyCountryDictionaryContract, VerifyUpgradeData: verifyCountryDictionaryContract},
 		{Sequence: 6, ID: "upload-config", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0014},
@@ -38,7 +38,7 @@ func ownershipAndAuditIntegrity(db *gorm.DB, config *conf.Configuration) error {
 }
 
 func verifyOwnershipAndAuditIntegrity(db *gorm.DB, config *conf.Configuration) error {
-	for _, verify := range []func(*gorm.DB, *conf.Configuration) error{verifyAttachmentContract, verifyUserOwnerContract, verifySecurityOwnerContract, verifySignedDeltaContract, verifyTargetContract, verifyLegacyTargetContract, verifyCommitContract, verifyOwnerColumnContract} {
+	for _, verify := range []func(*gorm.DB, *conf.Configuration) error{verifyAttachmentContract, verifyUserOwnerContract, verifySecurityOwnerContract, verifyTargetContract, verifyLegacyTargetContract, verifyCommitContract, verifyOwnerColumnContract} {
 		if err := verify(db, config); err != nil {
 			return err
 		}

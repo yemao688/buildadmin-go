@@ -302,6 +302,73 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 	}
 }
 
+func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *testing.T) {
+	db := getDB()
+	if db == nil {
+		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
+	}
+	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_%d_", time.Now().UnixNano())}}
+	if err := BootstrapLocalLedger(db, cfg); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Exec("DROP TABLE IF EXISTS " + core.QuoteIdentifier(core.TableName(cfg, "local_migrations")))
+	})
+
+	var upCalls, baselineCalls, schemaCalls int
+	local := LocalMigration{
+		Sequence: 1,
+		ID:       "baseline-contract",
+		Revision: 1,
+		Up: func(*gorm.DB, *conf.Configuration) error {
+			upCalls++
+			return nil
+		},
+		VerifyBaseline: func(*gorm.DB, *conf.Configuration) error {
+			baselineCalls++
+			return nil
+		},
+		VerifySchema: func(*gorm.DB, *conf.Configuration) error {
+			schemaCalls++
+			return nil
+		},
+	}
+	if _, err := RunLocalMigrations(db, cfg, nil, []LocalMigration{local}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RunLocalMigrations(db, cfg, nil, []LocalMigration{local}); err != nil {
+		t.Fatal(err)
+	}
+	if upCalls != 1 || baselineCalls != 1 || schemaCalls != 2 {
+		t.Fatalf("calls up=%d baseline=%d schema=%d", upCalls, baselineCalls, schemaCalls)
+	}
+}
+
+func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing.T) {
+	db := getDB()
+	if db == nil {
+		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
+	}
+	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("business_override_%d_", time.Now().UnixNano()))
+	section := &migrationCriticalSection{}
+	if _, err := runMigrationLifecycle(db, cfg, section); err != nil {
+		t.Fatal(err)
+	}
+	moneyTable := core.TableName(cfg, "user_money_log")
+	if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(moneyTable) + " MODIFY COLUMN " + core.QuoteIdentifier("money") + " decimal(12,2) NOT NULL DEFAULT 0.00").Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RunLocalMigrations(db, cfg, OfficialMigrations(), LocalMigrations()); err != nil {
+		t.Fatal(err)
+	}
+	if err := LocalVerifyCurrent(db, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateCurrentSchema(db, cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	db := getDB()
 	if db == nil {

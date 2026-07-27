@@ -30,6 +30,7 @@ type LocalMigration struct {
 	// local runner enforces official completion before executing local Up.
 	RequiresOfficial  []OfficialKey
 	Up                MigrationFn
+	VerifyBaseline    MigrationFn
 	VerifySchema      func(*gorm.DB, *conf.Configuration) error
 	VerifyUpgradeData func(*gorm.DB, *conf.Configuration) error
 }
