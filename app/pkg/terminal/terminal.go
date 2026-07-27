@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/filesystem"
+	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"net/http"
@@ -38,10 +39,15 @@ type Command struct {
 	Command string
 }
 
+type authModel interface {
+	IsLogin(ctx *gin.Context) (*token.Token, bool)
+	IsSuperAdmin(id int32) bool
+}
+
 type Terminal struct {
 	config *conf.Configuration
 	log    *zap.Logger
-	authM  *model.AuthModel
+	authM  authModel
 }
 
 func NewTerminal(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel) *Terminal {
@@ -134,10 +140,12 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 		token, ok := t.authM.IsLogin(ctx)
 		if !ok {
 			t.ExecError(output, "You are not super administrator or not logged in")
+			return
 		}
 		//判断是否超级管理员
 		if !t.authM.IsSuperAdmin(token.UserID) {
 			t.ExecError(output, "You are not super administrator or not logged in")
+			return
 		}
 	}
 
