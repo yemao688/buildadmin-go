@@ -1,6 +1,6 @@
 # Go BuildAdmin
 
-这是一个将 **BuildAdmin PHP 生态及其业务行为迁移到 Go** 的管理后台框架：后端使用 Go，前端基于 BuildAdmin v2.3.7。项目目标是让开发者和 AI agent 快速开发管理后台业务。它不是 PHP 的逐行翻译，而是在保持兼容性和业务语义的基础上，采用强类型的 Go、Gin、GORM 和 Wire 实现。
+这是一个将 **BuildAdmin PHP 生态及其业务行为迁移到 Go** 的管理后台框架：后端使用 Go，前端基于 BuildAdmin v2.3.8。项目目标是让开发者和 AI agent 快速开发管理后台业务。它不是 PHP 的逐行翻译，而是在保持兼容性和业务语义的基础上，采用强类型的 Go、Gin、GORM 和 Wire 实现。
 
 ## 技术栈与要求
 
@@ -138,4 +138,4 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 鸣谢
 
-感谢 [BuildAdmin](https://www.buildadmin.com/) 提供 PHP 生态和前端基础；本项目以前端 BuildAdmin v2.3.7 为基础并做了适配。
+感谢 [BuildAdmin](https://www.buildadmin.com/) 提供 PHP 生态和前端基础；本项目以前端 BuildAdmin v2.3.8 为基础并做了适配。

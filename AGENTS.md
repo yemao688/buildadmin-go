@@ -21,14 +21,14 @@
 
 ## Project identity and status semantics
 
-- 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.7。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
+- 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
 - 账户状态迁移由 `database/migrations/local/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 
 ## Toolchain and boundaries
 
 - Trust `go.mod`: use Go 1.25.x; do not retain the stale Go 1.21.8 requirement.
-- This repository contains two projects. The Gin/GORM/Wire backend is rooted here; `web/` is the BuildAdmin v2.3.7 Vue/Vite 8 frontend with its own `pnpm-lock.yaml`. Run frontend commands from `web/` with pnpm, never npm.
+- This repository contains two projects. The Gin/GORM/Wire backend is rooted here; `web/` is the BuildAdmin v2.3.8 Vue/Vite 8 frontend with its own `pnpm-lock.yaml`. Run frontend commands from `web/` with pnpm, never npm.
 - Real entrypoints and wiring are `cmd/app/main.go`, `cmd/app/wire.go`, `router/router.go`, and `web/src/main.ts`. Cobra commands live under `app/cmd/`.
 - `conf/config.example.yaml` is the tracked template. Runtime `conf/config.yaml` is ignored and is copied from the template when missing; never commit installer-written credentials.
 
@@ -59,7 +59,7 @@ pnpm build                             # emits web/dist/
 ```
 
 - Backend changes: run affected package tests and `go build ./...`. Frontend changes: run `pnpm lint`, `pnpm typecheck`, then `pnpm build` from `web/`.
-- `pnpm lint` uses the flat config `web/eslint.config.mjs`, a 1:1 port of the PHP upstream v2.3.7 `web/.eslintrc.js` ruleset (lenient: most rules off, findings are warn-level). Warnings on pre-existing code (`vue/no-required-prop-with-default`, `no-unused-vars`, `indent`) are upstream-inherited noise — ignore them; do not touch existing source or tighten the config to silence them. Only act on warnings introduced by your own new/changed code.
+- `pnpm lint` uses the flat config `web/eslint.config.mjs`, a 1:1 port of the PHP upstream v2.3.8 `web/.eslintrc.js` ruleset (lenient: most rules off, findings are warn-level). Warnings on pre-existing code (`vue/no-required-prop-with-default`, `no-unused-vars`, `indent`) are upstream-inherited noise — ignore them; do not touch existing source or tighten the config to silence them. Only act on warnings introduced by your own new/changed code.
 - Do not require default `go test ./...` or `go vet`; choose affected tests because some tests and generators need MySQL or have incomplete application DI. There is no repository CI workflow, task runner, Makefile, or configured Go linter.
 
 ## CRUD module generation (AI-driven)

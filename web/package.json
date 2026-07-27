@@ -1,6 +1,6 @@
 {
     "name": "build-admin",
-    "version": "2.3.7",
+    "version": "2.3.8",
     "license": "Apache-2.0",
     "type": "module",
     "scripts": {
@@ -16,8 +16,8 @@
         "@wangeditor-next/editor": "5.6.4",
         "@wangeditor-next/editor-for-vue": "5.1.14",
         "@vueuse/core": "14.2.1",
-        "axios": "1.17.0",
-        "echarts": "6.0.0",
+        "axios": "1.18.1",
+        "echarts": "6.1.0",
         "element-plus": "2.13.7",
         "font-awesome": "4.7.0",
         "js-sha1": "0.7.0",
@@ -52,7 +52,7 @@
         "sass": "1.99.0",
         "typescript": "6.0.3",
         "typescript-eslint": "8.59.1",
-        "vite": "8.0.10",
+        "vite": "8.1.5",
         "vue-tsc": "3.2.7"
     }
 }

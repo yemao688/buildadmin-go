@@ -1,6 +1,6 @@
 # CRUD YAML 生成指南
 
-本文是 Go CRUD 生成器的 YAML 契约，对框架源仓库和业务仓库同时生效。它对齐 BuildAdmin v2.3.7 的手工 CRUD 设计器和官方数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM、Wire、路由、数据权限和迁移实现。
+本文是 Go CRUD 生成器的 YAML 契约，对框架源仓库和业务仓库同时生效。它对齐 BuildAdmin v2.3.8 的手工 CRUD 设计器和官方数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM、Wire、路由、数据权限和迁移实现。
 
 ## 目录
 
