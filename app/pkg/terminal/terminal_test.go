@@ -1,8 +1,15 @@
 package terminal
 
 import (
+	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 )
 
 func newTestTerminal() *Terminal {
@@ -79,5 +86,73 @@ func TestGetCommandUnknownKey(t *testing.T) {
 	}
 	if _, ok := term.GetCommand("npx", ""); ok {
 		t.Fatal("key without dot must not resolve")
+	}
+}
+
+type authStub struct {
+	loggedIn        bool
+	superAdmin      bool
+	userID          int32
+	superAdminCalls int
+}
+
+func (s *authStub) IsLogin(_ *gin.Context) (*token.Token, bool) {
+	if !s.loggedIn {
+		return nil, false
+	}
+	return &token.Token{UserID: s.userID}, true
+}
+
+func (s *authStub) IsSuperAdmin(_ int32) bool {
+	s.superAdminCalls++
+	return s.superAdmin
+}
+
+func TestExecAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name            string
+		loggedIn        bool
+		superAdmin      bool
+		wantCreated     bool
+		superAdminCalls int
+	}{
+		{name: "not logged in", wantCreated: false, superAdminCalls: 0},
+		{name: "logged in non super administrator", loggedIn: true, wantCreated: false, superAdminCalls: 1},
+		{name: "super administrator", loggedIn: true, superAdmin: true, wantCreated: true, superAdminCalls: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "executed")
+			auth := &authStub{
+				loggedIn:   tt.loggedIn,
+				superAdmin: tt.superAdmin,
+				userID:     1,
+			}
+			term := newTestTerminal()
+			term.authM = auth
+			term.config.Terminal.Commands["test"] = map[string]conf.Command{
+				"create": {Command: "touch " + shellQuote(marker)},
+			}
+
+			writer := httptest.NewRecorder()
+			ctx, _ := gin.CreateTestContext(writer)
+			ctx.Request = httptest.NewRequest(http.MethodGet, "/?command=test.create", nil)
+			term.Exec(ctx, true)
+
+			_, err := os.Stat(marker)
+			created := err == nil
+			if err != nil && !os.IsNotExist(err) {
+				t.Fatalf("stat execution marker: %v", err)
+			}
+			if created != tt.wantCreated {
+				t.Fatalf("command created marker: %v, want %v", created, tt.wantCreated)
+			}
+			if auth.superAdminCalls != tt.superAdminCalls {
+				t.Fatalf("IsSuperAdmin calls: %d, want %d", auth.superAdminCalls, tt.superAdminCalls)
+			}
+		})
 	}
 }
