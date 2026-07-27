@@ -150,7 +150,7 @@ func (h *AccountHandler) Verification(ctx *gin.Context) {
 		id = user.Mobile + "user_" + params.Type + "_verify"
 	}
 
-	if !h.captcha.Check(params.Captcha, id) {
+	if !h.captcha.Check(params.Captcha, id, captcha.LogicCaptcha) {
 		FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))
 		return
 	}
@@ -219,7 +219,7 @@ func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 	}
 
 	// 检查验证码
-	if !h.captcha.Check(params.Captcha, verType+"user_change_"+params.Type) {
+	if !h.captcha.Check(params.Captcha, verType+"user_change_"+params.Type, captcha.LogicCaptcha) {
 		FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))
 		return
 	}
@@ -354,7 +354,7 @@ func (h *AccountHandler) RetrievePassword(ctx *gin.Context) {
 		return
 	}
 
-	if !h.captcha.Check(params.Captcha, params.Account+"user_retrieve_pwd") {
+	if !h.captcha.Check(params.Captcha, params.Account+"user_retrieve_pwd", captcha.LogicCaptcha) {
 		FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))
 		return
 	}

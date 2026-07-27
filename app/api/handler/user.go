@@ -149,7 +149,7 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 
 		registerType := userRegisterCaptchaID(params)
 
-		if !h.captcha.Check(params.Captcha, registerType) {
+		if !h.captcha.Check(params.Captcha, registerType, captcha.LogicCaptcha) {
 			FailByErr(ctx, cErr.BadRequest("Please enter the correct verification code"))
 			return
 		}

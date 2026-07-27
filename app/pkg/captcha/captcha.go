@@ -44,6 +44,13 @@ type CaptchaConfig struct {
 	Reset    bool   // 验证成功后是否重置
 }
 
+// 验证码类型与密文长度（对齐 PHP 上游 v2.3.8 安全更新：
+// 逻辑/图形验证码密文按长度隔离，防止图形验证码记录被用来伪造逻辑验证码）
+const (
+	LogicCaptcha   = 32 // 逻辑验证码
+	GraphicCaptcha = 30 // 图形验证码
+)
+
 type Captcha struct {
 	sqlDB  *gorm.DB
 	config CaptchaConfig
@@ -89,14 +96,20 @@ func (c *Captcha) SetConfig(config CaptchaConfig) {
 }
 
 // 验证验证码是否正确
-func (c *Captcha) Check(code, id string) bool {
+// typeLen 验证码类型和长度，内置常量：LogicCaptcha=逻辑验证码, GraphicCaptcha=图形验证码
+func (c *Captcha) Check(code, id string, typeLen int) bool {
 	if code == "" {
 		return false
 	}
-	key := c.authCode(c.config.SeKey, id)
+	key := c.authCode(c.config.SeKey, id, 32)
 	seCode := model.Captcha{}
 	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	if err != nil {
+		return false
+	}
+
+	// 验证码为空或密文类型不匹配
+	if len(seCode.Code) != typeLen {
 		return false
 	}
 
@@ -105,7 +118,7 @@ func (c *Captcha) Check(code, id string) bool {
 		return false
 	}
 
-	if c.authCode(strings.ToUpper(code), id) == seCode.Code {
+	if c.authCode(strings.ToUpper(code), id, typeLen) == seCode.Code {
 		if c.config.Reset {
 			c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
 		}
@@ -116,7 +129,7 @@ func (c *Captcha) Check(code, id string) bool {
 
 // 创建一个逻辑验证码可供后续验证（非图形）
 func (c *Captcha) Create(id string) (string, error) {
-	key := c.authCode(c.config.SeKey, id)
+	key := c.authCode(c.config.SeKey, id, 32)
 	seCode := model.Captcha{}
 	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	if err == nil {
@@ -124,7 +137,7 @@ func (c *Captcha) Create(id string) (string, error) {
 	}
 
 	captcha := c.generate()
-	code := c.authCode(captcha, id)
+	code := c.authCode(captcha, id, LogicCaptcha)
 	// 实现数据库插入操作
 	err = c.sqlDB.Model(&model.Captcha{}).Create(map[string]interface{}{
 		"key":         key,
@@ -138,7 +151,7 @@ func (c *Captcha) Create(id string) (string, error) {
 
 // 获取验证码数据
 func (c *Captcha) GetCaptchaData(id string) (model.Captcha, error) {
-	key := c.authCode(c.config.SeKey, id)
+	key := c.authCode(c.config.SeKey, id, 32)
 	seCode := model.Captcha{}
 	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	return seCode, err
@@ -182,18 +195,18 @@ func (c *Captcha) Entry(id string) (*image.RGBA, error) {
 		writeCurve(img, c.config.FontSize, c.config.ImageW, c.config.ImageH, textColor)
 	}
 
-	key := c.authCode(c.config.SeKey, id)
+	key := c.authCode(c.config.SeKey, id, 32)
 	seCode := model.Captcha{}
 	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 
-	// 绘验证码
-	if err == nil && time.Now().Unix() <= seCode.ExpireTime {
+	// 绘验证码（仅复用未过期的图形验证码记录，逻辑验证码记录不可复用）
+	if err == nil && len(seCode.Code) == GraphicCaptcha && time.Now().Unix() <= seCode.ExpireTime {
 		if _, err = writeText(img, c.config, seCode.Captcha, textColor); err != nil {
 			return nil, err
 		}
 	} else {
 		captcha, err := writeText(img, c.config, "", textColor)
-		code := c.authCode(captcha, id)
+		code := c.authCode(captcha, id, GraphicCaptcha)
 
 		if err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Create(&model.Captcha{
 			Key:        key,
@@ -384,11 +397,11 @@ func loadImage(filePath string) (image.Image, error) {
 	return img, nil
 }
 
-// 加密验证码
-func (c *Captcha) authCode(str, id string) string {
+// 加密字符串（对齐 PHP 上游 v2.3.8：length 控制密文长度，用于区分验证码类型）
+func (c *Captcha) authCode(str, id string, length int) string {
 	key := fmt.Sprintf("%x", md5.Sum([]byte(c.config.SeKey)))[5:13]
 	strHash := fmt.Sprintf("%x", md5.Sum([]byte(str)))[8:18]
-	return fmt.Sprintf("%x", md5.Sum([]byte(key+strHash+id)))
+	return fmt.Sprintf("%x", md5.Sum([]byte(key+strHash+id)))[:length]
 }
 
 // 生成验证码随机字符
