@@ -10,6 +10,7 @@ import (
 	"go/token"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -27,13 +28,14 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
-	structContent, err := getGenerateStruct(db, fullTableName, tableName, modelData.ModelFieldType)
+	structContent, err := getGenerateStruct(db, fullTableName, modelData.ClassName, modelData.ModelFieldType)
 	if err != nil {
 		return "", err
 	}
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
+	applyBaseModelPackageRef(&modelData, modelFile)
 
 	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
 	if err != nil {
@@ -46,7 +48,27 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	if err := writeProvider(modelFile.RootFileName, modelData.ClassName+"Model"); err != nil {
 		return "", err
 	}
+	if err := AddWireProviderSet(modelFile.RootFileName); err != nil {
+		return "", err
+	}
 	return structContent, nil
+}
+
+// applyBaseModelPackageRef 为子包模型设置根包 BaseModel 的限定引用；
+// 根包（app/admin/model、app/common/model）保持空值，生成输出与历史一致。
+func applyBaseModelPackageRef(modelData *ModelData, modelFile NameInfo) {
+	root := filepath.ToSlash(modelFile.RootFileName)
+	segments := strings.Split(root, "/")
+	if len(segments) != 4 || segments[0] != "app" || segments[3] == "model" {
+		return
+	}
+	if segments[2] != "model" {
+		return
+	}
+	module := segments[1]
+	modelData.BaseModelImport = "go-build-admin/app/" + module + "/model"
+	modelData.BaseModelAlias = module + "model"
+	modelData.BaseModelQualifier = modelData.BaseModelAlias + "."
 }
 
 func addCityTextFields(structContent string, cityFields []string) string {
@@ -76,7 +98,7 @@ func addRelationFields(structContent, relationFields string) string {
 	return structContent[:index] + relationFields + structContent[index:]
 }
 
-func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fieldTypeOverrides map[string]string) (string, error) {
+func getGenerateStruct(db *gorm.DB, fullTableName string, structName string, fieldTypeOverrides map[string]string) (string, error) {
 	g := gen.NewGenerator(gen.Config{
 		OutPath: "./",
 		Mode:    gen.WithoutContext | gen.WithDefaultQuery,
@@ -103,7 +125,7 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, tableName string, fiel
 	for _, columnName := range keys {
 		options = append(options, gen.FieldType(columnName, fieldTypeOverrides[columnName]))
 	}
-	data := g.GenerateModelAs(fullTableName, utils.SnakeToCamel(tableName, true), options...)
+	data := g.GenerateModelAs(fullTableName, structName, options...)
 
 	var buf bytes.Buffer
 	tpl, err := template.New(StructTmpl).Parse(StructTmpl)
@@ -147,6 +169,21 @@ func normalizeGeneratedIDInitialisms(structContent string) string {
 
 // }
 
+// applyBaseHandlerPackageRef 为子包 handler/registrar 设置根包 Base 与包级函数的
+// 限定引用；根包（app/admin/handler）保持空值，生成输出与历史一致。
+func applyBaseHandlerPackageRef(qualifier *string, alias *string, importPath *string, handlerFile NameInfo) {
+	root := filepath.ToSlash(handlerFile.RootFileName)
+	if root == "app/admin/handler" {
+		return
+	}
+	if !strings.HasPrefix(root, "app/admin/handler/") {
+		return
+	}
+	*alias = "adminhandler"
+	*importPath = "go-build-admin/app/admin/handler"
+	*qualifier = *alias + "."
+}
+
 func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string) error {
 	//请求参数验证结构体
 	index := strings.Index(structContent, "struct {")
@@ -159,6 +196,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	validateContent = re.ReplaceAllString(validateContent, "")
 	validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
 	handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
+	applyBaseHandlerPackageRef(&handlerData.BaseHandlerQualifier, &handlerData.BaseHandlerAlias, &handlerData.BaseHandlerImport, handlerFile)
 
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
@@ -179,7 +217,10 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Registrar"); err != nil {
 		return err
 	}
-	if err := writeRegistrarProviderEntry(handlerData.ClassName); err != nil {
+	if err := writeRegistrarProviderEntry(handlerData.ClassName, handlerFile.RootFileName); err != nil {
+		return err
+	}
+	if err := AddWireProviderSet(handlerFile.RootFileName); err != nil {
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
@@ -327,6 +368,7 @@ func writeRegistrarFile(handlerData HandlerData, handlerFile NameInfo) error {
 		RouteName: lowerFirst(handlerData.ClassName),
 		RoutePath: handlerData.RouteName,
 	}
+	applyBaseHandlerPackageRef(&data.BaseHandlerQualifier, &data.BaseHandlerAlias, &data.BaseHandlerImport, handlerFile)
 	content, err := render(registrarPath, registrarTemp, data)
 	if err != nil {
 		return err
@@ -345,26 +387,105 @@ func lowerFirst(value string) string {
 	return strings.ToLower(value[:1]) + value[1:]
 }
 
-func writeRegistrarProviderEntry(name string) error {
+func writeRegistrarProviderEntry(name string, handlerRoot string) error {
 	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	updated, err := addRegistrarProviderEntry(string(content), name)
+	updated, err := addRegistrarProviderEntry(string(content), name, handlerRoot)
 	if err != nil {
 		return err
 	}
 	return writeGoFile(path, updated)
 }
 
-func addRegistrarProviderEntry(content, name string) (string, error) {
+// handlerImportRef 返回 handler 目录在共享文件中使用的 import 路径、首选别名
+// 以及是否为子包（根 handler 包在 registrar_set.go 中固定使用别名 admin）。
+func handlerImportRef(handlerRoot string) (importPath string, alias string, isSub bool) {
+	root := filepath.ToSlash(handlerRoot)
+	importPath = "go-build-admin/" + root
+	if root == "app/admin/handler" {
+		return importPath, "admin", false
+	}
+	return importPath, path.Base(root), true
+}
+
+var importLinePattern = regexp.MustCompile(`(?m)^\t(?:(\w+) )?"([^"]+)"$`)
+
+// collectImports 解析 import 块中已有的别名与路径映射。
+func collectImports(content string) (aliasToPath map[string]string, pathToAlias map[string]string) {
+	aliasToPath = map[string]string{}
+	pathToAlias = map[string]string{}
+	for _, matches := range importLinePattern.FindAllStringSubmatch(content, -1) {
+		alias, importPath := matches[1], matches[2]
+		if alias == "" {
+			alias = path.Base(importPath)
+		}
+		aliasToPath[alias] = importPath
+		pathToAlias[importPath] = alias
+	}
+	return aliasToPath, pathToAlias
+}
+
+// resolveImportAlias 为 importPath 选择文件内稳定的别名：已导入则复用，
+// 首选别名被其它路径占用时回退为 fallback。
+func resolveImportAlias(content, importPath, preferred, fallback string) (alias string, imported bool) {
+	aliasToPath, pathToAlias := collectImports(content)
+	if alias, ok := pathToAlias[importPath]; ok {
+		return alias, true
+	}
+	if _, taken := aliasToPath[preferred]; taken {
+		return fallback, false
+	}
+	return preferred, false
+}
+
+func ensureImportLine(content, alias, importPath string) string {
+	if _, imported := resolveImportAlias(content, importPath, alias, alias); imported {
+		return content
+	}
+	marker := "import (\n"
+	index := strings.Index(content, marker)
+	if index < 0 {
+		return content
+	}
+	insertAt := index + len(marker)
+	return content[:insertAt] + "\t" + alias + " \"" + importPath + "\"\n" + content[insertAt:]
+}
+
+// removeImportLineIfUnused 在别名不再被引用时移除对应 import 行。
+func removeImportLineIfUnused(content, alias, importPath string) string {
+	if strings.Contains(content, alias+".") {
+		return content
+	}
+	line := "\t" + alias + " \"" + importPath + "\"\n"
+	return strings.Replace(content, line, "", 1)
+}
+
+// registrarVarCandidates 返回参数变量名候选：子包加包名前缀避免跨包同类名冲突；
+// 兼容历史上小写类名的裸变量名写法。
+func registrarVarCandidates(name string, handlerRoot string) []string {
+	_, alias, isSub := handlerImportRef(handlerRoot)
+	candidates := []string{lowerFirst(name) + "Registrar", lowerFirst(name)}
+	if isSub {
+		candidates = append([]string{lowerFirst(alias) + name + "Registrar"}, candidates...)
+	}
+	return candidates
+}
+
+func addRegistrarProviderEntry(content, name string, handlerRoot string) (string, error) {
 	registrarType := name + "Registrar"
-	registrarVar := lowerFirst(name) + "Registrar"
-	param := "\t" + registrarVar + " *admin." + registrarType + ",\n"
+	importPath, preferred, isSub := handlerImportRef(handlerRoot)
+	alias, _ := resolveImportAlias(content, importPath, preferred, "admin"+utils.SnakeToCamel(preferred, true))
+	registrarVar := registrarVarCandidates(name, handlerRoot)[0]
+	param := "\t" + registrarVar + " *" + alias + "." + registrarType + ",\n"
 	entry := "\t\t" + registrarVar + ",\n"
 
-	if !strings.Contains(content, param) {
+	if isSub {
+		content = ensureImportLine(content, alias, importPath)
+	}
+	if !strings.Contains(content, " *"+alias+"."+registrarType+",\n") {
 		marker := ") []RouteRegistrar {"
 		index := strings.Index(content, marker)
 		if index < 0 {
@@ -384,22 +505,27 @@ func addRegistrarProviderEntry(content, name string) (string, error) {
 	return content, nil
 }
 
-func RemoveRegistrarProvider(name string) error {
+func RemoveRegistrarProvider(name string, handlerRoot string) error {
 	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	updated, err := removeRegistrarProviderEntry(string(content), name)
+	updated, err := removeRegistrarProviderEntry(string(content), name, handlerRoot)
 	if err != nil {
 		return err
 	}
 	return writeGoFile(path, updated)
 }
 
-func removeRegistrarProviderEntry(content, name string) (string, error) {
+// removeRegistrarProviderEntry 按整行移除 registrar 参数与返回值条目。
+// 变量名兼容包前缀写法与历史裸类名写法；子包 import 在无引用时一并移除。
+func removeRegistrarProviderEntry(content, name string, handlerRoot string) (string, error) {
 	registrarType := name + "Registrar"
-	registrarVar := lowerFirst(name) + "Registrar"
+	varCandidates := registrarVarCandidates(name, handlerRoot)
+	isVar := func(value string) bool {
+		return slices.Contains(varCandidates, value)
+	}
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
 	if err != nil {
@@ -411,9 +537,12 @@ func removeRegistrarProviderEntry(content, name string) (string, error) {
 		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Type.Params == nil {
 			return true
 		}
+		matchField := func(field *ast.Field) bool {
+			return len(field.Names) == 1 && isVar(field.Names[0].Name) && strings.Contains(formatNodeText(fset, field, content), registrarType)
+		}
 		params := make([]ast.Node, 0, len(function.Type.Params.List))
 		for _, field := range function.Type.Params.List {
-			if len(field.Names) == 1 && field.Names[0].Name == registrarVar && strings.Contains(formatNodeText(fset, field, content), registrarType) {
+			if matchField(field) {
 				continue
 			}
 			params = append(params, field)
@@ -421,7 +550,7 @@ func removeRegistrarProviderEntry(content, name string) (string, error) {
 		if len(params) != len(function.Type.Params.List) {
 			removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
 				field, ok := node.(*ast.Field)
-				return ok && len(field.Names) == 1 && field.Names[0].Name == registrarVar && strings.Contains(formatNodeText(fset, field, content), registrarType)
+				return ok && matchField(field)
 			})...)
 		}
 		return true
@@ -433,7 +562,7 @@ func removeRegistrarProviderEntry(content, name string) (string, error) {
 		}
 		removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
 			ident, ok := node.(*ast.Ident)
-			return ok && ident.Name == registrarVar
+			return ok && isVar(ident.Name)
 		})...)
 		return true
 	})
@@ -441,11 +570,113 @@ func removeRegistrarProviderEntry(content, name string) (string, error) {
 		return content, nil
 	}
 	content = applySourceRemovals(content, removals)
+	importPath, _, isSub := handlerImportRef(handlerRoot)
+	if isSub {
+		_, pathToAlias := collectImports(content)
+		if alias, ok := pathToAlias[importPath]; ok {
+			content = removeImportLineIfUnused(content, alias, importPath)
+		}
+	}
 	formatted, err := formatGoCode(content)
 	if err != nil {
 		return "", err
 	}
 	return canonicalizeGoContent(formatted), nil
+}
+
+// wireProviderSetRef 计算子包在 cmd/app/wire.go 中的 ProviderSet 引用。
+// 根包（app/admin/handler、app/admin/model 等）已在 wire.Build 静态聚合，无需处理。
+func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, needed bool, err error) {
+	root := filepath.ToSlash(rootDir)
+	wiredRoots := map[string]string{
+		"app/admin/handler": "adminHandler",
+		"app/admin/model":   "adminModel",
+		"app/common/model":  "commonModel",
+		"app/api/handler":   "apiHandler",
+	}
+	if _, ok := wiredRoots[root]; ok {
+		return "", "", "", false, nil
+	}
+	segments := strings.Split(root, "/")
+	anchorAlias := ""
+	subStart := -1
+	for i := len(segments) - 1; i > 0; i-- {
+		if parentAlias, ok := wiredRoots[strings.Join(segments[:i], "/")]; ok {
+			anchorAlias = parentAlias
+			subStart = i
+			break
+		}
+	}
+	if anchorAlias == "" {
+		return "", "", "", false, fmt.Errorf("no wired root provider set found for %q", rootDir)
+	}
+	sub := make([]string, 0, len(segments)-subStart)
+	for _, segment := range segments[subStart:] {
+		sub = append(sub, utils.SnakeToCamel(segment, true))
+	}
+	anchorParent := path.Base(strings.Join(segments[:subStart], "/"))
+	alias = lowerFirst(strings.Join(sub, "")) + utils.SnakeToCamel(anchorParent, true)
+	return "go-build-admin/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
+}
+
+// AddWireProviderSet 将子包 ProviderSet 聚合并入 cmd/app/wire.go（幂等）。
+func AddWireProviderSet(rootDir string) error {
+	importPath, alias, anchor, needed, err := wireProviderSetRef(rootDir)
+	if err != nil || !needed {
+		return err
+	}
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	content, err := os.ReadFile(wirePath)
+	if err != nil {
+		return err
+	}
+	updated, err := addWireProviderSetEntry(string(content), importPath, alias, anchor)
+	if err != nil {
+		return err
+	}
+	return writeGoFile(wirePath, updated)
+}
+
+func addWireProviderSetEntry(content, importPath, alias, anchor string) (string, error) {
+	setLine := "\t\t" + alias + ".ProviderSet,\n"
+	if strings.Contains(content, setLine) {
+		return content, nil
+	}
+	aliasToPath, _ := collectImports(content)
+	if existing, taken := aliasToPath[alias]; taken && existing != importPath {
+		return "", fmt.Errorf("wire.go import alias %q already bound to %q, cannot add %q", alias, existing, importPath)
+	}
+	content = ensureImportLine(content, alias, importPath)
+	index := strings.Index(content, anchor)
+	if index < 0 {
+		return "", fmt.Errorf("wire.go provider set anchor %q not found", strings.TrimSpace(anchor))
+	}
+	insertAt := index + len(anchor)
+	return content[:insertAt] + setLine + content[insertAt:], nil
+}
+
+// RemoveWireProviderSet 从 cmd/app/wire.go 移除子包 ProviderSet 聚合（幂等）。
+func RemoveWireProviderSet(rootDir string) error {
+	importPath, alias, _, needed, err := wireProviderSetRef(rootDir)
+	if err != nil || !needed {
+		return err
+	}
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	content, err := os.ReadFile(wirePath)
+	if err != nil {
+		return err
+	}
+	updated := removeWireProviderSetEntry(string(content), importPath, alias)
+	return writeGoFile(wirePath, updated)
+}
+
+func removeWireProviderSetEntry(content, importPath, alias string) string {
+	_, pathToAlias := collectImports(content)
+	if actual, ok := pathToAlias[importPath]; ok {
+		alias = actual
+	}
+	content = strings.Replace(content, "\t\t"+alias+".ProviderSet,\n", "", 1)
+	return removeImportLineIfUnused(content, alias, importPath)
 }
 
 func writeProvider(dir string, name string) error {
@@ -470,7 +701,13 @@ func writeProvider(dir string, name string) error {
 	}
 
 	lastIndex := strings.LastIndex(string(content), ")")
-	content = []byte(string(content)[:lastIndex] + "	New" + name + ",\n)")
+	head := strings.TrimRight(string(content)[:lastIndex], " \t\r\n")
+	separator := ""
+	if !strings.HasSuffix(head, "(") && !strings.HasSuffix(head, ",") {
+		// gofmt 会把单参数 NewSet(arg) 折叠成单行，追加第二个条目时必须补逗号
+		separator = ","
+	}
+	content = []byte(head + separator + "\n\tNew" + name + ",\n)")
 	return writeGoFile(providerPath, string(content))
 }
 

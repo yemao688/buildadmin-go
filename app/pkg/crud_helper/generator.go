@@ -350,25 +350,32 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
-	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
+	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Handler"); err != nil {
 		return fail("remove handler provider", err)
 	}
-	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Registrar"); err != nil {
+	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Registrar"); err != nil {
 		return fail("remove handler registrar provider", err)
 	}
-	if err := RemoveProvider(modelFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
+	if err := RemoveProvider(modelFile.RootFileName, modelFile.LastName+"Model"); err != nil {
 		return fail("remove model provider", err)
 	}
 	if err := removeAssociatedModelProviders([]model.Field(log.Fields), manifest); err != nil {
 		return fail("remove associated model providers", err)
 	}
-	if err := RemoveRegistrarProvider(handlerFile.LastName); err != nil {
+	if err := RemoveRegistrarProvider(handlerFile.LastName, handlerFile.RootFileName); err != nil {
 		return fail("remove registrar provider", err)
+	}
+	if err := RemoveWireProviderSet(handlerFile.RootFileName); err != nil {
+		return fail("remove handler wire provider set", err)
+	}
+	if err := RemoveWireProviderSet(modelFile.RootFileName); err != nil {
+		return fail("remove model wire provider set", err)
 	}
 	if err := parseDeleteGoFiles(
 		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
 		filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
 		filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
+		filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
 	); err != nil {
 		return fail("parse guard", err)
 	}
@@ -498,6 +505,7 @@ func validateSharedManifestPath(path string) error {
 	root := utils.RootPath()
 	for _, allowed := range []string{
 		filepath.Join(root, "router", "registrar_set.go"),
+		filepath.Join(root, "cmd", "app", "wire.go"),
 		filepath.Join(root, "cmd", "app", "wire_gen.go"),
 	} {
 		if path == allowed {
@@ -505,7 +513,7 @@ func validateSharedManifestPath(path string) error {
 		}
 	}
 	if filepath.Base(path) != "provider.go" {
-		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, or cmd/app/wire_gen.go")
+		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/app/wire.go, or cmd/app/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
 		"app/admin/model", "app/common/model", "app/admin/handler",

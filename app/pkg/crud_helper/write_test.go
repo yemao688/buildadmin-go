@@ -57,7 +57,7 @@ func TestRegistrarProviderEntryRoundTrip(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.WriteFile(path, original, 0644) })
 
-	if err := writeRegistrarProviderEntry("Test"); err != nil {
+	if err := writeRegistrarProviderEntry("Test", "app/admin/handler"); err != nil {
 		t.Fatal(err)
 	}
 	added, err := os.ReadFile(path)
@@ -67,7 +67,7 @@ func TestRegistrarProviderEntryRoundTrip(t *testing.T) {
 	if !strings.Contains(string(added), "testRegistrar *admin.TestRegistrar,") || !strings.Contains(string(added), "testRegistrar,") {
 		t.Fatalf("registrar provider entry missing:\n%s", added)
 	}
-	if err := writeRegistrarProviderEntry("Test"); err != nil {
+	if err := writeRegistrarProviderEntry("Test", "app/admin/handler"); err != nil {
 		t.Fatal(err)
 	}
 	addedAgain, err := os.ReadFile(path)
@@ -78,7 +78,7 @@ func TestRegistrarProviderEntryRoundTrip(t *testing.T) {
 		t.Fatal("registrar provider insertion is not idempotent")
 	}
 
-	if err := RemoveRegistrarProvider("Test"); err != nil {
+	if err := RemoveRegistrarProvider("Test", "app/admin/handler"); err != nil {
 		t.Fatal(err)
 	}
 	removed, err := os.ReadFile(path)
@@ -88,7 +88,7 @@ func TestRegistrarProviderEntryRoundTrip(t *testing.T) {
 	if string(removed) != string(original) {
 		t.Fatalf("registrar provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
 	}
-	if err := RemoveRegistrarProvider("Test"); err != nil {
+	if err := RemoveRegistrarProvider("Test", "app/admin/handler"); err != nil {
 		t.Fatal(err)
 	}
 	removedAgain, err := os.ReadFile(path)
@@ -152,19 +152,129 @@ func TestRemoveRegistrarProviderEntryShapesRemainParseable(t *testing.T) {
 		{name: "first", params: "targetRegistrar *admin.TargetRegistrar,\n\tkeepRegistrar *admin.KeepRegistrar", items: "targetRegistrar,\n\tkeepRegistrar"},
 		{name: "middle", params: "keepRegistrar *admin.KeepRegistrar,\n\ttargetRegistrar *admin.TargetRegistrar,\n\totherRegistrar *admin.OtherRegistrar", items: "keepRegistrar,\n\ttargetRegistrar,\n\totherRegistrar"},
 		{name: "last", params: "keepRegistrar *admin.KeepRegistrar,\n\ttargetRegistrar *admin.TargetRegistrar", items: "keepRegistrar,\n\ttargetRegistrar"},
+		{name: "legacy bare var", params: "keepRegistrar *admin.KeepRegistrar,\n\ttarget *admin.TargetRegistrar", items: "keepRegistrar,\n\ttarget"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			content := "package router\n\nimport admin \"go-build-admin/app/admin/handler\"\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(" + tc.params + ") []RouteRegistrar {\n\treturn []RouteRegistrar{" + tc.items + "}\n}\n"
-			removed, err := removeRegistrarProviderEntry(content, "Target")
+			removed, err := removeRegistrarProviderEntry(content, "Target", "app/admin/handler")
 			if err != nil {
 				t.Fatal(err)
 			}
 			assertParseableGo(t, "registrar_set.go", removed)
-			if strings.Contains(removed, "targetRegistrar") || strings.Contains(removed, "TargetRegistrar") {
+			if strings.Contains(removed, "TargetRegistrar") {
 				t.Fatalf("target registrar remains:\n%s", removed)
 			}
+			if strings.Contains(removed, "targetRegistrar") || strings.Contains(removed, "\ttarget,") || strings.Contains(removed, "target *") {
+				t.Fatalf("target registrar var remains:\n%s", removed)
+			}
 		})
+	}
+}
+
+func TestRegistrarProviderEntrySubpackageRoundTrip(t *testing.T) {
+	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.WriteFile(path, original, 0644) })
+
+	handlerRoot := "app/admin/handler/registrar_subpkg_test"
+	if err := writeRegistrarProviderEntry("Order", handlerRoot); err != nil {
+		t.Fatal(err)
+	}
+	added, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertParseableGo(t, "registrar_set.go", string(added))
+	for _, want := range []string{
+		"registrar_subpkg_test \"go-build-admin/app/admin/handler/registrar_subpkg_test\"",
+		"registrar_subpkg_testOrderRegistrar *registrar_subpkg_test.OrderRegistrar,",
+		"\t\tregistrar_subpkg_testOrderRegistrar,",
+	} {
+		if !strings.Contains(string(added), want) {
+			t.Fatalf("subpackage registrar entry missing %q:\n%s", want, added)
+		}
+	}
+	if strings.Contains(string(added), "*admin.OrderRegistrar") {
+		t.Fatalf("subpackage registrar must not use root admin qualifier:\n%s", added)
+	}
+
+	if err := RemoveRegistrarProvider("Order", handlerRoot); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(removed) != string(original) {
+		t.Fatalf("subpackage registrar round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
+	}
+}
+
+const wireFixture = `package main
+
+import (
+	adminHandler "go-build-admin/app/admin/handler"
+	adminModel "go-build-admin/app/admin/model"
+
+	"github.com/google/wire"
+)
+
+func wireApp() {
+	panic(wire.Build(
+		adminHandler.ProviderSet,
+		adminModel.ProviderSet,
+	))
+}
+`
+
+func TestWireProviderSetRefSkipsWiredRoots(t *testing.T) {
+	for _, root := range []string{"app/admin/handler", "app/admin/model", "app/common/model", "app/api/handler"} {
+		if _, _, _, needed, err := wireProviderSetRef(root); err != nil || needed {
+			t.Fatalf("wired root %q should not need aggregation: needed=%v err=%v", root, needed, err)
+		}
+	}
+	importPath, alias, anchor, needed, err := wireProviderSetRef("app/admin/handler/order")
+	if err != nil || !needed {
+		t.Fatalf("subpackage ref failed: %v", err)
+	}
+	if importPath != "go-build-admin/app/admin/handler/order" || alias != "orderHandler" || anchor != "\t\tadminHandler.ProviderSet,\n" {
+		t.Fatalf("unexpected handler subpackage ref: %q %q %q", importPath, alias, anchor)
+	}
+	if _, alias, _, _, err := wireProviderSetRef("app/admin/model/order"); err != nil || alias != "orderModel" {
+		t.Fatalf("unexpected model subpackage alias %q: %v", alias, err)
+	}
+}
+
+func TestWireProviderSetEntryAddRemoveRoundTrip(t *testing.T) {
+	_, alias, anchor, _, err := wireProviderSetRef("app/admin/handler/order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	added, err := addWireProviderSetEntry(wireFixture, "go-build-admin/app/admin/handler/order", alias, anchor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertParseableGo(t, "wire.go", added)
+	if !strings.Contains(added, "orderHandler \"go-build-admin/app/admin/handler/order\"") {
+		t.Fatalf("wire.go import missing:\n%s", added)
+	}
+	if !strings.Contains(added, "\t\tadminHandler.ProviderSet,\n\t\torderHandler.ProviderSet,\n") {
+		t.Fatalf("wire.go provider set not anchored after adminHandler:\n%s", added)
+	}
+	again, err := addWireProviderSetEntry(added, "go-build-admin/app/admin/handler/order", alias, anchor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != added {
+		t.Fatal("wire provider set insertion is not idempotent")
+	}
+	removed := removeWireProviderSetEntry(added, "go-build-admin/app/admin/handler/order", alias)
+	if removed != wireFixture {
+		t.Fatalf("wire provider set round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, wireFixture)
 	}
 }
 
@@ -188,6 +298,27 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 	if !strings.Contains(string(content), "ProviderSet") || !strings.Contains(string(content), "NewOwnerModel") {
 		t.Fatalf("provider scaffold was not injected: %s", content)
 	}
+}
+
+func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "handler", "provider_fresh_seq_test")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	// 首个条目写入后 gofmt 会把单参数 NewSet 折叠成单行，第二个条目必须仍能合法追加
+	if err := writeProvider("app/admin/handler/provider_fresh_seq_test", "UserHandler"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeProvider("app/admin/handler/provider_fresh_seq_test", "UserRegistrar"); err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, "provider.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertParseableGo(t, "provider.go", string(content))
+	if !strings.Contains(string(content), "\tNewUserHandler,\n") || !strings.Contains(string(content), "\tNewUserRegistrar,\n") {
+		t.Fatalf("sequential provider entries missing: %s", content)
+	}
+	assertExactlyOneTrailingLF(t, string(content))
 }
 
 func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {

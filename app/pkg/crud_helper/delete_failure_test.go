@@ -140,7 +140,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	if err != nil {
 		t.Fatal(err)
 	}
-	routerAfter, err := addRegistrarProviderEntry(string(routerBefore), "DeleteFault")
+	routerAfter, err := addRegistrarProviderEntry(string(routerBefore), "DeleteFault", "app/admin/handler")
 	if err != nil {
 		t.Fatal(err)
 	}

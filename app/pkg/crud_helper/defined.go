@@ -277,6 +277,11 @@ type HandlerData struct {
 	Methods []string
 
 	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
+
+	// 子包 handler 对根包 Base/Success 等的限定引用；根包生成时为空，输出保持不变。
+	BaseHandlerQualifier string
+	BaseHandlerAlias     string
+	BaseHandlerImport    string
 }
 
 type RegistrarData struct {
@@ -284,13 +289,19 @@ type RegistrarData struct {
 	ClassName string
 	RouteName string
 	RoutePath string
+
+	// 子包 registrar 对根包 CRUDRoutes/CRUDCapabilities 的限定引用；根包生成时为空。
+	BaseHandlerQualifier string
+	BaseHandlerAlias     string
+	BaseHandlerImport    string
 }
 
 const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
 package {{.Namespace}}
 
 import (
-	"go-build-admin/app/middleware"
+	{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
+	{{end}}"go-build-admin/app/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -308,11 +319,11 @@ const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName
 func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
 
 func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
-	CRUDRoutes(g, {{.RouteName}}Route, r.handler)
+	{{.BaseHandlerQualifier}}CRUDRoutes(g, {{.RouteName}}Route, r.handler)
 }
 
 func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
-	return CRUDCapabilities({{.RouteName}}Route)
+	return {{.BaseHandlerQualifier}}CRUDCapabilities({{.RouteName}}Route)
 }
 `
 
@@ -321,7 +332,8 @@ package {{.Namespace}}
 
 import (
 	model "{{.ModelImportPath}}"
-	"go-build-admin/app/admin/validate"
+	{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
+	{{end}}"go-build-admin/app/admin/validate"
 	"go-build-admin/app/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -330,25 +342,25 @@ import (
 )
 
 type {{.ClassName}}Handler struct {
-	Base
+	{{.BaseHandlerQualifier}}Base
 	log        *zap.Logger
 	{{.ModelVar}}M *model.{{.ModelName}}Model
 }
 
 func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *model.{{.ModelName}}Model) *{{.ClassName}}Handler {
-	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}
+	{{if .BaseHandlerQualifier}}return &{{.ClassName}}Handler{Base: {{.BaseHandlerQualifier}}NewBase({{.ModelVar}}M), log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{else}}return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{end}}
 }
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		{{.BaseHandlerQualifier}}Success(ctx, data)
 	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	{{.BaseHandlerQualifier}}Success(ctx, map[string]any{
 		"list":   list,
 		"total":  total,
 		"remark": "",
@@ -361,17 +373,17 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	var params {{.ClassName}}Param
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	var data model.{{.ClassName}}
 	copier.Copy(&data, params)
 	err := h.{{.ModelVar}}M.Add(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	{{.BaseHandlerQualifier}}Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
@@ -387,23 +399,23 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 		{{.ClassName}}Param
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
 	err = h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	{{.BaseHandlerQualifier}}Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
@@ -411,15 +423,15 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validate.GetError(param, err))
+		{{.BaseHandlerQualifier}}FailByErr(ctx, validate.GetError(param, err))
 		return
 	}
 	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
 	if err != nil {
-		FailByErr(ctx, err)
+		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
 		return
 	}
-	SuccessWithMessage(ctx, "Deleted successfully")
+	{{.BaseHandlerQualifier}}SuccessWithMessage(ctx, "Deleted successfully")
 }
 `
 
@@ -433,6 +445,11 @@ type ModelData struct {
 	ModelVar         string //结构体变量
 	QuickSearchField string //快速搜索字段
 	StructTemp       string //结构体
+
+	// 子包模型对根包 BaseModel 的限定引用；根包生成时为空，输出保持不变。
+	BaseModelQualifier string
+	BaseModelAlias     string
+	BaseModelImport    string
 
 	Append                    []string
 	Methods                   []string
@@ -499,6 +516,8 @@ import (
 	{{end}}
 	{{if .RelationNeedsMultiNumeric}}"strconv"
 	{{end}}
+	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
+	{{end}}
 	"go-build-admin/app/pkg/data_scope"
 )
 
@@ -507,7 +526,7 @@ import (
 {{.RelationStructs}}
 
 type {{.ClassName}}Model struct {
-	BaseModel
+	{{.BaseModelQualifier}}BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
@@ -519,12 +538,17 @@ func (s *{{.ClassName}}Model) NewRow() any {
 
 func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Model {
 	return &{{.ClassName}}Model{
-		BaseModel: BaseModel{
+		{{if .BaseModelQualifier}}BaseModel: {{.BaseModelQualifier}}NewBaseModel(
+			config.Database.Prefix + "{{.Name}}",
+			"{{.Pk}}",
+			"{{.QuickSearchField}}",
+			sqlDB,
+		),{{else}}BaseModel: BaseModel{
 			TableName:        config.Database.Prefix + "{{.Name}}",
 			Key:              "{{.Pk}}",
 			QuickSearchField: "{{.QuickSearchField}}",
 			sqlDB:            sqlDB,
-		},
+		},{{end}}
 		Policy: data_scope.ResourcePolicy{
 			Mode:           "{{.DataScopePolicy.Mode}}",
 			OwnerColumn:    "{{.DataScopePolicy.OwnerColumn}}",
@@ -573,7 +597,7 @@ func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.Mod
 }
 
 func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
