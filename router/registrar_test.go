@@ -32,6 +32,26 @@ func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testin
 	}
 }
 
+func TestInitRouterReplacesCollectedRoutesOnReinitialization(t *testing.T) {
+	newCompleteRouter()
+
+	newEngine := newCompleteRouter()
+	collectedRoutes := admin.GetAllRoutes()
+
+	uniqueCollectedRoutes(t, collectedRoutes)
+	require.Len(t, collectedRoutes, len(newEngine.Routes()))
+
+	want := make([]admin.Route, 0, len(newEngine.Routes()))
+	for _, route := range newEngine.Routes() {
+		want = append(want, admin.Route{
+			Method:  route.Method,
+			Path:    route.Path,
+			Handler: route.Handler,
+		})
+	}
+	require.Equal(t, want, collectedRoutes)
+}
+
 func TestRegistrarCapabilitiesMatchRegisteredRoutes(t *testing.T) {
 	engine := newCompleteRouter()
 
@@ -94,7 +114,6 @@ func lookupAtomicRouteCapability(t *testing.T, route gin.RouteInfo) (middleware.
 
 func newCompleteRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	admin.RegisteredRoutes = nil
 
 	return InitRouter(
 		&lumberjack.Logger{},

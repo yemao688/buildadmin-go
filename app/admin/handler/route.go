@@ -56,13 +56,15 @@ func capabilityRoute(name string) string {
 
 func CollectRoutes(router *gin.Engine) {
 	routesInfo := router.Routes()
+	routes := make([]Route, 0, len(routesInfo))
 	for _, v := range routesInfo {
-		RegisteredRoutes = append(RegisteredRoutes, Route{
+		routes = append(routes, Route{
 			Method:  v.Method,
 			Path:    v.Path,
 			Handler: v.Handler,
 		})
 	}
+	RegisteredRoutes = routes
 }
 
 func GetAllRoutes() []Route {
