@@ -56,9 +56,7 @@ func InitRouter(
 	apiUserHandler *api.UserHandler,
 	apiDemoHandler *api.DemoHandler,
 
-	countryLanguageHandler *admin.CountryLanguageHandler,
-	countryCurrencyHandler *admin.CountryCurrencyHandler,
-	countryLanguageContentHandler *admin.CountryLanguageContentHandler,
+	registrars []RouteRegistrar,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
@@ -132,15 +130,6 @@ func InitRouter(
 		{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete},
 		{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost},
 		{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete},
-		{Route: "countryLanguage", Action: "add", Method: http.MethodPost},
-		{Route: "countryLanguage", Action: "edit", Method: http.MethodPost},
-		{Route: "countryLanguage", Action: "del", Method: http.MethodDelete},
-		{Route: "countryCurrency", Action: "add", Method: http.MethodPost},
-		{Route: "countryCurrency", Action: "edit", Method: http.MethodPost},
-		{Route: "countryCurrency", Action: "del", Method: http.MethodDelete},
-		{Route: "countryLanguageContent", Action: "add", Method: http.MethodPost},
-		{Route: "countryLanguageContent", Action: "edit", Method: http.MethodPost},
-		{Route: "countryLanguageContent", Action: "del", Method: http.MethodDelete},
 	} {
 		middleware.RegisterAtomicRoute(capability)
 	}
@@ -301,26 +290,25 @@ func InitRouter(
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
 	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
 
-	adminRouter.GET("countryLanguageContent/index", countryLanguageContentHandler.Index)
-	adminRouter.POST("countryLanguageContent/add", countryLanguageContentHandler.Add)
-	adminRouter.GET("countryLanguageContent/edit", countryLanguageContentHandler.One)
-	adminRouter.POST("countryLanguageContent/edit", countryLanguageContentHandler.Edit)
-	adminRouter.DELETE("countryLanguageContent/del", countryLanguageContentHandler.Del)
-	adminRouter.POST("countryLanguageContent/sortable", countryLanguageContentHandler.Sortable)
-
-	adminRouter.GET("countryCurrency/index", countryCurrencyHandler.Index)
-	adminRouter.POST("countryCurrency/add", countryCurrencyHandler.Add)
-	adminRouter.GET("countryCurrency/edit", countryCurrencyHandler.One)
-	adminRouter.POST("countryCurrency/edit", countryCurrencyHandler.Edit)
-	adminRouter.DELETE("countryCurrency/del", countryCurrencyHandler.Del)
-	adminRouter.POST("countryCurrency/sortable", countryCurrencyHandler.Sortable)
-
-	adminRouter.GET("countryLanguage/index", countryLanguageHandler.Index)
-	adminRouter.POST("countryLanguage/add", countryLanguageHandler.Add)
-	adminRouter.GET("countryLanguage/edit", countryLanguageHandler.One)
-	adminRouter.POST("countryLanguage/edit", countryLanguageHandler.Edit)
-	adminRouter.DELETE("countryLanguage/del", countryLanguageHandler.Del)
-	adminRouter.POST("countryLanguage/sortable", countryLanguageHandler.Sortable)
+	for _, registrar := range registrars {
+		for _, capability := range registrar.Capabilities() {
+			middleware.RegisterAtomicRoute(capability)
+		}
+	}
+	for _, registrar := range registrars {
+		var routes gin.IRoutes
+		switch registrar.Group() {
+		case "admin":
+			routes = adminRouter
+		case "api":
+			routes = apiRouter
+		case "root":
+			routes = router
+		default:
+			panic("unknown route registrar group: " + registrar.Group())
+		}
+		registrar.Register(routes)
+	}
 
 	admin.CollectRoutes(router)
 

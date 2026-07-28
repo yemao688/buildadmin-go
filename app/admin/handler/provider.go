@@ -30,7 +30,10 @@ var ProviderSet = wire.NewSet(
 	NewModuleHandler,
 
 	NewCountryLanguageHandler,
+	NewCountryLanguageRegistrar,
 
 	NewCountryCurrencyHandler,
+	NewCountryCurrencyRegistrar,
 	NewCountryLanguageContentHandler,
+	NewCountryLanguageContentRegistrar,
 )

@@ -40,6 +40,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		adminModel.ProviderSet,
 		apiHandler.ProviderSet,
 
+		router.ProvideRegistrars,
 		router.InitRouter,
 		cron.ProviderSet,
 		newHttpServer,
