@@ -328,18 +328,16 @@ func insertRouterEntry(content, name string) string {
 
 	newStr := strings.Replace(content, ") *gin.Engine {", paramContent, -1)
 
-	routerContent := "admin.CollectRoutes(router)\n\n"
-	routerContent += `
-	adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)
-	adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)
-	adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)
-	adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)
-	adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)
-	adminRouter.POST("` + nameVar + `/sortable", ` + nameVar + `Handler.Sortable)` + "\n"
+	routerContent := "\tadminRouter.GET(\"" + nameVar + "/index\", " + nameVar + "Handler.Index)\n" +
+		"\tadminRouter.POST(\"" + nameVar + "/add\", " + nameVar + "Handler.Add)\n" +
+		"\tadminRouter.GET(\"" + nameVar + "/edit\", " + nameVar + "Handler.One)\n" +
+		"\tadminRouter.POST(\"" + nameVar + "/edit\", " + nameVar + "Handler.Edit)\n" +
+		"\tadminRouter.DELETE(\"" + nameVar + "/del\", " + nameVar + "Handler.Del)\n" +
+		"\tadminRouter.POST(\"" + nameVar + "/sortable\", " + nameVar + "Handler.Sortable)\n"
 
-	newStr = strings.Replace(newStr, "admin.CollectRoutes(router)", routerContent, -1)
+	newStr = strings.Replace(newStr, "\tadmin.CollectRoutes(router)", routerContent+"\tadmin.CollectRoutes(router)", 1)
 	marker := "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
-	if !strings.Contains(newStr, "Route: \""+nameVar+"/add\"") {
+	if !strings.Contains(newStr, "Route: \""+nameVar+"\", Action: \"add\"") {
 		newStr = injectAtomicCapabilities(newStr, nameVar, marker)
 	}
 	return newStr
@@ -394,9 +392,9 @@ func removeRouterEntry(content, name string) (string, error) {
 }
 
 func atomicCapabilityLines(nameVar string) string {
-	return "\t\t{Route: \"" + nameVar + "/add\", Action: \"add\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "/edit\", Action: \"edit\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "/del\", Action: \"del\", Method: http.MethodDelete},\n"
+	return "\t\t{Route: \"" + nameVar + "\", Action: \"add\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "\", Action: \"edit\", Method: http.MethodPost},\n" +
+		"\t\t{Route: \"" + nameVar + "\", Action: \"del\", Method: http.MethodDelete},\n"
 }
 
 func injectAtomicCapabilities(content, nameVar, marker string) string {

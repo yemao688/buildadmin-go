@@ -132,15 +132,15 @@ func InitRouter(
 		{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete},
 		{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost},
 		{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete},
-		{Route: "countryLanguage/add", Action: "add", Method: http.MethodPost},
-		{Route: "countryLanguage/edit", Action: "edit", Method: http.MethodPost},
-		{Route: "countryLanguage/del", Action: "del", Method: http.MethodDelete},
-		{Route: "countryCurrency/add", Action: "add", Method: http.MethodPost},
-		{Route: "countryCurrency/edit", Action: "edit", Method: http.MethodPost},
-		{Route: "countryCurrency/del", Action: "del", Method: http.MethodDelete},
-		{Route: "countryLanguageContent/add", Action: "add", Method: http.MethodPost},
-		{Route: "countryLanguageContent/edit", Action: "edit", Method: http.MethodPost},
-		{Route: "countryLanguageContent/del", Action: "del", Method: http.MethodDelete},
+		{Route: "countryLanguage", Action: "add", Method: http.MethodPost},
+		{Route: "countryLanguage", Action: "edit", Method: http.MethodPost},
+		{Route: "countryLanguage", Action: "del", Method: http.MethodDelete},
+		{Route: "countryCurrency", Action: "add", Method: http.MethodPost},
+		{Route: "countryCurrency", Action: "edit", Method: http.MethodPost},
+		{Route: "countryCurrency", Action: "del", Method: http.MethodDelete},
+		{Route: "countryLanguageContent", Action: "add", Method: http.MethodPost},
+		{Route: "countryLanguageContent", Action: "edit", Method: http.MethodPost},
+		{Route: "countryLanguageContent", Action: "del", Method: http.MethodDelete},
 	} {
 		middleware.RegisterAtomicRoute(capability)
 	}
@@ -301,8 +301,6 @@ func InitRouter(
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
 	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
 
-	admin.CollectRoutes(router)
-
 	adminRouter.GET("countryLanguageContent/index", countryLanguageContentHandler.Index)
 	adminRouter.POST("countryLanguageContent/add", countryLanguageContentHandler.Add)
 	adminRouter.GET("countryLanguageContent/edit", countryLanguageContentHandler.One)
@@ -323,6 +321,8 @@ func InitRouter(
 	adminRouter.POST("countryLanguage/edit", countryLanguageHandler.Edit)
 	adminRouter.DELETE("countryLanguage/del", countryLanguageHandler.Del)
 	adminRouter.POST("countryLanguage/sortable", countryLanguageHandler.Sortable)
+
+	admin.CollectRoutes(router)
 
 	return router
 }
