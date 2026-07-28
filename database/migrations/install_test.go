@@ -3,7 +3,7 @@ package migrations
 import (
 	"fmt"
 	"go-build-admin/conf"
-	"go-build-admin/database/migrations/model"
+	"go-build-admin/database/migrations/internal/core"
 	"os"
 	"testing"
 
@@ -46,32 +46,7 @@ func TestInstall(t *testing.T) {
 	if db == nil {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
-	err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
-		&model.AdminGroupAccess{},
-		&model.AdminGroup{},
-		&model.AdminLog{},
-		&model.AdminRule{},
-		&model.Admin{},
-		&model.AdminClosure{},
-		&model.AdminHierarchyLock{},
-		&model.Area{},
-		&model.Attachment{},
-		&model.Captcha{},
-		&model.Config{},
-		&model.CrudLog{},
-		&model.Migrations{},
-		&model.SecurityDataRecycleLog{},
-		&model.SecurityDataRecycle{},
-		&model.SecuritySensitiveDataLog{},
-		&model.SecuritySensitiveData{},
-		&model.TestBuild{},
-		&model.Token{},
-		&model.UserGroup{},
-		&model.UserMoneyLog{},
-		&model.UserRule{},
-		&model.UserScoreLog{},
-		&model.User{},
-	)
+	err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...)
 	fmt.Println("生成数据表:", err)
 
 	install := NewInstall(db)

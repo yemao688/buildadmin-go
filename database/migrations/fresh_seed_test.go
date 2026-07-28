@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
-	"go-build-admin/database/migrations/model"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -23,16 +23,11 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("fresh_retry_%d_", os.Getpid())}}
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
-	models := []any{
-		&model.AdminGroupAccess{}, &model.AdminGroup{}, &model.AdminLog{}, &model.AdminRule{}, &model.Admin{}, &model.AdminClosure{}, &model.AdminHierarchyLock{},
-		&model.Area{}, &model.Attachment{}, &model.Captcha{}, &model.Config{}, &model.CrudLog{}, &model.Migrations{},
-		&model.SecurityDataRecycleLog{}, &model.SecurityDataRecycle{}, &model.SecuritySensitiveDataLog{}, &model.SecuritySensitiveData{}, &model.TestBuild{}, &model.Token{},
-		&model.UserGroup{}, &model.UserMoneyLog{}, &model.UserRule{}, &model.UserScoreLog{}, &model.User{},
-	}
+	models := core.CoreModels()
 	db = db.Set("gorm:table_options", "ENGINE=InnoDB")
 	require.NoError(t, db.AutoMigrate(models...))
 	t.Cleanup(func() {
-		for _, logical := range []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "admin", "admin_closure", "admin_hierarchy_lock", "area", "attachment", "captcha", "config", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"} {
+		for _, logical := range core.CoreLogicalNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})
@@ -77,10 +72,10 @@ func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
 	require.NoError(t, err)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_overlay_%d_", time.Now().UnixNano())}}
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
-	models := []any{&model.AdminGroupAccess{}, &model.AdminGroup{}, &model.AdminLog{}, &model.AdminRule{}, &model.Admin{}, &model.AdminClosure{}, &model.AdminHierarchyLock{}, &model.Area{}, &model.Attachment{}, &model.Captcha{}, &model.Config{}, &model.CrudLog{}, &model.Migrations{}, &model.SecurityDataRecycleLog{}, &model.SecurityDataRecycle{}, &model.SecuritySensitiveDataLog{}, &model.SecuritySensitiveData{}, &model.TestBuild{}, &model.Token{}, &model.UserGroup{}, &model.UserMoneyLog{}, &model.UserRule{}, &model.UserScoreLog{}, &model.User{}}
+	models := core.CoreModels()
 	require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(models...))
 	t.Cleanup(func() {
-		for _, logical := range []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "admin", "admin_closure", "admin_hierarchy_lock", "area", "attachment", "captcha", "config", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"} {
+		for _, logical := range core.CoreLogicalNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})

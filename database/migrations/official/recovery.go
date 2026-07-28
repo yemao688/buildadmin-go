@@ -47,10 +47,8 @@ func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallReco
 			markerPending = marker.EndTime == nil
 		}
 	}
-	// Keep this list synchronized with orchestrator.go's AutoMigrate model list.
-	businessTables := []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "admin", "admin_closure", "admin_hierarchy_lock", "area", "attachment", "captcha", "config", "country_language", "country_language_content", "country_currency", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"}
 	businessExists := false
-	for _, name := range businessTables {
+	for _, name := range core.CoreLogicalNames() {
 		ok, err := core.LegacyTableExists(db, core.TableName(config, name))
 		if err != nil {
 			return "", err

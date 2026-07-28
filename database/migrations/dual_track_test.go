@@ -2,10 +2,13 @@ package migrations
 
 import (
 	"database/sql"
+	"sync"
 	"testing"
 
 	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func TestDualTrackValidation(t *testing.T) {
@@ -76,5 +79,27 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 func TestLocalRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
 	if (LocalMigrationRecord{}).TableName() != "local_migrations" {
 		t.Fatal("unexpected model table name")
+	}
+}
+
+func TestCoreSchemaInventoryViewsStayEquivalent(t *testing.T) {
+	tables := core.CoreTables()
+	names := core.CoreLogicalNames()
+	models := core.CoreModels()
+	if len(tables) != len(names) || len(tables) != len(models) {
+		t.Fatalf("inventory views have different lengths: tables=%d names=%d models=%d", len(tables), len(names), len(models))
+	}
+	namer := schema.NamingStrategy{SingularTable: true}
+	for i, table := range tables {
+		if table.NewModel == nil {
+			t.Fatalf("inventory entry %d has no model factory", i)
+		}
+		parsed, err := schema.Parse(models[i], &sync.Map{}, namer)
+		if err != nil {
+			t.Fatalf("parse inventory model %d (%s): %v", i, table.LogicalName, err)
+		}
+		if names[i] != table.LogicalName || parsed.Table != table.LogicalName {
+			t.Fatalf("inventory entry %d differs: table=%q name=%q model=%q", i, table.LogicalName, names[i], parsed.Table)
+		}
 	}
 }

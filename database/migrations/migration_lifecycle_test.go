@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go-build-admin/conf"
-	"go-build-admin/database/migrations/model"
+	"go-build-admin/database/migrations/internal/core"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
@@ -16,12 +16,7 @@ import (
 )
 
 func migrationModels() []any {
-	return []any{
-		&model.AdminGroupAccess{}, &model.AdminGroup{}, &model.AdminLog{}, &model.AdminRule{}, &model.Admin{}, &model.AdminClosure{}, &model.AdminHierarchyLock{},
-		&model.Area{}, &model.Attachment{}, &model.Captcha{}, &model.Config{}, &model.CrudLog{}, &model.Migrations{},
-		&model.SecurityDataRecycleLog{}, &model.SecurityDataRecycle{}, &model.SecuritySensitiveDataLog{}, &model.SecuritySensitiveData{}, &model.TestBuild{}, &model.Token{},
-		&model.UserGroup{}, &model.UserMoneyLog{}, &model.UserRule{}, &model.UserScoreLog{}, &model.User{},
-	}
+	return core.CoreModels()
 }
 
 func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *conf.Configuration) {
@@ -30,7 +25,7 @@ func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB,
 	db = db.Session(&gorm.Session{NewDB: true})
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	t.Cleanup(func() {
-		for _, logical := range []string{"admin_group_access", "admin_group", "admin_log", "admin_rule", "admin", "admin_closure", "admin_hierarchy_lock", "area", "attachment", "captcha", "config", "crud_log", "migrations", "security_data_recycle_log", "security_data_recycle", "security_sensitive_data_log", "security_sensitive_data", "test_build", "token", "user_group", "user_money_log", "user_rule", "user_score_log", "user"} {
+		for _, logical := range core.CoreLogicalNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})
