@@ -82,7 +82,7 @@ push: login
 	@echo "  $(IMAGE):latest       (=VERSION,人肉入口)"
 	@echo ""
 	@echo "服务器拉新(本地不连 ssh):"
-  	@echo "    docker compose pull && docker compose up -d'"
+	@echo "    docker compose pull && docker compose up -d"
 
 # 本地前台运行 Go 服务。
 run:
