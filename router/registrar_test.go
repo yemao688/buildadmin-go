@@ -14,10 +14,27 @@ import (
 )
 
 func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testing.T) {
+	engine := newCompleteRouter()
+
+	want := countryRoutes()
+	engineRoutes := uniqueRoutes(t, engine.Routes())
+	require.Len(t, engineRoutes, len(engine.Routes()))
+	for _, route := range want {
+		require.Contains(t, engineRoutes, route)
+	}
+
+	collectedRoutes := uniqueCollectedRoutes(t, admin.GetAllRoutes())
+	require.Len(t, collectedRoutes, len(admin.GetAllRoutes()))
+	for _, route := range want {
+		require.Contains(t, collectedRoutes, route)
+	}
+}
+
+func newCompleteRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	admin.RegisteredRoutes = nil
 
-	engine := InitRouter(
+	return InitRouter(
 		&lumberjack.Logger{},
 		&middleware.Login{},
 		&middleware.Security{},
@@ -60,19 +77,6 @@ func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testin
 			admin.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
 		),
 	)
-
-	want := countryRoutes()
-	engineRoutes := uniqueRoutes(t, engine.Routes())
-	require.Len(t, engineRoutes, len(engine.Routes()))
-	for _, route := range want {
-		require.Contains(t, engineRoutes, route)
-	}
-
-	collectedRoutes := uniqueCollectedRoutes(t, admin.GetAllRoutes())
-	require.Len(t, collectedRoutes, len(admin.GetAllRoutes()))
-	for _, route := range want {
-		require.Contains(t, collectedRoutes, route)
-	}
 }
 
 func countryRoutes() []string {
