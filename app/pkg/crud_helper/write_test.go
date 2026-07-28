@@ -3,6 +3,8 @@ package crud_helper
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -111,6 +113,65 @@ func TestProviderEntryRoundTrip(t *testing.T) {
 	}
 	if removed != original {
 		t.Fatalf("provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
+	}
+}
+
+func TestRemoveProviderEntryShapesRemainParseable(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "unique", body: "\tNewTargetModel,\n"},
+		{name: "first", body: "\tNewTargetModel,\n\tNewKeepModel,\n"},
+		{name: "middle", body: "\tNewKeepModel,\n\tNewTargetModel,\n\tNewOtherModel,\n"},
+		{name: "last", body: "\tNewKeepModel,\n\tNewTargetModel,\n"},
+		{name: "single line unique", body: "NewTargetModel"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "package provider\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n" + tc.body + ")\n"
+			removed, err := removeProviderEntry(content, "TargetModel")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertParseableGo(t, "provider.go", removed)
+			if strings.Contains(removed, "NewTargetModel") {
+				t.Fatalf("target provider remains:\n%s", removed)
+			}
+		})
+	}
+}
+
+func TestRemoveRegistrarProviderEntryShapesRemainParseable(t *testing.T) {
+	cases := []struct {
+		name   string
+		params string
+		items  string
+	}{
+		{name: "unique", params: "targetRegistrar *admin.TargetRegistrar", items: "targetRegistrar"},
+		{name: "first", params: "targetRegistrar *admin.TargetRegistrar,\n\tkeepRegistrar *admin.KeepRegistrar", items: "targetRegistrar,\n\tkeepRegistrar"},
+		{name: "middle", params: "keepRegistrar *admin.KeepRegistrar,\n\ttargetRegistrar *admin.TargetRegistrar,\n\totherRegistrar *admin.OtherRegistrar", items: "keepRegistrar,\n\ttargetRegistrar,\n\totherRegistrar"},
+		{name: "last", params: "keepRegistrar *admin.KeepRegistrar,\n\ttargetRegistrar *admin.TargetRegistrar", items: "keepRegistrar,\n\ttargetRegistrar"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "package router\n\nimport admin \"go-build-admin/app/admin/handler\"\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(" + tc.params + ") []RouteRegistrar {\n\treturn []RouteRegistrar{" + tc.items + "}\n}\n"
+			removed, err := removeRegistrarProviderEntry(content, "Target")
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertParseableGo(t, "registrar_set.go", removed)
+			if strings.Contains(removed, "targetRegistrar") || strings.Contains(removed, "TargetRegistrar") {
+				t.Fatalf("target registrar remains:\n%s", removed)
+			}
+		})
+	}
+}
+
+func assertParseableGo(t *testing.T, filename, content string) {
+	t.Helper()
+	if _, err := parser.ParseFile(token.NewFileSet(), filename, content, parser.AllErrors); err != nil {
+		t.Fatalf("%s is not parseable: %v\n%s", filename, err, content)
 	}
 }
 

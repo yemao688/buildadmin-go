@@ -7,6 +7,8 @@ import (
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -345,8 +347,14 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return fail("menu snapshot", err)
 	}
+	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
+		return fail("delete menu", err)
+	}
 	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
 		return fail("remove handler provider", err)
+	}
+	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Registrar"); err != nil {
+		return fail("remove handler registrar provider", err)
 	}
 	if err := RemoveProvider(modelFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
 		return fail("remove model provider", err)
@@ -357,14 +365,18 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := RemoveRegistrarProvider(handlerFile.LastName); err != nil {
 		return fail("remove registrar provider", err)
 	}
+	if err := parseDeleteGoFiles(
+		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
+		filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
+		filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
+	); err != nil {
+		return fail("parse guard", err)
+	}
 	if err := runWire(); err != nil {
 		return fail("wire", err)
 	}
 	if err := runProjectBuild(); err != nil {
 		return fail("compile", err)
-	}
-	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
-		return fail("delete menu", err)
 	}
 	if err := shared.Cleanup(); err != nil {
 		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", shared.dir, err)
@@ -516,6 +528,15 @@ func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRu
 			if err := db.Table(cfg.Database.Prefix + "admin_rule").Create(&row).Error; err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func parseDeleteGoFiles(paths ...string) error {
+	for _, path := range paths {
+		if _, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.AllErrors); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
 	return nil

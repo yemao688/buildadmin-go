@@ -397,3 +397,22 @@ func TestWireErrorWithoutOutputReturnsOriginalError(t *testing.T) {
 		t.Fatalf("wire error without output = %q", err.Error())
 	}
 }
+
+func TestParseDeleteGoFilesReportsPathAndLine(t *testing.T) {
+	dir := t.TempDir()
+	valid := filepath.Join(dir, "provider.go")
+	invalid := filepath.Join(dir, "registrar_set.go")
+	if err := os.WriteFile(valid, []byte("package provider\n\nvar ProviderSet = struct{}{}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(invalid, []byte("package router\n\nvar ProviderSet = []int{\n\t1,\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := parseDeleteGoFiles(valid, invalid)
+	if err == nil {
+		t.Fatal("invalid provider output should fail the parse guard")
+	}
+	if !strings.Contains(err.Error(), invalid) || !strings.Contains(err.Error(), ":4:") {
+		t.Fatalf("parse guard error lacks path/line: %v", err)
+	}
+}

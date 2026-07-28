@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/utils"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -397,14 +400,52 @@ func RemoveRegistrarProvider(name string) error {
 func removeRegistrarProviderEntry(content, name string) (string, error) {
 	registrarType := name + "Registrar"
 	registrarVar := lowerFirst(name) + "Registrar"
-	param := "\t" + registrarVar + " *admin." + registrarType + ",\n"
-	entry := "\t\t" + registrarVar + ",\n"
-	if !strings.Contains(content, param) && !strings.Contains(content, entry) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return "", err
+	}
+	var removals []sourceRemoval
+	ast.Inspect(file, func(node ast.Node) bool {
+		function, ok := node.(*ast.FuncDecl)
+		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Type.Params == nil {
+			return true
+		}
+		params := make([]ast.Node, 0, len(function.Type.Params.List))
+		for _, field := range function.Type.Params.List {
+			if len(field.Names) == 1 && field.Names[0].Name == registrarVar && strings.Contains(formatNodeText(fset, field, content), registrarType) {
+				continue
+			}
+			params = append(params, field)
+		}
+		if len(params) != len(function.Type.Params.List) {
+			removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
+				field, ok := node.(*ast.Field)
+				return ok && len(field.Names) == 1 && field.Names[0].Name == registrarVar && strings.Contains(formatNodeText(fset, field, content), registrarType)
+			})...)
+		}
+		return true
+	})
+	ast.Inspect(file, func(node ast.Node) bool {
+		composite, ok := node.(*ast.CompositeLit)
+		if !ok || len(composite.Elts) == 0 {
+			return true
+		}
+		removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
+			ident, ok := node.(*ast.Ident)
+			return ok && ident.Name == registrarVar
+		})...)
+		return true
+	})
+	if len(removals) == 0 {
 		return content, nil
 	}
-	content = strings.ReplaceAll(content, param, "")
-	content = strings.ReplaceAll(content, entry, "")
-	return formatGoCode(content)
+	content = applySourceRemovals(content, removals)
+	formatted, err := formatGoCode(content)
+	if err != nil {
+		return "", err
+	}
+	return canonicalizeGoContent(formatted), nil
 }
 
 func writeProvider(dir string, name string) error {
@@ -448,13 +489,142 @@ func RemoveProvider(dir string, name string) error {
 
 // removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行）。
 func removeProviderEntry(content, name string) (string, error) {
-	newContent := strings.ReplaceAll(content, "\tNew"+name+",\n", "")
-	newContent = strings.ReplaceAll(newContent, "New"+name+",", "")
-	newContent, err := formatGoCode(newContent)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return "", err
+	}
+	var removals []sourceRemoval
+	target := "New" + name
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
+			return true
+		}
+		removals = append(removals, removeListElementRanges(content, fset, call.Lparen, call.Rparen, exprsAsNodes(call.Args), func(node ast.Node) bool {
+			ident, ok := node.(*ast.Ident)
+			return ok && ident.Name == target
+		})...)
+		return true
+	})
+	if len(removals) > 0 {
+		content = applySourceRemovals(content, removals)
+	}
+	newContent, err := formatGoCode(content)
 	if err != nil {
 		return "", err
 	}
 	return canonicalizeGoContent(newContent), nil
+}
+
+type sourceRemoval struct {
+	start int
+	end   int
+}
+
+func fieldsAsNodes(fields []*ast.Field) []ast.Node {
+	nodes := make([]ast.Node, len(fields))
+	for index, field := range fields {
+		nodes[index] = field
+	}
+	return nodes
+}
+
+func exprsAsNodes(exprs []ast.Expr) []ast.Node {
+	nodes := make([]ast.Node, len(exprs))
+	for index, expr := range exprs {
+		nodes[index] = expr
+	}
+	return nodes
+}
+
+func removeListElementRanges(content string, fset *token.FileSet, opening, closing token.Pos, elements []ast.Node, match func(ast.Node) bool) []sourceRemoval {
+	var removals []sourceRemoval
+	openOffset := fset.PositionFor(opening, false).Offset
+	closeOffset := fset.PositionFor(closing, false).Offset
+	multiline := strings.Contains(content[openOffset:closeOffset], "\n")
+	for index, element := range elements {
+		if !match(element) {
+			continue
+		}
+		start := fset.PositionFor(element.Pos(), false).Offset
+		end := fset.PositionFor(element.End(), false).Offset
+		if index < len(elements)-1 {
+			end = fset.PositionFor(elements[index+1].Pos(), false).Offset
+		} else {
+			end = consumeListComma(content, end)
+			if multiline {
+				start = listElementLineStart(content, start)
+			} else if index > 0 {
+				start = fset.PositionFor(elements[index-1].End(), false).Offset
+			}
+		}
+		removals = append(removals, sourceRemoval{start: start, end: end})
+	}
+	return removals
+}
+
+func consumeListComma(content string, offset int) int {
+	for offset < len(content) && (content[offset] == ' ' || content[offset] == '\t') {
+		offset++
+	}
+	if offset < len(content) && content[offset] == ',' {
+		offset++
+		if offset < len(content) && content[offset] == '\r' {
+			offset++
+		}
+		if offset < len(content) && content[offset] == '\n' {
+			offset++
+		}
+	}
+	return offset
+}
+
+func listElementLineStart(content string, offset int) int {
+	for offset > 0 && content[offset-1] != '\n' {
+		offset--
+	}
+	return offset
+}
+
+func applySourceRemovals(content string, removals []sourceRemoval) string {
+	sort.Slice(removals, func(i, j int) bool {
+		if removals[i].start == removals[j].start {
+			return removals[i].end > removals[j].end
+		}
+		return removals[i].start < removals[j].start
+	})
+	merged := removals[:0]
+	for _, removal := range removals {
+		if removal.start < 0 || removal.end <= removal.start || removal.end > len(content) {
+			continue
+		}
+		if len(merged) > 0 && removal.start <= merged[len(merged)-1].end {
+			if removal.end > merged[len(merged)-1].end {
+				merged[len(merged)-1].end = removal.end
+			}
+			continue
+		}
+		merged = append(merged, removal)
+	}
+	for index := len(merged) - 1; index >= 0; index-- {
+		removal := merged[index]
+		content = content[:removal.start] + content[removal.end:]
+	}
+	return content
+}
+
+func formatNodeText(fset *token.FileSet, node ast.Node, content string) string {
+	start := fset.PositionFor(node.Pos(), false).Offset
+	end := fset.PositionFor(node.End(), false).Offset
+	if start < 0 || end < start || end > len(content) {
+		return ""
+	}
+	return content[start:end]
 }
 
 func formatGoCode(code string) (string, error) {
@@ -465,6 +635,9 @@ func formatGoCode(code string) (string, error) {
 	// 获取输出
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+			return "", fmt.Errorf("gofmt: %s; code=%q", strings.TrimSpace(string(exitErr.Stderr)), code)
+		}
 		return "", err
 	}
 	return string(output), nil
