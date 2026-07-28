@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
@@ -62,8 +63,7 @@ func main() {
 			}
 			defer cleanup()
 
-			// 启动应用
-			log.Printf("start app %s ...", Version)
+			// 启动应用（启动横幅由 app.Run 输出）
 			if err := app.Run(); err != nil {
 				panic(err)
 			}
@@ -131,6 +131,9 @@ func initConfig() {
 	if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
 		panic(fmt.Errorf("apply config app.time_zone failed: %w", err))
 	}
+	if err := applyGinMode(nextConfig.App.Env); err != nil {
+		panic(fmt.Errorf("apply config app.env failed: %w", err))
+	}
 	config = &nextConfig
 
 	v.WatchConfig()
@@ -151,8 +154,26 @@ func initConfig() {
 			logConfigChangeError(fmt.Errorf("apply config app.time_zone failed: %w", err))
 			return
 		}
+		if err := applyGinMode(nextConfig.App.Env); err != nil {
+			logConfigChangeError(fmt.Errorf("apply config app.env failed: %w", err))
+			return
+		}
 		config = &nextConfig
 	})
+}
+
+// applyGinMode maps app.env onto the gin runtime mode. Only debug and release
+// are supported; anything else (including the legacy "local") is a config error.
+func applyGinMode(env string) error {
+	switch env {
+	case "debug":
+		gin.SetMode(gin.DebugMode)
+	case "release":
+		gin.SetMode(gin.ReleaseMode)
+	default:
+		return fmt.Errorf("invalid app.env %q: only 'debug' or 'release' is supported", env)
+	}
+	return nil
 }
 
 // applyTimeZone validates the configured location before changing the process-wide default.

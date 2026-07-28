@@ -4,7 +4,6 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -12,7 +11,7 @@ import (
 
 func ServerError(c *gin.Context, err interface{}) {
 	msg := "Internal Server Error"
-	if os.Getenv(gin.EnvGinMode) != gin.ReleaseMode {
+	if gin.Mode() != gin.ReleaseMode {
 		if _, ok := err.(error); ok {
 			msg = err.(error).Error()
 		}

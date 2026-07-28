@@ -82,12 +82,14 @@ GET /api/install/envBaseCheck
 GET /api/install/terminal
 GET /api/user/checkIn
 GET /assets/*filepath
+GET /favicon.ico
 GET /healthz
 GET /install/*filepath
 GET /static/*filepath
 GET /storage/default/*filepath
 HEAD /
 HEAD /assets/*filepath
+HEAD /favicon.ico
 HEAD /install/*filepath
 HEAD /static/*filepath
 HEAD /storage/default/*filepath

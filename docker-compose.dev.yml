@@ -1,0 +1,12 @@
+# 当前源码的本地开发覆盖配置。
+services:
+  buildadmin-go:
+    image: ${DEPLOY_IMAGE_NAME}:dev
+    pull_policy: never
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION}
+        GIT_SHA: ${GIT_SHA}
+        BUILD_TS: ${BUILD_TS}
+    restart: no

@@ -1,5 +1,5 @@
 app:
-  env: 'local'
+  env: 'debug' #运行模式: debug=开发调试模式, release=生产模式
   port: 9989
   app_name: 'go-build-admin'
   time_zone: 'Asia/Shanghai'
