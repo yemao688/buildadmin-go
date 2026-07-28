@@ -88,6 +88,7 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	handlerData.RouteName = routeNameFromRelativePath(table.GenerateRelativePath, handlerData.ClassName)
 	handlerData.PkGoType = modelData.PkGoType
 	handlerData.PkJSONName = tablePk
 	handlerData.TableComment = tableComment
@@ -162,6 +163,7 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 	quickSearchFieldZhCnTitle := []string{}
 
 	indexVueData := IndexVueData{}
+	indexVueData.RouteName = handlerData.RouteName
 	indexVueData.EnableDragSort = "false"
 	indexVueData.DefaultItems = []string{}
 	indexVueData.TableColumn = []string{" type: 'selection', align: 'center', operator: false"}
@@ -311,6 +313,14 @@ func pkGoField(pk string) string {
 		return "ID"
 	}
 	return utils.SnakeToCamel(pk, true)
+}
+
+func routeNameFromRelativePath(relativePath, fallback string) string {
+	parts := strings.Split(strings.Trim(relativePath, "/"), "/")
+	if len(parts) < 2 || parts[0] == "" || parts[len(parts)-1] == "" {
+		return lowerFirst(fallback)
+	}
+	return strings.Join(parts[:len(parts)-1], ".") + "." + utils.SnakeToCamel(parts[len(parts)-1], true)
 }
 
 func primaryKeyGoType(field model.Field) (string, error) {

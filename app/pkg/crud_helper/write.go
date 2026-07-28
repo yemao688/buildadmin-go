@@ -180,7 +180,10 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
-		name := strings.ToLower(handlerData.ClassName[:1]) + handlerData.ClassName[1:]
+		name := handlerData.RouteName
+		if name == "" {
+			name = strings.ToLower(handlerData.ClassName[:1]) + handlerData.ClassName[1:]
+		}
 		handlerData.RegisterAtomicRoute("POST", name+"/add")
 		handlerData.RegisterAtomicRoute("POST", name+"/edit")
 		handlerData.RegisterAtomicRoute("DELETE", name+"/del")
@@ -319,6 +322,7 @@ func writeRegistrarFile(handlerData HandlerData, handlerFile NameInfo) error {
 		Namespace: handlerFile.Namespace,
 		ClassName: handlerData.ClassName,
 		RouteName: lowerFirst(handlerData.ClassName),
+		RoutePath: handlerData.RouteName,
 	}
 	content, err := render(registrarPath, registrarTemp, data)
 	if err != nil {
@@ -536,7 +540,11 @@ func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile N
 	}
 	data["componentName"] = componentName
 	data["optButtons"] = buildSimpleArray(indexVueData.OptButtons)
-	data["apiUrl"] = "'/admin/" + utils.SnakeToCamel(handlerFile.LastName, false) + "/'"
+	apiRoute := indexVueData.RouteName
+	if apiRoute == "" {
+		apiRoute = utils.SnakeToCamel(handlerFile.LastName, false)
+	}
+	data["apiUrl"] = "'/admin/" + apiRoute + "/'"
 	data["tablePk"] = indexVueData.TablePk
 	data["tableColumn"] = buildTableColumn(indexVueData.TableColumn)
 	data["dblClickNotEditColumn"] = buildSimpleArray(indexVueData.DblClickNotEditColumn)

@@ -197,6 +197,7 @@ type IndexVueData struct {
 	DefaultOrder          string
 	TablePk               string
 	WebTranslate          string
+	RouteName             string
 }
 
 type FormVueData struct {
@@ -262,6 +263,7 @@ type HandlerData struct {
 	ModelVar            string //模型变量名
 	PkGoType            string //主键Go类型
 	PkJSONName          string //主键JSON字段名
+	RouteName           string //后台CRUD路由路径
 	RegisterAtomicRoute func(method, path string)
 	TableComment        string            //表备注
 	ValidateParam       string            //表单参数
@@ -281,6 +283,7 @@ type RegistrarData struct {
 	Namespace string
 	ClassName string
 	RouteName string
+	RoutePath string
 }
 
 const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
@@ -300,7 +303,7 @@ func New{{.ClassName}}Registrar(handler *{{.ClassName}}Handler) *{{.ClassName}}R
 	return &{{.ClassName}}Registrar{handler: handler}
 }
 
-const {{.RouteName}}Route = "{{.RouteName}}"
+const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName}}{{end}}"
 
 func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
 
