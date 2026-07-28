@@ -24,19 +24,13 @@ func InitRouter(
 
 	adminHandler *admin.AdminHandler,
 	adminInfoHandler *admin.AdminInfoHandler,
-	adminGroupHandler *admin.AdminGroupHandler,
-	adminRuleHandler *admin.AdminRuleHandler,
 	adminLogHandler *admin.AdminLogHandler,
 	indexHandler *admin.IndexHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
-	userGroupHandler *admin.UserGroupHandler,
-	userRuleHandler *admin.UserRuleHandler,
 	userMoneyLogHandler *admin.UserMoneyLogHandler,
 	userScoreLogHandler *admin.UserScoreLogHandler,
-	attachmentHandler *admin.AttachmentHandler,
 	crudHandler *admin.CrudHandler,
-	configHandler *admin.ConfigHandler,
 
 	dataRecycleHandler *admin.DataRecycleHandler,
 	dataRecycleLogHandler *admin.DataRecycleLogHandler,
@@ -102,18 +96,9 @@ func InitRouter(
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
 	for _, capability := range []middleware.AtomicRoute{
-		{Route: "auth/group", Action: "add", Method: http.MethodPost},
-		{Route: "auth/group", Action: "edit", Method: http.MethodPost},
-		{Route: "auth/group", Action: "del", Method: http.MethodDelete},
 		{Route: "auth/admin", Action: "add", Method: http.MethodPost},
 		{Route: "auth/admin", Action: "edit", Method: http.MethodPost},
 		{Route: "auth/admin", Action: "del", Method: http.MethodDelete},
-		{Route: "auth/rule", Action: "add", Method: http.MethodPost},
-		{Route: "auth/rule", Action: "edit", Method: http.MethodPost},
-		{Route: "auth/rule", Action: "del", Method: http.MethodDelete},
-		{Route: "routine/config", Action: "add", Method: http.MethodPost},
-		{Route: "routine/config", Action: "edit", Method: http.MethodPost},
-		{Route: "routine/config", Action: "del", Method: http.MethodDelete},
 		{Route: "user/user", Action: "add", Method: http.MethodPost},
 		{Route: "user/user", Action: "edit", Method: http.MethodPost},
 		{Route: "user/user", Action: "del", Method: http.MethodDelete},
@@ -135,24 +120,11 @@ func InitRouter(
 
 	adminRouter.GET("Dashboard/index", dashboardHandler.Index)
 
-	adminRouter.GET("auth.Group/index", adminGroupHandler.Index)
-	adminRouter.POST("auth.Group/add", adminGroupHandler.Add)
-	adminRouter.GET("auth.Group/edit", adminGroupHandler.One)
-	adminRouter.POST("auth.Group/edit", adminGroupHandler.Edit)
-	adminRouter.DELETE("auth.Group/del", adminGroupHandler.Del)
-
 	adminRouter.GET("auth.Admin/index", adminHandler.Index)
 	adminRouter.POST("auth.Admin/add", adminHandler.Add)
 	adminRouter.GET("auth.Admin/edit", adminHandler.One)
 	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)
 	adminRouter.DELETE("auth.Admin/del", adminHandler.Del)
-
-	adminRouter.GET("auth.Rule/index", adminRuleHandler.Index)
-	adminRouter.POST("auth.Rule/add", adminRuleHandler.Add)
-	adminRouter.GET("auth.Rule/edit", adminRuleHandler.One)
-	adminRouter.POST("auth.Rule/edit", adminRuleHandler.Edit)
-	adminRouter.DELETE("auth.Rule/del", adminRuleHandler.Del)
-	adminRouter.POST("auth.Rule/sortable", adminRuleHandler.Sortable)
 
 	registerAdminLogRoutes(adminRouter, adminLogHandler)
 
@@ -162,19 +134,6 @@ func InitRouter(
 	adminRouter.POST("user.User/edit", userHandler.Edit)
 	adminRouter.DELETE("user.User/del", userHandler.Del)
 
-	adminRouter.GET("user.Group/index", userGroupHandler.Index)
-	adminRouter.POST("user.Group/add", userGroupHandler.Add)
-	adminRouter.GET("user.Group/edit", userGroupHandler.One)
-	adminRouter.POST("user.Group/edit", userGroupHandler.Edit)
-	adminRouter.DELETE("user.Group/del", userGroupHandler.Del)
-
-	adminRouter.GET("user.Rule/index", userRuleHandler.Index)
-	adminRouter.POST("user.Rule/add", userRuleHandler.Add)
-	adminRouter.GET("user.Rule/edit", userRuleHandler.One)
-	adminRouter.POST("user.Rule/edit", userRuleHandler.Edit)
-	adminRouter.DELETE("user.Rule/del", userRuleHandler.Del)
-	adminRouter.POST("user.Rule/sortable", userRuleHandler.Sortable)
-
 	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
 	adminRouter.GET("user.MoneyLog/add", userHandler.One)
 	adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
@@ -182,17 +141,6 @@ func InitRouter(
 	adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
 	adminRouter.GET("user.ScoreLog/add", userHandler.One)
 	adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
-
-	adminRouter.GET("routine.Config/index", configHandler.Index)
-	adminRouter.POST("routine.Config/add", configHandler.Add)
-	adminRouter.POST("routine.Config/edit", configHandler.Edit)
-	adminRouter.DELETE("routine.Config/del", configHandler.Del)
-	adminRouter.POST("routine.Config/sendTestMail", configHandler.SendTestMail)
-
-	adminRouter.GET("routine.Attachment/index", attachmentHandler.Index)
-	adminRouter.GET("routine.Attachment/edit", attachmentHandler.One)
-	adminRouter.POST("routine.Attachment/edit", attachmentHandler.Edit)
-	adminRouter.DELETE("routine.Attachment/del", attachmentHandler.Del)
 
 	adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
 	adminRouter.POST("routine.AdminInfo/edit", adminInfoHandler.Edit)

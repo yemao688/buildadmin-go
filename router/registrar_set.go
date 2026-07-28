@@ -10,6 +10,12 @@ func ProvideRegistrars(
 	crudLog *admin.CrudLogRegistrar,
 	module *admin.ModuleRegistrar,
 	testBuild *admin.TestBuildRegistrar,
+	adminGroup *admin.AdminGroupRegistrar,
+	adminRule *admin.AdminRuleRegistrar,
+	userGroup *admin.UserGroupRegistrar,
+	userRule *admin.UserRuleRegistrar,
+	config *admin.ConfigRegistrar,
+	attachment *admin.AttachmentRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
 		countryLanguage,
@@ -18,5 +24,11 @@ func ProvideRegistrars(
 		crudLog,
 		module,
 		testBuild,
+		adminGroup,
+		adminRule,
+		userGroup,
+		userRule,
+		config,
+		attachment,
 	}
 }
