@@ -195,9 +195,12 @@ git push origin master
 
 | 文件或区域 | 处理原则 |
 |---|---|
-| `router/router.go` | 保留框架和业务双方路由，合并注册位置并检查路径、权限和重复注册。 |
+| `router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
+| `router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/app`。 |
+| `app/admin/handler/provider.go`、`app/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
 | provider 集合 | 合并双方 provider；来源解决后再按需要生成 Wire。 |
-| `cmd/app/wire_gen.go` | 不手改。先解决 `wire.go`、provider 等来源，再运行 `go generate ./cmd/app`。 |
+| `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
+| `router/testdata/routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
 | `conf/config.example.yaml` | 以框架新增字段为基础；业务运行值放在被忽略的 `conf/config.yaml`，不要把凭据合入模板。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
