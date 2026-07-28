@@ -297,25 +297,61 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	infoArr := strings.Split(info, ";")
+	if len(infoArr) != 3 {
+		return false
+	}
+
 	xyArr := strings.Split(infoArr[0], "-")
-	w, _ := strconv.Atoi(infoArr[1])
-	h, _ := strconv.Atoi(infoArr[2])
+	if len(xyArr) == 0 || len(xyArr) != len(captchaInfo.PointArr) {
+		return false
+	}
+	if captchaInfo.Width <= 0 || captchaInfo.Height <= 0 {
+		return false
+	}
+
+	w, err := strconv.Atoi(infoArr[1])
+	if err != nil || w <= 0 {
+		return false
+	}
+	h, err := strconv.Atoi(infoArr[2])
+	if err != nil || h <= 0 {
+		return false
+	}
+
 	xPro := w / captchaInfo.Width
 	yPro := h / captchaInfo.Height
+	if xPro == 0 || yPro == 0 {
+		return false
+	}
 
 	for k, v := range xyArr {
-		xy := strings.Split(v, ",")
-		x, _ := strconv.Atoi(xy[0])
-		y, _ := strconv.Atoi(xy[1])
-		if x/xPro < captchaInfo.PointArr[k].X || x/xPro > captchaInfo.PointArr[k].X+captchaInfo.PointArr[k].Width {
+		if k >= len(captchaInfo.PointArr) || captchaInfo.PointArr[k] == nil {
 			return false
 		}
 
-		phStart := captchaInfo.PointArr[k].Y - captchaInfo.PointArr[k].Height
-		phEnd := captchaInfo.PointArr[k].Y
-		if captchaInfo.PointArr[k].Icon {
-			phStart = captchaInfo.PointArr[k].Y
-			phEnd = captchaInfo.PointArr[k].Y + captchaInfo.PointArr[k].Height
+		xy := strings.Split(v, ",")
+		if len(xy) != 2 {
+			return false
+		}
+		x, err := strconv.Atoi(xy[0])
+		if err != nil || x < 0 {
+			return false
+		}
+		y, err := strconv.Atoi(xy[1])
+		if err != nil || y < 0 {
+			return false
+		}
+
+		point := captchaInfo.PointArr[k]
+		if x/xPro < point.X || x/xPro > point.X+point.Width {
+			return false
+		}
+
+		phStart := point.Y - point.Height
+		phEnd := point.Y
+		if point.Icon {
+			phStart = point.Y
+			phEnd = point.Y + point.Height
 		}
 		if y/yPro < phStart || y/yPro > phEnd {
 			return false

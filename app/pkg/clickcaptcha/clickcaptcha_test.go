@@ -1,16 +1,23 @@
 package clickcaptcha
 
 import (
+	"encoding/json"
 	"fmt"
+	"go-build-admin/database/migrations/model"
 	"go-build-admin/utils"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/freetype/truetype"
 	"github.com/magiconair/properties/assert"
 	"golang.org/x/image/font"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func TestRandPosition(t *testing.T) {
@@ -57,7 +64,7 @@ func TestGetFontWidthAndHeight(t *testing.T) {
 func TestAlpha(t *testing.T) {
 	fmt.Println(127 - 36*float64(127)/100)
 
-	info := ";350;200"
+	info := "15,10;350;200"
 	infoArr := strings.Split(info, ";")
 	fmt.Printf("%+v \n", infoArr)
 	xyArr := strings.Split(infoArr[0], "-")
@@ -71,4 +78,92 @@ func TestAlpha(t *testing.T) {
 	x, _ := strconv.Atoi(xy[0])
 	y, _ := strconv.Atoi(xy[1])
 	fmt.Println(x, y)
+}
+
+func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {
+	t.Helper()
+
+	db, err := gorm.Open(sqlite.Open("file:clickcaptcha-"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`CREATE TABLE ba_captcha (
+		key TEXT PRIMARY KEY,
+		code TEXT,
+		captcha TEXT,
+		create_time INTEGER,
+		expire_time INTEGER
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	points := make([]*Point, pointCount)
+	for i := range points {
+		points[i] = &Point{Width: 30, Height: 30, X: 10, Y: 20}
+	}
+	captchaJSON, err := json.Marshal(CaptchaInfo{Width: 350, Height: 200, PointArr: points})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&model.Captcha{
+		Key:        utils.Md5("clickcaptcha-test"),
+		Captcha:    string(captchaJSON),
+		ExpireTime: time.Now().Unix() + 600,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	return &ClickCaptcha{sqlDB: db}
+}
+
+func checkWithoutPanic(t *testing.T, clickCaptcha *ClickCaptcha, info string) bool {
+	t.Helper()
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("Check panicked for %q: %v", info, recovered)
+		}
+	}()
+	return clickCaptcha.Check("clickcaptcha-test", info, false)
+}
+
+func TestCheckRejectsMalformedInput(t *testing.T) {
+	tests := []struct {
+		name        string
+		info        string
+		pointCount  int
+		wantSuccess bool
+	}{
+		{name: "empty input", info: "", pointCount: 1},
+		{name: "truncated info array", info: "15,10", pointCount: 1},
+		{name: "non numeric x coordinate", info: "not-a-number,10;350;200", pointCount: 1},
+		{name: "non numeric y coordinate", info: "15,not-a-number;350;200", pointCount: 1},
+		{name: "zero x divisor", info: "15,10;1;200", pointCount: 1},
+		{name: "zero y divisor", info: "15,10;350;1", pointCount: 1},
+		{name: "fewer points than expected", info: "15,10;350;200", pointCount: 2},
+		{name: "well formed control", info: "15,10;350;200", pointCount: 1, wantSuccess: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			clickCaptcha := newCheckTestCaptcha(t, test.pointCount)
+			if got := checkWithoutPanic(t, clickCaptcha, test.info); got != test.wantSuccess {
+				t.Fatalf("Check(%q) = %v, want %v", test.info, got, test.wantSuccess)
+			}
+		})
+	}
+}
+
+func TestCheckMalformedInputNeverPanics(t *testing.T) {
+	clickCaptcha := newCheckTestCaptcha(t, 1)
+	rng := rand.New(rand.NewSource(1))
+
+	for i := 0; i < 1000; i++ {
+		garbage := make([]byte, rng.Intn(64))
+		for j := range garbage {
+			garbage[j] = byte(rng.Intn(256))
+		}
+		checkWithoutPanic(t, clickCaptcha, string(garbage))
+	}
 }
