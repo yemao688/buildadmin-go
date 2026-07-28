@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -39,7 +38,7 @@ type Command struct {
 	Command string
 }
 
-type authModel interface {
+type AuthModel interface {
 	IsLogin(ctx *gin.Context) (*token.Token, bool)
 	IsSuperAdmin(id int32) bool
 }
@@ -47,10 +46,10 @@ type authModel interface {
 type Terminal struct {
 	config *conf.Configuration
 	log    *zap.Logger
-	authM  authModel
+	authM  AuthModel
 }
 
-func NewTerminal(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel) *Terminal {
+func NewTerminal(config *conf.Configuration, log *zap.Logger, authM AuthModel) *Terminal {
 	return &Terminal{
 		config: config,
 		log:    log,

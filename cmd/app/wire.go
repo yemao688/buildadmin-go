@@ -16,6 +16,7 @@ import (
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
+	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/router"
 	"go-build-admin/service/db"
 	"go-build-admin/service/rds"
@@ -38,6 +39,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
 		adminModel.ProviderSet,
+		wire.Bind(new(terminal.AuthModel), new(*adminModel.AuthModel)),
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,
