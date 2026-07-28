@@ -3,6 +3,10 @@
 /public/*.lock
 /public/index.html
 /public/assets
+static/assets
+static/index.html
+static/favicon.ico
+install.lock
 
 # 通过 Git 部署项目至线上时可以考虑删除的忽略规则
 /public/storage/*
@@ -51,9 +55,6 @@ pnpm-debug.log*
 tmp
 storage
 todo.txt
-static/assets
-static/index.html
-install.lock
 
 # Runtime configuration generated or edited during installation
 .env

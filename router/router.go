@@ -97,6 +97,7 @@ func InitRouter(
 	router.Static("/static", filepath.Join(rootDir, "static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
 	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
+	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "static/favicon.ico"))
 
 	for _, registrar := range registrars {
 		for _, capability := range registrar.Capabilities() {
