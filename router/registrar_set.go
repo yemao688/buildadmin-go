@@ -16,6 +16,12 @@ func ProvideRegistrars(
 	userRule *admin.UserRuleRegistrar,
 	config *admin.ConfigRegistrar,
 	attachment *admin.AttachmentRegistrar,
+	admin *admin.AdminRegistrar,
+	user *admin.UserRegistrar,
+	dataRecycle *admin.DataRecycleRegistrar,
+	dataRecycleLog *admin.DataRecycleLogRegistrar,
+	sensitiveData *admin.SensitiveDataRegistrar,
+	sensitiveDataLog *admin.SensitiveDataLogRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
 		countryLanguage,
@@ -30,5 +36,11 @@ func ProvideRegistrars(
 		userRule,
 		config,
 		attachment,
+		admin,
+		user,
+		dataRecycle,
+		dataRecycleLog,
+		sensitiveData,
+		sensitiveDataLog,
 	}
 }

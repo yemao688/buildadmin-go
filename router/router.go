@@ -22,7 +22,6 @@ func InitRouter(
 	userLoginM *middleware.UserLogin,
 	recordM *middleware.Record,
 
-	adminHandler *admin.AdminHandler,
 	adminInfoHandler *admin.AdminInfoHandler,
 	adminLogHandler *admin.AdminLogHandler,
 	indexHandler *admin.IndexHandler,
@@ -32,10 +31,6 @@ func InitRouter(
 	userScoreLogHandler *admin.UserScoreLogHandler,
 	crudHandler *admin.CrudHandler,
 
-	dataRecycleHandler *admin.DataRecycleHandler,
-	dataRecycleLogHandler *admin.DataRecycleLogHandler,
-	sensitiveDataHandler *admin.SensitiveDataHandler,
-	sensitiveDataLogHandler *admin.SensitiveDataLogHandler,
 	ajaxHandler *admin.AjaxHandler,
 
 	apiAccountHandler *api.AccountHandler,
@@ -95,44 +90,12 @@ func InitRouter(
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
-	for _, capability := range []middleware.AtomicRoute{
-		{Route: "auth/admin", Action: "add", Method: http.MethodPost},
-		{Route: "auth/admin", Action: "edit", Method: http.MethodPost},
-		{Route: "auth/admin", Action: "del", Method: http.MethodDelete},
-		{Route: "user/user", Action: "add", Method: http.MethodPost},
-		{Route: "user/user", Action: "edit", Method: http.MethodPost},
-		{Route: "user/user", Action: "del", Method: http.MethodDelete},
-		{Route: "security/datarecycle", Action: "add", Method: http.MethodPost},
-		{Route: "security/datarecycle", Action: "edit", Method: http.MethodPost},
-		{Route: "security/datarecycle", Action: "del", Method: http.MethodDelete},
-		{Route: "security/datarecyclelog", Action: "restore", Method: http.MethodPost},
-		{Route: "security/datarecyclelog", Action: "del", Method: http.MethodDelete},
-		{Route: "security/sensitivedata", Action: "add", Method: http.MethodPost},
-		{Route: "security/sensitivedata", Action: "edit", Method: http.MethodPost},
-		{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete},
-		{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost},
-		{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete},
-	} {
-		middleware.RegisterAtomicRoute(capability)
-	}
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
 	adminRouter.GET("Dashboard/index", dashboardHandler.Index)
 
-	adminRouter.GET("auth.Admin/index", adminHandler.Index)
-	adminRouter.POST("auth.Admin/add", adminHandler.Add)
-	adminRouter.GET("auth.Admin/edit", adminHandler.One)
-	adminRouter.POST("auth.Admin/edit", adminHandler.Edit)
-	adminRouter.DELETE("auth.Admin/del", adminHandler.Del)
-
 	registerAdminLogRoutes(adminRouter, adminLogHandler)
-
-	adminRouter.GET("user.User/index", userHandler.Index)
-	adminRouter.POST("user.User/add", userHandler.Add)
-	adminRouter.GET("user.User/edit", userHandler.One)
-	adminRouter.POST("user.User/edit", userHandler.Edit)
-	adminRouter.DELETE("user.User/del", userHandler.Del)
 
 	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
 	adminRouter.GET("user.MoneyLog/add", userHandler.One)
@@ -144,30 +107,6 @@ func InitRouter(
 
 	adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
 	adminRouter.POST("routine.AdminInfo/edit", adminInfoHandler.Edit)
-
-	adminRouter.GET("security.DataRecycleLog/index", dataRecycleLogHandler.Index)
-	adminRouter.GET("security.DataRecycleLog/info", dataRecycleLogHandler.Info)
-	adminRouter.POST("security.DataRecycleLog/restore", dataRecycleLogHandler.Restore)
-	adminRouter.DELETE("security.DataRecycleLog/del", dataRecycleLogHandler.Del)
-
-	adminRouter.GET("security.DataRecycle/index", dataRecycleHandler.Index)
-	adminRouter.GET("security.DataRecycle/add", dataRecycleHandler.Add)
-	adminRouter.POST("security.DataRecycle/add", dataRecycleHandler.Add)
-	adminRouter.GET("security.DataRecycle/edit", dataRecycleHandler.One)
-	adminRouter.POST("security.DataRecycle/edit", dataRecycleHandler.Edit)
-	adminRouter.DELETE("security.DataRecycle/del", dataRecycleHandler.Del)
-
-	adminRouter.GET("security.SensitiveDataLog/index", sensitiveDataLogHandler.Index)
-	adminRouter.GET("security.SensitiveDataLog/info", sensitiveDataLogHandler.Info)
-	adminRouter.POST("security.SensitiveDataLog/rollback", sensitiveDataLogHandler.Rollback)
-	adminRouter.DELETE("security.SensitiveDataLog/del", sensitiveDataLogHandler.Del)
-
-	adminRouter.GET("security.SensitiveData/index", sensitiveDataHandler.Index)
-	adminRouter.GET("security.SensitiveData/add", sensitiveDataHandler.Add)
-	adminRouter.POST("security.SensitiveData/add", sensitiveDataHandler.Add)
-	adminRouter.GET("security.SensitiveData/edit", sensitiveDataHandler.One)
-	adminRouter.POST("security.SensitiveData/edit", sensitiveDataHandler.Edit)
-	adminRouter.DELETE("security.SensitiveData/del", sensitiveDataHandler.Del)
 
 	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
 	adminRouter.GET("crud.Crud/checkCrudLog", crudHandler.CheckCrudLog)
