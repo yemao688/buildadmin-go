@@ -302,7 +302,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	xyArr := strings.Split(infoArr[0], "-")
-	if len(xyArr) == 0 || len(xyArr) != len(captchaInfo.PointArr) {
+	if len(xyArr) != len(captchaInfo.PointArr) {
 		return false
 	}
 	if captchaInfo.Width <= 0 || captchaInfo.Height <= 0 {
@@ -325,7 +325,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	for k, v := range xyArr {
-		if k >= len(captchaInfo.PointArr) || captchaInfo.PointArr[k] == nil {
+		if captchaInfo.PointArr[k] == nil {
 			return false
 		}
 
