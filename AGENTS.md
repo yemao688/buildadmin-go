@@ -16,7 +16,7 @@
 | 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v2` |
 | 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支通常为 `master` |
 | PHP 上游 | BuildAdmin PHP 原版项目，仅框架维护时需要参考 |
-| 框架版本 | 根目录 `FRAMEWORK_VERSION`，框架发行 semver |
+| 框架版本 | 根目录 `VERSION_FRAMEWORK`，框架发行 semver |
 | 上游版本 | PHP BuildAdmin 兼容基线，事实源为 `web/package.json` 与 `composer.json` |
 | 业务版本 | 业务仓库根 `VERSION`，框架不提供该文件 |
 

@@ -10,12 +10,12 @@ import (
 )
 
 func TestFrameworkVersionFileMatchesConstant(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "FRAMEWORK_VERSION"))
+	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "VERSION_FRAMEWORK"))
 	if err != nil {
-		t.Fatalf("read FRAMEWORK_VERSION: %v", err)
+		t.Fatalf("read VERSION_FRAMEWORK: %v", err)
 	}
 
 	if got := strings.TrimSpace(string(data)); got != Framework {
-		t.Fatalf("FRAMEWORK_VERSION = %q, want %q", got, Framework)
+		t.Fatalf("VERSION_FRAMEWORK = %q, want %q", got, Framework)
 	}
 }
