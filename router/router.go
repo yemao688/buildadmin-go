@@ -22,25 +22,11 @@ func InitRouter(
 	userLoginM *middleware.UserLogin,
 	recordM *middleware.Record,
 
-	adminInfoHandler *admin.AdminInfoHandler,
-	adminLogHandler *admin.AdminLogHandler,
 	indexHandler *admin.IndexHandler,
-	dashboardHandler *admin.DashboardHandler,
-	userHandler *admin.UserHandler,
-	userMoneyLogHandler *admin.UserMoneyLogHandler,
-	userScoreLogHandler *admin.UserScoreLogHandler,
-	crudHandler *admin.CrudHandler,
 
 	ajaxHandler *admin.AjaxHandler,
 
-	apiAccountHandler *api.AccountHandler,
-	apiAjaxHandler *api.AjaxHandler,
-	apiCommonHandler *api.CommonHandler,
-	apiEmsHandler *api.EmsHandler,
-	apiIndexHandler *api.IndexHandler,
 	apiInstallHandler *api.InstallHandler,
-	apiUserHandler *api.UserHandler,
-	apiDemoHandler *api.DemoHandler,
 
 	registrars []RouteRegistrar,
 ) *gin.Engine {
@@ -93,30 +79,6 @@ func InitRouter(
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 
-	adminRouter.GET("Dashboard/index", dashboardHandler.Index)
-
-	registerAdminLogRoutes(adminRouter, adminLogHandler)
-
-	adminRouter.GET("user.MoneyLog/index", userMoneyLogHandler.Index)
-	adminRouter.GET("user.MoneyLog/add", userHandler.One)
-	adminRouter.POST("user.MoneyLog/add", userMoneyLogHandler.Add)
-
-	adminRouter.GET("user.ScoreLog/index", userScoreLogHandler.Index)
-	adminRouter.GET("user.ScoreLog/add", userHandler.One)
-	adminRouter.POST("user.ScoreLog/add", userScoreLogHandler.Add)
-
-	adminRouter.GET("routine.AdminInfo/index", adminInfoHandler.Index)
-	adminRouter.POST("routine.AdminInfo/edit", adminInfoHandler.Edit)
-
-	adminRouter.GET("crud.Crud/databaseList", crudHandler.DatabaseList)
-	adminRouter.GET("crud.Crud/checkCrudLog", crudHandler.CheckCrudLog)
-	adminRouter.POST("crud.Crud/parseFieldData", crudHandler.ParseFieldData)
-	adminRouter.GET("crud.Crud/getFileData", crudHandler.GetFileData)
-	adminRouter.POST("crud.Crud/generateCheck", crudHandler.GenerateCheck)
-	adminRouter.POST("crud.Crud/generate", crudHandler.Generate)
-	adminRouter.POST("crud.Crud/logStart", crudHandler.LogStart)
-	adminRouter.POST("crud.Crud/delete", crudHandler.Delete)
-
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
 	adminRouter.POST("Alioss/callback", ajaxHandler.AliossCallback)
@@ -128,35 +90,8 @@ func InitRouter(
 	adminRouter.POST("ajax/changeTerminalConfig", ajaxHandler.ChangeTerminalConfig)
 
 	//-----------------------api 接口部分--------------------//
-	registerPublicAccountRoutes(router, apiAccountHandler.RetrievePassword)
-	router.POST("/api/ajax/area", apiAjaxHandler.Area)
-	router.POST("/api/ajax/buildSuffixSvg", apiAjaxHandler.BuildSuffixSvg)
-	router.POST("/api/Ems/send", apiEmsHandler.Send)
-	router.GET("/api/index/index", apiIndexHandler.Index)
-	router.GET("/api/user/checkIn", apiUserHandler.CheckIn)
-	router.POST("/api/user/checkIn", apiUserHandler.CheckIn)
-
-	router.GET("/api/common/captcha", apiCommonHandler.Captcha)
-	router.GET("/api/common/clickCaptcha", apiCommonHandler.ClickCaptcha)
-	router.POST("/api/common/checkClickCaptcha", apiCommonHandler.CheckClickCaptcha)
-	router.POST("/api/common/refreshToken", apiCommonHandler.RefreshToken)
-
-	router.POST("/api/demo/index", apiDemoHandler.Index)
-
 	// 引入api接口路由
 	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
-	apiRouter.GET("account/overview", apiAccountHandler.Overview)
-	apiRouter.GET("account/profile", apiAccountHandler.Profile)
-	apiRouter.POST("account/profile", apiAccountHandler.Profile)
-	apiRouter.POST("account/verification", apiAccountHandler.Verification)
-	apiRouter.POST("account/changeBind", apiAccountHandler.ChangeBind)
-	apiRouter.POST("account/changePassword", apiAccountHandler.ChangePassword)
-	apiRouter.GET("account/integral", apiAccountHandler.Integral)
-	apiRouter.GET("account/balance", apiAccountHandler.Balance)
-
-	apiRouter.POST("ajax/upload", apiAjaxHandler.Upload)
-	apiRouter.POST("Alioss/callback", apiAjaxHandler.AliossCallback)
-	apiRouter.POST("user/logout", apiUserHandler.Logout)
 
 	router.Static("/assets", filepath.Join(rootDir, "static/assets"))
 	router.Static("/static", filepath.Join(rootDir, "static"))
@@ -174,7 +109,7 @@ func InitRouter(
 		case "admin":
 			routes = adminRouter
 		case "api":
-			routes = apiRouter
+			routes = newAPIRouteSet(router, apiRouter)
 		case "root":
 			routes = router
 		default:
@@ -186,15 +121,6 @@ func InitRouter(
 	admin.CollectRoutes(router)
 
 	return router
-}
-
-func registerAdminLogRoutes(adminRouter gin.IRoutes, handler *admin.AdminLogHandler) {
-	adminRouter.GET("auth.AdminLog/index", handler.Index)
-	adminRouter.DELETE("auth.AdminLog/del", handler.Del)
-}
-
-func registerPublicAccountRoutes(router *gin.Engine, accountHandler gin.HandlerFunc) {
-	router.POST("/api/account/retrievePassword", accountHandler)
 }
 
 func registerHealthRoute(router *gin.Engine) {

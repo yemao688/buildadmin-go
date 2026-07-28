@@ -1,6 +1,9 @@
 package router
 
-import admin "go-build-admin/app/admin/handler"
+import (
+	admin "go-build-admin/app/admin/handler"
+	api "go-build-admin/app/api/handler"
+)
 
 // ProvideRegistrars 聚合全部模块 registrar。CRUD 生成器只在这里追加参数与条目。
 func ProvideRegistrars(
@@ -22,6 +25,18 @@ func ProvideRegistrars(
 	dataRecycleLog *admin.DataRecycleLogRegistrar,
 	sensitiveData *admin.SensitiveDataRegistrar,
 	sensitiveDataLog *admin.SensitiveDataLogRegistrar,
+	adminInfo *admin.AdminInfoRegistrar,
+	adminLog *admin.AdminLogRegistrar,
+	crud *admin.CrudRegistrar,
+	dashboard *admin.DashboardRegistrar,
+	userLog *admin.UserLogRegistrar,
+	apiAccount *api.AccountRegistrar,
+	apiAjax *api.AjaxRegistrar,
+	apiCommon *api.CommonRegistrar,
+	apiEms *api.EmsRegistrar,
+	apiIndex *api.IndexRegistrar,
+	apiUser *api.UserRegistrar,
+	apiDemo *api.DemoRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
 		countryLanguage,
@@ -42,5 +57,17 @@ func ProvideRegistrars(
 		dataRecycleLog,
 		sensitiveData,
 		sensitiveDataLog,
+		adminInfo,
+		adminLog,
+		crud,
+		dashboard,
+		userLog,
+		apiAccount,
+		apiAjax,
+		apiCommon,
+		apiEms,
+		apiIndex,
+		apiUser,
+		apiDemo,
 	}
 }

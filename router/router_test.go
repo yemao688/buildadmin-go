@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	admin "go-build-admin/app/admin/handler"
+	api "go-build-admin/app/api/handler"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -14,23 +15,22 @@ import (
 func TestPublicRetrievePasswordRouteUsesFrontendPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	registerPublicAccountRoutes(router, func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
+	apiRoutes := newAPIRouteSet(router, router.Group("/api/"))
+	api.NewAccountRegistrar(&api.AccountHandler{}).Register(apiRoutes)
 
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/api/account/retrievePassword", nil)
-	router.ServeHTTP(recorder, request)
-	require.Equal(t, http.StatusNoContent, recorder.Code)
-
+	found := false
 	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost && route.Path == "/api/account/retrievePassword" {
+			found = true
+		}
 		require.NotEqual(t, "/api/account/RetrievePassword", route.Path)
 	}
+	require.True(t, found, "public retrieve-password route is not registered")
 }
 
 func TestAdminLogDeleteRoute(t *testing.T) {
 	router := gin.New()
-	registerAdminLogRoutes(router.Group("/admin/"), &admin.AdminLogHandler{})
+	admin.NewAdminLogRegistrar(&admin.AdminLogHandler{}).Register(router.Group("/admin/"))
 
 	found := false
 	for _, route := range router.Routes() {
