@@ -254,14 +254,15 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			updateMethod = "dec"
 		}
 
-		var weighRowIDs []int32
+		var weighRows []FullRow
 		if err := scopedDB(tx).Table(table).
+			Select(pkField+", weigh").
 			Where("weigh = ?", weigh).
-			Order("weigh "+orderDirection+", id desc").
-			Pluck(pkField, &weighRowIDs).Error; err != nil {
+			Order("weigh " + orderDirection + ", id desc").
+			Find(&weighRows).Error; err != nil {
 			return err
 		}
-		weighRowsCount := int32(len(weighRowIDs))
+		weighRowsCount := int32(len(weighRows))
 
 		shift := gorm.Expr("weigh + ?", weighRowsCount)
 		if updateMethod == "dec" {
@@ -278,14 +279,18 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		}
 
 		if direction == "down" {
-			slices.Reverse(weighRowIDs)
+			slices.Reverse(weighRows)
 		}
 		moveComplete := int32(0)
-		for key, rowID := range weighRowIDs {
-			var weighRow FullRow
-			if err := scopedDB(tx).Table(table).Where(pkField+" = ?", rowID).Take(&weighRow).Error; err != nil {
-				return err
+		updatedWeights := make(map[int32]int32, len(weighRows)+1)
+		updatedIDs := make([]int32, 0, len(weighRows)+1)
+		setWeight := func(id int32, weight int32) {
+			if _, ok := updatedWeights[id]; !ok {
+				updatedIDs = append(updatedIDs, id)
 			}
+			updatedWeights[id] = weight
+		}
+		for key, weighRow := range weighRows {
 			if fmt.Sprintf("%d", weighRow.Id) == moveID {
 				continue
 			}
@@ -297,16 +302,27 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			if fmt.Sprintf("%d", weighRow.Id) == targetID {
 				moveComplete = 1
 				moveRow.Weigh = rowWeighVal
-				if err := scopedDB(tx).Table(table).Where(pkField+" = ?", moveRow.Id).Update("weigh", moveRow.Weigh).Error; err != nil {
-					return err
-				}
+				setWeight(moveRow.Id, moveRow.Weigh)
 			}
 			if updateMethod == "dec" {
 				rowWeighVal -= moveComplete
 			} else {
 				rowWeighVal += moveComplete
 			}
-			if err := scopedDB(tx).Table(table).Where(pkField+" = ?", weighRow.Id).Update("weigh", rowWeighVal).Error; err != nil {
+			setWeight(weighRow.Id, rowWeighVal)
+		}
+
+		if len(updatedIDs) > 0 {
+			caseSQL := "CASE"
+			caseArgs := make([]any, 0, len(updatedIDs)*2)
+			for _, id := range updatedIDs {
+				caseSQL += " WHEN " + pkField + " = ? THEN ?"
+				caseArgs = append(caseArgs, id, updatedWeights[id])
+			}
+			caseSQL += " ELSE weigh END"
+			if err := scopedDB(tx).Table(table).
+				Where(pkField+" in ?", updatedIDs).
+				UpdateColumn("weigh", gorm.Expr(caseSQL, caseArgs...)).Error; err != nil {
 				return err
 			}
 		}
