@@ -86,3 +86,37 @@ func TestAuthRuleCacheUsesPrefixAndInvalidation(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func TestAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:common-auth-group-cache-test?mode=memory&cache=shared"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "pfx_"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&User{}, &authCacheUserGroup{}, &authCacheUserRule{}))
+	require.NoError(t, db.Create(&User{ID: 1, GroupID: 1}).Error)
+	require.NoError(t, db.Create(&authCacheUserGroup{ID: 1, Rules: "1", Status: "1"}).Error)
+
+	config := &conf.Configuration{}
+	config.Database.Prefix = "pfx_"
+	m := NewAuthModel(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config)
+
+	groups, err := m.GetGroups(1)
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	groups[0].Rules = "changed"
+	groups, err = m.GetGroups(1)
+	require.NoError(t, err)
+	require.NotEqual(t, "changed", groups[0].Rules)
+
+	ids, err := m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"1"}, ids)
+	require.NoError(t, db.Table("pfx_user_group").Where("id=?", 1).Update("rules", "2").Error)
+	ids, err = m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"1"}, ids)
+	m.InvalidateAll()
+	ids, err = m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"2"}, ids)
+}

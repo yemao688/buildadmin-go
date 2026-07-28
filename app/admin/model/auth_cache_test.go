@@ -50,6 +50,30 @@ func TestAdminAuthCacheInvalidationReloadsRules(t *testing.T) {
 	require.True(t, m.Check("auth/updated", 1, "or"))
 }
 
+func TestAdminAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
+	m, db, _ := newAdminAuthCacheModel(t)
+
+	groups, err := m.GetGroups(1)
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	groups[0].Rules = "changed"
+	groups, err = m.GetGroups(1)
+	require.NoError(t, err)
+	require.NotEqual(t, "changed", groups[0].Rules)
+
+	ids, err := m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"1"}, ids)
+	require.NoError(t, db.Model(&AdminGroup{}).Where("id=?", 1).Update("rules", "99").Error)
+	ids, err = m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"1"}, ids)
+	m.InvalidateUser(1)
+	ids, err = m.GetRuleIds(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"99"}, ids)
+}
+
 func TestAdminAuthCacheConcurrentAccess(t *testing.T) {
 	m, _, _ := newAdminAuthCacheModel(t)
 	_, err := m.GetRuleList(nil, 1)
