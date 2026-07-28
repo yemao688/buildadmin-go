@@ -2,6 +2,7 @@ package requesttx
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -53,4 +54,48 @@ func TestFinishUnbindsAndClearsTransaction(t *testing.T) {
 	require.False(t, Active(bound))
 	require.Nil(t, DB(bound))
 	require.Equal(t, parent, Unbind(bound))
+}
+
+func TestAfterCommitRunsCallbacksOnce(t *testing.T) {
+	ctx := Bind(context.Background(), &gorm.DB{})
+	var calls atomic.Int32
+	require.True(t, Stage(ctx, Outcome{HTTPCode: 200, BusinessCode: 1}))
+	require.True(t, AfterCommit(ctx, func() { calls.Add(1) }))
+	require.True(t, AfterCommit(ctx, func() { calls.Add(1) }))
+
+	RunAfterCommit(ctx)
+	RunAfterCommit(ctx)
+	require.Equal(t, int32(2), calls.Load())
+}
+
+func TestAfterCommitDiscardAndFinishSuppressCallbacks(t *testing.T) {
+	ctx := Bind(context.Background(), &gorm.DB{})
+	var calls atomic.Int32
+	require.True(t, AfterCommit(ctx, func() { calls.Add(1) }))
+	DiscardOutcome(ctx)
+	RunAfterCommit(ctx)
+	require.Zero(t, calls.Load())
+	require.False(t, AfterCommit(ctx, func() { calls.Add(1) }))
+
+	ctx = Bind(context.Background(), &gorm.DB{})
+	require.True(t, AfterCommit(ctx, func() { calls.Add(1) }))
+	Finish(ctx)
+	RunAfterCommit(ctx)
+	require.Zero(t, calls.Load())
+	require.False(t, AfterCommit(ctx, func() { calls.Add(1) }))
+}
+
+func TestAfterCommitInactiveAndFinishedSessionsReturnFalse(t *testing.T) {
+	callback := func() {}
+	require.False(t, AfterCommit(context.Background(), callback))
+
+	inactive := WithDB(context.Background(), &gorm.DB{})
+	require.False(t, AfterCommit(inactive, callback))
+
+	finished := Bind(context.Background(), &gorm.DB{})
+	Finish(finished)
+	require.False(t, AfterCommit(finished, callback))
+
+	missingDB := Bind(context.Background(), nil)
+	require.False(t, AfterCommit(missingDB, callback))
 }

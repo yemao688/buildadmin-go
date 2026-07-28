@@ -110,7 +110,7 @@ func AfterCommit(ctx context.Context, fn func()) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.active || s.finished {
+	if !s.active || s.db == nil || s.finished {
 		return false
 	}
 	s.afterCommit = append(s.afterCommit, fn)
