@@ -277,6 +277,42 @@ type HandlerData struct {
 	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
 }
 
+type RegistrarData struct {
+	Namespace string
+	ClassName string
+	RouteName string
+}
+
+const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
+package {{.Namespace}}
+
+import (
+	"go-build-admin/app/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+type {{.ClassName}}Registrar struct {
+	handler *{{.ClassName}}Handler
+}
+
+func New{{.ClassName}}Registrar(handler *{{.ClassName}}Handler) *{{.ClassName}}Registrar {
+	return &{{.ClassName}}Registrar{handler: handler}
+}
+
+const {{.RouteName}}Route = "{{.RouteName}}"
+
+func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
+
+func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
+	CRUDRoutes(g, {{.RouteName}}Route, r.handler)
+}
+
+func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
+	return CRUDCapabilities({{.RouteName}}Route)
+}
+`
+
 const handlerTemp = `
 package {{.Namespace}}
 

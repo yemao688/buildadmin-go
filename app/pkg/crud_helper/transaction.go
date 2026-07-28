@@ -44,11 +44,12 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 			filepath.Join(utils.RootPath(), views.Views, "popupForm.vue"),
 			modelFile.ParseFile,
 			handlerFile.ParseFile,
+			registrarFilePath(handlerFile),
 		},
 		Shared: []string{
 			filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
-			filepath.Join(utils.RootPath(), "router", "router.go"),
+			filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
 			filepath.Join(utils.RootPath(), "cmd", "app", "wire_gen.go"),
 		},
 	}
@@ -267,7 +268,7 @@ func manifestPathIsShared(path string) bool {
 	clean, _ = filepath.Abs(clean)
 	root := filepath.Clean(utils.RootPath())
 	return filepath.Base(clean) == "provider.go" ||
-		clean == filepath.Join(root, "router", "router.go") ||
+		clean == filepath.Join(root, "router", "registrar_set.go") ||
 		clean == filepath.Join(root, "cmd", "app", "wire_gen.go")
 }
 

@@ -170,8 +170,13 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
 		return err
 	}
-	//写入路由
-	if err := writeRouter(handlerData.ClassName); err != nil {
+	if err := writeRegistrarFile(handlerData, handlerFile); err != nil {
+		return err
+	}
+	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Registrar"); err != nil {
+		return err
+	}
+	if err := writeRegistrarProviderEntry(handlerData.ClassName); err != nil {
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
@@ -308,101 +313,94 @@ func render(file string, temp string, data any) (string, error) {
 	return string(text), nil
 }
 
-func writeRouter(name string) error {
-	content, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
+func writeRegistrarFile(handlerData HandlerData, handlerFile NameInfo) error {
+	registrarPath := registrarFilePath(handlerFile)
+	data := RegistrarData{
+		Namespace: handlerFile.Namespace,
+		ClassName: handlerData.ClassName,
+		RouteName: lowerFirst(handlerData.ClassName),
+	}
+	content, err := render(registrarPath, registrarTemp, data)
 	if err != nil {
 		return err
 	}
-	//判断是否已经生成过
-	if strings.Contains(string(content), "*admin."+name+"Handler") {
-		return nil
-	}
-
-	return writeGoFile(filepath.Join(utils.RootPath(), "router", "router.go"), insertRouterEntry(string(content), name))
+	return writeGoFile(registrarPath, content)
 }
 
-// insertRouterEntry 把模块的 handler 参数、REST 路由和原子能力注入 router.go 内容。
-func insertRouterEntry(content, name string) string {
-	nameVar := utils.SnakeToCamel(name, false)
-	paramContent := "	" + nameVar + "Handler *admin." + name + "Handler,\n) *gin.Engine {"
-
-	newStr := strings.Replace(content, ") *gin.Engine {", paramContent, -1)
-
-	routerContent := "\tadminRouter.GET(\"" + nameVar + "/index\", " + nameVar + "Handler.Index)\n" +
-		"\tadminRouter.POST(\"" + nameVar + "/add\", " + nameVar + "Handler.Add)\n" +
-		"\tadminRouter.GET(\"" + nameVar + "/edit\", " + nameVar + "Handler.One)\n" +
-		"\tadminRouter.POST(\"" + nameVar + "/edit\", " + nameVar + "Handler.Edit)\n" +
-		"\tadminRouter.DELETE(\"" + nameVar + "/del\", " + nameVar + "Handler.Del)\n" +
-		"\tadminRouter.POST(\"" + nameVar + "/sortable\", " + nameVar + "Handler.Sortable)\n"
-
-	newStr = strings.Replace(newStr, "\tadmin.CollectRoutes(router)", routerContent+"\tadmin.CollectRoutes(router)", 1)
-	marker := "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
-	if !strings.Contains(newStr, "Route: \""+nameVar+"\", Action: \"add\"") {
-		newStr = injectAtomicCapabilities(newStr, nameVar, marker)
-	}
-	return newStr
+func registrarFilePath(handlerFile NameInfo) string {
+	return strings.TrimSuffix(handlerFile.ParseFile, filepath.Ext(handlerFile.ParseFile)) + "_route.go"
 }
 
-func RemoveRouter(name string) error {
-	content, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
+func lowerFirst(value string) string {
+	if value == "" {
+		return value
+	}
+	return strings.ToLower(value[:1]) + value[1:]
+}
+
+func writeRegistrarProviderEntry(name string) error {
+	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-
-	newStr, err := removeRouterEntry(string(content), name)
+	updated, err := addRegistrarProviderEntry(string(content), name)
 	if err != nil {
 		return err
 	}
-	return writeGoFile(filepath.Join(utils.RootPath(), "router", "router.go"), newStr)
+	return writeGoFile(path, updated)
 }
 
-// removeRouterEntry 移除 insertRouterEntry 注入的内容。handler 参数按整行
-// （前导换行 + 缩进）删除，避免留下空行。
-func removeRouterEntry(content, name string) (string, error) {
-	nameVar := utils.SnakeToCamel(name, false)
+func addRegistrarProviderEntry(content, name string) (string, error) {
+	registrarType := name + "Registrar"
+	registrarVar := lowerFirst(name) + "Registrar"
+	param := "\t" + registrarVar + " *admin." + registrarType + ",\n"
+	entry := "\t\t" + registrarVar + ",\n"
 
-	paramContent := nameVar + "Handler *admin." + strings.ToUpper(nameVar[:1]) + nameVar[1:] + "Handler,"
-	newStr := strings.Replace(content, "\n\t"+paramContent, "", -1)
-	newStr = strings.Replace(newStr, paramContent, "", -1)
-
-	route := `adminRouter.GET("` + nameVar + `/index", ` + nameVar + `Handler.Index)`
-	newStr = strings.Replace(newStr, route, "", -1)
-
-	route = `adminRouter.POST("` + nameVar + `/add", ` + nameVar + `Handler.Add)`
-	newStr = strings.Replace(newStr, route, "", -1)
-
-	route = `adminRouter.GET("` + nameVar + `/edit", ` + nameVar + `Handler.One)`
-	newStr = strings.Replace(newStr, route, "", -1)
-
-	route = `adminRouter.POST("` + nameVar + `/edit", ` + nameVar + `Handler.Edit)`
-	newStr = strings.Replace(newStr, route, "", -1)
-
-	route = `adminRouter.DELETE("` + nameVar + `/del", ` + nameVar + `Handler.Del)`
-	newStr = strings.Replace(newStr, route, "", -1)
-
-	route = `adminRouter.POST("` + nameVar + `/sortable", ` + nameVar + `Handler.Sortable)`
-	newStr = strings.Replace(newStr, route, "", -1)
-	newStr = removeAtomicCapabilities(newStr, nameVar)
-
-	newStr, err := formatGoCode(newStr)
-	if err != nil {
-		return "", err
+	if !strings.Contains(content, param) {
+		marker := ") []RouteRegistrar {"
+		index := strings.Index(content, marker)
+		if index < 0 {
+			return "", fmt.Errorf("registrar provider signature anchor not found")
+		}
+		content = content[:index] + param + content[index:]
 	}
-	return canonicalizeGoContent(newStr), nil
+	if !strings.Contains(content, entry) {
+		marker := "\n\t}\n}"
+		index := strings.LastIndex(content, marker)
+		if index < 0 {
+			return "", fmt.Errorf("registrar provider return anchor not found")
+		}
+		insertAt := index + 1
+		content = content[:insertAt] + entry + content[insertAt:]
+	}
+	return content, nil
 }
 
-func atomicCapabilityLines(nameVar string) string {
-	return "\t\t{Route: \"" + nameVar + "\", Action: \"add\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "\", Action: \"edit\", Method: http.MethodPost},\n" +
-		"\t\t{Route: \"" + nameVar + "\", Action: \"del\", Method: http.MethodDelete},\n"
+func RemoveRegistrarProvider(name string) error {
+	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := removeRegistrarProviderEntry(string(content), name)
+	if err != nil {
+		return err
+	}
+	return writeGoFile(path, updated)
 }
 
-func injectAtomicCapabilities(content, nameVar, marker string) string {
-	return strings.Replace(content, marker, atomicCapabilityLines(nameVar)+marker, 1)
-}
-
-func removeAtomicCapabilities(content, nameVar string) string {
-	return strings.ReplaceAll(content, atomicCapabilityLines(nameVar), "")
+func removeRegistrarProviderEntry(content, name string) (string, error) {
+	registrarType := name + "Registrar"
+	registrarVar := lowerFirst(name) + "Registrar"
+	param := "\t" + registrarVar + " *admin." + registrarType + ",\n"
+	entry := "\t\t" + registrarVar + ",\n"
+	if !strings.Contains(content, param) && !strings.Contains(content, entry) {
+		return content, nil
+	}
+	content = strings.ReplaceAll(content, param, "")
+	content = strings.ReplaceAll(content, entry, "")
+	return formatGoCode(content)
 }
 
 func writeProvider(dir string, name string) error {

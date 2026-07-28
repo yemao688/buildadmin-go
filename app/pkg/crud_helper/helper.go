@@ -937,9 +937,8 @@ func GetRemotePk(fullTableName string, field model.Field) string {
 }
 
 // GetRemoteSelectUrl 对齐上游:crud 来源且指定了控制器时由控制器推导 URL,
-// 否则使用手动填写的 remote-url。Go 的 handler 文件是扁平的(如 user.go),
-// 无法从路径推出路由名(user.User),因此优先从 router/router.go 的注册
-// 信息反查,查不到再按路径回退推导。
+// 否则使用手动填写的 remote-url。优先从同目录 RouteRegistrar 反查，
+// 兼容尚未迁移的 handler 时再从旧 router.go 注册信息反查，最后按路径回退。
 func GetRemoteSelectUrl(field model.Field) string {
 	if field.Form.RemoteSourceConfigType != "custom" && field.Form.RemoteController != "" {
 		if url := routeIndexURLForController(field.Form.RemoteController); url != "" {
@@ -959,8 +958,8 @@ func GetRemoteSelectUrl(field model.Field) string {
 	return field.Form.RemoteUrl
 }
 
-// routeIndexURLForController 由控制器文件(如 app/admin/handler/user.go)推导
-// handler 变量名(userHandler),并在 router.go 中查找其注册的 index 路由。
+// routeIndexURLForController 由控制器文件推导同目录 registrar 文件并读取
+// route 常量；尚未迁移的 handler 则回退到 router.go 中的旧注册。
 func routeIndexURLForController(controller string) string {
 	normalized, err := normalizeLogicalPath(controller)
 	if err != nil {
@@ -969,6 +968,13 @@ func routeIndexURLForController(controller string) string {
 	stem := filepath.Base(normalized)
 	if stem == "" {
 		return ""
+	}
+	registrarPath := filepath.Join(utils.RootPath(), strings.TrimSuffix(normalized, filepath.Ext(normalized))+"_route.go")
+	if data, err := os.ReadFile(registrarPath); err == nil {
+		re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
+		if m := re.FindSubmatch(data); m != nil {
+			return "/admin/" + string(m[1]) + "/index"
+		}
 	}
 	handlerVar := utils.SnakeToCamel(stem, false) + "Handler"
 	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))

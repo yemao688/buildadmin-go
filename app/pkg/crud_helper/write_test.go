@@ -10,23 +10,91 @@ import (
 	"testing"
 )
 
-func TestAtomicCapabilitiesAreRemovedWithRouter(t *testing.T) {
-	const marker = "\t} {\n\t\tmiddleware.RegisterAtomicRoute(capability)"
-	original := "prefix\n" + marker + "\nsuffix\n"
-	name := "aiGateDemo"
-	injected := injectAtomicCapabilities(original, name, marker)
-	if !strings.Contains(injected, `Route: "aiGateDemo", Action: "add"`) {
-		t.Fatal("atomic capabilities were not injected")
+func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
+	path := filepath.Join(utils.RootPath(), "app", "admin", "handler", "demo_route.go")
+	content, err := render(path, registrarTemp, RegistrarData{
+		Namespace: "handler",
+		ClassName: "Demo",
+		RouteName: "demo",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(injected, `Route: "aiGateDemo/add"`) {
-		t.Fatal("atomic capability route must not include the action")
+	if !strings.Contains(content, `CRUDRoutes(g, demoRoute, r.handler)`) {
+		t.Fatalf("registrar route call missing:\n%s", content)
 	}
-	removed := removeAtomicCapabilities(injected, name)
-	if removed != original {
-		t.Fatalf("router content was not restored after removal:\n%s", removed)
+	if !strings.Contains(content, `CRUDCapabilities(demoRoute)`) {
+		t.Fatalf("registrar capability call missing:\n%s", content)
 	}
-	if removeAtomicCapabilities(original, name) != original {
-		t.Fatal("removing absent capabilities must be idempotent")
+}
+
+func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
+	path := filepath.Join(utils.RootPath(), "app", "admin", "handler", "country_language_route.go")
+	content, err := render(path, registrarTemp, RegistrarData{
+		Namespace: "handler",
+		ClassName: "CountryLanguage",
+		RouteName: "countryLanguage",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content != string(expected) {
+		t.Fatalf("registrar template differs from country sample:\n--- got ---\n%s\n--- want ---\n%s", content, expected)
+	}
+}
+
+func TestRegistrarProviderEntryRoundTrip(t *testing.T) {
+	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.WriteFile(path, original, 0644) })
+
+	if err := writeRegistrarProviderEntry("Test"); err != nil {
+		t.Fatal(err)
+	}
+	added, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(added), "testRegistrar *admin.TestRegistrar,") || !strings.Contains(string(added), "testRegistrar,") {
+		t.Fatalf("registrar provider entry missing:\n%s", added)
+	}
+	if err := writeRegistrarProviderEntry("Test"); err != nil {
+		t.Fatal(err)
+	}
+	addedAgain, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(addedAgain) != string(added) {
+		t.Fatal("registrar provider insertion is not idempotent")
+	}
+
+	if err := RemoveRegistrarProvider("Test"); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(removed) != string(original) {
+		t.Fatalf("registrar provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
+	}
+	if err := RemoveRegistrarProvider("Test"); err != nil {
+		t.Fatal(err)
+	}
+	removedAgain, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(removedAgain) != string(original) {
+		t.Fatal("removing an absent registrar provider entry is not idempotent")
 	}
 }
 
@@ -43,27 +111,6 @@ func TestProviderEntryRoundTrip(t *testing.T) {
 	}
 	if removed != original {
 		t.Fatalf("provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
-	}
-}
-
-func TestRouterEntryRoundTrip(t *testing.T) {
-	original := "package router\n\nfunc InitRouter(\n\tcountryCurrencyHandler *admin.CountryCurrencyHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\n\tadminRouter.GET(\"countryCurrency/index\", countryCurrencyHandler.Index)\n\n\tadmin.CollectRoutes(router)\n}\n"
-	added := insertRouterEntry(original, "Test")
-	if !strings.Contains(added, "testHandler *admin.TestHandler,") {
-		t.Fatalf("router entry was not injected:\n%s", added)
-	}
-	if !strings.Contains(added, `adminRouter.POST("test/sortable", testHandler.Sortable)`) {
-		t.Fatalf("sortable route was not injected:\n%s", added)
-	}
-	if strings.Index(added, `adminRouter.GET("test/index"`) > strings.Index(added, "admin.CollectRoutes(router)") {
-		t.Fatal("generated routes must be registered before CollectRoutes")
-	}
-	removed, err := removeRouterEntry(added, "Test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if removed != original {
-		t.Fatalf("router round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, original)
 	}
 }
 
@@ -137,24 +184,29 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 	}
 }
 
-func TestRemoveRouterEntryNormalizesSharedGoEOF(t *testing.T) {
-	original := "package router\n\nfunc InitRouter(\n\ttestHandler *admin.TestHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\n\tadminRouter.GET(\"test/index\", testHandler.Index)\n\tadminRouter.POST(\"test/add\", testHandler.Add)\n\tadminRouter.GET(\"test/edit\", testHandler.One)\n\tadminRouter.POST(\"test/edit\", testHandler.Edit)\n\tadminRouter.DELETE(\"test/del\", testHandler.Del)\n\tadminRouter.POST(\"test/sortable\", testHandler.Sortable)\n\n\tadmin.CollectRoutes(router)\n}\n"
-	trimmed := strings.TrimSuffix(original, "\n")
-	removed, err := removeRouterEntry(trimmed, "Test")
+func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
+	dir := filepath.Join(utils.RootPath(), "app", "admin", "handler", "registrar_provider_test")
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	provider := filepath.Join(dir, "provider.go")
+	original := "package registrar_provider_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingHandler,\n)\n"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(provider, []byte(original), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeProvider("app/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveProvider("app/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(provider)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertExactlyOneTrailingLF(t, removed)
-	if removed != "package router\n\nfunc InitRouter() *gin.Engine {\n\trouter := gin.New()\n\n\tadmin.CollectRoutes(router)\n}\n" {
-		t.Fatalf("shared router content did not normalize canonically: %q", removed)
-	}
-	removedAgain, err := removeRouterEntry(removed, "Test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertExactlyOneTrailingLF(t, removedAgain)
-	if removedAgain != removed {
-		t.Fatalf("shared router removal is not stable: got %q, want %q", removedAgain, removed)
+	if string(got) != original {
+		t.Fatalf("registrar provider round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, original)
 	}
 }
 

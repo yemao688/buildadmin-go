@@ -354,8 +354,8 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := removeAssociatedModelProviders([]model.Field(log.Fields), manifest); err != nil {
 		return fail("remove associated model providers", err)
 	}
-	if err := RemoveRouter(log.Table.Name); err != nil {
-		return fail("remove router", err)
+	if err := RemoveRegistrarProvider(handlerFile.LastName); err != nil {
+		return fail("remove registrar provider", err)
 	}
 	if err := runWire(); err != nil {
 		return fail("wire", err)
@@ -485,7 +485,7 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 func validateSharedManifestPath(path string) error {
 	root := utils.RootPath()
 	for _, allowed := range []string{
-		filepath.Join(root, "router", "router.go"),
+		filepath.Join(root, "router", "registrar_set.go"),
 		filepath.Join(root, "cmd", "app", "wire_gen.go"),
 	} {
 		if path == allowed {
@@ -493,7 +493,7 @@ func validateSharedManifestPath(path string) error {
 		}
 	}
 	if filepath.Base(path) != "provider.go" {
-		return fmt.Errorf("shared manifest target must be provider.go, router/router.go, or cmd/app/wire_gen.go")
+		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, or cmd/app/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
 		"app/admin/model", "app/common/model", "app/admin/handler",

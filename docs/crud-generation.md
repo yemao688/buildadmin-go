@@ -29,9 +29,9 @@ go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml
 go build ./...
 ```
 
-退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
+退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器会为每个后台 handler 旁生成 `<name>_route.go` RouteRegistrar，并更新 handler `provider.go` 与 `router/registrar_set.go`；不再修改 `router/router.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 
-所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 `provider.go`、`router.go` 这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
+所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 `provider.go`、`router/registrar_set.go` 这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
 
 已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
 
