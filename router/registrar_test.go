@@ -45,7 +45,6 @@ func newCompleteRouter() *gin.Engine {
 		&admin.AdminGroupHandler{},
 		&admin.AdminRuleHandler{},
 		&admin.AdminLogHandler{},
-		&admin.TestBuildHandler{},
 		&admin.IndexHandler{},
 		&admin.DashboardHandler{},
 		&admin.UserHandler{},
@@ -55,9 +54,7 @@ func newCompleteRouter() *gin.Engine {
 		&admin.UserScoreLogHandler{},
 		&admin.AttachmentHandler{},
 		&admin.CrudHandler{},
-		&admin.CrudLogHandler{},
 		&admin.ConfigHandler{},
-		&admin.ModuleHandler{},
 		&admin.DataRecycleHandler{},
 		&admin.DataRecycleLogHandler{},
 		&admin.SensitiveDataHandler{},
@@ -75,6 +72,9 @@ func newCompleteRouter() *gin.Engine {
 			admin.NewCountryLanguageRegistrar(&admin.CountryLanguageHandler{}),
 			admin.NewCountryCurrencyRegistrar(&admin.CountryCurrencyHandler{}),
 			admin.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
+			admin.NewCrudLogRegistrar(&admin.CrudLogHandler{}),
+			admin.NewModuleRegistrar(&admin.ModuleHandler{}),
+			admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
 		),
 	)
 }

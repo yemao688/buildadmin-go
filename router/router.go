@@ -27,7 +27,6 @@ func InitRouter(
 	adminGroupHandler *admin.AdminGroupHandler,
 	adminRuleHandler *admin.AdminRuleHandler,
 	adminLogHandler *admin.AdminLogHandler,
-	testBuildHandler *admin.TestBuildHandler,
 	indexHandler *admin.IndexHandler,
 	dashboardHandler *admin.DashboardHandler,
 	userHandler *admin.UserHandler,
@@ -37,9 +36,7 @@ func InitRouter(
 	userScoreLogHandler *admin.UserScoreLogHandler,
 	attachmentHandler *admin.AttachmentHandler,
 	crudHandler *admin.CrudHandler,
-	crudLogHandler *admin.CrudLogHandler,
 	configHandler *admin.ConfigHandler,
-	moduleHandler *admin.ModuleHandler,
 
 	dataRecycleHandler *admin.DataRecycleHandler,
 	dataRecycleLogHandler *admin.DataRecycleLogHandler,
@@ -233,11 +230,6 @@ func InitRouter(
 	adminRouter.POST("crud.Crud/logStart", crudHandler.LogStart)
 	adminRouter.POST("crud.Crud/delete", crudHandler.Delete)
 
-	adminRouter.GET("crud.Log/index", crudLogHandler.Index)
-
-	adminRouter.GET("module/index", moduleHandler.Index)
-	adminRouter.POST("module/uploadCompleted", moduleHandler.UploadCompleted)
-
 	adminRouter.GET("ajax/area", ajaxHandler.Area)
 	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
 	adminRouter.POST("Alioss/callback", ajaxHandler.AliossCallback)
@@ -247,12 +239,6 @@ func InitRouter(
 	adminRouter.GET("ajax/getDatabaseConnectionList", ajaxHandler.GetDatabaseConnectionList)
 	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
 	adminRouter.POST("ajax/changeTerminalConfig", ajaxHandler.ChangeTerminalConfig)
-
-	adminRouter.GET("testBuild/index", testBuildHandler.Index)
-	adminRouter.POST("testBuild/add", testBuildHandler.Add)
-	adminRouter.GET("testBuild/edit", testBuildHandler.One)
-	adminRouter.POST("testBuild/edit", testBuildHandler.Edit)
-	adminRouter.DELETE("testBuild/del", testBuildHandler.Del)
 
 	//-----------------------api 接口部分--------------------//
 	registerPublicAccountRoutes(router, apiAccountHandler.RetrievePassword)

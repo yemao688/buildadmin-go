@@ -7,10 +7,16 @@ func ProvideRegistrars(
 	countryLanguage *admin.CountryLanguageRegistrar,
 	countryCurrency *admin.CountryCurrencyRegistrar,
 	countryLanguageContent *admin.CountryLanguageContentRegistrar,
+	crudLog *admin.CrudLogRegistrar,
+	module *admin.ModuleRegistrar,
+	testBuild *admin.TestBuildRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
 		countryLanguage,
 		countryCurrency,
 		countryLanguageContent,
+		crudLog,
+		module,
+		testBuild,
 	}
 }
