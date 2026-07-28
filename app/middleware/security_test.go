@@ -3,11 +3,16 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/utils"
 	"go.uber.org/zap"
 )
 
@@ -75,6 +80,48 @@ func TestAtomicRouteCapabilityRejectsUnregisteredRoute(t *testing.T) {
 	r.HandleContext(c)
 	if _, ok := AtomicRouteCapability(c); ok {
 		t.Fatal("unregistered route must not have atomic capability")
+	}
+}
+
+func TestStaticAtomicCapabilitiesMatchRouterLookupKeys(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	capabilityPattern := regexp.MustCompile(`\{Route: "([^"]+)", Action: "([^"]+)", Method: http\.Method(Post|Delete)\}`)
+	routePattern := regexp.MustCompile(`adminRouter\.(GET|POST|DELETE)\("([^"]+)",`)
+	capabilities := capabilityPattern.FindAllStringSubmatch(string(content), -1)
+	routes := routePattern.FindAllStringSubmatch(string(content), -1)
+	if len(capabilities) == 0 {
+		t.Fatal("router.go has no static atomic capabilities")
+	}
+
+	methods := map[string]string{
+		"Post":   http.MethodPost,
+		"Delete": http.MethodDelete,
+	}
+	for _, capability := range capabilities {
+		want := normalizeAtomicRoute(AtomicRoute{
+			Route:  capability[1],
+			Action: capability[2],
+			Method: methods[capability[3]],
+		})
+		matched := false
+		for _, route := range routes {
+			if route[1] != want.Method {
+				continue
+			}
+			controller, action, ok := normalizeRouteAction("/admin/" + strings.TrimPrefix(route[2], "/"))
+			actual := AtomicRoute{Route: controller, Action: action, Method: route[1]}
+			if ok && actual == want {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			t.Fatalf("static capability does not match a registered route: %#v", want)
+		}
 	}
 }
 

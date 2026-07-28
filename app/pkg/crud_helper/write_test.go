@@ -15,8 +15,11 @@ func TestAtomicCapabilitiesAreRemovedWithRouter(t *testing.T) {
 	original := "prefix\n" + marker + "\nsuffix\n"
 	name := "aiGateDemo"
 	injected := injectAtomicCapabilities(original, name, marker)
-	if !strings.Contains(injected, `Route: "aiGateDemo/add"`) {
+	if !strings.Contains(injected, `Route: "aiGateDemo", Action: "add"`) {
 		t.Fatal("atomic capabilities were not injected")
+	}
+	if strings.Contains(injected, `Route: "aiGateDemo/add"`) {
+		t.Fatal("atomic capability route must not include the action")
 	}
 	removed := removeAtomicCapabilities(injected, name)
 	if removed != original {
@@ -44,13 +47,16 @@ func TestProviderEntryRoundTrip(t *testing.T) {
 }
 
 func TestRouterEntryRoundTrip(t *testing.T) {
-	original := "package router\n\nfunc InitRouter(\n\tcountryCurrencyHandler *admin.CountryCurrencyHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n\tadminRouter.GET(\"countryCurrency/index\", countryCurrencyHandler.Index)\n}\n"
+	original := "package router\n\nfunc InitRouter(\n\tcountryCurrencyHandler *admin.CountryCurrencyHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\n\tadminRouter.GET(\"countryCurrency/index\", countryCurrencyHandler.Index)\n\n\tadmin.CollectRoutes(router)\n}\n"
 	added := insertRouterEntry(original, "Test")
 	if !strings.Contains(added, "testHandler *admin.TestHandler,") {
 		t.Fatalf("router entry was not injected:\n%s", added)
 	}
 	if !strings.Contains(added, `adminRouter.POST("test/sortable", testHandler.Sortable)`) {
 		t.Fatalf("sortable route was not injected:\n%s", added)
+	}
+	if strings.Index(added, `adminRouter.GET("test/index"`) > strings.Index(added, "admin.CollectRoutes(router)") {
+		t.Fatal("generated routes must be registered before CollectRoutes")
 	}
 	removed, err := removeRouterEntry(added, "Test")
 	if err != nil {
@@ -132,14 +138,14 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 }
 
 func TestRemoveRouterEntryNormalizesSharedGoEOF(t *testing.T) {
-	original := "package router\n\nfunc InitRouter(\n\ttestHandler *admin.TestHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n\tadminRouter.GET(\"test/index\", testHandler.Index)\n\tadminRouter.POST(\"test/add\", testHandler.Add)\n\tadminRouter.GET(\"test/edit\", testHandler.One)\n\tadminRouter.POST(\"test/edit\", testHandler.Edit)\n\tadminRouter.DELETE(\"test/del\", testHandler.Del)\n\tadminRouter.POST(\"test/sortable\", testHandler.Sortable)\n}\n"
+	original := "package router\n\nfunc InitRouter(\n\ttestHandler *admin.TestHandler,\n) *gin.Engine {\n\trouter := gin.New()\n\n\tadminRouter.GET(\"test/index\", testHandler.Index)\n\tadminRouter.POST(\"test/add\", testHandler.Add)\n\tadminRouter.GET(\"test/edit\", testHandler.One)\n\tadminRouter.POST(\"test/edit\", testHandler.Edit)\n\tadminRouter.DELETE(\"test/del\", testHandler.Del)\n\tadminRouter.POST(\"test/sortable\", testHandler.Sortable)\n\n\tadmin.CollectRoutes(router)\n}\n"
 	trimmed := strings.TrimSuffix(original, "\n")
 	removed, err := removeRouterEntry(trimmed, "Test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertExactlyOneTrailingLF(t, removed)
-	if removed != "package router\n\nfunc InitRouter() *gin.Engine {\n\trouter := gin.New()\n\tadmin.CollectRoutes(router)\n\n}\n" {
+	if removed != "package router\n\nfunc InitRouter() *gin.Engine {\n\trouter := gin.New()\n\n\tadmin.CollectRoutes(router)\n}\n" {
 		t.Fatalf("shared router content did not normalize canonically: %q", removed)
 	}
 	removedAgain, err := removeRouterEntry(removed, "Test")
