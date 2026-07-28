@@ -386,6 +386,7 @@ func (m *Security) Handler() gin.HandlerFunc {
 			return
 		}
 		c.Writer = originalWriter
+		requesttx.RunAfterCommit(c.Request.Context())
 		bufferedWriter.flush()
 		if out, ok := requesttx.TakeOutcome(c.Request.Context()); ok {
 			c.JSON(out.HTTPCode, gin.H{"code": out.BusinessCode, "data": out.Data, "msg": out.Message, "time": 0})

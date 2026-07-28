@@ -3,6 +3,7 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/tree"
 	"strings"
 
@@ -16,14 +17,24 @@ type UserRuleHandler struct {
 	log       *zap.Logger
 	userRuleM *model.UserRuleModel
 	authM     *model.AuthModel
+	userAuthM *commonModel.AuthModel
 }
 
 func NewUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel) *UserRuleHandler {
+	return newUserRuleHandler(log, userRuleM, authM, nil)
+}
+
+func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
+	return newUserRuleHandler(log, userRuleM, authM, userAuthM)
+}
+
+func newUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
 	return &UserRuleHandler{
 		Base:      Base{currentM: userRuleM},
 		log:       log,
 		userRuleM: userRuleM,
 		authM:     authM,
+		userAuthM: userAuthM,
 	}
 }
 
@@ -97,10 +108,20 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		invalidateAfterMutation(ctx, func() {
+			if h.userAuthM != nil {
+				h.userAuthM.InvalidateAll()
+			}
+		})
 		return
 	}
 
@@ -128,6 +149,11 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 func (h *UserRuleHandler) Del(ctx *gin.Context) {
@@ -143,6 +169,11 @@ func (h *UserRuleHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {

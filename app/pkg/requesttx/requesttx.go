@@ -17,12 +17,13 @@ import (
 type stateKey struct{}
 
 type state struct {
-	mu       sync.Mutex
-	parent   context.Context
-	db       *gorm.DB
-	active   bool
-	outcome  *Outcome
-	finished bool
+	mu          sync.Mutex
+	parent      context.Context
+	db          *gorm.DB
+	active      bool
+	outcome     *Outcome
+	afterCommit []func()
+	finished    bool
 }
 
 // Outcome is the transport-neutral response captured while a request
@@ -97,6 +98,45 @@ func Stage(ctx context.Context, outcome Outcome) bool {
 	return true
 }
 
+// AfterCommit registers fn to run after the active request transaction commits.
+// It returns false when the request is not inside an active transaction.
+func AfterCommit(ctx context.Context, fn func()) bool {
+	if fn == nil {
+		return false
+	}
+	s := get(ctx)
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.active || s.finished {
+		return false
+	}
+	s.afterCommit = append(s.afterCommit, fn)
+	return true
+}
+
+// RunAfterCommit runs callbacks registered for a successfully committed
+// request transaction.
+func RunAfterCommit(ctx context.Context) {
+	s := get(ctx)
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	callbacks := s.afterCommit
+	s.afterCommit = nil
+	finished := s.finished
+	s.mu.Unlock()
+	if finished {
+		return
+	}
+	for _, callback := range callbacks {
+		callback()
+	}
+}
+
 // TakeOutcome consumes the staged response after the transaction is committed.
 func TakeOutcome(ctx context.Context) (Outcome, bool) {
 	s := get(ctx)
@@ -135,6 +175,7 @@ func DiscardOutcome(ctx context.Context) {
 	if s := get(ctx); s != nil {
 		s.mu.Lock()
 		s.outcome = nil
+		s.afterCommit = nil
 		s.finished = true
 		s.mu.Unlock()
 	}
@@ -147,6 +188,7 @@ func Finish(ctx context.Context) {
 		s.mu.Lock()
 		s.active = false
 		s.db = nil
+		s.afterCommit = nil
 		s.finished = true
 		s.mu.Unlock()
 	}

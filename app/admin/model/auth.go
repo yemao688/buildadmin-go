@@ -18,13 +18,6 @@ import (
 	"go-build-admin/utils"
 )
 
-var AuthGroupList map[int32][]AuthGroup = make(map[int32][]AuthGroup)
-var AuthRuleList map[int32][]Rule = make(map[int32][]Rule)
-var AuthRuleNameList map[int32][]string = make(map[int32][]string)
-
-var muGroup sync.Mutex
-var muRule sync.Mutex
-
 type AuthGroup struct {
 	UID     int32  `json:"uid"`      // 管理员ID
 	GroupID int32  `json:"group_id"` // 分组ID
@@ -54,10 +47,50 @@ type AuthModel struct {
 	sqlDB       *gorm.DB
 	tokenHelper *token.TokenHelper
 	config      *conf.Configuration
+	cache       authCache
+}
+
+type authCache struct {
+	groupMu   sync.RWMutex
+	groupList map[int32][]AuthGroup
+	ruleMu    sync.RWMutex
+	ruleList  map[int32][]Rule
+	ruleNames map[int32][]string
 }
 
 func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *AuthModel {
-	return &AuthModel{sqlDB: sqlDB, tokenHelper: tokenHelper, config: config}
+	return &AuthModel{
+		sqlDB:       sqlDB,
+		tokenHelper: tokenHelper,
+		config:      config,
+		cache: authCache{
+			groupList: make(map[int32][]AuthGroup),
+			ruleList:  make(map[int32][]Rule),
+			ruleNames: make(map[int32][]string),
+		},
+	}
+}
+
+// InvalidateUser clears the cached permissions for one administrator.
+func (s *AuthModel) InvalidateUser(uid int32) {
+	s.cache.ruleMu.Lock()
+	defer s.cache.ruleMu.Unlock()
+	s.cache.groupMu.Lock()
+	defer s.cache.groupMu.Unlock()
+	delete(s.cache.ruleList, uid)
+	delete(s.cache.ruleNames, uid)
+	delete(s.cache.groupList, uid)
+}
+
+// InvalidateAll clears all cached administrator permissions.
+func (s *AuthModel) InvalidateAll() {
+	s.cache.ruleMu.Lock()
+	defer s.cache.ruleMu.Unlock()
+	s.cache.groupMu.Lock()
+	defer s.cache.groupMu.Unlock()
+	clear(s.cache.ruleList)
+	clear(s.cache.ruleNames)
+	clear(s.cache.groupList)
 }
 
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
@@ -163,17 +196,19 @@ func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 
 // 获取菜单规则列表
 func (s *AuthModel) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err error) {
-	if _, ok := AuthRuleList[uid]; !ok {
+	ruleList, ok := s.cachedRules(uid)
+	if !ok {
 		if _, err = s.GetRuleList(ctx, uid); err != nil {
 			return
 		}
+		ruleList, _ = s.cachedRules(uid)
 	}
-	if len(AuthRuleList[uid]) == 0 {
+	if len(ruleList) == 0 {
 		rules = []Rule{}
 		return
 	}
 	children := map[int32][]Rule{}
-	for _, v := range AuthRuleList[uid] {
+	for _, v := range ruleList {
 		children[v.Pid] = append(children[v.Pid], v)
 	}
 
@@ -201,7 +236,9 @@ func (s *AuthModel) getChildren(children map[int32][]Rule, rules []Rule) []Rule 
  *relation 如果出现两个 name,是两个都通过(and)还是一个通过即可(or)
  */
 func (s *AuthModel) Check(name string, id int32, relation string) bool {
-	ruleNameList := AuthRuleNameList[id]
+	s.cache.ruleMu.RLock()
+	ruleNameList := append([]string(nil), s.cache.ruleNames[id]...)
+	s.cache.ruleMu.RUnlock()
 	if slices.Contains(ruleNameList, "*") {
 		return true
 	}
@@ -225,8 +262,8 @@ func (s *AuthModel) Check(name string, id int32, relation string) bool {
 
 // 获得权限规则列表
 func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
-	muRule.Lock()
-	defer muRule.Unlock()
+	s.cache.ruleMu.Lock()
+	defer s.cache.ruleMu.Unlock()
 
 	ids, err := s.GetRuleIds(uid)
 
@@ -235,7 +272,14 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 	}
 
 	if len(ids) == 0 {
-		AuthRuleList[uid] = []Rule{}
+		if s.cache.ruleList == nil {
+			s.cache.ruleList = make(map[int32][]Rule)
+		}
+		if s.cache.ruleNames == nil {
+			s.cache.ruleNames = make(map[int32][]string)
+		}
+		s.cache.ruleList[uid] = []Rule{}
+		s.cache.ruleNames[uid] = []string{}
 		return []string{}, nil
 	}
 
@@ -258,10 +302,16 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 			ruleNameList = append(ruleNameList, v.Name)
 		}
 	}
-	AuthRuleList[uid] = ruleList
-	AuthRuleNameList[uid] = ruleNameList
+	if s.cache.ruleList == nil {
+		s.cache.ruleList = make(map[int32][]Rule)
+	}
+	if s.cache.ruleNames == nil {
+		s.cache.ruleNames = make(map[int32][]string)
+	}
+	s.cache.ruleList[uid] = append([]Rule(nil), ruleList...)
+	s.cache.ruleNames[uid] = append([]string(nil), ruleNameList...)
 
-	return ruleNameList, nil
+	return append([]string(nil), ruleNameList...), nil
 
 }
 
@@ -288,10 +338,18 @@ func (s *AuthModel) GetRuleIds(uid int32) ([]string, error) {
 
 // 获取用户所有分组和对应权限规则
 func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
-	muGroup.Lock()
-	defer muGroup.Unlock()
-	if val, ok := AuthGroupList[uid]; ok {
-		return val, nil
+	s.cache.groupMu.RLock()
+	if val, ok := s.cache.groupList[uid]; ok {
+		groups := append([]AuthGroup(nil), val...)
+		s.cache.groupMu.RUnlock()
+		return groups, nil
+	}
+	s.cache.groupMu.RUnlock()
+
+	s.cache.groupMu.Lock()
+	defer s.cache.groupMu.Unlock()
+	if val, ok := s.cache.groupList[uid]; ok {
+		return append([]AuthGroup(nil), val...), nil
 	}
 	prefix := s.config.Database.Prefix
 	var authGroups []AuthGroup
@@ -300,8 +358,18 @@ func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
 		Where(prefix+"admin_group_access.uid=? and "+prefix+"admin_group.status='1'", uid).
 		Scan(&authGroups).Error
 
-	AuthGroupList[uid] = authGroups
-	return authGroups, err
+	if s.cache.groupList == nil {
+		s.cache.groupList = make(map[int32][]AuthGroup)
+	}
+	s.cache.groupList[uid] = append([]AuthGroup(nil), authGroups...)
+	return append([]AuthGroup(nil), authGroups...), err
+}
+
+func (s *AuthModel) cachedRules(uid int32) ([]Rule, bool) {
+	s.cache.ruleMu.RLock()
+	defer s.cache.ruleMu.RUnlock()
+	rules, ok := s.cache.ruleList[uid]
+	return append([]Rule(nil), rules...), ok
 }
 
 // 获取拥有"所有权限"的分组

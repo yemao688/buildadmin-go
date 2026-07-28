@@ -101,6 +101,7 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminGroupHandler) One(ctx *gin.Context) {
@@ -149,6 +150,7 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 		return
 	}
 
@@ -194,6 +196,7 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminGroupHandler) Del(ctx *gin.Context) {
@@ -216,6 +219,7 @@ func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 // 权限节点入库前处理

@@ -227,6 +227,7 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminHandler) One(ctx *gin.Context) {
@@ -409,6 +410,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func validateAccountStatusValue(value any) error {
@@ -432,6 +434,7 @@ func (h *AdminHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 // 检查分组权限

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	commonModel "go-build-admin/app/common/model"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
@@ -22,13 +23,23 @@ type UserHandler struct {
 	Base
 	log   *zap.Logger
 	userM *model.UserModel
+	authM *commonModel.AuthModel
 }
 
 func NewUserHandler(log *zap.Logger, userM *model.UserModel) *UserHandler {
+	return newUserHandler(log, userM, nil)
+}
+
+func NewUserHandlerWithAuth(log *zap.Logger, userM *model.UserModel, authM *commonModel.AuthModel) *UserHandler {
+	return newUserHandler(log, userM, authM)
+}
+
+func newUserHandler(log *zap.Logger, userM *model.UserModel, authM *commonModel.AuthModel) *UserHandler {
 	return &UserHandler{
 		Base:  Base{currentM: userM},
 		log:   log,
 		userM: userM,
+		authM: authM,
 	}
 }
 
@@ -125,6 +136,11 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.authM != nil {
+			h.authM.InvalidateUser(user.ID)
+		}
+	})
 }
 
 func (h *UserHandler) One(ctx *gin.Context) {
@@ -226,6 +242,11 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.authM != nil {
+			h.authM.InvalidateUser(user.ID)
+		}
+	})
 }
 
 func requestedAdminID(body []byte) (int32, bool, error) {
@@ -260,6 +281,13 @@ func (h *UserHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.authM != nil {
+			for _, id := range params.Ids {
+				h.authM.InvalidateUser(id)
+			}
+		}
+	})
 }
 
 func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {

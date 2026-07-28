@@ -3,6 +3,7 @@ package handler
 import (
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
+	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/utils"
 	"slices"
 	"strconv"
@@ -20,15 +21,25 @@ type UserGroupHandler struct {
 	userGroupM *model.UserGroupModel
 	userRuleM  *model.AdminRuleModel
 	authM      *model.AuthModel
+	userAuthM  *commonModel.AuthModel
 }
 
 func NewUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel) *UserGroupHandler {
+	return newUserGroupHandler(log, userGroupM, userRuleM, authM, nil)
+}
+
+func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
+	return newUserGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
+}
+
+func newUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
 	return &UserGroupHandler{
 		Base:       Base{currentM: userGroupM},
 		log:        log,
 		userGroupM: userGroupM,
 		userRuleM:  userRuleM,
 		authM:      authM,
+		userAuthM:  userAuthM,
 	}
 }
 
@@ -86,6 +97,11 @@ func (h *UserGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 func (h *UserGroupHandler) One(ctx *gin.Context) {
@@ -128,6 +144,11 @@ func (h *UserGroupHandler) One(ctx *gin.Context) {
 
 func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		invalidateAfterMutation(ctx, func() {
+			if h.userAuthM != nil {
+				h.userAuthM.InvalidateAll()
+			}
+		})
 		return
 	}
 
@@ -161,6 +182,11 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 func (h *UserGroupHandler) Del(ctx *gin.Context) {
@@ -176,6 +202,11 @@ func (h *UserGroupHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, func() {
+		if h.userAuthM != nil {
+			h.userAuthM.InvalidateAll()
+		}
+	})
 }
 
 // 权限节点入库前处理

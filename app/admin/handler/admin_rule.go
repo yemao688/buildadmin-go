@@ -98,10 +98,12 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
+		invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 		return
 	}
 
@@ -128,6 +130,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Del(ctx *gin.Context) {
@@ -143,6 +146,7 @@ func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
+	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
