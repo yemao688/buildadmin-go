@@ -21,6 +21,5 @@ type App struct {
 	CdnUrl             string `mapstructure:"cdn_url" json:"cdn_url" yaml:"cdn_url"`
 	CdnUrlParams       string `mapstructure:"cdn_url_params" json:"cdnUrlParams" yaml:"cdn_url_params"`
 	UserLoginCaptcha   bool   `mapstructure:"user_login_captcha" json:"userLoginCaptcha" yaml:"user_login_captcha"`
-	Version            string `mapstructure:"version" json:"version" yaml:"version"`
 	ApiUrl             string `mapstructure:"api_url" json:"api_url" yaml:"api_url"`
 }

@@ -195,6 +195,8 @@ git push origin master
 
 | 文件或区域 | 处理原则 |
 |---|---|
+| `FRAMEWORK_VERSION`、`CHANGELOG.md` | 框架拥有的发行版本文件和变更记录；冲突时取框架侧版本。 |
+| `VERSION` | 业务仓库自有的镜像/发布版本文件，框架永不提供；冲突时保留业务侧版本。 |
 | `router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
 | `router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/app`。 |
 | `app/admin/handler/provider.go`、`app/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
@@ -205,6 +207,10 @@ git push origin master
 | `conf/config.example.yaml` | 以框架新增字段为基础；业务运行值放在被忽略的 `conf/config.yaml`，不要把凭据合入模板。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
 | 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/local 注册表冲突。 |
+
+## 业务版本约定
+
+业务仓库在根目录 `VERSION` 文件维护自己的发布版本，版本格式由业务自行决定但应使用 semver。业务仓库还应在 `PROJECT.md` 记录当前基于的框架版本，例如 `基于框架 v2.0.0`。框架仓库不提供也不维护 `VERSION` 文件。
 
 ## 业务代码边界
 

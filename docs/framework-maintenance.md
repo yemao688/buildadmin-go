@@ -14,6 +14,12 @@
 
 全文档禁止裸用"上游"一词，必须带上述限定词。
 
+## 框架发布流程
+
+1. 更新根目录 `FRAMEWORK_VERSION`、`app/pkg/version` 中的 `version.Framework` 与 `version.Upstream`（仅在同步 PHP 上游时更新），并补充 `CHANGELOG.md`。
+2. 提交发布变更后创建带 `v` 前缀的 annotated tag，例如 `v2.0.0`。
+3. PHP 上游基线版本的事实源是 `web/package.json` 与 `composer.json`；同步 PHP 上游时，同时更新 `version.Upstream`。
+
 ## PHP 上游同步原则
 
 - 本框架把 PHP 上游的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP。

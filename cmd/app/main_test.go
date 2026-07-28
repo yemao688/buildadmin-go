@@ -1,9 +1,16 @@
 package main
 
 import (
+	appVersion "go-build-admin/app/pkg/version"
 	"testing"
 	"time"
 )
+
+func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
+	if Version != appVersion.Framework {
+		t.Fatalf("Version = %q, want %q", Version, appVersion.Framework)
+	}
+}
 
 func TestVersionRequested(t *testing.T) {
 	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "config.yaml", "--version"}} {

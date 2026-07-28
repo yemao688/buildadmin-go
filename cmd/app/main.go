@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-build-admin/app/cmd"
+	appVersion "go-build-admin/app/pkg/version"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"log"
@@ -29,7 +30,7 @@ import (
 var (
 	rootPath = utils.RootPath()
 
-	Version      = "dev"
+	Version      = appVersion.Framework
 	configPath   string
 	config       *conf.Configuration
 	loggerWriter *lumberjack.Logger
@@ -48,7 +49,7 @@ func init() {
 
 func main() {
 	if versionRequested(os.Args[1:]) {
-		fmt.Println(Version)
+		fmt.Printf("%s (upstream buildadmin %s)\n", Version, appVersion.Upstream)
 		return
 	}
 

@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+// Framework is the release version of this Go framework; downstream projects align to it.
+const Framework = "2.0.0"
+
+// Upstream is the compatible PHP BuildAdmin baseline; framework maintainers update it when syncing PHP upstream.
+const Upstream = "2.3.8"
+
 // 比较两个版本号
 func Compare(v1, v2 string) bool {
 	if v2 == "" {
