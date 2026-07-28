@@ -2,6 +2,8 @@ package router
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	admin "go-build-admin/app/admin/handler"
@@ -30,6 +32,66 @@ func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testin
 	}
 }
 
+func TestRegistrarCapabilitiesMatchRegisteredRoutes(t *testing.T) {
+	engine := newCompleteRouter()
+
+	want := make(map[middleware.AtomicRoute]struct{})
+	capabilityCount := 0
+	for _, registrar := range completeRegistrars() {
+		for _, capability := range registrar.Capabilities() {
+			capabilityCount++
+			if _, exists := want[capability]; exists {
+				t.Fatalf("duplicate registrar capability: %#v", capability)
+			}
+			want[capability] = struct{}{}
+		}
+	}
+	if capabilityCount == 0 {
+		t.Fatal("registrars must declare atomic capabilities")
+	}
+
+	got := make(map[middleware.AtomicRoute]struct{})
+	for _, route := range engine.Routes() {
+		if !strings.HasPrefix(route.Path, "/admin/") {
+			continue
+		}
+		capability, ok := lookupAtomicRouteCapability(t, route)
+		if ok {
+			got[capability] = struct{}{}
+		}
+	}
+
+	if len(got) != len(want) {
+		t.Fatalf("registered capability count = %d, registrar capability count = %d\nregistered: %#v\nregistrars: %#v", len(got), len(want), got, want)
+	}
+	for capability := range want {
+		if _, ok := got[capability]; !ok {
+			t.Fatalf("registrar capability has no matching registered route: %#v", capability)
+		}
+	}
+	for capability := range got {
+		if _, ok := want[capability]; !ok {
+			t.Fatalf("registered route has no matching registrar capability: %#v", capability)
+		}
+	}
+}
+
+func lookupAtomicRouteCapability(t *testing.T, route gin.RouteInfo) (middleware.AtomicRoute, bool) {
+	t.Helper()
+
+	var capability middleware.AtomicRoute
+	var ok bool
+	router := gin.New()
+	router.Handle(route.Method, route.Path, func(c *gin.Context) {
+		capability, ok = middleware.AtomicRouteCapability(c)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(route.Method, route.Path, nil)
+	router.ServeHTTP(recorder, request)
+	return capability, ok
+}
+
 func newCompleteRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	admin.RegisteredRoutes = nil
@@ -43,38 +105,42 @@ func newCompleteRouter() *gin.Engine {
 		&admin.IndexHandler{},
 		&admin.AjaxHandler{},
 		&api.InstallHandler{},
-		ProvideRegistrars(
-			admin.NewCountryLanguageRegistrar(&admin.CountryLanguageHandler{}),
-			admin.NewCountryCurrencyRegistrar(&admin.CountryCurrencyHandler{}),
-			admin.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
-			admin.NewCrudLogRegistrar(&admin.CrudLogHandler{}),
-			admin.NewModuleRegistrar(&admin.ModuleHandler{}),
-			admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
-			admin.NewAdminGroupRegistrar(&admin.AdminGroupHandler{}),
-			admin.NewAdminRuleRegistrar(&admin.AdminRuleHandler{}),
-			admin.NewUserGroupRegistrar(&admin.UserGroupHandler{}),
-			admin.NewUserRuleRegistrar(&admin.UserRuleHandler{}),
-			admin.NewConfigRegistrar(&admin.ConfigHandler{}),
-			admin.NewAttachmentRegistrar(&admin.AttachmentHandler{}),
-			admin.NewAdminRegistrar(&admin.AdminHandler{}),
-			admin.NewUserRegistrar(&admin.UserHandler{}),
-			admin.NewDataRecycleRegistrar(&admin.DataRecycleHandler{}),
-			admin.NewDataRecycleLogRegistrar(&admin.DataRecycleLogHandler{}),
-			admin.NewSensitiveDataRegistrar(&admin.SensitiveDataHandler{}),
-			admin.NewSensitiveDataLogRegistrar(&admin.SensitiveDataLogHandler{}),
-			admin.NewAdminInfoRegistrar(&admin.AdminInfoHandler{}),
-			admin.NewAdminLogRegistrar(&admin.AdminLogHandler{}),
-			admin.NewCrudRegistrar(&admin.CrudHandler{}),
-			admin.NewDashboardRegistrar(&admin.DashboardHandler{}),
-			admin.NewUserLogRegistrar(&admin.UserHandler{}, &admin.UserMoneyLogHandler{}, &admin.UserScoreLogHandler{}),
-			api.NewAccountRegistrar(&api.AccountHandler{}),
-			api.NewAjaxRegistrar(&api.AjaxHandler{}),
-			api.NewCommonRegistrar(&api.CommonHandler{}),
-			api.NewEmsRegistrar(&api.EmsHandler{}),
-			api.NewIndexRegistrar(&api.IndexHandler{}),
-			api.NewUserRegistrar(&api.UserHandler{}),
-			api.NewDemoRegistrar(&api.DemoHandler{}),
-		),
+		completeRegistrars(),
+	)
+}
+
+func completeRegistrars() []RouteRegistrar {
+	return ProvideRegistrars(
+		admin.NewCountryLanguageRegistrar(&admin.CountryLanguageHandler{}),
+		admin.NewCountryCurrencyRegistrar(&admin.CountryCurrencyHandler{}),
+		admin.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
+		admin.NewCrudLogRegistrar(&admin.CrudLogHandler{}),
+		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
+		admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
+		admin.NewAdminGroupRegistrar(&admin.AdminGroupHandler{}),
+		admin.NewAdminRuleRegistrar(&admin.AdminRuleHandler{}),
+		admin.NewUserGroupRegistrar(&admin.UserGroupHandler{}),
+		admin.NewUserRuleRegistrar(&admin.UserRuleHandler{}),
+		admin.NewConfigRegistrar(&admin.ConfigHandler{}),
+		admin.NewAttachmentRegistrar(&admin.AttachmentHandler{}),
+		admin.NewAdminRegistrar(&admin.AdminHandler{}),
+		admin.NewUserRegistrar(&admin.UserHandler{}),
+		admin.NewDataRecycleRegistrar(&admin.DataRecycleHandler{}),
+		admin.NewDataRecycleLogRegistrar(&admin.DataRecycleLogHandler{}),
+		admin.NewSensitiveDataRegistrar(&admin.SensitiveDataHandler{}),
+		admin.NewSensitiveDataLogRegistrar(&admin.SensitiveDataLogHandler{}),
+		admin.NewAdminInfoRegistrar(&admin.AdminInfoHandler{}),
+		admin.NewAdminLogRegistrar(&admin.AdminLogHandler{}),
+		admin.NewCrudRegistrar(&admin.CrudHandler{}),
+		admin.NewDashboardRegistrar(&admin.DashboardHandler{}),
+		admin.NewUserLogRegistrar(&admin.UserHandler{}, &admin.UserMoneyLogHandler{}, &admin.UserScoreLogHandler{}),
+		api.NewAccountRegistrar(&api.AccountHandler{}),
+		api.NewAjaxRegistrar(&api.AjaxHandler{}),
+		api.NewCommonRegistrar(&api.CommonHandler{}),
+		api.NewEmsRegistrar(&api.EmsHandler{}),
+		api.NewIndexRegistrar(&api.IndexHandler{}),
+		api.NewUserRegistrar(&api.UserHandler{}),
+		api.NewDemoRegistrar(&api.DemoHandler{}),
 	)
 }
 
