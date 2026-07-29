@@ -55,6 +55,16 @@ func (h TokenHelper) Set(token string, t string, user_id int32, expire int64) er
 func (h TokenHelper) Get(token string) (*Token, error) {
 	return h.Driver.Get(token)
 }
+func (h TokenHelper) GetFor(tokenStr, expectedType string) (*Token, error) {
+	tokenData, err := h.Get(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if tokenData.Type != expectedType {
+		return nil, fmt.Errorf("token type mismatch: expected %q, got %q", expectedType, tokenData.Type)
+	}
+	return tokenData, nil
+}
 func (h TokenHelper) Check(token string, t string, user_id int32) bool {
 	return h.Driver.Check(token, t, user_id)
 }

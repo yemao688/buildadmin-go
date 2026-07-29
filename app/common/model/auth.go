@@ -73,12 +73,18 @@ func (s *AuthModel) InvalidateAll() {
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	tokenStr := ctx.Request.Header.Get("ba-user-token")
 	if tokenStr != "" {
-		tokenData, err := s.tokenHelper.Get(tokenStr)
+		tokenData, err := s.tokenHelper.GetFor(tokenStr, "user")
 		if err == nil {
 			return tokenData, true
 		}
 	}
 	return nil, false
+}
+
+func (s *AuthModel) IsEnabledUser(id int32) bool {
+	var user User
+	err := s.sqlDB.Model(&User{}).Select("status").Where("id=?", id).First(&user).Error
+	return err == nil && user.Status == "enable"
 }
 
 func (s *AuthModel) SetVerificationToken(t string, id int32) string {

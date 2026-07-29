@@ -42,21 +42,13 @@ func (m *Login) Handler() gin.HandlerFunc {
 			return
 		}
 
-		tokenData, err := m.tokenHelper.Get(tokenStr)
+		tokenData, err := m.tokenHelper.GetFor(tokenStr, "admin")
 		if err != nil {
-			if v, ok := err.(*cErr.Error); ok {
-				msg := utils.Lang(c, v.Error(), nil)
-				c.JSON(http.StatusOK, map[string]interface{}{
-					"code": v.ErrorCode(),
-					"data": map[string]any{
-						"type": "need login",
-					},
-					"msg":  msg,
-					"time": 0,
-				})
-			}
-
-			c.Abort()
+			abortLogin(c, err)
+			return
+		}
+		if !m.authM.IsEnabledAdmin(tokenData.UserID) {
+			abortLogin(c, cErr.Unauthorized("Please login first"))
 			return
 		}
 		language := c.GetHeader("Accept-Language")
@@ -80,4 +72,22 @@ func (m *Login) Handler() gin.HandlerFunc {
 		}
 		c.Set("AdminAuth", authParam)
 	}
+}
+
+func abortLogin(c *gin.Context, err error) {
+	code := http.StatusUnauthorized
+	message := "Please login first"
+	if v, ok := err.(*cErr.Error); ok {
+		code = v.ErrorCode()
+		message = v.Error()
+	}
+	c.JSON(http.StatusOK, map[string]interface{}{
+		"code": code,
+		"data": map[string]any{
+			"type": "need login",
+		},
+		"msg":  utils.Lang(c, message, nil),
+		"time": 0,
+	})
+	c.Abort()
 }

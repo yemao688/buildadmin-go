@@ -126,3 +126,41 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	require.Equal(t, []int64{259200}, driver.expires)
 	require.Zero(t, driver.deleted)
 }
+
+func TestRefreshAdminTokenUsesAdminTTL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	driver := &handlerContractTokenDriver{get: &token.Token{Type: "admin-refresh", UserID: 1}}
+	config := &conf.Configuration{}
+	config.App.AdminTokenKeepTime = 86400
+	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}, config: config}
+	router := newContractTestRouter()
+	router.POST("/", h.RefreshToken)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"refreshToken":"refresh"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("batoken", "old-token")
+	router.ServeHTTP(recorder, request)
+
+	response := decodeHandlerResponse(t, recorder)
+	require.Equal(t, 1, response.Code)
+	require.Equal(t, "admin", driver.gotType)
+	require.Equal(t, []int64{86400}, driver.expires)
+}
+
+func TestRefreshTokenRejectsWrongDomainHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user-refresh", UserID: 1}}
+	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}, config: &conf.Configuration{}}
+	router := newContractTestRouter()
+	router.POST("/", h.RefreshToken)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"refreshToken":"refresh"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("batoken", "admin-token")
+	router.ServeHTTP(recorder, request)
+
+	response := decodeHandlerResponse(t, recorder)
+	require.Equal(t, 400, response.Code)
+	require.Equal(t, "Invalid Token!", response.Msg)
+	require.Zero(t, driver.setCount)
+}

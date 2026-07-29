@@ -74,12 +74,18 @@ func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 		tokenStr = ctx.Query("batoken")
 	}
 	if tokenStr != "" {
-		tokenData, err := s.tokenHelper.Get(tokenStr)
+		tokenData, err := s.tokenHelper.GetFor(tokenStr, "admin")
 		if err == nil {
 			return tokenData, true
 		}
 	}
 	return nil, false
+}
+
+func (s *AuthModel) IsEnabledAdmin(id int32) bool {
+	var admin Admin
+	err := s.sqlDB.Model(&Admin{}).Select("status").Where("id=?", id).First(&admin).Error
+	return err == nil && admin.Status == "enable"
 }
 
 func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (Admin, error) {

@@ -41,21 +41,13 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			return
 		}
 
-		tokenData, err := m.tokenHelper.Get(tokenStr)
+		tokenData, err := m.tokenHelper.GetFor(tokenStr, "user")
 		if err != nil {
-			if v, ok := err.(*cErr.Error); ok {
-				msg := utils.Lang(c, v.Error(), nil)
-				c.JSON(http.StatusOK, map[string]interface{}{
-					"code": v.ErrorCode(),
-					"data": map[string]any{
-						"type": "need login",
-					},
-					"msg":  msg,
-					"time": 0,
-				})
-			}
-
-			c.Abort()
+			abortLogin(c, err)
+			return
+		}
+		if !m.authM.IsEnabledUser(tokenData.UserID) {
+			abortLogin(c, cErr.Unauthorized("Please login first"))
 			return
 		}
 		language := c.GetHeader("Accept-Language")
@@ -67,16 +59,7 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			Token:    tokenStr,
 		}
 		if err := m.authM.ValidateUserToken(c, tokenData.UserID, c.ClientIP()); err != nil {
-			if v, ok := err.(*cErr.Error); ok {
-				msg := utils.Lang(c, v.Error(), nil)
-				c.JSON(http.StatusOK, map[string]interface{}{
-					"code": v.ErrorCode(),
-					"data": map[string]any{"type": "need login"},
-					"msg":  msg,
-					"time": 0,
-				})
-			}
-			c.Abort()
+			abortLogin(c, err)
 			return
 		}
 		c.Set("UserAuth", authParam)

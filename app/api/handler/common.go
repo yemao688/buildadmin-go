@@ -125,33 +125,33 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 		return
 	}
 
-	if result.Type != "admin-refresh" && result.Type != "user-refresh" {
+	accessType := ""
+	accessHeader := ""
+	switch result.Type {
+	case "admin-refresh":
+		accessType = "admin"
+		accessHeader = "batoken"
+	case "user-refresh":
+		accessType = "user"
+		accessHeader = "ba-user-token"
+	default:
+		FailByErr(ctx, cErr.BadRequest("Invalid token"))
+		return
+	}
+
+	if ctx.GetHeader(accessHeader) == "" {
 		FailByErr(ctx, cErr.BadRequest("Invalid token"))
 		return
 	}
 
 	newToken := random.Uuid()
-	if result.Type == "admin-refresh" {
-		batoken := ctx.GetHeader("batoken")
-		if batoken == "" {
-			FailByErr(ctx, cErr.BadRequest("Invalid token"))
-			return
-		}
-		if err := h.tokenHelper.Set(newToken, "admin", result.UserID, h.config.App.UserTokenKeepTime); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-
-	} else if result.Type == "user-refresh" {
-		baUserToken := ctx.GetHeader("ba-user-token")
-		if baUserToken == "" {
-			FailByErr(ctx, cErr.BadRequest("Invalid token"))
-			return
-		}
-		if err := h.tokenHelper.Set(newToken, "user", result.UserID, h.config.App.UserTokenKeepTime); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
+	keepTime := h.config.App.UserTokenKeepTime
+	if accessType == "admin" {
+		keepTime = h.config.App.AdminTokenKeepTime
+	}
+	if err := h.tokenHelper.Set(newToken, accessType, result.UserID, keepTime); err != nil {
+		FailByErr(ctx, err)
+		return
 	}
 
 	Success(ctx, map[string]any{

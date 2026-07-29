@@ -23,6 +23,16 @@ func (authTestTokenDriver) Check(string, string, int32) bool       { return fals
 func (authTestTokenDriver) Delete(string) error                    { return nil }
 func (authTestTokenDriver) Clear(string, int32) error              { return nil }
 
+type authDomainTokenDriver struct {
+	data *token.Token
+}
+
+func (d authDomainTokenDriver) Set(string, string, int32, int64) error { return nil }
+func (d authDomainTokenDriver) Get(string) (*token.Token, error)       { return d.data, nil }
+func (d authDomainTokenDriver) Check(string, string, int32) bool       { return false }
+func (d authDomainTokenDriver) Delete(string) error                    { return nil }
+func (d authDomainTokenDriver) Clear(string, int32) error              { return nil }
+
 func newAuthTestModel(t *testing.T) (*AuthModel, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
@@ -38,6 +48,17 @@ func authTestContext() *gin.Context {
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/", nil)
 	return ctx
+}
+
+func TestAuthIsLoginRejectsAdminToken(t *testing.T) {
+	m, _ := newAuthTestModel(t)
+	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}}
+	ctx := authTestContext()
+	ctx.Request.Header.Set("ba-user-token", "admin-token")
+
+	got, ok := m.IsLogin(ctx)
+	require.False(t, ok)
+	require.Nil(t, got)
 }
 
 func TestAuthLoginMissingAccountIsNotDisabled(t *testing.T) {
