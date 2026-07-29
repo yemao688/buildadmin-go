@@ -51,7 +51,6 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 		return err
 	}
 	comment := table.Comment
-	pk := getPk(fields)
 	if db.Migrator().HasTable(fullTableName) {
 		//更新表
 		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
@@ -142,47 +141,53 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 		}
 	} else {
 		//创建表
-		sqlData := SqlTemplData{
-			TableName: fullTableName,
-			Fields:    "",
-			Keys:      "PRIMARY KEY (`" + pk + "`)",
-			Engine:    "ENGINE=InnoDB",
-			Charset:   "DEFAULT CHARSET=utf8mb4",
-			SortRule:  "COLLATE=utf8mb4_unicode_ci",
-			RowFormat: "row_format=DYNAMIC",
-			Comment:   "",
-		}
-		if comment != "" {
-			sqlData.Comment = formatComment(comment)
-		}
-
-		for _, v := range fields {
-			str, err := getDDlFieldData(v)
-			if err != nil {
-				return err
-			}
-			sqlData.Fields += str
-		}
-
-		var buf bytes.Buffer
-		tpl, err := template.New(SqlTempl).Parse(SqlTempl)
+		ddl, err := createTableDDL(fullTableName, table, fields)
 		if err != nil {
 			return err
 		}
-		if err := tpl.Execute(&buf, sqlData); err != nil {
-			return err
-		}
-
-		if err := db.Exec(buf.String()).Error; err != nil {
+		if err := db.Exec(ddl).Error; err != nil {
 			return err
 		}
 	}
 	// Ensure a data-scope index exists whenever the resolved owner column is
 	// not the primary key. This makes the generated DDL self-consistent with
 	// the fail-closed index proof required by ResolveDataScope.
-	pk = getPk(fields)
+	pk := getPk(fields)
 	ownerCol := resolveOwnerColumn(table.DataScope, fields)
 	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+}
+
+func createTableDDL(fullTableName string, table model.Table, fields []model.Field) (string, error) {
+	pk := getPk(fields)
+	sqlData := SqlTemplData{
+		TableName: fullTableName,
+		Fields:    "",
+		Keys:      "PRIMARY KEY (`" + pk + "`)",
+		Engine:    "ENGINE=InnoDB",
+		Charset:   "DEFAULT CHARSET=utf8mb4",
+		SortRule:  "COLLATE=utf8mb4_unicode_ci",
+		RowFormat: "row_format=DYNAMIC",
+		Comment:   "",
+	}
+	if table.Comment != "" {
+		sqlData.Comment = formatComment(table.Comment)
+	}
+	for _, field := range fields {
+		fieldData, err := getDDlFieldData(field)
+		if err != nil {
+			return "", err
+		}
+		sqlData.Fields += fieldData
+	}
+	var buf bytes.Buffer
+	tpl, err := template.New(SqlTempl).Parse(SqlTempl)
+	if err != nil {
+		return "", err
+	}
+	if err := tpl.Execute(&buf, sqlData); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func hasColumn(db *gorm.DB, fullTableName, column string) (bool, error) {

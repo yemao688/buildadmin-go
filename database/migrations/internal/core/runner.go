@@ -1,53 +1,21 @@
 package core
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"time"
 
 	"go-build-admin/conf"
+	"go-build-admin/internal/advisorylock"
 	"gorm.io/gorm"
 )
 
 func WithMigrationLock(db *gorm.DB, name string, timeout time.Duration, fn func(*gorm.DB) error) (err error) {
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	conn, err := sqlDB.Conn(context.Background())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	var got int
-	if err = conn.QueryRowContext(context.Background(), "SELECT GET_LOCK(?, ?)", name, int(timeout/time.Second)).Scan(&got); err != nil {
-		return err
-	}
-	if got != 1 {
-		return fmt.Errorf("could not acquire migration lock %q", name)
-	}
-	defer func() {
-		releaseErr := releaseMigrationLock(conn, name)
-		if err == nil && releaseErr != nil {
-			err = releaseErr
-		}
-	}()
-	callbackDB := db.Session(&gorm.Session{NewDB: true, Context: context.Background()})
-	callbackDB.Statement.ConnPool = conn
-	return fn(callbackDB)
-}
-
-func releaseMigrationLock(conn *sql.Conn, name string) error {
-	var released sql.NullInt64
-	if err := conn.QueryRowContext(context.Background(), "SELECT RELEASE_LOCK(?)", name).Scan(&released); err != nil {
-		return err
-	}
-	return ValidateMigrationLockRelease(released)
+	return advisorylock.With(db, name, timeout, fn)
 }
 
 func ValidateMigrationLockRelease(released sql.NullInt64) error {
-	if !released.Valid || released.Int64 != 1 {
+	if err := advisorylock.ValidateRelease(released); err != nil {
 		return fmt.Errorf("migration lock was not released")
 	}
 	return nil

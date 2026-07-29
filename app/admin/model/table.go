@@ -124,14 +124,17 @@ func (s *TableModel) GetTablePk(tableName string) string {
 }
 
 type Column struct {
-	COLUMN_NAME    string
-	COLUMN_COMMENT string
-	IS_NULLABLE    string
-	COLUMN_TYPE    string
-	DATA_TYPE      string
-	COLUMN_DEFAULT sql.NullString
-	COLUMN_KEY     string
-	EXTRA          string
+	COLUMN_NAME           string
+	COLUMN_COMMENT        string
+	IS_NULLABLE           string
+	COLUMN_TYPE           string
+	DATA_TYPE             string
+	COLUMN_DEFAULT        sql.NullString
+	COLUMN_KEY            string
+	EXTRA                 string
+	CHARACTER_SET_NAME    string
+	COLLATION_NAME        string
+	GENERATION_EXPRESSION string
 }
 
 // 获取数据表的所有字段

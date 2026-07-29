@@ -33,19 +33,44 @@ const (
 	ApplyAltered   ApplyAction = "altered"
 	ApplyUnchanged ApplyAction = "unchanged"
 	ApplyRebuilt   ApplyAction = "rebuilt"
+	ApplyBlocked   ApplyAction = "blocked"
 )
 
 type ApplyOptions struct {
-	AllowRebuild bool // 允许对已有表按 spec type:create 删除重建（数据丢失，仅限可丢弃环境）
+	AllowRebuild bool // 允许对已有表发生主键漂移时删除重建（数据丢失，仅限可丢弃环境）
 	SkipMenu     bool
 	AdminID      int32
+	Plan         bool
+}
+
+type ApplyChange struct {
+	Field     string
+	Type      string
+	Class     DiffClass
+	Reason    string
+	DDL       string
+	Unmanaged []string
 }
 
 type ApplyTableResult struct {
+	Table       string
+	Action      ApplyAction
+	Changes     []string
+	Diffs       []ApplyChange
+	Unmanaged   []ApplyChange
+	Destructive bool
+	MenuResults []MenuSyncResult
+	LogID       int32
+}
+
+type ApplyBlockedError struct {
 	Table   string
-	Action  ApplyAction
-	Changes []string
-	LogID   int32
+	Class   DiffClass
+	Reasons []string
+}
+
+func (e *ApplyBlockedError) Error() string {
+	return fmt.Sprintf("crud apply for %q blocked by %s changes: %s; use a reviewed business migration or explicitly reconcile the spec", e.Table, e.Class, strings.Join(e.Reasons, "; "))
 }
 
 // decideApplyAction 计算已有表的应用动作与拒绝原因（纯函数，便于测试）。
@@ -73,16 +98,36 @@ func ApplySpecsFromDir(db *gorm.DB, cfg *conf.Configuration, dir string, opts Ap
 	return ApplySpecs(db, cfg, entries, opts)
 }
 
+func PlanSpecsFromDir(db *gorm.DB, cfg *conf.Configuration, dir string, opts ApplyOptions) ([]ApplyTableResult, error) {
+	entries, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("scan spec dir %q: %w", dir, err)
+	}
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	sort.Strings(entries)
+	return PlanSpecs(db, cfg, entries, opts)
+}
+
 // ApplySpecs 逐个应用 spec；任一失败即中止（DDL 本就不可回滚，确定性顺序使重跑可续）。
-func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts ApplyOptions) ([]ApplyTableResult, error) {
+func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts ApplyOptions) (results []ApplyTableResult, retErr error) {
+	if opts.Plan {
+		return PlanSpecs(db, cfg, specPaths, opts)
+	}
 	if db == nil || cfg == nil {
 		return nil, fmt.Errorf("crud apply requires database and configuration")
 	}
-	release, err := TryAcquireGenerationLock()
+	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return nil, err
 	}
-	defer release()
+	db = lockedDB
+	defer func() {
+		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
+			retErr = releaseErr
+		}
+	}()
 	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
 	reconcileStaleGeneratingLogs(db, cfg)
 
@@ -90,15 +135,186 @@ func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts A
 		opts.AdminID = 1
 	}
 	tableM := model.NewTableModel(cfg, db)
-	results := make([]ApplyTableResult, 0, len(specPaths))
+	results = make([]ApplyTableResult, 0, len(specPaths))
 	for _, path := range specPaths {
 		result, err := applyOneSpec(db, cfg, tableM, path, opts)
 		if err != nil {
+			if result != nil {
+				results = append(results, *result)
+			}
 			return results, fmt.Errorf("apply %q: %w", path, err)
 		}
 		results = append(results, *result)
 	}
 	return results, nil
+}
+
+// PlanSpecs reads the same database state as apply but never changes schema,
+// menus, CRUD logs, files, or other data. Rejected changes are returned in the
+// plan and also produce a non-nil error so the CLI exits non-zero.
+func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts ApplyOptions) (results []ApplyTableResult, retErr error) {
+	if db == nil || cfg == nil {
+		return nil, fmt.Errorf("crud plan requires database and configuration")
+	}
+	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
+	if err != nil {
+		return nil, err
+	}
+	db = lockedDB
+	defer func() {
+		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
+			retErr = releaseErr
+		}
+	}()
+	tableM := model.NewTableModel(cfg, db)
+	for _, path := range specPaths {
+		result, err := planOneSpec(db, cfg, tableM, path, opts)
+		if err != nil {
+			return results, fmt.Errorf("plan %q: %w", path, err)
+		}
+		results = append(results, *result)
+	}
+	if err := planBlockingError(results, opts.AllowRebuild); err != nil {
+		return results, err
+	}
+	return results, nil
+}
+
+func planBlockingError(results []ApplyTableResult, allowRebuild bool) error {
+	for _, result := range results {
+		if result.Destructive && allowRebuild {
+			continue
+		}
+		for _, change := range result.Diffs {
+			if change.Class == DiffRejected || change.Class == DiffRequiresApproval {
+				return &ApplyBlockedError{Table: result.Table, Class: change.Class, Reasons: []string{change.Field + ": " + change.Reason}}
+			}
+		}
+	}
+	return nil
+}
+
+func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
+	spec, err := LoadSpec(specPath)
+	if err != nil {
+		return nil, err
+	}
+	if IsProtectedTable(spec.Table.Name) {
+		return nil, fmt.Errorf("crud apply is forbidden for protected table %q", spec.Table.Name)
+	}
+	if err := validateGenerationMode(normalizeGenerationType(spec.Type, spec.Table.Rebuild)); err != nil {
+		return nil, err
+	}
+	result := &ApplyTableResult{Table: spec.Table.Name}
+	fullName := tableM.Name(spec.Table.Name, true)
+	if !tableExists(db, cfg, spec.Table.Name) {
+		result.Action = ApplyCreated
+		ddl, err := createTableDDL(fullName, spec.Table, spec.Fields)
+		if err != nil {
+			return nil, err
+		}
+		result.Diffs = []ApplyChange{{Field: "<table>", Type: "create-table", Class: DiffSafeAuto, DDL: ddl, Reason: "table does not exist"}}
+		return result, nil
+	}
+	actualPKs, err := actualPrimaryKeys(db, fullName)
+	if err != nil {
+		return nil, fmt.Errorf("read primary key: %w", err)
+	}
+	current, err := tableM.GetColumns(spec.Table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("read existing columns: %w", err)
+	}
+	if pkDrift, reason := primaryKeyDrift(actualPKs, spec.Fields, current); pkDrift {
+		if opts.AllowRebuild {
+			result.Action = ApplyRebuilt
+			result.Destructive = true
+			result.Diffs = []ApplyChange{{Field: "<primary key>", Type: "rebuild-table", Class: DiffRejected, Reason: reason, DDL: "DROP TABLE `" + fullName + "`; CREATE TABLE ..."}}
+			return result, nil
+		}
+		result.Action = ApplyBlocked
+		result.Diffs = []ApplyChange{{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: reason}}
+		return result, nil
+	}
+	diffs := deriveAlterDiff(current, spec.Fields)
+	result.Diffs = make([]ApplyChange, 0, len(diffs))
+	result.Unmanaged = unmanagedChanges(current, spec.Fields)
+	for _, diff := range diffs {
+		ddl, ddlErr := alterChangeDDL(fullName, diff)
+		if ddlErr != nil {
+			return nil, ddlErr
+		}
+		result.Diffs = append(result.Diffs, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Reason: diff.Reason, DDL: ddl, Unmanaged: diff.Unmanaged})
+	}
+	if len(diffs) == 0 {
+		result.Action = ApplyUnchanged
+	} else if firstBlockingDiff(diffs) != nil {
+		result.Action = ApplyBlocked
+	} else {
+		result.Action = ApplyAltered
+	}
+	return result, nil
+}
+
+func unmanagedChanges(columns []model.Column, fields []model.Field) []ApplyChange {
+	byName := make(map[string]model.Column, len(columns))
+	for _, column := range columns {
+		byName[strings.ToLower(column.COLUMN_NAME)] = column
+	}
+	changes := make([]ApplyChange, 0)
+	for _, field := range fields {
+		column, ok := byName[strings.ToLower(field.Name)]
+		if !ok || !specFieldMatchesColumn(field, column) {
+			continue
+		}
+		attributes := unmanagedColumnAttributes(column)
+		if len(attributes) == 0 {
+			continue
+		}
+		changes = append(changes, ApplyChange{Field: field.Name, Type: "unmanaged", Class: DiffUnmanaged, Reason: "database attributes are not modeled by CRUD spec", Unmanaged: attributes})
+	}
+	return changes
+}
+
+func alterChangeDDL(tableName string, diff AlterDiff) (string, error) {
+	fieldData, err := getDDlFieldData(diff.Field)
+	if err != nil {
+		return "", err
+	}
+	fieldData = trimDDLFragment(fieldData)
+	if diff.Change.Type == "add-field" {
+		return "ALTER TABLE `" + tableName + "` ADD " + fieldData, nil
+	}
+	return "ALTER TABLE `" + tableName + "` MODIFY " + fieldData, nil
+}
+
+func firstBlockingDiff(diffs []AlterDiff) *AlterDiff {
+	for i := range diffs {
+		if diffs[i].Class == DiffRejected || diffs[i].Class == DiffRequiresApproval {
+			return &diffs[i]
+		}
+	}
+	return nil
+}
+
+func primaryKeyDrift(actualPKs []string, fields []model.Field, columns []model.Column) (bool, string) {
+	specPKs := specPrimaryKeys(fields)
+	if !sameIdentifiers(actualPKs, specPKs) {
+		return true, fmt.Sprintf("primary key columns differ: database=%q spec=%q", strings.Join(actualPKs, ","), strings.Join(specPKs, ","))
+	}
+	byName := make(map[string]model.Column, len(columns))
+	for _, column := range columns {
+		byName[strings.ToLower(column.COLUMN_NAME)] = column
+	}
+	for _, field := range fields {
+		if !field.PrimaryKey {
+			continue
+		}
+		column, ok := byName[strings.ToLower(field.Name)]
+		if !ok || !specFieldMatchesColumn(field, column) {
+			return true, fmt.Sprintf("primary key column %q has attribute drift", field.Name)
+		}
+	}
+	return false, ""
 }
 
 func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
@@ -118,30 +334,52 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	result := &ApplyTableResult{Table: spec.Table.Name, Action: ApplyCreated}
 
 	if exists {
-		actualPK, err := actualPrimaryKey(db, fullName)
+		actualPKs, err := actualPrimaryKeys(db, fullName)
 		if err != nil {
 			return nil, fmt.Errorf("read primary key: %w", err)
 		}
-		specPK := getPk(spec.Fields)
-		action, err := decideApplyAction(!strings.EqualFold(actualPK, specPK), opts.AllowRebuild, spec.Table.Name, actualPK, specPK)
+		current, err := tableM.GetColumns(spec.Table.Name)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read existing columns: %w", err)
+		}
+		result.Unmanaged = unmanagedChanges(current, spec.Fields)
+		pkDrift, pkReason := primaryKeyDrift(actualPKs, spec.Fields, current)
+		specPK := strings.Join(specPrimaryKeys(spec.Fields), ",")
+		action, err := decideApplyAction(pkDrift, opts.AllowRebuild, spec.Table.Name, strings.Join(actualPKs, ","), specPK)
+		if err != nil {
+			result.Action = ApplyBlocked
+			result.Diffs = []ApplyChange{{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: pkReason}}
+			return result, &ApplyBlockedError{Table: spec.Table.Name, Class: DiffRejected, Reasons: []string{pkReason}}
 		}
 		result.Action = action
+		result.Destructive = action == ApplyRebuilt
 		if action == ApplyRebuilt {
 			if err := tableM.DelTable(spec.Table.Name); err != nil {
 				return nil, fmt.Errorf("drop table: %w", err)
 			}
 		} else {
-			current, err := tableM.GetColumns(spec.Table.Name)
-			if err != nil {
-				return nil, fmt.Errorf("read existing columns: %w", err)
+			diffs := deriveAlterDiff(current, spec.Fields)
+			if blocking := firstBlockingDiff(diffs); blocking != nil {
+				reasons := make([]string, 0, len(diffs))
+				for _, diff := range diffs {
+					if diff.Class == DiffRejected || diff.Class == DiffRequiresApproval {
+						reasons = append(reasons, diff.Field.Name+": "+diff.Reason)
+					}
+				}
+				result.Diffs = applyChangesFromDiffs(diffs)
+				result.Action = ApplyBlocked
+				return result, &ApplyBlockedError{Table: spec.Table.Name, Class: blocking.Class, Reasons: reasons}
 			}
-			spec.Table.DesignChange = deriveAlterChanges(current, spec.Fields)
-			for _, change := range spec.Table.DesignChange {
-				result.Changes = append(result.Changes, change.Type+" "+change.NewName)
+			spec.Table.DesignChange = make([]model.ChangeField, 0, len(diffs))
+			for _, diff := range diffs {
+				if diff.Class != DiffSafeAuto {
+					continue
+				}
+				spec.Table.DesignChange = append(spec.Table.DesignChange, diff.Change)
+				result.Changes = append(result.Changes, diff.Change.Type+" "+diff.Change.NewName)
 			}
-			if len(spec.Table.DesignChange) == 0 {
+			result.Diffs = applyChangesFromDiffs(diffs)
+			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 {
 				result.Action = ApplyUnchanged
 			}
 		}
@@ -151,9 +389,11 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	}
 	if !opts.SkipMenu {
 		webViewsDir := ParseWebDirNameData(spec.Table.Name, "views", spec.Table.WebViewsDir)
-		if _, err := CreateMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu); err != nil {
+		menuReport, err := SyncMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
+		if err != nil {
 			return nil, fmt.Errorf("menu sync: %w", err)
 		}
+		result.MenuResults = menuReport.Results
 	}
 	logID, err := adoptCrudLog(db, cfg, spec, opts.AdminID)
 	if err != nil {
@@ -161,6 +401,15 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	}
 	result.LogID = logID
 	return result, nil
+}
+
+func applyChangesFromDiffs(diffs []AlterDiff) []ApplyChange {
+	changes := make([]ApplyChange, 0, len(diffs))
+	for _, diff := range diffs {
+		ddl, _ := alterChangeDDL("<table>", diff)
+		changes = append(changes, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Reason: diff.Reason, DDL: ddl, Unmanaged: diff.Unmanaged})
+	}
+	return changes
 }
 
 // adoptCrudLog 确保目标库存在与当前 spec 一致的 success 记录：无则新建，

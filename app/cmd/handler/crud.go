@@ -59,6 +59,8 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 	opts.AllowRebuild, _ = cmd.Flags().GetBool("allow-rebuild")
 	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
 	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
+	plan, _ := cmd.Flags().GetBool("plan")
+	opts.Plan = plan
 	var results []helper.ApplyTableResult
 	var err error
 	if len(args) == 0 {
@@ -70,21 +72,76 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 	} else {
 		results, err = helper.ApplySpecs(h.db, h.config, args, opts)
 	}
+	if plan {
+		if len(args) == 0 {
+			dir := helper.DefaultSpecDir()
+			if dir == "" {
+				return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply --plan <spec.yaml...>")
+			}
+			results, err = helper.PlanSpecsFromDir(h.db, h.config, dir, opts)
+		} else {
+			results, err = helper.PlanSpecs(h.db, h.config, args, opts)
+		}
+		printApplyPlan(cmd, results)
+		if err != nil {
+			return fmt.Errorf("CRUD plan error: %w", err)
+		}
+		return nil
+	}
 	if err != nil {
+		printApplyResults(cmd, results)
 		return fmt.Errorf("CRUD apply error: %w", err)
 	}
 	if len(results) == 0 {
 		cmd.Println("CRUD apply: no specs found, nothing to do")
 		return nil
 	}
+	printApplyResults(cmd, results)
+	return nil
+}
+
+func printApplyResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
 	for _, result := range results {
 		line := fmt.Sprintf("CRUD apply %-9s %s (log id: %d)", string(result.Action), result.Table, result.LogID)
 		if len(result.Changes) > 0 {
 			line += ": " + strings.Join(result.Changes, ", ")
 		}
+		if result.Destructive {
+			line = "CRUD apply REBUILD (DESTRUCTIVE) " + result.Table + fmt.Sprintf(" (log id: %d)", result.LogID)
+		}
 		cmd.Println(line)
+		if result.Action == helper.ApplyBlocked {
+			for _, change := range result.Diffs {
+				cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.Reason)
+			}
+		}
+		for _, menu := range result.MenuResults {
+			cmd.Printf("CRUD menu  %-9s %s\n", string(menu.Action), menu.Name)
+		}
 	}
-	return nil
+}
+
+func printApplyPlan(cmd *cobra.Command, results []helper.ApplyTableResult) {
+	for _, result := range results {
+		label := string(result.Action)
+		if result.Destructive {
+			label = "REBUILD (DESTRUCTIVE)"
+		}
+		cmd.Printf("CRUD plan  %-19s %s\n", label, result.Table)
+		for _, change := range result.Diffs {
+			cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.DDL)
+			if change.Reason != "" {
+				cmd.Printf("    reason: %s\n", change.Reason)
+			}
+			if len(change.Unmanaged) > 0 {
+				cmd.Printf("    unmanaged: %s\n", strings.Join(change.Unmanaged, ", "))
+			}
+		}
+		for _, change := range result.Unmanaged {
+			cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.Reason)
+			cmd.Printf("    unmanaged: %s\n", strings.Join(change.Unmanaged, ", "))
+		}
+	}
 }
 
 func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {

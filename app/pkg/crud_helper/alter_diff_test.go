@@ -80,3 +80,98 @@ func TestDeriveAlterChangesAddFieldOnlyForMissingColumn(t *testing.T) {
 		t.Fatalf("expected single add-field for title: %+v", changes)
 	}
 }
+
+func TestAlterDiffRiskClasses(t *testing.T) {
+	actual := []model.Column{
+		alterTestColumn("id", "bigint unsigned", "NO", nil, "auto_increment", "ID"),
+		alterTestColumn("name", "varchar(20)", "NO", "", "", "名称"),
+		alterTestColumn("amount", "decimal(10,2)", "NO", "1.00000000", "", "金额"),
+		alterTestColumn("status", "tinyint unsigned", "NO", "1", "", "状态"),
+	}
+	fields := []model.Field{
+		{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, AutoIncrement: true, Comment: "ID"},
+		{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"},
+		{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "1", Comment: "金额"},
+		{Name: "status", Type: "tinyint", Unsigned: true, DefaultType: "INPUT", Default: "1", Comment: "状态"},
+	}
+
+	cases := []struct {
+		name   string
+		field  model.Field
+		column model.Column
+		class  DiffClass
+	}{
+		{"nullable addition", model.Field{Name: "note", Type: "varchar", Length: 20, Null: true}, model.Column{}, DiffSafeAuto},
+		{"defaulted addition", model.Field{Name: "enabled", Type: "tinyint", DefaultType: "INPUT", Default: "1"}, model.Column{}, DiffSafeAuto},
+		{"comment only", fields[1], alterTestColumn("name", "varchar(20)", "NO", "", "", "旧名称"), DiffSafeAuto},
+		{"type widening", model.Field{Name: "name", Type: "varchar", Length: 40, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRequiresApproval},
+		{"default change", model.Field{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "2", Comment: "金额"}, actual[2], DiffRequiresApproval},
+		{"unsigned flip", model.Field{Name: "status", Type: "tinyint", DefaultType: "INPUT", Default: "1", Comment: "状态"}, actual[3], DiffRejected},
+		{"varchar narrowing", model.Field{Name: "name", Type: "varchar", Length: 10, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRejected},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.column.COLUMN_NAME == "" {
+				diffs := deriveAlterDiff(nil, []model.Field{tc.field})
+				if len(diffs) != 1 || diffs[0].Class != tc.class {
+					t.Fatalf("diffs = %+v", diffs)
+				}
+				return
+			}
+			diffs := deriveAlterDiff([]model.Column{tc.column}, []model.Field{tc.field})
+			if len(diffs) != 1 || diffs[0].Class != tc.class {
+				t.Fatalf("diffs = %+v", diffs)
+			}
+		})
+	}
+
+	primaryDrift := deriveAlterDiff(actual, []model.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Comment: "ID"}})
+	if len(primaryDrift) != 1 || primaryDrift[0].Class != DiffRejected {
+		t.Fatalf("primary drift = %+v", primaryDrift)
+	}
+}
+
+func TestAlterDiffRejectsNullableDownAndEnumRemoval(t *testing.T) {
+	nullable := deriveAlterDiff([]model.Column{alterTestColumn("note", "varchar(20)", "YES", nil, "", "备注")}, []model.Field{{Name: "note", Type: "varchar", Length: 20, Null: false, Comment: "备注"}})
+	if len(nullable) != 1 || nullable[0].Class != DiffRejected {
+		t.Fatalf("nullable down = %+v", nullable)
+	}
+	enum := deriveAlterDiff([]model.Column{alterTestColumn("state", "enum('a','b')", "NO", "a", "", "状态")}, []model.Field{{Name: "state", DataType: "enum('a')", DefaultType: "INPUT", Default: "a", Comment: "状态"}})
+	if len(enum) != 1 || enum[0].Class != DiffRejected {
+		t.Fatalf("enum removal = %+v", enum)
+	}
+	longText := deriveAlterDiff(nil, []model.Field{{Name: "body", Type: "longtext", DefaultType: "INPUT", Default: "body"}})
+	if len(longText) != 1 || longText[0].Class != DiffRejected {
+		t.Fatalf("illegal longtext default = %+v", longText)
+	}
+}
+
+func TestDefaultNormalizationPreservesLargeIntegersAndStrings(t *testing.T) {
+	large := model.Field{Name: "id", Type: "bigint", DefaultType: "INPUT", Default: "9007199254740993"}
+	if !defaultsMatchColumn(large, sql.NullString{Valid: true, String: "9007199254740993"}) {
+		t.Fatal("large integer default was not compared exactly")
+	}
+	decimal := model.Field{Name: "rate", Type: "decimal", DefaultType: "INPUT", Default: "1"}
+	if !defaultsMatchColumn(decimal, sql.NullString{Valid: true, String: "1.00000000"}) {
+		t.Fatal("decimal default was not normalized exactly")
+	}
+	text := model.Field{Name: "value", Type: "varchar", DefaultType: "INPUT", Default: " 001 "}
+	if defaultsMatchColumn(text, sql.NullString{Valid: true, String: "001"}) {
+		t.Fatal("string default was numerically normalized")
+	}
+}
+
+func TestUnmanagedColumnAttributesDoNotChangeModeledMatch(t *testing.T) {
+	column := alterTestColumn("name", "varchar(20)", "NO", "", "on update CURRENT_TIMESTAMP", "名称")
+	column.CHARACTER_SET_NAME = "utf8mb4"
+	column.COLLATION_NAME = "utf8mb4_bin"
+	column.GENERATION_EXPRESSION = "upper(name)"
+	field := model.Field{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"}
+	if !specFieldMatchesColumn(field, column) {
+		t.Fatal("unmanaged attributes created a modeled diff")
+	}
+	attributes := unmanagedColumnAttributes(column)
+	if len(attributes) != 4 {
+		t.Fatalf("unmanaged attributes = %v", attributes)
+	}
+}

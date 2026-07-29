@@ -36,6 +36,7 @@ type GenerateOptions struct {
 type MenuOptions struct {
 	Title  string
 	Parent int32
+	Weigh  *int32
 }
 
 type GenerateResult struct {
@@ -51,14 +52,19 @@ type atomicRouteRegistration struct {
 // GenerateFromSpec performs the complete generation transaction-like
 // orchestration. File changes are recoverable; MySQL DDL is not transactional.
 func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (result *GenerateResult, retErr error) {
-	release, err := TryAcquireGenerationLock()
+	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return nil, err
 	}
+	db = lockedDB
 	var fail func(string, error) (*GenerateResult, error)
 	var cleanupSnapshot func() error
 	registeredRoutes := []atomicRouteRegistration{}
-	defer release()
+	defer func() {
+		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
+			retErr = releaseErr
+		}
+	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicErr := generationPanicError(recovered)
@@ -169,16 +175,23 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 	}
 	if opts.Type == "alter" && tableExists(db, cfg, opts.Table.Name) {
-		actualPK, err := actualPrimaryKey(db, getTableName(opts.Table.Name, true))
+		actualPKs, err := actualPrimaryKeys(db, getTableName(opts.Table.Name, true))
 		if err != nil {
 			return fail("read primary key", err)
 		}
-		if !strings.EqualFold(actualPK, getPk(opts.Fields)) {
-			return fail("primary key drift", fmt.Errorf("alter does not support primary key changes: database=%q spec=%q; use rebuild or perform a manual migration", actualPK, getPk(opts.Fields)))
+		specPKs := specPrimaryKeys(opts.Fields)
+		if !sameIdentifiers(actualPKs, specPKs) {
+			return fail("primary key drift", fmt.Errorf("alter does not support primary key changes: database=%q spec=%q; use rebuild or perform a manual migration", strings.Join(actualPKs, ","), strings.Join(specPKs, ",")))
 		}
 		current, err := getColumns(opts.Table.Name)
 		if err != nil {
 			return fail("read existing columns", err)
+		}
+		diffs := deriveAlterDiff(current, opts.Fields)
+		for _, diff := range diffs {
+			if diff.Field.PrimaryKey && diff.Class == DiffRejected {
+				return fail("primary key drift", fmt.Errorf("%s: %s", diff.Field.Name, diff.Reason))
+			}
 		}
 		opts.Table.DesignChange = deriveAlterChanges(current, opts.Fields)
 	}
@@ -216,12 +229,42 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 }
 
 func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {
-	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+	keys, err := actualPrimaryKeys(db, fullTableName)
+	if err != nil || len(keys) == 0 {
 		return "", err
 	}
-	var key string
-	err := db.Raw("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY' ORDER BY SEQ_IN_INDEX LIMIT 1", fullTableName).Scan(&key).Error
-	return key, err
+	return keys[0], nil
+}
+
+func actualPrimaryKeys(db *gorm.DB, fullTableName string) ([]string, error) {
+	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
+		return nil, err
+	}
+	var keys []string
+	err := db.Raw("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = 'PRIMARY' ORDER BY SEQ_IN_INDEX", fullTableName).Scan(&keys).Error
+	return keys, err
+}
+
+func specPrimaryKeys(fields []model.Field) []string {
+	keys := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field.PrimaryKey {
+			keys = append(keys, field.Name)
+		}
+	}
+	return keys
+}
+
+func sameIdentifiers(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if !strings.EqualFold(left[i], right[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizeGenerationType 将上游前端的生成类型映射为内部模式:
@@ -252,12 +295,17 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 }
 
 func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName string, unregister func(method, path string)) (retErr error) {
-	release, err := TryAcquireGenerationLock()
+	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return err
 	}
+	db = lockedDB
 	var fail func(string, error) error
-	defer release()
+	defer func() {
+		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
+			retErr = releaseErr
+		}
+	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicErr := generationPanicError(recovered)
@@ -729,20 +777,15 @@ func containsPath(paths []string, target string) bool {
 // deriveAlterChanges 派生 alter 差量：缺失列 add-field，属性漂移 change-field-attr，
 // 完全一致的列不产生差量（保证 alter 与 crud:apply 的幂等性）。
 func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.ChangeField {
-	existing := make(map[string]model.Column, len(columns))
-	for _, column := range columns {
-		existing[strings.ToLower(column.COLUMN_NAME)] = column
-	}
-	changes := make([]model.ChangeField, 0, len(fields))
-	for _, field := range fields {
-		column, ok := existing[strings.ToLower(field.Name)]
-		if !ok {
-			changes = append(changes, model.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, Sync: true})
-			continue
-		}
-		if !specFieldMatchesColumn(field, column) {
-			changes = append(changes, model.ChangeField{Type: "change-field-attr", OldName: field.Name, NewName: field.Name, Sync: true})
-		}
+	diffs := deriveAlterDiff(columns, fields)
+	changes := make([]model.ChangeField, 0, len(diffs))
+	for _, diff := range diffs {
+		change := diff.Change
+		// crud:generate remains the explicit development tool. Its legacy
+		// design-change payload keeps all changes executable; deployment apply
+		// filters the same detailed diff to safe-auto below.
+		change.Sync = true
+		changes = append(changes, change)
 	}
 	return changes
 }

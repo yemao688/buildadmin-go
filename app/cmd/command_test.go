@@ -33,3 +33,15 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRegisterCrudApplyAcceptsPlanFlag(t *testing.T) {
+	root := &cobra.Command{Use: "root", SilenceErrors: true, SilenceUsage: true}
+	want := errors.New("command construction failed")
+	Register(root, func() (*Command, func(), error) {
+		return nil, nil, want
+	})
+	root.SetArgs([]string{"crud:apply", "--plan"})
+	if err := root.Execute(); !errors.Is(err, want) {
+		t.Fatalf("Execute() error = %v, want %v", err, want)
+	}
+}

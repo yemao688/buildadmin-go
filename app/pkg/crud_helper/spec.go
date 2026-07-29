@@ -42,6 +42,7 @@ type specDataScope struct {
 type specMenu struct {
 	Title  string `mapstructure:"title"`
 	Parent int32  `mapstructure:"parent"`
+	Weigh  *int32 `mapstructure:"weigh"`
 }
 
 type specField struct {
@@ -199,7 +200,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	}
 	options := &GenerateOptions{Table: table, Fields: fields, Type: typeName}
 	if raw.Menu != nil {
-		options.Menu = &MenuOptions{Title: raw.Menu.Title, Parent: raw.Menu.Parent}
+		options.Menu = &MenuOptions{Title: raw.Menu.Title, Parent: raw.Menu.Parent, Weigh: raw.Menu.Weigh}
 	}
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)

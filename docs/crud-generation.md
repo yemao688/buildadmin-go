@@ -470,10 +470,12 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 ```bash
 go run ./cmd/app --conf config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
 go run ./cmd/app --conf config.yaml crud:apply crud_specs/<module>.yaml
-# flags: --allow-rebuild（仅限可丢弃环境） / --skip-menu / --admin-id
+# flags: --plan / --allow-rebuild（主键漂移时破坏性重建，仅限可丢弃环境） / --skip-menu / --admin-id
 ```
 
-`migrate` 尾部会自动执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
+`crud:apply --plan` 只读取数据库并逐表逐列输出风险等级和 DDL，不执行 schema、菜单或 `crud_log` 变更；存在 `rejected` 时返回非零退出码。`migrate` 只有在 `crud.apply_on_migrate: true` 时才会自动执行 apply，缺省关闭。
+
+`migrate` 尾部启用后执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
 
 ```bash
 git pull && go run ./cmd/app --conf config.yaml migrate        # 框架三轨道 + 业务表 apply
@@ -485,13 +487,16 @@ git pull && go run ./cmd/app --conf config.yaml migrate        # 框架三轨道
 | --- | --- |
 | 表不存在 | 按 spec 初始建表（安全，不是"重建"） |
 | 表已存在，无漂移 | `unchanged`，只同步表注释（幂等） |
-| 表已存在，属性漂移 | `altered`，只执行差量列（属性级比较：类型/长度/精度/可空/默认值/注释/unsigned/auto_increment） |
-| 主键漂移 | **拒绝**：alter 物理不支持主键变更，须手写 business 迁移（含回填）；可丢弃环境可 `--allow-rebuild` 删除重建 |
+| 新增 nullable 列、带合法默认值的新增列、字段 comment-only | `safe-auto`，自动执行 |
+| 类型扩宽命中显式安全矩阵、默认值变更 | `requires-approval`，计划中明示，默认跳过并非零退出 |
+| unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键列属性/列集合漂移 | `rejected`，拒绝并指向 business 迁移；`--allow-rebuild` 只对主键漂移允许破坏性重建 |
 
 关键约定：
 
 - **`type: create` 是生成时动词，不是稳态重建指令。** 仓库里停留在 `create` 的 spec 在已有表上同样幂等（无漂移即 unchanged）；apply 绝不因该字段隐式删表。
-- apply 同步菜单（按 `name` 去重，父目录按 views 路径段名称自动解析挂接）并把 spec adopt 成 `crud_log` success 记录（已存在则回写最新 payload），不触碰代码与迁移台账。
+- apply 同步菜单（按完整逻辑名及 `(pid,name)` 父级定位），更新生成器自有字段、补齐五个标准按钮并保留下游自定义按钮；菜单结果会输出 `created`/`updated`/`unchanged`。
+- generate/delete/apply/plan 共用进程内快速锁和数据库 GET_LOCK；锁名包含数据库名和表前缀，`start` 日志只在持有该数据库锁后对账，避免误判其它进程的活跃操作。
+- charset、collation、generated expression、ON UPDATE 等 spec 未建模属性标记为 `unmanaged`，默认不产生 `MODIFY`。
 - 列删除不在 alter 语义内（与生成一致：不出现在 spec 中的列保留不动）；确需删列请写 business 迁移。
 - 字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `migrate`（尾部 apply）→ 重启，全程无需手写 SQL。
 

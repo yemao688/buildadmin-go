@@ -73,7 +73,8 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 			return command.crudH.Apply(cmd, args)
 		},
 	}
-	applyCmd.Flags().Bool("allow-rebuild", false, "allow dropping and recreating existing tables declared as type:create (data loss, disposable environments only)")
+	applyCmd.Flags().Bool("allow-rebuild", false, "allow destructive drop-and-recreate for primary-key drift (data loss, disposable environments only)")
+	applyCmd.Flags().Bool("plan", false, "print the classified CRUD plan without executing changes")
 	applyCmd.Flags().Bool("skip-menu", false, "skip menu sync")
 	applyCmd.Flags().Int32("admin-id", 1, "administrator ID recorded for adopted CRUD logs")
 	rootCmd.AddCommand(
