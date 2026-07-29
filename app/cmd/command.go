@@ -94,14 +94,14 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 		&cobra.Command{
 			Use:   "migrate",
 			Short: "数据库迁移",
-			Run: func(cmd *cobra.Command, args []string) {
+			RunE: func(cmd *cobra.Command, args []string) error {
 				command, cleanup, err := newCmd()
 				if err != nil {
-					panic(err)
+					return err
 				}
 				defer cleanup()
 
-				command.migrateH.Run(cmd, args)
+				return command.migrateH.Run(cmd, args)
 			},
 		},
 		generateCmd,

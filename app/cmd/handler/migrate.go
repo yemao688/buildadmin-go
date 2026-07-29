@@ -25,23 +25,27 @@ func NewMigrateHandler(logger *zap.Logger, config *conf.Configuration) *MigrateH
 	}
 }
 
-func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
+func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 	report, err := migrations.Run(h.db, h.config)
 	if err != nil {
 		cmd.Printf("database migrate error: %v\n", err)
-		return
+		return err
 	}
 	cmd.Printf("executed %d migrations (%d official, %d local, %d business)", report.Official+report.Local+report.Business, report.Official, report.Local, report.Business)
 	if report.Seeded {
 		cmd.Print(" (seeded)")
 	}
 	cmd.Println()
+	if h.config == nil || !h.config.Crud.ApplyOnMigrate {
+		cmd.Println("CRUD apply skipped (set crud.apply_on_migrate: true to enable)")
+		return nil
+	}
 	// 部署闭环第四阶段：crud_specs 存在时幂等应用业务表结构与菜单（alter 安全子集）
 	if dir := helper.DefaultSpecDir(); dir != "" {
 		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1})
 		if applyErr != nil {
 			cmd.Printf("CRUD apply error: %v\n", applyErr)
-			return
+			return applyErr
 		}
 		for _, result := range results {
 			if result.Action == helper.ApplyUnchanged {
@@ -50,6 +54,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 			cmd.Printf("CRUD apply %-9s %s\n", string(result.Action), result.Table)
 		}
 	}
+	return nil
 }
 
 func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) {

@@ -80,6 +80,10 @@ upload:
   mimetype: 'jpg,png,bmp,jpeg,gif,webp,zip,rar,xls,xlsx,doc,docx,wav,mp4,mp3,txt'
   mode: ''
 
+crud:
+  # 是否在 migrate 尾部自动应用 crud_specs/*.yaml；生产环境默认关闭
+  apply_on_migrate: false
+
 terminal:
   npm_package_manager: 'pnpm'
   install_service_port: '9989'
