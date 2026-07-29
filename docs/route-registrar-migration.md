@@ -67,7 +67,7 @@ admin.CollectRoutes(router)
 - `router/api_routes.go`：API registrar 的公开接口与认证接口分发；公开接口仍注册到根引擎，认证接口仍经过 `/api/` 用户登录中间件。
 - `app/admin/handler/route.go`：标准 CRUD 路由和能力的公共 helper。
 - `router/route_snapshot_test.go`：只比较 `METHOD + path` 的路由黄金基线测试。
-- `router/testdata/routes.golden`：当前完整路由集合的黄金文件，现有基线为 165 条。
+- `router/testdata/registered_routes.golden`：当前完整路由集合的黄金文件，现有基线为 165 条。
 
 CRUD 生成器不再写入 `router/router.go`。后台生成模块现在会产出自己的 `<name>_route.go`，并维护 `app/admin/handler/provider.go` 与 `router/registrar_set.go`；删除生成模块时会整文件删除该模块的 route 文件，并移除共享注册条目。
 
@@ -216,7 +216,7 @@ go test ./router/... -run '^TestRouteSnapshotMatchesGolden$'
 go test ./router/... -run '^TestRouteSnapshotMatchesGolden$' -args -update
 ```
 
-业务 fork 应保留自己的 `router/testdata/routes.golden`，每批迁移前后都检查缺失和多余的 method+path；未经业务确认不要用 `-update` 掩盖路由变化。
+业务 fork 应保留自己的 `router/testdata/registered_routes.golden`，每批迁移前后都检查缺失和多余的 method+path；未经业务确认不要用 `-update` 掩盖路由变化。
 
 ## 维护边界
 

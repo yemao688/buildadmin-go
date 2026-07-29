@@ -202,7 +202,7 @@ git push origin master
 | `app/admin/handler/provider.go`、`app/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
 | provider 集合 | 合并双方 provider；来源解决后再按需要生成 Wire。 |
 | `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
-| `router/testdata/routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
+| `router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
 | `conf/config.example.yaml` | 以框架新增字段为基础；业务运行值放在被忽略的 `conf/config.yaml`，不要把凭据合入模板。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |

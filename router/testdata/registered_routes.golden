@@ -1,3 +1,7 @@
+# 注册路由表黄金快照 —— 仅供 router 包快照测试比对，业务运行时代码从不读取本文件。
+# Golden snapshot of the registered route table; only the router snapshot test reads it.
+# 由测试生成，禁止手改。路由有意变更后重新生成：
+#   go test ./router/ -run TestRouteSnapshotMatchesGolden -update
 DELETE /admin/auth.Admin/del
 DELETE /admin/auth.AdminLog/del
 DELETE /admin/auth.Group/del

@@ -11,7 +11,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var updateRoutesGolden = flag.Bool("update", false, "update router/testdata/routes.golden")
+// routeGoldenPath 是注册路由表黄金快照的位置。testdata 是 Go 约定的测试夹具目录，
+// 该文件只被本包的快照测试读取，业务运行时代码从不使用它。
+const routeGoldenPath = "testdata/registered_routes.golden"
+
+// routeGoldenHeader 写在快照文件开头，说明用途与生成方式；读取时以 # 开头的行会被跳过。
+const routeGoldenHeader = `# 注册路由表黄金快照 —— 仅供 router 包快照测试比对，业务运行时代码从不读取本文件。
+# Golden snapshot of the registered route table; only the router snapshot test reads it.
+# 由测试生成，禁止手改。路由有意变更后重新生成：
+#   go test ./router/ -run TestRouteSnapshotMatchesGolden -update
+`
+
+var updateRoutesGolden = flag.Bool("update", false, "regenerate "+routeGoldenPath)
 
 func TestRouteSnapshotMatchesGolden(t *testing.T) {
 	engine := newCompleteRouter()
@@ -59,21 +70,24 @@ func sortedUniqueRouteKeys(routes []gin.RouteInfo) ([]string, []string) {
 
 func readRouteGolden(t *testing.T) []string {
 	t.Helper()
-	data, err := os.ReadFile("testdata/routes.golden")
+	data, err := os.ReadFile(routeGoldenPath)
 	if err != nil {
 		t.Fatalf("read route golden: %v", err)
 	}
-	contents := strings.TrimSuffix(string(data), "\n")
-	if contents == "" {
-		return nil
+	var routes []string
+	for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		routes = append(routes, line)
 	}
-	return strings.Split(contents, "\n")
+	return routes
 }
 
 func writeRouteGolden(t *testing.T, routes []string) {
 	t.Helper()
-	data := strings.Join(routes, "\n") + "\n"
-	if err := os.WriteFile("testdata/routes.golden", []byte(data), 0o644); err != nil {
+	data := routeGoldenHeader + strings.Join(routes, "\n") + "\n"
+	if err := os.WriteFile(routeGoldenPath, []byte(data), 0o644); err != nil {
 		t.Fatalf("write route golden: %v", err)
 	}
 }
