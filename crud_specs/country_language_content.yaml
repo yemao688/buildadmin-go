@@ -10,32 +10,39 @@ quickSearchField: [group, key]
 fields:
   - name: id
     type: bigint
+    unsigned: true
     primaryKey: true
     autoIncrement: true
     null: false
     designType: pk
-    comment: 主键
+    comment: ID
   - name: lan
     type: varchar
     length: 20
     null: false
+    defaultType: EMPTY STRING
     comment: 语言代码
   - name: group
     type: varchar
     length: 50
     null: false
+    defaultType: EMPTY STRING
     comment: 分组
   - name: key
     type: varchar
     length: 100
     null: false
+    defaultType: EMPTY STRING
     comment: 键
   - name: type
-    type: tinyint
+    type: varchar
+    length: 30
     null: false
-    default: "0"
-    comment: 类型:0=文本,1=富文本,2=图片
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 类型
   - name: value
     type: longtext
     null: true
+    defaultType: NONE
     comment: 值

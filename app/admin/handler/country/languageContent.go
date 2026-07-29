@@ -38,11 +38,11 @@ func (h *LanguageContentHandler) Index(ctx *gin.Context) {
 }
 
 type LanguageContentParam struct {
-	Lan   string             `json:"lan"`   // 语言代码
-	Group string             `json:"group"` // 分组
-	Key   string             `json:"key"`   // 键
-	Type  validate.FlexInt32 `json:"type"`  // 类型:0=文本,1=富文本,2=图片
-	Value string             `json:"value"` // 值
+	Lan   string `json:"lan"`   // 语言代码
+	Group string `json:"group"` // 分组
+	Key   string `json:"key"`   // 键
+	Type  string `json:"type"`  // 类型
+	Value string `json:"value"` // 值
 }
 
 func (h *LanguageContentHandler) Add(ctx *gin.Context) {

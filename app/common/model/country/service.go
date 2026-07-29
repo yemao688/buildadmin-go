@@ -22,14 +22,14 @@ type LanguageContent struct {
 	Lan   string `gorm:"column:lan"`
 	Group string `gorm:"column:group"`
 	Key   string `gorm:"column:key"`
-	Type  int8   `gorm:"column:type"`
+	Type  string `gorm:"column:type"`
 	Value string `gorm:"column:value"`
 }
 
 const (
-	ContentTypeText     int8 = 0
-	ContentTypeRichText int8 = 1
-	ContentTypeImg      int8 = 2
+	ContentTypeText     = "0"
+	ContentTypeRichText = "1"
+	ContentTypeImg      = "2"
 )
 
 type Currency struct {
