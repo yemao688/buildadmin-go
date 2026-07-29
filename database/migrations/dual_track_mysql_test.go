@@ -12,7 +12,6 @@ import (
 
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
-	"go-build-admin/database/migrations/local"
 	"gorm.io/gorm"
 )
 
@@ -134,13 +133,14 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	}
 	config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("pinned_%d_", time.Now().UnixNano())}}
 	q := func(logical string) string { return quoteIdentifier(tableName(config, logical)) }
-	for _, logical := range []string{"admin", "user", "user_money_log", "user_score_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_hierarchy_lock"} {
+	for _, logical := range []string{"admin", "user", "attachment", "user_money_log", "user_score_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_hierarchy_lock", "admin_rule", "config", "country_language", "country_language_content", "country_currency"} {
 		db.Exec("DROP TABLE IF EXISTS " + q(logical))
 		table := q(logical)
 		t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS " + table) })
 	}
 	for _, ddl := range []string{
 		"CREATE TABLE " + q("admin") + " (id INT PRIMARY KEY, parent_id INT NULL)",
+		"CREATE TABLE " + q("attachment") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL DEFAULT 'enable')",
 		"CREATE TABLE " + q("user_money_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, money INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
 		"CREATE TABLE " + q("user_score_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, score INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
@@ -152,6 +152,8 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		"CREATE TABLE " + q("crud_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("admin_closure") + " (ancestor_id INT UNSIGNED NOT NULL, descendant_id INT UNSIGNED NOT NULL, depth INT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (ancestor_id, descendant_id), KEY idx_descendant_ancestor (descendant_id, ancestor_id), KEY idx_ancestor_depth (ancestor_id, depth))",
 		"CREATE TABLE " + q("admin_hierarchy_lock") + " (id TINYINT UNSIGNED PRIMARY KEY)",
+		"CREATE TABLE " + q("admin_rule") + " (id INT UNSIGNED NOT NULL AUTO_INCREMENT, pid INT UNSIGNED NOT NULL DEFAULT 0, type VARCHAR(30) NOT NULL DEFAULT '', title VARCHAR(100) NOT NULL DEFAULT '', name VARCHAR(100) NOT NULL DEFAULT '', path VARCHAR(100) NOT NULL DEFAULT '', menu_type VARCHAR(30) NOT NULL DEFAULT '', component VARCHAR(255) NOT NULL DEFAULT '', weigh INT NOT NULL DEFAULT 0, status VARCHAR(10) NOT NULL DEFAULT '1', PRIMARY KEY (id))",
+		"CREATE TABLE " + q("config") + " (id INT UNSIGNED NOT NULL AUTO_INCREMENT, name VARCHAR(30) NOT NULL DEFAULT '', `group` VARCHAR(30) NOT NULL DEFAULT '', title VARCHAR(50) NOT NULL DEFAULT '', tip VARCHAR(100) NOT NULL DEFAULT '', type VARCHAR(30) NOT NULL DEFAULT '', value LONGTEXT, content LONGTEXT, rule VARCHAR(100) NOT NULL DEFAULT '', extend VARCHAR(255) NOT NULL DEFAULT '', allow_del TINYINT UNSIGNED NOT NULL DEFAULT 0, weigh INT NOT NULL DEFAULT 0, PRIMARY KEY (id), UNIQUE KEY uq_config_name (name))",
 	} {
 		if err := db.Exec(ddl).Error; err != nil {
 			t.Fatal(err)
@@ -172,6 +174,15 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := db.Exec("INSERT INTO " + q("admin_hierarchy_lock") + " VALUES (1)").Error; err != nil {
 		t.Fatal(err)
 	}
+	if err := db.Exec("INSERT INTO "+q("security_data_recycle")+" (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (?, ?, ?, ?, ?, ?, ?)", 5, 0, "会员", "user/User.php", "auth/user", "user", "id").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO "+q("security_sensitive_data")+" (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 2, 0, "会员数据", "user/User.php", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec("INSERT INTO "+q("config")+" (id,name,`group`,title,tip,type,value,content,rule,extend,allow_del,weigh) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 1, "config_group", "basics", "Config group", "", "array", `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"}]`, "", "required", "", 0, -1).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := BootstrapOfficialLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +198,16 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	locals := LocalMigrations()[3:9]
+	// The current epoch-reset registry has six semantic tracks. Sequence 3
+	// folds the former ownership, signed-delta, target-owner, legacy-target,
+	// commit-state, and security-owner-column migrations together; sequences 4
+	// through 6 are security normalization, country dictionary, and upload
+	// config. Start at index 2 so the folded track is exercised as well.
+	registry := LocalMigrations()
+	if len(registry) != 6 {
+		t.Fatalf("current local migration registry length=%d, want 6", len(registry))
+	}
+	locals := registry[2:6]
 	if err := WithMigrationLock(db, "pinned-local-registry", time.Second, func(pinned *gorm.DB) error {
 		_, err := RunLocalMigrations(pinned, config, OfficialMigrations(), locals)
 		return err
@@ -196,8 +216,8 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	}
 	check := db.Session(&gorm.Session{NewDB: true})
 	var completed int64
-	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 4 AND 9 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 6 {
-		t.Fatalf("completed local 0004-0009=%d err=%v", completed, err)
+	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 3 AND 6 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 4 {
+		t.Fatalf("completed local sequence 3-6=%d err=%v", completed, err)
 	}
 	var invalid int64
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user") + " u LEFT JOIN " + q("admin") + " a ON a.id=u.admin_id WHERE a.id IS NULL OR u.admin_id=0").Scan(&invalid).Error; err != nil || invalid != 0 {
@@ -206,8 +226,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user_money_log") + " l JOIN " + q("user") + " u ON u.id=l.user_id WHERE l.admin_id<>u.admin_id").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("money owners invalid=%d err=%v", invalid, err)
 	}
-	localsForTest := local.Migrations(OfficialMigrations())
-	if err := localsForTest[3].VerifySchema(check, config); err != nil {
+	if err := locals[0].VerifySchema(check, config); err != nil {
 		t.Fatal(err)
 	}
 	var owner int32
@@ -216,11 +235,11 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	}
 	for _, item := range []struct{ table, column string }{{tableName(config, "user_money_log"), "money"}, {tableName(config, "user_score_log"), "score"}} {
 		def, ok, err := core.MigrationColumnInfo(check, item.table, item.column)
-		if err != nil || !ok {
+		if err != nil || !ok || strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
 			t.Fatalf("signed delta %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
 		}
 	}
-	if err := localsForTest[5].VerifySchema(check, config); err != nil {
+	if err := locals[1].VerifySchema(check, config); err != nil {
 		t.Fatal(err)
 	}
 	for _, logical := range []string{"security_data_recycle_log", "security_sensitive_data_log"} {
@@ -233,7 +252,9 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		if err != nil || !has || first != "target_admin_id" {
 			t.Fatalf("target index %s has=%v first=%s err=%v", table, has, first, err)
 		}
-		_ = def
+		if !strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
+			t.Fatalf("target column %s is not unsigned: %#v", table, def)
+		}
 		for _, column := range []string{"legacy_unrecoverable", "is_committed"} {
 			definition, ok, err := core.MigrationColumnInfo(check, table, column)
 			if err != nil || !ok {
@@ -241,14 +262,16 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 			}
 		}
 	}
-	if err := localsForTest[6].VerifySchema(check, config); err != nil {
+	if err := locals[2].VerifySchema(check, config); err != nil {
 		t.Fatal(err)
 	}
-	if err := localsForTest[8].VerifySchema(check, config); err != nil {
-		t.Fatal(err)
+	var uploadCount int64
+	if err := check.Table(tableName(config, "config")).Where("`group` = ?", "upload").Count(&uploadCount).Error; err != nil || uploadCount != 6 {
+		t.Fatalf("upload config rows=%d err=%v", uploadCount, err)
 	}
-	if err := localsForTest[9].VerifySchema(check, config); err != nil {
-		t.Fatal(err)
+	var groupValue string
+	if err := check.Table(tableName(config, "config")).Where("name = ?", "config_group").Pluck("value", &groupValue).Error; err != nil || !strings.Contains(groupValue, `"key":"upload"`) {
+		t.Fatalf("upload config group=%q err=%v", groupValue, err)
 	}
 }
 
