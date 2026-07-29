@@ -110,5 +110,4 @@ These rules apply when the repository is used as a framework for a business proj
 
 - Web installation creates `conf/config.yaml` and invokes the configured `terminal.commands.migrate.run`; keep that command able to run Cobra `migrate`. The installer is served at `/install` on port 9989.
 - MySQL integration tests in `database/migrations/install_test.go` require `BUILDADMIN_TEST_MYSQL_DSN` and mutate schema/data; use only a disposable database. Some legacy tests/generators also assume local MySQL or execute DDL.
-- Importing package `tests` creates/loads `conf/config.yaml`. Its `setupRouter()` is currently an empty Gin router because test DI is commented out; login-route tests are not application E2E coverage.
 - Air ignores `web/`, tests, and generated Go files and waits 10 seconds before rebuilding. Run Vite separately; if CRUD generation races Air, temporarily increase `.air.toml`’s `build.delay`.
