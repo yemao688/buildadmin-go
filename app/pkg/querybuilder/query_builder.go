@@ -8,6 +8,7 @@ import (
 	"go-build-admin/app/pkg/validator"
 	"go-build-admin/utils"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,8 @@ type TableInfo struct {
 	Key              string
 	QuickSearchField string
 }
+
+var fieldNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
 
 func GetQueryParameter(ctx *gin.Context) (*QueryParameter, error) {
 	var queryParameter QueryParameter
@@ -118,19 +121,23 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		}
 	}
 	// 排序
-	orderS = queryParameter.Order
-	if orderS != "" {
-		orderArr := strings.Split(orderS, ",")
-		if len(orderArr) == 2 && (orderArr[1] == "asc" || orderArr[1] == "desc") {
-			field := GetFullField(orderArr[0], table)
-			if IsValidFieldName(field, fieldTypeMap) {
-				err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]string{
-					"name": orderArr[0],
-				}))
-				return
-			}
-			orderS = field + " " + orderArr[1]
+	if queryParameter.Order != "" {
+		orderArr := strings.Split(queryParameter.Order, ",")
+		if len(orderArr) != 2 || (orderArr[1] != "asc" && orderArr[1] != "desc") {
+			err = cErr.BadRequest(utils.Lang(ctx, "Order express error:{name}", map[string]string{
+				"name": queryParameter.Order,
+			}))
+			return
 		}
+
+		field := GetFullField(orderArr[0], table)
+		if !IsValidFieldName(field, fieldTypeMap) {
+			err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]string{
+				"name": orderArr[0],
+			}))
+			return
+		}
+		orderS = field + " " + orderArr[1]
 	} else {
 		orderS = table.TableName + "." + table.Key + " desc"
 	}
@@ -144,7 +151,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		operater := GetOperatorByAlias(search[i].Operator)
 
 		//验证字段合法性
-		if IsValidFieldName(field, fieldTypeMap) {
+		if !IsValidFieldName(field, fieldTypeMap) {
 			err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]string{
 				"name": search[i].Field,
 			}))
@@ -291,16 +298,10 @@ func GetFieldType(fieldName string, fieldTypeMap map[string]string, table TableI
 	return fieldTypeMap[fieldName]
 }
 
-// 表中是否存在字段
-func IsValidFieldName(fieldName string, fieldTypeMap map[string]string) bool {
-	for key := range fieldTypeMap {
-		key = strings.ToLower(key)
-		fieldName = strings.Replace(fieldName, "_", "", -1)
-		if ok := strings.Contains(key, fieldName); ok {
-			return true
-		}
-	}
-	return false
+// IsValidFieldName validates a qualified SQL identifier. The field type map is
+// retained in the signature for compatibility with the admin/common wrappers.
+func IsValidFieldName(fieldName string, _ map[string]string) bool {
+	return fieldNamePattern.MatchString(fieldName)
 }
 
 // 获取表名加字段名
@@ -313,8 +314,9 @@ func GetFullField(field string, table TableInfo) string {
 
 // 为字段添加反引号
 func Backquote(field string) string {
+	field = strings.ReplaceAll(field, "`", "``")
 	if ok := strings.Contains(field, "."); ok {
-		field = strings.Replace(field, ".", "`.`", -1)
+		field = strings.ReplaceAll(field, ".", "`.`")
 	}
 	field = "`" + field + "`"
 	return field

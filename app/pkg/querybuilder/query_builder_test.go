@@ -1,18 +1,31 @@
 package querybuilder
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 
+	"go-build-admin/utils"
+
+	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/text/language"
 )
 
 func queryContext(rawQuery string) *gin.Context {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
+	ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
+		RootPath:         utils.RootPath() + "/conf/localize",
+		AcceptLanguage:   []language.Tag{language.English},
+		DefaultLanguage:  language.English,
+		UnmarshalFunc:    json.Unmarshal,
+		FormatBundleFile: "json",
+	}))(ctx)
 	return ctx
 }
 
@@ -67,15 +80,86 @@ func TestQueryBuilderSearchFilterComposition(t *testing.T) {
 }
 
 func TestQueryBuilderOrder(t *testing.T) {
-	_, _, orderS, _, _, err := QueryBuilder(queryContext("order=status,asc"), TableInfo{
-		TableName: "items",
-		Key:       "id",
-	}, nil)
-	if err != nil {
-		t.Fatalf("QueryBuilder() error = %v", err)
+	tests := []struct {
+		name      string
+		query     string
+		wantOrder string
+		wantError bool
+	}{
+		{name: "id ascending", query: "order=id,asc", wantOrder: "items.id asc"},
+		{name: "name descending", query: "order=name,desc", wantOrder: "items.name desc"},
+		{name: "qualified field", query: "order=items.name,desc", wantOrder: "items.name desc"},
+		{name: "function injection", query: "order=sleep(5)", wantError: true},
+		{name: "statement injection", query: "order=id,desc%3Bdrop", wantError: true},
+		{name: "missing direction", query: "order=id", wantError: true},
+		{name: "direction injection", query: "order=id,asc%20desc", wantError: true},
+		{name: "field injection", query: "order=id%29%3Bdrop,asc", wantError: true},
 	}
-	if orderS != "items.status asc" {
-		t.Fatalf("orderS = %q; want %q", orderS, "items.status asc")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, orderS, _, _, err := QueryBuilder(queryContext(tt.query), TableInfo{
+				TableName: "items",
+				Key:       "id",
+			}, nil)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("QueryBuilder() error = nil; want bad request")
+				}
+				badRequest, ok := err.(interface{ ErrorCode() int })
+				if !ok || badRequest.ErrorCode() != http.StatusBadRequest {
+					t.Fatalf("QueryBuilder() error = %v; want bad request", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("QueryBuilder() error = %v", err)
+			}
+			if orderS != tt.wantOrder {
+				t.Fatalf("orderS = %q; want %q", orderS, tt.wantOrder)
+			}
+		})
+	}
+}
+
+func TestQueryBuilderSearchFieldValidation(t *testing.T) {
+	tests := []struct {
+		name      string
+		field     string
+		wantWhere string
+		wantError bool
+	}{
+		{name: "valid field", field: "name", wantWhere: "`items`.`name` = ? "},
+		{name: "valid qualified field", field: "items.name", wantWhere: "`items`.`name` = ? "},
+		{name: "hyphen", field: "name-drop", wantError: true},
+		{name: "expression", field: "name);drop", wantError: true},
+		{name: "leading digit", field: "1name", wantError: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := "search[0][field]=" + url.QueryEscape(tt.field) + "&search[0][val]=value&search[0][operator]=eq"
+			whereS, _, _, _, _, err := QueryBuilder(queryContext(query), TableInfo{
+				TableName: "items",
+				Key:       "id",
+			}, nil)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("QueryBuilder() error = nil; want bad request")
+				}
+				badRequest, ok := err.(interface{ ErrorCode() int })
+				if !ok || badRequest.ErrorCode() != http.StatusBadRequest {
+					t.Fatalf("QueryBuilder() error = %v; want bad request", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("QueryBuilder() error = %v", err)
+			}
+			if whereS != tt.wantWhere {
+				t.Fatalf("whereS = %q; want %q", whereS, tt.wantWhere)
+			}
+		})
 	}
 }
 
@@ -107,6 +191,9 @@ func TestQueryBuilderHelpers(t *testing.T) {
 	}
 	if got := Backquote("items.name"); got != "`items`.`name`" {
 		t.Fatalf("Backquote() = %q; want %q", got, "`items`.`name`")
+	}
+	if got := Backquote("items.na`me"); got != "`items`.`na``me`" {
+		t.Fatalf("Backquote() = %q; want %q", got, "`items`.`na``me`")
 	}
 	if got := GetOperatorByAlias("eq"); got != "=" {
 		t.Fatalf("GetOperatorByAlias() = %q; want %q", got, "=")
