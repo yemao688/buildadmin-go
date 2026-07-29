@@ -51,6 +51,8 @@ pnpm-debug.log*
 *.exe
 /cmd/model
 todo.txt
+# 验证码测试的视觉调试产物（go test ./app/pkg/captcha 会重新生成）
+/app/pkg/captcha/output.png
 
 # Runtime configuration generated or edited during installation
 .env
