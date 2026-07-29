@@ -90,7 +90,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	port, manager, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
-			"content": "根目录/conf/config.yaml",
+			"content": "根目录/config.yaml",
 		})))
 		return
 	}
@@ -105,7 +105,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 	if h.isInstallComplete() {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
-			"lock": "static/" + LockFileName,
+			"lock": "public/" + LockFileName,
 		})))
 		return
 	}
@@ -136,7 +136,7 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 		return
 	}
 	configIsWritableLink := []map[string]any{}
-	configPath := filepath.Join(utils.RootPath(), "conf", ConfigFileName)
+	configPath := filepath.Join(utils.RootPath(), ConfigFileName)
 	configDescribe := utils.Lang(ctx, "Writable", nil)
 	configState := OK
 	if !filesystem.PathIsWritable(configPath) {
@@ -155,7 +155,7 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 
 	// storage-start
 	storageIsWritableLink := []map[string]any{}
-	storagePath := filepath.Join(utils.RootPath(), "storage")
+	storagePath := filepath.Join(utils.RootPath(), "public", "storage")
 	storageDescribe := utils.Lang(ctx, "Writable", nil)
 	storageState := OK
 	if !filesystem.PathIsWritable(storagePath) {
@@ -365,7 +365,7 @@ func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
 func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	if h.isInstallComplete() {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
-			"lock": "static/" + LockFileName,
+			"lock": "public/" + LockFileName,
 		})))
 		return
 	}
@@ -391,7 +391,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	configPath := filepath.Join(utils.RootPath(), "conf", ConfigFileName)
+	configPath := filepath.Join(utils.RootPath(), ConfigFileName)
 	if err := ensureConfigFile(); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -432,7 +432,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	}
 
 	// 建立安装锁文件
-	err = os.WriteFile(filepath.Join(utils.RootPath(), "static", LockFileName), []byte(time.Now().Format("2006-01-02")), 0644)
+	err = os.WriteFile(filepath.Join(utils.RootPath(), "public", LockFileName), []byte(time.Now().Format("2006-01-02")), 0644)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -516,7 +516,7 @@ func (h *InstallHandler) newDB(dbConfig Database) (*gorm.DB, error) {
 }
 
 func (h *InstallHandler) isInstallComplete() bool {
-	path := filepath.Join(utils.RootPath(), "static", LockFileName)
+	path := filepath.Join(utils.RootPath(), "public", LockFileName)
 	_, err := os.Stat(path)
 	if err != nil {
 		return false
@@ -529,7 +529,7 @@ func (h *InstallHandler) isInstallComplete() bool {
 func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 	if h.isInstallComplete() {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
-			"lock": "static/" + LockFileName,
+			"lock": "public/" + LockFileName,
 		})))
 		return
 	}
@@ -548,7 +548,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 	}
 
 	if params.Type == "web" {
-		path := filepath.Join(utils.RootPath(), "static", LockFileName)
+		path := filepath.Join(utils.RootPath(), "public", LockFileName)
 		if err := os.WriteFile(path, []byte(InstallationCompletionMark), 0644); err != nil {
 			FailByErr(ctx, validate.GetError(params, err))
 			return

@@ -28,14 +28,14 @@ import (
 
 // 可以使用的背景图片路径
 var bgPaths []string = []string{
-	"/static/images/captcha/click/bgs/1.png",
-	"/static/images/captcha/click/bgs/2.png",
-	"/static/images/captcha/click/bgs/2.png",
+	"/public/static/images/captcha/click/bgs/1.png",
+	"/public/static/images/captcha/click/bgs/2.png",
+	"/public/static/images/captcha/click/bgs/2.png",
 }
 
 // 可以使用的字体文件路径
 var fontPaths []string = []string{
-	"/static/fonts/zhttfs/2.ttf",
+	"/public/static/fonts/zhttfs/2.ttf",
 }
 
 // 验证点 Icon 映射表
@@ -149,7 +149,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 				point.Text = "<" + iconDict[v] + ">"
 			}
 
-			iconImg, err := loadImage(utils.RootPath() + "/static/images/captcha/click/icons/" + v + ".png")
+			iconImg, err := loadImage(utils.RootPath() + "/public/static/images/captcha/click/icons/" + v + ".png")
 			if err != nil {
 				return nil, err
 			}

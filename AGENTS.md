@@ -4,10 +4,14 @@
 
 本文件会被框架源仓库和所有业务 fork 原样继承。开始任何工作前，先判断你在哪一类仓库：
 
-1. 仓库根存在 `PROJECT.md` → **业务仓库**，安装、升级、协作与代码边界规则见 `docs/framework-workflow.md`。
+1. 仓库根存在 `AGENT_BUSINESS.md` → **业务仓库**，安装、升级、协作与代码边界规则见 `docs/framework-workflow.md`。
 2. `git remote -v` 中 `origin` 指向 `yemao688/buildadmin-go` → **框架源仓库**（业务 fork 的 `origin` 应指向用户自己的 fork），框架维护规则另见 `docs/framework-maintenance.md`。
-3. `origin` 指向别处、但有其它 remote（如 `upstream`）指向 `yemao688/buildadmin-go` → **业务仓库**（尚未创建 `PROJECT.md`），按 `docs/framework-workflow.md` 工作，并提醒用户补建 `PROJECT.md`。
+3. `origin` 指向别处、但有其它 remote（如 `upstream`）指向 `yemao688/buildadmin-go` → **业务仓库**（尚未创建 `AGENT_BUSINESS.md`），按 `docs/framework-workflow.md` 工作，并提醒用户补建 `AGENT_BUSINESS.md`。
 4. 以上都不满足（例如 remote 未配置或被改名）→ 向用户确认，不要默认。
+
+## 文档所有权（框架 vs 业务）
+
+框架在 `docs/templates/` 提供业务初始化模板（目前为 `AGENT_BUSINESS.md`），业务仓库初始化时复制到仓库根目录后自行维护；框架永不发布根目录 `AGENT_BUSINESS.md`，也不要把它加入框架 `.gitignore`（否则业务仓库里该文件会被忽略）。业务仓库的 AI 协作者把业务规则、模块清单、部署笔记写进根目录 `AGENT_BUSINESS.md`，禁止改动 `AGENTS.md` 与框架级文档。
 
 ## 术语与读者
 
@@ -33,7 +37,7 @@
 - Trust `go.mod`: use Go 1.25.x; do not retain the stale Go 1.21.8 requirement.
 - This repository contains two projects. The Gin/GORM/Wire backend is rooted here; `web/` is the BuildAdmin v2.3.8 Vue/Vite 8 frontend with its own `pnpm-lock.yaml`. Run frontend commands from `web/` with pnpm, never npm.
 - Real entrypoints and wiring are `cmd/app/main.go`, `cmd/app/wire.go`, `router/router.go`, and `web/src/main.ts`. Cobra commands live under `app/cmd/`.
-- `conf/config.example.yaml` is the tracked template. Runtime `conf/config.yaml` is ignored and is copied from the template when missing; never commit installer-written credentials.
+- `config.example.yaml` is the tracked template at the repository root. Runtime `config.yaml` at the repository root is ignored and is copied from the template when missing; never commit installer-written credentials.
 
 ## AI development protocol
 
@@ -90,7 +94,7 @@ Every business table should carry `create_time` and `update_time` as `bigint`; t
 - Every migration is prefix-safe (`mysql.prefix` is variable; never hard-code `ba_`). Destructive renames, type changes, and backfills must not rely on AutoMigrate.
 - Never hand-edit `cmd/app/wire_gen.go`; after provider or `cmd/app/wire.go` changes run `go generate ./cmd/app`.
 - `go run ./cmd/generate` is hazardous: it uses a hard-coded local MySQL DSN and can overwrite generated models relative to the current directory. Inspect it before use.
-- `database/migrations/model/*.gen.go` drives the fresh-snapshot AutoMigrate; preserve its tags and migration contracts. `pnpm dev` regenerates `web/types/tableRenderer.d.ts` and i18n Ally language indexes; edit the TypeScript sources under `web/src/lang/` instead. Frontend builds remain in `web/dist/`, while deployment may copy assets into ignored `static/` paths.
+- `database/migrations/model/*.gen.go` drives the fresh-snapshot AutoMigrate; preserve its tags and migration contracts. `pnpm dev` regenerates `web/types/tableRenderer.d.ts` and i18n Ally language indexes; edit the TypeScript sources under `web/src/lang/` instead. Frontend builds remain in `web/dist/`, while deployment may copy assets into ignored `public/` paths.
 
 ## Framework usage best practices (business repositories)
 
@@ -108,6 +112,6 @@ These rules apply when the repository is used as a framework for a business proj
 
 ## Installation and test risks
 
-- Web installation creates `conf/config.yaml` and invokes the configured `terminal.commands.migrate.run`; keep that command able to run Cobra `migrate`. The installer is served at `/install` on port 9989.
+- Web installation creates `config.yaml` at the repository root and invokes the configured `terminal.commands.migrate.run`; keep that command able to run Cobra `migrate`. The installer is served at `/install` on port 9989.
 - MySQL integration tests in `database/migrations/install_test.go` require `BUILDADMIN_TEST_MYSQL_DSN` and mutate schema/data; use only a disposable database. Some legacy tests/generators also assume local MySQL or execute DDL.
 - Air ignores `web/`, tests, and generated Go files and waits 10 seconds before rebuilding. Run Vite separately; if CRUD generation races Air, temporarily increase `.air.toml`’s `build.delay`.

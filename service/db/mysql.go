@@ -91,7 +91,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger
 	}); err != nil {
-		path := filepath.Join(utils.RootPath(), "static/install.lock")
+		path := filepath.Join(utils.RootPath(), "public/install.lock")
 		if _, err := os.Stat(path); err == nil {
 			content, _ := os.ReadFile(path)
 			if string(content) == "install-end" {

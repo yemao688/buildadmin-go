@@ -33,7 +33,7 @@ click_captcha:
 
 log:
   level: 'info'
-  root_dir: 'storage/logs'
+  root_dir: 'runtime/logs'
   filename: 'app.log'
   format: ''
   show_line: true
@@ -126,19 +126,19 @@ terminal:
         command: 'node -v'
     test:
       npm:
-        cwd: 'static/npm-install-test'
+        cwd: 'public/npm-install-test'
         command: 'npm install'
       cnpm:
-        cwd: 'static/npm-install-test'
+        cwd: 'public/npm-install-test'
         command: 'cnpm install'
       yarn:
-        cwd: 'static/npm-install-test'
+        cwd: 'public/npm-install-test'
         command: yarn install
       pnpm:
-        cwd: 'static/npm-install-test'
+        cwd: 'public/npm-install-test'
         command: pnpm install
       ni:
-        cwd: 'static/npm-install-test'
+        cwd: 'public/npm-install-test'
         command: ni install
     web-install:
       npm:

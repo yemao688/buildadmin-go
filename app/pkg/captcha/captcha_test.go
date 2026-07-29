@@ -14,7 +14,7 @@ import (
 )
 
 func TestDraw(t *testing.T) {
-	filepath := filepath.Join(utils.RootPath(), "static/images/captcha/click/bgs/1.png")
+	filepath := filepath.Join(utils.RootPath(), "public/static/images/captcha/click/bgs/1.png")
 	bgImg, err := loadImage(filepath)
 	if err != nil {
 		fmt.Print(err)
@@ -26,7 +26,7 @@ func TestDraw(t *testing.T) {
 }
 
 func TestDrawIcon(t *testing.T) {
-	filepath := filepath.Join(utils.RootPath(), "static/images/captcha/click/bgs/1.png")
+	filepath := filepath.Join(utils.RootPath(), "public/static/images/captcha/click/bgs/1.png")
 	bgImg, err := loadImage(filepath)
 	if err != nil {
 		fmt.Print(err)
@@ -34,7 +34,7 @@ func TestDrawIcon(t *testing.T) {
 	drawImg := image.NewRGBA(bgImg.Bounds())
 	draw.Draw(drawImg, bgImg.Bounds(), bgImg, image.Point{}, draw.Src)
 
-	iconImg, err := loadImage(utils.RootPath() + "/static/images/captcha/click/icons/apple.png")
+	iconImg, err := loadImage(utils.RootPath() + "/public/static/images/captcha/click/icons/apple.png")
 	if err != nil {
 		fmt.Print(err)
 	}
@@ -64,7 +64,7 @@ func TestDrawIcon(t *testing.T) {
 }
 
 func TestDrawIcon1(t *testing.T) {
-	filepath := filepath.Join(utils.RootPath(), "static/images/captcha/click/bgs/1.png")
+	filepath := filepath.Join(utils.RootPath(), "public/static/images/captcha/click/bgs/1.png")
 	bgImg, err := loadImage(filepath)
 	if err != nil {
 		fmt.Print(err)
@@ -72,7 +72,7 @@ func TestDrawIcon1(t *testing.T) {
 	drawImg := image.NewRGBA(bgImg.Bounds())
 	draw.Draw(drawImg, bgImg.Bounds(), bgImg, image.Point{}, draw.Src)
 
-	iconImg, err := loadImage(utils.RootPath() + "/static/images/captcha/click/icons/apple.png")
+	iconImg, err := loadImage(utils.RootPath() + "/public/static/images/captcha/click/icons/apple.png")
 	if err != nil {
 		fmt.Print(err)
 	}

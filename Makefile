@@ -30,11 +30,11 @@ frontend:
 	pnpm --dir web build
 	@test -f web/dist/index.html || { echo "ERROR: web/dist/index.html is missing after build"; exit 1; }
 	@test -d web/dist/assets || { echo "ERROR: web/dist/assets is missing after build"; exit 1; }
-	@mkdir -p static
-	rm -rf static/assets
-	cp -R web/dist/assets static/assets
-	cd web/dist && find . -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} $(CURDIR)/static/ \;
-	@echo "frontend dist synced to static/"
+	@mkdir -p public
+	rm -rf public/assets
+	cp -R web/dist/assets public/assets
+	cd web/dist && find . -mindepth 1 -maxdepth 1 ! -name assets -exec cp -R {} $(CURDIR)/public/ \;
+	@echo "frontend dist synced to public/"
 
 # 登录 registry 用 stdin 传密码(macOS / 无 GUI 场景也能用,不依赖 keychain)
 # 用法:确保 .env 里设了 DEPLOY_REGISTRY_USER 和 DEPLOY_REGISTRY_PASSWORD

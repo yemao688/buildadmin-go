@@ -58,7 +58,7 @@ func InitRouter(
 	)
 
 	rootDir := utils.RootPath()
-	router.Static("/install", filepath.Join(rootDir, "static/install"))
+	router.Static("/install", filepath.Join(rootDir, "public/install"))
 	router.POST("/api/install/changePackageManager", apiInstallHandler.ChangePackageManager)
 	router.GET("/api/install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
 	router.POST("/api/install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
@@ -94,11 +94,11 @@ func InitRouter(
 	// 引入api接口路由
 	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
 
-	router.Static("/assets", filepath.Join(rootDir, "static/assets"))
-	router.Static("/static", filepath.Join(rootDir, "static"))
-	router.Static("/storage/default", filepath.Join(rootDir, "storage/default"))
-	router.StaticFile("/", filepath.Join(rootDir, "static/index.html"))
-	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "static/favicon.ico"))
+	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
+	router.Static("/static", filepath.Join(rootDir, "public"))
+	router.Static("/storage/default", filepath.Join(rootDir, "public/storage/default"))
+	router.StaticFile("/", filepath.Join(rootDir, "public/index.html"))
+	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
 	for _, registrar := range registrars {
 		for _, capability := range registrar.Capabilities() {

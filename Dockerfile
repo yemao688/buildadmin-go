@@ -15,12 +15,12 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 1000 app \
     && adduser -S -D -H -u 1000 -G app app \
-    && mkdir -p /app/conf /app/storage /app/static \
-    && printf 'install-end' > /app/static/install.lock \
+    && mkdir -p /app/conf /app/runtime /app/public \
+    && printf 'install-end' > /app/public/install.lock \
     && chown -R app:app /app
 COPY --from=go-build /out/app /app/app
-COPY static/ /app/static/
+COPY public/ /app/public/
 RUN chown -R app:app /app
 USER 1000:1000
 EXPOSE 9989
-ENTRYPOINT ["/app/app", "--conf", "/app/conf/config.yaml"]
+ENTRYPOINT ["/app/app", "--conf", "/app/config.yaml"]

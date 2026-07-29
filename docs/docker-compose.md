@@ -1,6 +1,6 @@
 # Docker Compose 发布
 
-这是一个单副本、app-only 的线上发布方案。发布机先用 `make frontend` 构建前端并同步到仓库根目录 `static/`，镜像只消费这些静态产物。镜像不包含 Node、Go 工具链、源码或安装器；MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。
+这是一个单副本、app-only 的线上发布方案。发布机先用 `make frontend` 构建前端并同步到仓库根目录 `public/`，镜像只消费这些静态产物。镜像不包含 Node、Go 工具链、源码或安装器；MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。
 
 ## 发布机：构建并推送
 
@@ -13,7 +13,7 @@ make frontend
 make push
 ```
 
-`make frontend` 会在 `web/` 执行 `pnpm install --frozen-lockfile && pnpm build`，然后替换根 `static/assets/` 并复制 `static/index.html`。替换而非叠加可避免旧 hash 资源残留。Dockerfile 不构建前端，也不消费 `web/dist/`。
+`make frontend` 会在 `web/` 执行 `pnpm install --frozen-lockfile && pnpm build`，然后替换根 `public/assets/` 并复制 `public/index.html`。替换而非叠加可避免旧 hash 资源残留。Dockerfile 不构建前端，也不消费 `web/dist/`。
 
 `make push` 先通过 stdin 登录 registry，再用一次多架构 buildx 构建推送三个 tag：`FULL_TAG`（版本、短 SHA、UTC 时间）、`VERSION` 和 `latest`。`make build` 仅接受单个平台并使用 `--load`；多平台发布使用 `make push`。push 不会隐式安装前端依赖。
 
@@ -23,17 +23,18 @@ make push
 
 * `docker-compose.yaml`
 * `.env`（镜像地址、宿主端口等发布变量）
-* `conf/config.yaml`（应用配置和凭据，不能提交到 Git）
-* `storage/`（上传文件和日志）
+* `config.yaml`（根目录应用配置和凭据，不能提交到 Git）
+* `runtime/`（日志和运行时文件）
+* `public/storage/`（上传文件）
 
-在发布仓库中从模板准备配置，经安全渠道放到生产机的 `conf/config.yaml`，然后编辑生产连接信息：
+在发布仓库中从根目录模板准备配置，经安全渠道放到生产机的 `config.yaml`，然后编辑生产连接信息：
 
 ```bash
-cp conf/config.example.yaml /path/to/release/conf/config.yaml
-# 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/storage/logs
+cp config.example.yaml /path/to/release/config.yaml
+# 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/runtime/logs
 ```
 
-应用配置中的 `app.port` 必须保持 `9989`，时区通过应用 YAML 的 `app.time_zone` 设置。`APP_PORT` 只改变宿主机映射端口，不改变容器内监听端口。Compose 会将 `./conf/config.yaml` 只读挂载为 `/app/conf/config.yaml`，并将 `./storage/` 挂载为 `/app/storage`。应用 YAML 与 `.env` 是两套配置，不能混用。
+应用配置中的 `app.port` 必须保持 `9989`，时区通过应用 YAML 的 `app.time_zone` 设置。`APP_PORT` 只改变宿主机映射端口，不改变容器内监听端口。Compose 会将 `./config.yaml` 只读挂载为 `/app/config.yaml`，并将 `./runtime/` 挂载为 `/app/runtime`。应用 YAML 与 `.env` 是两套配置，不能混用。
 
 在生产机执行：
 
@@ -44,7 +45,7 @@ docker compose ps
 docker compose logs -f app
 ```
 
-镜像内预写 `static/install.lock` 为 `install-end`，表示线上是已安装环境。安装器不随镜像发布。
+镜像内预写 `public/install.lock` 为 `install-end`，表示线上是已安装环境。安装器不随镜像发布。
 
 ## 数据库迁移
 
@@ -65,14 +66,14 @@ docker compose pull
 docker compose up -d
 ```
 
-升级前直接备份 `conf/config.yaml` 和 `storage/`。需要精确回滚时，在生产机 `.env` 固定 `DEPLOY_IMAGE_TAG` 为已知的 `FULL_TAG`，再执行 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。
+升级前直接备份 `config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `DEPLOY_IMAGE_TAG` 为已知的 `FULL_TAG`，再执行 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。
 
 ## 存储、Redis、健康检查和 HTTP
 
-上传文件和日志位于生产机的 `storage/`。备份示例：
+上传文件位于生产机的 `public/storage/`，日志位于 `runtime/logs`。备份示例：
 
 ```bash
-tar czf config-and-storage.tgz conf/config.yaml storage/
+tar czf config-and-runtime.tgz config.yaml runtime/ public/storage/
 ```
 
 单副本方案适合单节点上传；不要直接扩展副本，除非另行设计共享文件存储、会话和一致性策略。

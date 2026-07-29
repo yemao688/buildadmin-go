@@ -33,11 +33,11 @@ go install github.com/air-verse/air@latest
    ```
 
    后端默认监听 `9989`。
-2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会从 `conf/config.example.yaml` 创建运行配置 `conf/config.yaml`，并执行其中配置的迁移命令。运行配置含凭据，不要提交。
+2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会从根目录的 `config.example.yaml` 创建根目录运行配置 `config.yaml`，并执行其中配置的迁移命令。运行配置含凭据，不要提交。
 3. 如果不使用 Web 安装器，可复制配置模板、按环境填写后直接执行数据库迁移：
 
    ```bash
-   cp conf/config.example.yaml conf/config.yaml
+   cp config.example.yaml config.yaml
    go run ./cmd/app --conf config.yaml migrate
    ```
 
@@ -53,7 +53,7 @@ go install github.com/air-verse/air@latest
 
 ## Docker Compose 部署
 
-发布入口：发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `static/`），再执行 `make push`；Docker 只打包根 `static/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、`conf/config.yaml` 和 `storage/`，然后执行 `docker compose pull && docker compose up -d`。从 `conf/config.example.yaml` 复制生成 `conf/config.yaml`，并在应用 YAML 中设置 `app.time_zone`；`app.port` 保持 `9989`。首次安装在本地完成，详细流程见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布入口：发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。从根目录 `config.example.yaml` 复制生成 `config.yaml`，并在应用 YAML 中设置 `app.time_zone`；`app.port` 保持 `9989`。首次安装在本地完成，详细流程见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 
@@ -77,13 +77,15 @@ app/                 业务、命令、公共组件与中间件
 cmd/app/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 三轨迁移（official/local/business）、迁移模型与内部迁移基础设施
-conf/                配置模板和本地化资源
+config.example.yaml  根目录配置模板
+config.yaml          根目录运行配置（忽略，不提交）
+conf/                本地化资源（conf/localize/）
 web/                 Vue/Vite 前端源码
-static/              发布到镜像中的前端和运行时静态资源
+public/              发布到镜像中的前端和运行时静态资源
 crud_specs/          AI CRUD 生成 YAML
 docs/                开发文档
 tests/               测试支持代码
-storage/             运行时上传文件和日志
+runtime/             运行时日志和临时文件
 ```
 
 ## AI 驱动 CRUD 模块生成
