@@ -39,8 +39,8 @@ fields:
     length: 30
     null: false
     defaultType: EMPTY STRING
-    designType: string
-    comment: 类型
+    designType: select
+    comment: 类型:0=文本,1=富文本,2=图片
   - name: value
     type: longtext
     null: true

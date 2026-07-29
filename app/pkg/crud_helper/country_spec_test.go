@@ -20,7 +20,7 @@ func TestCountrySpecsMatchDictionaryContract(t *testing.T) {
 		{"country_currency.yaml", "code", "varchar", 20, false, "EMPTY STRING", "货币代码"},
 		{"country_currency.yaml", "status", "tinyint", 0, true, "INPUT", "状态:0=禁用,1=启用"},
 		{"country_language.yaml", "remark", "varchar", 255, false, "EMPTY STRING", "备注"},
-		{"country_language_content.yaml", "type", "varchar", 30, false, "EMPTY STRING", "类型"},
+		{"country_language_content.yaml", "type", "varchar", 30, false, "EMPTY STRING", "类型:0=文本,1=富文本,2=图片"},
 		{"country_language_content.yaml", "value", "longtext", 0, false, "NONE", "值"},
 	}
 

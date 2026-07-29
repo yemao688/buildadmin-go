@@ -24,7 +24,7 @@ func version0013(db *gorm.DB, config *conf.Configuration) error {
 	}
 	for _, column := range []struct{ table, name, definition string }{
 		{"country_language", "remark", "varchar(255) NOT NULL DEFAULT '' COMMENT '备注'"},
-		{"country_language_content", "type", "varchar(30) NOT NULL DEFAULT '' COMMENT '类型'"},
+		{"country_language_content", "type", "varchar(30) NOT NULL DEFAULT '' COMMENT '类型:0=文本,1=富文本,2=图片'"},
 		{"country_currency", "rate", "decimal(20,8) NOT NULL DEFAULT 1 COMMENT '汇率'"},
 	} {
 		table := core.TableName(config, column.table)
