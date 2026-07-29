@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	admin "go-build-admin/app/admin/handler"
+	country "go-build-admin/app/admin/handler/country"
 	api "go-build-admin/app/api/handler"
 	"go-build-admin/app/middleware"
 
@@ -130,9 +131,6 @@ func newCompleteRouter() *gin.Engine {
 
 func completeRegistrars() []RouteRegistrar {
 	return ProvideRegistrars(
-		admin.NewCountryLanguageRegistrar(&admin.CountryLanguageHandler{}),
-		admin.NewCountryCurrencyRegistrar(&admin.CountryCurrencyHandler{}),
-		admin.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
 		admin.NewCrudLogRegistrar(&admin.CrudLogHandler{}),
 		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
 		admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
@@ -160,12 +158,15 @@ func completeRegistrars() []RouteRegistrar {
 		api.NewIndexRegistrar(&api.IndexHandler{}),
 		api.NewUserRegistrar(&api.UserHandler{}),
 		api.NewDemoRegistrar(&api.DemoHandler{}),
+		country.NewCurrencyRegistrar(&country.CurrencyHandler{}),
+		country.NewLanguageRegistrar(&country.LanguageHandler{}),
+		country.NewLanguageContentRegistrar(&country.LanguageContentHandler{}),
 	)
 }
 
 func countryRoutes() []string {
 	routes := make([]string, 0, 18)
-	for _, name := range []string{"countryLanguage", "countryCurrency", "countryLanguageContent"} {
+	for _, name := range []string{"country.Language", "country.Currency", "country.LanguageContent"} {
 		for _, route := range []struct {
 			method string
 			path   string
