@@ -192,7 +192,7 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 	}{
 		{"user controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
 		{"nested-style controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/admin_group.go", RemoteSourceConfigType: "crud"}}, "/admin/auth.Group/index"},
-		{"registrar controller resolves route constant", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/country_language.go", RemoteSourceConfigType: "crud"}}, "/admin/countryLanguage/index"},
+		{"registrar controller resolves route constant", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/country/language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
 		{"backslash path", model.Field{Form: model.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
 		{"manual url wins for custom source", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
 		{"unknown controller falls back to path derivation", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no_such_handler/index"},

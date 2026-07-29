@@ -48,12 +48,4 @@ var ProviderSet = wire.NewSet(
 	NewUserRegistrar,
 	NewModuleHandler,
 	NewModuleRegistrar,
-
-	NewCountryLanguageHandler,
-	NewCountryLanguageRegistrar,
-
-	NewCountryCurrencyHandler,
-	NewCountryCurrencyRegistrar,
-	NewCountryLanguageContentHandler,
-	NewCountryLanguageContentRegistrar,
 )

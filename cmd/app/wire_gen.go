@@ -8,7 +8,9 @@ package main
 
 import (
 	"go-build-admin/app/admin/handler"
+	country3 "go-build-admin/app/admin/handler/country"
 	"go-build-admin/app/admin/model"
+	country2 "go-build-admin/app/admin/model/country"
 	handler2 "go-build-admin/app/api/handler"
 	"go-build-admin/app/cmd"
 	handler3 "go-build-admin/app/cmd/handler"
@@ -55,15 +57,6 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authModel)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableModel, uploadHelper, terminalTerminal, configuration)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
-	countryLanguageModel := model.NewCountryLanguageModel(gormDB, configuration, closureEnforcer)
-	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageModel)
-	countryLanguageRegistrar := handler.NewCountryLanguageRegistrar(countryLanguageHandler)
-	countryCurrencyModel := model.NewCountryCurrencyModel(gormDB, configuration, closureEnforcer)
-	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyModel)
-	countryCurrencyRegistrar := handler.NewCountryCurrencyRegistrar(countryCurrencyHandler)
-	countryLanguageContentModel := model.NewCountryLanguageContentModel(gormDB, configuration, closureEnforcer)
-	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentModel)
-	countryLanguageContentRegistrar := handler.NewCountryLanguageContentRegistrar(countryLanguageContentHandler)
 	crudLogModel := model.NewCrudLogModel(gormDB, configuration, closureEnforcer)
 	crudLogHandler := handler.NewCrudLogHandler(zapLogger, crudLogModel, authModel)
 	crudLogRegistrar := handler.NewCrudLogRegistrar(crudLogHandler)
@@ -138,7 +131,16 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	handlerUserRegistrar := handler2.NewUserRegistrar(handlerUserHandler)
 	demoHandler := handler2.NewDemoHandler(zapLogger)
 	demoRegistrar := handler2.NewDemoRegistrar(demoHandler)
-	v := router.ProvideRegistrars(countryLanguageRegistrar, countryCurrencyRegistrar, countryLanguageContentRegistrar, crudLogRegistrar, moduleRegistrar, testBuildRegistrar, adminGroupRegistrar, adminRuleRegistrar, userGroupRegistrar, userRuleRegistrar, configRegistrar, attachmentRegistrar, adminRegistrar, userRegistrar, dataRecycleRegistrar, dataRecycleLogRegistrar, sensitiveDataRegistrar, sensitiveDataLogRegistrar, adminInfoRegistrar, adminLogRegistrar, crudRegistrar, dashboardRegistrar, userLogRegistrar, accountRegistrar, ajaxRegistrar, commonRegistrar, emsRegistrar, indexRegistrar, handlerUserRegistrar, demoRegistrar)
+	currencyModel := country2.NewCurrencyModel(gormDB, configuration, closureEnforcer)
+	currencyHandler := country3.NewCurrencyHandler(zapLogger, currencyModel)
+	currencyRegistrar := country3.NewCurrencyRegistrar(currencyHandler)
+	languageModel := country2.NewLanguageModel(gormDB, configuration, closureEnforcer)
+	languageHandler := country3.NewLanguageHandler(zapLogger, languageModel)
+	languageRegistrar := country3.NewLanguageRegistrar(languageHandler)
+	languageContentModel := country2.NewLanguageContentModel(gormDB, configuration, closureEnforcer)
+	languageContentHandler := country3.NewLanguageContentHandler(zapLogger, languageContentModel)
+	languageContentRegistrar := country3.NewLanguageContentRegistrar(languageContentHandler)
+	v := router.ProvideRegistrars(crudLogRegistrar, moduleRegistrar, testBuildRegistrar, adminGroupRegistrar, adminRuleRegistrar, userGroupRegistrar, userRuleRegistrar, configRegistrar, attachmentRegistrar, adminRegistrar, userRegistrar, dataRecycleRegistrar, dataRecycleLogRegistrar, sensitiveDataRegistrar, sensitiveDataLogRegistrar, adminInfoRegistrar, adminLogRegistrar, crudRegistrar, dashboardRegistrar, userLogRegistrar, accountRegistrar, ajaxRegistrar, commonRegistrar, emsRegistrar, indexRegistrar, handlerUserRegistrar, demoRegistrar, currencyRegistrar, languageRegistrar, languageContentRegistrar)
 	engine := router.InitRouter(lumberjackLogger, login, security, userLogin, record, indexHandler, ajaxHandler, installHandler, v)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)

@@ -33,7 +33,7 @@
                     <FormItem :label="t('country.languageContent.lan')" type="string" v-model="baTable.form.items!.lan" prop="lan" :placeholder="t('Please input field', { field: t('country.languageContent.lan') })" />
                     <FormItem :label="t('country.languageContent.group')" type="string" v-model="baTable.form.items!.group" prop="group" :placeholder="t('Please input field', { field: t('country.languageContent.group') })" />
                     <FormItem :label="t('country.languageContent.key')" type="string" v-model="baTable.form.items!.key" prop="key" :placeholder="t('Please input field', { field: t('country.languageContent.key') })" />
-                    <FormItem :label="t('country.languageContent.type')" type="number" v-model.number="baTable.form.items!.type" prop="type" :data="{ content: { '1': t('country.languageContent.type 1'), '2': t('country.languageContent.type 2'), '0': t('country.languageContent.type 0') } }" :placeholder="t('Please input field', { field: t('country.languageContent.type') })" />
+                    <FormItem :label="t('country.languageContent.type')" type="number" v-model.number="baTable.form.items!.type" prop="type" :data="{ content: { '0': t('country.languageContent.type 0'), '1': t('country.languageContent.type 1'), '2': t('country.languageContent.type 2') } }" :placeholder="t('Please input field', { field: t('country.languageContent.type') })" />
                     <FormItem :label="t('country.languageContent.value')" type="textarea" v-model="baTable.form.items!.value" prop="value" :input-attr="{ rows: 3 }" @keyup.enter.stop="" @keyup.ctrl.enter="baTable.onSubmit(formRef)" :placeholder="t('Please input field', { field: t('country.languageContent.value') })" />
                 </el-form>
             </div>
@@ -64,7 +64,9 @@ const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
 
-const rules: Partial<Record<string, FormItemRule[]>> = reactive({})
+const rules: Partial<Record<string, FormItemRule[]>> = reactive({
+    type: [buildValidatorData({ name: "number", title: t("country.languageContent.type") })],
+})
 </script>
 
 <style scoped lang="scss"></style>

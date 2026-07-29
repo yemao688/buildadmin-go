@@ -41,24 +41,24 @@ const optButtons: OptButton[] = defaultOptButtons(['weigh-sort', 'edit', 'delete
  * baTable 内包含了表格的所有数据且数据具备响应性，然后通过 provide 注入给了后代组件
  */
 const baTable = new baTableClass(
-    new baTableApi('/admin/countryCurrency/'),
+    new baTableApi('/admin/country.Currency/'),
     {
         pk: 'id',
         column: [
             { type: 'selection', align: 'center', operator: false },
-            { label: t("country.currency.id"), prop: "id", align: "center" },
-            { label: t("country.currency.code"), prop: "code", align: "center" },
-            { label: t("country.currency.name"), prop: "name", align: "center" },
-            { label: t("country.currency.symbol"), prop: "symbol", align: "center" },
-            { label: t("country.currency.rate"), prop: "rate", align: "center" },
-            { label: t("country.currency.status"), prop: "status", align: "center", replaceValue: { '1': t('country.currency.status 1'), '0': t('country.currency.status 0')} },
-            { label: t("country.currency.weigh"), prop: "weigh", align: "center" },
-            { label: t('Operate'), align: 'center', width: 140, render: 'buttons', buttons: optButtons, operator: false },
+            { label: t("country.currency.id"), prop: "id", align: "center", operator: "RANGE", sortable: "custom", width: 70 },
+            { label: t("country.currency.code"), prop: "code", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.currency.name"), prop: "name", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.currency.symbol"), prop: "symbol", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.currency.rate"), prop: "rate", align: "center", operator: "RANGE", sortable: false },
+            { label: t("country.currency.status"), prop: "status", align: "center", operator: "RANGE", sortable: false, replaceValue: { "0": t('country.currency.status 0'), "1": t('country.currency.status 1')} },
+            { label: t("country.currency.weigh"), prop: "weigh", align: "center", operator: "RANGE", sortable: "custom" },
+            { label: t('Operate'), align: 'center', width: 140, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false },
         ],
         dblClickNotEditColumn: [undefined],
     },
     {
-        defaultItems: {rate:1,status:1,weigh:0},
+        defaultItems: {rate:1,status:1},
     }
 )
 

@@ -1,12 +1,12 @@
 export default {
-    id: "ID",
-    code: "Currency code",
-    status: "Status",
-    "status 0": "Disabled",
-    "status 1": "Enabled",
-    weigh: "Weight",
-    name: "Currency name",
-    symbol: "Symbol",
-    rate: "Exchange rate",
-    "quick Search Fields": "currency code, currency name",
-};
+    "quick Search Fields": 'code,name',
+    name: 'name',
+    status: 'status',
+    id: 'id',
+    code: 'code',
+    symbol: 'symbol',
+    rate: 'rate',
+    "status 0": 'status 0',
+    "status 1": 'status 1',
+    weigh: 'weigh',
+}

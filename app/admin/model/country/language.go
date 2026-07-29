@@ -1,16 +1,19 @@
-package model
+package country
 
 import (
 	"fmt"
-	"go-build-admin/app/pkg/data_scope"
+
+	adminmodel "go-build-admin/app/admin/model"
 	"go-build-admin/conf"
+
+	"go-build-admin/app/pkg/data_scope"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// CountryLanguage 全局语言
-type CountryLanguage struct {
+// Language 全局语言
+type Language struct {
 	ID     int64  `gorm:"column:id;primaryKey;autoIncrement:true;comment:主键" json:"id"`        // 主键
 	Lan    string `gorm:"column:lan;not null;comment:语言代码" json:"lan"`                         // 语言代码
 	Name   string `gorm:"column:name;not null;comment:语言名称" json:"name"`                       // 语言名称
@@ -19,34 +22,40 @@ type CountryLanguage struct {
 	Weigh  int32  `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                       // 权重
 }
 
-type CountryLanguageModel struct {
-	BaseModel
+type LanguageModel struct {
+	adminmodel.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
+	config   *conf.Configuration
 }
 
-func NewCountryLanguageModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryLanguageModel {
-	return &CountryLanguageModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "country_language",
-			Key:              "id",
-			QuickSearchField: "lan,name,id",
-			sqlDB:            sqlDB,
-		},
+func (s *LanguageModel) NewRow() any {
+	return &Language{}
+}
+
+func NewLanguageModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *LanguageModel {
+	return &LanguageModel{
+		BaseModel: adminmodel.NewBaseModel(
+			config.Database.Prefix+"country_language",
+			"id",
+			"lan,name,id",
+			sqlDB,
+		),
 		Policy: data_scope.ResourcePolicy{
 			Mode:           "none",
 			OwnerColumn:    "",
 			AssignOnCreate: false,
 		},
 		Enforcer: enforcer,
+		config:   config,
 	}
 }
 
-func (s *CountryLanguageModel) scopedDB(ctx *gin.Context) *gorm.DB {
+func (s *LanguageModel) scopedDB(ctx *gin.Context) *gorm.DB {
 	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
-func (s *CountryLanguageModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *LanguageModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -59,19 +68,19 @@ func (s *CountryLanguageModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *CountryLanguageModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *LanguageModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *CountryLanguageModel) GetOne(ctx *gin.Context, id int64) (countryLanguage CountryLanguage, err error) {
+func (s *LanguageModel) GetOne(ctx *gin.Context, id int64) (language Language, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
-	err = db.Where("id=?", id).First(&countryLanguage).Error
+	err = db.Where("id=?", id).First(&language).Error
 	return
 }
 
-func (s *CountryLanguageModel) List(ctx *gin.Context) (list []CountryLanguage, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+func (s *LanguageModel) List(ctx *gin.Context) (list []Language, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := adminmodel.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -88,7 +97,7 @@ func (s *CountryLanguageModel) List(ctx *gin.Context) (list []CountryLanguage, t
 	return
 }
 
-func (s *CountryLanguageModel) Add(ctx *gin.Context, countryLanguage CountryLanguage) error {
+func (s *LanguageModel) Add(ctx *gin.Context, language Language) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -99,20 +108,21 @@ func (s *CountryLanguageModel) Add(ctx *gin.Context, countryLanguage CountryLang
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := tx.Table(s.TableName).Create(&countryLanguage).Error; err != nil {
+
+		if err := tx.Table(s.TableName).Create(&language).Error; err != nil {
 			return err
 		}
-		if countryLanguage.Weigh == 0 {
-			if err := tx.Table(s.TableName).Where("id = ?", countryLanguage.ID).Update("weigh", countryLanguage.ID).Error; err != nil {
+		if language.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("id = ?", language.ID).Update("weigh", language.ID).Error; err != nil {
 				return err
 			}
-			countryLanguage.Weigh = int32(countryLanguage.ID)
+			language.Weigh = int32(language.ID)
 		}
 		return nil
 	})
 }
 
-func (s *CountryLanguageModel) Edit(ctx *gin.Context, countryLanguage CountryLanguage) error {
+func (s *LanguageModel) Edit(ctx *gin.Context, language Language) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -125,19 +135,30 @@ func (s *CountryLanguageModel) Edit(ctx *gin.Context, countryLanguage CountryLan
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
 
-		res := tx.Table(s.TableName).Model(&countryLanguage).Where("id = ?", countryLanguage.ID).Select("lan", "name", "remark", "status", "weigh").Updates(&countryLanguage)
+		res := tx.Table(s.TableName).Model(&language).Where("id = ?", language.ID).Select("lan", "name", "remark", "status", "weigh").Updates(&language)
 		if err := res.Error; err != nil {
 			return err
 		}
-		if res.RowsAffected != 1 {
+		switch res.RowsAffected {
+		case 1:
+			return nil
+		case 0:
+			var visible int64
+			if err := tx.Table(s.TableName).Model(&Language{}).Where("id = ?", language.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
 			return gorm.ErrRecordNotFound
+		default:
+			return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)
 		}
-		return nil
 	})
 }
 
-func (s *CountryLanguageModel) Del(ctx *gin.Context, ids interface{}) error {
-	normalizedIDs, err := normalizeCountryLanguageIDs(ids)
+func (s *LanguageModel) Del(ctx *gin.Context, ids interface{}) error {
+	normalizedIDs, err := normalizeLanguageIDs(ids)
 	if err != nil {
 		return err
 	}
@@ -149,14 +170,14 @@ func (s *CountryLanguageModel) Del(ctx *gin.Context, ids interface{}) error {
 		tx = s.scopeDB(ctx, tx)
 
 		var visible int64
-		if err := tx.Table(s.TableName).Model(&CountryLanguage{}).Where("id IN ?", normalizedIDs).Count(&visible).Error; err != nil {
+		if err := tx.Table(s.TableName).Model(&Language{}).Where("id IN ?", normalizedIDs).Count(&visible).Error; err != nil {
 			return err
 		}
 		if visible != int64(len(normalizedIDs)) {
 			return gorm.ErrRecordNotFound
 		}
 
-		res := tx.Table(s.TableName).Where("id IN ?", normalizedIDs).Delete(&CountryLanguage{})
+		res := tx.Table(s.TableName).Where("id IN ?", normalizedIDs).Delete(&Language{})
 		if err := res.Error; err != nil {
 			return err
 		}
@@ -167,7 +188,7 @@ func (s *CountryLanguageModel) Del(ctx *gin.Context, ids interface{}) error {
 	})
 }
 
-func normalizeCountryLanguageIDs(ids interface{}) ([]int64, error) {
+func normalizeLanguageIDs(ids interface{}) ([]int64, error) {
 	raw, ok := ids.([]int64)
 	if !ok {
 		return nil, fmt.Errorf("invalid id ids type %T", ids)

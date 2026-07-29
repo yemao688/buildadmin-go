@@ -1,9 +1,12 @@
 name: country_language
 comment: 全局语言
 type: alter
+generateRelativePath: country.language
 dataScope:
   mode: none
 quickSearchField: [lan, name]
+menu:
+  title: 语言管理
 fields:
   - name: id
     type: bigint
