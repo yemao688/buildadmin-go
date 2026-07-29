@@ -136,6 +136,8 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 	}()
 
+	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
+	reconcileStaleGeneratingLogs(db, cfg)
 	logID, err := createCrudLog(db, cfg, opts)
 	if err != nil {
 		return nil, err
@@ -269,6 +271,8 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if db == nil || cfg == nil {
 		return fmt.Errorf("crud deletion requires database and configuration")
 	}
+	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
+	reconcileStaleGeneratingLogs(db, cfg)
 	logPtr, err := latestSuccessfulCrudLog(db, cfg, tableName)
 	if err != nil {
 		return err
@@ -350,25 +354,32 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
-	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Handler"); err != nil {
+	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Handler"); err != nil {
 		return fail("remove handler provider", err)
 	}
-	if err := RemoveProvider(handlerFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Registrar"); err != nil {
+	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Registrar"); err != nil {
 		return fail("remove handler registrar provider", err)
 	}
-	if err := RemoveProvider(modelFile.RootFileName, utils.SnakeToCamel(log.Table.Name, true)+"Model"); err != nil {
+	if err := RemoveProvider(modelFile.RootFileName, modelFile.LastName+"Model"); err != nil {
 		return fail("remove model provider", err)
 	}
 	if err := removeAssociatedModelProviders([]model.Field(log.Fields), manifest); err != nil {
 		return fail("remove associated model providers", err)
 	}
-	if err := RemoveRegistrarProvider(handlerFile.LastName); err != nil {
+	if err := RemoveRegistrarProvider(handlerFile.LastName, handlerFile.RootFileName); err != nil {
 		return fail("remove registrar provider", err)
+	}
+	if err := RemoveWireProviderSet(handlerFile.RootFileName); err != nil {
+		return fail("remove handler wire provider set", err)
+	}
+	if err := RemoveWireProviderSet(modelFile.RootFileName); err != nil {
+		return fail("remove model wire provider set", err)
 	}
 	if err := parseDeleteGoFiles(
 		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
 		filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
 		filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
+		filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
 	); err != nil {
 		return fail("parse guard", err)
 	}
@@ -384,6 +395,14 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := quarantine.Commit(); err != nil {
 		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", quarantine.dir, err)
 	}
+	// 删除后清理：子包空 provider 脚手架与为空的目录链（视图、语言、Go 包目录）
+	pruneEmptyProviderScaffold(handlerFile.RootFileName, "app/admin/handler")
+	pruneEmptyProviderScaffold(modelFile.RootFileName, filepath.Join("app", module, "model"))
+	viewsDir := ParseWebDirNameData(log.Table.Name, "views", log.Table.WebViewsDir)
+	langDir := ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)
+	pruneEmptyDirsUpTo(filepath.Join(utils.RootPath(), viewsDir.Views), filepath.Join(utils.RootPath(), "web", "src", "views", "backend"))
+	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(utils.RootPath(), langDir.LangFile("en"))), filepath.Join(utils.RootPath(), "web", "src", "lang", "backend", "en"))
+	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(utils.RootPath(), langDir.LangFile("zh-cn"))), filepath.Join(utils.RootPath(), "web", "src", "lang", "backend", "zh-cn"))
 	if unregister != nil {
 		for _, route := range atomicRoutesForName(handlerFile.LastName) {
 			unregister(route.method, route.path)
@@ -498,6 +517,7 @@ func validateSharedManifestPath(path string) error {
 	root := utils.RootPath()
 	for _, allowed := range []string{
 		filepath.Join(root, "router", "registrar_set.go"),
+		filepath.Join(root, "cmd", "app", "wire.go"),
 		filepath.Join(root, "cmd", "app", "wire_gen.go"),
 	} {
 		if path == allowed {
@@ -505,7 +525,7 @@ func validateSharedManifestPath(path string) error {
 		}
 	}
 	if filepath.Base(path) != "provider.go" {
-		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, or cmd/app/wire_gen.go")
+		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/app/wire.go, or cmd/app/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
 		"app/admin/model", "app/common/model", "app/admin/handler",
@@ -749,8 +769,21 @@ func updateCrudStatus(db *gorm.DB, cfg *conf.Configuration, id int32, status str
 	return nil
 }
 
+// crudLogCommentLimit 与 ba_crud_log.comment 的 varchar(255) 对齐。
+// 失败消息（gofmt/wire/编译输出）经常超过 255 字符，不截断时 UPDATE 会被
+// MySQL 严格模式整体拒绝，status 永远无法离开 start，表现为"生成中"残留。
+const crudLogCommentLimit = 255
+
+func truncateCrudLogComment(message string) string {
+	runes := []rune(message)
+	if len(runes) <= crudLogCommentLimit {
+		return message
+	}
+	return string(runes[:crudLogCommentLimit-3]) + "..."
+}
+
 func recordCrudError(db *gorm.DB, cfg *conf.Configuration, id int32, message string) error {
-	result := db.Table(crudLogTable(cfg)).Where("id=?", id).Updates(map[string]interface{}{"status": "error", "comment": message})
+	result := db.Table(crudLogTable(cfg)).Where("id=?", id).Updates(map[string]interface{}{"status": "error", "comment": truncateCrudLogComment(message)})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -761,8 +794,45 @@ func recordCrudError(db *gorm.DB, cfg *conf.Configuration, id int32, message str
 }
 
 func recordCrudDeleteError(db *gorm.DB, cfg *conf.Configuration, id int32, message string) error {
-	result := db.Table(crudLogTable(cfg)).Where("id=?", id).Update("comment", "delete failed: "+message)
+	result := db.Table(crudLogTable(cfg)).Where("id=?", id).Update("comment", truncateCrudLogComment("delete failed: "+message))
 	return result.Error
+}
+
+// reconcileStaleGeneratingLogs 将仍为 start 的记录对账为失败。
+// 仅在持有生成锁时调用：锁内不存在进行中的生成，start 必为进程中断残留。
+func reconcileStaleGeneratingLogs(db *gorm.DB, cfg *conf.Configuration) {
+	_ = db.Table(crudLogTable(cfg)).Where("status=?", "start").Updates(map[string]interface{}{
+		"status":  "error",
+		"comment": "生成中断：进程在生成完成前退出",
+	}).Error
+}
+
+// pruneEmptyProviderScaffold 删除子包中已无任何条目的空 provider 脚手架
+// （var ProviderSet = wire.NewSet()），并向上清理为空的包目录，止于 stopRoot（不含）。
+func pruneEmptyProviderScaffold(rootFileName, stopRoot string) {
+	root := filepath.Clean(rootFileName)
+	stop := filepath.Clean(stopRoot)
+	if root == stop || !strings.HasPrefix(root, stop+string(filepath.Separator)) {
+		return
+	}
+	provider := filepath.Join(utils.RootPath(), root, "provider.go")
+	if data, err := os.ReadFile(provider); err == nil && strings.Contains(string(data), "wire.NewSet()") {
+		_ = os.Remove(provider)
+	}
+	pruneEmptyDirsUpTo(filepath.Join(utils.RootPath(), root), filepath.Join(utils.RootPath(), stop))
+}
+
+// pruneEmptyDirsUpTo 自 dir 向上删除为空的目录，止于 stopAt（不含）。
+// 目录非空或删除失败即停止，不会误删仍有内容的父目录。
+func pruneEmptyDirsUpTo(dir, stopAt string) {
+	dir = filepath.Clean(dir)
+	stopAt = filepath.Clean(stopAt)
+	for dir != stopAt && strings.HasPrefix(dir, stopAt+string(filepath.Separator)) {
+		if err := os.Remove(dir); err != nil {
+			return
+		}
+		dir = filepath.Dir(dir)
+	}
 }
 
 func fileExists(path string) bool {

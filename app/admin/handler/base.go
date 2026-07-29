@@ -44,6 +44,11 @@ type Base struct {
 	currentM CommonModel
 }
 
+// NewBase 供子包生成的 handler 构造 Base；子包无法写入未导出的 currentM 字段。
+func NewBase(currentM CommonModel) Base {
+	return Base{currentM: currentM}
+}
+
 // PartialEditValidator optionally validates a switch update before it is
 // written. Existing callers can omit it and retain the historical behavior.
 type PartialEditValidator func(id int32, fieldName string, fieldValue any) error
