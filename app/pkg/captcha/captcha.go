@@ -246,10 +246,10 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 	if fontTtf == "" {
 		if config.UseZh {
 			name := strconv.Itoa(r.Intn(2) + 1)
-			fontTtf = filepath.Join(utils.RootPath(), "/static/fonts/zhttfs", name+".ttf")
+			fontTtf = filepath.Join(utils.RootPath(), "/public/static/fonts/zhttfs", name+".ttf")
 		} else {
 			name := strconv.Itoa(r.Intn(6) + 1)
-			fontTtf = filepath.Join(utils.RootPath(), "/static/fonts/ttfs", name+".ttf")
+			fontTtf = filepath.Join(utils.RootPath(), "/public/static/fonts/ttfs", name+".ttf")
 		}
 	}
 
@@ -377,7 +377,7 @@ func background() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	bgs := []string{}
 	for i := 1; i <= 8; i++ {
-		bgs = append(bgs, filepath.Join("static/images/captcha/image/", strconv.Itoa(i)+".jpg"))
+		bgs = append(bgs, filepath.Join("public/static/images/captcha/image/", strconv.Itoa(i)+".jpg"))
 	}
 	randIndex := r.Intn(len(bgs) - 1)
 	imagePath := bgs[randIndex]

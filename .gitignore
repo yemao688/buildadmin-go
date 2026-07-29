@@ -3,9 +3,7 @@
 /public/*.lock
 /public/index.html
 /public/assets
-static/assets
-static/index.html
-static/favicon.ico
+/public/favicon.ico
 install.lock
 
 # 通过 Git 部署项目至线上时可以考虑删除的忽略规则
@@ -52,13 +50,11 @@ pnpm-debug.log*
 .svn
 *.exe
 /cmd/model
-tmp
-storage
 todo.txt
 
 # Runtime configuration generated or edited during installation
 .env
-/conf/config.yaml
+/config.yaml
 
 # Slim: upstream source clones for comparison
 /.slim/

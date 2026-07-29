@@ -39,7 +39,7 @@ var (
 )
 
 func init() {
-	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "conf", "config.yaml"), "config path, eg: --conf config.yaml")
+	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "config.yaml"), "config path, eg: --conf config.yaml")
 
 	cobra.OnInitialize(func() {
 		initConfig()
@@ -111,7 +111,7 @@ func initConfig() {
 		panic(fmt.Errorf("ensure config failed: %s ", err))
 	}
 	if !filepath.IsAbs(configPath) {
-		configPath = filepath.Join(rootPath, "conf", configPath)
+		configPath = filepath.Join(rootPath, configPath)
 	}
 
 	fmt.Println("load config:" + configPath)

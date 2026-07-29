@@ -313,14 +313,14 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	}
 	attachment.FullUrl = utils.FullUrl(savePath, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
 
-	dirPath := filepath.Dir(utils.RootPath() + savePath)
+	dirPath := filepath.Dir(utils.RootPath() + "/public" + savePath)
 	// 尝试创建路径中所有不存在的目录
 	err = os.MkdirAll(dirPath, 0755)
 	if err != nil {
 		return nil, err
 	}
 	// 创建目标文件
-	out, err := os.Create(utils.RootPath() + savePath)
+	out, err := os.Create(utils.RootPath() + "/public" + savePath)
 	if err != nil {
 		return nil, err
 	}

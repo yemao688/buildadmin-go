@@ -74,14 +74,14 @@ git push -u origin master
 
 此后长期在自己的 `master` 上开发，业务提交正常 push 到 `origin/master`。
 
-### 3. 创建 `PROJECT.md`（业务身份标记）
+### 3. 创建 `AGENT_BUSINESS.md`（业务身份与协作说明）
 
-在仓库根创建 `PROJECT.md`，声明本仓库是业务项目。它是 AI agent 判断"当前是业务仓库"的首要标记（见根目录 `AGENTS.md` 的"仓库身份自检"）。复制模板、填写业务名后提交：
+在仓库根创建 `AGENT_BUSINESS.md`，声明本仓库是业务项目并记录业务协作规则。它是 AI agent 判断"当前是业务仓库"的首要标记（见根目录 `AGENTS.md` 的"仓库身份自检"）。复制模板、填写业务名后提交：
 
 ```bash
-cp docs/templates/PROJECT.md PROJECT.md
-# 编辑 PROJECT.md，把 <业务名> 替换为实际业务名
-git add PROJECT.md && git commit -m "docs: declare project identity"
+cp docs/templates/AGENT_BUSINESS.md AGENT_BUSINESS.md
+# 编辑 AGENT_BUSINESS.md，替换 <业务名> 等占位
+git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 ```
 
 ## 本地安装与日常开发
@@ -103,16 +103,16 @@ air
 # 或：go run ./cmd/app --conf config.yaml
 ```
 
-浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。安装器会生成被 Git 忽略的 `conf/config.yaml` 并执行其中的迁移命令。
+浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。安装器会在仓库根目录生成被 Git 忽略的 `config.yaml` 并执行其中的迁移命令。
 
 **手动配置和迁移：** 从模板复制运行配置，按目标环境填写数据库、密钥等值，再执行迁移：
 
 ```bash
-cp conf/config.example.yaml conf/config.yaml
+cp config.example.yaml config.yaml
 go run ./cmd/app --conf config.yaml migrate
 ```
 
-`conf/config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
+根目录的 `config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
 
 前端日常开发必须在 `web/` 执行：
 
@@ -157,7 +157,7 @@ git merge upstream/v2
 
 将 `YYYYMMDD` 替换为实际日期。`git merge` 产生冲突时，按下表处理；解决后检查 `git status`，逐个 `git add`，再执行 `git commit`。
 
-合并完成后，使用目标环境的 `conf/config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
+合并完成后，使用目标环境根目录的 `config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
 
 ```bash
 go run ./cmd/app --conf config.yaml migrate
@@ -204,13 +204,13 @@ git push origin master
 | `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
 | `router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
-| `conf/config.example.yaml` | 以框架新增字段为基础；业务运行值放在被忽略的 `conf/config.yaml`，不要把凭据合入模板。 |
+| `config.example.yaml` | 以框架新增字段为基础；业务运行值放在根目录被忽略的 `config.yaml`，不要把凭据合入模板。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
 | 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/local 注册表冲突。 |
 
 ## 业务版本约定
 
-业务仓库在根目录 `VERSION` 文件维护自己的发布版本，版本格式由业务自行决定但应使用 semver。业务仓库还应在 `PROJECT.md` 记录当前基于的框架版本，例如 `基于框架 v2.0.0`。框架仓库不提供也不维护 `VERSION` 文件。
+业务仓库在根目录 `VERSION` 文件维护自己的发布版本，版本格式由业务自行决定但应使用 semver。业务仓库还应在根目录 `AGENT_BUSINESS.md` 记录当前基于的框架版本，例如 `基于框架 v2.0.0`。框架仓库不提供也不维护 `VERSION` 文件。
 
 ## 业务代码边界
 

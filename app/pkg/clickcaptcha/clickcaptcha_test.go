@@ -40,7 +40,7 @@ func TestRandPosition(t *testing.T) {
 }
 
 func TestGetFontWidthAndHeight(t *testing.T) {
-	fontBytes, err := os.ReadFile(utils.RootPath() + "/static/fonts/zhttfs/2.ttf")
+	fontBytes, err := os.ReadFile(utils.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
 	if err != nil {
 		fmt.Println("加载字体失败")
 	}

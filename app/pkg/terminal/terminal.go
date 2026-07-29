@@ -246,7 +246,7 @@ func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, ext
 // 执行前埋点
 func (t *Terminal) BeforeExecution(commandKey string) {
 	if commandKey == "test.pnpm" {
-		os.Remove(filepath.Join(utils.RootPath(), "static/npm-install-test/pnpm-lock.yaml"))
+		os.Remove(filepath.Join(utils.RootPath(), "public/npm-install-test/pnpm-lock.yaml"))
 	} else if commandKey == "web-install.pnpm" {
 		os.Remove(filepath.Join(utils.RootPath(), "web/pnpm-lock.yaml"))
 	}
@@ -311,8 +311,8 @@ func (t *Terminal) MvDist() bool {
 		return false
 	}
 
-	toIndexHtmlPath := filepath.Join(utils.RootPath(), "static", "index.html")
-	toAssetsPath := filepath.Join(utils.RootPath(), "static", "assets")
+	toIndexHtmlPath := filepath.Join(utils.RootPath(), "public", "index.html")
+	toAssetsPath := filepath.Join(utils.RootPath(), "public", "assets")
 	if err := os.Remove(toIndexHtmlPath); err != nil {
 		t.log.Info(err.Error())
 	}
