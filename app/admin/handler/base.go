@@ -11,7 +11,10 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
 	"io"
+	"math"
+	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -162,18 +165,15 @@ func oneRow(m CommonModel) (result any, scanTarget any) {
 }
 
 func (h *Base) primaryKey() string {
-	if info, ok := h.currentM.(modelKeyInfo); ok && info.PrimaryKeyName() != "" {
-		return info.PrimaryKeyName()
-	}
-	return "id"
+	return primaryKeyName(h.currentM)
 }
 
 func (h *Base) Sortable(ctx *gin.Context) {
 	type Sort struct {
-		Move      any    `json:"move"`
-		Target    any    `json:"target"`
-		Order     string `json:"order"`
-		Direction string `json:"direction"`
+		Move      json.RawMessage `json:"move"`
+		Target    json.RawMessage `json:"target"`
+		Order     string          `json:"order"`
+		Direction string          `json:"direction"`
 	}
 	params := Sort{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -188,16 +188,130 @@ func (h *Base) Sortable(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
+func primaryKeyName(m CommonModel) string {
+	if info, ok := m.(modelKeyInfo); ok && info.PrimaryKeyName() != "" {
+		return info.PrimaryKeyName()
+	}
+	return "id"
+}
+
+func validPrimaryKeyName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index := 0; index < len(name); index++ {
+		char := name[index]
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char == '_' || (index > 0 && char >= '0' && char <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func normalizeSortablePrimaryKey(value any) (string, error) {
+	switch v := value.(type) {
+	case json.RawMessage:
+		if len(v) == 0 {
+			return "", errors.New("empty primary key")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(v))
+		decoder.UseNumber()
+		var decoded any
+		if err := decoder.Decode(&decoded); err != nil {
+			return "", fmt.Errorf("invalid JSON primary key: %w", err)
+		}
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			if err == nil {
+				return "", errors.New("invalid JSON primary key")
+			}
+			return "", fmt.Errorf("invalid JSON primary key: %w", err)
+		}
+		return normalizeSortablePrimaryKey(decoded)
+	case string:
+		if v == "" {
+			return "", errors.New("empty primary key")
+		}
+		return v, nil
+	case []byte:
+		return normalizeSortablePrimaryKey(string(v))
+	case json.Number:
+		return normalizeSortableJSONNumber(v)
+	case int:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int8:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int16:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int32:
+		return strconv.FormatInt(int64(v), 10), nil
+	case int64:
+		return strconv.FormatInt(v, 10), nil
+	case uint:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint8:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint16:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10), nil
+	case uint64:
+		return strconv.FormatUint(v, 10), nil
+	case float32:
+		return normalizeSortableFloat(float64(v), 32)
+	case float64:
+		return normalizeSortableFloat(v, 64)
+	default:
+		return "", fmt.Errorf("unsupported primary key type %T", value)
+	}
+}
+
+func normalizeSortableJSONNumber(value json.Number) (string, error) {
+	number := value.String()
+	if number == "" {
+		return "", errors.New("empty primary key")
+	}
+	rational, ok := new(big.Rat).SetString(number)
+	if !ok || !rational.IsInt() {
+		return "", fmt.Errorf("primary key must be an integer: %s", number)
+	}
+	return rational.Num().String(), nil
+}
+
+func normalizeSortableFloat(value float64, bitSize int) (string, error) {
+	if math.IsNaN(value) || math.IsInf(value, 0) || math.Trunc(value) != value {
+		return "", errors.New("primary key must be an integer")
+	}
+	if value == 0 {
+		return "0", nil
+	}
+	if bitSize == 64 && math.Abs(value) > float64(1<<53) {
+		return "", errors.New("floating-point primary key exceeds safe integer precision")
+	}
+	return strconv.FormatFloat(value, 'f', -1, bitSize), nil
+}
+
 func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction string, orderValues ...string) error {
 	table := m1.Table()
-	pkField := "id"
-	moveID := fmt.Sprintf("%v", moveId)
-	targetID := fmt.Sprintf("%v", targetId)
+	pkField := primaryKeyName(m1)
+	if !validPrimaryKeyName(pkField) {
+		return cErr.BadRequest("Unsupported primary key field")
+	}
+	moveID, err := normalizeSortablePrimaryKey(moveId)
+	if err != nil {
+		return cErr.BadRequest("Invalid move primary key: " + err.Error())
+	}
+	targetID, err := normalizeSortablePrimaryKey(targetId)
+	if err != nil {
+		return cErr.BadRequest("Invalid target primary key: " + err.Error())
+	}
 
 	type FullRow struct {
-		Id    int32
+		ID    string `gorm:"column:sortable_primary_key"`
 		Weigh int32
 	}
+	rowSelect := pkField + " AS sortable_primary_key, weigh"
 
 	transaction := func(fn func(*gorm.DB) error) error {
 		if m, ok := m1.(transactionalModel); ok {
@@ -213,17 +327,20 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			return db
 		}
 		var moveRow, targetRow FullRow
-		if err := scopedDB(tx).Table(table).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
+		if err := scopedDB(tx).Table(table).Select(rowSelect).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return cErr.BadRequest("Record not found")
 			}
 			return err
 		}
-		if err := scopedDB(tx).Table(table).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
+		if err := scopedDB(tx).Table(table).Select(rowSelect).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return cErr.BadRequest("Record not found")
 			}
 			return err
+		}
+		if moveRow.ID == "" || targetRow.ID == "" {
+			return cErr.BadRequest("Invalid primary key value")
 		}
 		if moveID == targetID || direction == "" {
 			return cErr.BadRequest("Record not found")
@@ -261,9 +378,9 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 
 		var weighRows []FullRow
 		if err := scopedDB(tx).Table(table).
-			Select(pkField+", weigh").
+			Select(rowSelect).
 			Where("weigh = ?", weigh).
-			Order("weigh " + orderDirection + ", id desc").
+			Order("weigh " + orderDirection + ", " + pkField + " desc").
 			Find(&weighRows).Error; err != nil {
 			return err
 		}
@@ -273,7 +390,7 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		if updateMethod == "dec" {
 			shift = gorm.Expr("weigh - ?", weighRowsCount)
 		}
-		shiftQuery := scopedDB(tx).Table(table).Where("id <> ?", moveID)
+		shiftQuery := scopedDB(tx).Table(table).Where(pkField+" <> ?", moveID)
 		if updateMethod == "dec" {
 			shiftQuery = shiftQuery.Where("weigh < ?", weigh)
 		} else {
@@ -287,16 +404,19 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			slices.Reverse(weighRows)
 		}
 		moveComplete := int32(0)
-		updatedWeights := make(map[int32]int32, len(weighRows)+1)
-		updatedIDs := make([]int32, 0, len(weighRows)+1)
-		setWeight := func(id int32, weight int32) {
+		updatedWeights := make(map[string]int32, len(weighRows)+1)
+		updatedIDs := make([]string, 0, len(weighRows)+1)
+		setWeight := func(id string, weight int32) {
 			if _, ok := updatedWeights[id]; !ok {
 				updatedIDs = append(updatedIDs, id)
 			}
 			updatedWeights[id] = weight
 		}
 		for key, weighRow := range weighRows {
-			if fmt.Sprintf("%d", weighRow.Id) == moveID {
+			if weighRow.ID == "" {
+				return cErr.BadRequest("Invalid primary key value")
+			}
+			if weighRow.ID == moveID {
 				continue
 			}
 
@@ -304,17 +424,17 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			if updateMethod == "dec" {
 				rowWeighVal = weighRow.Weigh - int32(key)
 			}
-			if fmt.Sprintf("%d", weighRow.Id) == targetID {
+			if weighRow.ID == targetID {
 				moveComplete = 1
 				moveRow.Weigh = rowWeighVal
-				setWeight(moveRow.Id, moveRow.Weigh)
+				setWeight(moveRow.ID, moveRow.Weigh)
 			}
 			if updateMethod == "dec" {
 				rowWeighVal -= moveComplete
 			} else {
 				rowWeighVal += moveComplete
 			}
-			setWeight(weighRow.Id, rowWeighVal)
+			setWeight(weighRow.ID, rowWeighVal)
 		}
 
 		if len(updatedIDs) > 0 {
