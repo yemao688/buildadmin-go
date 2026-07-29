@@ -77,24 +77,6 @@ func NewCaptcha(sqlDB *gorm.DB) *Captcha {
 	return &Captcha{config: defaultConfig, sqlDB: sqlDB}
 }
 
-func (c *Captcha) SetConfig(config CaptchaConfig) {
-	if config.CodeSet != "" {
-		c.config.CodeSet = config.CodeSet
-	}
-
-	if config.FontSize != 0 {
-		c.config.FontSize = config.FontSize
-	}
-
-	if config.Length != 0 {
-		c.config.Length = config.Length
-	}
-
-	c.config.UseCurve = config.UseCurve
-	c.config.CodeSet = config.CodeSet
-
-}
-
 // 验证验证码是否正确
 // typeLen 验证码类型和长度，内置常量：LogicCaptcha=逻辑验证码, GraphicCaptcha=图形验证码
 func (c *Captcha) Check(code, id string, typeLen int) bool {
