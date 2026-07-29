@@ -8,11 +8,13 @@ import "sync"
 // user. Rule reloads hold the rule lock while loading groups, so callers must
 // keep the rule-then-group lock order when adding cache operations.
 type Cache[G any, R any] struct {
-	groupMu   sync.RWMutex
-	groupList map[int32][]G
-	ruleMu    sync.RWMutex
-	ruleList  map[int32][]R
-	ruleNames map[int32][]string
+	groupMu    sync.RWMutex
+	groupList  map[int32][]G
+	ruleMu     sync.RWMutex
+	ruleList   map[int32][]R
+	ruleNames  map[int32][]string
+	allNames   []string
+	allNamesOK bool
 }
 
 func New[G any, R any]() *Cache[G, R] {
@@ -85,6 +87,31 @@ func (c *Cache[G, R]) RuleNames(uid int32) []string {
 	return clone(c.ruleNames[uid])
 }
 
+// AllRuleNames returns the cached names for every rule, loading them once
+// when the cache is cold.
+func (c *Cache[G, R]) AllRuleNames(loader func() ([]string, error)) ([]string, error) {
+	c.ruleMu.RLock()
+	if c.allNamesOK {
+		names := clone(c.allNames)
+		c.ruleMu.RUnlock()
+		return names, nil
+	}
+	c.ruleMu.RUnlock()
+
+	c.ruleMu.Lock()
+	defer c.ruleMu.Unlock()
+	if c.allNamesOK {
+		return clone(c.allNames), nil
+	}
+	names, err := loader()
+	if err != nil {
+		return nil, err
+	}
+	c.allNames = clone(names)
+	c.allNamesOK = true
+	return clone(names), nil
+}
+
 // InvalidateUser clears all cached permission data for uid.
 func (c *Cache[G, R]) InvalidateUser(uid int32) {
 	c.ruleMu.Lock()
@@ -94,6 +121,8 @@ func (c *Cache[G, R]) InvalidateUser(uid int32) {
 	delete(c.ruleList, uid)
 	delete(c.ruleNames, uid)
 	delete(c.groupList, uid)
+	c.allNames = nil
+	c.allNamesOK = false
 }
 
 // InvalidateAll clears all cached permission data.
@@ -105,6 +134,8 @@ func (c *Cache[G, R]) InvalidateAll() {
 	clear(c.ruleList)
 	clear(c.ruleNames)
 	clear(c.groupList)
+	c.allNames = nil
+	c.allNamesOK = false
 }
 
 func clone[T any](values []T) []T {

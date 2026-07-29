@@ -119,6 +119,7 @@ func newCompleteRouter() *gin.Engine {
 	return InitRouter(
 		&lumberjack.Logger{},
 		&middleware.Login{},
+		&middleware.Authorization{},
 		&middleware.Security{},
 		&middleware.UserLogin{},
 		&middleware.Record{},

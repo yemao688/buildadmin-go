@@ -50,6 +50,41 @@ func TestAdminAuthCacheInvalidationReloadsRules(t *testing.T) {
 	require.True(t, m.Check("auth/updated", 1, "or"))
 }
 
+func TestAdminAuthCheckDeniesRuleOutsideGroup(t *testing.T) {
+	m, db, _ := newAdminAuthCacheModel(t)
+
+	// The group only grants "auth/initial"; an enabled rule that is not part of
+	// the group's rules must not pass Check. Regression: the unassigned
+	// tx.Where("id in ?") previously dropped the group filter and loaded every
+	// enabled rule.
+	require.NoError(t, db.Create(&AdminRule{Pid: 0, Type: "button", Title: "Other", Name: "auth/other", Status: "1", Weigh: 1}).Error)
+
+	_, err := m.GetRuleList(nil, 1)
+	require.NoError(t, err)
+	require.True(t, m.Check("auth/initial", 1, "or"))
+	require.False(t, m.Check("auth/other", 1, "or"))
+}
+
+func TestAdminAuthCheckNormalizesCamelCaseRuleNames(t *testing.T) {
+	m, db, rule := newAdminAuthCacheModel(t)
+
+	camelRule := AdminRule{Pid: 0, Type: "button", Title: "LanguageContent", Name: "country/languageContent/index", Status: "1", Weigh: 1}
+	require.NoError(t, db.Create(&camelRule).Error)
+	require.NoError(t, db.Model(&AdminGroup{}).Where("id=?", 1).Update("rules", strconv.Itoa(int(rule.ID))+","+strconv.Itoa(int(camelRule.ID))).Error)
+
+	_, err := m.GetRuleList(nil, 1)
+	require.NoError(t, err)
+	// The middleware builds rule names from normalized (lowercased) route/action
+	// pairs; camelCase rule names stored in admin_rule must still match.
+	require.True(t, m.Check("country/languagecontent/index", 1, "or"))
+	require.True(t, m.Check("country/languageContent/index", 1, "or"))
+
+	names, err := m.GetAllRuleNames()
+	require.NoError(t, err)
+	require.Contains(t, names, "country/languagecontent/index")
+	require.NotContains(t, names, "country/languageContent/index")
+}
+
 func TestAdminAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
 	m, db, _ := newAdminAuthCacheModel(t)
 

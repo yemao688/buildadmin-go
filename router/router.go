@@ -18,6 +18,7 @@ import (
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	loginM *middleware.Login,
+	authorizationM *middleware.Authorization,
 	securityM *middleware.Security,
 	userLoginM *middleware.UserLogin,
 	recordM *middleware.Record,
@@ -75,7 +76,7 @@ func InitRouter(
 	router.GET("/admin/ajax/terminal", ajaxHandler.Terminal)
 
 	// 引入admin路由
-	adminRouter := router.Group("/admin/").Use(loginM.Handler(), securityM.Handler())
+	adminRouter := router.Group("/admin/").Use(loginM.Handler(), authorizationM.Handler(), securityM.Handler())
 	adminRouter.GET("Index/index", indexHandler.Index)
 	adminRouter.POST("Index/logout", indexHandler.Logout)
 

@@ -415,7 +415,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 
 		tx := s.sqlDB.Table(s.config.Database.Prefix+"user_rule").Where("status=?", "1")
 		if !slices.Contains(ids, "*") {
-			tx.Where("id in ?", ids)
+			tx = tx.Where("id in ?", ids)
 		}
 		var ruleRows []userRuleAuthRow
 		tx.Order("weigh desc,id asc").Scan(&ruleRows)

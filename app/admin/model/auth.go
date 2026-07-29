@@ -68,6 +68,29 @@ func (s *AuthModel) InvalidateAll() {
 	s.cache.InvalidateAll()
 }
 
+// GetAllRuleNames returns the names of every admin rule, independent of the
+// current administrator's permissions.
+func (s *AuthModel) GetAllRuleNames() ([]string, error) {
+	return s.cache.AllRuleNames(func() ([]string, error) {
+		var names []string
+		if err := s.sqlDB.Model(&AdminRule{}).Pluck("name", &names).Error; err != nil {
+			return nil, err
+		}
+
+		seen := make(map[string]struct{}, len(names))
+		unique := make([]string, 0, len(names))
+		for _, name := range names {
+			name = strings.ToLower(name)
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			unique = append(unique, name)
+		}
+		return unique, nil
+	})
+}
+
 func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	tokenStr := ctx.Request.Header.Get("batoken")
 	if tokenStr == "" {
@@ -239,6 +262,16 @@ func (s *AuthModel) Check(name string, id int32, relation string) bool {
 	return result
 }
 
+// EnsureRuleList loads an administrator's rules when the permission cache is
+// cold. Check intentionally remains a cache-only operation.
+func (s *AuthModel) EnsureRuleList(ctx *gin.Context, uid int32) error {
+	if _, ok := s.cachedRules(uid); ok {
+		return nil
+	}
+	_, err := s.GetRuleList(ctx, uid)
+	return err
+}
+
 // 获得权限规则列表
 func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 	return s.cache.ReloadRules(uid, func() ([]Rule, []string, error) {
@@ -252,7 +285,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 
 		tx := s.sqlDB.Model(&AdminRule{}).Where("status=?", "1")
 		if !slices.Contains(ids, "*") {
-			tx.Where("id in ?", ids)
+			tx = tx.Where("id in ?", ids)
 		}
 		var ruleList []Rule
 		tx.Order("weigh desc,id asc").Scan(&ruleList)
@@ -264,9 +297,10 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 
 		seen := make(map[string]bool)
 		for _, v := range ruleList {
-			if _, ok := seen[v.Name]; !ok {
-				seen[v.Name] = true
-				ruleNameList = append(ruleNameList, v.Name)
+			name := strings.ToLower(v.Name)
+			if _, ok := seen[name]; !ok {
+				seen[name] = true
+				ruleNameList = append(ruleNameList, name)
 			}
 		}
 		return ruleList, ruleNameList, nil
