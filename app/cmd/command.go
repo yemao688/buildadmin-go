@@ -58,6 +58,24 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 			return command.crudH.Delete(cmd, args)
 		},
 	}
+	applyCmd := &cobra.Command{
+		Use:           "crud:apply [spec.yaml...]",
+		Short:         "将 spec 声明的表结构与菜单幂等应用到目标库（部署语义，alter 安全子集）",
+		Args:          cobra.ArbitraryArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := newCmd()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.crudH.Apply(cmd, args)
+		},
+	}
+	applyCmd.Flags().Bool("allow-rebuild", false, "allow dropping and recreating existing tables declared as type:create (data loss, disposable environments only)")
+	applyCmd.Flags().Bool("skip-menu", false, "skip menu sync")
+	applyCmd.Flags().Int32("admin-id", 1, "administrator ID recorded for adopted CRUD logs")
 	rootCmd.AddCommand(
 		&cobra.Command{
 			Use:   "example",
@@ -88,5 +106,6 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 		},
 		generateCmd,
 		deleteCmd,
+		applyCmd,
 	)
 }

@@ -35,9 +35,9 @@ type CrudLogModel struct {
 type JSON_TABLE Table
 
 func (j *JSON_TABLE) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("type assertion to []byte failed")
+	bytes, err := scanBytes(value)
+	if err != nil {
+		return err
 	}
 	return json.Unmarshal(bytes, j)
 }
@@ -50,11 +50,25 @@ func (j JSON_TABLE) Value() (driver.Value, error) {
 type JSON_FIELDS []Field
 
 func (j *JSON_FIELDS) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("type assertion to []byte failed")
+	bytes, err := scanBytes(value)
+	if err != nil {
+		return err
 	}
 	return json.Unmarshal(bytes, j)
+}
+
+// scanBytes 兼容 TEXT 列在不同驱动下的返回类型（MySQL 多为 []byte，sqlite 为 string）。
+func scanBytes(value interface{}) ([]byte, error) {
+	switch v := value.(type) {
+	case []byte:
+		return v, nil
+	case string:
+		return []byte(v), nil
+	case nil:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("cannot scan %T as JSON bytes", value)
+	}
 }
 
 func (j JSON_FIELDS) Value() (driver.Value, error) {

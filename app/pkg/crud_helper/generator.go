@@ -726,18 +726,23 @@ func containsPath(paths []string, target string) bool {
 	return false
 }
 
+// deriveAlterChanges 派生 alter 差量：缺失列 add-field，属性漂移 change-field-attr，
+// 完全一致的列不产生差量（保证 alter 与 crud:apply 的幂等性）。
 func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.ChangeField {
-	existing := make(map[string]bool, len(columns))
+	existing := make(map[string]model.Column, len(columns))
 	for _, column := range columns {
-		existing[strings.ToLower(column.COLUMN_NAME)] = true
+		existing[strings.ToLower(column.COLUMN_NAME)] = column
 	}
 	changes := make([]model.ChangeField, 0, len(fields))
 	for _, field := range fields {
-		changeType := "add-field"
-		if existing[strings.ToLower(field.Name)] {
-			changeType = "change-field-attr"
+		column, ok := existing[strings.ToLower(field.Name)]
+		if !ok {
+			changes = append(changes, model.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, Sync: true})
+			continue
 		}
-		changes = append(changes, model.ChangeField{Type: changeType, OldName: field.Name, NewName: field.Name, Sync: true})
+		if !specFieldMatchesColumn(field, column) {
+			changes = append(changes, model.ChangeField{Type: "change-field-attr", OldName: field.Name, NewName: field.Name, Sync: true})
+		}
 	}
 	return changes
 }

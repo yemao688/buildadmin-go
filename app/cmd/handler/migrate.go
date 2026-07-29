@@ -1,6 +1,7 @@
 package handler
 
 import (
+	helper "go-build-admin/app/pkg/crud_helper"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations"
 	"go-build-admin/service/db"
@@ -35,6 +36,20 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) {
 		cmd.Print(" (seeded)")
 	}
 	cmd.Println()
+	// 部署闭环第四阶段：crud_specs 存在时幂等应用业务表结构与菜单（alter 安全子集）
+	if dir := helper.DefaultSpecDir(); dir != "" {
+		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1})
+		if applyErr != nil {
+			cmd.Printf("CRUD apply error: %v\n", applyErr)
+			return
+		}
+		for _, result := range results {
+			if result.Action == helper.ApplyUnchanged {
+				continue
+			}
+			cmd.Printf("CRUD apply %-9s %s\n", string(result.Action), result.Table)
+		}
+	}
 }
 
 func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) {

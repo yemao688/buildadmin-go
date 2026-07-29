@@ -463,6 +463,38 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 
 不要添加 PHP `validateFile`、原始 Phinx `designChange`、plugin namespace、engine/charset/rowFormat 或任意 pass-through 属性。Go alter 根据当前 schema 和 fields 派生变更，不接受 raw migration 操作；Go 没有 PHP validator 文件，SQL 表属性使用固定实现。新属性必须进入明确的 model/spec contract 和测试。
 
+## 部署与 `crud:apply`（业务表结构同步）
+
+`crud:generate` 是开发工具（代码 + 开发库 DDL + 菜单）；`crud:apply` 是部署工具：把仓库里提交的 spec 幂等同步到任意目标库，**不写代码、不产生迁移文件**。spec 是业务表结构的唯一事实源。
+
+```bash
+go run ./cmd/app --conf config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
+go run ./cmd/app --conf config.yaml crud:apply crud_specs/<module>.yaml
+# flags: --allow-rebuild（仅限可丢弃环境） / --skip-menu / --admin-id
+```
+
+`migrate` 尾部会自动执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
+
+```bash
+git pull && go run ./cmd/app --conf config.yaml migrate        # 框架三轨道 + 业务表 apply
+```
+
+每个 spec 的应用语义：
+
+| 场景 | 动作 |
+| --- | --- |
+| 表不存在 | 按 spec 初始建表（安全，不是"重建"） |
+| 表已存在，无漂移 | `unchanged`，只同步表注释（幂等） |
+| 表已存在，属性漂移 | `altered`，只执行差量列（属性级比较：类型/长度/精度/可空/默认值/注释/unsigned/auto_increment） |
+| 主键漂移 | **拒绝**：alter 物理不支持主键变更，须手写 business 迁移（含回填）；可丢弃环境可 `--allow-rebuild` 删除重建 |
+
+关键约定：
+
+- **`type: create` 是生成时动词，不是稳态重建指令。** 仓库里停留在 `create` 的 spec 在已有表上同样幂等（无漂移即 unchanged）；apply 绝不因该字段隐式删表。
+- apply 同步菜单（按 `name` 去重，父目录按 views 路径段名称自动解析挂接）并把 spec adopt 成 `crud_log` success 记录（已存在则回写最新 payload），不触碰代码与迁移台账。
+- 列删除不在 alter 语义内（与生成一致：不出现在 spec 中的列保留不动）；确需删列请写 business 迁移。
+- 字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `migrate`（尾部 apply）→ 重启，全程无需手写 SQL。
+
 ## 生成失败排查清单
 
 生成或生成后行为不符合预期时，按此清单自查：

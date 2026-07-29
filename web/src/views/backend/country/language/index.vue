@@ -41,23 +41,23 @@ const optButtons: OptButton[] = defaultOptButtons(['weigh-sort', 'edit', 'delete
  * baTable 内包含了表格的所有数据且数据具备响应性，然后通过 provide 注入给了后代组件
  */
 const baTable = new baTableClass(
-    new baTableApi('/admin/countryLanguage/'),
+    new baTableApi('/admin/country.Language/'),
     {
         pk: 'id',
         column: [
             { type: 'selection', align: 'center', operator: false },
-            { label: t("country.language.id"), prop: "id", align: "center" },
-            { label: t("country.language.lan"), prop: "lan", align: "center" },
-            { label: t("country.language.name"), prop: "name", align: "center" },
-            { label: t("country.language.remark"), prop: "remark", align: "center" },
-            { label: t("country.language.status"), prop: "status", align: "center", replaceValue: { '0': t('country.language.status 0'), '1': t('country.language.status 1')} },
-            { label: t("country.language.weigh"), prop: "weigh", align: "center" },
-            { label: t('Operate'), align: 'center', width: 140, render: 'buttons', buttons: optButtons, operator: false },
+            { label: t("country.language.id"), prop: "id", align: "center", operator: "RANGE", sortable: "custom", width: 70 },
+            { label: t("country.language.lan"), prop: "lan", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.language.name"), prop: "name", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.language.remark"), prop: "remark", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.language.status"), prop: "status", align: "center", operator: "RANGE", sortable: false, replaceValue: { "0": t('country.language.status 0'), "1": t('country.language.status 1')} },
+            { label: t("country.language.weigh"), prop: "weigh", align: "center", operator: "RANGE", sortable: "custom" },
+            { label: t('Operate'), align: 'center', width: 140, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false },
         ],
         dblClickNotEditColumn: [undefined],
     },
     {
-        defaultItems: {status:1,weigh:0},
+        defaultItems: {status:1},
     }
 )
 

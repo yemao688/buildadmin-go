@@ -7,7 +7,7 @@
         :close-on-click-modal="false"
         :model-value="['Add', 'Edit'].includes(baTable.form.operate!)"
         @close="baTable.toggleForm"
-        width="520px"
+        width="50%"
     >
         <template #header>
             <div class="title" v-drag="['.ba-operate-dialog', '.el-dialog__header']" v-zoom="'.ba-operate-dialog'">
@@ -18,7 +18,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     v-if="!baTable.form.loading"
@@ -30,80 +30,12 @@
                     :label-width="baTable.form.labelWidth + 'px'"
                     :rules="rules"
                 >
-                    <FormItem
-                        :label="t('country.currency.code')"
-                        type="string"
-                        v-model="baTable.form.items!.code"
-                        prop="code"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.code'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.currency.name')"
-                        type="string"
-                        v-model="baTable.form.items!.name"
-                        prop="name"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.name'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.currency.symbol')"
-                        type="string"
-                        v-model="baTable.form.items!.symbol"
-                        prop="symbol"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.symbol'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.currency.rate')"
-                        type="number"
-                        v-model.number="baTable.form.items!.rate"
-                        prop="rate"
-                        :input-attr="{ step: 0.0001, min: 0 }"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.rate'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.currency.status')"
-                        type="number"
-                        v-model.number="baTable.form.items!.status"
-                        prop="status"
-                        :data="{
-                            content: {
-                                '0': t('country.currency.status 0'),
-                                '1': t('country.currency.status 1'),
-                            },
-                        }"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.status'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.currency.weigh')"
-                        type="number"
-                        v-model.number="baTable.form.items!.weigh"
-                        prop="weigh"
-                        :input-attr="{ step: 1 }"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.currency.weigh'),
-                            })
-                        "
-                    />
+                    <FormItem :label="t('country.currency.code')" type="string" v-model="baTable.form.items!.code" prop="code" :placeholder="t('Please input field', { field: t('country.currency.code') })" />
+                    <FormItem :label="t('country.currency.name')" type="string" v-model="baTable.form.items!.name" prop="name" :placeholder="t('Please input field', { field: t('country.currency.name') })" />
+                    <FormItem :label="t('country.currency.symbol')" type="string" v-model="baTable.form.items!.symbol" prop="symbol" :placeholder="t('Please input field', { field: t('country.currency.symbol') })" />
+                    <FormItem :label="t('country.currency.rate')" type="number" v-model.number="baTable.form.items!.rate" prop="rate" :input-attr="{ step: 1 }" :placeholder="t('Please input field', { field: t('country.currency.rate') })" />
+                    <FormItem :label="t('country.currency.status')" type="number" v-model.number="baTable.form.items!.status" prop="status" :data="{ content: { '0': t('country.currency.status 0'), '1': t('country.currency.status 1') } }" :placeholder="t('Please input field', { field: t('country.currency.status') })" />
+                    <FormItem :label="t('country.currency.weigh')" type="number" v-model.number="baTable.form.items!.weigh" prop="weigh" :input-attr="{ step: 1 }" :placeholder="t('Please input field', { field: t('country.currency.weigh') })" />
                 </el-form>
             </div>
         </el-scrollbar>
@@ -133,13 +65,10 @@ const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
 
-const rules: Partial<Record<string, FormItemRule[]>> = reactive({})
+const rules: Partial<Record<string, FormItemRule[]>> = reactive({
+    rate: [buildValidatorData({ name: "number", title: t("country.currency.rate") })],
+    status: [buildValidatorData({ name: "number", title: t("country.currency.status") })],
+})
 </script>
 
-<style scoped lang="scss">
-@media screen and (max-width: 600px) {
-    :global(.ba-operate-dialog) {
-        width: calc(100% - 24px) !important;
-    }
-}
-</style>
+<style scoped lang="scss"></style>

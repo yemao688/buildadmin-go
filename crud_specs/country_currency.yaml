@@ -1,9 +1,12 @@
 name: country_currency
 comment: 全局货币
 type: alter
+generateRelativePath: country.currency
 dataScope:
   mode: none
 quickSearchField: [code, name]
+menu:
+  title: 货币管理
 fields:
   - name: id
     type: bigint

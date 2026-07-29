@@ -6,6 +6,8 @@
 package main
 
 import (
+	countryHandler "go-build-admin/app/admin/handler/country"
+	countryModel "go-build-admin/app/admin/model/country"
 	"go-build-admin/conf"
 
 	adminHandler "go-build-admin/app/admin/handler"
@@ -38,7 +40,9 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		middleware.ProviderSet,
 		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
+		countryHandler.ProviderSet,
 		adminModel.ProviderSet,
+		countryModel.ProviderSet,
 		wire.Bind(new(terminal.AuthModel), new(*adminModel.AuthModel)),
 		apiHandler.ProviderSet,
 

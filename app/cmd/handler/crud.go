@@ -54,6 +54,39 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
+	opts := helper.ApplyOptions{AdminID: 1}
+	opts.AllowRebuild, _ = cmd.Flags().GetBool("allow-rebuild")
+	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
+	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
+	var results []helper.ApplyTableResult
+	var err error
+	if len(args) == 0 {
+		dir := helper.DefaultSpecDir()
+		if dir == "" {
+			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply <spec.yaml...>")
+		}
+		results, err = helper.ApplySpecsFromDir(h.db, h.config, dir, opts)
+	} else {
+		results, err = helper.ApplySpecs(h.db, h.config, args, opts)
+	}
+	if err != nil {
+		return fmt.Errorf("CRUD apply error: %w", err)
+	}
+	if len(results) == 0 {
+		cmd.Println("CRUD apply: no specs found, nothing to do")
+		return nil
+	}
+	for _, result := range results {
+		line := fmt.Sprintf("CRUD apply %-9s %s (log id: %d)", string(result.Action), result.Table, result.LogID)
+		if len(result.Changes) > 0 {
+			line += ": " + strings.Join(result.Changes, ", ")
+		}
+		cmd.Println(line)
+	}
+	return nil
+}
+
 func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: crud:delete <tableName>")

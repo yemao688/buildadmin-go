@@ -31,11 +31,15 @@ func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
 }
 
 func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
-	path := filepath.Join(utils.RootPath(), "app", "admin", "handler", "country_language_route.go")
+	path := filepath.Join(utils.RootPath(), "app", "admin", "handler", "country", "language_route.go")
 	content, err := render(path, registrarTemp, RegistrarData{
-		Namespace: "handler",
-		ClassName: "CountryLanguage",
-		RouteName: "countryLanguage",
+		Namespace:            "country",
+		ClassName:            "Language",
+		RouteName:            "language",
+		RoutePath:            "country.Language",
+		BaseHandlerQualifier: "adminhandler.",
+		BaseHandlerAlias:     "adminhandler",
+		BaseHandlerImport:    "go-build-admin/app/admin/handler",
 	})
 	if err != nil {
 		t.Fatal(err)

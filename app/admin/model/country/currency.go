@@ -1,16 +1,19 @@
-package model
+package country
 
 import (
 	"fmt"
-	"go-build-admin/app/pkg/data_scope"
+
+	adminmodel "go-build-admin/app/admin/model"
 	"go-build-admin/conf"
+
+	"go-build-admin/app/pkg/data_scope"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// CountryCurrency 全局货币
-type CountryCurrency struct {
+// Currency 全局货币
+type Currency struct {
 	ID     int64   `gorm:"column:id;primaryKey;autoIncrement:true;comment:主键" json:"id"`        // 主键
 	Code   string  `gorm:"column:code;not null;comment:货币代码" json:"code"`                       // 货币代码
 	Name   string  `gorm:"column:name;not null;comment:货币名称" json:"name"`                       // 货币名称
@@ -20,34 +23,40 @@ type CountryCurrency struct {
 	Weigh  int32   `gorm:"column:weigh;not null;comment:权重" json:"weigh"`                       // 权重
 }
 
-type CountryCurrencyModel struct {
-	BaseModel
+type CurrencyModel struct {
+	adminmodel.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
+	config   *conf.Configuration
 }
 
-func NewCountryCurrencyModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryCurrencyModel {
-	return &CountryCurrencyModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "country_currency",
-			Key:              "id",
-			QuickSearchField: "code,name,id",
-			sqlDB:            sqlDB,
-		},
+func (s *CurrencyModel) NewRow() any {
+	return &Currency{}
+}
+
+func NewCurrencyModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CurrencyModel {
+	return &CurrencyModel{
+		BaseModel: adminmodel.NewBaseModel(
+			config.Database.Prefix+"country_currency",
+			"id",
+			"code,name,id",
+			sqlDB,
+		),
 		Policy: data_scope.ResourcePolicy{
 			Mode:           "none",
 			OwnerColumn:    "",
 			AssignOnCreate: false,
 		},
 		Enforcer: enforcer,
+		config:   config,
 	}
 }
 
-func (s *CountryCurrencyModel) scopedDB(ctx *gin.Context) *gorm.DB {
+func (s *CurrencyModel) scopedDB(ctx *gin.Context) *gorm.DB {
 	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
-func (s *CountryCurrencyModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CurrencyModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -60,19 +69,19 @@ func (s *CountryCurrencyModel) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *CountryCurrencyModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CurrencyModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *CountryCurrencyModel) GetOne(ctx *gin.Context, id int64) (countryCurrency CountryCurrency, err error) {
+func (s *CurrencyModel) GetOne(ctx *gin.Context, id int64) (currency Currency, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
-	err = db.Where("id=?", id).First(&countryCurrency).Error
+	err = db.Where("id=?", id).First(&currency).Error
 	return
 }
 
-func (s *CountryCurrencyModel) List(ctx *gin.Context) (list []CountryCurrency, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+func (s *CurrencyModel) List(ctx *gin.Context) (list []Currency, total int64, err error) {
+	whereS, whereP, orderS, limit, offset, err := adminmodel.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -89,7 +98,7 @@ func (s *CountryCurrencyModel) List(ctx *gin.Context) (list []CountryCurrency, t
 	return
 }
 
-func (s *CountryCurrencyModel) Add(ctx *gin.Context, countryCurrency CountryCurrency) error {
+func (s *CurrencyModel) Add(ctx *gin.Context, currency Currency) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -100,20 +109,21 @@ func (s *CountryCurrencyModel) Add(ctx *gin.Context, countryCurrency CountryCurr
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := tx.Table(s.TableName).Create(&countryCurrency).Error; err != nil {
+
+		if err := tx.Table(s.TableName).Create(&currency).Error; err != nil {
 			return err
 		}
-		if countryCurrency.Weigh == 0 {
-			if err := tx.Table(s.TableName).Where("id = ?", countryCurrency.ID).Update("weigh", countryCurrency.ID).Error; err != nil {
+		if currency.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("id = ?", currency.ID).Update("weigh", currency.ID).Error; err != nil {
 				return err
 			}
-			countryCurrency.Weigh = int32(countryCurrency.ID)
+			currency.Weigh = int32(currency.ID)
 		}
 		return nil
 	})
 }
 
-func (s *CountryCurrencyModel) Edit(ctx *gin.Context, countryCurrency CountryCurrency) error {
+func (s *CurrencyModel) Edit(ctx *gin.Context, currency Currency) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -126,19 +136,30 @@ func (s *CountryCurrencyModel) Edit(ctx *gin.Context, countryCurrency CountryCur
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
 
-		res := tx.Table(s.TableName).Model(&countryCurrency).Where("id = ?", countryCurrency.ID).Select("code", "name", "symbol", "rate", "status", "weigh").Updates(&countryCurrency)
+		res := tx.Table(s.TableName).Model(&currency).Where("id = ?", currency.ID).Select("code", "name", "symbol", "rate", "status", "weigh").Updates(&currency)
 		if err := res.Error; err != nil {
 			return err
 		}
-		if res.RowsAffected != 1 {
+		switch res.RowsAffected {
+		case 1:
+			return nil
+		case 0:
+			var visible int64
+			if err := tx.Table(s.TableName).Model(&Currency{}).Where("id = ?", currency.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
 			return gorm.ErrRecordNotFound
+		default:
+			return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)
 		}
-		return nil
 	})
 }
 
-func (s *CountryCurrencyModel) Del(ctx *gin.Context, ids interface{}) error {
-	normalizedIDs, err := normalizeCountryCurrencyIDs(ids)
+func (s *CurrencyModel) Del(ctx *gin.Context, ids interface{}) error {
+	normalizedIDs, err := normalizeCurrencyIDs(ids)
 	if err != nil {
 		return err
 	}
@@ -150,14 +171,14 @@ func (s *CountryCurrencyModel) Del(ctx *gin.Context, ids interface{}) error {
 		tx = s.scopeDB(ctx, tx)
 
 		var visible int64
-		if err := tx.Table(s.TableName).Model(&CountryCurrency{}).Where("id IN ?", normalizedIDs).Count(&visible).Error; err != nil {
+		if err := tx.Table(s.TableName).Model(&Currency{}).Where("id IN ?", normalizedIDs).Count(&visible).Error; err != nil {
 			return err
 		}
 		if visible != int64(len(normalizedIDs)) {
 			return gorm.ErrRecordNotFound
 		}
 
-		res := tx.Table(s.TableName).Where("id IN ?", normalizedIDs).Delete(&CountryCurrency{})
+		res := tx.Table(s.TableName).Where("id IN ?", normalizedIDs).Delete(&Currency{})
 		if err := res.Error; err != nil {
 			return err
 		}
@@ -168,7 +189,7 @@ func (s *CountryCurrencyModel) Del(ctx *gin.Context, ids interface{}) error {
 	})
 }
 
-func normalizeCountryCurrencyIDs(ids interface{}) ([]int64, error) {
+func normalizeCurrencyIDs(ids interface{}) ([]int64, error) {
 	raw, ok := ids.([]int64)
 	if !ok {
 		return nil, fmt.Errorf("invalid id ids type %T", ids)

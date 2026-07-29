@@ -2,14 +2,12 @@ package router
 
 import (
 	admin "go-build-admin/app/admin/handler"
+	country "go-build-admin/app/admin/handler/country"
 	api "go-build-admin/app/api/handler"
 )
 
 // ProvideRegistrars 聚合全部模块 registrar。CRUD 生成器只在这里追加参数与条目。
 func ProvideRegistrars(
-	countryLanguage *admin.CountryLanguageRegistrar,
-	countryCurrency *admin.CountryCurrencyRegistrar,
-	countryLanguageContent *admin.CountryLanguageContentRegistrar,
 	crudLog *admin.CrudLogRegistrar,
 	module *admin.ModuleRegistrar,
 	testBuild *admin.TestBuildRegistrar,
@@ -37,11 +35,11 @@ func ProvideRegistrars(
 	apiIndex *api.IndexRegistrar,
 	apiUser *api.UserRegistrar,
 	apiDemo *api.DemoRegistrar,
+	countryCurrencyRegistrar *country.CurrencyRegistrar,
+	countryLanguageRegistrar *country.LanguageRegistrar,
+	countryLanguageContentRegistrar *country.LanguageContentRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
-		countryLanguage,
-		countryCurrency,
-		countryLanguageContent,
 		crudLog,
 		module,
 		testBuild,
@@ -69,5 +67,8 @@ func ProvideRegistrars(
 		apiIndex,
 		apiUser,
 		apiDemo,
+		countryCurrencyRegistrar,
+		countryLanguageRegistrar,
+		countryLanguageContentRegistrar,
 	}
 }

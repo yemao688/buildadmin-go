@@ -7,7 +7,7 @@
         :close-on-click-modal="false"
         :model-value="['Add', 'Edit'].includes(baTable.form.operate!)"
         @close="baTable.toggleForm"
-        width="520px"
+        width="50%"
     >
         <template #header>
             <div class="title" v-drag="['.ba-operate-dialog', '.el-dialog__header']" v-zoom="'.ba-operate-dialog'">
@@ -18,7 +18,7 @@
             <div
                 class="ba-operate-form"
                 :class="'ba-' + baTable.form.operate + '-form'"
-                :style="config.layout.shrink ? '' : 'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
+                :style="config.layout.shrink ? '':'width: calc(100% - ' + baTable.form.labelWidth! / 2 + 'px)'"
             >
                 <el-form
                     v-if="!baTable.form.loading"
@@ -30,68 +30,11 @@
                     :label-width="baTable.form.labelWidth + 'px'"
                     :rules="rules"
                 >
-                    <FormItem
-                        :label="t('country.language.lan')"
-                        type="string"
-                        v-model="baTable.form.items!.lan"
-                        prop="lan"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.language.lan'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.language.name')"
-                        type="string"
-                        v-model="baTable.form.items!.name"
-                        prop="name"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.language.name'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.language.remark')"
-                        type="string"
-                        v-model="baTable.form.items!.remark"
-                        prop="remark"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.language.remark'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.language.status')"
-                        type="number"
-                        v-model.number="baTable.form.items!.status"
-                        prop="status"
-                        :data="{
-                            content: {
-                                '1': t('country.language.status 1'),
-                                '0': t('country.language.status 0'),
-                            },
-                        }"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.language.status'),
-                            })
-                        "
-                    />
-                    <FormItem
-                        :label="t('country.language.weigh')"
-                        type="number"
-                        v-model.number="baTable.form.items!.weigh"
-                        prop="weigh"
-                        :input-attr="{ step: 1 }"
-                        :placeholder="
-                            t('Please input field', {
-                                field: t('country.language.weigh'),
-                            })
-                        "
-                    />
+                    <FormItem :label="t('country.language.lan')" type="string" v-model="baTable.form.items!.lan" prop="lan" :placeholder="t('Please input field', { field: t('country.language.lan') })" />
+                    <FormItem :label="t('country.language.name')" type="string" v-model="baTable.form.items!.name" prop="name" :placeholder="t('Please input field', { field: t('country.language.name') })" />
+                    <FormItem :label="t('country.language.remark')" type="string" v-model="baTable.form.items!.remark" prop="remark" :placeholder="t('Please input field', { field: t('country.language.remark') })" />
+                    <FormItem :label="t('country.language.status')" type="number" v-model.number="baTable.form.items!.status" prop="status" :data="{ content: { '0': t('country.language.status 0'), '1': t('country.language.status 1') } }" :placeholder="t('Please input field', { field: t('country.language.status') })" />
+                    <FormItem :label="t('country.language.weigh')" type="number" v-model.number="baTable.form.items!.weigh" prop="weigh" :input-attr="{ step: 1 }" :placeholder="t('Please input field', { field: t('country.language.weigh') })" />
                 </el-form>
             </div>
         </el-scrollbar>
@@ -121,13 +64,9 @@ const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
 
-const rules: Partial<Record<string, FormItemRule[]>> = reactive({})
+const rules: Partial<Record<string, FormItemRule[]>> = reactive({
+    status: [buildValidatorData({ name: "number", title: t("country.language.status") })],
+})
 </script>
 
-<style scoped lang="scss">
-@media screen and (max-width: 600px) {
-    :global(.ba-operate-dialog) {
-        width: calc(100% - 24px) !important;
-    }
-}
-</style>
+<style scoped lang="scss"></style>

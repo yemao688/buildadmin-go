@@ -41,18 +41,18 @@ const optButtons: OptButton[] = defaultOptButtons(['edit', 'delete'])
  * baTable 内包含了表格的所有数据且数据具备响应性，然后通过 provide 注入给了后代组件
  */
 const baTable = new baTableClass(
-    new baTableApi('/admin/countryLanguageContent/'),
+    new baTableApi('/admin/country.LanguageContent/'),
     {
         pk: 'id',
         column: [
             { type: 'selection', align: 'center', operator: false },
-            { label: t("country.languageContent.id"), prop: "id", align: "center" },
-            { label: t("country.languageContent.lan"), prop: "lan", align: "center" },
-            { label: t("country.languageContent.group"), prop: "group", align: "center" },
-            { label: t("country.languageContent.key"), prop: "key", align: "center" },
-            { label: t("country.languageContent.type"), prop: "type", align: "center", replaceValue: { '0': t('country.languageContent.type 0'), '1': t('country.languageContent.type 1'), '2': t('country.languageContent.type 2')} },
-            { label: t("country.languageContent.value"), prop: "value", align: "center" },
-            { label: t('Operate'), align: 'center', width: 100, render: 'buttons', buttons: optButtons, operator: false },
+            { label: t("country.languageContent.id"), prop: "id", align: "center", operator: "RANGE", sortable: "custom", width: 70 },
+            { label: t("country.languageContent.lan"), prop: "lan", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.languageContent.group"), prop: "group", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.languageContent.key"), prop: "key", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
+            { label: t("country.languageContent.type"), prop: "type", align: "center", operator: "RANGE", sortable: false, replaceValue: { "0": t('country.languageContent.type 0'), "1": t('country.languageContent.type 1'), "2": t('country.languageContent.type 2')} },
+            { label: t("country.languageContent.value"), prop: "value", align: "center", operator: false },
+            { label: t('Operate'), align: 'center', width: 100, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false },
         ],
         dblClickNotEditColumn: [undefined],
     },
