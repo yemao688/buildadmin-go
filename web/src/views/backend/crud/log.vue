@@ -49,7 +49,7 @@
                 <template #tableName>
                     <el-table-column :show-overflow-tooltip="true" prop="table_name" align="center" :label="t('crud.log.table_name')">
                         <template #default="scope">
-                            {{ (scope.row.table.databaseConnection ? scope.row.table.databaseConnection + '.' : '') + scope.row.table.name }}
+                            {{ scope.row.table.name }}
                         </template>
                     </el-table-column>
                 </template>
@@ -190,7 +190,7 @@
                 <el-table-column type="selection" align="center" />
                 <el-table-column :show-overflow-tooltip="true" align="center" :label="t('crud.log.table_name')">
                     <template #default="scope">
-                        {{ (scope.row.table.databaseConnection ? scope.row.table.databaseConnection + '.' : '') + scope.row.table.name }}
+                        {{ scope.row.table.name }}
                     </template>
                 </el-table-column>
                 <el-table-column prop="comment" :label="t('crud.log.comment')" align="center" show-overflow-tooltip />

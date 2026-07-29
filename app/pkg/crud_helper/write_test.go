@@ -172,6 +172,36 @@ func TestRemoveRegistrarProviderEntryShapesRemainParseable(t *testing.T) {
 	}
 }
 
+func TestRemoveRegistrarProviderEntrySubpackageKeepsRootSameName(t *testing.T) {
+	content := "package router\n\nimport (\n\tadmin \"go-build-admin/app/admin/handler\"\n\torder \"go-build-admin/app/admin/handler/order\"\n)\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(\n\tuser *admin.UserRegistrar,\n\torderUserRegistrar *order.UserRegistrar,\n) []RouteRegistrar {\n\treturn []RouteRegistrar{\n\t\tuser,\n\t\torderUserRegistrar,\n\t}\n}\n"
+
+	// 删除子包 User：根包 user 参数与条目必须保留，子包条目与 import 一并移除
+	removed, err := removeRegistrarProviderEntry(content, "User", "app/admin/handler/order")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertParseableGo(t, "registrar_set.go", removed)
+	if !strings.Contains(removed, "user *admin.UserRegistrar,") || !strings.Contains(removed, "\t\tuser,\n") {
+		t.Fatalf("root user registrar must be kept when deleting subpackage User:\n%s", removed)
+	}
+	if strings.Contains(removed, "orderUserRegistrar") || strings.Contains(removed, "handler/order") {
+		t.Fatalf("subpackage registrar/import not fully removed:\n%s", removed)
+	}
+
+	// 删除根包 User：子包条目必须保留
+	removedRoot, err := removeRegistrarProviderEntry(content, "User", "app/admin/handler")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertParseableGo(t, "registrar_set.go", removedRoot)
+	if !strings.Contains(removedRoot, "orderUserRegistrar *order.UserRegistrar,") || !strings.Contains(removedRoot, "\t\torderUserRegistrar,\n") {
+		t.Fatalf("subpackage registrar must be kept when deleting root User:\n%s", removedRoot)
+	}
+	if strings.Contains(removedRoot, "user *admin.UserRegistrar") {
+		t.Fatalf("root user registrar not removed:\n%s", removedRoot)
+	}
+}
+
 func TestRegistrarProviderEntrySubpackageRoundTrip(t *testing.T) {
 	path := filepath.Join(utils.RootPath(), "router", "registrar_set.go")
 	original, err := os.ReadFile(path)

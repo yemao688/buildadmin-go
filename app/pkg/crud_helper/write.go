@@ -519,9 +519,13 @@ func RemoveRegistrarProvider(name string, handlerRoot string) error {
 }
 
 // removeRegistrarProviderEntry 按整行移除 registrar 参数与返回值条目。
-// 变量名兼容包前缀写法与历史裸类名写法；子包 import 在无引用时一并移除。
+// 类型按包限定符精确匹配（*order.UserRegistrar 与 *admin.UserRegistrar 是不同模块），
+// 返回条目只移除实际命中参数的变量；子包 import 在无引用时一并移除。
 func removeRegistrarProviderEntry(content, name string, handlerRoot string) (string, error) {
 	registrarType := name + "Registrar"
+	importPath, preferred, isSub := handlerImportRef(handlerRoot)
+	alias, _ := resolveImportAlias(content, importPath, preferred, preferred)
+	qualifiedType := alias + "." + registrarType
 	varCandidates := registrarVarCandidates(name, handlerRoot)
 	isVar := func(value string) bool {
 		return slices.Contains(varCandidates, value)
@@ -532,22 +536,26 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 		return "", err
 	}
 	var removals []sourceRemoval
+	matchedVars := map[string]bool{}
 	ast.Inspect(file, func(node ast.Node) bool {
 		function, ok := node.(*ast.FuncDecl)
 		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Type.Params == nil {
 			return true
 		}
 		matchField := func(field *ast.Field) bool {
-			return len(field.Names) == 1 && isVar(field.Names[0].Name) && strings.Contains(formatNodeText(fset, field, content), registrarType)
+			return len(field.Names) == 1 && isVar(field.Names[0].Name) && strings.Contains(formatNodeText(fset, field, content), qualifiedType)
 		}
 		params := make([]ast.Node, 0, len(function.Type.Params.List))
+		removed := false
 		for _, field := range function.Type.Params.List {
 			if matchField(field) {
+				matchedVars[field.Names[0].Name] = true
+				removed = true
 				continue
 			}
 			params = append(params, field)
 		}
-		if len(params) != len(function.Type.Params.List) {
+		if removed {
 			removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
 				field, ok := node.(*ast.Field)
 				return ok && matchField(field)
@@ -562,7 +570,7 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 		}
 		removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
 			ident, ok := node.(*ast.Ident)
-			return ok && isVar(ident.Name)
+			return ok && matchedVars[ident.Name]
 		})...)
 		return true
 	})
@@ -570,11 +578,10 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 		return content, nil
 	}
 	content = applySourceRemovals(content, removals)
-	importPath, _, isSub := handlerImportRef(handlerRoot)
 	if isSub {
 		_, pathToAlias := collectImports(content)
-		if alias, ok := pathToAlias[importPath]; ok {
-			content = removeImportLineIfUnused(content, alias, importPath)
+		if actual, ok := pathToAlias[importPath]; ok {
+			content = removeImportLineIfUnused(content, actual, importPath)
 		}
 	}
 	formatted, err := formatGoCode(content)
