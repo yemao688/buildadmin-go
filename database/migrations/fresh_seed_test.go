@@ -33,6 +33,8 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	})
 	require.NoError(t, BootstrapOfficialLedger(db, cfg))
 	require.NoError(t, MarkSeedPending(db, cfg))
+	_, err = RunOfficialMigrations(db, cfg, OfficialMigrations())
+	require.NoError(t, err)
 	require.NoError(t, db.Exec("INSERT INTO `"+tableName(cfg, "security_data_recycle")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (1,0,'会员','user/User.php','auth/user','user','id'),(5,0,'会员','user/User.php','user/user','user','id')").Error)
 	require.NoError(t, db.Exec("INSERT INTO `"+tableName(cfg, "security_sensitive_data")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (1,0,'会员数据','user/User.php','auth/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\",\"password\":\"密码\"}'),(2,0,'会员数据','user/User.php','user/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\"}')").Error)
 	lockName := fmt.Sprintf("fresh-seed-%d", os.Getpid())
@@ -42,15 +44,18 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	require.False(t, pending)
 	var baselineRows int64
 	require.NoError(t, db.Table(tableName(cfg, "admin")).Count(&baselineRows).Error)
-	require.Zero(t, baselineRows)
+	require.Equal(t, int64(1), baselineRows)
 	require.NoError(t, db.Table(tableName(cfg, "security_data_recycle")).Count(&baselineRows).Error)
-	require.Equal(t, int64(2), baselineRows)
+	require.Equal(t, int64(6), baselineRows)
 	require.NoError(t, db.Table(tableName(cfg, "security_sensitive_data")).Count(&baselineRows).Error)
-	require.Equal(t, int64(2), baselineRows)
+	require.Equal(t, int64(3), baselineRows)
 	require.NoError(t, WithMigrationLock(db, lockName, time.Second, func(pinned *gorm.DB) error { return RunOfficialFreshSeed(pinned, cfg) }))
 	pending, err = SeedPending(db, cfg)
 	require.NoError(t, err)
 	require.False(t, pending)
+	require.NoError(t, BootstrapLocalLedger(db, cfg))
+	_, err = RunLocalMigrations(db, cfg, OfficialMigrations(), LocalMigrations())
+	require.NoError(t, err)
 	queryDB := func() *gorm.DB { return db.Session(&gorm.Session{NewDB: true}) }
 	require.NoError(t, queryDB().Table(tableName(cfg, "security_data_recycle")).Where("id=1").Count(&baselineRows).Error)
 	require.Zero(t, baselineRows)
@@ -82,6 +87,7 @@ func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
 	// A current snapshot with empty security rule rows is a valid upgrade state.
 	require.NoError(t, LocalMigrations()[3].VerifyUpgradeData(db.Session(&gorm.Session{NewDB: true}), cfg))
 	require.NoError(t, NewInstall(db).InsertData())
+	require.NoError(t, LocalMigrations()[1].Up(db, cfg))
 	type recycleRow struct {
 		ID, AdminID                                    int32
 		Name, Controller, Route, DataTable, PrimaryKey string

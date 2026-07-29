@@ -5,10 +5,12 @@ import (
 	"os"
 	"testing"
 
-	"go-build-admin/conf"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/conf"
+	"go-build-admin/database/migrations/internal/core"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func TestInstallRecoveryDecisionFourStates(t *testing.T) {
@@ -36,7 +38,8 @@ func TestInstallRecoveryDecisionFourStates(t *testing.T) {
 		{"snapshot_complete_pending", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			require.NoError(t, MarkSeedPending(db, cfg))
-			require.NoError(t, db.Exec("CREATE TABLE `"+tableName(cfg, "admin")+"` (id INT PRIMARY KEY)").Error)
+			db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
+			require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...))
 		}, InstallInterrupted, false},
 		{"ordinary_upgrade", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
 			require.NoError(t, db.Exec("CREATE TABLE `"+tableName(cfg, "admin")+"` (id INT PRIMARY KEY)").Error)
