@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	"go-build-admin/internal/advisorylock"
+	"go-build-admin/app/pkg/advisorylock"
 	"os"
 	"testing"
 	"time"

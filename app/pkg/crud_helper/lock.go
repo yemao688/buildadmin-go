@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"go-build-admin/app/pkg/advisorylock"
 	"go-build-admin/conf"
-	"go-build-admin/internal/advisorylock"
 	"sync"
 	"time"
 

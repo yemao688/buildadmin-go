@@ -3,9 +3,9 @@ package model
 import (
 	"errors"
 	"fmt"
-	"go-build-admin/app/internal/permissioncache"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/permissioncache"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/systemroot"
 	"go-build-admin/conf"
