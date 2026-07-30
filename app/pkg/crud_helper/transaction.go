@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
@@ -16,7 +16,7 @@ type FileManifest struct {
 // BuildFileManifest returns every known CRUD output plus the shared files that
 // Wire/provider updates can modify. DDL is intentionally not part of this
 // transaction: MySQL DDL cannot be rolled back reliably.
-func BuildFileManifest(table model.Table) (FileManifest, error) {
+func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 	if err := normalizeTableConfiguration(&table); err != nil {
 		return FileManifest{}, err
 	}
@@ -67,7 +67,7 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 	return normalizeFileManifest(manifest)
 }
 
-func BuildFileManifestForFields(table model.Table, fields []model.Field) (FileManifest, error) {
+func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field) (FileManifest, error) {
 	manifest, err := BuildFileManifest(table)
 	if err != nil {
 		return FileManifest{}, err

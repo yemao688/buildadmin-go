@@ -1,4 +1,4 @@
-package model
+package user
 
 import (
 	"fmt"
@@ -36,14 +36,9 @@ type UserScoreLogModel struct {
 
 func NewUserScoreLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserScoreLogModel {
 	return &UserScoreLogModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "user_score_log",
-			Key:              "id",
-			QuickSearchField: "user.username,user.nickname",
-			sqlDB:            sqlDB,
-		},
-		config:   config,
-		enforcer: enforcer,
+		BaseModel: NewBaseModel(config.Database.Prefix+"user_score_log", "id", "user.username,user.nickname", sqlDB),
+		config:    config,
+		enforcer:  enforcer,
 	}
 }
 
@@ -74,7 +69,7 @@ func (s *UserScoreLogModel) userJoin() string {
 
 func (s *UserScoreLogModel) GetOne(ctx *gin.Context, id int32) (UserScoreLog, error) {
 	data := UserScoreLog{}
-	err := s.sqlDB.Model(&UserScoreLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
+	err := s.DB().Model(&UserScoreLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
 	return data, err
 }
 
@@ -83,7 +78,7 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&UserScoreLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
+	db := s.DB().Model(&UserScoreLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
 	db = db.Scopes(s.scoped(ctx))
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -105,7 +100,7 @@ func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog *UserScoreLog) er
 		return err
 	}
 
-	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+	return s.DB().Transaction(func(tx *gorm.DB) error {
 		var user User
 		if err := tx.Model(&User{}).Scopes(s.userScope(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userScoreLog.UserID).Take(&user).Error; err != nil {
 			return err
@@ -156,7 +151,7 @@ func (s *UserScoreLogModel) Del(ctx *gin.Context, ids interface{}) error {
 			normalized = append(normalized, id)
 		}
 	}
-	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+	return s.DB().Transaction(func(tx *gorm.DB) error {
 		var list []UserScoreLog
 		scoped := tx.Model(&UserScoreLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where(quote(s.TableName)+".id IN ?", normalized).Find(&list).Error; err != nil {

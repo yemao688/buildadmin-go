@@ -1,4 +1,4 @@
-package handler
+package crud
 
 import (
 	"bytes"

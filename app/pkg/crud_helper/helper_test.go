@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	"go/format"
 	"go/parser"
@@ -125,37 +126,37 @@ func TestGetDictData(t *testing.T) {
 func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
 	tests := []struct {
 		name       string
-		field      model.Field
+		field      crudmodel.Field
 		wantKeys   []string
 		wantLabels []string
 	}{
 		{
 			name:       "radio comment dictionary",
-			field:      model.Field{Name: "visibility", Type: "enum", DataType: "enum('opt0','opt1')", DesignType: "radio", Comment: "单选框:opt0=选项一,opt1=选项二"},
+			field:      crudmodel.Field{Name: "visibility", Type: "enum", DataType: "enum('opt0','opt1')", DesignType: "radio", Comment: "单选框:opt0=选项一,opt1=选项二"},
 			wantKeys:   []string{"opt0", "opt1"},
 			wantLabels: []string{"选项一", "选项二"},
 		},
 		{
 			name:       "select aligned enum",
-			field:      model.Field{Name: "category", Type: "enum", DataType: "enum('tab','link')", DesignType: "select", Comment: "类型:tab=选项卡,link=链接"},
+			field:      crudmodel.Field{Name: "category", Type: "enum", DataType: "enum('tab','link')", DesignType: "select", Comment: "类型:tab=选项卡,link=链接"},
 			wantKeys:   []string{"tab", "link"},
 			wantLabels: []string{"选项卡", "链接"},
 		},
 		{
 			name:       "checkbox set",
-			field:      model.Field{Name: "features", Type: "set", DataType: "set('feature_a','feature_b')", DesignType: "checkbox", Comment: "功能:feature_a=功能一,feature_b=功能二"},
+			field:      crudmodel.Field{Name: "features", Type: "set", DataType: "set('feature_a','feature_b')", DesignType: "checkbox", Comment: "功能:feature_a=功能一,feature_b=功能二"},
 			wantKeys:   []string{"feature_a", "feature_b"},
 			wantLabels: []string{"功能一", "功能二"},
 		},
 		{
 			name:       "selects set",
-			field:      model.Field{Name: "categories", Type: "set", DataType: "set('category_a','category_b')", DesignType: "selects", Comment: "分类:category_a=分类一,category_b=分类二"},
+			field:      crudmodel.Field{Name: "categories", Type: "set", DataType: "set('category_a','category_b')", DesignType: "selects", Comment: "分类:category_a=分类一,category_b=分类二"},
 			wantKeys:   []string{"category_a", "category_b"},
 			wantLabels: []string{"分类一", "分类二"},
 		},
 		{
 			name:       "label only",
-			field:      model.Field{Name: "plain", Type: "enum", DataType: "enum('a','b')", DesignType: "radio", Comment: "只有标签"},
+			field:      crudmodel.Field{Name: "plain", Type: "enum", DataType: "enum('a','b')", DesignType: "radio", Comment: "只有标签"},
 			wantKeys:   []string{"a", "b"},
 			wantLabels: []string{"plain a", "plain b"},
 		},
@@ -187,16 +188,16 @@ func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
 func TestGetRemoteSelectUrl(t *testing.T) {
 	cases := []struct {
 		name  string
-		field model.Field
+		field crudmodel.Field
 		want  string
 	}{
-		{"user controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
-		{"nested-style controller resolves registered route", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/admin_group.go", RemoteSourceConfigType: "crud"}}, "/admin/auth.Group/index"},
-		{"registrar controller resolves route constant", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/country/language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
-		{"backslash path", model.Field{Form: model.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
-		{"manual url wins for custom source", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
-		{"unknown controller falls back to path derivation", model.Field{Form: model.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no_such_handler/index"},
-		{"empty controller uses remote url", model.Field{Form: model.FormAttr{RemoteUrl: "/admin/foo/index", RemoteSourceConfigType: "crud"}}, "/admin/foo/index"},
+		{"user controller resolves registered route", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
+		{"nested-style controller resolves registered route", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/admin_group.go", RemoteSourceConfigType: "crud"}}, "/admin/auth.Group/index"},
+		{"registrar controller resolves route constant", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/country/language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
+		{"backslash path", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
+		{"manual url wins for custom source", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
+		{"unknown controller falls back to path derivation", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no_such_handler/index"},
+		{"empty controller uses remote url", crudmodel.Field{Form: crudmodel.FormAttr{RemoteUrl: "/admin/foo/index", RemoteSourceConfigType: "crud"}}, "/admin/foo/index"},
 	}
 	for _, c := range cases {
 		if got := GetRemoteSelectUrl(c.field); got != c.want {
@@ -206,13 +207,13 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 }
 
 func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
-	field := model.Field{
+	field := crudmodel.Field{
 		Name:       "reviewer_admins",
 		Type:       "varchar",
 		DataType:   "varchar(255)",
 		DesignType: "remoteSelects",
-		Form:       model.FormAttr{RemoteTable: "admin", RemotePk: "id", RemoteField: "nickname", RelationFields: "nickname,email"},
-		Table:      model.TableAttr{ComSearchRender: "remoteSelect", Operator: "FIND_IN_SET", Remote: `pk: "ba_admin.id", field: "nickname", remoteUrl: "/admin/auth.Admin/index", multiple: true`},
+		Form:       crudmodel.FormAttr{RemoteTable: "admin", RemotePk: "id", RemoteField: "nickname", RelationFields: "nickname,email"},
+		Table:      crudmodel.TableAttr{ComSearchRender: "remoteSelect", Operator: "FIND_IN_SET", Remote: `pk: "ba_admin.id", field: "nickname", remoteUrl: "/admin/auth.Admin/index", multiple: true`},
 	}
 	field = analyseField(field)
 	field = prepareGeneratedColumnField(field)
@@ -347,7 +348,7 @@ func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := inferDesignTypeForField(model.Field{Name: tc.name, Type: tc.typ, DataType: tc.dataType, AutoIncrement: tc.auto})
+			got := inferDesignTypeForField(crudmodel.Field{Name: tc.name, Type: tc.typ, DataType: tc.dataType, AutoIncrement: tc.auto})
 			if got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
@@ -368,7 +369,7 @@ func TestDesignTypeDefaultMatrix(t *testing.T) {
 		"image": {"image", "false", "", "", 0}, "images": {"images", "false", "", "", 0}, "file": {"none", "false", "", "", 0}, "files": {"none", "false", "", "", 0}, "password": {"", "false", "", "", 0}, "array": {"", "false", "", "", 0}, "city": {"", "false", "", "", 0}, "icon": {"icon", "false", "", "", 0}, "color": {"color", "false", "", "", 0},
 	}
 	for designType, want := range cases {
-		field := model.Field{DesignType: designType}
+		field := crudmodel.Field{DesignType: designType}
 		applyDesignTypeDefaults(&field)
 		if field.Table.Render != want.render || field.Table.Operator != want.operator || field.Table.Sortable != want.sortable || field.Table.ComSearchRender != want.search || field.Table.Width != want.width {
 			t.Errorf("%s defaults = %+v", designType, field.Table)
@@ -377,7 +378,7 @@ func TestDesignTypeDefaultMatrix(t *testing.T) {
 }
 
 func TestDesignTypeFormDefaultMatrix(t *testing.T) {
-	tests := map[string]model.FormAttr{
+	tests := map[string]crudmodel.FormAttr{
 		"password":      {Validator: []string{"password"}},
 		"number":        {Validator: []string{"number"}, Step: 1},
 		"float":         {Validator: []string{"float"}, Step: 1},
@@ -396,7 +397,7 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 	}
 	for designType, want := range tests {
 		t.Run(designType, func(t *testing.T) {
-			field := model.Field{DesignType: designType}
+			field := crudmodel.Field{DesignType: designType}
 			applyDesignTypeDefaults(&field)
 			require.Equal(t, want, field.Form)
 		})
@@ -404,9 +405,9 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 }
 
 func TestFractionalStepSurvivesPopupFormRendering(t *testing.T) {
-	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: 0.001}}
+	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: 0.001}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
-	content, err := renderFormFile(FormVueData{FormFields: []string{markup}}, []model.Field{field}, "")
+	content, err := renderFormFile(FormVueData{FormFields: []string{markup}}, []crudmodel.Field{field}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +417,7 @@ func TestFractionalStepSurvivesPopupFormRendering(t *testing.T) {
 }
 
 func TestNumberStepZeroKeepsExistingDefault(t *testing.T) {
-	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: 0}}
+	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: 0}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
 	if !strings.Contains(markup, `:input-attr="{ step: 1 }"`) {
 		t.Fatalf("zero step default changed: %s", markup)
@@ -424,7 +425,7 @@ func TestNumberStepZeroKeepsExistingDefault(t *testing.T) {
 }
 
 func TestNumberStepNegativePreservesExistingEmission(t *testing.T) {
-	field := model.Field{Name: "ratio", DesignType: "number", Form: model.FormAttr{Step: -0.5}}
+	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: -0.5}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
 	if !strings.Contains(markup, `:input-attr="{ step: -0.5 }"`) {
 		t.Fatalf("negative step emission changed: %s", markup)
@@ -433,13 +434,13 @@ func TestNumberStepNegativePreservesExistingEmission(t *testing.T) {
 
 func TestGetRemotePk(t *testing.T) {
 	for _, tc := range []struct {
-		field model.Field
+		field crudmodel.Field
 		want  string
 	}{
-		{model.Field{}, "ba_user.id"},
-		{model.Field{Form: model.FormAttr{RemotePk: "uuid"}}, "ba_user.uuid"},
-		{model.Field{Form: model.FormAttr{RemotePk: "owner.uuid"}}, "owner.uuid"},
-		{model.Field{Form: model.FormAttr{RemotePrimaryTableAlias: "owner", RemotePk: "uuid"}}, "owner.uuid"},
+		{crudmodel.Field{}, "ba_user.id"},
+		{crudmodel.Field{Form: crudmodel.FormAttr{RemotePk: "uuid"}}, "ba_user.uuid"},
+		{crudmodel.Field{Form: crudmodel.FormAttr{RemotePk: "owner.uuid"}}, "owner.uuid"},
+		{crudmodel.Field{Form: crudmodel.FormAttr{RemotePrimaryTableAlias: "owner", RemotePk: "uuid"}}, "owner.uuid"},
 	} {
 		if got := GetRemotePk("ba_user", tc.field); got != tc.want {
 			t.Fatalf("GetRemotePk()=%q want %q", got, tc.want)
@@ -461,14 +462,14 @@ func TestGetJsonFromAnyEscapesStringsAndSortsNestedValues(t *testing.T) {
 }
 
 func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
-	column := getTableColumn(model.Field{Name: "title", Table: model.TableAttr{ComSearchInputAttr: model.ComSearchInputAttrs{"size": "large"}}}, nil, "", "", "")
+	column := getTableColumn(crudmodel.Field{Name: "title", Table: crudmodel.TableAttr{ComSearchInputAttr: crudmodel.ComSearchInputAttrs{"size": "large"}}}, nil, "", "", "")
 	if !strings.Contains(column, `comSearchInputAttr: { size: "large" }`) {
 		t.Fatalf("column = %s", column)
 	}
 }
 
 func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
-	fields := []model.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
+	fields := []crudmodel.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
 	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "go-build-admin/app/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
 	content, err := renderHandler(handler, "type Orders struct {\n\tID int `json:\"id\"`\n}\n")
 	if err != nil {
@@ -483,9 +484,9 @@ func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
 }
 
 func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
-	field := model.Field{Name: "owner_id", DesignType: "remoteSelect", Form: model.FormAttr{RemoteTable: "owner", RemotePk: "uuid", RemoteField: "name", RemoteUrl: "/admin/owner/options"}}
+	field := crudmodel.Field{Name: "owner_id", DesignType: "remoteSelect", Form: crudmodel.FormAttr{RemoteTable: "owner", RemotePk: "uuid", RemoteField: "name", RemoteUrl: "/admin/owner/options"}}
 	metadata := buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
-	column := getTableColumn(model.Field{Name: field.Name, Table: model.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
+	column := getTableColumn(crudmodel.Field{Name: field.Name, Table: crudmodel.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
 	if !strings.Contains(column, `comSearchRender: "remoteSelect"`) || !strings.Contains(column, "remote: {") || strings.Count(column, "comSearchRender:") != 1 {
 		t.Fatalf("remote search column metadata incomplete or duplicated: %s", column)
 	}
@@ -622,7 +623,7 @@ func TestParseJoinDataWithoutLabelKeepsDefaultTranslation(t *testing.T) {
 }
 
 func TestOmittedFKColumnStillGeneratesRelationDisplayAndLoader(t *testing.T) {
-	table := model.Table{ColumnFields: []string{"id"}}
+	table := crudmodel.Table{ColumnFields: []string{"id"}}
 	field := relationTestField("remoteSelect", "username")
 	field.Table.ComSearchRender = "remoteSelect"
 	indexData := IndexVueData{}
@@ -698,9 +699,9 @@ func TestRelationFKExplicitShowTrueIsPreserved(t *testing.T) {
 }
 
 func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {
-	field := model.Field{
+	field := crudmodel.Field{
 		Name: "reviewer_admins", Type: "varchar", DataType: "varchar(255)", DesignType: "remoteSelects",
-		Form: model.FormAttr{RemoteTable: "admin", RemotePk: "id", RelationFields: "nickname,email"},
+		Form: crudmodel.FormAttr{RemoteTable: "admin", RemotePk: "id", RelationFields: "nickname,email"},
 	}
 	metadata, err := buildRelationMetadata(ParseTableColumns(multiRelationTestColumns(), true), field, "Orders")
 	require.NoError(t, err)
@@ -748,15 +749,15 @@ func multiRelationTestColumns() []model.Column {
 	}
 }
 
-func relationTestField(designType, relationFields string) model.Field {
-	return model.Field{
+func relationTestField(designType, relationFields string) crudmodel.Field {
+	return crudmodel.Field{
 		Name: "user_id", Type: "varchar", DataType: "varchar(255)", DesignType: designType,
-		Form: model.FormAttr{RemoteTable: "user", RemotePk: "id", RemoteField: "nickname_text", RelationFields: relationFields},
+		Form: crudmodel.FormAttr{RemoteTable: "user", RemotePk: "id", RemoteField: "nickname_text", RelationFields: relationFields},
 	}
 }
 
 func TestBuildEditableColumnsKeepsTableExcludedFormField(t *testing.T) {
-	fields := []model.Field{{Name: "title", Form: model.FormAttr{}}, {Name: "hidden_column", TableBuildExclude: true}, {Name: "hidden_form", FormBuildExclude: true}}
+	fields := []crudmodel.Field{{Name: "title", Form: crudmodel.FormAttr{}}, {Name: "hidden_column", TableBuildExclude: true}, {Name: "hidden_form", FormBuildExclude: true}}
 	got := buildEditableColumns("id", "", []string{"title", "hidden_column", "hidden_form"}, fields)
 	if !slices.Equal(got, []string{"title", "hidden_column"}) {
 		t.Fatalf("editable columns = %v", got)
@@ -778,8 +779,8 @@ func TestCityModelStructIncludesTextAccessor(t *testing.T) {
 }
 
 func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.T) {
-	table := model.Table{Name: "orders", FormFields: []string{"region_city"}, ColumnFields: []string{"id", "region_city"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone}}
-	fields := []model.Field{
+	table := crudmodel.Table{Name: "orders", FormFields: []string{"region_city"}, ColumnFields: []string{"id", "region_city"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone}}
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "int", PrimaryKey: true, DesignType: "pk"},
 		{Name: "region_city", Type: "varchar", DesignType: "city"},
 	}

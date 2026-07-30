@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"database/sql"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -28,8 +29,8 @@ const (
 )
 
 type AlterDiff struct {
-	Change    model.ChangeField
-	Field     model.Field
+	Change    crudmodel.ChangeField
+	Field     crudmodel.Field
 	Column    *model.Column
 	Class     DiffClass
 	Reason    string
@@ -37,7 +38,7 @@ type AlterDiff struct {
 }
 
 // specColumnType 渲染 spec 字段对应的 MySQL COLUMN_TYPE（与 getDDlFieldData 同一类型来源）。
-func specColumnType(field model.Field) string {
+func specColumnType(field crudmodel.Field) string {
 	columnType := analyseFieldDataType(field)
 	columnType = strings.TrimSuffix(columnType, "(0)")
 	if field.Unsigned {
@@ -53,7 +54,7 @@ func normalizeColumnType(value string) string {
 	return multiSpaceCommaPattern.ReplaceAllString(normalized, ",")
 }
 
-func specFieldNullable(field model.Field) bool {
+func specFieldNullable(field crudmodel.Field) bool {
 	return field.Null || strings.EqualFold(field.DefaultType, "NULL")
 }
 
@@ -70,7 +71,7 @@ func normalizeDefaultValue(value string) string {
 	return normalized
 }
 
-func normalizeDefaultValueForField(field model.Field, value string) string {
+func normalizeDefaultValueForField(field crudmodel.Field, value string) string {
 	base := strings.ToLower(analyseFieldTypeForSpec(field))
 	if base == "" {
 		base = strings.ToLower(field.Type)
@@ -102,7 +103,7 @@ func normalizeDecimalDefault(value string) string {
 	return value
 }
 
-func defaultsMatchColumn(field model.Field, actual sql.NullString) bool {
+func defaultsMatchColumn(field crudmodel.Field, actual sql.NullString) bool {
 	switch strings.ToUpper(strings.TrimSpace(field.DefaultType)) {
 	case "INPUT":
 		return actual.Valid && normalizeDefaultValueForField(field, actual.String) == normalizeDefaultValueForField(field, field.Default)
@@ -145,11 +146,11 @@ func columnUnsigned(column model.Column) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(column.COLUMN_TYPE)), " unsigned")
 }
 
-func fieldTypeChanged(field model.Field, column model.Column) bool {
+func fieldTypeChanged(field crudmodel.Field, column model.Column) bool {
 	return normalizeColumnType(specColumnType(field)) != normalizeColumnType(column.COLUMN_TYPE)
 }
 
-func nullableChanged(field model.Field, column model.Column) bool {
+func nullableChanged(field crudmodel.Field, column model.Column) bool {
 	want := "NO"
 	if specFieldNullable(field) {
 		want = "YES"
@@ -157,13 +158,13 @@ func nullableChanged(field model.Field, column model.Column) bool {
 	return !strings.EqualFold(column.IS_NULLABLE, want)
 }
 
-func autoIncrementChanged(field model.Field, column model.Column) bool {
+func autoIncrementChanged(field crudmodel.Field, column model.Column) bool {
 	want := field.AutoIncrement && field.PrimaryKey
 	has := strings.Contains(strings.ToLower(column.EXTRA), "auto_increment")
 	return want != has
 }
 
-func defaultChanged(field model.Field, column model.Column) bool {
+func defaultChanged(field crudmodel.Field, column model.Column) bool {
 	return !defaultsMatchColumn(field, column.COLUMN_DEFAULT)
 }
 
@@ -268,7 +269,7 @@ func unmanagedColumnAttributes(column model.Column) []string {
 	return attributes
 }
 
-func riskForNewField(field model.Field) (DiffClass, string) {
+func riskForNewField(field crudmodel.Field) (DiffClass, string) {
 	if field.PrimaryKey && field.AutoIncrement {
 		return DiffSafeAuto, "new auto-increment primary key column"
 	}
@@ -286,7 +287,7 @@ func riskForNewField(field model.Field) (DiffClass, string) {
 	}
 }
 
-func legalDefaultForNewField(field model.Field) bool {
+func legalDefaultForNewField(field crudmodel.Field) bool {
 	base := strings.ToLower(analyseFieldTypeForSpec(field))
 	if noDefaultValueType(base) {
 		return false
@@ -305,7 +306,7 @@ func legalDefaultForNewField(field model.Field) bool {
 	return field.Default != ""
 }
 
-func classifyFieldDiff(field model.Field, column model.Column, primary bool) (DiffClass, string) {
+func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool) (DiffClass, string) {
 	typeChanged := fieldTypeChanged(field, column)
 	unsignedChanged := field.Unsigned != columnUnsigned(column)
 	nullableChangedValue := nullableChanged(field, column)
@@ -348,7 +349,7 @@ func classifyFieldDiff(field model.Field, column model.Column, primary bool) (Di
 }
 
 // specFieldMatchesColumn 判断 spec 字段与实际列是否完全一致（无漂移）。
-func specFieldMatchesColumn(field model.Field, column model.Column) bool {
+func specFieldMatchesColumn(field crudmodel.Field, column model.Column) bool {
 	if fieldTypeChanged(field, column) {
 		return false
 	}
@@ -367,7 +368,7 @@ func specFieldMatchesColumn(field model.Field, column model.Column) bool {
 	return column.COLUMN_COMMENT == field.Comment
 }
 
-func deriveAlterDiff(columns []model.Column, fields []model.Field) []AlterDiff {
+func deriveAlterDiff(columns []model.Column, fields []crudmodel.Field) []AlterDiff {
 	existing := make(map[string]model.Column, len(columns))
 	for _, column := range columns {
 		existing[strings.ToLower(column.COLUMN_NAME)] = column
@@ -384,7 +385,7 @@ func deriveAlterDiff(columns []model.Column, fields []model.Field) []AlterDiff {
 		if !ok {
 			class, reason := riskForNewField(field)
 			changes = append(changes, AlterDiff{
-				Change: model.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
+				Change: crudmodel.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
 				Field:  field, Class: class, Reason: reason,
 			})
 			continue
@@ -394,7 +395,7 @@ func deriveAlterDiff(columns []model.Column, fields []model.Field) []AlterDiff {
 		}
 		class, reason := classifyFieldDiff(field, column, primary[strings.ToLower(field.Name)])
 		changes = append(changes, AlterDiff{
-			Change: model.ChangeField{Type: "change-field-attr", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
+			Change: crudmodel.ChangeField{Type: "change-field-attr", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
 			Field:  field, Column: &column, Class: class, Reason: reason, Unmanaged: unmanagedColumnAttributes(column),
 		})
 	}

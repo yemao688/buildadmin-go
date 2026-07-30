@@ -1,15 +1,15 @@
 package crud_helper
 
 import (
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"strings"
 	"testing"
 
-	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
 )
 
 func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "create_time", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "createtime", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "update_time", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
@@ -17,7 +17,7 @@ func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
 		{Name: "end_time", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "created_at", Type: "datetime", DataType: "datetime", DesignType: "datetime"},
 	}
-	analysed := make([]model.Field, len(fields))
+	analysed := make([]crudmodel.Field, len(fields))
 	for i, field := range fields {
 		analysed[i] = analyseField(field)
 	}
@@ -109,7 +109,7 @@ func TestRenderModelUsesOneNowAndActualCanonicalFieldNames(t *testing.T) {
 }
 
 func TestCanonicalTimestampsExcludedFromEditableColumnsAndParams(t *testing.T) {
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "id", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "create_time", DesignType: "timestamp", FormBuildExclude: true},
 		{Name: "update_time", DesignType: "timestamp", FormBuildExclude: true},

@@ -3,8 +3,8 @@ package crud_helper
 import (
 	"encoding/json"
 	"errors"
-	"go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -159,13 +159,13 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}
-	fields := []model.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true}}
-	table := model.Table{
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true}}
+	table := crudmodel.Table{
 		Name:           tableName,
 		ModelFile:      filepath.ToSlash(filepath.Join("app", "admin", "model", dirName, "deleteFault.go")),
 		ControllerFile: filepath.ToSlash(filepath.Join("app", "admin", "handler", dirName, "deleteFault.go")),
 		WebViewsDir:    "web/src/views/backend/delete/fault",
-		Manifest: &model.CRUDFileManifest{
+		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: []string{generated},
 			Shared:    []string{modelProvider, handlerProvider, routerPath},
 		},

@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/utils"
 	"net/url"
@@ -28,7 +28,7 @@ var enumTypeRE = regexp.MustCompile(`^(enum|set)\((?:'[^'\\\x00]*(?:''[^'\\\x00]
 var windowsDrivePathRE = regexp.MustCompile(`^[A-Za-z]:`)
 
 // ValidateGenerationInput is the shared validation boundary for all DDL input.
-func ValidateGenerationInput(table model.Table, fields []model.Field) error {
+func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) error {
 	if err := normalizeTableConfiguration(&table); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func ValidateGenerationInput(table model.Table, fields []model.Field) error {
 	return nil
 }
 
-func validateRelationField(field model.Field) error {
+func validateRelationField(field crudmodel.Field) error {
 	if field.Form.RemoteModel != "" && field.Form.RemoteTable == "" {
 		return fmt.Errorf("remote model for field %q requires remote table", field.Name)
 	}
@@ -149,7 +149,7 @@ func validateRelationField(field model.Field) error {
 	return nil
 }
 
-func validatePrimaryKeyTypes(fields []model.Field) error {
+func validatePrimaryKeyTypes(fields []crudmodel.Field) error {
 	for _, field := range fields {
 		if !field.PrimaryKey {
 			continue
@@ -161,7 +161,7 @@ func validatePrimaryKeyTypes(fields []model.Field) error {
 	return nil
 }
 
-func ValidateField(field model.Field) error {
+func ValidateField(field crudmodel.Field) error {
 	if err := data_scope.ValidateIdentifier(field.Name); err != nil {
 		return fmt.Errorf("invalid field name %q: %w", field.Name, err)
 	}
@@ -200,7 +200,7 @@ var validatorRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*(\([^\r\n()'";]*\))?$
 // keep it data-only because it cannot be JSON encoded without changing format.
 var frontendObjectRE = regexp.MustCompile(`^[A-Za-z0-9_$\s:'".,/{}\[\]-]+$`)
 
-func validateFrontendField(field model.Field) error {
+func validateFrontendField(field crudmodel.Field) error {
 	if field.Form.RemoteField != "" && !frontendIdentifierRE.MatchString(field.Form.RemoteField) {
 		return fmt.Errorf("invalid remote field %q", field.Form.RemoteField)
 	}
@@ -364,7 +364,7 @@ func normalizeLogicalPath(value string) (string, error) {
 	return strings.Join(parts, "/"), nil
 }
 
-func validateDefaultType(field model.Field) error {
+func validateDefaultType(field crudmodel.Field) error {
 	switch field.DefaultType {
 	case "":
 		return nil
@@ -375,13 +375,13 @@ func validateDefaultType(field model.Field) error {
 	}
 }
 
-func normalizeFieldConfiguration(field *model.Field) {
+func normalizeFieldConfiguration(field *crudmodel.Field) {
 	if field.DefaultType == "NULL" {
 		field.Null = true
 	}
 }
 
-func normalizeTableConfiguration(table *model.Table) error {
+func normalizeTableConfiguration(table *crudmodel.Table) error {
 	if table.DatabaseConnection == "" {
 		table.DatabaseConnection = "mysql"
 	}

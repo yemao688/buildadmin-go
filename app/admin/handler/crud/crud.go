@@ -1,10 +1,11 @@
-package handler
+package crud
 
 import (
 	"encoding/json"
 	"fmt"
-	"go-build-admin/app/admin/model"
+	model "go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/middleware"
 	helper "go-build-admin/app/pkg/crud_helper"
@@ -24,7 +25,7 @@ import (
 type CrudHandler struct {
 	log        *zap.Logger
 	tableM     *model.TableModel
-	crudLogM   *model.CrudLogModel
+	crudLogM   *crudmodel.CrudLogModel
 	adminRuleM *adminauth.AdminRuleModel
 	config     *conf.Configuration
 }
@@ -52,7 +53,7 @@ func (b *boolValue) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("cancelSync must be a boolean")
 }
 
-func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *crudmodel.CrudLogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
 	return &CrudHandler{
 		log:        log,
 		tableM:     tableM,
@@ -65,9 +66,9 @@ func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.C
 // 开始生成
 func (h *CrudHandler) Generate(ctx *gin.Context) {
 	params := struct {
-		Table  model.Table   `json:"table" binding:"required"`
-		Type   string        `json:"type" binding:"required"`
-		Fields []model.Field `json:"fields" binding:"required"`
+		Table  crudmodel.Table   `json:"table" binding:"required"`
+		Type   string            `json:"type" binding:"required"`
+		Fields []crudmodel.Field `json:"fields" binding:"required"`
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {

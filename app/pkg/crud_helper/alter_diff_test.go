@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"database/sql"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"testing"
 )
 
@@ -22,7 +23,7 @@ func TestDeriveAlterChangesSkipsInSyncColumns(t *testing.T) {
 		alterTestColumn("rate", "decimal(20,8)", "NO", "1.00000000", "", "汇率"),
 		alterTestColumn("status", "tinyint", "NO", "1", "", "状态:0=禁用,1=启用"),
 	}
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Null: false, DefaultType: "NONE", Comment: "主键"},
 		{Name: "code", Type: "varchar", Length: 20, Null: false, DefaultType: "NONE", Comment: "货币代码"},
 		{Name: "rate", Type: "decimal", Length: 20, Precision: 8, Null: false, DefaultType: "INPUT", Default: "1", Comment: "汇率"},
@@ -41,29 +42,29 @@ func TestDeriveAlterChangesDetectsRealDrift(t *testing.T) {
 	}
 	cases := []struct {
 		name  string
-		field model.Field
+		field crudmodel.Field
 	}{
-		{"length drift", model.Field{Name: "code", Type: "varchar", Length: 50, Null: false, DefaultType: "NONE", Comment: "货币代码"}},
-		{"comment drift", model.Field{Name: "code", Type: "varchar", Length: 20, Null: false, DefaultType: "NONE", Comment: "新注释"}},
-		{"nullable drift", model.Field{Name: "code", Type: "varchar", Length: 20, Null: true, DefaultType: "NULL", Comment: "货币代码"}},
-		{"default drift", model.Field{Name: "rate", Type: "decimal", Length: 20, Precision: 8, Null: false, DefaultType: "INPUT", Default: "2", Comment: "汇率"}},
+		{"length drift", crudmodel.Field{Name: "code", Type: "varchar", Length: 50, Null: false, DefaultType: "NONE", Comment: "货币代码"}},
+		{"comment drift", crudmodel.Field{Name: "code", Type: "varchar", Length: 20, Null: false, DefaultType: "NONE", Comment: "新注释"}},
+		{"nullable drift", crudmodel.Field{Name: "code", Type: "varchar", Length: 20, Null: true, DefaultType: "NULL", Comment: "货币代码"}},
+		{"default drift", crudmodel.Field{Name: "rate", Type: "decimal", Length: 20, Precision: 8, Null: false, DefaultType: "INPUT", Default: "2", Comment: "汇率"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			changes := deriveAlterChanges(base, []model.Field{tc.field})
+			changes := deriveAlterChanges(base, []crudmodel.Field{tc.field})
 			if len(changes) != 1 || changes[0].Type != "change-field-attr" {
 				t.Fatalf("expected one change-field-attr: %+v", changes)
 			}
 		})
 	}
 	// tinyint(1) 与 tinyint 在 MySQL 8 显示宽度归一化后视为一致
-	changes := deriveAlterChanges(base, []model.Field{{Name: "status", Type: "tinyint", Length: 1, Null: false, DefaultType: "INPUT", Default: "1", Comment: "状态:0=禁用,1=启用"}})
+	changes := deriveAlterChanges(base, []crudmodel.Field{{Name: "status", Type: "tinyint", Length: 1, Null: false, DefaultType: "INPUT", Default: "1", Comment: "状态:0=禁用,1=启用"}})
 	if len(changes) != 0 {
 		t.Fatalf("int display width must be normalized: %+v", changes)
 	}
 	// enum 逗号空格差异视为一致
 	enumColumns := []model.Column{alterTestColumn("status", "enum('pending', 'paid')", "NO", "pending", "", "状态")}
-	enumChanges := deriveAlterChanges(enumColumns, []model.Field{{Name: "status", DataType: "enum('pending','paid')", Null: false, DefaultType: "INPUT", Default: "pending", Comment: "状态"}})
+	enumChanges := deriveAlterChanges(enumColumns, []crudmodel.Field{{Name: "status", DataType: "enum('pending','paid')", Null: false, DefaultType: "INPUT", Default: "pending", Comment: "状态"}})
 	if len(enumChanges) != 0 {
 		t.Fatalf("enum spacing must be normalized: %+v", enumChanges)
 	}
@@ -71,7 +72,7 @@ func TestDeriveAlterChangesDetectsRealDrift(t *testing.T) {
 
 func TestDeriveAlterChangesAddFieldOnlyForMissingColumn(t *testing.T) {
 	columns := []model.Column{alterTestColumn("id", "bigint", "NO", nil, "auto_increment", "ID")}
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DefaultType: "NONE", Comment: "ID"},
 		{Name: "title", Type: "varchar", Length: 50, Null: false, DefaultType: "NONE", Comment: "标题"},
 	}
@@ -88,7 +89,7 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 		alterTestColumn("amount", "decimal(10,2)", "NO", "1.00000000", "", "金额"),
 		alterTestColumn("status", "tinyint unsigned", "NO", "1", "", "状态"),
 	}
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, AutoIncrement: true, Comment: "ID"},
 		{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"},
 		{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "1", Comment: "金额"},
@@ -97,65 +98,65 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 
 	cases := []struct {
 		name   string
-		field  model.Field
+		field  crudmodel.Field
 		column model.Column
 		class  DiffClass
 	}{
-		{"nullable addition", model.Field{Name: "note", Type: "varchar", Length: 20, Null: true}, model.Column{}, DiffSafeAuto},
-		{"defaulted addition", model.Field{Name: "enabled", Type: "tinyint", DefaultType: "INPUT", Default: "1"}, model.Column{}, DiffSafeAuto},
+		{"nullable addition", crudmodel.Field{Name: "note", Type: "varchar", Length: 20, Null: true}, model.Column{}, DiffSafeAuto},
+		{"defaulted addition", crudmodel.Field{Name: "enabled", Type: "tinyint", DefaultType: "INPUT", Default: "1"}, model.Column{}, DiffSafeAuto},
 		{"comment only", fields[1], alterTestColumn("name", "varchar(20)", "NO", "", "", "旧名称"), DiffSafeAuto},
-		{"type widening", model.Field{Name: "name", Type: "varchar", Length: 40, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRequiresApproval},
-		{"default change", model.Field{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "2", Comment: "金额"}, actual[2], DiffRequiresApproval},
-		{"unsigned flip", model.Field{Name: "status", Type: "tinyint", DefaultType: "INPUT", Default: "1", Comment: "状态"}, actual[3], DiffRejected},
-		{"varchar narrowing", model.Field{Name: "name", Type: "varchar", Length: 10, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRejected},
+		{"type widening", crudmodel.Field{Name: "name", Type: "varchar", Length: 40, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRequiresApproval},
+		{"default change", crudmodel.Field{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "2", Comment: "金额"}, actual[2], DiffRequiresApproval},
+		{"unsigned flip", crudmodel.Field{Name: "status", Type: "tinyint", DefaultType: "INPUT", Default: "1", Comment: "状态"}, actual[3], DiffRejected},
+		{"varchar narrowing", crudmodel.Field{Name: "name", Type: "varchar", Length: 10, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRejected},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.column.COLUMN_NAME == "" {
-				diffs := deriveAlterDiff(nil, []model.Field{tc.field})
+				diffs := deriveAlterDiff(nil, []crudmodel.Field{tc.field})
 				if len(diffs) != 1 || diffs[0].Class != tc.class {
 					t.Fatalf("diffs = %+v", diffs)
 				}
 				return
 			}
-			diffs := deriveAlterDiff([]model.Column{tc.column}, []model.Field{tc.field})
+			diffs := deriveAlterDiff([]model.Column{tc.column}, []crudmodel.Field{tc.field})
 			if len(diffs) != 1 || diffs[0].Class != tc.class {
 				t.Fatalf("diffs = %+v", diffs)
 			}
 		})
 	}
 
-	primaryDrift := deriveAlterDiff(actual, []model.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Comment: "ID"}})
+	primaryDrift := deriveAlterDiff(actual, []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Comment: "ID"}})
 	if len(primaryDrift) != 1 || primaryDrift[0].Class != DiffRejected {
 		t.Fatalf("primary drift = %+v", primaryDrift)
 	}
 }
 
 func TestAlterDiffRejectsNullableDownAndEnumRemoval(t *testing.T) {
-	nullable := deriveAlterDiff([]model.Column{alterTestColumn("note", "varchar(20)", "YES", nil, "", "备注")}, []model.Field{{Name: "note", Type: "varchar", Length: 20, Null: false, Comment: "备注"}})
+	nullable := deriveAlterDiff([]model.Column{alterTestColumn("note", "varchar(20)", "YES", nil, "", "备注")}, []crudmodel.Field{{Name: "note", Type: "varchar", Length: 20, Null: false, Comment: "备注"}})
 	if len(nullable) != 1 || nullable[0].Class != DiffRejected {
 		t.Fatalf("nullable down = %+v", nullable)
 	}
-	enum := deriveAlterDiff([]model.Column{alterTestColumn("state", "enum('a','b')", "NO", "a", "", "状态")}, []model.Field{{Name: "state", DataType: "enum('a')", DefaultType: "INPUT", Default: "a", Comment: "状态"}})
+	enum := deriveAlterDiff([]model.Column{alterTestColumn("state", "enum('a','b')", "NO", "a", "", "状态")}, []crudmodel.Field{{Name: "state", DataType: "enum('a')", DefaultType: "INPUT", Default: "a", Comment: "状态"}})
 	if len(enum) != 1 || enum[0].Class != DiffRejected {
 		t.Fatalf("enum removal = %+v", enum)
 	}
-	longText := deriveAlterDiff(nil, []model.Field{{Name: "body", Type: "longtext", DefaultType: "INPUT", Default: "body"}})
+	longText := deriveAlterDiff(nil, []crudmodel.Field{{Name: "body", Type: "longtext", DefaultType: "INPUT", Default: "body"}})
 	if len(longText) != 1 || longText[0].Class != DiffRejected {
 		t.Fatalf("illegal longtext default = %+v", longText)
 	}
 }
 
 func TestDefaultNormalizationPreservesLargeIntegersAndStrings(t *testing.T) {
-	large := model.Field{Name: "id", Type: "bigint", DefaultType: "INPUT", Default: "9007199254740993"}
+	large := crudmodel.Field{Name: "id", Type: "bigint", DefaultType: "INPUT", Default: "9007199254740993"}
 	if !defaultsMatchColumn(large, sql.NullString{Valid: true, String: "9007199254740993"}) {
 		t.Fatal("large integer default was not compared exactly")
 	}
-	decimal := model.Field{Name: "rate", Type: "decimal", DefaultType: "INPUT", Default: "1"}
+	decimal := crudmodel.Field{Name: "rate", Type: "decimal", DefaultType: "INPUT", Default: "1"}
 	if !defaultsMatchColumn(decimal, sql.NullString{Valid: true, String: "1.00000000"}) {
 		t.Fatal("decimal default was not normalized exactly")
 	}
-	text := model.Field{Name: "value", Type: "varchar", DefaultType: "INPUT", Default: " 001 "}
+	text := crudmodel.Field{Name: "value", Type: "varchar", DefaultType: "INPUT", Default: " 001 "}
 	if defaultsMatchColumn(text, sql.NullString{Valid: true, String: "001"}) {
 		t.Fatal("string default was numerically normalized")
 	}
@@ -166,7 +167,7 @@ func TestUnmanagedColumnAttributesDoNotChangeModeledMatch(t *testing.T) {
 	column.CHARACTER_SET_NAME = "utf8mb4"
 	column.COLLATION_NAME = "utf8mb4_bin"
 	column.GENERATION_EXPRESSION = "upper(name)"
-	field := model.Field{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"}
+	field := crudmodel.Field{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"}
 	if !specFieldMatchesColumn(field, column) {
 		t.Fatal("unmanaged attributes created a modeled diff")
 	}

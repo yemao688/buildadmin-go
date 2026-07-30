@@ -1,28 +1,28 @@
 package crud_helper
 
 import (
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"strconv"
 	"strings"
 	"testing"
 )
 
 func TestValidateGenerationInputRejectsInjectedIdentifiersAndTypes(t *testing.T) {
-	base := model.Table{Name: "orders"}
-	if err := ValidateGenerationInput(base, []model.Field{{Name: "name`); DROP TABLE users;--", Type: "varchar"}}); err == nil {
+	base := crudmodel.Table{Name: "orders"}
+	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "name`); DROP TABLE users;--", Type: "varchar"}}); err == nil {
 		t.Fatal("injected field name was accepted")
 	}
-	if err := ValidateGenerationInput(base, []model.Field{{Name: "name", DataType: "varchar(20)); DROP TABLE users;--"}}); err == nil {
+	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "name", DataType: "varchar(20)); DROP TABLE users;--"}}); err == nil {
 		t.Fatal("injected data type was accepted")
 	}
-	if err := ValidateGenerationInput(model.Table{Name: "orders; DROP TABLE users"}, nil); err == nil {
+	if err := ValidateGenerationInput(crudmodel.Table{Name: "orders; DROP TABLE users"}, nil); err == nil {
 		t.Fatal("injected table name was accepted")
 	}
 }
 
 func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testing.T) {
-	field := model.Field{Name: "title", DataType: "varchar(64)", Default: "O'Reilly", Comment: "Bob's title", PrimaryKey: true}
-	if err := ValidateGenerationInput(model.Table{Name: "orders", Comment: "customer's orders"}, []model.Field{field}); err != nil {
+	field := crudmodel.Field{Name: "title", DataType: "varchar(64)", Default: "O'Reilly", Comment: "Bob's title", PrimaryKey: true}
+	if err := ValidateGenerationInput(crudmodel.Table{Name: "orders", Comment: "customer's orders"}, []crudmodel.Field{field}); err != nil {
 		t.Fatal(err)
 	}
 	if got := formatDefault(field.Default); got != "DEFAULT 'O''Reilly'" {
@@ -34,33 +34,33 @@ func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testi
 }
 
 func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
-	base := model.Table{Name: "orders"}
-	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int"}}); err == nil {
+	base := crudmodel.Table{Name: "orders"}
+	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "id", Type: "int"}}); err == nil {
 		t.Fatal("missing primary key was accepted")
 	}
-	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "ID", Type: "varchar"}}); err == nil {
+	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "ID", Type: "varchar"}}); err == nil {
 		t.Fatal("case-insensitive duplicate field was accepted")
 	}
-	if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "other", Type: "int", PrimaryKey: true}}); err == nil {
+	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "other", Type: "int", PrimaryKey: true}}); err == nil {
 		t.Fatal("multiple primary keys were accepted")
 	}
 }
 
 func TestValidateGenerationInputRejectsDottedRelationQuickSearch(t *testing.T) {
-	table := model.Table{Name: "orders", QuickSearchField: []string{"user.username"}}
-	fields := []model.Field{{Name: "id", Type: "int", PrimaryKey: true}}
+	table := crudmodel.Table{Name: "orders", QuickSearchField: []string{"user.username"}}
+	fields := []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}}
 	if err := ValidateGenerationInput(table, fields); err == nil || !strings.Contains(err.Error(), "requires JOIN support") {
 		t.Fatalf("dotted relation quick search error = %v", err)
 	}
 }
 
 func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
-	field := model.Field{
-		Name: "owner_id", Type: "int", Form: model.FormAttr{
+	field := crudmodel.Field{
+		Name: "owner_id", Type: "int", Form: crudmodel.FormAttr{
 			RemoteTable: "owner", RemoteModel: "app/admin/model/../handler/Evil.go", RelationFields: "name",
 		},
 	}
-	err := ValidateGenerationInput(model.Table{Name: "orders"}, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, field})
+	err := ValidateGenerationInput(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, field})
 	if err == nil {
 		t.Fatal("remote model path traversal was accepted")
 	}
@@ -68,11 +68,11 @@ func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
 
 func TestValidateGenerationInputRemotePkAcceptsQualifiedAndUnqualified(t *testing.T) {
 	for _, remotePk := range []string{"uuid", "owner.uuid"} {
-		fields := []model.Field{
+		fields := []crudmodel.Field{
 			{Name: "id", Type: "int", PrimaryKey: true},
-			{Name: "owner_id", Type: "int", Form: model.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
+			{Name: "owner_id", Type: "int", Form: crudmodel.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
 		}
-		if err := ValidateGenerationInput(model.Table{Name: "orders"}, fields); err != nil {
+		if err := ValidateGenerationInput(crudmodel.Table{Name: "orders"}, fields); err != nil {
 			t.Errorf("remotePk %q rejected: %v", remotePk, err)
 		}
 	}
@@ -80,11 +80,11 @@ func TestValidateGenerationInputRemotePkAcceptsQualifiedAndUnqualified(t *testin
 
 func TestValidateGenerationInputRejectsMalformedRemotePk(t *testing.T) {
 	for _, remotePk := range []string{".uuid", "uuid.", "owner..uuid", "a.b.c", "owner.uuid;DROP TABLE users", "owner-id"} {
-		fields := []model.Field{
+		fields := []crudmodel.Field{
 			{Name: "id", Type: "int", PrimaryKey: true},
-			{Name: "owner_id", Type: "int", Form: model.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
+			{Name: "owner_id", Type: "int", Form: crudmodel.FormAttr{RemoteTable: "owner", RemotePk: remotePk}},
 		}
-		if err := ValidateGenerationInput(model.Table{Name: "orders"}, fields); err == nil {
+		if err := ValidateGenerationInput(crudmodel.Table{Name: "orders"}, fields); err == nil {
 			t.Errorf("malformed remotePk %q was accepted", remotePk)
 		}
 	}
@@ -124,33 +124,33 @@ func TestNormalizeLogicalPathRejectsTraversalAbsoluteAndDrivePaths(t *testing.T)
 
 func TestValidateDefaultTypes(t *testing.T) {
 	for _, value := range []string{"NONE", "NULL", "EMPTY STRING", "INPUT"} {
-		if err := ValidateField(model.Field{Name: "value", Type: "varchar", DefaultType: value}); err != nil {
+		if err := ValidateField(crudmodel.Field{Name: "value", Type: "varchar", DefaultType: value}); err != nil {
 			t.Errorf("%s rejected: %v", value, err)
 		}
 	}
-	if err := ValidateField(model.Field{Name: "value", Type: "varchar", DefaultType: "OTHER"}); err == nil {
+	if err := ValidateField(crudmodel.Field{Name: "value", Type: "varchar", DefaultType: "OTHER"}); err == nil {
 		t.Fatal("invalid default type accepted")
 	}
 }
 
 func TestValidateGenerationInputRejectsUnsafeFrontendValues(t *testing.T) {
-	base := model.Table{Name: "orders"}
-	for _, field := range []model.Field{
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteField: "name;alert(1)"}},
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteController: "app/admin/controller/../Evil.go"}},
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteUrl: "javascript:alert(1)"}},
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteUrl: "data:text/html,x"}},
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteUrl: "/api\nEvil"}},
-		{Name: "owner", Type: "int", Form: model.FormAttr{RemoteUrl: "/api/'\""}},
+	base := crudmodel.Table{Name: "orders"}
+	for _, field := range []crudmodel.Field{
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteField: "name;alert(1)"}},
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteController: "app/admin/controller/../Evil.go"}},
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteUrl: "javascript:alert(1)"}},
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteUrl: "data:text/html,x"}},
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteUrl: "/api\nEvil"}},
+		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteUrl: "/api/'\""}},
 	} {
-		if err := ValidateGenerationInput(base, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, field}); err == nil {
+		if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, field}); err == nil {
 			t.Errorf("unsafe frontend field was accepted: %+v", field.Form)
 		}
 	}
 }
 
 func TestRenderFormFileUsesSafeJavaScriptStrings(t *testing.T) {
-	fields := []model.Field{{Name: "name", Form: model.FormAttr{Validator: []string{"required"}, ValidatorMsg: "bad ' quote\nnext"}}}
+	fields := []crudmodel.Field{{Name: "name", Form: crudmodel.FormAttr{Validator: []string{"required"}, ValidatorMsg: "bad ' quote\nnext"}}}
 	content, err := renderFormFile(FormVueData{}, fields, "form.")
 	if err != nil {
 		t.Fatal(err)

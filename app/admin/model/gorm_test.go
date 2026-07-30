@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	adminauth "go-build-admin/app/admin/model/auth"
+	usermodel "go-build-admin/app/admin/model/user"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -32,7 +33,7 @@ func getDb() *gorm.DB {
 
 func TestBelong(t *testing.T) {
 	db := getDb()
-	log := UserMoneyLog{}
+	log := usermodel.UserMoneyLog{}
 	db.Table("ba_user_money_log").Preload("ba_user").Where("id=1").Find(&log)
 	fmt.Printf("%+v", log)
 }

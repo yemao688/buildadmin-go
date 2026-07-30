@@ -3,7 +3,7 @@ package crud_helper
 import (
 	"bytes"
 	"fmt"
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/utils"
 	"go/ast"
 	"go/parser"
@@ -1003,7 +1003,7 @@ func buildTableColumn(tableColumnList []string) string {
 	return strings.TrimRight(columnJson, "\n")
 }
 
-func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []model.Field, webTranslate string) error {
+func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
 	formVueContent, err := renderFormFile(formVueData, fields, webTranslate)
 	if err != nil {
 		return err
@@ -1011,7 +1011,7 @@ func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []model.F
 	return writeFile(filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
 }
 
-func renderFormFile(formVueData FormVueData, fields []model.Field, webTranslate string) (string, error) {
+func renderFormFile(formVueData FormVueData, fields []crudmodel.Field, webTranslate string) (string, error) {
 	fieldHtml := "\n"
 	data := map[string]string{}
 	if formVueData.BigDialog != "" {

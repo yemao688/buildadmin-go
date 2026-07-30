@@ -1,11 +1,11 @@
 package crud_helper
 
 import (
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 )
 
-func getTestTableData() model.Table {
-	table := model.Table{
+func getTestTableData() crudmodel.Table {
+	table := crudmodel.Table{
 		Name:             "test1",
 		Comment:          "测试表",
 		QuickSearchField: []string{"id"},
@@ -71,7 +71,7 @@ func getTestTableData() model.Table {
 		ControllerFile:       "app\\admin\\handler\\Test1.go",
 		ValidateFile:         "app\\admin\\validate\\Test1.go",
 		WebViewsDir:          "web\\src\\views\\backend\\test1",
-		DesignChange: []model.ChangeField{
+		DesignChange: []crudmodel.ChangeField{
 			{
 				Type:    "change-field-name",
 				Index:   3,
@@ -86,9 +86,9 @@ func getTestTableData() model.Table {
 	return table
 }
 
-func getTestFieldData() []model.Field {
-	fields := []model.Field{}
-	fields = append(fields, model.Field{
+func getTestFieldData() []crudmodel.Field {
+	fields := []crudmodel.Field{}
+	fields = append(fields, crudmodel.Field{
 		Title:             "主键",
 		Name:              "id",
 		DataType:          "",
@@ -96,12 +96,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "pk",
 		TableBuildExclude: false,
 		FormBuildExclude:  true,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:    70,
 			Operator: "eq",
 			Sortable: "custom",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "int",
 		Length:             10,
 		Precision:          0,
@@ -113,7 +113,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "权重（拖拽排序）",
 		Name:              "weigh",
 		DataType:          "",
@@ -121,11 +121,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "weigh",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "custom",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator: []string{
 				"number",
 				"required",
@@ -141,7 +141,7 @@ func getTestFieldData() []model.Field {
 		Unsigned:   true,
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "状态",
 		Name:              "status",
 		DataType:          "",
@@ -149,12 +149,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "switch",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "false",
 			Render:   "switch",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "tinyint",
 		Length:             1,
 		Precision:          0,
@@ -166,7 +166,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "备注",
 		Name:              "remark11",
 		DataType:          "",
@@ -174,10 +174,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "textarea",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"required"},
 			ValidatorMsg: "",
 			Rows:         3,
@@ -193,7 +193,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "修改时间",
 		Name:              "update_time",
 		DataType:          "",
@@ -201,14 +201,14 @@ func getTestFieldData() []model.Field {
 		DesignType:        "timestamp",
 		TableBuildExclude: false,
 		FormBuildExclude:  true,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:      160,
 			Operator:   "RANGE",
 			Sortable:   "custom",
 			Render:     "datetime",
 			TimeFormat: "yyyy-mm-dd hh:MM:ss",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -223,7 +223,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "创建时间",
 		Name:              "create_time",
 		DataType:          "",
@@ -231,14 +231,14 @@ func getTestFieldData() []model.Field {
 		DesignType:        "timestamp",
 		TableBuildExclude: false,
 		FormBuildExclude:  true,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:      160,
 			Operator:   "RANGE",
 			Sortable:   "custom",
 			Render:     "datetime",
 			TimeFormat: "yyyy-mm-dd hh:MM:ss",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -253,7 +253,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "远程下拉（关联表）",
 		Name:              "banner_id",
 		DataType:          "",
@@ -261,10 +261,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "remoteSelect",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:        []string{},
 			ValidatorMsg:     "",
 			Rows:             0,
@@ -288,7 +288,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "字符串",
 		Name:              "string",
 		DataType:          "",
@@ -296,12 +296,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "string",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "LIKE",
 			Sortable: "false",
 			Render:   "none",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             200,
 		Precision:          0,
@@ -313,7 +313,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "图片",
 		Name:              "image",
 		DataType:          "",
@@ -321,11 +321,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "image",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "image",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             200,
 		Precision:          0,
@@ -337,7 +337,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "文件",
 		Name:              "file",
 		DataType:          "",
@@ -345,11 +345,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "file",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "none",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             200,
 		Precision:          0,
@@ -361,7 +361,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "单选框",
 		Name:              "radio",
 		DataType:          "enum('opt0','opt1')",
@@ -369,12 +369,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "radio",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "false",
 			Render:   "tag",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "enum",
 		Length:             0,
 		Precision:          0,
@@ -386,7 +386,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "数字",
 		Name:              "number",
 		DataType:          "",
@@ -394,14 +394,14 @@ func getTestFieldData() []model.Field {
 		DesignType:        "number",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:      0,
 			Operator:   "RANGE",
 			Sortable:   "false",
 			Render:     "none",
 			TimeFormat: "",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator: []string{"number"},
 			Step:      1,
 		},
@@ -416,7 +416,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "日期",
 		Name:              "date",
 		DataType:          "",
@@ -424,14 +424,14 @@ func getTestFieldData() []model.Field {
 		DesignType:        "date",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:      0,
 			Operator:   "eq",
 			Sortable:   "custom",
 			Render:     "",
 			TimeFormat: "",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -446,7 +446,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "时间日期（时间戳存储）",
 		Name:              "timestamp",
 		DataType:          "",
@@ -454,14 +454,14 @@ func getTestFieldData() []model.Field {
 		DesignType:        "timestamp",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:      160,
 			Operator:   "RANGE",
 			Sortable:   "custom",
 			Render:     "datetime",
 			TimeFormat: "yyyy-mm-dd hh:MM:ss",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -476,7 +476,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "年份",
 		Name:              "year",
 		DataType:          "",
@@ -484,11 +484,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "year",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "RANGE",
 			Sortable: "custom",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -503,7 +503,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "时间日期",
 		Name:              "datetime",
 		DataType:          "",
@@ -511,12 +511,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "datetime",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Width:    160,
 			Operator: "eq",
 			Sortable: "custom",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"date"},
 			ValidatorMsg: "",
 		},
@@ -531,7 +531,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "时间",
 		Name:              "time",
 		DataType:          "",
@@ -539,11 +539,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "time",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "custom",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{},
 			ValidatorMsg: "",
 		},
@@ -558,7 +558,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "密码",
 		Name:              "password",
 		DataType:          "",
@@ -566,10 +566,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "password",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"password"},
 			ValidatorMsg: "",
 		},
@@ -584,7 +584,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "浮点数",
 		Name:              "float",
 		DataType:          "",
@@ -592,12 +592,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "float",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "RANGE",
 			Sortable: "false",
 			Render:   "none",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator: []string{"float"},
 			Step:      1,
 		},
@@ -612,7 +612,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "复选框",
 		Name:              "checkbox",
 		DataType:          "set('opt0','opt1')",
@@ -620,12 +620,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "checkbox",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "FIND_IN_SET",
 			Sortable: "false",
 			Render:   "tags",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "set",
 		Length:             0,
 		Precision:          0,
@@ -637,7 +637,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "多行文本框",
 		Name:              "textarea",
 		DataType:          "",
@@ -645,10 +645,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "textarea",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{},
 			ValidatorMsg: "",
 			Rows:         3,
@@ -664,7 +664,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "富文本",
 		Name:              "editor",
 		DataType:          "",
@@ -672,10 +672,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "editor",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{"editorRequired"},
 			ValidatorMsg: "",
 		},
@@ -690,7 +690,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "下拉框",
 		Name:              "select",
 		DataType:          "enum('opt0','opt1')",
@@ -698,12 +698,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "select",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "false",
 			Render:   "tag",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "enum",
 		Length:             0,
 		Precision:          0,
@@ -715,7 +715,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "城市选择",
 		Name:              "city",
 		DataType:          "",
@@ -723,10 +723,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "city",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             100,
 		Precision:          0,
@@ -738,7 +738,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "数组",
 		Name:              "array",
 		DataType:          "",
@@ -746,10 +746,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "array",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             255,
 		Precision:          0,
@@ -761,7 +761,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "下拉框（多选）",
 		Name:              "selects",
 		DataType:          "",
@@ -769,12 +769,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "selects",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "FIND_IN_SET",
 			Sortable: "false",
 			Render:   "tags",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{},
 			ValidatorMsg: "",
 			Rows:         0,
@@ -791,7 +791,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "远程下拉（关联多选）",
 		Name:              "team_ids",
 		DataType:          "",
@@ -799,10 +799,10 @@ func getTestFieldData() []model.Field {
 		DesignType:        "remoteSelects",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "LIKE",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:        []string{},
 			ValidatorMsg:     "",
 			SelectMulti:      "1",
@@ -825,7 +825,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "文件（多选）",
 		Name:              "files",
 		DataType:          "",
@@ -833,11 +833,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "files",
 		TableBuildExclude: true,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "none",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{},
 			ValidatorMsg: "",
 			FileMulti:    "1",
@@ -853,7 +853,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "图片（多选）",
 		Name:              "images",
 		DataType:          "",
@@ -861,11 +861,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "images",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "images",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:  []string{},
 			ImageMulti: "1",
 		},
@@ -880,7 +880,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "颜色选择器",
 		Name:              "color",
 		DataType:          "",
@@ -888,11 +888,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "color",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "color",
 		},
-		Form: model.FormAttr{
+		Form: crudmodel.FormAttr{
 			Validator:    []string{},
 			ValidatorMsg: "",
 		},
@@ -906,7 +906,7 @@ func getTestFieldData() []model.Field {
 		AutoIncrement:      false,
 		OriginalDesignType: "",
 	})
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "开关",
 		Name:              "switch",
 		DataType:          "",
@@ -914,12 +914,12 @@ func getTestFieldData() []model.Field {
 		DesignType:        "switch",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "eq",
 			Sortable: "false",
 			Render:   "switch",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "tinyint",
 		Length:             1,
 		Precision:          0,
@@ -931,7 +931,7 @@ func getTestFieldData() []model.Field {
 		OriginalDesignType: "",
 	})
 
-	fields = append(fields, model.Field{
+	fields = append(fields, crudmodel.Field{
 		Title:             "图标选择",
 		Name:              "icon",
 		DataType:          "",
@@ -939,11 +939,11 @@ func getTestFieldData() []model.Field {
 		DesignType:        "icon",
 		TableBuildExclude: false,
 		FormBuildExclude:  false,
-		Table: model.TableAttr{
+		Table: crudmodel.TableAttr{
 			Operator: "false",
 			Render:   "icon",
 		},
-		Form:               model.FormAttr{},
+		Form:               crudmodel.FormAttr{},
 		Type:               "varchar",
 		Length:             50,
 		Precision:          0,

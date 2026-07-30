@@ -1,9 +1,9 @@
-package handler
+package user
 
 import (
 	"bytes"
 	"encoding/json"
-	"go-build-admin/app/admin/model"
+	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	cErr "go-build-admin/app/pkg/error"
@@ -22,15 +22,15 @@ import (
 type UserHandler struct {
 	Base
 	log   *zap.Logger
-	userM *model.UserModel
+	userM *adminmodel.UserModel
 	authM *commonModel.AuthModel
 }
 
-func NewUserHandler(log *zap.Logger, userM *model.UserModel) *UserHandler {
+func NewUserHandler(log *zap.Logger, userM *adminmodel.UserModel) *UserHandler {
 	return newUserHandler(log, userM, nil)
 }
 
-func NewUserHandlerWithAuth(log *zap.Logger, userM *model.UserModel, authM *commonModel.AuthModel) *UserHandler {
+func NewUserHandlerWithAuth(log *zap.Logger, userM *adminmodel.UserModel, authM *commonModel.AuthModel) *UserHandler {
 	return newUserHandler(log, userM, authM)
 }
 
@@ -42,9 +42,9 @@ func validateAccountStatusValue(value any) error {
 	return nil
 }
 
-func newUserHandler(log *zap.Logger, userM *model.UserModel, authM *commonModel.AuthModel) *UserHandler {
+func newUserHandler(log *zap.Logger, userM *adminmodel.UserModel, authM *commonModel.AuthModel) *UserHandler {
 	return &UserHandler{
-		Base:  Base{currentM: userM},
+		Base:  NewBase(userM),
 		log:   log,
 		userM: userM,
 		authM: authM,
@@ -125,7 +125,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var user model.User
+	var user adminmodel.User
 	if params.Birthday == "" {
 		params.Birthday = "0000-00-00"
 	}

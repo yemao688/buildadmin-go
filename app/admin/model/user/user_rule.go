@@ -1,4 +1,4 @@
-package model
+package user
 
 import (
 	cErr "go-build-admin/app/pkg/error"
@@ -36,17 +36,12 @@ type UserRuleModel struct {
 
 func NewUserRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *UserRuleModel {
 	return &UserRuleModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "user_rule",
-			Key:              "id",
-			QuickSearchField: "title",
-			sqlDB:            sqlDB,
-		},
+		BaseModel: NewBaseModel(config.Database.Prefix+"user_rule", "id", "title", sqlDB),
 	}
 }
 
 func (s *UserRuleModel) GetOne(ctx *gin.Context, id int32) (userRule UserRule, err error) {
-	err = s.sqlDB.Where("id=?", id).First(&userRule).Error
+	err = s.DB().Where("id=?", id).First(&userRule).Error
 	return
 }
 
@@ -55,12 +50,12 @@ func (s *UserRuleModel) List(ctx *gin.Context) (list []UserRule, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Model(&UserRule{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.DB().Model(&UserRule{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
 func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
-	tx := s.sqlDB.Begin()
+	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -78,12 +73,12 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 	parent := UserRule{}
 	if userRule.Pid > 0 {
-		if err := s.sqlDB.Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
+		if err := s.DB().Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
 			return err
 		}
 	}
 
-	tx := s.sqlDB.Begin()
+	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -106,7 +101,7 @@ func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 
 func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 	var subIds []int32
-	if err := s.sqlDB.Model(&UserRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+	if err := s.DB().Model(&UserRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
@@ -116,12 +111,12 @@ func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 		}
 	}
 
-	err := s.sqlDB.Model(&UserRule{}).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.DB().Model(&UserRule{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 
 func (s *UserRuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	pids := []int32{}
-	err := s.sqlDB.Model(&UserRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
+	err := s.DB().Model(&UserRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }

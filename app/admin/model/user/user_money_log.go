@@ -1,4 +1,4 @@
-package model
+package user
 
 import (
 	"fmt"
@@ -38,14 +38,9 @@ type UserMoneyLogModel struct {
 
 func NewUserMoneyLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserMoneyLogModel {
 	return &UserMoneyLogModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "user_money_log",
-			Key:              "id",
-			QuickSearchField: "user.username,user.nickname",
-			sqlDB:            sqlDB,
-		},
-		config:   config,
-		enforcer: enforcer,
+		BaseModel: NewBaseModel(config.Database.Prefix+"user_money_log", "id", "user.username,user.nickname", sqlDB),
+		config:    config,
+		enforcer:  enforcer,
 	}
 }
 
@@ -80,7 +75,7 @@ func (s *UserMoneyLogModel) userJoin() string {
 
 func (s *UserMoneyLogModel) GetOne(ctx *gin.Context, id int32) (UserMoneyLog, error) {
 	data := UserMoneyLog{}
-	err := s.sqlDB.Model(&UserMoneyLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
+	err := s.DB().Model(&UserMoneyLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
 	return data, err
 }
 
@@ -89,7 +84,7 @@ func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total i
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&UserMoneyLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
+	db := s.DB().Model(&UserMoneyLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
 	db = db.Scopes(s.scoped(ctx))
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -111,7 +106,7 @@ func (s *UserMoneyLogModel) Add(ctx *gin.Context, userMoneyLog *UserMoneyLog) er
 		return err
 	}
 
-	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+	return s.DB().Transaction(func(tx *gorm.DB) error {
 		var user User
 		if err := tx.Model(&User{}).Scopes(s.userScope(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userMoneyLog.UserID).Take(&user).Error; err != nil {
 			return err
@@ -172,7 +167,7 @@ func (s *UserMoneyLogModel) Del(ctx *gin.Context, ids interface{}) error {
 			normalized = append(normalized, id)
 		}
 	}
-	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+	return s.DB().Transaction(func(tx *gorm.DB) error {
 		var list []UserMoneyLog
 		scoped := tx.Model(&UserMoneyLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where(quote(s.TableName)+".id IN ?", normalized).Find(&list).Error; err != nil {

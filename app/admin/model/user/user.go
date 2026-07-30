@@ -1,4 +1,4 @@
-package model
+package user
 
 import (
 	"errors"
@@ -60,14 +60,9 @@ type UserModel struct {
 
 func NewUserModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserModel {
 	return &UserModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "user",
-			Key:              "id",
-			QuickSearchField: "username,nickname",
-			sqlDB:            sqlDB,
-		},
-		config:   config,
-		enforcer: enforcer,
+		BaseModel: NewBaseModel(config.Database.Prefix+"user", "id", "username,nickname", sqlDB),
+		config:    config,
+		enforcer:  enforcer,
 	}
 }
 

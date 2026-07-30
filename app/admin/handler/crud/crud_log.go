@@ -1,8 +1,8 @@
-package handler
+package crud
 
 import (
-	"go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 
@@ -13,13 +13,13 @@ import (
 type CrudLogHandler struct {
 	Base
 	log     *zap.Logger
-	crudLog *model.CrudLogModel
+	crudLog *crudmodel.CrudLogModel
 	authM   *adminauth.AuthModel
 }
 
-func NewCrudLogHandler(log *zap.Logger, crudLog *model.CrudLogModel, authM *adminauth.AuthModel) *CrudLogHandler {
+func NewCrudLogHandler(log *zap.Logger, crudLog *crudmodel.CrudLogModel, authM *adminauth.AuthModel) *CrudLogHandler {
 	return &CrudLogHandler{
-		Base:    Base{currentM: crudLog},
+		Base:    NewBase(crudLog),
 		log:     log,
 		crudLog: crudLog,
 		authM:   authM,

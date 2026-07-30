@@ -1,4 +1,4 @@
-package model
+package user
 
 import (
 	"go-build-admin/conf"
@@ -23,17 +23,12 @@ type UserGroupModel struct {
 
 func NewUserGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *UserGroupModel {
 	return &UserGroupModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "user_group",
-			Key:              "id",
-			QuickSearchField: "name",
-			sqlDB:            sqlDB,
-		},
+		BaseModel: NewBaseModel(config.Database.Prefix+"user_group", "id", "name", sqlDB),
 	}
 }
 
 func (s *UserGroupModel) GetOne(ctx *gin.Context, id int32) (userGroup UserGroup, err error) {
-	err = s.sqlDB.Where("id=?", id).First(&userGroup).Error
+	err = s.DB().Where("id=?", id).First(&userGroup).Error
 	return
 }
 
@@ -42,12 +37,12 @@ func (s *UserGroupModel) List(ctx *gin.Context) (list []UserGroup, err error) {
 	if err != nil {
 		return nil, err
 	}
-	err = s.sqlDB.Model(&UserGroup{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.DB().Model(&UserGroup{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
 func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
-	tx := s.sqlDB.Begin()
+	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -63,7 +58,7 @@ func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
 }
 
 func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
-	tx := s.sqlDB.Begin()
+	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -78,6 +73,6 @@ func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
 }
 
 func (s *UserGroupModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.sqlDB.Model(&UserGroup{}).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.DB().Model(&UserGroup{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }

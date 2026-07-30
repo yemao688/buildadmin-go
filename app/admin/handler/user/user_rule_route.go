@@ -1,5 +1,5 @@
 // 由 RouteRegistrar 模式维护（手写模块）
-package handler
+package user
 
 import (
 	"go-build-admin/app/middleware"

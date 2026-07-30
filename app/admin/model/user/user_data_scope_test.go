@@ -1,4 +1,4 @@
-package model_test
+package user
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	model "go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
@@ -23,18 +22,6 @@ import (
 
 type Admin = adminauth.Admin
 type AdminGroup = adminauth.AdminGroup
-
-type User = model.User
-type UserGroup = model.UserGroup
-type UserModel = model.UserModel
-type UserMoneyLog = model.UserMoneyLog
-type UserMoneyLogModel = model.UserMoneyLogModel
-type UserScoreLog = model.UserScoreLog
-type UserScoreLogModel = model.UserScoreLogModel
-
-var NewUserModel = model.NewUserModel
-var NewUserMoneyLogModel = model.NewUserMoneyLogModel
-var NewUserScoreLogModel = model.NewUserScoreLogModel
 
 type scopeFixture struct {
 	db     *gorm.DB

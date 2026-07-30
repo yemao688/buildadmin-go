@@ -1,7 +1,7 @@
-package handler
+package user
 
 import (
-	"go-build-admin/app/admin/model"
+	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 
 	"github.com/gin-gonic/gin"
@@ -12,12 +12,12 @@ import (
 type UserScoreLogHandler struct {
 	Base
 	log           *zap.Logger
-	userScoreLogM *model.UserScoreLogModel
+	userScoreLogM *adminmodel.UserScoreLogModel
 }
 
-func NewUserScoreLogHandler(log *zap.Logger, userScoreLogM *model.UserScoreLogModel) *UserScoreLogHandler {
+func NewUserScoreLogHandler(log *zap.Logger, userScoreLogM *adminmodel.UserScoreLogModel) *UserScoreLogHandler {
 	return &UserScoreLogHandler{
-		Base:          Base{currentM: userScoreLogM},
+		Base:          NewBase(userScoreLogM),
 		log:           log,
 		userScoreLogM: userScoreLogM,
 	}
@@ -77,7 +77,7 @@ func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	userScoreLog := model.UserScoreLog{}
+	userScoreLog := adminmodel.UserScoreLog{}
 	if err := copier.Copy(&userScoreLog, params); err != nil {
 		FailByErr(ctx, err)
 		return

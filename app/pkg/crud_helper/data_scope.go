@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	"slices"
 	"strings"
@@ -54,7 +54,7 @@ func ProtectedTableNames() []string {
 }
 
 // DataScopeResolveOptions customizes data-scope resolution during CRUD
-// generation. It mirrors the contract options but accepts model.Field metadata
+// generation. It mirrors the contract options but accepts crudmodel.Field metadata
 // for validation and an optional index prover.
 type DataScopeResolveOptions struct {
 	// AllowNoneWithAdminID permits an explicit ModeNone override only when the
@@ -103,7 +103,7 @@ type ResolvedDataScope struct {
 //     explicitly persisted ModeNone (AllowNoneWithAdminID set by the production
 //     entrypoint for cfg.Mode == ModeNone).
 //   - admin.id is explicit ModeRequired with OwnerColumn="id".
-func ResolveDataScope(cfg *data_scope.Config, fields []model.Field, opts DataScopeResolveOptions) (ResolvedDataScope, error) {
+func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts DataScopeResolveOptions) (ResolvedDataScope, error) {
 	hasAdminID := hasExactField(fields, "admin_id")
 
 	if cfg == nil || cfg.Mode == "" {
@@ -152,7 +152,7 @@ func ResolveDataScope(cfg *data_scope.Config, fields []model.Field, opts DataSco
 // Primary key columns are self-evident; everything else must be confirmed by
 // ProveIndex. If no proof is available, it fails closed with an actionable
 // error instead of a hint.
-func proveIndexStrategy(ownerColumn string, fields []model.Field, proveIndex func(string) (bool, error)) (IndexStrategy, error) {
+func proveIndexStrategy(ownerColumn string, fields []crudmodel.Field, proveIndex func(string) (bool, error)) (IndexStrategy, error) {
 	if ownerColumn == "" {
 		return IndexUnknown, nil
 	}
@@ -182,7 +182,7 @@ func proveIndexStrategy(ownerColumn string, fields []model.Field, proveIndex fun
 // resolveOwnerColumn extracts the effective owner column for DDL purposes
 // without requiring a proven index. It is used by HandleTableDesign to create
 // idx_<owner> immediately after the table is materialized.
-func resolveOwnerColumn(cfg *data_scope.Config, fields []model.Field) string {
+func resolveOwnerColumn(cfg *data_scope.Config, fields []crudmodel.Field) string {
 	if cfg != nil && cfg.Mode == data_scope.ModeRequired && cfg.OwnerColumn != "" {
 		return cfg.OwnerColumn
 	}
@@ -194,7 +194,7 @@ func resolveOwnerColumn(cfg *data_scope.Config, fields []model.Field) string {
 	return ""
 }
 
-func hasExactField(fields []model.Field, name string) bool {
+func hasExactField(fields []crudmodel.Field, name string) bool {
 	for _, f := range fields {
 		if f.Name == name {
 			return true
@@ -203,16 +203,16 @@ func hasExactField(fields []model.Field, name string) bool {
 	return false
 }
 
-func findField(fields []model.Field, name string) (model.Field, bool) {
+func findField(fields []crudmodel.Field, name string) (crudmodel.Field, bool) {
 	for _, f := range fields {
 		if f.Name == name {
 			return f, true
 		}
 	}
-	return model.Field{}, false
+	return crudmodel.Field{}, false
 }
 
-func validateRequiredOwner(column string, fields []model.Field) error {
+func validateRequiredOwner(column string, fields []crudmodel.Field) error {
 	if column == "" {
 		return fmt.Errorf("%w: owner column is required", data_scope.ErrInvalidOwnerColumn)
 	}
@@ -230,7 +230,7 @@ func validateRequiredOwner(column string, fields []model.Field) error {
 
 // isIntegerCompatible reports whether the named column has an integer-ish base
 // type. It is intentionally conservative: only MySQL integer types count.
-func isIntegerCompatible(fields []model.Field, column string) bool {
+func isIntegerCompatible(fields []crudmodel.Field, column string) bool {
 	f, ok := findField(fields, column)
 	if !ok {
 		return false

@@ -1,9 +1,9 @@
-package handler
+package user
 
 import (
 	"encoding/json"
 	"fmt"
-	"go-build-admin/app/admin/model"
+	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/pkg/safeint"
 
@@ -15,12 +15,12 @@ import (
 type UserMoneyLogHandler struct {
 	Base
 	log           *zap.Logger
-	userMoneyLogM *model.UserMoneyLogModel
+	userMoneyLogM *adminmodel.UserMoneyLogModel
 }
 
-func NewUserMoneyLogHandler(log *zap.Logger, userMoneyLogM *model.UserMoneyLogModel) *UserMoneyLogHandler {
+func NewUserMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.UserMoneyLogModel) *UserMoneyLogHandler {
 	return &UserMoneyLogHandler{
-		Base:          Base{currentM: userMoneyLogM},
+		Base:          NewBase(userMoneyLogM),
 		log:           log,
 		userMoneyLogM: userMoneyLogM,
 	}
@@ -80,7 +80,7 @@ func (h *UserMoneyLogHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	userMoneyLog := model.UserMoneyLog{}
+	userMoneyLog := adminmodel.UserMoneyLog{}
 	cents, err := safeint.ParseDecimalCents(params.Money)
 	if err != nil {
 		FailByErr(ctx, err)

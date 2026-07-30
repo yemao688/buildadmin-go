@@ -1,8 +1,8 @@
-package handler
+package user
 
 import (
-	"go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/utils"
@@ -19,23 +19,23 @@ import (
 type UserGroupHandler struct {
 	Base
 	log        *zap.Logger
-	userGroupM *model.UserGroupModel
+	userGroupM *adminmodel.UserGroupModel
 	userRuleM  *adminauth.AdminRuleModel
 	authM      *adminauth.AuthModel
 	userAuthM  *commonModel.AuthModel
 }
 
-func NewUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *UserGroupHandler {
+func NewUserGroupHandler(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *UserGroupHandler {
 	return newUserGroupHandler(log, userGroupM, userRuleM, authM, nil)
 }
 
-func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
+func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
 	return newUserGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
 }
 
-func newUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
+func newUserGroupHandler(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
 	return &UserGroupHandler{
-		Base:       Base{currentM: userGroupM},
+		Base:       NewBase(userGroupM),
 		log:        log,
 		userGroupM: userGroupM,
 		userRuleM:  userRuleM,
@@ -80,7 +80,7 @@ func (h *UserGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	userGroup := model.UserGroup{}
+	userGroup := adminmodel.UserGroup{}
 	if err := copier.Copy(&userGroup, params); err != nil {
 		FailByErr(ctx, err)
 		return

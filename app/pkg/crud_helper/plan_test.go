@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"os"
 	"path/filepath"
@@ -59,7 +60,7 @@ func TestPrimaryKeyDriftComparesCompleteColumnSetAndAttributes(t *testing.T) {
 		{COLUMN_NAME: "id", COLUMN_TYPE: "bigint", IS_NULLABLE: "NO", COLUMN_KEY: "PRI", EXTRA: "auto_increment", COLUMN_COMMENT: "ID"},
 		{COLUMN_NAME: "tenant_id", COLUMN_TYPE: "bigint", IS_NULLABLE: "NO", COLUMN_KEY: "PRI", COLUMN_COMMENT: "租户"},
 	}
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Comment: "ID"},
 		{Name: "tenant_id", Type: "bigint", PrimaryKey: true, Comment: "租户"},
 	}

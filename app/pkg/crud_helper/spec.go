@@ -3,7 +3,7 @@ package crud_helper
 import (
 	"bytes"
 	"fmt"
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	"os"
 	"strings"
@@ -46,24 +46,24 @@ type specMenu struct {
 }
 
 type specField struct {
-	Name              string          `mapstructure:"name"`
-	Title             string          `mapstructure:"title"`
-	Type              string          `mapstructure:"type"`
-	DataType          string          `mapstructure:"dataType"`
-	Length            int             `mapstructure:"length"`
-	Precision         int             `mapstructure:"precision"`
-	Default           string          `mapstructure:"default"`
-	DefaultType       string          `mapstructure:"defaultType"`
-	Null              bool            `mapstructure:"null"`
-	PrimaryKey        bool            `mapstructure:"primaryKey"`
-	Unsigned          bool            `mapstructure:"unsigned"`
-	AutoIncrement     bool            `mapstructure:"autoIncrement"`
-	Comment           string          `mapstructure:"comment"`
-	DesignType        string          `mapstructure:"designType"`
-	Form              model.FormAttr  `mapstructure:"form"`
-	Table             model.TableAttr `mapstructure:"table"`
-	FormBuildExclude  *bool           `mapstructure:"formBuildExclude"`
-	TableBuildExclude bool            `mapstructure:"tableBuildExclude"`
+	Name              string              `mapstructure:"name"`
+	Title             string              `mapstructure:"title"`
+	Type              string              `mapstructure:"type"`
+	DataType          string              `mapstructure:"dataType"`
+	Length            int                 `mapstructure:"length"`
+	Precision         int                 `mapstructure:"precision"`
+	Default           string              `mapstructure:"default"`
+	DefaultType       string              `mapstructure:"defaultType"`
+	Null              bool                `mapstructure:"null"`
+	PrimaryKey        bool                `mapstructure:"primaryKey"`
+	Unsigned          bool                `mapstructure:"unsigned"`
+	AutoIncrement     bool                `mapstructure:"autoIncrement"`
+	Comment           string              `mapstructure:"comment"`
+	DesignType        string              `mapstructure:"designType"`
+	Form              crudmodel.FormAttr  `mapstructure:"form"`
+	Table             crudmodel.TableAttr `mapstructure:"table"`
+	FormBuildExclude  *bool               `mapstructure:"formBuildExclude"`
+	TableBuildExclude bool                `mapstructure:"tableBuildExclude"`
 }
 
 // LoadSpec decodes an AI-authored YAML spec and applies safe generator
@@ -106,7 +106,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		return nil, fmt.Errorf("spec %q must define fields", raw.Name)
 	}
 
-	fields := make([]model.Field, 0, len(raw.Fields))
+	fields := make([]crudmodel.Field, 0, len(raw.Fields))
 	for i, item := range raw.Fields {
 		if item.Name == "" {
 			return nil, fmt.Errorf("field[%d] name is required", i)
@@ -129,7 +129,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 				}
 			}
 		}
-		field := model.Field{
+		field := crudmodel.Field{
 			Name: item.Name, Title: item.Title, Type: strings.ToLower(item.Type), DataType: strings.ToLower(item.DataType),
 			Length: item.Length, Precision: item.Precision, Default: item.Default, DefaultType: defaultType, Null: item.Null,
 			PrimaryKey: item.PrimaryKey, Unsigned: item.Unsigned, AutoIncrement: item.AutoIncrement,
@@ -188,7 +188,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if typeName == "" {
 		typeName = "create"
 	}
-	table := model.Table{
+	table := crudmodel.Table{
 		Name: raw.Name, Comment: raw.Comment, FormFields: formFields, ColumnFields: columnFields,
 		QuickSearchField: raw.QuickSearchField, DefaultSortField: raw.DefaultSortField, DefaultSortType: raw.DefaultSortType,
 		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
@@ -236,7 +236,7 @@ func normalizeNullKeys(node *yaml.Node) error {
 				}
 			}
 			if key.Value == "comSearchInputAttr" && value.Kind == yaml.ScalarNode {
-				attrs, err := model.ParseComSearchInputAttrs(value.Value)
+				attrs, err := crudmodel.ParseComSearchInputAttrs(value.Value)
 				if err != nil {
 					return err
 				}
@@ -262,7 +262,7 @@ func normalizeNullKeys(node *yaml.Node) error {
 
 // inferDesignTypeForField follows Helper.php::$inputTypeRule in order.  The
 // order is significant: suffix rules intentionally beat broad type rules.
-func inferDesignTypeForField(field model.Field) string {
+func inferDesignTypeForField(field crudmodel.Field) string {
 	name := strings.ToLower(field.Name)
 	typ := strings.ToLower(analyseFieldTypeForSpec(field))
 	columnType := strings.ToLower(field.DataType)
@@ -359,7 +359,7 @@ func inferDesignTypeForField(field model.Field) string {
 	return "string"
 }
 
-func analyseFieldTypeForSpec(field model.Field) string {
+func analyseFieldTypeForSpec(field crudmodel.Field) string {
 	typ := field.Type
 	if field.DataType != "" {
 		typ = field.DataType
@@ -405,7 +405,7 @@ func isCanonicalTimeField(name string) bool {
 	}
 }
 
-func applyTimestampTableDefaults(table *model.TableAttr) {
+func applyTimestampTableDefaults(table *crudmodel.TableAttr) {
 	if table.Render == "" {
 		table.Render = "datetime"
 	}
@@ -423,7 +423,7 @@ func applyTimestampTableDefaults(table *model.TableAttr) {
 	}
 }
 
-func applyDesignTypeDefaults(field *model.Field) {
+func applyDesignTypeDefaults(field *crudmodel.Field) {
 	setTable := func(render, operator, sortable, search string, width int, timeFormat string) {
 		if field.Table.Render == "" {
 			field.Table.Render = render

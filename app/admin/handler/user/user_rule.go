@@ -1,8 +1,8 @@
-package handler
+package user
 
 import (
-	"go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/tree"
@@ -16,22 +16,22 @@ import (
 type UserRuleHandler struct {
 	Base
 	log       *zap.Logger
-	userRuleM *model.UserRuleModel
+	userRuleM *adminmodel.UserRuleModel
 	authM     *adminauth.AuthModel
 	userAuthM *commonModel.AuthModel
 }
 
-func NewUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel) *UserRuleHandler {
+func NewUserRuleHandler(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel) *UserRuleHandler {
 	return newUserRuleHandler(log, userRuleM, authM, nil)
 }
 
-func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
+func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
 	return newUserRuleHandler(log, userRuleM, authM, userAuthM)
 }
 
-func newUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
+func newUserRuleHandler(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
 	return &UserRuleHandler{
-		Base:      Base{currentM: userRuleM},
+		Base:      NewBase(userRuleM),
 		log:       log,
 		userRuleM: userRuleM,
 		authM:     authM,
@@ -97,7 +97,7 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var userRule model.UserRule
+	var userRule adminmodel.UserRule
 	if err := copier.Copy(&userRule, params); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -201,7 +201,7 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取菜单列表
-func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.UserRule, error) {
+func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []interface{}) ([]adminmodel.UserRule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
 	if keyword != "" {
 		keywordArr := strings.Split(keyword, " ")
@@ -211,13 +211,13 @@ func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []i
 		}
 	}
 
-	list := []model.UserRule{}
+	list := []adminmodel.UserRule{}
 	err := h.userRuleM.DB().Table(h.userRuleM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Order("weigh desc,id asc").Find(&list).Error
 	return list, err
 }
 
 type UserRuleExpend struct {
-	model.UserRule
+	adminmodel.UserRule
 	Children []*UserRuleExpend `json:"children"`
 }
 
@@ -230,7 +230,7 @@ func (l *UserRuleExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*UserRuleExpend)
 }
 
-func (h *UserRuleHandler) AssembleChild(list []model.UserRule) []*UserRuleExpend {
+func (h *UserRuleHandler) AssembleChild(list []adminmodel.UserRule) []*UserRuleExpend {
 	expendList := []*UserRuleExpend{}
 	for _, v := range list {
 		temp := UserRuleExpend{}

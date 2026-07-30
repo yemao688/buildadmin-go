@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"os"
 	"path/filepath"
@@ -57,8 +57,8 @@ func newApplyTestDB(t *testing.T) (*gorm.DB, *conf.Configuration) {
 }
 
 func applyTestSpec(tableName string) *GenerateOptions {
-	fields := []model.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DesignType: "pk", Comment: "ID"}}
-	table := model.Table{Name: tableName, Comment: "测试表", QuickSearchField: []string{"id"}}
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DesignType: "pk", Comment: "ID"}}
+	table := crudmodel.Table{Name: tableName, Comment: "测试表", QuickSearchField: []string{"id"}}
 	return &GenerateOptions{Table: table, Fields: fields, Type: "create", AdminID: 1}
 }
 

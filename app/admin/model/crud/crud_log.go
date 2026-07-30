@@ -1,9 +1,10 @@
-package model
+package crud
 
 import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	model "go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"strconv"
@@ -28,7 +29,7 @@ type CrudLog struct {
 }
 
 type CrudLogModel struct {
-	BaseModel
+	model.BaseModel
 	enforcer data_scope.Enforcer
 }
 
@@ -272,13 +273,8 @@ type Field struct {
 
 func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CrudLogModel {
 	return &CrudLogModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "crud_log",
-			Key:              "id",
-			QuickSearchField: "table_name",
-			sqlDB:            sqlDB,
-		},
-		enforcer: enforcer,
+		BaseModel: model.NewBaseModel(config.Database.Prefix+"crud_log", "id", "table_name", sqlDB),
+		enforcer:  enforcer,
 	}
 }
 
@@ -296,7 +292,7 @@ func (s *CrudLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 }
 
 func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
+	err = s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
 	return
 }
 
@@ -311,21 +307,21 @@ func (s *CrudLogModel) HasAnyByTableName(table string) (bool, error) {
 		names = append(names, prefix+strings.TrimPrefix(table, prefix))
 	}
 	var count int64
-	err := s.sqlDB.Model(&CrudLog{}).Where("table_name IN ?", names).Count(&count).Error
+	err := s.DB().Model(&CrudLog{}).Where("table_name IN ?", names).Count(&count).Error
 	return count > 0, err
 }
 
 func (s *CrudLogModel) GetOne(ctx *gin.Context, id int32) (crudLog CrudLog, err error) {
-	err = s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).First(&crudLog).Error
+	err = s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).First(&crudLog).Error
 	return
 }
 
 func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	whereS, whereP, orderS, limit, offset, err := model.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
+	db := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -349,7 +345,7 @@ func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
 			normalized = append(normalized, id)
 		}
 	}
-	return s.sqlDB.Transaction(func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []CrudLog
 		scoped := tx.Model(&CrudLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where("id IN ?", normalized).Find(&list).Error; err != nil {
@@ -381,7 +377,7 @@ func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, 
 	data.AdminID = actor.AdminID
 
 	if data.ID != 0 {
-		result := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", data.ID).Update("status", data.Status)
+		result := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", data.ID).Update("status", data.Status)
 		if result.Error != nil {
 			return 0, result.Error
 		}
@@ -390,7 +386,7 @@ func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, 
 		}
 		return data.ID, nil
 	}
-	if err := s.sqlDB.Create(&data).Error; err != nil {
+	if err := s.DBFor(ctx).Create(&data).Error; err != nil {
 		return 0, err
 	}
 	return data.ID, nil
@@ -403,7 +399,7 @@ func (s *CrudLogModel) RecordCrudError(ctx *gin.Context, id int32, message strin
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	result := s.sqlDB.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).Updates(map[string]interface{}{
+	result := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).Updates(map[string]interface{}{
 		"status":  "error",
 		"comment": message,
 	})

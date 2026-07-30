@@ -10,13 +10,17 @@ import (
 	"go-build-admin/app/admin/handler"
 	auth2 "go-build-admin/app/admin/handler/auth"
 	country3 "go-build-admin/app/admin/handler/country"
+	crud2 "go-build-admin/app/admin/handler/crud"
 	routine2 "go-build-admin/app/admin/handler/routine"
 	security2 "go-build-admin/app/admin/handler/security"
+	user2 "go-build-admin/app/admin/handler/user"
 	model2 "go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/model/auth"
 	country2 "go-build-admin/app/admin/model/country"
+	"go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/model/security"
+	"go-build-admin/app/admin/model/user"
 	handler2 "go-build-admin/app/api/handler"
 	"go-build-admin/app/cmd"
 	handler3 "go-build-admin/app/cmd/handler"
@@ -64,9 +68,9 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authModel)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableModel, uploadHelper, terminalTerminal, configuration)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
-	crudLogModel := model2.NewCrudLogModel(gormDB, configuration, closureEnforcer)
-	crudLogHandler := handler.NewCrudLogHandler(zapLogger, crudLogModel, authModel)
-	crudLogRegistrar := handler.NewCrudLogRegistrar(crudLogHandler)
+	crudLogModel := crud.NewCrudLogModel(gormDB, configuration, closureEnforcer)
+	crudLogHandler := crud2.NewCrudLogHandler(zapLogger, crudLogModel, authModel)
+	crudLogRegistrar := crud2.NewCrudLogRegistrar(crudLogHandler)
 	moduleHandler := handler.NewModuleHandler(zapLogger)
 	moduleRegistrar := handler.NewModuleRegistrar(moduleHandler)
 	testBuildModel := model2.NewTestBuildModel(gormDB, configuration)
@@ -78,12 +82,12 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	adminGroupRegistrar := auth2.NewAdminGroupRegistrar(adminGroupHandler)
 	adminRuleHandler := auth2.NewAdminRuleHandler(zapLogger, adminRuleModel, authModel)
 	adminRuleRegistrar := auth2.NewAdminRuleRegistrar(adminRuleHandler)
-	userGroupModel := model2.NewUserGroupModel(gormDB, configuration)
-	userGroupHandler := handler.NewUserGroupHandlerWithAuth(zapLogger, userGroupModel, adminRuleModel, authModel, modelAuthModel)
-	userGroupRegistrar := handler.NewUserGroupRegistrar(userGroupHandler)
-	userRuleModel := model2.NewUserRuleModel(gormDB, configuration)
-	userRuleHandler := handler.NewUserRuleHandlerWithAuth(zapLogger, userRuleModel, authModel, modelAuthModel)
-	userRuleRegistrar := handler.NewUserRuleRegistrar(userRuleHandler)
+	userGroupModel := user.NewUserGroupModel(gormDB, configuration)
+	userGroupHandler := user2.NewUserGroupHandlerWithAuth(zapLogger, userGroupModel, adminRuleModel, authModel, modelAuthModel)
+	userGroupRegistrar := user2.NewUserGroupRegistrar(userGroupHandler)
+	userRuleModel := user.NewUserRuleModel(gormDB, configuration)
+	userRuleHandler := user2.NewUserRuleHandlerWithAuth(zapLogger, userRuleModel, authModel, modelAuthModel)
+	userRuleRegistrar := user2.NewUserRuleRegistrar(userRuleHandler)
 	configHandler := routine2.NewConfigHandler(zapLogger, configuration, configModel)
 	configRegistrar := routine2.NewConfigRegistrar(configHandler)
 	attachmentModel := model.NewAttachmentModel(gormDB, configuration, closureEnforcer)
@@ -92,9 +96,9 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	adminModel := auth.NewAdminModel(gormDB, configuration)
 	adminHandler := auth2.NewAdminHandler(zapLogger, adminModel, authModel)
 	adminRegistrar := auth2.NewAdminRegistrar(adminHandler)
-	userModel := model2.NewUserModel(gormDB, configuration, closureEnforcer)
-	userHandler := handler.NewUserHandlerWithAuth(zapLogger, userModel, modelAuthModel)
-	userRegistrar := handler.NewUserRegistrar(userHandler)
+	userModel := user.NewUserModel(gormDB, configuration, closureEnforcer)
+	userHandler := user2.NewUserHandlerWithAuth(zapLogger, userModel, modelAuthModel)
+	userRegistrar := user2.NewUserRegistrar(userHandler)
 	dataRecycleModel := security.NewDataRecycleModel(gormDB, configuration, closureEnforcer)
 	dataRecycleHandler := security2.NewDataRecycleHandler(zapLogger, configuration, dataRecycleModel, tableModel)
 	dataRecycleRegistrar := security2.NewDataRecycleRegistrar(dataRecycleHandler)
@@ -111,15 +115,15 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	adminInfoRegistrar := routine2.NewAdminInfoRegistrar(adminInfoHandler)
 	adminLogHandler := auth2.NewAdminLogHandler(zapLogger, adminLogModel)
 	adminLogRegistrar := auth2.NewAdminLogRegistrar(adminLogHandler)
-	crudHandler := handler.NewCrudHandler(zapLogger, tableModel, crudLogModel, adminRuleModel, configuration)
-	crudRegistrar := handler.NewCrudRegistrar(crudHandler)
+	crudHandler := crud2.NewCrudHandler(zapLogger, tableModel, crudLogModel, adminRuleModel, configuration)
+	crudRegistrar := crud2.NewCrudRegistrar(crudHandler)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleModel)
 	dashboardRegistrar := handler.NewDashboardRegistrar(dashboardHandler)
-	userMoneyLogModel := model2.NewUserMoneyLogModel(gormDB, configuration, closureEnforcer)
-	userMoneyLogHandler := handler.NewUserMoneyLogHandler(zapLogger, userMoneyLogModel)
-	userScoreLogModel := model2.NewUserScoreLogModel(gormDB, configuration, closureEnforcer)
-	userScoreLogHandler := handler.NewUserScoreLogHandler(zapLogger, userScoreLogModel)
-	userLogRegistrar := handler.NewUserLogRegistrar(userHandler, userMoneyLogHandler, userScoreLogHandler)
+	userMoneyLogModel := user.NewUserMoneyLogModel(gormDB, configuration, closureEnforcer)
+	userMoneyLogHandler := user2.NewUserMoneyLogHandler(zapLogger, userMoneyLogModel)
+	userScoreLogModel := user.NewUserScoreLogModel(gormDB, configuration, closureEnforcer)
+	userScoreLogHandler := user2.NewUserScoreLogHandler(zapLogger, userScoreLogModel)
+	userLogRegistrar := user2.NewUserLogRegistrar(userHandler, userMoneyLogHandler, userScoreLogHandler)
 	modelUserModel := model.NewUserModel(gormDB, configuration)
 	modelUserScoreLogModel := model.NewUserScoreLogModel(gormDB)
 	modelUserMoneyLogModel := model.NewUserMoneyLogModel(gormDB)

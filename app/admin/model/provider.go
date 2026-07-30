@@ -5,12 +5,6 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
-	NewCrudLogModel,
 	NewTableModel,
 	NewTestBuildModel,
-	NewUserGroupModel,
-	NewUserMoneyLogModel,
-	NewUserRuleModel,
-	NewUserScoreLogModel,
-	NewUserModel,
 )

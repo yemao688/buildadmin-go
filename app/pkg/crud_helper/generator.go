@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/model"
 	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -24,8 +25,8 @@ import (
 // Authorization is deliberately outside this service: HTTP callers must check
 // their actor, while CLI callers have no gin.Context.
 type GenerateOptions struct {
-	Table                 model.Table
-	Fields                []model.Field
+	Table                 crudmodel.Table
+	Fields                []crudmodel.Field
 	Type                  string
 	SkipMenu              bool
 	AdminID               int32
@@ -120,7 +121,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target manifest differs from the latest successful generation; use crud:delete first or keep the original paths", opts.Table.Name)
 	}
 	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
-	opts.Table.Manifest = &model.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
+	opts.Table.Manifest = &crudmodel.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
 	snapshot, err := NewFileSnapshot(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	if err != nil {
 		return nil, err
@@ -246,7 +247,7 @@ func actualPrimaryKeys(db *gorm.DB, fullTableName string) ([]string, error) {
 	return keys, err
 }
 
-func specPrimaryKeys(fields []model.Field) []string {
+func specPrimaryKeys(fields []crudmodel.Field) []string {
 	keys := make([]string, 0, len(fields))
 	for _, field := range fields {
 		if field.PrimaryKey {
@@ -333,14 +334,14 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if IsProtectedTableWithPrefix(cfg.Database.Prefix, log.Tablename, log.Table.Name) {
 		return fmt.Errorf("crud deletion is forbidden for protected table %q", log.Tablename)
 	}
-	if err := ValidateGenerationInput(model.Table(log.Table), []model.Field(log.Fields)); err != nil {
+	if err := ValidateGenerationInput(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields)); err != nil {
 		return err
 	}
-	manifest, err := BuildFileManifestForFields(model.Table(log.Table), []model.Field(log.Fields))
+	manifest, err := BuildFileManifestForFields(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields))
 	if err != nil {
 		return err
 	}
-	manifest, err = historicalDeleteManifest(manifest, model.Table(log.Table))
+	manifest, err = historicalDeleteManifest(manifest, crudmodel.Table(log.Table))
 	if err != nil {
 		return err
 	}
@@ -412,7 +413,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := RemoveProvider(modelFile.RootFileName, modelFile.LastName+"Model"); err != nil {
 		return fail("remove model provider", err)
 	}
-	if err := removeAssociatedModelProviders([]model.Field(log.Fields), manifest); err != nil {
+	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest); err != nil {
 		return fail("remove associated model providers", err)
 	}
 	if err := RemoveRegistrarProvider(handlerFile.LastName, handlerFile.RootFileName); err != nil {
@@ -491,7 +492,7 @@ func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
 	return FileManifest{Generated: generated, Shared: manifest.Shared}, nil
 }
 
-func historicalDeleteManifest(current FileManifest, table model.Table) (FileManifest, error) {
+func historicalDeleteManifest(current FileManifest, table crudmodel.Table) (FileManifest, error) {
 	var result FileManifest
 	if table.Manifest != nil {
 		result = FileManifest{Generated: append([]string{}, table.Manifest.Generated...), Shared: append([]string{}, table.Manifest.Shared...)}
@@ -611,7 +612,7 @@ func parseDeleteGoFiles(paths ...string) error {
 	return nil
 }
 
-func removeAssociatedModelProviders(fields []model.Field, manifest FileManifest) error {
+func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManifest) error {
 	seen := map[string]bool{}
 	for _, field := range fields {
 		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
@@ -651,7 +652,7 @@ func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
 	return db.Migrator().HasTable(cfg.Database.Prefix + table)
 }
 
-func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*model.CrudLog, error) {
+func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*crudmodel.CrudLog, error) {
 	// 已被后续 delete 消费的 success 记录不再约束重新生成,
 	// 否则删除后换新路径重新生成会被旧 manifest 拒绝
 	var lastDeleteID int32
@@ -662,7 +663,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	if lastDeleteID > 0 {
 		query = query.Where("id > ?", lastDeleteID)
 	}
-	var log model.CrudLog
+	var log crudmodel.CrudLog
 	err := query.Order("create_time desc, id desc").Take(&log).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -670,7 +671,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	return &log, err
 }
 
-func manifestAllows(manifest FileManifest, log *model.CrudLog) bool {
+func manifestAllows(manifest FileManifest, log *crudmodel.CrudLog) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
@@ -777,9 +778,9 @@ func containsPath(paths []string, target string) bool {
 
 // deriveAlterChanges 派生 alter 差量：缺失列 add-field，属性漂移 change-field-attr，
 // 完全一致的列不产生差量（保证 alter 与 crud:apply 的幂等性）。
-func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.ChangeField {
+func deriveAlterChanges(columns []model.Column, fields []crudmodel.Field) []crudmodel.ChangeField {
 	diffs := deriveAlterDiff(columns, fields)
-	changes := make([]model.ChangeField, 0, len(diffs))
+	changes := make([]crudmodel.ChangeField, 0, len(diffs))
 	for _, diff := range diffs {
 		change := diff.Change
 		// crud:generate remains the explicit development tool. Its legacy
@@ -792,13 +793,13 @@ func deriveAlterChanges(columns []model.Column, fields []model.Field) []model.Ch
 }
 
 func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (int32, error) {
-	record := model.CrudLog{
+	record := crudmodel.CrudLog{
 		AdminID:    opts.AdminID,
 		Tablename:  opts.Table.Name,
 		Comment:    opts.Table.Comment,
 		Connection: opts.Table.DatabaseConnection,
-		Table:      model.JSON_TABLE(opts.Table),
-		Fields:     model.JSON_FIELDS(opts.Fields),
+		Table:      crudmodel.JSON_TABLE(opts.Table),
+		Fields:     crudmodel.JSON_FIELDS(opts.Fields),
 		Status:     "start",
 	}
 	if err := db.Table(crudLogTable(cfg)).Create(&record).Error; err != nil {
