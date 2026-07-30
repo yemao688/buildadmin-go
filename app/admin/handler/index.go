@@ -4,7 +4,7 @@ import (
 	adminauth "go-build-admin/app/admin/model/auth"
 	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/common/model/country"
+	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"

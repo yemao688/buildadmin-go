@@ -14,7 +14,7 @@ import (
 	routine2 "go-build-admin/app/admin/handler/routine"
 	security2 "go-build-admin/app/admin/handler/security"
 	user2 "go-build-admin/app/admin/handler/user"
-	model2 "go-build-admin/app/admin/model"
+	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/model/auth"
 	country2 "go-build-admin/app/admin/model/country"
 	"go-build-admin/app/admin/model/crud"
@@ -25,9 +25,9 @@ import (
 	user3 "go-build-admin/app/api/model/user"
 	"go-build-admin/app/cmd"
 	handler3 "go-build-admin/app/cmd/handler"
+	"go-build-admin/app/common/area"
+	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/member"
-	"go-build-admin/app/common/model"
-	"go-build-admin/app/common/model/country"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -64,8 +64,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	countryService := country.NewService(gormDB, configuration)
 	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, countryService, clickCaptcha)
-	areaModel := model.NewAreaModel(gormDB, configuration)
-	tableModel := model2.NewTableModel(configuration, gormDB)
+	areaModel := area.NewAreaModel(gormDB, configuration)
+	tableModel := model.NewTableModel(configuration, gormDB)
 	aliossStorage := upload.NewAliossStorage(gormDB, configuration)
 	uploadHelper := upload.NewUploadHelper(gormDB, configuration, aliossStorage)
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authModel)
@@ -76,7 +76,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	logRegistrar := crud2.NewLogRegistrar(logHandler)
 	moduleHandler := handler.NewModuleHandler(zapLogger)
 	moduleRegistrar := handler.NewModuleRegistrar(moduleHandler)
-	testBuildModel := model2.NewTestBuildModel(gormDB, configuration)
+	testBuildModel := model.NewTestBuildModel(gormDB, configuration)
 	testBuildHandler := handler.NewTestBuildHandler(zapLogger, testBuildModel)
 	testBuildRegistrar := handler.NewTestBuildRegistrar(testBuildHandler)
 	adminGroupModel := auth.NewAdminGroupModel(gormDB, configuration)

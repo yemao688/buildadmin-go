@@ -1,12 +1,5 @@
 package model
 
-import (
-	"go-build-admin/app/common/model/country"
+import "github.com/google/wire"
 
-	"github.com/google/wire"
-)
-
-var ProviderSet = wire.NewSet(
-	NewAreaModel,
-	country.NewService,
-)
+var ProviderSet = wire.NewSet()

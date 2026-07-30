@@ -1,6 +1,7 @@
-package model
+package area
 
 import (
+	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
@@ -24,17 +25,12 @@ type Area struct {
 }
 
 type AreaModel struct {
-	BaseModel
+	commonModel.BaseModel
 }
 
 func NewAreaModel(sqlDB *gorm.DB, config *conf.Configuration) *AreaModel {
 	return &AreaModel{
-		BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "area",
-			Key:              "id",
-			QuickSearchField: "name",
-			sqlDB:            sqlDB,
-		},
+		BaseModel: commonModel.NewBaseModel(config.Database.Prefix+"area", "id", "name", sqlDB),
 	}
 }
 
@@ -57,6 +53,6 @@ func (s *AreaModel) List(ctx *gin.Context) (any, error) {
 		Value int32  `json:"value"`
 		Label string `json:"label"`
 	}{}
-	err := s.sqlDB.Model(&Area{}).Select("id as value,name as label").Where(whereS, pid, level).Scan(&list).Error
+	err := s.DB().Model(&Area{}).Select("id as value,name as label").Where(whereS, pid, level).Scan(&list).Error
 	return list, err
 }

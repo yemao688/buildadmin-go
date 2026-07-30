@@ -2,7 +2,7 @@ package handler
 
 import (
 	adminModel "go-build-admin/app/admin/model"
-	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/common/area"
 	"go-build-admin/app/common/upload"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
@@ -18,14 +18,14 @@ import (
 
 type AjaxHandler struct {
 	log          *zap.Logger
-	areaM        *commonModel.AreaModel
+	areaM        *area.AreaModel
 	tableM       *adminModel.TableModel
 	uploadHelper *upload.UploadHelper
 	terminal     *terminal.Terminal
 	config       *conf.Configuration
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *commonModel.AreaModel, tableM *adminModel.TableModel, uploadHelper *upload.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
+func NewAjaxHandler(log *zap.Logger, areaM *area.AreaModel, tableM *adminModel.TableModel, uploadHelper *upload.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
 	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal, config: config}
 }
 

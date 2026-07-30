@@ -1,7 +1,7 @@
 package handler
 
 import (
-	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/common/area"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/utils"
@@ -14,11 +14,11 @@ import (
 
 type AjaxHandler struct {
 	log          *zap.Logger
-	areaM        *commonModel.AreaModel
+	areaM        *area.AreaModel
 	uploadHelper *upload.UploadHelper
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *commonModel.AreaModel, uploadHelper *upload.UploadHelper) *AjaxHandler {
+func NewAjaxHandler(log *zap.Logger, areaM *area.AreaModel, uploadHelper *upload.UploadHelper) *AjaxHandler {
 	return &AjaxHandler{log: log, areaM: areaM, uploadHelper: uploadHelper}
 }
 
