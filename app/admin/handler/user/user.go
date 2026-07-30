@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
-	commonModel "go-build-admin/app/common/model"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/utils"
@@ -23,14 +22,14 @@ type UserHandler struct {
 	Base
 	log   *zap.Logger
 	userM *adminmodel.UserModel
-	authM *commonModel.AuthModel
+	authM MemberPermissionInvalidator
 }
 
 func NewUserHandler(log *zap.Logger, userM *adminmodel.UserModel) *UserHandler {
 	return newUserHandler(log, userM, nil)
 }
 
-func NewUserHandlerWithAuth(log *zap.Logger, userM *adminmodel.UserModel, authM *commonModel.AuthModel) *UserHandler {
+func NewUserHandlerWithAuth(log *zap.Logger, userM *adminmodel.UserModel, authM MemberPermissionInvalidator) *UserHandler {
 	return newUserHandler(log, userM, authM)
 }
 
@@ -42,7 +41,7 @@ func validateAccountStatusValue(value any) error {
 	return nil
 }
 
-func newUserHandler(log *zap.Logger, userM *adminmodel.UserModel, authM *commonModel.AuthModel) *UserHandler {
+func newUserHandler(log *zap.Logger, userM *adminmodel.UserModel, authM MemberPermissionInvalidator) *UserHandler {
 	return &UserHandler{
 		Base:  NewBase(userM),
 		log:   log,

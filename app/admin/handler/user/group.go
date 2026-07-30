@@ -4,7 +4,6 @@ import (
 	adminauth "go-build-admin/app/admin/model/auth"
 	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
-	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/utils"
 	"slices"
 	"strconv"
@@ -22,18 +21,18 @@ type GroupHandler struct {
 	userGroupM *adminmodel.GroupModel
 	userRuleM  *adminauth.AdminRuleModel
 	authM      *adminauth.AuthModel
-	userAuthM  *commonModel.AuthModel
+	userAuthM  MemberPermissionInvalidator
 }
 
 func NewGroupHandler(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *GroupHandler {
 	return newGroupHandler(log, userGroupM, userRuleM, authM, nil)
 }
 
-func NewGroupHandlerWithAuth(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *GroupHandler {
+func NewGroupHandlerWithAuth(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM MemberPermissionInvalidator) *GroupHandler {
 	return newGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
 }
 
-func newGroupHandler(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *GroupHandler {
+func newGroupHandler(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM MemberPermissionInvalidator) *GroupHandler {
 	return &GroupHandler{
 		Base:       NewBase(userGroupM),
 		log:        log,

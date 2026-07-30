@@ -10,6 +10,7 @@ import (
 	"time"
 
 	usermodel "go-build-admin/app/api/model/user"
+	"go-build-admin/app/common/member"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/header"
@@ -158,7 +159,7 @@ func TestChangeBindChecksEmailAndMobileOccupancy(t *testing.T) {
 				require.NoError(t, err)
 
 				h := &AccountHandler{
-					authM:   commonModel.NewAuthModel(db, tokenHelper, config),
+					authM:   member.NewService(db, tokenHelper, config),
 					userM:   usermodel.NewUserModel(db, nil),
 					captcha: captchaModel,
 				}

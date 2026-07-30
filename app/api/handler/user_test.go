@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-build-admin/app/common/model"
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -24,7 +24,7 @@ import (
 func newUserHandlerTest(config *conf.Configuration) *UserHandler {
 	return &UserHandler{
 		config: config,
-		authM:  model.NewAuthModel(nil, nil, config),
+		authM:  member.NewService(nil, nil, config),
 	}
 }
 
@@ -114,7 +114,7 @@ func TestUserCheckInLoggedInResponseMatchesPHPContract(t *testing.T) {
 	config := &conf.Configuration{}
 	config.App.OpenMemberCenter = true
 	h := newUserHandlerTest(config)
-	h.authM = model.NewAuthModel(nil, &token.TokenHelper{Driver: userTestTokenDriver{}}, config)
+	h.authM = member.NewService(nil, &token.TokenHelper{Driver: userTestTokenDriver{}}, config)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         utils.RootPath() + "/conf/localize",

@@ -2,7 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/common/model"
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
@@ -18,12 +18,12 @@ import (
 type UserHandler struct {
 	log          *zap.Logger
 	config       *conf.Configuration
-	authM        *model.AuthModel
+	authM        *member.Service
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	captcha      *captcha.Captcha
 }
 
-func NewUserHandler(log *zap.Logger, config *conf.Configuration, authM *model.AuthModel, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha) *UserHandler {
+func NewUserHandler(log *zap.Logger, config *conf.Configuration, authM *member.Service, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha) *UserHandler {
 	return &UserHandler{log: log, config: config, authM: authM, clickCaptcha: clickCaptcha, captcha: captcha}
 }
 

@@ -4,7 +4,6 @@ import (
 	adminauth "go-build-admin/app/admin/model/auth"
 	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
-	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/tree"
 	"strings"
 
@@ -18,18 +17,18 @@ type RuleHandler struct {
 	log       *zap.Logger
 	userRuleM *adminmodel.RuleModel
 	authM     *adminauth.AuthModel
-	userAuthM *commonModel.AuthModel
+	userAuthM MemberPermissionInvalidator
 }
 
 func NewRuleHandler(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel) *RuleHandler {
 	return newRuleHandler(log, userRuleM, authM, nil)
 }
 
-func NewRuleHandlerWithAuth(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *RuleHandler {
+func NewRuleHandlerWithAuth(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM MemberPermissionInvalidator) *RuleHandler {
 	return newRuleHandler(log, userRuleM, authM, userAuthM)
 }
 
-func newRuleHandler(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *RuleHandler {
+func newRuleHandler(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM MemberPermissionInvalidator) *RuleHandler {
 	return &RuleHandler{
 		Base:      NewBase(userRuleM),
 		log:       log,

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	adminModel "go-build-admin/app/admin/model/auth"
+	"go-build-admin/app/common/member"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -101,7 +102,7 @@ func TestUserLoginRejectsAdminToken(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "enable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}
-	authM := commonModel.NewAuthModel(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
+	authM := member.NewService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -119,7 +120,7 @@ func TestUserLoginRejectsDisabledUserToken(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "disable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "user", UserID: 1}}
-	authM := commonModel.NewAuthModel(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
+	authM := member.NewService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

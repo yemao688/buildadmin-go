@@ -11,7 +11,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -61,7 +61,7 @@ func TestIndexRequiredLoginIncludesPHPType(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	driver := &handlerContractTokenDriver{getErr: errors.New("not logged in")}
 	h := &IndexHandler{
-		authM: commonModel.NewAuthModel(nil, &token.TokenHelper{Driver: driver}, nil),
+		authM: member.NewService(nil, &token.TokenHelper{Driver: driver}, nil),
 	}
 	router := newContractTestRouter()
 	router.GET("/", h.Index)

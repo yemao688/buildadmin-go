@@ -7,6 +7,11 @@ import (
 	"go-build-admin/app/pkg/requesttx"
 )
 
+type MemberPermissionInvalidator interface {
+	InvalidateUser(uid int32)
+	InvalidateAll()
+}
+
 func invalidateAfterMutation(ctx *gin.Context, invalidate func()) {
 	if invalidate == nil {
 		return

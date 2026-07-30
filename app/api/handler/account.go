@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-build-admin/app/admin/validate"
 	usermodel "go-build-admin/app/api/model/user"
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
 	cErr "go-build-admin/app/pkg/error"
@@ -20,14 +21,14 @@ import (
 
 type AccountHandler struct {
 	log           *zap.Logger
-	authM         *model.AuthModel
+	authM         *member.Service
 	userM         *usermodel.UserModel
 	userScoreLogM *usermodel.UserScoreLogModel
 	userMoneyLogM *usermodel.UserMoneyLogModel
 	captcha       *captcha.Captcha
 }
 
-func NewAccountHandler(log *zap.Logger, authM *model.AuthModel, userM *usermodel.UserModel, userScoreLogM *usermodel.UserScoreLogModel, userMoneyLogM *usermodel.UserMoneyLogModel, captcha *captcha.Captcha) *AccountHandler {
+func NewAccountHandler(log *zap.Logger, authM *member.Service, userM *usermodel.UserModel, userScoreLogM *usermodel.UserScoreLogModel, userMoneyLogM *usermodel.UserMoneyLogModel, captcha *captcha.Captcha) *AccountHandler {
 	return &AccountHandler{log: log, authM: authM, userM: userM, userScoreLogM: userScoreLogM, userMoneyLogM: userMoneyLogM, captcha: captcha}
 }
 

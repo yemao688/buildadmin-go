@@ -1,8 +1,9 @@
-package model
+package member
 
 import (
 	"errors"
 	"fmt"
+	"go-build-admin/app/common/model"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/permissioncache"
@@ -45,15 +46,15 @@ type Rule struct {
 	Children     []Rule `json:"children"`
 }
 
-type AuthModel struct {
+type Service struct {
 	sqlDB       *gorm.DB
 	tokenHelper *token.TokenHelper
 	config      *conf.Configuration
 	cache       permissioncache.Cache[AuthGroup, Rule]
 }
 
-func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *AuthModel {
-	return &AuthModel{
+func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *Service {
+	return &Service{
 		sqlDB:       sqlDB,
 		tokenHelper: tokenHelper,
 		config:      config,
@@ -61,16 +62,16 @@ func NewAuthModel(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.C
 }
 
 // InvalidateUser clears the cached permissions for one user.
-func (s *AuthModel) InvalidateUser(uid int32) {
+func (s *Service) InvalidateUser(uid int32) {
 	s.cache.InvalidateUser(uid)
 }
 
 // InvalidateAll clears all cached user permissions.
-func (s *AuthModel) InvalidateAll() {
+func (s *Service) InvalidateAll() {
 	s.cache.InvalidateAll()
 }
 
-func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
+func (s *Service) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	tokenStr := ctx.Request.Header.Get("ba-user-token")
 	if tokenStr != "" {
 		tokenData, err := s.tokenHelper.GetFor(tokenStr, "user")
@@ -81,35 +82,35 @@ func (s *AuthModel) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	return nil, false
 }
 
-func (s *AuthModel) IsEnabledUser(id int32) bool {
-	var user User
-	err := s.sqlDB.Model(&User{}).Select("status").Where("id=?", id).First(&user).Error
+func (s *Service) IsEnabledUser(id int32) bool {
+	var user model.User
+	err := s.sqlDB.Model(&model.User{}).Select("status").Where("id=?", id).First(&user).Error
 	return err == nil && user.Status == "enable"
 }
 
-func (s *AuthModel) SetVerificationToken(t string, id int32) string {
+func (s *Service) SetVerificationToken(t string, id int32) string {
 	tokenStr := random.Uuid()
 	s.tokenHelper.Set(tokenStr, t, id, 600) //30天
 	return tokenStr
 }
 
-func (s *AuthModel) VerificationToken(token string, t string, user_id int32) bool {
+func (s *Service) VerificationToken(token string, t string, user_id int32) bool {
 	result := s.tokenHelper.Check(token, t, user_id)
 	return result
 }
 
-func (s *AuthModel) DelVerificationToken(token string) {
+func (s *Service) DelVerificationToken(token string) {
 	s.tokenHelper.Delete(token)
 }
 
-func (s *AuthModel) GetInfo(ctx *gin.Context, id int32) (User, error) {
-	user := User{}
-	err := s.sqlDB.Model(&User{}).Where("id=?", id).Scan(&user).Error
+func (s *Service) GetInfo(ctx *gin.Context, id int32) (model.User, error) {
+	user := model.User{}
+	err := s.sqlDB.Model(&model.User{}).Where("id=?", id).Scan(&user).Error
 	return user, err
 }
 
-func (s *AuthModel) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
-	var user User
+func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
+	var user model.User
 	if err := s.sqlDB.Where("id=?", id).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return cErr.BadRequest("Account not exist")
@@ -119,14 +120,14 @@ func (s *AuthModel) ValidateUserToken(ctx *gin.Context, id int32, ip string) err
 	if user.Status != "enable" {
 		return cErr.BadRequest("Account disabled")
 	}
-	return s.sqlDB.Model(&User{}).Where("id=?", id).Updates(map[string]any{
+	return s.sqlDB.Model(&model.User{}).Where("id=?", id).Updates(map[string]any{
 		"login_failure":   0,
 		"last_login_time": time.Now().Unix(),
 		"last_login_ip":   ip,
 	}).Error
 }
 
-func (s *AuthModel) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
+func (s *Service) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
 	// 判断账户类型
 	accountType := ""
 	phoneRegex := regexp.MustCompile(`^1[3-9]\d{9}$`)
@@ -142,8 +143,8 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, cErr.BadRequest("Account not exist")
 	}
 
-	user := User{}
-	result := s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user)
+	user := model.User{}
+	result := s.sqlDB.Model(&model.User{}).Where(accountType+"=?", username).Scan(&user)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -159,12 +160,12 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	if retry > 0 && user.LastLoginTime > 0 {
 		now := time.Now().Unix()
 		if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
-			if err := s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]any{
+			if err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]any{
 				"login_failure": 0,
 			}).Error; err != nil {
 				return nil, err
 			}
-			result = s.sqlDB.Model(&User{}).Where(accountType+"=?", username).Scan(&user)
+			result = s.sqlDB.Model(&model.User{}).Where(accountType+"=?", username).Scan(&user)
 			if result.Error != nil {
 				return nil, result.Error
 			}
@@ -175,7 +176,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	}
 
 	if user.Password != utils.EncryptPassword(password, user.Salt) {
-		s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
+		s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 			"login_failure":   user.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),
 			"last_login_ip":   ctx.ClientIP(),
@@ -200,7 +201,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 
 	loginTime := time.Now().Unix()
 	loginIP := ctx.ClientIP()
-	err := s.sqlDB.Model(&User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
+	err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": loginTime,
 		"last_login_ip":   loginIP,
@@ -215,7 +216,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 	return userInfo, err
 }
 
-func (s *AuthModel) FilterData(user User) map[string]any {
+func (s *Service) FilterData(user model.User) map[string]any {
 
 	birthday := ""
 	if user.Birthday.Unix() > 100 {
@@ -239,7 +240,7 @@ func (s *AuthModel) FilterData(user User) map[string]any {
 	}
 }
 
-func (s *AuthModel) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
+func (s *Service) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
 	if username != "" {
 		exists, err := s.accountExists("username", username)
 		if err != nil {
@@ -281,7 +282,7 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 	}
 
 	nickname := utils.MaskPhone(username)
-	user := User{
+	user := model.User{
 		AdminID:       rootID,
 		GroupID:       1,
 		Username:      username,
@@ -316,16 +317,16 @@ func (s *AuthModel) Register(ctx *gin.Context, username string, password string,
 	return userInfo, nil
 }
 
-func (s *AuthModel) accountExists(field, value string) (bool, error) {
-	var user User
-	result := s.sqlDB.Model(&User{}).Where(field+"=?", value).Scan(&user)
+func (s *Service) accountExists(field, value string) (bool, error) {
+	var user model.User
+	result := s.sqlDB.Model(&model.User{}).Where(field+"=?", value).Scan(&user)
 	if result.Error != nil {
 		return false, result.Error
 	}
 	return result.RowsAffected > 0, nil
 }
 
-func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
+func (s *Service) Logout(ctx *gin.Context, refreshToken string) error {
 	if refreshToken != "" {
 		if err := s.tokenHelper.Delete(refreshToken); err != nil {
 			return err
@@ -339,7 +340,7 @@ func (s *AuthModel) Logout(ctx *gin.Context, refreshToken string) error {
 }
 
 // 获取菜单规则列表
-func (s *AuthModel) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err error) {
+func (s *Service) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err error) {
 	ruleList, ok := s.cachedRules(uid)
 	if !ok {
 		if _, err = s.GetRuleList(ctx, uid); err != nil {
@@ -364,7 +365,7 @@ func (s *AuthModel) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err err
 }
 
 // 获取传递的菜单规则的子规则
-func (s *AuthModel) getChildren(children map[int32][]Rule, rules []Rule) []Rule {
+func (s *Service) getChildren(children map[int32][]Rule, rules []Rule) []Rule {
 	for key, v := range rules {
 		if _, ok := children[v.ID]; ok {
 			rules[key].Children = s.getChildren(children, children[v.ID])
@@ -379,7 +380,7 @@ func (s *AuthModel) getChildren(children map[int32][]Rule, rules []Rule) []Rule 
  *uid   用户ID
  *relation 如果出现两个 name,是两个都通过(and)还是一个通过即可(or)
  */
-func (s *AuthModel) Check(name string, id int32, relation string) bool {
+func (s *Service) Check(name string, id int32, relation string) bool {
 	ruleNameList := s.cache.RuleNames(id)
 	if slices.Contains(ruleNameList, "*") {
 		return true
@@ -403,7 +404,7 @@ func (s *AuthModel) Check(name string, id int32, relation string) bool {
 }
 
 // 获得权限规则列表
-func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
+func (s *Service) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 	return s.cache.ReloadRules(uid, func() ([]Rule, []string, error) {
 		ids, err := s.GetRuleIds(uid)
 		if err != nil {
@@ -454,7 +455,7 @@ func (s *AuthModel) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
 }
 
 // 获取权限规则ids
-func (s *AuthModel) GetRuleIds(uid int32) ([]string, error) {
+func (s *Service) GetRuleIds(uid int32) ([]string, error) {
 	groups, err := s.GetGroups(uid)
 	if err != nil {
 		return nil, err
@@ -475,7 +476,7 @@ func (s *AuthModel) GetRuleIds(uid int32) ([]string, error) {
 }
 
 // 获取用户所有分组和对应权限规则
-func (s *AuthModel) GetGroups(uid int32) ([]AuthGroup, error) {
+func (s *Service) GetGroups(uid int32) ([]AuthGroup, error) {
 	return s.cache.GetOrLoadGroups(uid, func() ([]AuthGroup, error) {
 		prefix := s.config.Database.Prefix
 		var authGroups []AuthGroup
@@ -502,6 +503,6 @@ type userRuleAuthRow struct {
 	Extend       string `gorm:"column:extend"`
 }
 
-func (s *AuthModel) cachedRules(uid int32) ([]Rule, bool) {
+func (s *Service) cachedRules(uid int32) ([]Rule, bool) {
 	return s.cache.Rules(uid)
 }

@@ -11,6 +11,5 @@ var ProviderSet = wire.NewSet(
 	NewAttachmentModel,
 	NewUploadHelper,
 	NewAliossStorage,
-	NewAuthModel,
 	country.NewService,
 )

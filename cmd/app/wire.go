@@ -26,6 +26,7 @@ import (
 	apiUserModel "go-build-admin/app/api/model/user"
 	"go-build-admin/app/cmd"
 	commandHandler "go-build-admin/app/cmd/handler"
+	"go-build-admin/app/common/member"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -50,6 +51,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		pkg.ProviderSet,
 		middleware.ProviderSet,
 		commonModel.ProviderSet,
+		member.ProviderSet,
 		apiUserModel.ProviderSet,
 		adminHandler.ProviderSet,
 		countryHandler.ProviderSet,

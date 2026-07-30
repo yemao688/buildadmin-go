@@ -9,6 +9,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/common/member"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -34,7 +35,7 @@ func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
 	user := commonModel.User{ID: 1, Username: "middleware_user", Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := commonModel.NewAuthModel(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := member.NewService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 	middleware := NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: userLoginTokenDriver{}}, authM)
 
 	router := gin.New()

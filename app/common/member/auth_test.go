@@ -1,4 +1,4 @@
-package model
+package member
 
 import (
 	"errors"
@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -33,15 +34,15 @@ func (d authDomainTokenDriver) Check(string, string, int32) bool       { return 
 func (d authDomainTokenDriver) Delete(string) error                    { return nil }
 func (d authDomainTokenDriver) Clear(string, int32) error              { return nil }
 
-func newAuthTestModel(t *testing.T) (*AuthModel, *gorm.DB) {
+func newAuthTestModel(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&User{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}))
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
-	return NewAuthModel(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
+	return NewService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
 }
 
 func authTestContext() *gin.Context {
@@ -71,12 +72,12 @@ func TestAuthLoginAllowsLegacyStatuses(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	for _, status := range []string{"0", "1", "other"} {
 		salt := "salt-" + status
-		user := User{Username: "user_" + status, Password: utils.EncryptPassword("password", salt), Salt: salt, Status: status}
+		user := model.User{Username: "user_" + status, Password: utils.EncryptPassword("password", salt), Salt: salt, Status: status}
 		require.NoError(t, db.Create(&user).Error)
 		_, err := m.Login(authTestContext(), user.Username, "password", false)
 		require.NoError(t, err)
 	}
-	user := User{Username: "disabled", Password: utils.EncryptPassword("password", "disabled-salt"), Salt: "disabled-salt", Status: "disable"}
+	user := model.User{Username: "disabled", Password: utils.EncryptPassword("password", "disabled-salt"), Salt: "disabled-salt", Status: "disable"}
 	require.NoError(t, db.Create(&user).Error)
 	_, err := m.Login(authTestContext(), user.Username, "password", false)
 	require.EqualError(t, err, "Account disabled")
@@ -85,7 +86,7 @@ func TestAuthLoginAllowsLegacyStatuses(t *testing.T) {
 func TestAuthLoginUsesMobileBeforeUsername(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	salt := "mobile-salt"
-	user := User{
+	user := model.User{
 		Username: "phone_user",
 		Mobile:   "18888888888",
 		Password: utils.EncryptPassword("password", salt),
@@ -101,7 +102,7 @@ func TestAuthLoginUsesMobileBeforeUsername(t *testing.T) {
 func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	m.config.App.UserLoginRetry = 2
-	user := User{
+	user := model.User{
 		Username:      "cooldown_user",
 		Password:      utils.EncryptPassword("correct", "cooldown-salt"),
 		Salt:          "cooldown-salt",
@@ -113,7 +114,7 @@ func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 
 	_, err := m.Login(authTestContext(), user.Username, "wrong", false)
 	require.EqualError(t, err, "Password is incorrect")
-	var updated User
+	var updated model.User
 	require.NoError(t, db.First(&updated, user.ID).Error)
 	require.Equal(t, int32(1), updated.LoginFailure)
 }
@@ -121,7 +122,7 @@ func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	salt := "response-salt"
-	user := User{
+	user := model.User{
 		Username: "response_user",
 		Password: utils.EncryptPassword("password", salt),
 		Salt:     salt,
@@ -148,7 +149,7 @@ func TestAuthRegisterRejectsExistingContactFields(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			m, db := newAuthTestModel(t)
-			require.NoError(t, db.Create(&User{Username: test.username, Email: test.email, Mobile: test.mobile}).Error)
+			require.NoError(t, db.Create(&model.User{Username: test.username, Email: test.email, Mobile: test.mobile}).Error)
 			_, err := m.Register(authTestContext(), test.username, "password", test.mobile, test.email)
 			require.EqualError(t, err, test.message)
 		})

@@ -3,6 +3,7 @@ package handler
 import (
 	routinemodel "go-build-admin/app/admin/model/routine"
 	usermodel "go-build-admin/app/admin/model/user"
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
 	cErr "go-build-admin/app/pkg/error"
@@ -17,20 +18,20 @@ import (
 
 type IndexHandler struct {
 	log     *zap.Logger
-	authM   *model.AuthModel
+	authM   *member.Service
 	config  *conf.Configuration
 	configM *routinemodel.ConfigModel
 	country *country.Service
 }
 
-func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *routinemodel.ConfigModel, countryService *country.Service) *IndexHandler {
+func NewIndexHandler(log *zap.Logger, authM *member.Service, config *conf.Configuration, configM *routinemodel.ConfigModel, countryService *country.Service) *IndexHandler {
 	return &IndexHandler{log: log, authM: authM, config: config, configM: configM, country: countryService}
 }
 
 // 前台和会员中心的初始化请求
 func (h *IndexHandler) Index(ctx *gin.Context) {
-	rules := []model.Rule{}
-	menus := []model.Rule{}
+	rules := []member.Rule{}
+	menus := []member.Rule{}
 	userInfo := map[string]any{}
 	token, isLogin := h.authM.IsLogin(ctx)
 	if isLogin {

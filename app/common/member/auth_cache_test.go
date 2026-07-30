@@ -1,10 +1,11 @@
-package model
+package member
 
 import (
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"gorm.io/driver/sqlite"
@@ -44,14 +45,14 @@ func TestAuthRuleCacheUsesPrefixAndInvalidation(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "pfx_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&User{}, &authCacheUserGroup{}, &authCacheUserRule{}))
-	require.NoError(t, db.Create(&User{ID: 1, GroupID: 1}).Error)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &authCacheUserGroup{}, &authCacheUserRule{}))
+	require.NoError(t, db.Create(&model.User{ID: 1, GroupID: 1}).Error)
 	require.NoError(t, db.Create(&authCacheUserGroup{ID: 1, Rules: "1", Status: "1"}).Error)
 	require.NoError(t, db.Create(&authCacheUserRule{ID: 1, Pid: 0, Type: "menu", Title: "Initial", Name: "user/initial", Status: "1", Weigh: 1}).Error)
 
 	config := &conf.Configuration{}
 	config.Database.Prefix = "pfx_"
-	m := NewAuthModel(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config)
+	m := NewService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config)
 
 	_, err = m.GetRuleList(nil, 1)
 	require.NoError(t, err)
@@ -92,13 +93,13 @@ func TestAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "pfx_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&User{}, &authCacheUserGroup{}, &authCacheUserRule{}))
-	require.NoError(t, db.Create(&User{ID: 1, GroupID: 1}).Error)
+	require.NoError(t, db.AutoMigrate(&model.User{}, &authCacheUserGroup{}, &authCacheUserRule{}))
+	require.NoError(t, db.Create(&model.User{ID: 1, GroupID: 1}).Error)
 	require.NoError(t, db.Create(&authCacheUserGroup{ID: 1, Rules: "1", Status: "1"}).Error)
 
 	config := &conf.Configuration{}
 	config.Database.Prefix = "pfx_"
-	m := NewAuthModel(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config)
+	m := NewService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config)
 
 	groups, err := m.GetGroups(1)
 	require.NoError(t, err)
