@@ -1,9 +1,9 @@
 package handler
 
 import (
-	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/member"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/common/upload"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
@@ -17,12 +17,12 @@ type IndexHandler struct {
 	log     *zap.Logger
 	authM   *member.Service
 	config  *conf.Configuration
-	configM *routinemodel.ConfigModel
+	configS *siteconfig.Service
 	country *country.Service
 }
 
-func NewIndexHandler(log *zap.Logger, authM *member.Service, config *conf.Configuration, configM *routinemodel.ConfigModel, countryService *country.Service) *IndexHandler {
-	return &IndexHandler{log: log, authM: authM, config: config, configM: configM, country: countryService}
+func NewIndexHandler(log *zap.Logger, authM *member.Service, config *conf.Configuration, configS *siteconfig.Service, countryService *country.Service) *IndexHandler {
+	return &IndexHandler{log: log, authM: authM, config: config, configS: configS, country: countryService}
 }
 
 // 前台和会员中心的初始化请求
@@ -63,7 +63,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			return
 		}
 	}
-	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
+	basicConfig, err := h.configS.GetKVByGroup(ctx, "basics")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -79,7 +79,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
+	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configS, h.config)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

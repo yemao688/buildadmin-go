@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	model "go-build-admin/app/admin/model/routine"
+	siteconfig "go-build-admin/app/common/siteconfig"
 )
 
 func TestUpdateConfigValueSkipsUnchangedValue(t *testing.T) {
@@ -50,12 +50,12 @@ func TestConfigEditArrayValueFromJSONRequestIsUpdated(t *testing.T) {
 		"version":       "v1.0.0",
 		"record_number": "渝ICP备8888888号-1",
 	} {
-		if value := (&model.Config{}).SetValueAttr(params[name], "string"); value != expectedValue {
+		if value := (&siteconfig.Config{}).SetValueAttr(params[name], "string"); value != expectedValue {
 			t.Fatalf("%s=%q, want %q", name, value, expectedValue)
 		}
 	}
 
-	newValue := (&model.Config{}).SetValueAttr(params["config_group"], "array")
+	newValue := (&siteconfig.Config{}).SetValueAttr(params["config_group"], "array")
 	var entries []configJSONItem
 	if err := json.Unmarshal([]byte(newValue), &entries); err != nil {
 		t.Fatalf("decode serialized config_group: %v", err)

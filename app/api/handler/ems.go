@@ -2,9 +2,9 @@ package handler
 
 import (
 	"crypto/tls"
-	routinemodel "go-build-admin/app/admin/model/routine"
 	usermodel "go-build-admin/app/api/model/user"
 	"go-build-admin/app/common/member"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
@@ -22,17 +22,17 @@ import (
 
 type EmsHandler struct {
 	log          *zap.Logger
-	configM      *routinemodel.ConfigModel
+	configS      *siteconfig.Service
 	captcha      *captcha.Captcha
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	userM        *usermodel.UserModel
 	authM        *member.Service
 }
 
-func NewEmsHandler(log *zap.Logger, configM *routinemodel.ConfigModel, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *usermodel.UserModel, authM *member.Service) *EmsHandler {
+func NewEmsHandler(log *zap.Logger, configS *siteconfig.Service, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *usermodel.UserModel, authM *member.Service) *EmsHandler {
 	return &EmsHandler{
 		log:          log,
-		configM:      configM,
+		configS:      configS,
 		captcha:      captcha,
 		clickCaptcha: clickCaptcha,
 		userM:        userM,
@@ -71,7 +71,7 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 		return
 	}
 
-	mailConfig, err := h.configM.GetKVByGroup(ctx, "mail")
+	mailConfig, err := h.configS.GetKVByGroup(ctx, "mail")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -135,7 +135,7 @@ func (h *EmsHandler) Send(ctx *gin.Context) {
 		return
 	}
 
-	site_name, _ := h.configM.GetValueByName(ctx, "mail")
+	site_name, _ := h.configS.GetValueByName(ctx, "mail")
 	subject := utils.Lang(ctx, params.Event+"-"+site_name, map[string]string{
 		"code": code,
 	})

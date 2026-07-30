@@ -8,6 +8,7 @@ import (
 	adminhandler "go-build-admin/app/admin/handler"
 	model "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"net/http"
@@ -175,7 +176,7 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var config = model.Config{}
+	var config = siteconfig.Config{}
 	copier.Copy(&config, params)
 	if params.Type == "radio" || params.Type == "checkbox" || params.Type == "select" || params.Type == "selects" {
 		contentBytes, _ := json.Marshal(utils.StrAttrToArray(params.Content))
@@ -214,8 +215,8 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 	}
 
 	if err := h.configM.Transaction(ctx, func(tx *gorm.DB) error {
-		all := []model.Config{}
-		if err := tx.Model(&model.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
+		all := []siteconfig.Config{}
+		if err := tx.Model(&siteconfig.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
 			return err
 		}
 		for _, v := range all {

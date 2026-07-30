@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	adminauth "go-build-admin/app/admin/model/auth"
-	routinemodel "go-build-admin/app/admin/model/routine"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/app/pkg/random"
@@ -566,7 +566,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 
 		// 修改站点名称
-		h.db.Model(&routinemodel.Config{}).Where("name=?", "site_name").Updates(map[string]any{
+		h.db.Model(&siteconfig.Config{}).Where("name=?", "site_name").Updates(map[string]any{
 			"value": params.Sitename,
 		})
 	}

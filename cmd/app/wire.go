@@ -29,6 +29,7 @@ import (
 	"go-build-admin/app/common/area"
 	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/member"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -55,6 +56,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		area.ProviderSet,
 		country.ProviderSet,
 		upload.ProviderSet,
+		siteconfig.ProviderSet,
 		member.ProviderSet,
 		apiUserModel.ProviderSet,
 		adminHandler.ProviderSet,

@@ -28,6 +28,7 @@ import (
 	"go-build-admin/app/common/area"
 	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/member"
+	"go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
@@ -60,7 +61,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	userLogin := middleware.NewUserLogin(configuration, tokenHelper, service)
 	adminLogModel := auth.NewAdminLogModel(gormDB, configuration)
 	record := middleware.NewRecord(configuration, adminLogModel)
-	configModel := routine.NewConfigModel(gormDB, configuration)
+	siteconfigService := siteconfig.NewService(gormDB)
+	configModel := routine.NewConfigModel(gormDB, configuration, siteconfigService)
 	countryService := country.NewService(gormDB, configuration)
 	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, countryService, clickCaptcha)
@@ -138,9 +140,9 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	ajaxRegistrar := handler2.NewAjaxRegistrar(handlerAjaxHandler)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper, configuration)
 	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
-	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, userUserModel, service)
+	emsHandler := handler2.NewEmsHandler(zapLogger, siteconfigService, captchaCaptcha, clickCaptcha, userUserModel, service)
 	emsRegistrar := handler2.NewEmsRegistrar(emsHandler)
-	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, service, configuration, configModel, countryService)
+	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, service, configuration, siteconfigService, countryService)
 	indexRegistrar := handler2.NewIndexRegistrar(handlerIndexHandler)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, service, clickCaptcha, captchaCaptcha)
 	handlerUserRegistrar := handler2.NewUserRegistrar(handlerUserHandler)

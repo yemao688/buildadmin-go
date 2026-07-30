@@ -11,6 +11,7 @@ import (
 
 	adminhandler "go-build-admin/app/admin/handler"
 	model "go-build-admin/app/admin/model/routine"
+	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
@@ -26,12 +27,12 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.Config{}))
+	require.NoError(t, db.AutoMigrate(&siteconfig.Config{}))
 
 	config := &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
-	configModel := model.NewConfigModel(db, config)
+	configModel := model.NewConfigModel(db, config, siteconfig.NewService(db))
 	initialGroup := `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"config_quick_entrance","value":"Config Quick entrance"},{"key":"upload","value":"Upload"}]`
-	rows := []model.Config{
+	rows := []siteconfig.Config{
 		{ID: 1, Name: "config_group", Type: "array", Value: initialGroup, Weigh: -1},
 		{ID: 2, Name: "site_name", Type: "string", Value: "站点名称", Weigh: 99},
 		{ID: 3, Name: "record_number", Type: "string", Value: "渝ICP备8888888号-1", Weigh: 0},
@@ -57,7 +58,7 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 	require.Equal(t, 1, response.Code)
 
 	values := map[string]string{}
-	var persisted []model.Config
+	var persisted []siteconfig.Config
 	require.NoError(t, db.Table(configModel.TableName).Find(&persisted).Error)
 	for _, row := range persisted {
 		values[row.Name] = row.Value

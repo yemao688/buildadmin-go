@@ -44,12 +44,6 @@ var boundaryRules = []boundaryRule{
 var importBoundaryWhitelist = []whitelistEntry{
 	// R2 / Permanent exception: the installer owns its own DB connection and runs before Wire assembles shared services; these imports only target GORM structs.
 	{File: "api/handler/install.go", ImportPath: "go-build-admin/app/admin/model/auth", Rule: "R2", Reason: "installer bootstrap still reuses admin auth models", Stage: 4},
-	// R2 / Permanent exception: the installer owns its own DB connection and runs before Wire assembles shared services; these imports only target GORM structs.
-	{File: "api/handler/install.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "installer bootstrap still reads the admin routine config model", Stage: 4},
-	// R2 / Stage 5d clear: ConfigModel read methods will move down into common/siteconfig.
-	{File: "api/handler/index.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "frontend init still consumes the admin routine config model", Stage: 5},
-	// R2 / Stage 5d clear: ConfigModel read methods will move down into common/siteconfig.
-	{File: "api/handler/ems.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "EMS mail flow still reads the admin routine config model", Stage: 5},
 }
 
 func TestImportBoundary(t *testing.T) {
