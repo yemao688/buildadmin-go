@@ -9,14 +9,14 @@ import (
 
 type UserLogRegistrar struct {
 	userHandler     *UserHandler
-	moneyLogHandler *UserMoneyLogHandler
-	scoreLogHandler *UserScoreLogHandler
+	moneyLogHandler *MoneyLogHandler
+	scoreLogHandler *ScoreLogHandler
 }
 
 func NewUserLogRegistrar(
 	userHandler *UserHandler,
-	moneyLogHandler *UserMoneyLogHandler,
-	scoreLogHandler *UserScoreLogHandler,
+	moneyLogHandler *MoneyLogHandler,
+	scoreLogHandler *ScoreLogHandler,
 ) *UserLogRegistrar {
 	return &UserLogRegistrar{
 		userHandler:     userHandler,

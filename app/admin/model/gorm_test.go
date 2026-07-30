@@ -33,15 +33,15 @@ func getDb() *gorm.DB {
 
 func TestBelong(t *testing.T) {
 	db := getDb()
-	log := usermodel.UserMoneyLog{}
+	log := usermodel.MoneyLog{}
 	db.Table("ba_user_money_log").Preload("ba_user").Where("id=1").Find(&log)
 	fmt.Printf("%+v", log)
 }
 
 func TestJoin(t *testing.T) {
 	db := getDb()
-	// list := []UserMoneyLog{}
-	// err := db.Model(&UserMoneyLog{}).Preload("User").Find(&list).Error
+	// list := []MoneyLog{}
+	// err := db.Model(&MoneyLog{}).Preload("User").Find(&list).Error
 	// fmt.Printf("%+v", err)
 	// fmt.Printf("%+v", list)
 

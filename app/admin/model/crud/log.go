@@ -14,8 +14,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// CrudLog CRUD记录表
-type CrudLog struct {
+// Log CRUD记录表
+type Log struct {
 	ID         int32       `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
 	AdminID    int32       `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                                 // ID
 	Tablename  string      `gorm:"column:table_name;not null;comment:数据表名" json:"table_name"`                                              // 数据表名
@@ -28,7 +28,7 @@ type CrudLog struct {
 	CreateTime int64       `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
 }
 
-type CrudLogModel struct {
+type LogModel struct {
 	model.BaseModel
 	enforcer data_scope.Enforcer
 }
@@ -271,8 +271,8 @@ type Field struct {
 	OriginalDesignType string `json:"originalDesignType"`
 }
 
-func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CrudLogModel {
-	return &CrudLogModel{
+func NewLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *LogModel {
+	return &LogModel{
 		BaseModel: model.NewBaseModel(config.Database.Prefix+"crud_log", "id", "table_name", sqlDB),
 		enforcer:  enforcer,
 	}
@@ -280,7 +280,7 @@ func NewCrudLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_s
 
 // scoped applies the fail-closed hierarchical data-scope enforcer to
 // crud_log.admin_id. Only an explicit unrestricted actor bypasses scope.
-func (s *CrudLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *LogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if s.enforcer == nil {
 			tx := db.Session(&gorm.Session{})
@@ -291,8 +291,8 @@ func (s *CrudLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
-func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog CrudLog, err error) {
-	err = s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
+func (s *LogModel) GetByTableName(ctx *gin.Context, table string) (crudLog Log, err error) {
+	err = s.DBFor(ctx).Model(&Log{}).Scopes(s.scoped(ctx)).Where("table_name=?", table).Order("create_time desc").Take(&crudLog).Error
 	return
 }
 
@@ -300,28 +300,28 @@ func (s *CrudLogModel) GetByTableName(ctx *gin.Context, table string) (crudLog C
 // distinguish a first generation from regeneration; exposing the log row is
 // not required. A scoped lookup would let another administrator overwrite a
 // handwritten file merely because somebody else generated that table.
-func (s *CrudLogModel) HasAnyByTableName(table string) (bool, error) {
+func (s *LogModel) HasAnyByTableName(table string) (bool, error) {
 	prefix := strings.TrimSuffix(s.TableName, "crud_log")
 	names := []string{table, strings.TrimPrefix(table, prefix)}
 	if prefix != "" {
 		names = append(names, prefix+strings.TrimPrefix(table, prefix))
 	}
 	var count int64
-	err := s.DB().Model(&CrudLog{}).Where("table_name IN ?", names).Count(&count).Error
+	err := s.DB().Model(&Log{}).Where("table_name IN ?", names).Count(&count).Error
 	return count > 0, err
 }
 
-func (s *CrudLogModel) GetOne(ctx *gin.Context, id int32) (crudLog CrudLog, err error) {
-	err = s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).First(&crudLog).Error
+func (s *LogModel) GetOne(ctx *gin.Context, id int32) (crudLog Log, err error) {
+	err = s.DBFor(ctx).Model(&Log{}).Scopes(s.scoped(ctx)).Where("id=?", id).First(&crudLog).Error
 	return
 }
 
-func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err error) {
+func (s *LogModel) List(ctx *gin.Context) (list []Log, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := model.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
+	db := s.DBFor(ctx).Model(&Log{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -329,7 +329,7 @@ func (s *CrudLogModel) List(ctx *gin.Context) (list []CrudLog, total int64, err 
 	return
 }
 
-func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
+func (s *LogModel) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid crud log ids")
@@ -346,8 +346,8 @@ func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		var list []CrudLog
-		scoped := tx.Model(&CrudLog{}).Scopes(s.scoped(ctx))
+		var list []Log
+		scoped := tx.Model(&Log{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where("id IN ?", normalized).Find(&list).Error; err != nil {
 			return err
 		}
@@ -366,7 +366,7 @@ func (s *CrudLogModel) Del(ctx *gin.Context, ids interface{}) error {
 }
 
 // 记录CRUD状态
-func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, error) {
+func (s *LogModel) RecordCrudStatus(ctx *gin.Context, data Log) (int32, error) {
 	if s.enforcer == nil {
 		return 0, data_scope.ErrScopedAccessDenied
 	}
@@ -377,7 +377,7 @@ func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, 
 	data.AdminID = actor.AdminID
 
 	if data.ID != 0 {
-		result := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", data.ID).Update("status", data.Status)
+		result := s.DBFor(ctx).Model(&Log{}).Scopes(s.scoped(ctx)).Where("id=?", data.ID).Update("status", data.Status)
 		if result.Error != nil {
 			return 0, result.Error
 		}
@@ -395,11 +395,11 @@ func (s *CrudLogModel) RecordCrudStatus(ctx *gin.Context, data CrudLog) (int32, 
 // RecordCrudError marks a generation as failed and preserves the failing
 // stage/message for operators. It intentionally uses the same scoped update
 // path as normal status transitions.
-func (s *CrudLogModel) RecordCrudError(ctx *gin.Context, id int32, message string) error {
+func (s *LogModel) RecordCrudError(ctx *gin.Context, id int32, message string) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	result := s.DBFor(ctx).Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id=?", id).Updates(map[string]interface{}{
+	result := s.DBFor(ctx).Model(&Log{}).Scopes(s.scoped(ctx)).Where("id=?", id).Updates(map[string]interface{}{
 		"status":  "error",
 		"comment": message,
 	})
@@ -414,14 +414,14 @@ func (s *CrudLogModel) RecordCrudError(ctx *gin.Context, id int32, message strin
 
 // UpdateSync applies upload completion markers. Cancellation only clears a
 // marker when it still matches the callback's submitted value.
-func (s *CrudLogModel) UpdateSync(ctx *gin.Context, syncIDs map[int32]int, cancelSync bool) error {
+func (s *LogModel) UpdateSync(ctx *gin.Context, syncIDs map[int32]int, cancelSync bool) error {
 	if len(syncIDs) == 0 {
 		return nil
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		for id, syncValue := range syncIDs {
-			query := tx.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id = ?", id)
+			query := tx.Model(&Log{}).Scopes(s.scoped(ctx)).Where("id = ?", id)
 			value := syncValue
 			if cancelSync {
 				query = query.Where("sync = ?", syncValue)

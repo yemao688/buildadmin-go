@@ -10,15 +10,15 @@ import (
 	"go.uber.org/zap"
 )
 
-type CrudLogHandler struct {
+type LogHandler struct {
 	Base
 	log     *zap.Logger
-	crudLog *crudmodel.CrudLogModel
+	crudLog *crudmodel.LogModel
 	authM   *adminauth.AuthModel
 }
 
-func NewCrudLogHandler(log *zap.Logger, crudLog *crudmodel.CrudLogModel, authM *adminauth.AuthModel) *CrudLogHandler {
-	return &CrudLogHandler{
+func NewLogHandler(log *zap.Logger, crudLog *crudmodel.LogModel, authM *adminauth.AuthModel) *LogHandler {
+	return &LogHandler{
 		Base:    NewBase(crudLog),
 		log:     log,
 		crudLog: crudLog,
@@ -26,7 +26,7 @@ func NewCrudLogHandler(log *zap.Logger, crudLog *crudmodel.CrudLogModel, authM *
 	}
 }
 
-func (h *CrudLogHandler) Index(ctx *gin.Context) {
+func (h *LogHandler) Index(ctx *gin.Context) {
 	// 对齐 PHP 上游 crud/Log::initialize()：日志页不单独占权限节点，
 	// 豁免通用规则检查后仍需持有 CRUD 主页权限（超管 * 在 Check 内自动放行）
 	value, ok := ctx.Get(data_scope.ActorContextKey)

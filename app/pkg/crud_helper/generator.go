@@ -652,7 +652,7 @@ func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
 	return db.Migrator().HasTable(cfg.Database.Prefix + table)
 }
 
-func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*crudmodel.CrudLog, error) {
+func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*crudmodel.Log, error) {
 	// 已被后续 delete 消费的 success 记录不再约束重新生成,
 	// 否则删除后换新路径重新生成会被旧 manifest 拒绝
 	var lastDeleteID int32
@@ -663,7 +663,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	if lastDeleteID > 0 {
 		query = query.Where("id > ?", lastDeleteID)
 	}
-	var log crudmodel.CrudLog
+	var log crudmodel.Log
 	err := query.Order("create_time desc, id desc").Take(&log).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -671,7 +671,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	return &log, err
 }
 
-func manifestAllows(manifest FileManifest, log *crudmodel.CrudLog) bool {
+func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
@@ -793,7 +793,7 @@ func deriveAlterChanges(columns []model.Column, fields []crudmodel.Field) []crud
 }
 
 func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (int32, error) {
-	record := crudmodel.CrudLog{
+	record := crudmodel.Log{
 		AdminID:    opts.AdminID,
 		Tablename:  opts.Table.Name,
 		Comment:    opts.Table.Comment,

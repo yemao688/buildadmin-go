@@ -103,24 +103,24 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type UserRuleExpend struct {
-	usermodel.UserRule
-	Children []*UserRuleExpend `json:"children"`
+type RuleExpend struct {
+	usermodel.Rule
+	Children []*RuleExpend `json:"children"`
 }
 
-func (l *UserRuleExpend) GetId() int               { return int(l.ID) }
-func (l *UserRuleExpend) GetPid() int              { return int(l.Pid) }
-func (l *UserRuleExpend) GetTitle() string         { return l.Title }
-func (l *UserRuleExpend) GetChildren() interface{} { return l.Children }
-func (l *UserRuleExpend) SetTitle(title string)    { l.Title = title }
-func (l *UserRuleExpend) SetChildren(children interface{}) {
-	l.Children = children.([]*UserRuleExpend)
+func (l *RuleExpend) GetId() int               { return int(l.ID) }
+func (l *RuleExpend) GetPid() int              { return int(l.Pid) }
+func (l *RuleExpend) GetTitle() string         { return l.Title }
+func (l *RuleExpend) GetChildren() interface{} { return l.Children }
+func (l *RuleExpend) SetTitle(title string)    { l.Title = title }
+func (l *RuleExpend) SetChildren(children interface{}) {
+	l.Children = children.([]*RuleExpend)
 }
 
-func (h *IndexHandler) AssembleChild(list []usermodel.UserRule) []*UserRuleExpend {
-	expendList := []*UserRuleExpend{}
+func (h *IndexHandler) AssembleChild(list []usermodel.Rule) []*RuleExpend {
+	expendList := []*RuleExpend{}
 	for _, v := range list {
-		temp := UserRuleExpend{}
+		temp := RuleExpend{}
 		copier.Copy(&temp, v)
 		expendList = append(expendList, &temp)
 	}

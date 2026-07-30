@@ -25,7 +25,7 @@ import (
 type CrudHandler struct {
 	log        *zap.Logger
 	tableM     *model.TableModel
-	crudLogM   *crudmodel.CrudLogModel
+	crudLogM   *crudmodel.LogModel
 	adminRuleM *adminauth.AdminRuleModel
 	config     *conf.Configuration
 }
@@ -53,7 +53,7 @@ func (b *boolValue) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("cancelSync must be a boolean")
 }
 
-func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *crudmodel.CrudLogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *crudmodel.LogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
 	return &CrudHandler{
 		log:        log,
 		tableM:     tableM,

@@ -27,8 +27,8 @@ type scopeFixture struct {
 	db     *gorm.DB
 	cfg    *conf.Configuration
 	root   *UserModel
-	money  *UserMoneyLogModel
-	score  *UserScoreLogModel
+	money  *MoneyLogModel
+	score  *ScoreLogModel
 	admins map[int32]Admin
 	users  map[int32]User
 }
@@ -45,7 +45,7 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}, DisableForeignKeyConstraintWhenMigrating: true})
 	require.NoError(t, err)
 	f := &scopeFixture{db: db, cfg: cfg, admins: map[int32]Admin{}, users: map[int32]User{}}
-	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &UserGroup{}, &User{}, &UserMoneyLog{}, &UserScoreLog{}))
+	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &Group{}, &User{}, &MoneyLog{}, &ScoreLog{}))
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
 	require.NoError(t, db.Exec("CREATE TABLE `"+closure+"` (`ancestor_id` INT NOT NULL, `descendant_id` INT NOT NULL, `depth` INT NOT NULL, PRIMARY KEY (`ancestor_id`,`descendant_id`), KEY (`descendant_id`,`ancestor_id`)) ENGINE=InnoDB").Error)
@@ -70,8 +70,8 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 		require.NoError(t, db.Table(closure).Create(map[string]any{"ancestor_id": row.a, "descendant_id": row.d, "depth": row.depth}).Error)
 	}
 	f.root = NewUserModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
-	f.money = NewUserMoneyLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
-	f.score = NewUserScoreLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
+	f.money = NewMoneyLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
+	f.score = NewScoreLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
 	return f
 }
 
@@ -154,8 +154,8 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	require.Error(t, f.root.Add(ctx, &blocked))
 
 	transfer := f.addUser(t, ctx, 20, "transfer")
-	require.NoError(t, f.db.Create(&UserMoneyLog{UserID: transfer.ID, AdminID: 20, Money: 1}).Error)
-	require.NoError(t, f.db.Create(&UserScoreLog{UserID: transfer.ID, AdminID: 20, Score: 1}).Error)
+	require.NoError(t, f.db.Create(&MoneyLog{UserID: transfer.ID, AdminID: 20, Money: 1}).Error)
+	require.NoError(t, f.db.Create(&ScoreLog{UserID: transfer.ID, AdminID: 20, Score: 1}).Error)
 	transfer.AdminID = 30
 	require.NoError(t, f.root.Edit(ctx, &transfer, ""))
 	var moneyOwner, scoreOwner int32
@@ -165,7 +165,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	require.Equal(t, int32(30), scoreOwner)
 
 	mismatch := f.addUser(t, ctx, 20, "mismatch")
-	require.NoError(t, f.db.Create(&UserMoneyLog{UserID: mismatch.ID, AdminID: 30, Money: 1}).Error)
+	require.NoError(t, f.db.Create(&MoneyLog{UserID: mismatch.ID, AdminID: 30, Money: 1}).Error)
 	mismatch.AdminID = 30
 	require.Error(t, f.root.Edit(ctx, &mismatch, ""))
 	var unchanged int32

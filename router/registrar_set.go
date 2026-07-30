@@ -13,13 +13,13 @@ import (
 
 // ProvideRegistrars 聚合全部模块 registrar。CRUD 生成器只在这里追加参数与条目。
 func ProvideRegistrars(
-	crudLog *crud.CrudLogRegistrar,
+	log *crud.LogRegistrar,
 	module *admin.ModuleRegistrar,
 	testBuild *admin.TestBuildRegistrar,
 	adminGroup *auth.AdminGroupRegistrar,
 	adminRule *auth.AdminRuleRegistrar,
-	userGroup *user.UserGroupRegistrar,
-	userRule *user.UserRuleRegistrar,
+	group *user.GroupRegistrar,
+	rule *user.RuleRegistrar,
 	config *routine.ConfigRegistrar,
 	attachment *routine.AttachmentRegistrar,
 	admin *auth.AdminRegistrar,
@@ -45,13 +45,13 @@ func ProvideRegistrars(
 	countryLanguageContentRegistrar *country.LanguageContentRegistrar,
 ) []RouteRegistrar {
 	return []RouteRegistrar{
-		crudLog,
+		log,
 		module,
 		testBuild,
 		adminGroup,
 		adminRule,
-		userGroup,
-		userRule,
+		group,
+		rule,
 		config,
 		attachment,
 		admin,

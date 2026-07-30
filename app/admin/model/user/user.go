@@ -43,7 +43,7 @@ type User struct {
 	UpdateTime    int64        `gorm:"autoCreateTime;column:update_time;comment:更新时间" json:"update_time"`                                    // 更新时间
 	CreateTime    int64        `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                    // 创建时间
 	Admin         simple.Admin `gorm:"foreignKey:AdminID" json:"admin"`
-	Group         UserGroup    `gorm:"foreignKey:GroupID" json:"group"`
+	Group         Group        `gorm:"foreignKey:GroupID" json:"group"`
 }
 
 type OutUser struct {

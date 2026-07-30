@@ -100,7 +100,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil) {
 		t.Fatal("first generation must reject existing model and handler targets")
 	}
-	log := &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
+	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
 	if !manifestAllows(manifest, log) {
 		t.Fatal("latest success manifest should allow its own target")
 	}
@@ -214,13 +214,13 @@ func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
 	root := utils.RootPath()
 	newPath := filepath.Join(root, "web/src/lang/backend/en/country/language.ts")
 	oldPath := filepath.Join(root, "web/src/lang/backend/country/en/language.ts")
-	log := &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
+	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
 	if !manifestAllows(FileManifest{Generated: []string{newPath}}, log) {
 		t.Fatal("legacy language manifest should match locale-first path")
 	}
 	nonLangOld := filepath.Join(root, "web/src/views/backend/old/country/language.ts")
 	nonLangNew := filepath.Join(root, "web/src/views/backend/new/country/language.ts")
-	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
+	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
 		t.Fatal("non-language path migration should remain rejected")
 	}
 }

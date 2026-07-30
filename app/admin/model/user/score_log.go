@@ -14,8 +14,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// UserScoreLog 会员积分变动表
-type UserScoreLog struct {
+// ScoreLog 会员积分变动表
+type ScoreLog struct {
 	ID         int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
 	AdminID    int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`            // 管理员ID
 	UserID     int32        `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`               // 会员ID
@@ -28,14 +28,14 @@ type UserScoreLog struct {
 	User       simple.User  `json:"user"`
 }
 
-type UserScoreLogModel struct {
+type ScoreLogModel struct {
 	BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
 }
 
-func NewUserScoreLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserScoreLogModel {
-	return &UserScoreLogModel{
+func NewScoreLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *ScoreLogModel {
+	return &ScoreLogModel{
 		BaseModel: NewBaseModel(config.Database.Prefix+"user_score_log", "id", "user.username,user.nickname", sqlDB),
 		config:    config,
 		enforcer:  enforcer,
@@ -44,7 +44,7 @@ func NewUserScoreLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer d
 
 // scoped applies the fail-closed hierarchical data-scope enforcer to
 // user_score_log.admin_id. Only an explicit unrestricted actor bypasses scope.
-func (s *UserScoreLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *ScoreLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if s.enforcer == nil {
 			tx := db.Session(&gorm.Session{})
@@ -55,30 +55,30 @@ func (s *UserScoreLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB 
 	}
 }
 
-func (s *UserScoreLogModel) userScope(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *ScoreLogModel) userScope(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	userAlias := s.config.Database.Prefix + "user"
 	return func(db *gorm.DB) *gorm.DB {
 		return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: userAlias, Column: "admin_id"})
 	}
 }
 
-func (s *UserScoreLogModel) userJoin() string {
+func (s *ScoreLogModel) userJoin() string {
 	userTable := s.config.Database.Prefix + "user"
 	return "LEFT JOIN " + quote(userTable) + " AS " + quote("user") + " ON " + quote("user") + ".`id` = " + quote(s.TableName) + ".`user_id`"
 }
 
-func (s *UserScoreLogModel) GetOne(ctx *gin.Context, id int32) (UserScoreLog, error) {
-	data := UserScoreLog{}
-	err := s.DB().Model(&UserScoreLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
+func (s *ScoreLogModel) GetOne(ctx *gin.Context, id int32) (ScoreLog, error) {
+	data := ScoreLog{}
+	err := s.DB().Model(&ScoreLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
 	return data, err
 }
 
-func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total int64, err error) {
+func (s *ScoreLogModel) List(ctx *gin.Context) (list []ScoreLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.DB().Model(&UserScoreLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
+	db := s.DB().Model(&ScoreLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
 	db = db.Scopes(s.scoped(ctx))
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -92,7 +92,7 @@ func (s *UserScoreLogModel) List(ctx *gin.Context) (list []UserScoreLog, total i
 // with int64 overflow checks and must not become negative, then the user row is
 // updated and the log (owned by user.AdminID) is inserted. Any failure rolls
 // back both changes.
-func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog *UserScoreLog) error {
+func (s *ScoreLogModel) Add(ctx *gin.Context, userScoreLog *ScoreLog) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
@@ -135,7 +135,7 @@ func (s *UserScoreLogModel) Add(ctx *gin.Context, userScoreLog *UserScoreLog) er
 	})
 }
 
-func (s *UserScoreLogModel) Del(ctx *gin.Context, ids interface{}) error {
+func (s *ScoreLogModel) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid user score log ids")
@@ -152,8 +152,8 @@ func (s *UserScoreLogModel) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}
 	return s.DB().Transaction(func(tx *gorm.DB) error {
-		var list []UserScoreLog
-		scoped := tx.Model(&UserScoreLog{}).Scopes(s.scoped(ctx))
+		var list []ScoreLog
+		scoped := tx.Model(&ScoreLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where(quote(s.TableName)+".id IN ?", normalized).Find(&list).Error; err != nil {
 			return err
 		}

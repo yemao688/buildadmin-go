@@ -137,13 +137,13 @@ func newCompleteRouter() *gin.Engine {
 
 func completeRegistrars() []RouteRegistrar {
 	return ProvideRegistrars(
-		crudhandler.NewCrudLogRegistrar(&crudhandler.CrudLogHandler{}),
+		crudhandler.NewLogRegistrar(&crudhandler.LogHandler{}),
 		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
 		admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
 		authhandler.NewAdminGroupRegistrar(&authhandler.AdminGroupHandler{}),
 		authhandler.NewAdminRuleRegistrar(&authhandler.AdminRuleHandler{}),
-		userhandler.NewUserGroupRegistrar(&userhandler.UserGroupHandler{}),
-		userhandler.NewUserRuleRegistrar(&userhandler.UserRuleHandler{}),
+		userhandler.NewGroupRegistrar(&userhandler.GroupHandler{}),
+		userhandler.NewRuleRegistrar(&userhandler.RuleHandler{}),
 		routinehandler.NewConfigRegistrar(&routinehandler.ConfigHandler{}),
 		routinehandler.NewAttachmentRegistrar(&routinehandler.AttachmentHandler{}),
 		authhandler.NewAdminRegistrar(&authhandler.AdminHandler{}),
@@ -156,7 +156,7 @@ func completeRegistrars() []RouteRegistrar {
 		authhandler.NewAdminLogRegistrar(&authhandler.AdminLogHandler{}),
 		crudhandler.NewCrudRegistrar(&crudhandler.CrudHandler{}),
 		admin.NewDashboardRegistrar(&admin.DashboardHandler{}),
-		userhandler.NewUserLogRegistrar(&userhandler.UserHandler{}, &userhandler.UserMoneyLogHandler{}, &userhandler.UserScoreLogHandler{}),
+		userhandler.NewUserLogRegistrar(&userhandler.UserHandler{}, &userhandler.MoneyLogHandler{}, &userhandler.ScoreLogHandler{}),
 		api.NewAccountRegistrar(&api.AccountHandler{}),
 		api.NewAjaxRegistrar(&api.AjaxHandler{}),
 		api.NewCommonRegistrar(&api.CommonHandler{}),

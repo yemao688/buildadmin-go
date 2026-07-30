@@ -12,21 +12,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserMoneyLogHandler struct {
+type MoneyLogHandler struct {
 	Base
 	log           *zap.Logger
-	userMoneyLogM *adminmodel.UserMoneyLogModel
+	userMoneyLogM *adminmodel.MoneyLogModel
 }
 
-func NewUserMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.UserMoneyLogModel) *UserMoneyLogHandler {
-	return &UserMoneyLogHandler{
+func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.MoneyLogModel) *MoneyLogHandler {
+	return &MoneyLogHandler{
 		Base:          NewBase(userMoneyLogM),
 		log:           log,
 		userMoneyLogM: userMoneyLogM,
 	}
 }
 
-func (h *UserMoneyLogHandler) Index(ctx *gin.Context) {
+func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 		return
@@ -73,14 +73,14 @@ func (v Money) GetMessages() validate.ValidatorMessages {
 	}
 }
 
-func (h *UserMoneyLogHandler) Add(ctx *gin.Context) {
+func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	var params Money
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	userMoneyLog := adminmodel.UserMoneyLog{}
+	userMoneyLog := adminmodel.MoneyLog{}
 	cents, err := safeint.ParseDecimalCents(params.Money)
 	if err != nil {
 		FailByErr(ctx, err)

@@ -16,25 +16,25 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserGroupHandler struct {
+type GroupHandler struct {
 	Base
 	log        *zap.Logger
-	userGroupM *adminmodel.UserGroupModel
+	userGroupM *adminmodel.GroupModel
 	userRuleM  *adminauth.AdminRuleModel
 	authM      *adminauth.AuthModel
 	userAuthM  *commonModel.AuthModel
 }
 
-func NewUserGroupHandler(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *UserGroupHandler {
-	return newUserGroupHandler(log, userGroupM, userRuleM, authM, nil)
+func NewGroupHandler(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *GroupHandler {
+	return newGroupHandler(log, userGroupM, userRuleM, authM, nil)
 }
 
-func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
-	return newUserGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
+func NewGroupHandlerWithAuth(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *GroupHandler {
+	return newGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
 }
 
-func newUserGroupHandler(log *zap.Logger, userGroupM *adminmodel.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
-	return &UserGroupHandler{
+func newGroupHandler(log *zap.Logger, userGroupM *adminmodel.GroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *GroupHandler {
+	return &GroupHandler{
 		Base:       NewBase(userGroupM),
 		log:        log,
 		userGroupM: userGroupM,
@@ -44,7 +44,7 @@ func newUserGroupHandler(log *zap.Logger, userGroupM *adminmodel.UserGroupModel,
 	}
 }
 
-func (h *UserGroupHandler) Index(ctx *gin.Context) {
+func (h *GroupHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 	}
@@ -60,27 +60,27 @@ func (h *UserGroupHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type UserGroup struct {
+type Group struct {
 	Pid    int32   `json:"pid"`
 	Name   string  `json:"name" binding:"required"`
 	Rules  []int32 `json:"rules"`
 	Status string  `json:"status"`
 }
 
-func (v UserGroup) GetMessages() validate.ValidatorMessages {
+func (v Group) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
 		"name.required": "name required",
 	}
 }
 
-func (h *UserGroupHandler) Add(ctx *gin.Context) {
-	var params UserGroup
+func (h *GroupHandler) Add(ctx *gin.Context) {
+	var params Group
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	userGroup := adminmodel.UserGroup{}
+	userGroup := adminmodel.Group{}
 	if err := copier.Copy(&userGroup, params); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -105,7 +105,7 @@ func (h *UserGroupHandler) Add(ctx *gin.Context) {
 	})
 }
 
-func (h *UserGroupHandler) One(ctx *gin.Context) {
+func (h *GroupHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	userGroup, err := h.userGroupM.GetOne(ctx, int32(id))
 	if err != nil {
@@ -143,7 +143,7 @@ func (h *UserGroupHandler) One(ctx *gin.Context) {
 	})
 }
 
-func (h *UserGroupHandler) Edit(ctx *gin.Context) {
+func (h *GroupHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
 		invalidateAfterMutation(ctx, func() {
 			if h.userAuthM != nil {
@@ -155,7 +155,7 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 
 	var params = struct {
 		IDS
-		UserGroup
+		Group
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
@@ -190,7 +190,7 @@ func (h *UserGroupHandler) Edit(ctx *gin.Context) {
 	})
 }
 
-func (h *UserGroupHandler) Del(ctx *gin.Context) {
+func (h *GroupHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
@@ -211,7 +211,7 @@ func (h *UserGroupHandler) Del(ctx *gin.Context) {
 }
 
 // 权限节点入库前处理
-func (h *UserGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string, error) {
+func (h *GroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string, error) {
 	if len(rules) > 0 {
 		list, err := h.userRuleM.List(ctx)
 		if err != nil {

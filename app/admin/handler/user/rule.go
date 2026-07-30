@@ -13,24 +13,24 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserRuleHandler struct {
+type RuleHandler struct {
 	Base
 	log       *zap.Logger
-	userRuleM *adminmodel.UserRuleModel
+	userRuleM *adminmodel.RuleModel
 	authM     *adminauth.AuthModel
 	userAuthM *commonModel.AuthModel
 }
 
-func NewUserRuleHandler(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel) *UserRuleHandler {
-	return newUserRuleHandler(log, userRuleM, authM, nil)
+func NewRuleHandler(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel) *RuleHandler {
+	return newRuleHandler(log, userRuleM, authM, nil)
 }
 
-func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
-	return newUserRuleHandler(log, userRuleM, authM, userAuthM)
+func NewRuleHandlerWithAuth(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *RuleHandler {
+	return newRuleHandler(log, userRuleM, authM, userAuthM)
 }
 
-func newUserRuleHandler(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
-	return &UserRuleHandler{
+func newRuleHandler(log *zap.Logger, userRuleM *adminmodel.RuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *RuleHandler {
+	return &RuleHandler{
 		Base:      NewBase(userRuleM),
 		log:       log,
 		userRuleM: userRuleM,
@@ -39,7 +39,7 @@ func newUserRuleHandler(log *zap.Logger, userRuleM *adminmodel.UserRuleModel, au
 	}
 }
 
-func (h *UserRuleHandler) Index(ctx *gin.Context) {
+func (h *RuleHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 		return
@@ -67,7 +67,7 @@ func (h *UserRuleHandler) Index(ctx *gin.Context) {
 
 }
 
-type UserRule struct {
+type Rule struct {
 	Pid       int32  `json:"pid"`
 	Type      string `json:"type"`
 	Title     string `json:"title"  binding:"required"`
@@ -84,20 +84,20 @@ type UserRule struct {
 	Status    string `json:"status"`
 }
 
-func (v UserRule) GetMessages() validate.ValidatorMessages {
+func (v Rule) GetMessages() validate.ValidatorMessages {
 	return validate.ValidatorMessages{
 		"title.required": "title required",
 	}
 }
 
-func (h *UserRuleHandler) Add(ctx *gin.Context) {
-	var params UserRule
+func (h *RuleHandler) Add(ctx *gin.Context) {
+	var params Rule
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	var userRule adminmodel.UserRule
+	var userRule adminmodel.Rule
 	if err := copier.Copy(&userRule, params); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -116,7 +116,7 @@ func (h *UserRuleHandler) Add(ctx *gin.Context) {
 	})
 }
 
-func (h *UserRuleHandler) Edit(ctx *gin.Context) {
+func (h *RuleHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
 		invalidateAfterMutation(ctx, func() {
 			if h.userAuthM != nil {
@@ -128,7 +128,7 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 
 	var params = struct {
 		IDS
-		UserRule
+		Rule
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
@@ -157,7 +157,7 @@ func (h *UserRuleHandler) Edit(ctx *gin.Context) {
 	})
 }
 
-func (h *UserRuleHandler) Del(ctx *gin.Context) {
+func (h *RuleHandler) Del(ctx *gin.Context) {
 	var params validate.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
@@ -177,7 +177,7 @@ func (h *UserRuleHandler) Del(ctx *gin.Context) {
 	})
 }
 
-func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
+func (h *RuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	if s := ctx.Request.FormValue("select"); s == "" {
 		return nil, false
 	}
@@ -201,7 +201,7 @@ func (h *UserRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取菜单列表
-func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []interface{}) ([]adminmodel.UserRule, error) {
+func (h *RuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []interface{}) ([]adminmodel.Rule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
 	if keyword != "" {
 		keywordArr := strings.Split(keyword, " ")
@@ -211,29 +211,29 @@ func (h *UserRuleHandler) GetRules(ctx *gin.Context, whereS []string, whereP []i
 		}
 	}
 
-	list := []adminmodel.UserRule{}
+	list := []adminmodel.Rule{}
 	err := h.userRuleM.DB().Table(h.userRuleM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Order("weigh desc,id asc").Find(&list).Error
 	return list, err
 }
 
-type UserRuleExpend struct {
-	adminmodel.UserRule
-	Children []*UserRuleExpend `json:"children"`
+type RuleExpend struct {
+	adminmodel.Rule
+	Children []*RuleExpend `json:"children"`
 }
 
-func (l *UserRuleExpend) GetId() int               { return int(l.ID) }
-func (l *UserRuleExpend) GetPid() int              { return int(l.Pid) }
-func (l *UserRuleExpend) GetTitle() string         { return l.Title }
-func (l *UserRuleExpend) GetChildren() interface{} { return l.Children }
-func (l *UserRuleExpend) SetTitle(title string)    { l.Title = title }
-func (l *UserRuleExpend) SetChildren(children interface{}) {
-	l.Children = children.([]*UserRuleExpend)
+func (l *RuleExpend) GetId() int               { return int(l.ID) }
+func (l *RuleExpend) GetPid() int              { return int(l.Pid) }
+func (l *RuleExpend) GetTitle() string         { return l.Title }
+func (l *RuleExpend) GetChildren() interface{} { return l.Children }
+func (l *RuleExpend) SetTitle(title string)    { l.Title = title }
+func (l *RuleExpend) SetChildren(children interface{}) {
+	l.Children = children.([]*RuleExpend)
 }
 
-func (h *UserRuleHandler) AssembleChild(list []adminmodel.UserRule) []*UserRuleExpend {
-	expendList := []*UserRuleExpend{}
+func (h *RuleHandler) AssembleChild(list []adminmodel.Rule) []*RuleExpend {
+	expendList := []*RuleExpend{}
 	for _, v := range list {
-		temp := UserRuleExpend{}
+		temp := RuleExpend{}
 		copier.Copy(&temp, v)
 		expendList = append(expendList, &temp)
 	}

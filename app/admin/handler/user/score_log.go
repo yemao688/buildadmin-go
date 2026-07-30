@@ -9,21 +9,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserScoreLogHandler struct {
+type ScoreLogHandler struct {
 	Base
 	log           *zap.Logger
-	userScoreLogM *adminmodel.UserScoreLogModel
+	userScoreLogM *adminmodel.ScoreLogModel
 }
 
-func NewUserScoreLogHandler(log *zap.Logger, userScoreLogM *adminmodel.UserScoreLogModel) *UserScoreLogHandler {
-	return &UserScoreLogHandler{
+func NewScoreLogHandler(log *zap.Logger, userScoreLogM *adminmodel.ScoreLogModel) *ScoreLogHandler {
+	return &ScoreLogHandler{
 		Base:          NewBase(userScoreLogM),
 		log:           log,
 		userScoreLogM: userScoreLogM,
 	}
 }
 
-func (h *UserScoreLogHandler) Index(ctx *gin.Context) {
+func (h *ScoreLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 		return
@@ -70,14 +70,14 @@ func (v Score) GetMessages() validate.ValidatorMessages {
 	}
 }
 
-func (h *UserScoreLogHandler) Add(ctx *gin.Context) {
+func (h *ScoreLogHandler) Add(ctx *gin.Context) {
 	var params Score
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
 
-	userScoreLog := adminmodel.UserScoreLog{}
+	userScoreLog := adminmodel.ScoreLog{}
 	if err := copier.Copy(&userScoreLog, params); err != nil {
 		FailByErr(ctx, err)
 		return

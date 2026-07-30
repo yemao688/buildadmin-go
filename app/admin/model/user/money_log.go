@@ -15,8 +15,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// UserMoneyLog 会员余额变动表
-type UserMoneyLog struct {
+// MoneyLog 会员余额变动表
+type MoneyLog struct {
 	ID         int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
 	AdminID    int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`       // 管理员ID
 	UserID     int32        `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`          // 会员ID
@@ -30,14 +30,14 @@ type UserMoneyLog struct {
 	User       simple.User  `json:"user"`
 }
 
-type UserMoneyLogModel struct {
+type MoneyLogModel struct {
 	BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
 }
 
-func NewUserMoneyLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserMoneyLogModel {
-	return &UserMoneyLogModel{
+func NewMoneyLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *MoneyLogModel {
+	return &MoneyLogModel{
 		BaseModel: NewBaseModel(config.Database.Prefix+"user_money_log", "id", "user.username,user.nickname", sqlDB),
 		config:    config,
 		enforcer:  enforcer,
@@ -50,7 +50,7 @@ func quote(s string) string {
 
 // scoped applies the fail-closed hierarchical data-scope enforcer to
 // user_money_log.admin_id. Only an explicit unrestricted actor bypasses scope.
-func (s *UserMoneyLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *MoneyLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if s.enforcer == nil {
 			tx := db.Session(&gorm.Session{})
@@ -61,30 +61,30 @@ func (s *UserMoneyLogModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB 
 	}
 }
 
-func (s *UserMoneyLogModel) userScope(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *MoneyLogModel) userScope(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	userAlias := s.config.Database.Prefix + "user"
 	return func(db *gorm.DB) *gorm.DB {
 		return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: userAlias, Column: "admin_id"})
 	}
 }
 
-func (s *UserMoneyLogModel) userJoin() string {
+func (s *MoneyLogModel) userJoin() string {
 	userTable := s.config.Database.Prefix + "user"
 	return "LEFT JOIN " + quote(userTable) + " AS " + quote("user") + " ON " + quote("user") + ".`id` = " + quote(s.TableName) + ".`user_id`"
 }
 
-func (s *UserMoneyLogModel) GetOne(ctx *gin.Context, id int32) (UserMoneyLog, error) {
-	data := UserMoneyLog{}
-	err := s.DB().Model(&UserMoneyLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
+func (s *MoneyLogModel) GetOne(ctx *gin.Context, id int32) (MoneyLog, error) {
+	data := MoneyLog{}
+	err := s.DB().Model(&MoneyLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
 	return data, err
 }
 
-func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total int64, err error) {
+func (s *MoneyLogModel) List(ctx *gin.Context) (list []MoneyLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.DB().Model(&UserMoneyLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
+	db := s.DB().Model(&MoneyLog{}).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(whereS, whereP...)
 	db = db.Scopes(s.scoped(ctx))
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -98,7 +98,7 @@ func (s *UserMoneyLogModel) List(ctx *gin.Context) (list []UserMoneyLog, total i
 // with int64 overflow checks and must not become negative, then the user row is
 // updated and the log (owned by user.AdminID) is inserted. Any failure rolls
 // back both changes.
-func (s *UserMoneyLogModel) Add(ctx *gin.Context, userMoneyLog *UserMoneyLog) error {
+func (s *MoneyLogModel) Add(ctx *gin.Context, userMoneyLog *MoneyLog) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
@@ -151,7 +151,7 @@ func (s *UserMoneyLogModel) Add(ctx *gin.Context, userMoneyLog *UserMoneyLog) er
 	})
 }
 
-func (s *UserMoneyLogModel) Del(ctx *gin.Context, ids interface{}) error {
+func (s *MoneyLogModel) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid user money log ids")
@@ -168,8 +168,8 @@ func (s *UserMoneyLogModel) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}
 	return s.DB().Transaction(func(tx *gorm.DB) error {
-		var list []UserMoneyLog
-		scoped := tx.Model(&UserMoneyLog{}).Scopes(s.scoped(ctx))
+		var list []MoneyLog
+		scoped := tx.Model(&MoneyLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where(quote(s.TableName)+".id IN ?", normalized).Find(&list).Error; err != nil {
 			return err
 		}

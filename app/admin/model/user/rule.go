@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserRule 会员菜单权限规则表
-type UserRule struct {
+// Rule 会员菜单权限规则表
+type Rule struct {
 	ID           int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                                           // ID
 	Pid          int32  `gorm:"column:pid;not null;comment:上级菜单" json:"pid"`                                                                                            // 上级菜单
 	Type         string `gorm:"column:type;not null;default:menu;comment:类型:route=路由,menu_dir=菜单目录,menu=菜单项,nav_user_menu=顶栏会员菜单下拉项,nav=顶栏菜单项,button=页面按钮" json:"type"` // 类型:route=路由,menu_dir=菜单目录,menu=菜单项,nav_user_menu=顶栏会员菜单下拉项,nav=顶栏菜单项,button=页面按钮
@@ -30,31 +30,31 @@ type UserRule struct {
 	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                                                      // 创建时间
 }
 
-type UserRuleModel struct {
+type RuleModel struct {
 	BaseModel
 }
 
-func NewUserRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *UserRuleModel {
-	return &UserRuleModel{
+func NewRuleModel(sqlDB *gorm.DB, config *conf.Configuration) *RuleModel {
+	return &RuleModel{
 		BaseModel: NewBaseModel(config.Database.Prefix+"user_rule", "id", "title", sqlDB),
 	}
 }
 
-func (s *UserRuleModel) GetOne(ctx *gin.Context, id int32) (userRule UserRule, err error) {
-	err = s.DB().Where("id=?", id).First(&userRule).Error
+func (s *RuleModel) GetOne(ctx *gin.Context, id int32) (rule Rule, err error) {
+	err = s.DB().Where("id=?", id).First(&rule).Error
 	return
 }
 
-func (s *UserRuleModel) List(ctx *gin.Context) (list []UserRule, err error) {
+func (s *RuleModel) List(ctx *gin.Context) (list []Rule, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}
-	err = s.DB().Model(&UserRule{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.DB().Model(&Rule{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
-func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
+func (s *RuleModel) Add(ctx *gin.Context, rule Rule) error {
 	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -62,7 +62,7 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 		}
 	}()
 
-	if err := tx.Create(&userRule).Error; err != nil {
+	if err := tx.Create(&rule).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -70,10 +70,10 @@ func (s *UserRuleModel) Add(ctx *gin.Context, userRule UserRule) error {
 	return tx.Commit().Error
 }
 
-func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
-	parent := UserRule{}
-	if userRule.Pid > 0 {
-		if err := s.DB().Where("id=?", userRule.Pid).First(&parent).Error; err != nil {
+func (s *RuleModel) Edit(ctx *gin.Context, rule Rule) error {
+	parent := Rule{}
+	if rule.Pid > 0 {
+		if err := s.DB().Where("id=?", rule.Pid).First(&parent).Error; err != nil {
 			return err
 		}
 	}
@@ -85,23 +85,23 @@ func (s *UserRuleModel) Edit(ctx *gin.Context, userRule UserRule) error {
 		}
 	}()
 
-	if parent.Pid == userRule.ID {
-		if err := tx.Model(&UserRule{}).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
+	if parent.Pid == rule.ID {
+		if err := tx.Model(&Rule{}).Where("id=?", parent.ID).Update("pid", 0).Error; err != nil {
 			tx.Rollback()
 			return err
 		}
 	}
 
-	if err := tx.Save(&userRule).Error; err != nil {
+	if err := tx.Save(&rule).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 	return tx.Commit().Error
 }
 
-func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
+func (s *RuleModel) Del(ctx *gin.Context, ids []int32) error {
 	var subIds []int32
-	if err := s.DB().Model(&UserRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
+	if err := s.DB().Model(&Rule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
 		return err
 	}
 
@@ -111,12 +111,12 @@ func (s *UserRuleModel) Del(ctx *gin.Context, ids []int32) error {
 		}
 	}
 
-	err := s.DB().Model(&UserRule{}).Where(" id in ? ", ids).Delete(nil).Error
+	err := s.DB().Model(&Rule{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
 
-func (s *UserRuleModel) GetRulePIds(ids []string) ([]int32, error) {
+func (s *RuleModel) GetRulePIds(ids []string) ([]int32, error) {
 	pids := []int32{}
-	err := s.DB().Model(&UserRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
+	err := s.DB().Model(&Rule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
 }

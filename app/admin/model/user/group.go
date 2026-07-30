@@ -7,8 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserGroup 会员组表
-type UserGroup struct {
+// Group 会员组表
+type Group struct {
 	ID         int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // ID
 	Name       string `gorm:"column:name;not null;comment:组名" json:"name"`                         // 组名
 	Rules      string `gorm:"column:rules;comment:权限节点" json:"rules"`                              // 权限节点
@@ -17,31 +17,31 @@ type UserGroup struct {
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`   // 创建时间
 }
 
-type UserGroupModel struct {
+type GroupModel struct {
 	BaseModel
 }
 
-func NewUserGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *UserGroupModel {
-	return &UserGroupModel{
+func NewGroupModel(sqlDB *gorm.DB, config *conf.Configuration) *GroupModel {
+	return &GroupModel{
 		BaseModel: NewBaseModel(config.Database.Prefix+"user_group", "id", "name", sqlDB),
 	}
 }
 
-func (s *UserGroupModel) GetOne(ctx *gin.Context, id int32) (userGroup UserGroup, err error) {
-	err = s.DB().Where("id=?", id).First(&userGroup).Error
+func (s *GroupModel) GetOne(ctx *gin.Context, id int32) (group Group, err error) {
+	err = s.DB().Where("id=?", id).First(&group).Error
 	return
 }
 
-func (s *UserGroupModel) List(ctx *gin.Context) (list []UserGroup, err error) {
+func (s *GroupModel) List(ctx *gin.Context) (list []Group, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, err
 	}
-	err = s.DB().Model(&UserGroup{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = s.DB().Model(&Group{}).Where(whereS, whereP...).Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
-func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
+func (s *GroupModel) Add(ctx *gin.Context, group Group) error {
 	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -49,7 +49,7 @@ func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
 		}
 	}()
 
-	if err := tx.Create(&userGroup).Error; err != nil {
+	if err := tx.Create(&group).Error; err != nil {
 		tx.Rollback()
 		return err
 
@@ -57,7 +57,7 @@ func (s *UserGroupModel) Add(ctx *gin.Context, userGroup UserGroup) error {
 	return tx.Commit().Error
 }
 
-func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
+func (s *GroupModel) Edit(ctx *gin.Context, group Group) error {
 	tx := s.DB().Begin()
 	defer func() {
 		if r := recover(); r != nil {
@@ -65,14 +65,14 @@ func (s *UserGroupModel) Edit(ctx *gin.Context, userGroup UserGroup) error {
 		}
 	}()
 
-	if err := tx.Save(&userGroup).Error; err != nil {
+	if err := tx.Save(&group).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
 	return tx.Commit().Error
 }
 
-func (s *UserGroupModel) Del(ctx *gin.Context, ids interface{}) error {
-	err := s.DB().Model(&UserGroup{}).Where(" id in ? ", ids).Delete(nil).Error
+func (s *GroupModel) Del(ctx *gin.Context, ids interface{}) error {
+	err := s.DB().Model(&Group{}).Where(" id in ? ", ids).Delete(nil).Error
 	return err
 }
