@@ -1,12 +1,12 @@
 export default {
+    "quick Search Fields": 'group,key',
+    group: 'group',
+    key: 'key',
+    type: 'type',
     "type 1": 'type 1',
     "type 2": 'type 2',
-    "quick Search Fields": 'group,key',
-    id: 'id',
-    key: 'key',
-    "type 0": 'type 0',
     value: 'value',
+    id: 'id',
     lan: 'lan',
-    group: 'group',
-    type: 'type',
+    "type 0": 'type 0',
 }

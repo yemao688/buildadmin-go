@@ -1,7 +1,7 @@
 name: country_language
 comment: 全局语言
 type: alter
-generateRelativePath: country.language
+generateRelativePath: country_language
 dataScope:
   mode: none
 quickSearchField: [lan, name]
