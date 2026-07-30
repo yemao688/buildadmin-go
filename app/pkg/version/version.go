@@ -9,7 +9,7 @@ import (
 )
 
 // Framework is the release version of this Go framework; downstream projects align to it.
-const Framework = "2.0.2"
+const Framework = "2.1.0"
 
 // Upstream is the compatible PHP BuildAdmin baseline; framework maintainers update it when syncing PHP upstream.
 const Upstream = "2.3.8"
