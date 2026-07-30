@@ -668,6 +668,19 @@ func RemoveWireProviderSet(rootDir string) error {
 	if err != nil || !needed {
 		return err
 	}
+	providerPath := filepath.Join(utils.RootPath(), rootDir, "provider.go")
+	if content, err := os.ReadFile(providerPath); err == nil {
+		remaining, err := countWireProviderSetEntries(string(content))
+		if err != nil {
+			return err
+		}
+		if remaining > 0 {
+			// 多模块共享包里仍有其他模块由该 ProviderSet 提供，不能提前从 wire.go 摘掉整包引用。
+			return nil
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
 	content, err := os.ReadFile(wirePath)
 	if err != nil {
@@ -684,6 +697,32 @@ func removeWireProviderSetEntry(content, importPath, alias string) string {
 	}
 	content = strings.Replace(content, "\t\t"+alias+".ProviderSet,\n", "", 1)
 	return removeImportLineIfUnused(content, alias, importPath)
+}
+
+func countWireProviderSetEntries(content string) (int, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return 0, err
+	}
+	entries := 0
+	ast.Inspect(file, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if !ok || len(spec.Names) != 1 || spec.Names[0].Name != "ProviderSet" || len(spec.Values) != 1 {
+			return true
+		}
+		call, ok := spec.Values[0].(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
+			return true
+		}
+		entries = len(call.Args)
+		return false
+	})
+	return entries, nil
 }
 
 func writeProvider(dir string, name string) error {

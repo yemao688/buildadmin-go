@@ -312,6 +312,99 @@ func TestWireProviderSetEntryAddRemoveRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCountWireProviderSetEntries(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    int
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			content: "package provider\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet()\n",
+			want:    0,
+		},
+		{
+			name:    "entries",
+			content: "package provider\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFoo,\n\tNewBar,\n)\n",
+			want:    2,
+		},
+		{
+			name:    "invalid",
+			content: "package provider\nvar ProviderSet = wire.NewSet(\n",
+			wantErr: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := countWireProviderSetEntries(tc.content)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected parse error, got count %d", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("countWireProviderSetEntries() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRemoveWireProviderSetKeepsSharedProviderSetWhenEntriesRemain(t *testing.T) {
+	rootDir := "app/admin/handler/remove_wire_provider_set_test"
+	dir := filepath.Join(utils.RootPath(), rootDir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	if err := os.WriteFile(filepath.Join(dir, "provider.go"), []byte("package provider\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFoo,\n\tNewBar,\n)\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	original, err := os.ReadFile(wirePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.WriteFile(wirePath, original, 0644) })
+
+	importPath, alias, anchor, needed, err := wireProviderSetRef(rootDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !needed {
+		t.Fatal("expected test root to require wire aggregation")
+	}
+
+	if err := AddWireProviderSet(rootDir); err != nil {
+		t.Fatal(err)
+	}
+	added, err := os.ReadFile(wirePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{anchor, "\t\t" + alias + ".ProviderSet,\n", alias + " \"" + importPath + "\""} {
+		if !strings.Contains(string(added), want) {
+			t.Fatalf("wire.go missing %q after add:\n%s", want, added)
+		}
+	}
+
+	if err := RemoveWireProviderSet(rootDir); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(wirePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(added) {
+		t.Fatalf("wire.go changed unexpectedly while shared providers remain:\n--- got ---\n%s\n--- want ---\n%s", after, added)
+	}
+}
+
 func assertParseableGo(t *testing.T, filename, content string) {
 	t.Helper()
 	if _, err := parser.ParseFile(token.NewFileSet(), filename, content, parser.AllErrors); err != nil {
