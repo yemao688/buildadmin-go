@@ -26,13 +26,38 @@ import (
 	"gorm.io/gorm"
 )
 
+// UploadHelper 是无状态共享服务：实例由 Wire 以单例注入，在并发请求间共享。
+// 请求级状态（文件、细目）一律通过 UploadParams 逐调用传入，禁止挂载到实例上。
 type UploadHelper struct {
-	config     *conf.Configuration
-	sqlDB      *gorm.DB
-	oss        *AliossStorage
-	file       *multipart.FileHeader
-	topic      string //细目（存储目录）
-	sourceType string
+	config *conf.Configuration
+	sqlDB  *gorm.DB
+	oss    *AliossStorage
+}
+
+// UploadParams 单次上传请求的输入值。
+type UploadParams struct {
+	File  *multipart.FileHeader
+	Topic string //细目（存储目录），空则按 default 处理
+}
+
+func (p UploadParams) topic() string {
+	if p.Topic == "" {
+		return "default"
+	}
+	return p.Topic
+}
+
+func (p UploadParams) sourceType() string {
+	return p.File.Header.Get("Content-Type")
+}
+
+// 获取文件后缀
+func (p UploadParams) suffix() string {
+	suffix := strings.TrimLeft(filepath.Ext(p.File.Filename), ".")
+	if suffix == "" {
+		suffix = "file"
+	}
+	return suffix
 }
 
 type OSSCallback struct {
@@ -89,37 +114,17 @@ func NewUploadHelper(sqlDB *gorm.DB, config *conf.Configuration, ossStorage *Ali
 		config: config,
 		sqlDB:  sqlDB,
 		oss:    ossStorage,
-		topic:  "default",
 	}
 }
 
-func (s *UploadHelper) SetFile(file *multipart.FileHeader) map[string]any {
-	s.file = file
-	s.sourceType = s.file.Header.Get("Content-Type")
-
-	fileInfo := map[string]any{}
-	suffix := s.getSuffix()
-	fileInfo["suffix"] = suffix
-	fileInfo["type"] = s.sourceType
-	fileInfo["size"] = s.file.Size
-	fileInfo["name"] = s.file.Filename
-	fileInfo["sha1"] = ""
-	return fileInfo
-}
-
-func (s *UploadHelper) SetTopic(topic string) {
-	s.topic = topic
-}
-
 // 检查文件类型是否允许上传
-func (s *UploadHelper) checkMimetype() error {
+func (s *UploadHelper) checkMimetype(sourceType, suffix string) error {
 	mimetypeArr := strings.Split(strings.ToLower(s.config.Upload.Mimetype), ",")
-	sourceTypeArr := strings.Split(s.sourceType, ",")
+	sourceTypeArr := strings.Split(sourceType, ",")
 	// 验证文件后缀
 	if s.config.Upload.Mimetype == "*" {
 		return nil
 	}
-	suffix := s.getSuffix()
 	if slices.Contains(mimetypeArr, suffix) {
 		return nil
 	}
@@ -128,7 +133,7 @@ func (s *UploadHelper) checkMimetype() error {
 		return nil
 	}
 
-	if slices.Contains(mimetypeArr, s.sourceType) {
+	if slices.Contains(mimetypeArr, sourceType) {
 		return nil
 	}
 
@@ -139,20 +144,17 @@ func (s *UploadHelper) checkMimetype() error {
 }
 
 // 是否是图片
-func (s *UploadHelper) checkIsImage() bool {
+func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 	typeArr := []string{"image/gif", "image/jpg", "image/jpeg", "image/bmp", "image/png", "image/webp"}
 	suffixArr := []string{"gif", "jpg", "jpeg", "bmp", "png", "webp"}
-	if slices.Contains(typeArr, s.sourceType) || slices.Contains(suffixArr, s.getSuffix()) {
-		return true
-	}
-	return false
+	return slices.Contains(typeArr, sourceType) || slices.Contains(suffixArr, suffix)
 }
 
 // 检查文件大小是否允许上传
-func (s *UploadHelper) checkSize(ctx *gin.Context) error {
-	if s.file.Size > int64(s.config.Upload.Maxsize) {
+func (s *UploadHelper) checkSize(ctx *gin.Context, file *multipart.FileHeader) error {
+	if file.Size > int64(s.config.Upload.Maxsize) {
 		msg := utils.Lang(ctx, "The uploaded file is too large (%sMiB), Maximum file size:%sMiB", map[string]string{
-			"min": fmt.Sprintf("%d", s.file.Size),
+			"min": fmt.Sprintf("%d", file.Size),
 			"max": fmt.Sprintf("%d", s.config.Upload.Maxsize),
 		})
 		return cErr.BadRequest(msg, 10002)
@@ -169,32 +171,23 @@ func (s *UploadHelper) uploadMode() string {
 	return s.config.Upload.Mode
 }
 
-// 获取文件后缀
-func (s *UploadHelper) getSuffix() string {
-	suffix := strings.TrimLeft(filepath.Ext(s.file.Filename), ".")
-	if suffix == "" {
-		suffix = "file"
-	}
-	return suffix
-}
-
 // 获取文件保存名
-func (s *UploadHelper) getSaveName(sha1 string) string {
+func (s *UploadHelper) getSaveName(params UploadParams, sha1 string) string {
 	now := time.Now()
 
-	filename := s.file.Filename
-	if len(s.file.Filename) > 15 {
+	filename := params.File.Filename
+	if len(params.File.Filename) > 15 {
 		filename = filename[:15]
 	}
 
-	suffix := s.getSuffix()
+	suffix := params.suffix()
 	dotSuffix := ""
 	if suffix != "" {
 		dotSuffix = "." + suffix
 	}
 
 	replaceArr := map[string]string{
-		"{topic}":    s.topic,
+		"{topic}":    params.topic(),
 		"{year}":     fmt.Sprintf("%04d", now.Year()),
 		"{mon}":      fmt.Sprintf("%02d", now.Month()),
 		"{day}":      fmt.Sprintf("%02d", now.Day()),
@@ -216,15 +209,17 @@ func (s *UploadHelper) getSaveName(sha1 string) string {
 	return saveName
 }
 
-func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (any, error) {
-	if err := s.checkSize(ctx); err != nil {
+func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int32, userId int32) (any, error) {
+	if err := s.checkSize(ctx, params.File); err != nil {
 		return nil, err
 	}
-	if err := s.checkMimetype(); err != nil {
+	sourceType := params.sourceType()
+	suffix := params.suffix()
+	if err := s.checkMimetype(sourceType, suffix); err != nil {
 		return nil, err
 	}
 
-	fileReader, err := s.file.Open()
+	fileReader, err := params.File.Open()
 	if err != nil {
 		return nil, err
 	}
@@ -243,9 +238,9 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	}
 	fileSHA1 := hasher.Sum(nil)
 	sha1String := fmt.Sprintf("%x", fileSHA1)
-	savePath := s.getSaveName(sha1String)
+	savePath := s.getSaveName(params, sha1String)
 	//如果是图片,计算图片宽高
-	isImage := s.checkIsImage()
+	isImage := s.checkIsImage(sourceType, suffix)
 	width := 0
 	height := 0
 	if isImage {
@@ -261,7 +256,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	if s.uploadMode() == "alioss" {
 		storage = "alioss"
 	}
-	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, s.topic, storage).Take(&attach).Error; err == nil {
+	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, params.topic(), storage).Take(&attach).Error; err == nil {
 		//判断文件是否存在
 		missing := attach.Storage == "local" && !utils.PathExists(utils.RootPath()+attach.URL)
 		if attach.Storage == "alioss" && s.oss != nil {
@@ -285,15 +280,15 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	}
 
 	attachment := Attachment{
-		Topic:          s.topic,
+		Topic:          params.topic(),
 		AdminID:        adminId,
 		UserID:         userId,
 		URL:            savePath,
 		Width:          int32(width),
 		Height:         int32(height),
-		Name:           s.file.Filename,
-		Size:           int32(s.file.Size),
-		Mimetype:       s.sourceType,
+		Name:           params.File.Filename,
+		Size:           int32(params.File.Size),
+		Mimetype:       sourceType,
 		Storage:        storage,
 		Sha1:           sha1String,
 		Quote:          1,
@@ -302,7 +297,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, adminId int32, userId int32) (an
 	if err := s.sqlDB.Create(&attachment).Error; err != nil {
 		return nil, err
 	}
-	attachment.Suffix = s.getSuffix()
+	attachment.Suffix = suffix
 	if storage == "alioss" && s.oss != nil {
 		if err := s.oss.Save(bytes.NewReader(buffer.Bytes()), savePath); err != nil {
 			s.sqlDB.Delete(&attachment)

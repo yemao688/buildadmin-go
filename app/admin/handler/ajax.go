@@ -36,8 +36,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 
-	h.uploadHelper.SetFile(file)
-	result, err := h.uploadHelper.Upload(ctx, adminAuth.Id, 0)
+	result, err := h.uploadHelper.Upload(ctx, model.UploadParams{File: file}, adminAuth.Id, 0)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
