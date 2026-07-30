@@ -2,6 +2,7 @@ package handler
 
 import (
 	adminModel "go-build-admin/app/admin/model"
+	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
 	cErr "go-build-admin/app/pkg/error"
@@ -18,11 +19,11 @@ type IndexHandler struct {
 	log     *zap.Logger
 	authM   *model.AuthModel
 	config  *conf.Configuration
-	configM *adminModel.ConfigModel
+	configM *routinemodel.ConfigModel
 	country *country.Service
 }
 
-func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *adminModel.ConfigModel, countryService *country.Service) *IndexHandler {
+func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *routinemodel.ConfigModel, countryService *country.Service) *IndexHandler {
 	return &IndexHandler{log: log, authM: authM, config: config, configM: configM, country: countryService}
 }
 

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"go-build-admin/app/admin/model"
+	securitymodel "go-build-admin/app/admin/model/security"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
 	"gorm.io/gorm"
@@ -17,7 +18,7 @@ import (
 
 type sensitiveAuditor struct {
 	work *securityWork
-	rule model.SecuritySensitiveData
+	rule securitymodel.SecuritySensitiveData
 }
 
 func (a *sensitiveAuditor) run() {
@@ -68,7 +69,7 @@ func (a *sensitiveAuditor) run() {
 	if len(logs) == 0 {
 		return
 	}
-	if err := db.Model(&model.SecuritySensitiveDataLog{}).Create(&logs).Error; err != nil {
+	if err := db.Model(&securitymodel.SecuritySensitiveDataLog{}).Create(&logs).Error; err != nil {
 		a.work.security.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
 		a.work.abort(http.StatusInternalServerError, "security log write failed")
 	}
@@ -173,14 +174,14 @@ func (a *sensitiveAuditor) auditIdentity(row map[string]any, policy data_scope.R
 	return targetOwner, int32(idValue), true
 }
 
-func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, targetOwner, idValue int32) []model.SecuritySensitiveDataLog {
+func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, targetOwner, idValue int32) []securitymodel.SecuritySensitiveDataLog {
 	w := a.work
-	logs := []model.SecuritySensitiveDataLog{}
+	logs := []securitymodel.SecuritySensitiveDataLog{}
 	for field, comment := range dataFields {
 		beforeV, oldOK := beforeRow[field]
 		afterV, newOK := afterRow[field]
 		if oldOK && newOK && normalizeAuditValue(beforeV) != normalizeAuditValue(afterV) {
-			logs = append(logs, model.SecuritySensitiveDataLog{
+			logs = append(logs, securitymodel.SecuritySensitiveDataLog{
 				AdminID: w.actor.AdminID, TargetAdminID: targetOwner, IsCommitted: 1,
 				SensitiveID: a.rule.ID, DataTable: a.rule.DataTable, PrimaryKey: a.rule.PrimaryKey,
 				DataField: field, DataComment: comment, IDValue: idValue,

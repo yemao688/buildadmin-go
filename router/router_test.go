@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	admin "go-build-admin/app/admin/handler"
+	adminauth "go-build-admin/app/admin/handler/auth"
 	api "go-build-admin/app/api/handler"
 
 	"github.com/gin-gonic/gin"
@@ -30,7 +30,7 @@ func TestPublicRetrievePasswordRouteUsesFrontendPath(t *testing.T) {
 
 func TestAdminLogDeleteRoute(t *testing.T) {
 	router := gin.New()
-	admin.NewAdminLogRegistrar(&admin.AdminLogHandler{}).Register(router.Group("/admin/"))
+	adminauth.NewAdminLogRegistrar(&adminauth.AdminLogHandler{}).Register(router.Group("/admin/"))
 
 	found := false
 	for _, route := range router.Routes() {

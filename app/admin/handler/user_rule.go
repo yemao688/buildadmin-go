@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/tree"
@@ -16,19 +17,19 @@ type UserRuleHandler struct {
 	Base
 	log       *zap.Logger
 	userRuleM *model.UserRuleModel
-	authM     *model.AuthModel
+	authM     *adminauth.AuthModel
 	userAuthM *commonModel.AuthModel
 }
 
-func NewUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel) *UserRuleHandler {
+func NewUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel) *UserRuleHandler {
 	return newUserRuleHandler(log, userRuleM, authM, nil)
 }
 
-func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
+func NewUserRuleHandlerWithAuth(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
 	return newUserRuleHandler(log, userRuleM, authM, userAuthM)
 }
 
-func newUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
+func newUserRuleHandler(log *zap.Logger, userRuleM *model.UserRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserRuleHandler {
 	return &UserRuleHandler{
 		Base:      Base{currentM: userRuleM},
 		log:       log,

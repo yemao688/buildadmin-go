@@ -478,7 +478,7 @@ func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32
 		return cErr.BadRequest("cannot delete administrator with subordinates")
 	}
 
-	result := tx.WithContext(reqCtx).Table(h.adminTable()).Where("id IN ?", unique).Delete(&Admin{})
+	result := tx.WithContext(reqCtx).Table(h.adminTable()).Where("id IN ?", unique).Delete(nil)
 	if result.Error != nil {
 		return result.Error
 	}

@@ -34,6 +34,14 @@ func NewUserHandlerWithAuth(log *zap.Logger, userM *model.UserModel, authM *comm
 	return newUserHandler(log, userM, authM)
 }
 
+func validateAccountStatusValue(value any) error {
+	status, ok := value.(string)
+	if !ok || (status != "enable" && status != "disable") {
+		return cErr.BadRequest("status must be enable or disable")
+	}
+	return nil
+}
+
 func newUserHandler(log *zap.Logger, userM *model.UserModel, authM *commonModel.AuthModel) *UserHandler {
 	return &UserHandler{
 		Base:  Base{currentM: userM},

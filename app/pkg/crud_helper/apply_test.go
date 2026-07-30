@@ -130,8 +130,6 @@ func TestApplySpecsRejectsProtectedTable(t *testing.T) {
 	}
 }
 
-
-
 func TestApplySpecsFromDirSkipsMissingDirectory(t *testing.T) {
 	db, cfg := newApplyTestDB(t)
 	results, err := ApplySpecsFromDir(db, cfg, filepath.Join(t.TempDir(), "no_such_dir"), ApplyOptions{})

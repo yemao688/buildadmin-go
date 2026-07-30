@@ -1,15 +1,19 @@
-package model
+package model_test
 
 import (
 	"encoding/json"
 	"fmt"
 	"testing"
 
+	adminauth "go-build-admin/app/admin/model/auth"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
+
+type Rule = adminauth.Rule
 
 func getDb() *gorm.DB {
 	dsn := "root:root@tcp(localhost:3306)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local"

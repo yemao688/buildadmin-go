@@ -46,13 +46,13 @@ func BuildFileManifest(table model.Table) (FileManifest, error) {
 			handlerFile.ParseFile,
 			registrarFilePath(handlerFile),
 		},
-	Shared: []string{
-		filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
-		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
-		filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
-		filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
-		filepath.Join(utils.RootPath(), "cmd", "app", "wire_gen.go"),
-	},
+		Shared: []string{
+			filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
+			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
+			filepath.Join(utils.RootPath(), "router", "registrar_set.go"),
+			filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
+			filepath.Join(utils.RootPath(), "cmd", "app", "wire_gen.go"),
+		},
 	}
 	for _, path := range manifest.Generated {
 		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", modelRoot, "app/admin/handler"); err != nil {

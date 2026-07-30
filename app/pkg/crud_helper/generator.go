@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -158,7 +159,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 		_ = recordCrudError(db, cfg, logID, message)
 		if len(createdMenuIDs) > 0 {
-			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
+			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&adminauth.AdminRule{}).Error
 		}
 		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
 		return nil, fmt.Errorf("%s: %w", stage, cause)
@@ -210,7 +211,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return fail("file generation", err)
 	}
 	if !opts.SkipMenu {
-		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu)
+		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu)
 		if err != nil {
 			return fail("menu generation", err)
 		}
@@ -357,7 +358,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
-	var menuSnapshot []model.AdminRule
+	var menuSnapshot []adminauth.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		quarantineRestoreErr := quarantine.Restore()
@@ -399,7 +400,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return fail("menu snapshot", err)
 	}
-	if err := model.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
+	if err := adminauth.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
 	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Handler"); err != nil {
@@ -580,13 +581,13 @@ func validateSharedManifestPath(path string) error {
 	)
 }
 
-func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {
-	var rows []model.AdminRule
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]adminauth.AdminRule, error) {
+	var rows []adminauth.AdminRule
 	err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
 	return rows, err
 }
 
-func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRule) error {
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []adminauth.AdminRule) error {
 	for _, row := range rows {
 		var count int64
 		if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("id=?", row.ID).Count(&count).Error; err != nil {

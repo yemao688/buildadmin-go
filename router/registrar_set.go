@@ -2,7 +2,10 @@ package router
 
 import (
 	admin "go-build-admin/app/admin/handler"
+	auth "go-build-admin/app/admin/handler/auth"
 	country "go-build-admin/app/admin/handler/country"
+	routine "go-build-admin/app/admin/handler/routine"
+	security "go-build-admin/app/admin/handler/security"
 	api "go-build-admin/app/api/handler"
 )
 
@@ -11,20 +14,20 @@ func ProvideRegistrars(
 	crudLog *admin.CrudLogRegistrar,
 	module *admin.ModuleRegistrar,
 	testBuild *admin.TestBuildRegistrar,
-	adminGroup *admin.AdminGroupRegistrar,
-	adminRule *admin.AdminRuleRegistrar,
+	adminGroup *auth.AdminGroupRegistrar,
+	adminRule *auth.AdminRuleRegistrar,
 	userGroup *admin.UserGroupRegistrar,
 	userRule *admin.UserRuleRegistrar,
-	config *admin.ConfigRegistrar,
-	attachment *admin.AttachmentRegistrar,
-	admin *admin.AdminRegistrar,
+	config *routine.ConfigRegistrar,
+	attachment *routine.AttachmentRegistrar,
+	admin *auth.AdminRegistrar,
 	user *admin.UserRegistrar,
-	dataRecycle *admin.DataRecycleRegistrar,
-	dataRecycleLog *admin.DataRecycleLogRegistrar,
-	sensitiveData *admin.SensitiveDataRegistrar,
-	sensitiveDataLog *admin.SensitiveDataLogRegistrar,
-	adminInfo *admin.AdminInfoRegistrar,
-	adminLog *admin.AdminLogRegistrar,
+	dataRecycle *security.DataRecycleRegistrar,
+	dataRecycleLog *security.DataRecycleLogRegistrar,
+	sensitiveData *security.SensitiveDataRegistrar,
+	sensitiveDataLog *security.SensitiveDataLogRegistrar,
+	adminInfo *routine.AdminInfoRegistrar,
+	adminLog *auth.AdminLogRegistrar,
 	crud *admin.CrudRegistrar,
 	dashboard *admin.DashboardRegistrar,
 	userLog *admin.UserLogRegistrar,

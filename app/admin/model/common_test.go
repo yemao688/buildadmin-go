@@ -1,8 +1,9 @@
-package model
+package model_test
 
 import (
 	"testing"
 
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/header"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +11,10 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+type AdminLog = adminauth.AdminLog
+
+var IsSuperAdmin = adminauth.IsSuperAdmin
 
 func TestAdminLogScopeUsesCurrentAdminID(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:admin-log-scope?mode=memory&cache=shared"), &gorm.Config{})

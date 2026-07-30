@@ -1,7 +1,8 @@
 package handler
 
 import (
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
+	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
@@ -19,13 +20,13 @@ import (
 type IndexHandler struct {
 	config       *conf.Configuration
 	log          *zap.Logger
-	authM        *model.AuthModel
-	configM      *model.ConfigModel
+	authM        *adminauth.AuthModel
+	configM      *routinemodel.ConfigModel
 	country      *country.Service
 	clickCaptcha *clickcaptcha.ClickCaptcha
 }
 
-func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *model.AuthModel, configM *model.ConfigModel, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
+func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *adminauth.AuthModel, configM *routinemodel.ConfigModel, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
 	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, country: countryService, clickCaptcha: clickCaptcha}
 }
 

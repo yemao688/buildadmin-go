@@ -9,7 +9,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	adminModel "go-build-admin/app/admin/model"
+	adminModel "go-build-admin/app/admin/model/auth"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"

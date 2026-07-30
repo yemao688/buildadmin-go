@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"fmt"
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -389,7 +390,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	}
 	if !opts.SkipMenu {
 		webViewsDir := ParseWebDirNameData(spec.Table.Name, "views", spec.Table.WebViewsDir)
-		menuReport, err := SyncMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
+		menuReport, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
 		if err != nil {
 			return nil, fmt.Errorf("menu sync: %w", err)
 		}

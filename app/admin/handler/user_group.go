@@ -2,6 +2,7 @@ package handler
 
 import (
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/utils"
@@ -19,20 +20,20 @@ type UserGroupHandler struct {
 	Base
 	log        *zap.Logger
 	userGroupM *model.UserGroupModel
-	userRuleM  *model.AdminRuleModel
-	authM      *model.AuthModel
+	userRuleM  *adminauth.AdminRuleModel
+	authM      *adminauth.AuthModel
 	userAuthM  *commonModel.AuthModel
 }
 
-func NewUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel) *UserGroupHandler {
+func NewUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel) *UserGroupHandler {
 	return newUserGroupHandler(log, userGroupM, userRuleM, authM, nil)
 }
 
-func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
+func NewUserGroupHandlerWithAuth(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
 	return newUserGroupHandler(log, userGroupM, userRuleM, authM, userAuthM)
 }
 
-func newUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *model.AdminRuleModel, authM *model.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
+func newUserGroupHandler(log *zap.Logger, userGroupM *model.UserGroupModel, userRuleM *adminauth.AdminRuleModel, authM *adminauth.AuthModel, userAuthM *commonModel.AuthModel) *UserGroupHandler {
 	return &UserGroupHandler{
 		Base:       Base{currentM: userGroupM},
 		log:        log,

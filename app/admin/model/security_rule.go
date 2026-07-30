@@ -2,7 +2,7 @@ package model
 
 import "fmt"
 
-func validateRuleIdentityChange(hasLogs bool, currentPK, currentOwner, newPK, newOwner string) error {
+func ValidateRuleIdentityChange(hasLogs bool, currentPK, currentOwner, newPK, newOwner string) error {
 	if currentPK == "" {
 		currentPK = "id"
 	}
@@ -19,4 +19,8 @@ func validateRuleIdentityChange(hasLogs bool, currentPK, currentOwner, newPK, ne
 		return fmt.Errorf("cannot change owner_column or primary_key after security logs exist")
 	}
 	return nil
+}
+
+func validateRuleIdentityChange(hasLogs bool, currentPK, currentOwner, newPK, newOwner string) error {
+	return ValidateRuleIdentityChange(hasLogs, currentPK, currentOwner, newPK, newOwner)
 }

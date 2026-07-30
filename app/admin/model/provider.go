@@ -5,17 +5,7 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
-	NewAdminGroupModel,
-	NewAdminLogModel,
-	NewAdminRuleModel,
-	NewAdminModel,
-	NewAuthModel,
-	NewConfigModel,
 	NewCrudLogModel,
-	NewDataRecycleLogModel,
-	NewDataRecycleModel,
-	NewSensitiveDataLogModel,
-	NewSensitiveDataModel,
 	NewTableModel,
 	NewTestBuildModel,
 	NewUserGroupModel,

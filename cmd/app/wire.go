@@ -6,8 +6,14 @@
 package main
 
 import (
+	authHandler "go-build-admin/app/admin/handler/auth"
 	countryHandler "go-build-admin/app/admin/handler/country"
+	routineHandler "go-build-admin/app/admin/handler/routine"
+	securityHandler "go-build-admin/app/admin/handler/security"
+	authModel "go-build-admin/app/admin/model/auth"
 	countryModel "go-build-admin/app/admin/model/country"
+	routineModel "go-build-admin/app/admin/model/routine"
+	securityModel "go-build-admin/app/admin/model/security"
 	"go-build-admin/conf"
 
 	adminHandler "go-build-admin/app/admin/handler"
@@ -41,9 +47,15 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
 		countryHandler.ProviderSet,
+		authHandler.ProviderSet,
+		routineHandler.ProviderSet,
+		securityHandler.ProviderSet,
 		adminModel.ProviderSet,
 		countryModel.ProviderSet,
-		wire.Bind(new(terminal.AuthModel), new(*adminModel.AuthModel)),
+		authModel.ProviderSet,
+		routineModel.ProviderSet,
+		securityModel.ProviderSet,
+		wire.Bind(new(terminal.AuthModel), new(*authModel.AuthModel)),
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,

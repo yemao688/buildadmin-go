@@ -2,7 +2,7 @@ package handler
 
 import (
 	"crypto/tls"
-	"go-build-admin/app/admin/model"
+	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
@@ -21,14 +21,14 @@ import (
 
 type EmsHandler struct {
 	log          *zap.Logger
-	configM      *model.ConfigModel
+	configM      *routinemodel.ConfigModel
 	captcha      *captcha.Captcha
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	userM        *commonModel.UserModel
 	authM        *commonModel.AuthModel
 }
 
-func NewEmsHandler(log *zap.Logger, configM *model.ConfigModel, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *commonModel.UserModel, authM *commonModel.AuthModel) *EmsHandler {
+func NewEmsHandler(log *zap.Logger, configM *routinemodel.ConfigModel, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *commonModel.UserModel, authM *commonModel.AuthModel) *EmsHandler {
 	return &EmsHandler{
 		log:          log,
 		configM:      configM,

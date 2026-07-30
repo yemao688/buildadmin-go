@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/middleware"
 	helper "go-build-admin/app/pkg/crud_helper"
@@ -24,7 +25,7 @@ type CrudHandler struct {
 	log        *zap.Logger
 	tableM     *model.TableModel
 	crudLogM   *model.CrudLogModel
-	adminRuleM *model.AdminRuleModel
+	adminRuleM *adminauth.AdminRuleModel
 	config     *conf.Configuration
 }
 
@@ -51,7 +52,7 @@ func (b *boolValue) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("cancelSync must be a boolean")
 }
 
-func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *model.AdminRuleModel, config *conf.Configuration) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
 	return &CrudHandler{
 		log:        log,
 		tableM:     tableM,

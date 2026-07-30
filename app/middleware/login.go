@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
@@ -16,10 +16,10 @@ import (
 type Login struct {
 	config      *conf.Configuration
 	tokenHelper *token.TokenHelper
-	authM       *model.AuthModel
+	authM       *adminauth.AuthModel
 }
 
-func NewLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM *model.AuthModel) *Login {
+func NewLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM *adminauth.AuthModel) *Login {
 	return &Login{
 		config:      config,
 		tokenHelper: tokenHelper,
