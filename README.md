@@ -115,7 +115,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 - 订单类：`order_recharge`、`order_withdraw`
 - 用户类：`user_wallet`、`user_level`
 
-多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，格式 `<分类>.<实体驼峰>`：`seller_money_log` 写 `seller.moneyLog`，`country_language_content` 写 `country.languageContent`。菜单名、视图目录、路由和 model/handler 路径都固定为两级扁平结构（`seller/moneyLog`），不会随表名下划线拆出更深的子目录，而表名仍是可读的蛇形命名。`webViewsDir`（参考 `crud_specs/country_language_content.yaml`）是单路径覆盖项，需要单独调整 views 目录时再用。
+多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，标准值就是表名本身：`ops_user_test_xxx` 写 `generateRelativePath: ops_user_test_xxx`，生成 `handler/ops/user_test_xxx.go`、`model/ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.user_test_xxx`、菜单 `ops/userTestXxx`。首段是业务分类（也是生成目录），其余段是实体名；Go 文件名保持蛇形原样，视图目录 lcfirst 驼峰化，路由名各段原样（点号连接，对齐 PHP 上游），菜单/权限名与视图目录同形（斜杠连接，与框架既有菜单一致）。生成器对省略的兜底默认也是表名，但规范要求显式写出，不让 spec 依赖省略。`/` 或 `.` 分隔符仅在需要更深业务子目录时使用（`ops/user/test_xxx` -> 三层结构）。`webViewsDir`（参考 `crud_specs/country_language_content.yaml`）是单路径覆盖项，需要单独调整 views 目录时再用。
 
 **每次 CRUD 生成后立刻提交一次 commit。** 生成会同时改动 model、handler、provider 装配、路由、菜单和 Vue 脚手架，一模一 commit 便于审查，也能保证 `crud:delete`/重新生成往返字节级一致；不要把手工改动混进生成提交。
 

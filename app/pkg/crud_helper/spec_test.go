@@ -294,8 +294,9 @@ func TestLoadSpecCompletenessOptions(t *testing.T) {
 		name, yaml, wantPath, wantDB string
 		wantColumns                  int
 	}{
-		{"defaults", `name: orders\nfields:\n  - {name: id, type: bigint, primaryKey: true}\n  - {name: title, type: varchar}`, "", "mysql", 2},
-		{"empty columns", `name: orders\ncolumnFields: []\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "", "mysql", 0},
+		{"defaults", `name: orders\nfields:\n  - {name: id, type: bigint, primaryKey: true}\n  - {name: title, type: varchar}`, "orders", "mysql", 2},
+		{"underscored defaults", `name: ops_user_test_xxx\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "ops_user_test_xxx", "mysql", 1},
+		{"empty columns", `name: orders\ncolumnFields: []\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "orders", "mysql", 0},
 		{"dotted shorthand", `name: country_language_content\ngenerateRelativePath: country.languageContent\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "country/languageContent", "mysql", 1},
 		{"slash shorthand", `name: orders\ngenerateRelativePath: custom_dir/orders\ndatabaseConnection: mysql\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "custom_dir/orders", "mysql", 1},
 		{"backslash shorthand", "name: orders\ngenerateRelativePath: custom_dir\\orders\nfields:\n  - {name: id, type: bigint, primaryKey: true}", "custom_dir/orders", "mysql", 1},

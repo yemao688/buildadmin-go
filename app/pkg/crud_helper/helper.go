@@ -317,11 +317,34 @@ func pkGoField(pk string) string {
 }
 
 func routeNameFromRelativePath(relativePath, fallback string) string {
-	parts := strings.Split(strings.Trim(relativePath, "/"), "/")
-	if len(parts) < 2 || parts[0] == "" || parts[len(parts)-1] == "" {
+	normalized, err := normalizeLogicalPath(relativePath)
+	if err != nil {
 		return lowerFirst(fallback)
 	}
-	return strings.Join(parts[:len(parts)-1], ".") + "." + utils.SnakeToCamel(parts[len(parts)-1], true)
+	dirs, entity := splitLogicalNameParts(strings.Split(normalized, "/"))
+	if entity == "" {
+		return lowerFirst(fallback)
+	}
+	return strings.Join(append(dirs, entity), ".")
+}
+
+func splitLogicalNameParts(parts []string) ([]string, string) {
+	switch len(parts) {
+	case 0:
+		return nil, ""
+	case 1:
+		last := parts[0]
+		if idx := strings.IndexByte(last, '_'); idx > 0 && idx < len(last)-1 {
+			return []string{strings.ToLower(last[:idx])}, last[idx+1:]
+		}
+		return nil, last
+	default:
+		dirs := slices.Clone(parts[:len(parts)-1])
+		for i, part := range dirs {
+			dirs[i] = strings.ToLower(part)
+		}
+		return dirs, parts[len(parts)-1]
+	}
 }
 
 func primaryKeyGoType(field crudmodel.Field) (string, error) {
@@ -475,7 +498,6 @@ func getCommnet(comment string) string {
 // 解析文件数据
 func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
 	var pathArr []string
-	explicitPath := file != ""
 	if file != "" {
 		if err := validateRelativePathInput(file); err != nil {
 			return NameInfo{}, err
@@ -501,35 +523,27 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		}
 	}
 
-	originalLastName := pathArr[len(pathArr)-1]
-	lastName := strings.ToLower(originalLastName)
-	if explicitPath {
-		lastName = originalLastName
-	}
-	pathArr = pathArr[:len(pathArr)-1]
-	for k, v := range pathArr {
-		if !explicitPath {
-			pathArr[k] = strings.ToLower(v)
-		}
-	}
+	pathArr, originalLastName := splitLogicalNameParts(pathArr)
+	lastName := utils.SnakeToCamel(originalLastName, true)
 
 	// 类名不能为内部关键字
-	if slices.Contains(reservedKeywords, lastName) {
-		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + lastName)
+	reservedName := strings.ToLower(lastName)
+	if slices.Contains(reservedKeywords, reservedName) {
+		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
 	}
 
 	namespace := moduleType
 	if len(pathArr) > 0 {
 		namespace = pathArr[len(pathArr)-1]
 	}
-	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(pathArr...), lastName+".go")
+	parseFile := filepath.Join(utils.RootPath(), "app", module, moduleType, filepath.Join(pathArr...), originalLastName+".go")
 	if err := validateAbsolutePathUnderRoots(parseFile, filepath.Join("app", module, moduleType)); err != nil {
 		return NameInfo{}, err
 	}
 	rootFileName := filepath.Join("app", module, moduleType, filepath.Join(pathArr...))
 
 	info := NameInfo{
-		LastName:         utils.SnakeToCamel(lastName, true),
+		LastName:         lastName,
 		OriginalLastName: originalLastName,
 		Path:             pathArr,
 		Namespace:        namespace,
@@ -580,34 +594,17 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 			if normalizeErr != nil {
 				return WebDir{}
 			}
-			parts := strings.Split(normalized, "/")
-			if len(parts) == 1 {
-				parts = strings.Split(parts[0], "_")
-			}
-			if len(parts) >= 3 {
-				parts = append(parts[:len(parts)-2], utils.SnakeToCamel(strings.Join(parts[len(parts)-2:], "_"), false))
-			}
-			pathArr = parts
+			pathArr = strings.Split(normalized, "/")
 		}
 	}
 
-	originalLastName := pathArr[len(pathArr)-1]
-	// 对齐上游:lastName 仅首字母小写(lcfirst),保留驼峰;
-	// 否则显式路径 country/languageContent 的 views 目录会被压成 languagecontent,
-	// 与菜单名(取 OriginalLastName)不一致
-	lastName := originalLastName
-	if lastName != "" {
-		lastName = strings.ToLower(lastName[:1]) + lastName[1:]
-	}
-	pathArr = pathArr[:len(pathArr)-1]
-	for k, v := range pathArr {
-		pathArr[k] = strings.ToLower(v)
-	}
+	pathArr, originalLastName := splitLogicalNameParts(pathArr)
+	lastName := utils.SnakeToCamel(originalLastName, false)
 
 	webDir := WebDir{
 		Path:             pathArr,
 		LastName:         lastName,
-		OriginalLastName: originalLastName,
+		OriginalLastName: lastName,
 	}
 
 	if moduleType == "views" {
@@ -962,7 +959,7 @@ func GetRemoteSelectUrl(field crudmodel.Field) string {
 		redundantDir := []string{"app", "admin", "handler"}
 		pathArr := strings.Split(controller, "/")
 		_, pathArr = TrimPrefix(redundantDir, pathArr)
-		if url := strings.Join(pathArr, "."); url != "" {
+		if url := routeNameFromRelativePath(strings.Join(pathArr, "/"), ""); url != "" {
 			return "/admin/" + url + "/index"
 		}
 	}

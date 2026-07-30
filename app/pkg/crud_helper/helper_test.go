@@ -18,6 +18,7 @@ import (
 
 	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/utils"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -63,7 +64,7 @@ func TestParseWebDirNameData(t *testing.T) {
 	require.Equal(t, "web/src/views/backend/country/language/content", filepath.ToSlash(nestedViews.Views))
 	require.Equal(t, "web/src/lang/backend/zh-cn/country/language/content.ts", filepath.ToSlash(nestedLang.LangFile("zh-cn")))
 
-	// 对齐上游 lcfirst:显式路径的驼峰末段必须保留,
+	// 视图目录尾段按 SnakeToCamel(..., false) 归一，显式驼峰尾保持不变，
 	// 使 views 目录与菜单名(OriginalLastName)一致
 	camelViews := ParseWebDirNameData("country_language_content", "views", "web/src/views/backend/country/languageContent")
 	camelLang := ParseWebDirNameData("country_language_content", "lang", "web/src/views/backend/country/languageContent")
@@ -196,7 +197,7 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 		{"registrar controller resolves route constant", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/country/language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
 		{"backslash path", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
 		{"manual url wins for custom source", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
-		{"unknown controller falls back to path derivation", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no_such_handler/index"},
+		{"unknown controller falls back to path derivation", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "app/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no.such_handler/index"},
 		{"empty controller uses remote url", crudmodel.Field{Form: crudmodel.FormAttr{RemoteUrl: "/admin/foo/index", RemoteSourceConfigType: "crud"}}, "/admin/foo/index"},
 	}
 	for _, c := range cases {
@@ -856,5 +857,146 @@ func TestParseNameDataPreservesExplicitCamelCaseTail(t *testing.T) {
 	camel, err := ParseNameData("admin", "ignored", "model", "app/admin/model/country/languageContent.go")
 	if err != nil || camel.LastName != "LanguageContent" {
 		t.Fatalf("camel explicit info=%+v err=%v", camel, err)
+	}
+}
+
+func TestParseNameAndWebDirDerivationRules(t *testing.T) {
+	tests := []struct {
+		name         string
+		tableName    string
+		modelFile    string
+		viewsFile    string
+		relativePath string
+		wantModel    string
+		wantViews    string
+		wantRoute    string
+		wantMenu     string
+		wantClass    string
+		wantViewName string
+	}{
+		{
+			name:         "default ops_user_test_xxx",
+			tableName:    "ops_user_test_xxx",
+			modelFile:    "",
+			viewsFile:    "",
+			relativePath: "ops_user_test_xxx",
+			wantModel:    "app/admin/model/ops/user_test_xxx.go",
+			wantViews:    "web/src/views/backend/ops/userTestXxx",
+			wantRoute:    "ops.user_test_xxx",
+			wantMenu:     "ops/userTestXxx",
+			wantClass:    "UserTestXxx",
+			wantViewName: "userTestXxx",
+		},
+		{
+			name:         "default ops_user_order",
+			tableName:    "ops_user_order",
+			modelFile:    "",
+			viewsFile:    "",
+			relativePath: "ops_user_order",
+			wantModel:    "app/admin/model/ops/user_order.go",
+			wantViews:    "web/src/views/backend/ops/userOrder",
+			wantRoute:    "ops.user_order",
+			wantMenu:     "ops/userOrder",
+			wantClass:    "UserOrder",
+			wantViewName: "userOrder",
+		},
+		{
+			name:         "default ops_banner",
+			tableName:    "ops_banner",
+			modelFile:    "",
+			viewsFile:    "",
+			relativePath: "ops_banner",
+			wantModel:    "app/admin/model/ops/banner.go",
+			wantViews:    "web/src/views/backend/ops/banner",
+			wantRoute:    "ops.banner",
+			wantMenu:     "ops/banner",
+			wantClass:    "Banner",
+			wantViewName: "banner",
+		},
+		{
+			name:         "default foo",
+			tableName:    "foo",
+			modelFile:    "",
+			viewsFile:    "",
+			relativePath: "foo",
+			wantModel:    "app/admin/model/foo.go",
+			wantViews:    "web/src/views/backend/foo",
+			wantRoute:    "foo",
+			wantMenu:     "foo",
+			wantClass:    "Foo",
+			wantViewName: "foo",
+		},
+		{
+			name:         "explicit slash path",
+			tableName:    "ignored",
+			modelFile:    "app/admin/model/ops/user/test_xxx.go",
+			viewsFile:    "web/src/views/backend/ops/user/test_xxx",
+			relativePath: "ops/user/test_xxx",
+			wantModel:    "app/admin/model/ops/user/test_xxx.go",
+			wantViews:    "web/src/views/backend/ops/user/testXxx",
+			wantRoute:    "ops.user.test_xxx",
+			wantMenu:     "ops/user/testXxx",
+			wantClass:    "TestXxx",
+			wantViewName: "testXxx",
+		},
+		{
+			name:         "explicit dotted path",
+			tableName:    "ignored",
+			modelFile:    "app/admin/model/ops.user.test_xxx.go",
+			viewsFile:    "web/src/views/backend/ops.user.test_xxx",
+			relativePath: "ops.user.test_xxx",
+			wantModel:    "app/admin/model/ops/user/test_xxx.go",
+			wantViews:    "web/src/views/backend/ops/user/testXxx",
+			wantRoute:    "ops.user.test_xxx",
+			wantMenu:     "ops/user/testXxx",
+			wantClass:    "TestXxx",
+			wantViewName: "testXxx",
+		},
+		{
+			name:         "explicit country.languageContent",
+			tableName:    "ignored",
+			modelFile:    "app/admin/model/country.languageContent.go",
+			viewsFile:    "web/src/views/backend/country.languageContent",
+			relativePath: "country.languageContent",
+			wantModel:    "app/admin/model/country/languageContent.go",
+			wantViews:    "web/src/views/backend/country/languageContent",
+			wantRoute:    "country.languageContent",
+			wantMenu:     "country/languageContent",
+			wantClass:    "LanguageContent",
+			wantViewName: "languageContent",
+		},
+		{
+			name:         "preset user",
+			tableName:    "user",
+			modelFile:    "app/admin/model/user/user.go",
+			viewsFile:    "web/src/views/backend/user/user",
+			relativePath: "user",
+			wantModel:    "app/admin/model/user/user.go",
+			wantViews:    "web/src/views/backend/user/user",
+			wantRoute:    "user",
+			wantMenu:     "user/user",
+			wantClass:    "User",
+			wantViewName: "user",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			modelInfo, err := ParseNameData("admin", tc.tableName, "model", tc.modelFile)
+			require.NoError(t, err)
+			handlerFile := strings.Replace(tc.modelFile, "/model/", "/handler/", 1)
+			handlerInfo, err := ParseNameData("admin", tc.tableName, "handler", handlerFile)
+			require.NoError(t, err)
+			webDir := ParseWebDirNameData(tc.tableName, "views", tc.viewsFile)
+
+			require.Equal(t, tc.wantClass, modelInfo.LastName)
+			require.Equal(t, tc.wantClass, handlerInfo.LastName)
+			require.Equal(t, tc.wantViewName, webDir.LastName)
+			require.Equal(t, filepath.ToSlash(filepath.Join(utils.RootPath(), tc.wantModel)), filepath.ToSlash(modelInfo.ParseFile))
+			require.Equal(t, filepath.ToSlash(filepath.Join(utils.RootPath(), strings.Replace(tc.wantModel, "/model/", "/handler/", 1))), filepath.ToSlash(handlerInfo.ParseFile))
+			require.Equal(t, tc.wantViews, filepath.ToSlash(webDir.Views))
+			require.Equal(t, tc.wantMenu, GetMenuName(webDir))
+			require.Equal(t, tc.wantRoute, routeNameFromRelativePath(tc.relativePath, modelInfo.LastName))
+		})
 	}
 }

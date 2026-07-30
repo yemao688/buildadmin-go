@@ -389,7 +389,7 @@ func normalizeTableConfiguration(table *crudmodel.Table) error {
 		return fmt.Errorf("unknown database connection %q; only \"mysql\" is available", table.DatabaseConnection)
 	}
 	if table.GenerateRelativePath == "" {
-		return nil
+		table.GenerateRelativePath = table.Name
 	}
 	relative, err := normalizeLogicalPath(table.GenerateRelativePath)
 	if err != nil {

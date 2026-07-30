@@ -311,7 +311,7 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 }
 
 func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
-	table := crudmodel.Table{Name: "ai_gate_base", ModelFile: "app/admin/model/ai_gate_base.go", ControllerFile: "app/admin/handler/ai_gate_base.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
+	table := crudmodel.Table{Name: "ai_gate_base", ModelFile: "app/admin/model/AiGateBase.go", ControllerFile: "app/admin/handler/AiGateBase.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "string"},

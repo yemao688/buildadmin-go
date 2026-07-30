@@ -12,6 +12,7 @@
 - 删除 `database/buildadmin.sql` 及其升级合约测试（该 SQL 仅为测试夹具；生产安装使用 AutoMigrate + Go 种子，不受影响）。
 - **迁移运行时文件：** 执行 `git mv storage runtime`，并将已有配置中的 `log.root_dir` 改为 `runtime/logs`。上传文件现位于 `public/storage/`；如需保留历史上传，将 `storage/default` 等内容移入 `public/storage/`。
 - **迁移部署配置：** Docker 入口改为 `--conf /app/config.yaml`，Compose 挂载改为 `./config.yaml` 与 `./runtime`。
+- **Breaking (CRUD 生成器命名约定):** 业务模块路径推导统一为蛇形实体约定。`generateRelativePath` 省略时兜底默认等于表名（规范仍要求显式写出，标准值即表名）；单段路径在第一个下划线处拆分——表 `ops_user_test_xxx` 生成 handler/model `ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.user_test_xxx`、菜单 `ops/userTestXxx`。路由名改为各段原样点号连接（对齐 PHP 上游），不再对末段驼峰化：既有 `country.*` 模块重新生成后路由从 `/admin/country.LanguageContent/*` 变为 `/admin/country.languageContent/*`，前端调用与外部集成需同步调整；生成的 Go 文件、视图目录、菜单/权限名不受路由变化影响（菜单维持与视图目录同形的既有规则）。显式路径中蛇形末段的视图叶子从原样保留改为 lcfirst 驼峰化（`test_xxx` → `testXxx`）。旧的自动推导（Go 文件扁平落根目录、视图末两段合并驼峰、路由扁平无命名空间）已移除。
 
 ## v2.0.2
 
