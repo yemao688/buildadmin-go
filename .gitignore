@@ -66,3 +66,6 @@ todo.txt
 
 # 为 i18n Ally（VSCode 插件）生成的语言包索引（执行 dev 命令时自动生成）
 /web/src/lang/*.json
+
+# tsc/vue-tsc 误发射的编译副产物（web 前端为纯 TS 源码，不受版本控制的 .js）
+/web/**/*.js
