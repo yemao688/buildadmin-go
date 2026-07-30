@@ -1,6 +1,7 @@
-package model
+package user
 
 import (
+	"go-build-admin/app/common/model"
 	"go-build-admin/utils"
 	"time"
 
@@ -46,7 +47,7 @@ func (s *UserScoreLogModel) GetDayScore(ctx *gin.Context, t time.Time, userId in
 }
 
 func (s *UserScoreLogModel) List(ctx *gin.Context, userId int32) (list []*UserScoreLog, total int64, err error) {
-	limit, offset := LimitAddOffset(ctx)
+	limit, offset := model.LimitAddOffset(ctx)
 	db := s.sqlDB.Model(&UserScoreLog{}).Where("user_id=?", userId)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err

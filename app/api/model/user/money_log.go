@@ -1,7 +1,8 @@
-package model
+package user
 
 import (
 	"fmt"
+	"go-build-admin/app/common/model"
 	"go-build-admin/utils"
 	"time"
 
@@ -47,7 +48,7 @@ func (s *UserMoneyLogModel) GetDayMoney(ctx *gin.Context, t time.Time, userId in
 }
 
 func (s *UserMoneyLogModel) List(ctx *gin.Context, userId int32) (result []map[string]any, total int64, err error) {
-	limit, offset := LimitAddOffset(ctx)
+	limit, offset := model.LimitAddOffset(ctx)
 	db := s.sqlDB.Model(&UserMoneyLog{}).Where("user_id=?", userId)
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err

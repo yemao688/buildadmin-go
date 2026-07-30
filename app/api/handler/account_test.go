@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	usermodel "go-build-admin/app/api/model/user"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/header"
@@ -81,7 +82,7 @@ func TestRetrievePasswordUsesAccountForLookup(t *testing.T) {
 			require.NoError(t, db.Create(&commonModel.User{Email: test.account, Mobile: test.account}).Error)
 
 			h := &AccountHandler{
-				userM:   commonModel.NewUserModel(db, nil),
+				userM:   usermodel.NewUserModel(db, nil),
 				captcha: captcha.NewCaptcha(db),
 			}
 			router := newAccountHandlerTestRouter()
@@ -158,7 +159,7 @@ func TestChangeBindChecksEmailAndMobileOccupancy(t *testing.T) {
 
 				h := &AccountHandler{
 					authM:   commonModel.NewAuthModel(db, tokenHelper, config),
-					userM:   commonModel.NewUserModel(db, nil),
+					userM:   usermodel.NewUserModel(db, nil),
 					captcha: captchaModel,
 				}
 				router := newAccountHandlerTestRouter()
@@ -201,7 +202,7 @@ func TestProfileAllowsEmptyBirthday(t *testing.T) {
 	db := newAccountHandlerTestDB(t, false)
 	user := commonModel.User{Username: "olduser", Nickname: "Old", Email: "old@example.com"}
 	require.NoError(t, db.Create(&user).Error)
-	h := &AccountHandler{userM: commonModel.NewUserModel(db, nil)}
+	h := &AccountHandler{userM: usermodel.NewUserModel(db, nil)}
 	router := newAccountHandlerTestRouter()
 	router.POST("/profile", func(ctx *gin.Context) {
 		ctx.Set("UserAuth", header.UserAuth{Id: user.ID})

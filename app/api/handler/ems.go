@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
+	usermodel "go-build-admin/app/api/model/user"
 	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
@@ -24,11 +25,11 @@ type EmsHandler struct {
 	configM      *routinemodel.ConfigModel
 	captcha      *captcha.Captcha
 	clickCaptcha *clickcaptcha.ClickCaptcha
-	userM        *commonModel.UserModel
+	userM        *usermodel.UserModel
 	authM        *commonModel.AuthModel
 }
 
-func NewEmsHandler(log *zap.Logger, configM *routinemodel.ConfigModel, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *commonModel.UserModel, authM *commonModel.AuthModel) *EmsHandler {
+func NewEmsHandler(log *zap.Logger, configM *routinemodel.ConfigModel, captcha *captcha.Captcha, clickCaptcha *clickcaptcha.ClickCaptcha, userM *usermodel.UserModel, authM *commonModel.AuthModel) *EmsHandler {
 	return &EmsHandler{
 		log:          log,
 		configM:      configM,

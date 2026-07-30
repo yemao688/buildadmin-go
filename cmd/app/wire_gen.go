@@ -22,6 +22,7 @@ import (
 	"go-build-admin/app/admin/model/security"
 	"go-build-admin/app/admin/model/user"
 	handler2 "go-build-admin/app/api/handler"
+	user3 "go-build-admin/app/api/model/user"
 	"go-build-admin/app/cmd"
 	handler3 "go-build-admin/app/cmd/handler"
 	"go-build-admin/app/common/model"
@@ -124,17 +125,17 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	scoreLogModel := user.NewScoreLogModel(gormDB, configuration, closureEnforcer)
 	scoreLogHandler := user2.NewScoreLogHandler(zapLogger, scoreLogModel)
 	userLogRegistrar := user2.NewUserLogRegistrar(userHandler, moneyLogHandler, scoreLogHandler)
-	modelUserModel := model.NewUserModel(gormDB, configuration)
-	userScoreLogModel := model.NewUserScoreLogModel(gormDB)
-	userMoneyLogModel := model.NewUserMoneyLogModel(gormDB)
+	userUserModel := user3.NewUserModel(gormDB, configuration)
+	userScoreLogModel := user3.NewUserScoreLogModel(gormDB)
+	userMoneyLogModel := user3.NewUserMoneyLogModel(gormDB)
 	captchaCaptcha := captcha.NewCaptcha(gormDB)
-	accountHandler := handler2.NewAccountHandler(zapLogger, modelAuthModel, modelUserModel, userScoreLogModel, userMoneyLogModel, captchaCaptcha)
+	accountHandler := handler2.NewAccountHandler(zapLogger, modelAuthModel, userUserModel, userScoreLogModel, userMoneyLogModel, captchaCaptcha)
 	accountRegistrar := handler2.NewAccountRegistrar(accountHandler)
 	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger, areaModel, uploadHelper)
 	ajaxRegistrar := handler2.NewAjaxRegistrar(handlerAjaxHandler)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper, configuration)
 	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
-	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, modelUserModel, modelAuthModel)
+	emsHandler := handler2.NewEmsHandler(zapLogger, configModel, captchaCaptcha, clickCaptcha, userUserModel, modelAuthModel)
 	emsRegistrar := handler2.NewEmsRegistrar(emsHandler)
 	handlerIndexHandler := handler2.NewIndexHandler(zapLogger, modelAuthModel, configuration, configModel, service)
 	indexRegistrar := handler2.NewIndexRegistrar(handlerIndexHandler)
