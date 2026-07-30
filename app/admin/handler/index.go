@@ -4,8 +4,8 @@ import (
 	adminauth "go-build-admin/app/admin/model/auth"
 	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
-	commonModel "go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
+	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
@@ -55,7 +55,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		languageTabs = append(languageTabs, map[string]string{"lan": language.Lan, "remark": language.Remark})
 	}
 
-	uploadConfig, err := commonModel.UploadSiteConfig(ctx, h.configM, h.config)
+	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

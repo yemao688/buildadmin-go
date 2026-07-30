@@ -1,8 +1,8 @@
-package routine
+package upload
 
 import "github.com/google/wire"
 
 var ProviderSet = wire.NewSet(
-	NewConfigModel,
-	NewAttachmentModel,
+	NewAliossStorage,
+	NewUploadHelper,
 )

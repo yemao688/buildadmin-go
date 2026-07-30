@@ -2,8 +2,8 @@ package routine
 
 import (
 	adminhandler "go-build-admin/app/admin/handler"
+	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/common/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -14,10 +14,10 @@ import (
 type AttachmentHandler struct {
 	adminhandler.Base
 	log         *zap.Logger
-	attachmentM *model.AttachmentModel
+	attachmentM *routinemodel.AttachmentModel
 }
 
-func NewAttachmentHandler(log *zap.Logger, attachmentM *model.AttachmentModel) *AttachmentHandler {
+func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentModel) *AttachmentHandler {
 	return &AttachmentHandler{
 		Base:        adminhandler.NewBase(attachmentM),
 		log:         log,

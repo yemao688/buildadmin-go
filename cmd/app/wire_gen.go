@@ -28,6 +28,7 @@ import (
 	"go-build-admin/app/common/member"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
+	"go-build-admin/app/common/upload"
 	"go-build-admin/app/cron"
 	"go-build-admin/app/middleware"
 	"go-build-admin/app/pkg/captcha"
@@ -65,8 +66,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authModel, configModel, countryService, clickCaptcha)
 	areaModel := model.NewAreaModel(gormDB, configuration)
 	tableModel := model2.NewTableModel(configuration, gormDB)
-	aliossStorage := model.NewAliossStorage(gormDB, configuration)
-	uploadHelper := model.NewUploadHelper(gormDB, configuration, aliossStorage)
+	aliossStorage := upload.NewAliossStorage(gormDB, configuration)
+	uploadHelper := upload.NewUploadHelper(gormDB, configuration, aliossStorage)
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authModel)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableModel, uploadHelper, terminalTerminal, configuration)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
@@ -93,7 +94,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	ruleRegistrar := user2.NewRuleRegistrar(ruleHandler)
 	configHandler := routine2.NewConfigHandler(zapLogger, configuration, configModel)
 	configRegistrar := routine2.NewConfigRegistrar(configHandler)
-	attachmentModel := model.NewAttachmentModel(gormDB, configuration, closureEnforcer)
+	attachmentModel := routine.NewAttachmentModel(gormDB, configuration, closureEnforcer)
 	attachmentHandler := routine2.NewAttachmentHandler(zapLogger, attachmentModel)
 	attachmentRegistrar := routine2.NewAttachmentRegistrar(attachmentHandler)
 	adminModel := auth.NewAdminModel(gormDB, configuration)

@@ -4,8 +4,8 @@ import (
 	routinemodel "go-build-admin/app/admin/model/routine"
 	usermodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/common/member"
-	"go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
+	"go-build-admin/app/common/upload"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/tree"
 	"go-build-admin/conf"
@@ -82,7 +82,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	uploadConfig, err := model.UploadSiteConfig(ctx, h.configM, h.config)
+	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

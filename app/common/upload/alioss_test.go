@@ -1,4 +1,4 @@
-package model
+package upload
 
 import (
 	"crypto/hmac"

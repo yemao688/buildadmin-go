@@ -1,4 +1,4 @@
-package model
+package routine
 
 import (
 	"net/http/httptest"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"gorm.io/driver/mysql"
@@ -89,7 +90,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	_, err = m.GetOne(ctx(2, false), 3)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 
-	edit := Attachment{ID: 2, Topic: "", URL: "/edited", Width: 0, Height: 0, Name: "", Size: 0, Mimetype: "", Quote: 0, Storage: "", Sha1: ""}
+	edit := upload.Attachment{ID: 2, Topic: "", URL: "/edited", Width: 0, Height: 0, Name: "", Size: 0, Mimetype: "", Quote: 0, Storage: "", Sha1: ""}
 	require.NoError(t, m.Edit(ctx(2, false), edit))
 	var raw attachmentRuntimeRow
 	require.NoError(t, db.Table(attachment).Where("id=2").Take(&raw).Error)
@@ -98,7 +99,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	require.Equal(t, "/edited", raw.URL)
 	require.Equal(t, "", raw.Name)
 	before := raw
-	require.ErrorIs(t, m.Edit(ctx(3, false), Attachment{ID: 2, Name: "hijack"}), gorm.ErrRecordNotFound)
+	require.ErrorIs(t, m.Edit(ctx(3, false), upload.Attachment{ID: 2, Name: "hijack"}), gorm.ErrRecordNotFound)
 	require.NoError(t, db.Table(attachment).Where("id=2").Take(&raw).Error)
 	require.Equal(t, before, raw)
 
@@ -117,7 +118,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	require.Error(t, err)
 	_, err = m.GetOne(ctx(0, false), 1)
 	require.Error(t, err)
-	require.Error(t, m.Edit(ctx(0, false), Attachment{ID: 1, Name: "x"}))
+	require.Error(t, m.Edit(ctx(0, false), upload.Attachment{ID: 1, Name: "x"}))
 	require.Error(t, m.Del(ctx(0, false), []int32{1}))
 }
 

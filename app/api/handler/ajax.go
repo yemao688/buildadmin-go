@@ -1,7 +1,8 @@
 package handler
 
 import (
-	"go-build-admin/app/common/model"
+	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/utils"
 	"net/http"
@@ -13,11 +14,11 @@ import (
 
 type AjaxHandler struct {
 	log          *zap.Logger
-	areaM        *model.AreaModel
-	uploadHelper *model.UploadHelper
+	areaM        *commonModel.AreaModel
+	uploadHelper *upload.UploadHelper
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, uploadHelper *model.UploadHelper) *AjaxHandler {
+func NewAjaxHandler(log *zap.Logger, areaM *commonModel.AreaModel, uploadHelper *upload.UploadHelper) *AjaxHandler {
 	return &AjaxHandler{log: log, areaM: areaM, uploadHelper: uploadHelper}
 }
 
@@ -30,7 +31,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 
 	userAuth := header.GetUserAuth(ctx)
 
-	result, err := h.uploadHelper.Upload(ctx, model.UploadParams{File: file}, 0, userAuth.Id)
+	result, err := h.uploadHelper.Upload(ctx, upload.UploadParams{File: file}, 0, userAuth.Id)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -41,7 +42,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) AliossCallback(ctx *gin.Context) {
-	var params model.OSSCallback
+	var params upload.OSSCallback
 	if err := ctx.ShouldBind(&params); err != nil {
 		FailByErr(ctx, err)
 		return

@@ -8,8 +8,5 @@ import (
 
 var ProviderSet = wire.NewSet(
 	NewAreaModel,
-	NewAttachmentModel,
-	NewUploadHelper,
-	NewAliossStorage,
 	country.NewService,
 )

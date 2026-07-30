@@ -2,7 +2,8 @@ package handler
 
 import (
 	adminModel "go-build-admin/app/admin/model"
-	"go-build-admin/app/common/model"
+	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/common/upload"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/terminal"
@@ -17,14 +18,14 @@ import (
 
 type AjaxHandler struct {
 	log          *zap.Logger
-	areaM        *model.AreaModel
+	areaM        *commonModel.AreaModel
 	tableM       *adminModel.TableModel
-	uploadHelper *model.UploadHelper
+	uploadHelper *upload.UploadHelper
 	terminal     *terminal.Terminal
 	config       *conf.Configuration
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *model.AreaModel, tableM *adminModel.TableModel, uploadHelper *model.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
+func NewAjaxHandler(log *zap.Logger, areaM *commonModel.AreaModel, tableM *adminModel.TableModel, uploadHelper *upload.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
 	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal, config: config}
 }
 
@@ -36,7 +37,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 
-	result, err := h.uploadHelper.Upload(ctx, model.UploadParams{File: file}, adminAuth.Id, 0)
+	result, err := h.uploadHelper.Upload(ctx, upload.UploadParams{File: file}, adminAuth.Id, 0)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -47,7 +48,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) AliossCallback(ctx *gin.Context) {
-	var params model.OSSCallback
+	var params upload.OSSCallback
 	if err := ctx.ShouldBind(&params); err != nil {
 		FailByErr(ctx, err)
 		return

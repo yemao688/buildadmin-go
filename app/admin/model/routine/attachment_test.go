@@ -1,9 +1,10 @@
-package model
+package routine
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/common/upload"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -17,7 +18,7 @@ func TestAttachmentAssociationTableNames(t *testing.T) {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Attachment{}))
+	require.NoError(t, db.AutoMigrate(&upload.Attachment{}))
 	require.True(t, db.Migrator().HasTable("ba_admin"))
 	require.True(t, db.Migrator().HasTable("ba_user"))
 
@@ -26,8 +27,8 @@ func TestAttachmentAssociationTableNames(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO ba_attachment (id, topic, admin_id, user_id, url, width, height, name, size, mimetype, quote, storage, sha1, create_time, last_upload_time) VALUES (1, 't', 1, 2, '/u', 1, 1, 'n', 1, 'image/png', 0, 'local', 's', 1, 1)").Error)
 
 	// 与 AttachmentModel.List 相同的查询链（Preload + Joins）。
-	var list []*Attachment
-	err = db.Table("ba_attachment AS attachment").Model(&Attachment{}).
+	var list []*upload.Attachment
+	err = db.Table("ba_attachment AS attachment").Model(&upload.Attachment{}).
 		Preload("Admin").Preload("User").
 		Joins("Admin").Joins("User").
 		Find(&list).Error
