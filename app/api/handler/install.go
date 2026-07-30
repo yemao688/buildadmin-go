@@ -5,11 +5,11 @@ import (
 	"fmt"
 	adminauth "go-build-admin/app/admin/model/auth"
 	routinemodel "go-build-admin/app/admin/model/routine"
-	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/terminal"
+	"go-build-admin/app/pkg/validator"
 	"go-build-admin/app/pkg/version"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -198,7 +198,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 		Manager string `json:"manager"`
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if params.Manager != "" {
@@ -333,8 +333,8 @@ type Database struct {
 	Prefix   string `json:"prefix"`
 }
 
-func (v Database) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v Database) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"hostname.required": "hostname required",
 		"username.required": "username required",
 		"password.required": "password required",
@@ -345,7 +345,7 @@ func (v Database) GetMessages() validate.ValidatorMessages {
 func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
 	var params Database
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -382,7 +382,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 
 	var databaseParam Database
 	if err := ctx.ShouldBindJSON(&databaseParam); err != nil {
-		FailByErr(ctx, validate.GetError(databaseParam, err))
+		FailByErr(ctx, validator.GetError(databaseParam, err))
 		return
 	}
 
@@ -544,14 +544,14 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 
 	params := Params{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if params.Type == "web" {
 		path := filepath.Join(utils.RootPath(), "public", LockFileName)
 		if err := os.WriteFile(path, []byte(InstallationCompletionMark), 0644); err != nil {
-			FailByErr(ctx, validate.GetError(params, err))
+			FailByErr(ctx, validator.GetError(params, err))
 			return
 		}
 	} else {

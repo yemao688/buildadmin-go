@@ -3,13 +3,13 @@ package handler
 import (
 	"errors"
 	"fmt"
-	"go-build-admin/app/admin/validate"
 	usermodel "go-build-admin/app/api/model/user"
 	"go-build-admin/app/common/member"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/captcha"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	"go-build-admin/app/pkg/validator"
 	"go-build-admin/utils"
 	"net/http"
 	"time"
@@ -63,8 +63,8 @@ type ProfileParam struct {
 	Motto    string `json:"motto" binding:"max=255"`
 }
 
-func (v ProfileParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v ProfileParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"username.required": "username required",
 		"username.alphanum": "username can only be letters and numbers",
 		"username.min":      "username > 2 and username < 15",
@@ -79,7 +79,7 @@ func (h *AccountHandler) Profile(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodPost {
 		params := ProfileParam{}
 		if err := ctx.ShouldBindJSON(&params); err != nil {
-			FailByErr(ctx, validate.GetError(params, err))
+			FailByErr(ctx, validator.GetError(params, err))
 			return
 		}
 
@@ -118,8 +118,8 @@ type VerificationParam struct {
 	Captcha string `json:"captcha" binding:"required"`
 }
 
-func (v VerificationParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v VerificationParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"type.required":    "type required",
 		"captcha.required": "captcha required",
 	}
@@ -134,7 +134,7 @@ func (v VerificationParam) GetMessages() validate.ValidatorMessages {
 func (h *AccountHandler) Verification(ctx *gin.Context) {
 	params := VerificationParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -172,8 +172,8 @@ type ChangeBindParam struct {
 	Password                 string `json:"password"`
 }
 
-func (v ChangeBindParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v ChangeBindParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"type.required": "type required",
 		"email.email":   "email invalid",
 	}
@@ -186,7 +186,7 @@ func (v ChangeBindParam) GetMessages() validate.ValidatorMessages {
 func (h *AccountHandler) ChangeBind(ctx *gin.Context) {
 	params := ChangeBindParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -262,8 +262,8 @@ type ChangePasswordParam struct {
 	NewPassword string `json:"newPassword" binding:"required,password"`
 }
 
-func (v ChangePasswordParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v ChangePasswordParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"oldPassword.required": "oldPassword required",
 		"newPassword.required": "newPassword required",
 	}
@@ -272,7 +272,7 @@ func (v ChangePasswordParam) GetMessages() validate.ValidatorMessages {
 func (h *AccountHandler) ChangePassword(ctx *gin.Context) {
 	params := ChangePasswordParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -325,8 +325,8 @@ type RetrieveParam struct {
 	Password string `json:"password" binding:"required,password"`
 }
 
-func (v RetrieveParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v RetrieveParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"Type.required":     "type required",
 		"Type.oneof":        "type invalid",
 		"Account.required":  "account required",
@@ -339,7 +339,7 @@ func (v RetrieveParam) GetMessages() validate.ValidatorMessages {
 func (h *AccountHandler) RetrievePassword(ctx *gin.Context) {
 	params := RetrieveParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

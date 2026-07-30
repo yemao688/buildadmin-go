@@ -42,26 +42,14 @@ var boundaryRules = []boundaryRule{
 }
 
 var importBoundaryWhitelist = []whitelistEntry{
-	// R2 / Stage 4: installer bootstrap still reuses admin auth models while the installer split is incomplete.
+	// R2 / Permanent exception: the installer owns its own DB connection and runs before Wire assembles shared services; these imports only target GORM structs.
 	{File: "api/handler/install.go", ImportPath: "go-build-admin/app/admin/model/auth", Rule: "R2", Reason: "installer bootstrap still reuses admin auth models", Stage: 4},
-	// R2 / Stage 4: installer bootstrap still reads the admin routine config model.
+	// R2 / Permanent exception: the installer owns its own DB connection and runs before Wire assembles shared services; these imports only target GORM structs.
 	{File: "api/handler/install.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "installer bootstrap still reads the admin routine config model", Stage: 4},
-	// R2 / Stage 2: installer validation messages still live in admin validate.
-	{File: "api/handler/install.go", ImportPath: "go-build-admin/app/admin/validate", Rule: "R2", Reason: "installer validation messages still live in admin validate", Stage: 2},
-	// R2 / Stage 2: account flows still reuse admin validation helpers.
-	{File: "api/handler/account.go", ImportPath: "go-build-admin/app/admin/validate", Rule: "R2", Reason: "account flows still reuse admin validation helpers", Stage: 2},
-	// R2 / Stage 3: frontend init still consumes the admin routine config model.
-	{File: "api/handler/index.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "frontend init still consumes the admin routine config model", Stage: 3},
-	// R2 / Stage 3: frontend init still consumes the admin user model.
-	{File: "api/handler/index.go", ImportPath: "go-build-admin/app/admin/model/user", Rule: "R2", Reason: "frontend init still consumes the admin user model", Stage: 3},
-	// R2 / Stage 3: EMS mail flow still reads the admin routine config model.
-	{File: "api/handler/ems.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "EMS mail flow still reads the admin routine config model", Stage: 3},
-	// R2 / Stage 2: EMS mail flow still uses admin validation helpers.
-	{File: "api/handler/ems.go", ImportPath: "go-build-admin/app/admin/validate", Rule: "R2", Reason: "EMS mail flow still uses admin validation helpers", Stage: 2},
-	// R2 / Stage 2: demo binding still uses admin validation helpers.
-	{File: "api/handler/demo.go", ImportPath: "go-build-admin/app/admin/validate", Rule: "R2", Reason: "demo binding still uses admin validation helpers", Stage: 2},
-	// R2 / Stage 2: user auth binding still uses admin validation helpers.
-	{File: "api/handler/user.go", ImportPath: "go-build-admin/app/admin/validate", Rule: "R2", Reason: "user auth binding still uses admin validation helpers", Stage: 2},
+	// R2 / Stage 5d clear: ConfigModel read methods will move down into common/siteconfig.
+	{File: "api/handler/index.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "frontend init still consumes the admin routine config model", Stage: 5},
+	// R2 / Stage 5d clear: ConfigModel read methods will move down into common/siteconfig.
+	{File: "api/handler/ems.go", ImportPath: "go-build-admin/app/admin/model/routine", Rule: "R2", Reason: "EMS mail flow still reads the admin routine config model", Stage: 5},
 }
 
 func TestImportBoundary(t *testing.T) {

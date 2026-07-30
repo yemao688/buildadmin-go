@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"go-build-admin/app/admin/validate"
 	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/validator"
 	"go-build-admin/conf"
 	"net/http"
 	"regexp"
@@ -40,8 +40,8 @@ type Login struct {
 	RegisterType string `json:"registerType"`
 }
 
-func (v Login) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v Login) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func userRegisterCaptchaID(params Login) string {
@@ -60,8 +60,8 @@ type userRegisterValidation struct {
 	Captcha      string `json:"captcha" binding:"required"`
 }
 
-func (v userRegisterValidation) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v userRegisterValidation) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"RegisterType.required": "registerType required",
 		"RegisterType.oneof":    "registerType invalid",
 		"Username.required":     "username required",
@@ -102,7 +102,7 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 
 	var params Login
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -139,7 +139,7 @@ func (h *UserHandler) CheckIn(ctx *gin.Context) {
 			Captcha:      params.Captcha,
 		}
 		if err := binding.Validator.ValidateStruct(registerParams); err != nil {
-			FailByErr(ctx, validate.GetError(registerParams, err))
+			FailByErr(ctx, validator.GetError(registerParams, err))
 			return
 		}
 		if !regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`).MatchString(params.Username) {
@@ -173,14 +173,14 @@ type Logout struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-func (v Logout) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v Logout) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *UserHandler) Logout(ctx *gin.Context) {
 	var params Logout
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

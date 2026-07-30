@@ -2,17 +2,14 @@ package handler
 
 import (
 	routinemodel "go-build-admin/app/admin/model/routine"
-	usermodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/common/country"
 	"go-build-admin/app/common/member"
 	"go-build-admin/app/common/upload"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/tree"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
@@ -102,28 +99,4 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		"language":         languages,
 		"currency":         currencies,
 	})
-}
-
-type RuleExpend struct {
-	usermodel.Rule
-	Children []*RuleExpend `json:"children"`
-}
-
-func (l *RuleExpend) GetId() int               { return int(l.ID) }
-func (l *RuleExpend) GetPid() int              { return int(l.Pid) }
-func (l *RuleExpend) GetTitle() string         { return l.Title }
-func (l *RuleExpend) GetChildren() interface{} { return l.Children }
-func (l *RuleExpend) SetTitle(title string)    { l.Title = title }
-func (l *RuleExpend) SetChildren(children interface{}) {
-	l.Children = children.([]*RuleExpend)
-}
-
-func (h *IndexHandler) AssembleChild(list []usermodel.Rule) []*RuleExpend {
-	expendList := []*RuleExpend{}
-	for _, v := range list {
-		temp := RuleExpend{}
-		copier.Copy(&temp, v)
-		expendList = append(expendList, &temp)
-	}
-	return tree.AssembleChild(expendList)
 }

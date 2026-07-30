@@ -3,12 +3,12 @@ package handler
 import (
 	"crypto/tls"
 	routinemodel "go-build-admin/app/admin/model/routine"
-	"go-build-admin/app/admin/validate"
 	usermodel "go-build-admin/app/api/model/user"
 	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
+	"go-build-admin/app/pkg/validator"
 	"go-build-admin/utils"
 	"slices"
 	"strconv"
@@ -48,8 +48,8 @@ type SendEmail struct {
 	Password    string `json:"password"`
 }
 
-func (v SendEmail) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v SendEmail) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"email.required": "email required",
 		"event.required": "event required",
 	}
@@ -63,7 +63,7 @@ func (v SendEmail) GetMessages() validate.ValidatorMessages {
 func (h *EmsHandler) Send(ctx *gin.Context) {
 	params := SendEmail{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if !slices.Contains([]string{"user_register", "user_change_email", "user_retrieve_pwd", "user_email_verify"}, params.Event) {
