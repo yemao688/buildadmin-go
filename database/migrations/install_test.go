@@ -64,7 +64,16 @@ func TestInstall(t *testing.T) {
 	if err := MarkSeedPending(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := RunOfficialMigrations(db, seedConfig, OfficialMigrations()); err != nil {
+		t.Fatal(err)
+	}
 	if err := RunOfficialFreshSeed(db, seedConfig); err != nil {
+		t.Fatal(err)
+	}
+	if err := BootstrapLocalLedger(db, seedConfig); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RunLocalMigrations(db, seedConfig, OfficialMigrations(), LocalMigrations()); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {

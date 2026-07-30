@@ -119,8 +119,19 @@ func TestAuthorizationRejectsUnauthorizedExistingRule(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, authorizationBusinessCode(t, recorder))
 }
 
-func TestAuthorizationAllowsUnknownRuleInObservationMode(t *testing.T) {
+func TestAuthorizationRejectsUnknownRule(t *testing.T) {
 	fixture := newAuthorizationFixture(t)
+
+	recorder := fixture.request(t, "/admin/country.Currency/index", 1)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, http.StatusForbidden, authorizationBusinessCode(t, recorder))
+}
+
+func TestAuthorizationAllowsPermissionExemptRoute(t *testing.T) {
+	fixture := newAuthorizationFixture(t)
+	RegisterPermissionExempt("country/currency", "index")
+	t.Cleanup(func() { UnregisterPermissionExempt("country/currency", "index") })
 
 	recorder := fixture.request(t, "/admin/country.Currency/index", 1)
 
@@ -141,7 +152,8 @@ func TestAuthorizationEnforcesRuleAddedAfterCacheInvalidation(t *testing.T) {
 	fixture := newAuthorizationFixture(t)
 
 	initial := fixture.request(t, "/admin/country.Currency/index", 1)
-	require.Equal(t, http.StatusNoContent, initial.Code)
+	require.Equal(t, http.StatusOK, initial.Code)
+	require.Equal(t, http.StatusForbidden, authorizationBusinessCode(t, initial))
 
 	fixture.addRule(t, "country/currency/index")
 	fixture.auth.InvalidateAll()

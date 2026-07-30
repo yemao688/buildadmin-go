@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// Authorization enforces admin_rule permissions for registered rules while
-// keeping unregistered routes observable during the first rollout.
+// Authorization enforces admin_rule permissions for registered rules and
+// rejects unregistered routes unless they are explicitly exempt.
 type Authorization struct {
 	authM *adminModel.AuthModel
 	log   *zap.Logger
@@ -38,6 +38,9 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 
 		auth := header.GetAdminAuth(c)
 		ruleName := route + "/" + action
+		if PermissionExempt(route, action) {
+			return
+		}
 		ruleNames, err := m.authM.GetAllRuleNames()
 		if err != nil {
 			m.logError("admin authorization rule lookup failed", err, route, action, auth.Id)
@@ -46,6 +49,7 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 		}
 		if !slices.Contains(ruleNames, ruleName) {
 			m.logWarn("admin authorization rule not registered", route, action, auth.Id)
+			abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
 			return
 		}
 

@@ -39,8 +39,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	client := rds.NewRedis(configuration, zapLogger)
 	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
 	authModel := model.NewAuthModel(gormDB, tokenHelper, configuration)
-	login := middleware.NewLogin(configuration, tokenHelper, authModel)
 	authorization := middleware.NewAuthorization(authModel, zapLogger)
+	login := middleware.NewLogin(configuration, tokenHelper, authModel)
 	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
 	security := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
 	modelAuthModel := model2.NewAuthModel(gormDB, tokenHelper, configuration)
@@ -146,7 +146,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)
-	app := newApp(configuration, zapLogger, server, cronCron)
+	app := newApp(configuration, zapLogger, authorization, server, cronCron)
 	return app, func() {
 	}, nil
 }

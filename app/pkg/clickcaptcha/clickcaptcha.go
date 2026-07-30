@@ -14,6 +14,7 @@ import (
 	"image/png"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ import (
 var bgPaths []string = []string{
 	"/public/static/images/captcha/click/bgs/1.png",
 	"/public/static/images/captcha/click/bgs/2.png",
-	"/public/static/images/captcha/click/bgs/2.png",
+	"/public/static/images/captcha/click/bgs/3.png",
 }
 
 // 可以使用的字体文件路径
@@ -113,7 +114,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	rand.Seed(time.Now().UnixNano())
 	randIndex := rand.Intn(len(bgPaths) - 1)
 	imagePath := bgPaths[randIndex]
-	bgImg, err := loadImage(utils.RootPath() + imagePath)
+	bgImg, err := loadImage(filepath.Join(utils.RootPath(), imagePath))
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +122,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 
 	// 加载字体文件
 	fontPath := fontPaths[0]
-	fontBytes, err := os.ReadFile(utils.RootPath() + fontPath)
+	fontBytes, err := os.ReadFile(filepath.Join(utils.RootPath(), fontPath))
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +150,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 				point.Text = "<" + iconDict[v] + ">"
 			}
 
-			iconImg, err := loadImage(utils.RootPath() + "/public/static/images/captcha/click/icons/" + v + ".png")
+			iconImg, err := loadImage(filepath.Join(utils.RootPath(), "public/static/images/captcha/click/icons", v+".png"))
 			if err != nil {
 				return nil, err
 			}

@@ -18,6 +18,7 @@ func NewCrudRegistrar(handler *CrudHandler) *CrudRegistrar {
 func (r *CrudRegistrar) Group() string { return "admin" }
 
 func (r *CrudRegistrar) Register(g gin.IRoutes) {
+	middleware.RegisterPermissionExempt("crud/crud", "logstart", "getfiledata", "parsefielddata", "generatecheck", "uploadcompleted", "checkcrudlog", "databaselist")
 	g.GET("crud.Crud/databaseList", r.handler.DatabaseList)
 	g.GET("crud.Crud/checkCrudLog", r.handler.CheckCrudLog)
 	g.POST("crud.Crud/parseFieldData", r.handler.ParseFieldData)
@@ -26,6 +27,7 @@ func (r *CrudRegistrar) Register(g gin.IRoutes) {
 	g.POST("crud.Crud/generate", r.handler.Generate)
 	g.POST("crud.Crud/logStart", r.handler.LogStart)
 	g.POST("crud.Crud/delete", r.handler.Delete)
+	g.POST("crud.Crud/uploadCompleted", r.handler.UploadCompleted)
 }
 
 func (r *CrudRegistrar) Capabilities() []middleware.AtomicRoute { return nil }
