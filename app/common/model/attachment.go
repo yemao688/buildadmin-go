@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 type AttachmentAdmin struct {
@@ -19,10 +20,20 @@ type AttachmentAdmin struct {
 	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
 }
 
+// TableName 经由全局命名策略解析，保持与真实 admin 表一致（前缀安全，不硬编码前缀）。
+func (AttachmentAdmin) TableName(namer schema.Namer) string {
+	return namer.TableName("admin")
+}
+
 type AttachmentUser struct {
 	ID       int32  `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
 	Username string `gorm:"column:username;not null;comment:用户名" json:"username"`
 	Nickname string `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`
+}
+
+// TableName 经由全局命名策略解析，保持与真实 user 表一致（前缀安全，不硬编码前缀）。
+func (AttachmentUser) TableName(namer schema.Namer) string {
+	return namer.TableName("user")
 }
 
 // Attachment 附件表
