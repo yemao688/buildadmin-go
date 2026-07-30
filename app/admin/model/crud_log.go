@@ -415,3 +415,27 @@ func (s *CrudLogModel) RecordCrudError(ctx *gin.Context, id int32, message strin
 	}
 	return nil
 }
+
+// UpdateSync applies upload completion markers. Cancellation only clears a
+// marker when it still matches the callback's submitted value.
+func (s *CrudLogModel) UpdateSync(ctx *gin.Context, syncIDs map[int32]int, cancelSync bool) error {
+	if len(syncIDs) == 0 {
+		return nil
+	}
+
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		for id, syncValue := range syncIDs {
+			query := tx.Model(&CrudLog{}).Scopes(s.scoped(ctx)).Where("id = ?", id)
+			value := syncValue
+			if cancelSync {
+				query = query.Where("sync = ?", syncValue)
+				value = 0
+			}
+			result := query.Update("sync", value)
+			if result.Error != nil {
+				return result.Error
+			}
+		}
+		return nil
+	})
+}

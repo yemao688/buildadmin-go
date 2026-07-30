@@ -63,6 +63,8 @@ func main() {
 			}
 			defer cleanup()
 
+			reportUnprotectedRoutes(app)
+
 			// 启动应用（启动横幅由 app.Run 输出）
 			if err := app.Run(); err != nil {
 				panic(err)
@@ -95,6 +97,20 @@ func main() {
 		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+}
+
+func reportUnprotectedRoutes(app *App) {
+	if app == nil || app.config == nil || app.config.App.Env != "debug" || app.httpSrv == nil || app.authM == nil {
+		return
+	}
+	router, ok := app.httpSrv.Handler.(*gin.Engine)
+	if !ok {
+		if app.logger != nil {
+			app.logger.Warn("admin route protection report unavailable: HTTP handler is not a Gin engine")
+		}
+		return
+	}
+	go app.authM.ReportUnprotectedRoutes(router.Routes())
 }
 
 func versionRequested(args []string) bool {

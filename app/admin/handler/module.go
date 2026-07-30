@@ -57,8 +57,3 @@ func (h *ModuleHandler) Upload(ctx *gin.Context) {
 
 	Success(ctx, "")
 }
-
-func (h *ModuleHandler) UploadCompleted(ctx *gin.Context) {
-
-	Success(ctx, "")
-}

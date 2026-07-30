@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"go-build-admin/app/admin/model"
 	"go-build-admin/app/admin/validate"
@@ -25,6 +26,29 @@ type CrudHandler struct {
 	crudLogM   *model.CrudLogModel
 	adminRuleM *model.AdminRuleModel
 	config     *conf.Configuration
+}
+
+type crudUploadCompletedParams struct {
+	SyncIDs    map[int32]int `json:"syncIds"`
+	CancelSync boolValue     `json:"cancelSync"`
+}
+
+type boolValue bool
+
+func (b *boolValue) UnmarshalJSON(data []byte) error {
+	var value bool
+	if err := json.Unmarshal(data, &value); err == nil {
+		*b = boolValue(value)
+		return nil
+	}
+
+	var number int
+	if err := json.Unmarshal(data, &number); err == nil && (number == 0 || number == 1) {
+		*b = boolValue(number == 1)
+		return nil
+	}
+
+	return fmt.Errorf("cancelSync must be a boolean")
 }
 
 func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *model.CrudLogModel, adminRuleM *model.AdminRuleModel, config *conf.Configuration) *CrudHandler {
@@ -130,6 +154,22 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, map[string]interface{}{})
+}
+
+// UploadCompleted records the sync marker for each uploaded CRUD log. A
+// cancellation is conditional so a newer upload cannot be cleared by an old
+// completion callback.
+func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
+	var params crudUploadCompletedParams
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, validate.GetError(params, err))
+		return
+	}
+	if err := h.crudLogM.UpdateSync(ctx, params.SyncIDs, bool(params.CancelSync)); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, "")
 }
 
 func requireCrudRoot(ctx *gin.Context) error {

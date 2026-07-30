@@ -18,6 +18,8 @@ func NewAjaxRegistrar(handler *AjaxHandler) *AjaxRegistrar {
 func (r *AjaxRegistrar) Group() string { return "api" }
 
 func (r *AjaxRegistrar) Register(g gin.IRoutes) {
+	middleware.RegisterPermissionExempt("ajax", "*")
+	middleware.RegisterPermissionExempt("alioss", "callback")
 	g.POST("ajax/area", r.handler.Area)
 	g.POST("ajax/buildSuffixSvg", r.handler.BuildSuffixSvg)
 	g.POST("ajax/upload", r.handler.Upload)

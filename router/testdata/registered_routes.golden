@@ -124,7 +124,7 @@ POST /admin/crud.Crud/generate
 POST /admin/crud.Crud/generateCheck
 POST /admin/crud.Crud/logStart
 POST /admin/crud.Crud/parseFieldData
-POST /admin/module/uploadCompleted
+POST /admin/crud.Crud/uploadCompleted
 POST /admin/routine.AdminInfo/edit
 POST /admin/routine.Attachment/edit
 POST /admin/routine.Config/add

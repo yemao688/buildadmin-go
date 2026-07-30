@@ -18,6 +18,7 @@ func NewIndexRegistrar(handler *IndexHandler) *IndexRegistrar {
 func (r *IndexRegistrar) Group() string { return "api" }
 
 func (r *IndexRegistrar) Register(g gin.IRoutes) {
+	middleware.RegisterPermissionExempt("index", "index", "logout")
 	g.GET("index/index", r.handler.Index)
 }
 

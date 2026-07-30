@@ -141,6 +141,10 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 删除命令不会 DROP 数据表；MySQL DDL 不可由文件回滚，生成和删除前都要确认数据库副作用。
 
+### 后台路由权限
+
+CRUD 生成器自动建规则无需处理；手写路由按同一规则二选一：声明 `middleware.RegisterPermissionExempt` 豁免，或通过 business 迁移补充 `admin_rule`，参考 [`framework-maintenance.md`](framework-maintenance.md) 的条款。
+
 ## 标准框架升级流程
 
 升级前确认当前在自己的 `master`，工作树干净，且已备份目标数据库。建议为每次升级建立临时分支，便于审查和回退：

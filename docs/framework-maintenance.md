@@ -44,6 +44,8 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 - `local/`：框架自身的 6 条语义迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
 - `business/`：下游扩展轨道，框架仓库自身不放业务表。
 
+新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）；启动 debug 模式会输出未登记也未豁免的路由告警。
+
 迁移回调分为两类契约：`VerifyBaseline` 是应用迁移时的一次性基线契约，只在对应 `Up` 成功后执行；失败会随应用重试，已完成的迁移记录不再执行它，因此判据可以精确描述该迁移刚建立的基线。`VerifySchema` 与 `VerifyUpgradeData` 是 standing 运行时不变量，每次 migrate 都会执行，判据必须兼容业务仓库在基线之上的合法改造。
 
 迁移编排顺序必须保持不变：
