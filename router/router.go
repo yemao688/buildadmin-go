@@ -95,7 +95,7 @@ func InitRouter(
 	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
 
 	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
-	router.Static("/static", filepath.Join(rootDir, "public"))
+	router.Static("/static", filepath.Join(rootDir, "public/static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "public/storage/default"))
 	router.StaticFile("/", filepath.Join(rootDir, "public/index.html"))
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
