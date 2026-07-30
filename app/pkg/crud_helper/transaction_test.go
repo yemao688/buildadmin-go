@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
@@ -52,7 +52,7 @@ func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	manifest, err := BuildFileManifestForFields(model.Table{Name: "orders"}, []model.Field{{Form: model.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_test/Owner.go", RelationFields: "name"}}})
+	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_test/Owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T
 func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *testing.T) {
 	dir := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation_manifest_absent_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	manifest, err := BuildFileManifestForFields(model.Table{Name: "orders"}, []model.Field{{Form: model.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_absent_test/Owner.go", RelationFields: "name"}}})
+	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "app/admin/model/relation_manifest_absent_test/Owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

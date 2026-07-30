@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"encoding/json"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,14 +14,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
 )
 
 func ptr[T any](v T) *T { return &v }
 
-func newField(name, typ string, pk bool) model.Field {
-	return model.Field{Name: name, Type: typ, DesignType: typ, PrimaryKey: pk}
+func newField(name, typ string, pk bool) crudmodel.Field {
+	return crudmodel.Field{Name: name, Type: typ, DesignType: typ, PrimaryKey: pk}
 }
 
 func proveAll(_ string) (bool, error)  { return true, nil }
@@ -30,7 +30,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 	cases := []struct {
 		name        string
 		cfg         *data_scope.Config
-		fields      []model.Field
+		fields      []crudmodel.Field
 		allowNone   bool
 		prove       func(string) (bool, error)
 		wantMode    data_scope.Mode
@@ -44,7 +44,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "legacy nil with exact admin_id fails closed without index proof",
 			cfg:         nil,
-			fields:      []model.Field{newField("id", "int", true), newField("admin_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)},
 			prove:       proveNone,
 			wantErr:     true,
 			errContains: "no proven index",
@@ -52,7 +52,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "legacy nil with exact admin_id and proven index",
 			cfg:         nil,
-			fields:      []model.Field{newField("id", "int", true), newField("admin_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)},
 			prove:       proveAll,
 			wantMode:    data_scope.ModeAuto,
 			wantOwner:   "admin_id",
@@ -63,21 +63,21 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:     "legacy nil with AdminID does not auto-detect",
 			cfg:      nil,
-			fields:   []model.Field{newField("id", "int", true), newField("AdminID", "int", false)},
+			fields:   []crudmodel.Field{newField("id", "int", true), newField("AdminID", "int", false)},
 			prove:    proveAll,
 			wantMode: data_scope.ModeNone,
 		},
 		{
 			name:     "auto with last_admin_id is not auto owner",
 			cfg:      &data_scope.Config{Mode: data_scope.ModeAuto},
-			fields:   []model.Field{newField("id", "int", true), newField("last_admin_id", "int", false)},
+			fields:   []crudmodel.Field{newField("id", "int", true), newField("last_admin_id", "int", false)},
 			prove:    proveAll,
 			wantMode: data_scope.ModeNone,
 		},
 		{
 			name:        "required custom owner last_admin_id without proven index fails",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "last_admin_id"},
-			fields:      []model.Field{newField("id", "int", true), newField("last_admin_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("last_admin_id", "int", false)},
 			prove:       proveNone,
 			wantErr:     true,
 			errContains: "no proven index",
@@ -85,7 +85,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "required custom owner operator_admin_id with proven index",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id", AssignOnCreate: ptr(true)},
-			fields:      []model.Field{newField("id", "int", true), newField("operator_admin_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("operator_admin_id", "int", false)},
 			prove:       proveAll,
 			wantMode:    data_scope.ModeRequired,
 			wantOwner:   "operator_admin_id",
@@ -96,21 +96,21 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "required missing owner column",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired},
-			fields:      []model.Field{newField("id", "int", true)},
+			fields:      []crudmodel.Field{newField("id", "int", true)},
 			wantErr:     true,
 			errContains: "owner column is required",
 		},
 		{
 			name:        "required owner column wrong type",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_name"},
-			fields:      []model.Field{newField("id", "int", true), newField("owner_name", "varchar", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("owner_name", "varchar", false)},
 			wantErr:     true,
 			errContains: "not integer-compatible",
 		},
 		{
 			name:        "required custom owner with assign on create",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(true)},
-			fields:      []model.Field{newField("id", "int", true), newField("owner_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("owner_id", "int", false)},
 			prove:       proveAll,
 			wantMode:    data_scope.ModeRequired,
 			wantOwner:   "owner_id",
@@ -121,7 +121,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "none override with admin_id requires explicit flag",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeNone},
-			fields:      []model.Field{newField("id", "int", true), newField("admin_id", "int", false)},
+			fields:      []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)},
 			prove:       proveAll,
 			wantErr:     true,
 			errContains: "explicit override",
@@ -129,7 +129,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:      "none override with admin_id allowed when explicit",
 			cfg:       &data_scope.Config{Mode: data_scope.ModeNone},
-			fields:    []model.Field{newField("id", "int", true), newField("admin_id", "int", false)},
+			fields:    []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)},
 			allowNone: true,
 			prove:     proveAll,
 			wantMode:  data_scope.ModeNone,
@@ -137,7 +137,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "admin.id explicit required",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "id"},
-			fields:      []model.Field{newField("id", "int", true)},
+			fields:      []crudmodel.Field{newField("id", "int", true)},
 			wantMode:    data_scope.ModeRequired,
 			wantOwner:   "id",
 			wantGoField: "ID",
@@ -147,7 +147,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 		{
 			name:        "admin.id cannot assign on create",
 			cfg:         &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "id", AssignOnCreate: ptr(true)},
-			fields:      []model.Field{newField("id", "int", true)},
+			fields:      []crudmodel.Field{newField("id", "int", true)},
 			wantErr:     true,
 			errContains: "admin.id cannot assign on create",
 		},
@@ -177,14 +177,14 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 }
 
 func TestResolveDataScope_NoProverFailsClosed(t *testing.T) {
-	fields := []model.Field{newField("id", "int", true), newField("admin_id", "int", false)}
+	fields := []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)}
 	_, err := ResolveDataScope(nil, fields, DataScopeResolveOptions{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot prove an index")
 }
 
 func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) {
-	adminIDFields := []model.Field{
+	adminIDFields := []crudmodel.Field{
 		newField("id", "bigint", true),
 		newField("user_id", "bigint", false),
 		newField("admin_id", "bigint", false),
@@ -195,7 +195,7 @@ func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) 
 	assert.Equal(t, "admin_id", resolved.OwnerColumn)
 	assert.True(t, resolved.AssignOnCreate)
 
-	agentOwnerFields := []model.Field{
+	agentOwnerFields := []crudmodel.Field{
 		newField("id", "bigint", true),
 		newField("user_id", "bigint", false),
 		newField("agent_admin_id", "bigint", false),
@@ -280,7 +280,7 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 	table.Name = "big_order"
 	table.ModelFile = "app/admin/model/BigOrder.go"
 	table.ControllerFile = "app/admin/handler/BigOrder.go"
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "order_id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}
@@ -311,8 +311,8 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 }
 
 func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
-	table := model.Table{Name: "ai_gate_base", ModelFile: "app/admin/model/ai_gate_base.go", ControllerFile: "app/admin/handler/ai_gate_base.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
-	fields := []model.Field{
+	table := crudmodel.Table{Name: "ai_gate_base", ModelFile: "app/admin/model/ai_gate_base.go", ControllerFile: "app/admin/handler/ai_gate_base.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}
@@ -336,8 +336,8 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 }
 
 func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
-	table := model.Table{Name: "big_owner", ModelFile: "app/admin/model/BigOwner.go", ControllerFile: "app/admin/handler/BigOwner.go", FormFields: []string{"name"}}
-	fields := []model.Field{
+	table := crudmodel.Table{Name: "big_owner", ModelFile: "app/admin/model/BigOwner.go", ControllerFile: "app/admin/handler/BigOwner.go", FormFields: []string{"name"}}
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "admin_id", Type: "bigint", DesignType: "number"},
 		{Name: "name", Type: "varchar", DesignType: "string"},
@@ -372,13 +372,13 @@ func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
 }
 
 func TestValidateGenerationInputRejectsTextPrimaryKey(t *testing.T) {
-	err := ValidateGenerationInput(model.Table{Name: "text_key"}, []model.Field{{Name: "token", Type: "text", PrimaryKey: true}})
+	err := ValidateGenerationInput(crudmodel.Table{Name: "text_key"}, []crudmodel.Field{{Name: "token", Type: "text", PrimaryKey: true}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported primary key type")
 }
 
 func TestRelatedModelWithoutAdminIDResolvesModeNone(t *testing.T) {
-	resolved, err := ResolveDataScope(nil, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "name", Type: "varchar"}}, DataScopeResolveOptions{ProveIndex: proveAll})
+	resolved, err := ResolveDataScope(nil, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "name", Type: "varchar"}}, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.NoError(t, err)
 	assert.Equal(t, data_scope.ModeNone, resolved.Policy.Mode)
 }
@@ -391,19 +391,19 @@ func TestCommonModelBaseSupportsRequestTransactions(t *testing.T) {
 }
 
 func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {
-	_, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(false)}, []model.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "owner_id", Type: "int"}}, DataScopeResolveOptions{ProveIndex: proveAll})
+	_, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(false)}, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "owner_id", Type: "int"}}, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "assignOnCreate=true")
 }
 
 func TestPrepareGenerationData_CommonModelImportPath(t *testing.T) {
-	table := model.Table{
+	table := crudmodel.Table{
 		Name:           "order_item",
 		IsCommonModel:  1,
 		ModelFile:      "app/common/model/OrderItem.go",
 		ControllerFile: "app/admin/handler/OrderItem.go",
 	}
-	fields := []model.Field{{Name: "id", Type: "int", PrimaryKey: true}}
+	fields := []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}}
 	getTableName := func(name string, full bool) string {
 		if full {
 			return "ba_" + name
@@ -485,7 +485,7 @@ func TestCrudLogTableDataScopeRoundtrip(t *testing.T) {
 		Mode:        data_scope.ModeRequired,
 		OwnerColumn: "operator_admin_id",
 	}
-	table := model.Table{
+	table := crudmodel.Table{
 		Name:       "demo",
 		DataScope:  cfg,
 		FormFields: []string{"name", "operator_admin_id"},
@@ -497,17 +497,17 @@ func TestCrudLogTableDataScopeRoundtrip(t *testing.T) {
 	assert.Contains(t, string(data), `"mode":"required"`)
 	assert.Contains(t, string(data), `"ownerColumn":"operator_admin_id"`)
 
-	var decoded model.Table
+	var decoded crudmodel.Table
 	require.NoError(t, json.Unmarshal(data, &decoded))
 	require.NotNil(t, decoded.DataScope)
 	assert.Equal(t, data_scope.ModeRequired, decoded.DataScope.Mode)
 	assert.Equal(t, "operator_admin_id", decoded.DataScope.OwnerColumn)
 
 	// Legacy nil DataScope resolves to auto when fed through generation.
-	legacy := model.Table{Name: "legacy"}
+	legacy := crudmodel.Table{Name: "legacy"}
 	legacyData, err := json.Marshal(legacy)
 	require.NoError(t, err)
-	var legacyDecoded model.Table
+	var legacyDecoded crudmodel.Table
 	require.NoError(t, json.Unmarshal(legacyData, &legacyDecoded))
 	assert.Nil(t, legacyDecoded.DataScope)
 }
@@ -518,12 +518,12 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 		cfg        *data_scope.Config
 		owner      string
 		wantOwner  bool
-		ownerField model.Field
+		ownerField crudmodel.Field
 	}{
 		{
 			name:  "auto admin_id",
 			owner: "admin_id",
-			ownerField: model.Field{
+			ownerField: crudmodel.Field{
 				Name: "admin_id", Type: "int", DesignType: "number",
 			},
 		},
@@ -531,7 +531,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 			name:  "custom owner",
 			cfg:   &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "operator_admin_id", AssignOnCreate: ptr(true)},
 			owner: "operator_admin_id",
-			ownerField: model.Field{
+			ownerField: crudmodel.Field{
 				Name: "operator_admin_id", Type: "int", DesignType: "number",
 			},
 		},
@@ -539,7 +539,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 			name:  "admin.id",
 			cfg:   &data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "id"},
 			owner: "id",
-			ownerField: model.Field{
+			ownerField: crudmodel.Field{
 				Name: "id", Type: "int", DesignType: "number", PrimaryKey: true,
 			},
 		},
@@ -548,13 +548,13 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 			cfg:        &data_scope.Config{Mode: data_scope.ModeNone},
 			owner:      "admin_id",
 			wantOwner:  true,
-			ownerField: model.Field{Name: "admin_id", Type: "int", DesignType: "number"},
+			ownerField: crudmodel.Field{Name: "admin_id", Type: "int", DesignType: "number"},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			table := model.Table{
+			table := crudmodel.Table{
 				Name:           "form_scope_test",
 				Comment:        "form scope",
 				ModelFile:      "app/admin/model/FormScopeTest.go",
@@ -563,7 +563,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 				FormFields:     []string{"name", tc.owner},
 				DataScope:      tc.cfg,
 			}
-			fields := []model.Field{
+			fields := []crudmodel.Field{
 				{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 				{Name: "name", Type: "varchar", DesignType: "string"},
 				tc.ownerField,
@@ -718,18 +718,18 @@ func renderModelString(t *testing.T, data ModelData) string {
 	return out
 }
 
-func getCompileFields(owner string) []model.Field {
-	fields := []model.Field{
+func getCompileFields(owner string) []crudmodel.Field {
+	fields := []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "int", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "varchar"},
 		{Name: "create_time", Type: "int", DesignType: "int", FormBuildExclude: true},
 		{Name: "update_time", Type: "int", DesignType: "int", FormBuildExclude: true},
 	}
 	if owner != "" && owner != "id" {
-		fields = append(fields, model.Field{Name: owner, Type: "int", DesignType: "int"})
+		fields = append(fields, crudmodel.Field{Name: owner, Type: "int", DesignType: "int"})
 	}
 	if owner == "" {
-		fields = append(fields, model.Field{Name: "admin_id", Type: "int", DesignType: "int"})
+		fields = append(fields, crudmodel.Field{Name: "admin_id", Type: "int", DesignType: "int"})
 	}
 	return fields
 }

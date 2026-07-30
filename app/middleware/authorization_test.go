@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	adminModel "go-build-admin/app/admin/model"
+	adminModel "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/conf"
 	"go-build-admin/utils"

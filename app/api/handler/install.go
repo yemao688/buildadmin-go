@@ -3,7 +3,8 @@ package handler
 import (
 	"database/sql"
 	"fmt"
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
+	routinemodel "go-build-admin/app/admin/model/routine"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
@@ -557,7 +558,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		salt := random.Build("alnum", 16)
 		password := utils.EncryptPassword(params.Adminpassword, salt)
 		// 管理员配置入库
-		h.db.Model(&model.Admin{}).Where("username=?", "admin").Updates(map[string]any{
+		h.db.Model(&adminauth.Admin{}).Where("username=?", "admin").Updates(map[string]any{
 			"username": params.Adminname,
 			"nickname": params.Adminname,
 			"password": password,
@@ -565,7 +566,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 
 		// 修改站点名称
-		h.db.Model(&model.Config{}).Where("name=?", "site_name").Updates(map[string]any{
+		h.db.Model(&routinemodel.Config{}).Where("name=?", "site_name").Updates(map[string]any{
 			"value": params.Sitename,
 		})
 	}

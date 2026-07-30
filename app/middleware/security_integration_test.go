@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/admin/model"
+	securitymodel "go-build-admin/app/admin/model/security"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/conf"
@@ -234,7 +235,7 @@ func TestSecurityMySQLDeleteCommitRollbackAndRestore(t *testing.T) {
 	var rowCount int64
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Zero(t, rowCount)
-	recycleModel := model.NewDataRecycleLogModel(f.db, f.config, data_scope.NewClosureEnforcer(f.config))
+	recycleModel := securitymodel.NewDataRecycleLogModel(f.db, f.config, data_scope.NewClosureEnforcer(f.config))
 	require.NoError(t, recycleModel.Restore(f.actorContext(2, false), []int32{logID}))
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Equal(t, int64(1), rowCount)

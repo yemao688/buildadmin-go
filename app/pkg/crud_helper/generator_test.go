@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"errors"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/utils"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestGenerateFromSpecRejectsProtectedTableBeforeDependencies(t *testing.T) {
-	_, err := GenerateFromSpec(nil, nil, GenerateOptions{Table: model.Table{Name: "admin"}})
+	_, err := GenerateFromSpec(nil, nil, GenerateOptions{Table: crudmodel.Table{Name: "admin"}})
 	if err == nil || err.Error() != `crud generation is forbidden for protected table "admin"` {
 		t.Fatalf("error = %v", err)
 	}
@@ -74,7 +75,7 @@ func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
 }
 
 func TestAlterChangesOnlyAddAndModify(t *testing.T) {
-	changes := deriveAlterChanges([]model.Column{{COLUMN_NAME: "id"}, {COLUMN_NAME: "legacy"}}, []model.Field{{Name: "id"}, {Name: "name"}})
+	changes := deriveAlterChanges([]model.Column{{COLUMN_NAME: "id"}, {COLUMN_NAME: "legacy"}}, []crudmodel.Field{{Name: "id"}, {Name: "name"}})
 	if len(changes) != 2 || changes[0].Type != "change-field-attr" || changes[1].Type != "add-field" {
 		t.Fatalf("unexpected alter changes: %+v", changes)
 	}
@@ -99,7 +100,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil) {
 		t.Fatal("first generation must reject existing model and handler targets")
 	}
-	log := &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{path}}}
+	log := &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
 	if !manifestAllows(manifest, log) {
 		t.Fatal("latest success manifest should allow its own target")
 	}
@@ -120,7 +121,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			manifest, err := BuildFileManifest(model.Table{
+			manifest, err := BuildFileManifest(crudmodel.Table{
 				Name:           tc.name,
 				ModelFile:      "app/admin/model/" + tc.name + ".go",
 				ControllerFile: "app/admin/handler/" + tc.name + ".go",
@@ -146,7 +147,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 
 func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
 	root := utils.RootPath()
-	manifest, err := BuildFileManifest(model.Table{
+	manifest, err := BuildFileManifest(crudmodel.Table{
 		Name:           "country_language_content",
 		ModelFile:      "app/admin/model/country/languageContent.go",
 		ControllerFile: "app/admin/handler/country/languageContent.go",
@@ -169,7 +170,7 @@ func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
 }
 
 func TestBuildFileManifestNormalizesPathSeparators(t *testing.T) {
-	forward := model.Table{
+	forward := crudmodel.Table{
 		Name: "country_language_content", ModelFile: "app/admin/model/country/languageContent.go",
 		ControllerFile: "app/admin/handler/country/languageContent.go", WebViewsDir: "web/src/views/backend/country/languageContent",
 	}
@@ -213,13 +214,13 @@ func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
 	root := utils.RootPath()
 	newPath := filepath.Join(root, "web/src/lang/backend/en/country/language.ts")
 	oldPath := filepath.Join(root, "web/src/lang/backend/country/en/language.ts")
-	log := &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
+	log := &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
 	if !manifestAllows(FileManifest{Generated: []string{newPath}}, log) {
 		t.Fatal("legacy language manifest should match locale-first path")
 	}
 	nonLangOld := filepath.Join(root, "web/src/views/backend/old/country/language.ts")
 	nonLangNew := filepath.Join(root, "web/src/views/backend/new/country/language.ts")
-	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &model.CrudLog{Table: model.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
+	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &crudmodel.CrudLog{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
 		t.Fatal("non-language path migration should remain rejected")
 	}
 }
@@ -236,7 +237,7 @@ func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
 	}
 	defer os.RemoveAll(filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete"))
 
-	manifest, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{oldPath}}})
+	manifest, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{oldPath}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +253,7 @@ func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
 func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
 	provider := filepath.Join(utils.RootPath(), "app", "admin", "model", "relation", "provider.go")
 	current := FileManifest{Shared: []string{provider}}
-	historical := model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{provider}}}
+	historical := crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{provider}}}
 	manifest, err := historicalDeleteManifest(current, historical)
 	if err != nil {
 		t.Fatal(err)
@@ -312,7 +313,7 @@ func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.
 
 func TestHistoricalManifestRejectsPathOutsideAllowedRoots(t *testing.T) {
 	for _, path := range []string{"../../etc/passwd", "/tmp/evil.go"} {
-		if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{Generated: []string{path}}}); err == nil {
+		if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{path}}}); err == nil {
 			t.Errorf("historical path %q was accepted", path)
 		}
 	}
@@ -322,19 +323,19 @@ func TestHistoricalManifestEnforcesGeneratedAndSharedPathClasses(t *testing.T) {
 	root := utils.RootPath()
 	validGenerated := filepath.Join(root, "app", "admin", "model", "orders.go")
 	validShared := filepath.Join(root, "app", "admin", "model", "provider.go")
-	if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: &model.CRUDFileManifest{
+	if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{
 		Generated: []string{validGenerated},
 		Shared:    []string{validShared},
 	}}); err != nil {
 		t.Fatalf("valid historical manifest was rejected: %v", err)
 	}
 
-	for _, manifest := range []*model.CRUDFileManifest{
+	for _, manifest := range []*crudmodel.CRUDFileManifest{
 		{Generated: []string{filepath.Join(root, "app", "middleware", "security.go")}},
 		{Shared: []string{filepath.Join(root, "app", "admin", "model", "admin.go")}},
 		{Shared: []string{filepath.Join(root, "router", "unexpected.go")}},
 	} {
-		if _, err := historicalDeleteManifest(FileManifest{}, model.Table{Manifest: manifest}); err == nil {
+		if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: manifest}); err == nil {
 			t.Errorf("historical manifest path class was accepted: %+v", manifest)
 		}
 	}

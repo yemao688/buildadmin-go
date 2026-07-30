@@ -2,7 +2,8 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"os"
 	"strings"
@@ -31,11 +32,11 @@ func TestAlter(t *testing.T) {
 }
 
 func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
-	nullable, err := getDDlFieldData(model.Field{Name: "nickname", Type: "varchar", Length: 64, Null: true})
+	nullable, err := getDDlFieldData(crudmodel.Field{Name: "nickname", Type: "varchar", Length: 64, Null: true})
 	require.NoError(t, err)
 	assert.NotContains(t, nullable, "NOT NULL")
 
-	notNullable, err := getDDlFieldData(model.Field{Name: "status", Type: "int", Null: false})
+	notNullable, err := getDDlFieldData(crudmodel.Field{Name: "status", Type: "int", Null: false})
 	require.NoError(t, err)
 	assert.Contains(t, notNullable, "NOT NULL")
 }
@@ -55,7 +56,7 @@ func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
 		{"stale_empty", "EMPTY STRING", "stale", "DEFAULT ''"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := getDDlFieldData(model.Field{Name: tc.name, Type: "varchar", Length: 32, DefaultType: tc.defaultType, Default: tc.value})
+			got, err := getDDlFieldData(crudmodel.Field{Name: tc.name, Type: "varchar", Length: 32, DefaultType: tc.defaultType, Default: tc.value})
 			require.NoError(t, err)
 			assert.Contains(t, got, tc.want)
 		})
@@ -63,7 +64,7 @@ func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
 }
 
 func TestGetDDLFieldDataNullDefaultIsNullable(t *testing.T) {
-	got, err := getDDlFieldData(model.Field{Name: "value", Type: "varchar", DefaultType: "NULL"})
+	got, err := getDDlFieldData(crudmodel.Field{Name: "value", Type: "varchar", DefaultType: "NULL"})
 	require.NoError(t, err)
 	assert.NotContains(t, got, "NOT NULL")
 	assert.Contains(t, got, "DEFAULT NULL")
@@ -72,7 +73,7 @@ func TestGetDDLFieldDataNullDefaultIsNullable(t *testing.T) {
 func TestGetDDLFieldDataNoDefaultFamilies(t *testing.T) {
 	for dataType := range noDefaultValueTypes {
 		t.Run(dataType, func(t *testing.T) {
-			got, err := getDDlFieldData(model.Field{Name: "value", Type: dataType, DefaultType: "INPUT", Default: "x"})
+			got, err := getDDlFieldData(crudmodel.Field{Name: "value", Type: dataType, DefaultType: "INPUT", Default: "x"})
 			require.NoError(t, err)
 			assert.NotContains(t, got, "DEFAULT")
 		})
@@ -123,7 +124,7 @@ func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 	cfg := &conf.Configuration{}
 	cfg.Database.Prefix = "ba_"
 	menuName := fmt.Sprintf("oracle_menu_snapshot_%d", time.Now().UnixNano())
-	rows := []model.AdminRule{
+	rows := []adminauth.AdminRule{
 		{Name: menuName, Path: menuName, Title: "snapshot", Type: "menu", Status: "1"},
 		{Name: menuName + "/index", Path: menuName + "/index", Title: "view", Type: "button", Status: "1"},
 	}
@@ -131,12 +132,12 @@ func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 		require.NoError(t, db.Table("ba_admin_rule").Create(&rows[i]).Error)
 	}
 	t.Cleanup(func() {
-		_ = db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error
+		_ = db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&adminauth.AdminRule{}).Error
 	})
 	snapshot, err := snapshotMenuRules(db, cfg, menuName)
 	require.NoError(t, err)
 	require.Len(t, snapshot, 2)
-	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error)
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&adminauth.AdminRule{}).Error)
 	require.NoError(t, restoreMenuRules(db, cfg, snapshot))
 	var count int64
 	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Count(&count).Error)

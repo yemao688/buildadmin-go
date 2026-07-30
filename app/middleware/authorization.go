@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	adminModel "go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/utils"
@@ -14,11 +14,11 @@ import (
 // Authorization enforces admin_rule permissions for registered rules and
 // rejects unregistered routes unless they are explicitly exempt.
 type Authorization struct {
-	authM *adminModel.AuthModel
+	authM *adminauth.AuthModel
 	log   *zap.Logger
 }
 
-func NewAuthorization(authM *adminModel.AuthModel, log *zap.Logger) *Authorization {
+func NewAuthorization(authM *adminauth.AuthModel, log *zap.Logger) *Authorization {
 	return &Authorization{
 		authM: authM,
 		log:   log,

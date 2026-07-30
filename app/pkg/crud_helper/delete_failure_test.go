@@ -3,7 +3,8 @@ package crud_helper
 import (
 	"encoding/json"
 	"errors"
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -33,7 +34,7 @@ func TestDeleteWireFailureRestoresMenuWithSameID(t *testing.T) {
 		t.Fatalf("wire failure stage = %v", err)
 	}
 	assertDeleteFixtureFilesRestored(t, fixture)
-	var rows []model.AdminRule
+	var rows []adminauth.AdminRule
 	if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func TestDeleteMenuFailureRestoresFilesAndReportsStage(t *testing.T) {
 type deleteFailureFixture struct {
 	tableName string
 	menuName  string
-	menu      model.AdminRule
+	menu      adminauth.AdminRule
 	generated []string
 	shared    map[string][]byte
 }
@@ -99,7 +100,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 	cfg := &conf.Configuration{}
 	cfg.Database.Prefix = "ba_"
-	if err := db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}); err != nil {
+	if err := db.Table("ba_admin_rule").AutoMigrate(&adminauth.AdminRule{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error; err != nil {
@@ -154,17 +155,17 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 	t.Cleanup(func() { _ = os.WriteFile(routerPath, routerBefore, 0644) })
 
-	menu := model.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
+	menu := adminauth.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}
-	fields := []model.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true}}
-	table := model.Table{
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true}}
+	table := crudmodel.Table{
 		Name:           tableName,
 		ModelFile:      filepath.ToSlash(filepath.Join("app", "admin", "model", dirName, "deleteFault.go")),
 		ControllerFile: filepath.ToSlash(filepath.Join("app", "admin", "handler", dirName, "deleteFault.go")),
 		WebViewsDir:    "web/src/views/backend/delete/fault",
-		Manifest: &model.CRUDFileManifest{
+		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: []string{generated},
 			Shared:    []string{modelProvider, handlerProvider, routerPath},
 		},

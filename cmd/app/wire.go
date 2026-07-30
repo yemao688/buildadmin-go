@@ -6,8 +6,18 @@
 package main
 
 import (
+	authHandler "go-build-admin/app/admin/handler/auth"
 	countryHandler "go-build-admin/app/admin/handler/country"
+	crudHandler "go-build-admin/app/admin/handler/crud"
+	routineHandler "go-build-admin/app/admin/handler/routine"
+	securityHandler "go-build-admin/app/admin/handler/security"
+	userHandler "go-build-admin/app/admin/handler/user"
+	authModel "go-build-admin/app/admin/model/auth"
 	countryModel "go-build-admin/app/admin/model/country"
+	crudModel "go-build-admin/app/admin/model/crud"
+	routineModel "go-build-admin/app/admin/model/routine"
+	securityModel "go-build-admin/app/admin/model/security"
+	userModel "go-build-admin/app/admin/model/user"
 	"go-build-admin/conf"
 
 	adminHandler "go-build-admin/app/admin/handler"
@@ -41,9 +51,19 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		commonModel.ProviderSet,
 		adminHandler.ProviderSet,
 		countryHandler.ProviderSet,
+		authHandler.ProviderSet,
+		routineHandler.ProviderSet,
+		securityHandler.ProviderSet,
+		userHandler.ProviderSet,
+		crudHandler.ProviderSet,
 		adminModel.ProviderSet,
 		countryModel.ProviderSet,
-		wire.Bind(new(terminal.AuthModel), new(*adminModel.AuthModel)),
+		authModel.ProviderSet,
+		routineModel.ProviderSet,
+		securityModel.ProviderSet,
+		userModel.ProviderSet,
+		crudModel.ProviderSet,
+		wire.Bind(new(terminal.AuthModel), new(*authModel.AuthModel)),
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,

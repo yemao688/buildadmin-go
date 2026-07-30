@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/utils"
 	"go/parser"
 	"go/token"
@@ -447,7 +447,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 	if err := os.WriteFile(provider, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	fields := []model.Field{{Form: model.FormAttr{RemoteTable: "assoc", RemoteModel: "app/admin/model/assoc_provider_test/Assoc.go", RelationFields: "name"}}}
+	fields := []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "assoc", RemoteModel: "app/admin/model/assoc_provider_test/Assoc.go", RelationFields: "name"}}}
 	manifest := FileManifest{
 		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "assoc_provider_test", "Assoc.go")},
 		Shared:    []string{provider},
@@ -472,7 +472,7 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fields := []model.Field{{Form: model.FormAttr{RemoteTable: "ba_admin", RemoteModel: "app/admin/model/admin.go", RelationFields: "username"}}}
+	fields := []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "ba_admin", RemoteModel: "app/admin/model/admin.go", RelationFields: "username"}}}
 	manifest := FileManifest{
 		Generated: []string{filepath.Join(utils.RootPath(), "app", "admin", "model", "test.go")},
 		Shared:    []string{provider},
@@ -589,8 +589,8 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			field := analyseField(model.Field{Name: tc.name, DesignType: tc.designType, Type: tc.typeName, DataType: tc.dataType, Length: tc.length, DefaultType: tc.defaultTyp, Default: tc.defaultVal})
-			got := buildHandlerParamTypeOverrides([]model.Field{field})
+			field := analyseField(crudmodel.Field{Name: tc.name, DesignType: tc.designType, Type: tc.typeName, DataType: tc.dataType, Length: tc.length, DefaultType: tc.defaultTyp, Default: tc.defaultVal})
+			got := buildHandlerParamTypeOverrides([]crudmodel.Field{field})
 			if got[tc.name] != tc.want {
 				t.Fatalf("override = %q, want %q (analysed field: %+v)", got[tc.name], tc.want, field)
 			}
@@ -599,7 +599,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 }
 
 func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
-	fields := []model.Field{
+	fields := []crudmodel.Field{
 		{Name: "enabled", Type: "tinyint", Length: 1, DesignType: "switch"},
 		{Name: "visible", Type: "tinyint", DataType: "tinyint(1)", DesignType: "radio"},
 		{Name: "published_year", Type: "year", DataType: "year", DesignType: "year"},

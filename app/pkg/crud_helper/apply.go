@@ -3,6 +3,8 @@ package crud_helper
 import (
 	"fmt"
 	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"os"
@@ -255,7 +257,7 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel,
 	return result, nil
 }
 
-func unmanagedChanges(columns []model.Column, fields []model.Field) []ApplyChange {
+func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyChange {
 	byName := make(map[string]model.Column, len(columns))
 	for _, column := range columns {
 		byName[strings.ToLower(column.COLUMN_NAME)] = column
@@ -296,7 +298,7 @@ func firstBlockingDiff(diffs []AlterDiff) *AlterDiff {
 	return nil
 }
 
-func primaryKeyDrift(actualPKs []string, fields []model.Field, columns []model.Column) (bool, string) {
+func primaryKeyDrift(actualPKs []string, fields []crudmodel.Field, columns []model.Column) (bool, string) {
 	specPKs := specPrimaryKeys(fields)
 	if !sameIdentifiers(actualPKs, specPKs) {
 		return true, fmt.Sprintf("primary key columns differ: database=%q spec=%q", strings.Join(actualPKs, ","), strings.Join(specPKs, ","))
@@ -370,7 +372,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 				result.Action = ApplyBlocked
 				return result, &ApplyBlockedError{Table: spec.Table.Name, Class: blocking.Class, Reasons: reasons}
 			}
-			spec.Table.DesignChange = make([]model.ChangeField, 0, len(diffs))
+			spec.Table.DesignChange = make([]crudmodel.ChangeField, 0, len(diffs))
 			for _, diff := range diffs {
 				if diff.Class != DiffSafeAuto {
 					continue
@@ -389,7 +391,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	}
 	if !opts.SkipMenu {
 		webViewsDir := ParseWebDirNameData(spec.Table.Name, "views", spec.Table.WebViewsDir)
-		menuReport, err := SyncMenuWithOptionsAndRecord(model.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
+		menuReport, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
 		if err != nil {
 			return nil, fmt.Errorf("menu sync: %w", err)
 		}
@@ -415,12 +417,12 @@ func applyChangesFromDiffs(diffs []AlterDiff) []ApplyChange {
 // adoptCrudLog 确保目标库存在与当前 spec 一致的 success 记录：无则新建，
 // 有则回写最新 spec payload（manifest 随当前布局重算，保持 crud:delete 可用性）。
 func adoptCrudLog(db *gorm.DB, cfg *conf.Configuration, spec *GenerateOptions, adminID int32) (int32, error) {
-	manifest, err := BuildFileManifestForFields(model.Table(spec.Table), []model.Field(spec.Fields))
+	manifest, err := BuildFileManifestForFields(crudmodel.Table(spec.Table), []crudmodel.Field(spec.Fields))
 	if err != nil {
 		return 0, err
 	}
 	spec.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
-	spec.Table.Manifest = &model.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
+	spec.Table.Manifest = &crudmodel.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
 	spec.AdminID = adminID
 
 	existing, err := latestSuccessfulCrudLog(db, cfg, spec.Table.Name)
@@ -438,8 +440,8 @@ func adoptCrudLog(db *gorm.DB, cfg *conf.Configuration, spec *GenerateOptions, a
 		return logID, nil
 	}
 	updates := map[string]interface{}{
-		"table":  model.JSON_TABLE(spec.Table),
-		"fields": model.JSON_FIELDS(spec.Fields),
+		"table":  crudmodel.JSON_TABLE(spec.Table),
+		"fields": crudmodel.JSON_FIELDS(spec.Fields),
 	}
 	if err := db.Table(crudLogTable(cfg)).Where("id=?", existing.ID).Updates(updates).Error; err != nil {
 		return 0, err

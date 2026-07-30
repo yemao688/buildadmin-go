@@ -1,13 +1,13 @@
 package crud_helper
 
 import (
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go-build-admin/app/admin/model"
 	"go-build-admin/app/pkg/data_scope"
 )
 
@@ -18,18 +18,18 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
-	autoCode := renderE2EModel(t, model.Table{
+	autoCode := renderE2EModel(t, crudmodel.Table{
 		Name: "scopeitems", ModelFile: "app/admin/model/Scopeitems.go", ControllerFile: "app/admin/handler/Scopeitems.go",
 		FormFields: []string{"name", "admin_id"}, DataScope: nil,
-	}, []model.Field{
+	}, []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "admin_id", Type: "int", DesignType: "number"},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}, nil, compileDemoStruct("Scopeitems", "admin_id", "AdminID", "admin_id"))
-	globalCode := renderE2EModel(t, model.Table{
+	globalCode := renderE2EModel(t, crudmodel.Table{
 		Name: "banner", ModelFile: "app/admin/model/Banner.go", ControllerFile: "app/admin/handler/Banner.go",
 		FormFields: []string{"name"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone},
-	}, []model.Field{
+	}, []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}, &data_scope.Config{Mode: data_scope.ModeNone}, compileDemoStruct("Banner", "", "", ""))
@@ -45,7 +45,7 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func renderE2EModel(t *testing.T, table model.Table, fields []model.Field, cfg *data_scope.Config, structContent string) string {
+func renderE2EModel(t *testing.T, table crudmodel.Table, fields []crudmodel.Field, cfg *data_scope.Config, structContent string) string {
 	t.Helper()
 	getTableName := func(name string, full bool) string {
 		if full {

@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"fmt"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/utils"
@@ -18,7 +19,7 @@ import (
 )
 
 // 生成表
-func GenerateFile(table model.Table, fields []model.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+func GenerateFile(table crudmodel.Table, fields []crudmodel.Field, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -27,7 +28,7 @@ func GenerateFile(table model.Table, fields []model.Field, getTableName GetTable
 
 // prepareGenerationData resolves data-scope policy and initializes the model/handler
 // data structures used by both production generation and compile-only tests.
-func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
+func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
 	tableName := getTableName(table.Name, false)
 	fullTableName := getTableName(table.Name, true)
 	//主键
@@ -145,11 +146,11 @@ func prepareGenerationData(table model.Table, fields []model.Field, dsConfig *da
 
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
 // configuration. A nil dsConfig preserves legacy auto-detection behavior.
-func GenerateFileWithDataScope(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
+func GenerateFileWithDataScope(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
 	return GenerateFileWithRouteRegistrar(table, fields, dsConfig, getTableName, getColumns, db, nil)
 }
 
-func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string)) (WebDir, string, error) {
+func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string)) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -187,7 +188,7 @@ func GenerateFileWithRouteRegistrar(table model.Table, fields []model.Field, dsC
 
 		//分析字段
 		field = analyseField(field)
-		for name, typeName := range buildHandlerParamTypeOverrides([]model.Field{field}) {
+		for name, typeName := range buildHandlerParamTypeOverrides([]crudmodel.Field{field}) {
 			handlerData.ParamTypeOverrides[name] = typeName
 		}
 
@@ -323,7 +324,7 @@ func routeNameFromRelativePath(relativePath, fallback string) string {
 	return strings.Join(parts[:len(parts)-1], ".") + "." + utils.SnakeToCamel(parts[len(parts)-1], true)
 }
 
-func primaryKeyGoType(field model.Field) (string, error) {
+func primaryKeyGoType(field crudmodel.Field) (string, error) {
 	base := strings.ToLower(analyseFieldType(field))
 	switch base {
 	case "int", "mediumint":
@@ -337,7 +338,7 @@ func primaryKeyGoType(field model.Field) (string, error) {
 	}
 }
 
-func ownerGoType(field model.Field) (string, error) {
+func ownerGoType(field crudmodel.Field) (string, error) {
 	base := strings.ToLower(analyseFieldType(field))
 	switch base {
 	case "tinyint", "smallint", "mediumint", "int", "integer":
@@ -372,7 +373,7 @@ func buildIndexProver(db *gorm.DB, fullTableName string) func(string) (bool, err
 // buildEditableColumns returns the columns that may be updated by Edit.
 // It excludes the primary key, the data-scope owner, timestamp fields, and any
 // fields that are not part of the form (read-only / form-excluded).
-func buildEditableColumns(pk, ownerColumn string, formFields []string, fields []model.Field) []string {
+func buildEditableColumns(pk, ownerColumn string, formFields []string, fields []crudmodel.Field) []string {
 	timestampFields := []string{"create_time", "createtime", "update_time", "updatetime"}
 	result := make([]string, 0, len(formFields))
 	for _, name := range formFields {
@@ -391,7 +392,7 @@ func buildEditableColumns(pk, ownerColumn string, formFields []string, fields []
 	return result
 }
 
-func buildRemoteSearchMetadata(field model.Field, getTableName GetTableName) string {
+func buildRemoteSearchMetadata(field crudmodel.Field, getTableName GetTableName) string {
 	remoteField := field.Form.RemoteField
 	if remoteField == "" {
 		remoteField = "name"
@@ -413,14 +414,14 @@ func buildOperateColumn(enableDragSort bool) string {
 	return " label: t('Operate'), align: 'center', width: " + width + ", fixed: 'right', render: 'buttons', buttons: optButtons, operator: false"
 }
 
-func prepareGeneratedColumnField(field model.Field) model.Field {
+func prepareGeneratedColumnField(field crudmodel.Field) crudmodel.Field {
 	if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) && field.Form.RemoteTable != "" && strings.TrimSpace(field.Form.RelationFields) != "" && field.Table.Show == "" {
 		field.Table.Show = "false"
 	}
 	return field
 }
 
-func buildPartialEditFields(fields []model.Field) string {
+func buildPartialEditFields(fields []crudmodel.Field) string {
 	partialEditFields := make([]string, 0)
 	for _, field := range fields {
 		if analyseField(field).DesignType == "switch" {
@@ -438,7 +439,7 @@ func joinQuotedColumns(columns []string) string {
 	return strings.Join(parts, ", ")
 }
 
-func buildFormFieldMarkup(formFields []string, fields []model.Field, webTranslate string, getTableName GetTableName) []string {
+func buildFormFieldMarkup(formFields []string, fields []crudmodel.Field, webTranslate string, getTableName GetTableName) []string {
 	result := make([]string, 0, len(formFields))
 	for _, field := range fields {
 		if !slices.Contains(formFields, field.Name) {
@@ -451,7 +452,7 @@ func buildFormFieldMarkup(formFields []string, fields []model.Field, webTranslat
 }
 
 // 获取表主键
-func getPk(fields []model.Field) string {
+func getPk(fields []crudmodel.Field) string {
 	pk := "id"
 	for _, v := range fields {
 		if v.PrimaryKey {
@@ -625,7 +626,7 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 	return webDir
 }
 
-func analyseField(field model.Field) model.Field {
+func analyseField(field crudmodel.Field) crudmodel.Field {
 	field.Type = analyseFieldType(field)
 	field.OriginalDesignType = field.DesignType
 
@@ -656,7 +657,7 @@ func analyseField(field model.Field) model.Field {
 	return field
 }
 
-func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
+func buildHandlerParamTypeOverrides(fields []crudmodel.Field) map[string]string {
 	overrides := make(map[string]string)
 	for _, field := range fields {
 		designType := field.DesignType
@@ -685,7 +686,7 @@ func buildHandlerParamTypeOverrides(fields []model.Field) map[string]string {
 	return overrides
 }
 
-func buildModelFieldTypeOverrides(fields []model.Field) map[string]string {
+func buildModelFieldTypeOverrides(fields []crudmodel.Field) map[string]string {
 	overrides := make(map[string]string)
 	for _, rawField := range fields {
 		field := analyseField(rawField)
@@ -726,7 +727,7 @@ func timestampAdapterType(fieldName string) string {
 	return "validate.FlexFormattedUnixTime"
 }
 
-func isBooleanStorageField(field model.Field) bool {
+func isBooleanStorageField(field crudmodel.Field) bool {
 	if !strings.EqualFold(strings.TrimSpace(field.Type), "tinyint") {
 		return false
 	}
@@ -741,7 +742,7 @@ func isBooleanStorageField(field model.Field) bool {
 }
 
 // 分析字段数据类型
-func analyseFieldType(field model.Field) string {
+func analyseFieldType(field crudmodel.Field) string {
 	dataType := field.Type
 	if field.DataType != "" {
 		dataType = field.DataType
@@ -755,7 +756,7 @@ func analyseFieldType(field model.Field) string {
 }
 
 // 获取字段字典数据
-func getDictData(dict *map[string]string, field model.Field, lang string, translationPrefix string) {
+func getDictData(dict *map[string]string, field crudmodel.Field, lang string, translationPrefix string) {
 	if field.Comment == "" {
 		return
 	}
@@ -789,7 +790,7 @@ func getDictData(dict *map[string]string, field model.Field, lang string, transl
 	}
 }
 
-func getColumnDict(column model.Field, translationPrefix string, webTranslate string) map[string]string {
+func getColumnDict(column crudmodel.Field, translationPrefix string, webTranslate string) map[string]string {
 	dict := map[string]string{}
 	// 确保字典中无翻译也可以识别到该值
 	if slices.Contains([]string{"enum", "set"}, column.Type) {
@@ -819,7 +820,7 @@ func getColumnDict(column model.Field, translationPrefix string, webTranslate st
 
 }
 
-func getFormField(field model.Field, columnDict map[string]string, webTranslate string, getTableName GetTableName) string {
+func getFormField(field crudmodel.Field, columnDict map[string]string, webTranslate string, getTableName GetTableName) string {
 
 	fieldHtml := Tab(5) + "<FormItem"
 	// 表单项属性
@@ -890,7 +891,7 @@ func formatJSNumber(value float64) string {
 
 // getFieldDefault 生成 index.vue defaultItems 的单项,语义对齐上游
 // BuildAdmin v2 Crud::getFormField 的默认值处理。返回空字符串表示不生成该项。
-func getFieldDefault(field model.Field) string {
+func getFieldDefault(field crudmodel.Field) string {
 	// array 类型固定为空数组
 	if field.DesignType == "array" {
 		return field.Name + ": []"
@@ -932,7 +933,7 @@ func getFieldDefault(field model.Field) string {
 	return field.Name + ":" + getQuote(field.Default) + field.Default + getQuote(field.Default)
 }
 
-func GetRemotePk(fullTableName string, field model.Field) string {
+func GetRemotePk(fullTableName string, field crudmodel.Field) string {
 	if strings.Contains(field.Form.RemotePk, ".") {
 		return field.Form.RemotePk
 	}
@@ -949,7 +950,7 @@ func GetRemotePk(fullTableName string, field model.Field) string {
 // GetRemoteSelectUrl 对齐上游:crud 来源且指定了控制器时由控制器推导 URL,
 // 否则使用手动填写的 remote-url。优先从同目录 RouteRegistrar 反查，
 // 兼容尚未迁移的 handler 时再从旧 router.go 注册信息反查，最后按路径回退。
-func GetRemoteSelectUrl(field model.Field) string {
+func GetRemoteSelectUrl(field crudmodel.Field) string {
 	if field.Form.RemoteSourceConfigType != "custom" && field.Form.RemoteController != "" {
 		if url := routeIndexURLForController(field.Form.RemoteController); url != "" {
 			return url
@@ -986,6 +987,14 @@ func routeIndexURLForController(controller string) string {
 			return "/admin/" + string(m[1]) + "/index"
 		}
 	}
+	if registrarPath = findRouteRegistrarPath(filepath.Join(utils.RootPath(), "app/admin/handler"), stem); registrarPath != "" {
+		if data, err := os.ReadFile(registrarPath); err == nil {
+			re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
+			if m := re.FindSubmatch(data); m != nil {
+				return "/admin/" + string(m[1]) + "/index"
+			}
+		}
+	}
 	handlerVar := utils.SnakeToCamel(stem, false) + "Handler"
 	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "router", "router.go"))
 	if err != nil {
@@ -998,7 +1007,27 @@ func routeIndexURLForController(controller string) string {
 	return ""
 }
 
-func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePrefix string, translationPrefix string, webTranslate string) string {
+func findRouteRegistrarPath(root, stem string) string {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		path := filepath.Join(root, entry.Name())
+		if entry.IsDir() {
+			if registrar := findRouteRegistrarPath(path, stem); registrar != "" {
+				return registrar
+			}
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), "_route.go") && strings.TrimSuffix(entry.Name(), "_route.go") == stem {
+			return path
+		}
+	}
+	return ""
+}
+
+func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNamePrefix string, translationPrefix string, webTranslate string) string {
 	prop := ""
 	if field.DesignType == "city" {
 		prop = "_text"
@@ -1062,7 +1091,7 @@ func getTableColumn(field model.Field, columnDict map[string]string, fieldNamePr
 
 // parseJoinData validates and records one slim relation, then adds its nested
 // display columns. Relation labels never use a JOIN or relation-side scope.
-func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, _ *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field model.Field, _ GetTableName, webTranslate string) error {
+func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string, dictZhCn *map[string]string, _ *HandlerData, modelData *ModelData, indexVueData *IndexVueData, field crudmodel.Field, _ GetTableName, webTranslate string) error {
 	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
 		return nil
 	}
@@ -1105,7 +1134,7 @@ func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string
 	return nil
 }
 
-func buildRelationMetadata(joinFields []model.Field, field model.Field, className string) (RelationMetadata, error) {
+func buildRelationMetadata(joinFields []crudmodel.Field, field crudmodel.Field, className string) (RelationMetadata, error) {
 	remoteTable := field.Form.RemoteTable
 	if err := data_scope.ValidateIdentifier(remoteTable); err != nil {
 		return RelationMetadata{}, fmt.Errorf("invalid remote table %q for field %q: %w", remoteTable, field.Name, err)
@@ -1183,7 +1212,7 @@ func buildRelationMetadata(joinFields []model.Field, field model.Field, classNam
 	return metadata, nil
 }
 
-func isMultiRelationStorage(field model.Field) bool {
+func isMultiRelationStorage(field crudmodel.Field) bool {
 	base := strings.ToLower(analyseFieldType(field))
 	return slices.Contains([]string{"char", "varchar", "text", "tinytext", "mediumtext", "longtext", "set"}, base)
 }
@@ -1198,7 +1227,7 @@ func appendRelationMetadata(modelData *ModelData, relation RelationMetadata) err
 	return nil
 }
 
-func relationDTOField(field model.Field) RelationDTOField {
+func relationDTOField(field crudmodel.Field) RelationDTOField {
 	return RelationDTOField{
 		ColumnName: field.Name,
 		GoName:     generatedGoFieldName(field.Name),
@@ -1233,7 +1262,7 @@ func relationColumnGoType(field model.Column) string {
 	}
 }
 
-func relationColumnGoTypeFromField(field model.Field) string {
+func relationColumnGoTypeFromField(field crudmodel.Field) string {
 	column := model.Column{DATA_TYPE: field.Type, COLUMN_TYPE: field.DataType}
 	return relationColumnGoType(column)
 }
@@ -1538,7 +1567,7 @@ func relationNameForField(fieldName string) string {
 }
 
 // 解析模型方法（设置器、获取器等）
-func parseModelMethods(field model.Field, modelData *ModelData) {
+func parseModelMethods(field crudmodel.Field, modelData *ModelData) {
 	// fieldType
 	if field.DesignType == "array" {
 		modelData.FieldType[field.Name] = "json"
@@ -1591,7 +1620,7 @@ func parseModelMethods(field model.Field, modelData *ModelData) {
 
 }
 
-func collectCityTextFields(fields []model.Field) []string {
+func collectCityTextFields(fields []crudmodel.Field) []string {
 	result := make([]string, 0)
 	for _, field := range fields {
 		if analyseField(field).DesignType == "city" && !slices.Contains(result, field.Name) {
@@ -1602,7 +1631,7 @@ func collectCityTextFields(fields []model.Field) []string {
 }
 
 // 控制器/模型等文件的一些杂项属性解析
-func parseSundryData(handlerData *HandlerData, indexVueData *IndexVueData, formVueData *FormVueData, field model.Field, table model.Table) {
+func parseSundryData(handlerData *HandlerData, indexVueData *IndexVueData, formVueData *FormVueData, field crudmodel.Field, table crudmodel.Table) {
 	if field.DesignType == "editor" {
 		formVueData.BigDialog = "true"
 		handlerData.FilterRule = append(handlerData.FilterRule, "clean_xss")

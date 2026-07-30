@@ -3,7 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/conf"
 	"io"
 	"mime"
@@ -19,7 +19,7 @@ type Record struct {
 	adminLogM adminLogWriter
 }
 
-func NewRecord(config *conf.Configuration, adminLogM *model.AdminLogModel) *Record {
+func NewRecord(config *conf.Configuration, adminLogM *adminauth.AdminLogModel) *Record {
 	return newRecord(config, adminLogM)
 }
 

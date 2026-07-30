@@ -1,7 +1,8 @@
 package handler
 
 import (
-	adminModel "go-build-admin/app/admin/model"
+	routinemodel "go-build-admin/app/admin/model/routine"
+	usermodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/common/model"
 	"go-build-admin/app/common/model/country"
 	cErr "go-build-admin/app/pkg/error"
@@ -18,11 +19,11 @@ type IndexHandler struct {
 	log     *zap.Logger
 	authM   *model.AuthModel
 	config  *conf.Configuration
-	configM *adminModel.ConfigModel
+	configM *routinemodel.ConfigModel
 	country *country.Service
 }
 
-func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *adminModel.ConfigModel, countryService *country.Service) *IndexHandler {
+func NewIndexHandler(log *zap.Logger, authM *model.AuthModel, config *conf.Configuration, configM *routinemodel.ConfigModel, countryService *country.Service) *IndexHandler {
 	return &IndexHandler{log: log, authM: authM, config: config, configM: configM, country: countryService}
 }
 
@@ -103,7 +104,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 }
 
 type UserRuleExpend struct {
-	adminModel.UserRule
+	usermodel.UserRule
 	Children []*UserRuleExpend `json:"children"`
 }
 
@@ -116,7 +117,7 @@ func (l *UserRuleExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*UserRuleExpend)
 }
 
-func (h *IndexHandler) AssembleChild(list []adminModel.UserRule) []*UserRuleExpend {
+func (h *IndexHandler) AssembleChild(list []usermodel.UserRule) []*UserRuleExpend {
 	expendList := []*UserRuleExpend{}
 	for _, v := range list {
 		temp := UserRuleExpend{}

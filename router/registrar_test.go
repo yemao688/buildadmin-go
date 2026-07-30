@@ -7,7 +7,12 @@ import (
 	"testing"
 
 	admin "go-build-admin/app/admin/handler"
+	authhandler "go-build-admin/app/admin/handler/auth"
 	country "go-build-admin/app/admin/handler/country"
+	crudhandler "go-build-admin/app/admin/handler/crud"
+	routinehandler "go-build-admin/app/admin/handler/routine"
+	securityhandler "go-build-admin/app/admin/handler/security"
+	userhandler "go-build-admin/app/admin/handler/user"
 	api "go-build-admin/app/api/handler"
 	"go-build-admin/app/middleware"
 
@@ -132,26 +137,26 @@ func newCompleteRouter() *gin.Engine {
 
 func completeRegistrars() []RouteRegistrar {
 	return ProvideRegistrars(
-		admin.NewCrudLogRegistrar(&admin.CrudLogHandler{}),
+		crudhandler.NewCrudLogRegistrar(&crudhandler.CrudLogHandler{}),
 		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
 		admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
-		admin.NewAdminGroupRegistrar(&admin.AdminGroupHandler{}),
-		admin.NewAdminRuleRegistrar(&admin.AdminRuleHandler{}),
-		admin.NewUserGroupRegistrar(&admin.UserGroupHandler{}),
-		admin.NewUserRuleRegistrar(&admin.UserRuleHandler{}),
-		admin.NewConfigRegistrar(&admin.ConfigHandler{}),
-		admin.NewAttachmentRegistrar(&admin.AttachmentHandler{}),
-		admin.NewAdminRegistrar(&admin.AdminHandler{}),
-		admin.NewUserRegistrar(&admin.UserHandler{}),
-		admin.NewDataRecycleRegistrar(&admin.DataRecycleHandler{}),
-		admin.NewDataRecycleLogRegistrar(&admin.DataRecycleLogHandler{}),
-		admin.NewSensitiveDataRegistrar(&admin.SensitiveDataHandler{}),
-		admin.NewSensitiveDataLogRegistrar(&admin.SensitiveDataLogHandler{}),
-		admin.NewAdminInfoRegistrar(&admin.AdminInfoHandler{}),
-		admin.NewAdminLogRegistrar(&admin.AdminLogHandler{}),
-		admin.NewCrudRegistrar(&admin.CrudHandler{}),
+		authhandler.NewAdminGroupRegistrar(&authhandler.AdminGroupHandler{}),
+		authhandler.NewAdminRuleRegistrar(&authhandler.AdminRuleHandler{}),
+		userhandler.NewUserGroupRegistrar(&userhandler.UserGroupHandler{}),
+		userhandler.NewUserRuleRegistrar(&userhandler.UserRuleHandler{}),
+		routinehandler.NewConfigRegistrar(&routinehandler.ConfigHandler{}),
+		routinehandler.NewAttachmentRegistrar(&routinehandler.AttachmentHandler{}),
+		authhandler.NewAdminRegistrar(&authhandler.AdminHandler{}),
+		userhandler.NewUserRegistrar(&userhandler.UserHandler{}),
+		securityhandler.NewDataRecycleRegistrar(&securityhandler.DataRecycleHandler{}),
+		securityhandler.NewDataRecycleLogRegistrar(&securityhandler.DataRecycleLogHandler{}),
+		securityhandler.NewSensitiveDataRegistrar(&securityhandler.SensitiveDataHandler{}),
+		securityhandler.NewSensitiveDataLogRegistrar(&securityhandler.SensitiveDataLogHandler{}),
+		routinehandler.NewAdminInfoRegistrar(&routinehandler.AdminInfoHandler{}),
+		authhandler.NewAdminLogRegistrar(&authhandler.AdminLogHandler{}),
+		crudhandler.NewCrudRegistrar(&crudhandler.CrudHandler{}),
 		admin.NewDashboardRegistrar(&admin.DashboardHandler{}),
-		admin.NewUserLogRegistrar(&admin.UserHandler{}, &admin.UserMoneyLogHandler{}, &admin.UserScoreLogHandler{}),
+		userhandler.NewUserLogRegistrar(&userhandler.UserHandler{}, &userhandler.UserMoneyLogHandler{}, &userhandler.UserScoreLogHandler{}),
 		api.NewAccountRegistrar(&api.AccountHandler{}),
 		api.NewAjaxRegistrar(&api.AjaxHandler{}),
 		api.NewCommonRegistrar(&api.CommonHandler{}),

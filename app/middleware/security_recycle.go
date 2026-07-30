@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"go-build-admin/app/admin/model"
+	securitymodel "go-build-admin/app/admin/model/security"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
 	"gorm.io/gorm"
@@ -15,7 +16,7 @@ import (
 
 type recycleAuditor struct {
 	work *securityWork
-	rule model.SecurityDataRecycle
+	rule securitymodel.SecurityDataRecycle
 }
 
 func (a *recycleAuditor) run() {
@@ -34,7 +35,7 @@ func (a *recycleAuditor) run() {
 	if !ok {
 		return
 	}
-	if err := db.Model(&model.SecurityDataRecycleLog{}).Create(&logs).Error; err != nil {
+	if err := db.Model(&securitymodel.SecurityDataRecycleLog{}).Create(&logs).Error; err != nil {
 		a.work.security.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
 		a.work.abort(http.StatusInternalServerError, "security log write failed")
 		return
@@ -132,9 +133,9 @@ func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, dat
 	return db, resolvedTable, policy, rows, true
 }
 
-func (a *recycleAuditor) snapshotRows(policy data_scope.RulePolicy, rows []map[string]any) ([]model.SecurityDataRecycleLog, bool) {
+func (a *recycleAuditor) snapshotRows(policy data_scope.RulePolicy, rows []map[string]any) ([]securitymodel.SecurityDataRecycleLog, bool) {
 	w := a.work
-	logs := []model.SecurityDataRecycleLog{}
+	logs := []securitymodel.SecurityDataRecycleLog{}
 	for _, row := range rows {
 		data, err := json.Marshal(row)
 		if err != nil {
@@ -146,7 +147,7 @@ func (a *recycleAuditor) snapshotRows(policy data_scope.RulePolicy, rows []map[s
 			w.abort(http.StatusInternalServerError, "target owner missing")
 			return nil, false
 		}
-		logs = append(logs, model.SecurityDataRecycleLog{
+		logs = append(logs, securitymodel.SecurityDataRecycleLog{
 			AdminID:       w.actor.AdminID,
 			TargetAdminID: targetOwner,
 			IsCommitted:   1,

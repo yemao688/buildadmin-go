@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"go-build-admin/app/admin/model"
+	adminauth "go-build-admin/app/admin/model/auth"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -10,10 +10,10 @@ import (
 type DashboardHandler struct {
 	Base
 	log        *zap.Logger
-	adminRuleM *model.AdminRuleModel
+	adminRuleM *adminauth.AdminRuleModel
 }
 
-func NewDashboardHandler(log *zap.Logger, adminRuleM *model.AdminRuleModel) *DashboardHandler {
+func NewDashboardHandler(log *zap.Logger, adminRuleM *adminauth.AdminRuleModel) *DashboardHandler {
 	return &DashboardHandler{
 		Base:       Base{currentM: adminRuleM},
 		log:        log,

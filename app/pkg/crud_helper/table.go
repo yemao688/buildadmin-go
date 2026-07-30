@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go-build-admin/app/admin/model"
+	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"regexp"
@@ -43,7 +44,7 @@ type FieldTemplData struct {
 }
 
 // 创建表或更新表
-func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fields []model.Field) error {
+func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) error {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return err
 	}
@@ -157,7 +158,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table model.Table, fie
 	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
 }
 
-func createTableDDL(fullTableName string, table model.Table, fields []model.Field) (string, error) {
+func createTableDDL(fullTableName string, table crudmodel.Table, fields []crudmodel.Field) (string, error) {
 	pk := getPk(fields)
 	sqlData := SqlTemplData{
 		TableName: fullTableName,
@@ -212,7 +213,7 @@ func hasColumn(db *gorm.DB, fullTableName, column string) (bool, error) {
 
 // HandleTableDesignWithDataScope creates or updates the table and ensures an
 // index exists for the resolved data-scope owner column when required.
-func HandleTableDesignWithDataScope(db *gorm.DB, fullTableName string, table model.Table, fields []model.Field, dsConfig *data_scope.Config) error {
+func HandleTableDesignWithDataScope(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config) error {
 	table.DataScope = dsConfig
 	if err := HandleTableDesign(db, fullTableName, table, fields); err != nil {
 		return err
@@ -276,8 +277,8 @@ func trimDDLFragment(fieldData string) string {
 	return strings.TrimSuffix(strings.TrimRight(fieldData, " \t\r\n"), ",")
 }
 
-func searchField(fields []model.Field, name string) model.Field {
-	findField := model.Field{}
+func searchField(fields []crudmodel.Field, name string) crudmodel.Field {
+	findField := crudmodel.Field{}
 	for _, field := range fields {
 		if field.Name == name {
 			findField = field
@@ -287,7 +288,7 @@ func searchField(fields []model.Field, name string) model.Field {
 	return findField
 }
 
-func getDDlFieldData(field model.Field) (string, error) {
+func getDDlFieldData(field crudmodel.Field) (string, error) {
 	normalizeFieldConfiguration(&field)
 	if err := ValidateField(field); err != nil {
 		return "", err
@@ -381,7 +382,7 @@ var noDefaultValueTypes = map[string]bool{
 
 func noDefaultValueType(dataType string) bool { return noDefaultValueTypes[strings.ToLower(dataType)] }
 
-func updateFieldOrder(db *gorm.DB, fullTableName string, fields []model.Field, designChange []model.ChangeField) error {
+func updateFieldOrder(db *gorm.DB, fullTableName string, fields []crudmodel.Field, designChange []crudmodel.ChangeField) error {
 	if len(designChange) == 0 {
 		return nil
 	}
@@ -418,7 +419,7 @@ func updateFieldOrder(db *gorm.DB, fullTableName string, fields []model.Field, d
 }
 
 // 分析字段的完整数据类型定义
-func analyseFieldDataType(field model.Field) string {
+func analyseFieldDataType(field crudmodel.Field) string {
 	if field.DataType != "" {
 		return field.DataType
 	}
@@ -438,7 +439,7 @@ func analyseFieldDataType(field model.Field) string {
 }
 
 // 分析字段limit和精度
-func analyseFieldLimit(conciseType string, field model.Field) (string, []string) {
+func analyseFieldLimit(conciseType string, field crudmodel.Field) (string, []string) {
 	decimalType := []string{"decimal", "double", "float"}
 	valuesType := []string{"enum", "set"}
 
@@ -498,11 +499,11 @@ func dataTypeLimit(dataType string) []string {
 }
 
 // 根据数据表解析字段数据
-func ParseTableColumns(columns []model.Column, analyseField bool) []model.Field {
+func ParseTableColumns(columns []model.Column, analyseField bool) []crudmodel.Field {
 
-	fields := []model.Field{}
+	fields := []crudmodel.Field{}
 	for _, v := range columns {
-		field := model.Field{}
+		field := crudmodel.Field{}
 		field.Name = v.COLUMN_NAME
 		field.Type = v.DATA_TYPE
 

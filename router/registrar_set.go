@@ -2,32 +2,37 @@ package router
 
 import (
 	admin "go-build-admin/app/admin/handler"
+	auth "go-build-admin/app/admin/handler/auth"
 	country "go-build-admin/app/admin/handler/country"
+	crud "go-build-admin/app/admin/handler/crud"
+	routine "go-build-admin/app/admin/handler/routine"
+	security "go-build-admin/app/admin/handler/security"
+	user "go-build-admin/app/admin/handler/user"
 	api "go-build-admin/app/api/handler"
 )
 
 // ProvideRegistrars 聚合全部模块 registrar。CRUD 生成器只在这里追加参数与条目。
 func ProvideRegistrars(
-	crudLog *admin.CrudLogRegistrar,
+	crudLog *crud.CrudLogRegistrar,
 	module *admin.ModuleRegistrar,
 	testBuild *admin.TestBuildRegistrar,
-	adminGroup *admin.AdminGroupRegistrar,
-	adminRule *admin.AdminRuleRegistrar,
-	userGroup *admin.UserGroupRegistrar,
-	userRule *admin.UserRuleRegistrar,
-	config *admin.ConfigRegistrar,
-	attachment *admin.AttachmentRegistrar,
-	admin *admin.AdminRegistrar,
-	user *admin.UserRegistrar,
-	dataRecycle *admin.DataRecycleRegistrar,
-	dataRecycleLog *admin.DataRecycleLogRegistrar,
-	sensitiveData *admin.SensitiveDataRegistrar,
-	sensitiveDataLog *admin.SensitiveDataLogRegistrar,
-	adminInfo *admin.AdminInfoRegistrar,
-	adminLog *admin.AdminLogRegistrar,
-	crud *admin.CrudRegistrar,
+	adminGroup *auth.AdminGroupRegistrar,
+	adminRule *auth.AdminRuleRegistrar,
+	userGroup *user.UserGroupRegistrar,
+	userRule *user.UserRuleRegistrar,
+	config *routine.ConfigRegistrar,
+	attachment *routine.AttachmentRegistrar,
+	admin *auth.AdminRegistrar,
+	user *user.UserRegistrar,
+	dataRecycle *security.DataRecycleRegistrar,
+	dataRecycleLog *security.DataRecycleLogRegistrar,
+	sensitiveData *security.SensitiveDataRegistrar,
+	sensitiveDataLog *security.SensitiveDataLogRegistrar,
+	adminInfo *routine.AdminInfoRegistrar,
+	adminLog *auth.AdminLogRegistrar,
+	crud *crud.CrudRegistrar,
 	dashboard *admin.DashboardRegistrar,
-	userLog *admin.UserLogRegistrar,
+	userLog *user.UserLogRegistrar,
 	apiAccount *api.AccountRegistrar,
 	apiAjax *api.AjaxRegistrar,
 	apiCommon *api.CommonRegistrar,
