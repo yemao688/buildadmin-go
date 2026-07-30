@@ -316,8 +316,8 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 - 拒绝 `..`、绝对路径、Windows drive prefix（如 `C:\\...`）、空段和无效段，包括 `a//b`、`a..b`。
 - 显式路径段保留下划线：`some_special_dir/orders` 不会拆成多层目录。
 - 业务表命名约定：表名首段是业务分类（也是生成目录），其余段是实体名（蛇形）。**`generateRelativePath` 必须显式设置，标准值就是表名本身**（生成器对省略的兜底默认也是表名，但 spec 不依赖省略——显式写出让五处路径一目了然）；单段输入在第一个下划线处拆一次，左侧为目录、右侧为实体名（实体名内的下划线保留）：`ops_user_test_xxx` -> 目录 `ops` + 实体 `user_test_xxx`；`ops_banner` -> `ops` + `banner`。
-- 五处输出统一推导（以 `ops_user_test_xxx` 为例）：model/handler 文件 `ops/user_test_xxx.go`（实体名原样保留，蛇形就是蛇形文件）；views 目录 `ops/userTestXxx`（实体名 lcfirst 驼峰化）；路由名 `ops.user_test_xxx`（各段原样、点号连接，对齐 PHP 上游）；菜单/权限 name `ops/userTestXxx`（与 views 目录同形、斜杠连接，与框架既有菜单一致）；Go 类型名 PascalCase（`UserTestXxxHandler`）。
-- 只有需要比"分类/实体"两级更深的业务子目录时，才使用 `/` 或 `.` 分隔符（两者等价）：`ops/user/test_xxx` -> handler/model `ops/user/test_xxx.go`、views `ops/user/testXxx`、路由 `ops.user.test_xxx`、菜单 `ops/user/testXxx`。显式路径末段原样保留（写蛇形得蛇形文件、写驼峰得驼峰文件），views 叶子始终 lcfirst 驼峰化。
+- 五处输出统一推导（以 `ops_user_test_xxx` 为例）：model/handler 文件 `ops/user_test_xxx.go`（实体名原样保留，蛇形就是蛇形文件）；views 目录 `ops/userTestXxx`（实体名 lcfirst 驼峰化）；路由名 `ops.UserTestXxx`（目录段小写原样、实体段 PascalCase，对齐 PHP 实际 URL 形态如 `/admin/country.LanguageContent/index`）；菜单/权限 name `ops/userTestXxx`（与 views 目录同形、斜杠连接，与框架既有菜单一致）；Go 类型名 PascalCase（`UserTestXxxHandler`）。
+- 只有需要比"分类/实体"两级更深的业务子目录时，才使用 `/` 或 `.` 分隔符（两者等价）：`ops/user/test_xxx` -> handler/model `ops/user/test_xxx.go`、views `ops/user/testXxx`、路由 `ops.user.TestXxx`、菜单 `ops/user/testXxx`。显式路径末段原样保留（写蛇形得蛇形文件、写驼峰得驼峰文件），views 叶子始终 lcfirst 驼峰化。
 - 不要把实体名拆成多段（`ops.user.test.xxx` 会变成 `ops/user/test/xxx` 四层结构，菜单和路由同样变深）。分类应为单词；多词分类（如 `order_center`）写显式路径 `order_center/recharge`。一段表（无分类前缀）允许生成、落在根级，但属于反模式。
 - `generateRelativePath` 只填充缺失的三个路径；每个显式 `modelFile`、`controllerFile`、`webViewsDir` 都覆盖 shorthand。Go `handler` 是 PHP controller 等价物。
 

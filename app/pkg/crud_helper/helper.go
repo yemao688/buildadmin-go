@@ -325,7 +325,7 @@ func routeNameFromRelativePath(relativePath, fallback string) string {
 	if entity == "" {
 		return lowerFirst(fallback)
 	}
-	return strings.Join(append(dirs, entity), ".")
+	return strings.Join(append(dirs, utils.SnakeToCamel(entity, true)), ".")
 }
 
 func splitLogicalNameParts(parts []string) ([]string, string) {
