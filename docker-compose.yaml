@@ -3,8 +3,11 @@ services:
     image: ${DEPLOY_REGISTRY}/${DEPLOY_IMAGE_NAME}:${DEPLOY_IMAGE_TAG:-latest}
     pull_policy: always
     user: "1000:1000"
+    environment:
+      APP_PORT: ${APP_PORT:-9989}
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
     ports:
-      - "${APP_PORT:-9989}:9989"
+      - "${APP_PORT:-9989}:${APP_PORT:-9989}"
     volumes:
       - type: bind
         source: ./config.yaml
@@ -14,7 +17,7 @@ services:
           create_host_path: false
       - ./runtime:/app/runtime
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9989/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9989}/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5

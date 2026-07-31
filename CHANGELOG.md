@@ -2,6 +2,8 @@
 
 ## v2.4.0
 
+- **Changed (config):** `app.port`/`app.time_zone` 移出 YAML 配置，改由环境变量 `APP_PORT`/`APP_TIME_ZONE` 提供——启动时自动复制缺失的 `.env`（←`.env.example`，godotenv 加载且不覆盖已有环境变量），缺省兜底 `9989`/`Asia/Shanghai`；compose 经 `environment` 显式传递两变量，端口映射与 healthcheck 全插值化。新增依赖 `github.com/joho/godotenv`。
+- **Removed (config):** 删除 `app.app_name`——仅启动横幅与测试邮件 Subject 两处引用，一并移除（配置键、conf 字段、基座键同步删除）。
 - **Fixed (dev):** air 入口移除冗余的显式 `--conf` 传参——`--conf` 默认值本即根目录 `config.yaml`，显式传参会置 Changed 标记，文件缺失时硬 panic，导致全新检出/重装向导模式在 air 下无法进入；现无参启动，三形态各归其位（有配置正常合并、无配置基座向导、显式 `--conf` 缺失仍报错）。
 - **Changed (installer):** 安装完成流程加固——`CommandExecComplete` 写锁前校验 `public/index.html` 存在（误完成不再封死向导后续步骤）；已安装时重试改为幂等成功返回，`/api/install/commandExecComplete` 从 InstallGuard 豁免以让重试拿到友好提示而非 403；其余安装接口保持已安装即封禁。
 - **Fixed:** 成功登录的后台日志写入真实 `admin_id`——登录 handler 认证成功后经新增的 canonical setter `header.SetAdminAuth` 把 admin 身份写入 gin context（登录中间件同步改为该 setter）；此前登录请求无认证上下文，`AdminLogModel.Add` 只能记出 `admin_id=0` 的无效属主行并触发迁移不变量失败。失败登录仍记 `admin_id=0`（匿名尝试，合法）。

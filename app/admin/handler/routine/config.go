@@ -279,7 +279,7 @@ func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 	message := mail.NewMessage()
 	message.SetHeader("From", params.SmtpSenderMail)
 	message.SetHeader("To", params.TestMail)
-	message.SetHeader("Subject", "This is a test email-"+h.config.App.AppName)
+	message.SetHeader("Subject", "This is a test email")
 	message.SetBody("text/plain", "congratulations, receiving this email means that your email service has been configured correctly")
 
 	// 根据提供的加密类型设置 Dialer 的 TLSConfig

@@ -172,12 +172,25 @@ func initConfig() {
 	}
 	v.SetDefault("app.user_login_captcha", true)
 
+	envPath := filepath.Join(rootPath, conf.EnvFileName)
+	createdEnv, err := conf.EnsureEnvFile(rootPath)
+	if err != nil {
+		panic(err)
+	}
+	if createdEnv {
+		fmt.Printf(".env 不存在，已从 %s 自动复制到 %s\n", conf.EnvExampleFileName, conf.EnvFileName)
+	}
+	if err := conf.LoadEnvFile(envPath); err != nil {
+		panic(err)
+	}
+
 	var nextConfig conf.Configuration
 	if err := v.Unmarshal(&nextConfig); err != nil {
 		panic(fmt.Errorf("unmarshal config failed: %w", err))
 	}
+	applyAppRuntimeEnvironment(&nextConfig)
 	if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
-		panic(fmt.Errorf("apply config app.time_zone failed: %w", err))
+		panic(fmt.Errorf("apply APP_TIME_ZONE failed: %w", err))
 	}
 	if err := applyGinMode(nextConfig.App.Env); err != nil {
 		panic(fmt.Errorf("apply config app.env failed: %w", err))
@@ -198,8 +211,9 @@ func initConfig() {
 			logConfigChangeError(fmt.Errorf("unmarshal config failed: %w", err))
 			return
 		}
+		applyAppRuntimeEnvironment(&nextConfig)
 		if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
-			logConfigChangeError(fmt.Errorf("apply config app.time_zone failed: %w", err))
+			logConfigChangeError(fmt.Errorf("apply APP_TIME_ZONE failed: %w", err))
 			return
 		}
 		if err := applyGinMode(nextConfig.App.Env); err != nil {
@@ -208,6 +222,12 @@ func initConfig() {
 		}
 		config = &nextConfig
 	})
+}
+
+func applyAppRuntimeEnvironment(configuration *conf.Configuration) {
+	settings := conf.ResolveAppRuntimeEnvironment(os.LookupEnv)
+	configuration.App.Port = settings.Port
+	configuration.App.TimeZone = settings.TimeZone
 }
 
 // applyGinMode maps app.env onto the gin runtime mode. Only debug and release

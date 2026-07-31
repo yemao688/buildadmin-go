@@ -82,6 +82,32 @@ func TestLoadLayeredConfigSparseOverride(t *testing.T) {
 	}
 }
 
+func TestLoadLayeredConfigUnmarshalsWithoutRemovedAppName(t *testing.T) {
+	root := t.TempDir()
+	defaultsPath := filepath.Join(root, DefaultsFileName)
+	if err := os.WriteFile(defaultsPath, []byte("app:\n  env: debug\nmysql:\n  host: 127.0.0.1\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	v, deadKeys, err := LoadLayeredConfig(defaultsPath, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deadKeys) != 0 {
+		t.Fatalf("dead keys = %#v", deadKeys)
+	}
+	var configuration Configuration
+	if err := v.Unmarshal(&configuration); err != nil {
+		t.Fatal(err)
+	}
+	if configuration.App.Env != "debug" {
+		t.Fatalf("app.env = %q, want debug", configuration.App.Env)
+	}
+	if configuration.App.Port != "" || configuration.App.TimeZone != "" {
+		t.Fatalf("YAML unexpectedly supplied runtime values: %#v", configuration.App)
+	}
+}
+
 func TestWriteConfigOverridesPreservesExistingOverrides(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("app:\n  env: release\n"), 0600); err != nil {

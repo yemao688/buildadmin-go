@@ -1,8 +1,5 @@
 app:
   env: 'debug' #运行模式: debug=开发调试模式, release=生产模式
-  port: 9989
-  app_name: 'buildadmin-go'
-  time_zone: 'Asia/Shanghai'
   cors_request_domain:  'localhost,127.0.0.1' #允许跨域访问的域名
   admin_login_captcha: true #是否开启管理员登录验证码
   user_login_captcha: true

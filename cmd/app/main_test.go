@@ -2,6 +2,7 @@ package main
 
 import (
 	appVersion "go-build-admin/app/pkg/version"
+	"go-build-admin/conf"
 	"testing"
 	"time"
 )
@@ -58,5 +59,27 @@ func TestApplyTimeZoneEmptyUsesUTC(t *testing.T) {
 	}
 	if time.Local != time.UTC {
 		t.Fatalf("time.Local = %v, want UTC", time.Local)
+	}
+}
+
+func TestApplyAppRuntimeEnvironment(t *testing.T) {
+	t.Setenv("APP_PORT", "9911")
+	t.Setenv("APP_TIME_ZONE", "UTC")
+
+	configuration := &conf.Configuration{}
+	applyAppRuntimeEnvironment(configuration)
+	if configuration.App.Port != "9911" || configuration.App.TimeZone != "UTC" {
+		t.Fatalf("configuration app runtime values = %#v", configuration.App)
+	}
+}
+
+func TestApplyAppRuntimeEnvironmentFallbacks(t *testing.T) {
+	t.Setenv("APP_PORT", "")
+	t.Setenv("APP_TIME_ZONE", "")
+
+	configuration := &conf.Configuration{}
+	applyAppRuntimeEnvironment(configuration)
+	if configuration.App.Port != "9989" || configuration.App.TimeZone != "Asia/Shanghai" {
+		t.Fatalf("configuration app fallback values = %#v", configuration.App)
 	}
 }
