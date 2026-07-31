@@ -96,7 +96,7 @@ run-docker:
 # 显式注入构建字段，确保 Compose 插值不依赖 .env 文件。
 run-docker-dev:
 	VERSION="$(VERSION)" GIT_SHA="$(GIT_SHA)" BUILD_TS="$(BUILD_TS)" \
-		docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+		docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
 
 logs:
 	docker compose logs -f

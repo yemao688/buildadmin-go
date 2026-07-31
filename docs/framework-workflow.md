@@ -220,6 +220,8 @@ git push origin master
 
 业务优先放在这些位置：新增 `crud_specs/`、生成并定制业务后端模块、`web/src/views/` 和 `web/src/lang/` 的业务前端、以及自己制定编号/命名策略的新迁移。下游迁移不必错误地占用框架预留编号；应使用独立且稳定的编号或命名空间，合并时检查 registry 冲突，并保证幂等、前缀安全。
 
+路由注册走 RouteRegistrar 体系，业务路由不进 `router/router.go`：每个后台/API 模块由自己的 `<name>_route.go` registrar 承载——`Group()` 声明分组（`admin`/`api`/`root`）、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力；CRUD 生成器自动产出该文件并维护 `provider.go` 与 `router/registrar_set.go` 的共享追加条目，`crud:delete` 反向移除。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
+
 以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`router/router.go` 的既有框架区域、`database/migrations/official/` 和 `local/` 的历史、`database/migrations/model/` 生成模型，以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
 ## AI agent 协议

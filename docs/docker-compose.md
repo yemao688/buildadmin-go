@@ -81,3 +81,7 @@ tar czf config-and-runtime.tgz config.yaml runtime/ public/storage/
 默认 token 存储不是 Redis。只有应用 YAML 中 `token.default: redis` 时，才配置可达的外部 Redis 地址、端口、数据库和密码；Compose 不创建 Redis 服务。
 
 Compose healthcheck 请求容器内的 `GET http://127.0.0.1:9989/healthz`。应用直接提供 HTTP，生产环境应在独立反向代理或负载均衡器处终止 TLS、配置域名和证书，再转发到 `APP_PORT` 映射的宿主端口；Compose 不提供 TLS。
+
+## 本地开发镜像
+
+`make run-docker-dev` 使用 `docker-compose.yaml` 叠加 `docker-compose.dev.yaml` 覆盖配置，从当前源码本地构建镜像（`pull_policy: never`，不经过 registry）并后台启动，用于在本机以容器形态验证构建产物。Makefile 会显式注入 `VERSION`/`GIT_SHA`/`BUILD_TS` 构建字段，Compose 插值不依赖 `.env`。停止用 `make stop`，日志用 `make logs`。

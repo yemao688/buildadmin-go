@@ -8,7 +8,7 @@
 - 数据库：MySQL。
 - 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
 - 包管理：`pnpm`，不要使用 npm。
-- 可选工具：Air 用于后端开发热重载；Wire 通过 `go generate ./cmd/app` 按项目声明运行。
+- 可选工具：Air 用于后端开发热重载。Wire 无需单独安装——`go generate ./cmd/app` 与 `crud:generate` 均通过 `go run` 按模块依赖运行 wire。
 
 ```bash
 go install github.com/air-verse/air@latest
@@ -53,7 +53,7 @@ go install github.com/air-verse/air@latest
 
 ## Docker Compose 部署
 
-发布入口：发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。从根目录 `config.example.yaml` 复制生成 `config.yaml`，并在应用 YAML 中设置 `app.time_zone`；`app.port` 保持 `9989`。首次安装在本地完成，详细流程见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 
@@ -93,6 +93,7 @@ runtime/             运行时日志和临时文件
 生成业务模块前，先阅读 [`docs/crud-generation.md`](docs/crud-generation.md)，再将规范写入 `crud_specs/`，使用内置链路，不要手写 model、handler 或 Vue 脚手架：
 
 ```bash
+go run ./cmd/app crud:validate crud_specs/<module>.yaml
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
 go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ```
@@ -103,7 +104,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 - 迁移采用三条轨道：`database/migrations/official/` 跟随 PHP 上游更新，`database/migrations/local/` 承载框架自身的 6 条语义迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
-- MySQL 集成测试会修改数据库，需要 `BUILDADMIN_TEST_MYSQL_DSN` 和一次性数据库；测试覆盖和运行约束见 [`AGENTS.md`](AGENTS.md)。
+- MySQL 集成测试由 `config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
 ## 业务开发最佳实践
 
@@ -115,9 +116,9 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 - 订单类：`order_recharge`、`order_withdraw`
 - 用户类：`user_wallet`、`user_level`
 
-多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，标准值就是表名本身：`ops_user_test_xxx` 写 `generateRelativePath: ops_user_test_xxx`，生成 `handler/ops/user_test_xxx.go`、`model/ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.UserTestXxx`、菜单 `ops/userTestXxx`。首段是业务分类（也是生成目录），其余段是实体名；Go 文件名保持蛇形原样，视图目录 lcfirst 驼峰化，路由名目录段小写、实体段 PascalCase（点号连接，对齐 PHP 上游实际 URL 形态如 `/admin/country.LanguageContent/index`），菜单/权限名与视图目录同形（斜杠连接，与框架既有菜单一致）。生成器对省略的兜底默认也是表名，但规范要求显式写出，不让 spec 依赖省略。`/` 或 `.` 分隔符仅在需要更深业务子目录时使用（`ops/user/test_xxx` -> 三层结构）。`webViewsDir`（参考 `crud_specs/country_language_content.yaml`）是单路径覆盖项，需要单独调整 views 目录时再用。
+多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，标准值就是表名本身：首段是业务分类（也是生成目录），其余段是实体名；Go 文件保持蛇形原样，视图目录 lcfirst 驼峰化，路由实体段 PascalCase（对齐 PHP 上游 URL 形态），菜单/权限名与视图目录同形。五个产物的完整推导规则、更深子目录用法和 `webViewsDir` 覆盖项见 [`AGENTS.md`](AGENTS.md) 业务最佳实践一节，示例见 `crud_specs/country_language_content.yaml`。
 
-**每次 CRUD 生成后立刻提交一次 commit。** 生成会同时改动 model、handler、provider 装配、路由、菜单和 Vue 脚手架，一模一 commit 便于审查，也能保证 `crud:delete`/重新生成往返字节级一致；不要把手工改动混进生成提交。
+**CRUD 模块按双 commit 工作流提交**：生成 commit 只含 spec 与全部生成产物（纯生成器输出，message 标注框架版本），业务微调一律独立 commit 并写明动机；重新生成后 `git diff` 对照微调 commit 逐条回补。完整规则与 round-trip 校验见 [`AGENTS.md`](AGENTS.md)。
 
 ### 业务迁移：只加文件，不动框架
 
