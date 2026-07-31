@@ -123,11 +123,28 @@ func versionRequested(args []string) bool {
 }
 
 func initConfig() {
-	if err := utils.EnsureConfigFile(rootPath); err != nil {
-		panic(fmt.Errorf("ensure config failed: %s ", err))
-	}
 	if !filepath.IsAbs(configPath) {
 		configPath = filepath.Join(rootPath, configPath)
+	}
+
+	if !utils.PathExists(configPath) {
+		// 首次启动不自动复制 config.yaml：安装向导（/install）负责创建它。
+		// serve 默认命令以只读模板启动进入安装向导；其它命令必须已有真实配置。
+		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed {
+			panic(fmt.Errorf("config file not found: %s", configPath))
+		}
+		args := os.Args[1:]
+		for i := 0; i < len(args); i++ {
+			if strings.HasPrefix(args[i], "-") {
+				if args[i] == "--conf" || args[i] == "-conf" {
+					i++ // 跳过 --conf 的值
+				}
+				continue
+			}
+			panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
+		}
+		fmt.Println("config.yaml 不存在，以只读模板启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）")
+		configPath = filepath.Join(rootPath, "config.example.yaml")
 	}
 
 	fmt.Println("load config:" + configPath)

@@ -37,7 +37,7 @@
 - Trust `go.mod`: use Go 1.25.x; do not retain the stale Go 1.21.8 requirement.
 - This repository contains two projects. The Gin/GORM/Wire backend is rooted here; `web/` is the BuildAdmin v2.3.8 Vue/Vite 8 frontend with its own `pnpm-lock.yaml`. Run frontend commands from `web/` with pnpm, never npm.
 - Real entrypoints and wiring are `cmd/app/main.go`, `cmd/app/wire.go`, `router/router.go`, and `web/src/main.ts`. Cobra commands live under `app/cmd/`.
-- `config.example.yaml` is the tracked template at the repository root. Runtime `config.yaml` at the repository root is ignored and is copied from the template when missing; never commit installer-written credentials.
+- `config.example.yaml` is the tracked template at the repository root. Runtime `config.yaml` at the repository root is ignored and is written by the web installer (`/install`); on a fresh checkout the server boots from the read-only template in install-wizard mode instead of copying it, and non-serve commands fail fast without a real config. Never commit installer-written credentials.
 
 ## AI development protocol
 
