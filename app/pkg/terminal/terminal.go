@@ -367,20 +367,15 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) (string, string, bool)
 		return newPort, newPackageManager, true
 	}
 
-	configPath := filepath.Join(utils.RootPath(), "conf", "config.yaml")
-	bytesData, err := os.ReadFile(configPath)
-	if err != nil {
-		t.log.Error(err.Error())
-		return newPort, newPackageManager, false
-	}
-
-	pattern := regexp.MustCompile(`install_service_port:(\s+)'` + oldPort + `'`)
-	replacedContent := pattern.ReplaceAllString(string(bytesData), "install_service_port:$1'"+newPort+"'")
-
-	pattern = regexp.MustCompile(`npm_package_manager:(\s+)'` + oldPackageManager + `'`)
-	replacedContent = pattern.ReplaceAllString(replacedContent, "npm_package_manager:$1'"+newPackageManager+"'")
-
-	err = os.WriteFile(configPath, []byte(replacedContent), 0644)
+	configPath := filepath.Join(utils.RootPath(), "config.yaml")
+	// Package-manager changes are also sparse overrides; do not rewrite the
+	// tracked defaults or use the historical conf/config.yaml path.
+	err := conf.WriteConfigOverrides(configPath, map[string]any{
+		"terminal": map[string]any{
+			"install_service_port": newPort,
+			"npm_package_manager":  newPackageManager,
+		},
+	})
 	if err != nil {
 		t.log.Error(err.Error())
 		return newPort, newPackageManager, false

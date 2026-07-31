@@ -27,8 +27,8 @@ func RootPath() string {
 }
 
 // rootMarkers 标识项目根目录的特征文件/目录：
-// 开发环境有 go.mod 与 config.example.yaml；生产镜像只有 public/。
-var rootMarkers = []string{"go.mod", "config.example.yaml", "public"}
+// 开发环境有 go.mod 与 config.defaults.yaml；生产镜像只有 public/。
+var rootMarkers = []string{"go.mod", "config.defaults.yaml", "public"}
 
 // findProjectRoot 从 startDir 逐级向上查找包含任一 rootMarker 的目录，
 // 使二进制位于根下任意深度（tmp/、runtime/tmp/ 等）都能正确定位根目录；
@@ -76,8 +76,8 @@ func PathExists(path string) bool {
 	return false
 }
 
-// EnsureConfigFile creates the runtime configuration from the tracked example
-// when a fresh installation has no editable config yet.
+// EnsureConfigFile creates an empty, valid sparse runtime override layer when
+// a fresh installation has no editable config yet.
 func EnsureConfigFile(rootPath string) error {
 	configPath := filepath.Join(rootPath, "config.yaml")
 	if _, err := os.Stat(configPath); err == nil {
@@ -86,10 +86,6 @@ func EnsureConfigFile(rootPath string) error {
 		return err
 	}
 
-	templatePath := filepath.Join(rootPath, "config.example.yaml")
-	data, err := os.ReadFile(templatePath)
-	if err != nil {
-		return err
-	}
+	data := []byte("# Runtime overrides; unspecified keys come from config.defaults.yaml.\n{}\n")
 	return os.WriteFile(configPath, data, 0600)
 }

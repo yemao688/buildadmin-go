@@ -19,6 +19,7 @@ RUN apk add --no-cache ca-certificates tzdata \
     && printf 'install-end' > /app/public/install.lock \
     && chown -R app:app /app
 COPY --from=go-build /out/app /app/app
+COPY config.defaults.yaml /app/config.defaults.yaml
 COPY public/ /app/public/
 RUN chown -R app:app /app
 USER 1000:1000

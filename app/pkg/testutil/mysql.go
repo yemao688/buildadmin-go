@@ -12,7 +12,6 @@ import (
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 
-	"github.com/spf13/viper"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,16 +20,15 @@ import (
 
 var errMysqlTestNotConfigured = errors.New("mysql_test is not configured")
 
-// loadMySQLTestConfig 从指定路径读取测试配置，供公开门禁和单元测试复用。
+// loadMySQLTestConfig 从分层配置读取测试配置，供公开门禁和单元测试复用。
 func loadMySQLTestConfig(configPath string) (*conf.Configuration, error) {
 	if _, err := os.Stat(configPath); err != nil {
 		return nil, err
 	}
 
-	v := viper.New()
-	v.SetConfigFile(configPath)
-	v.SetConfigType("yaml")
-	if err := v.ReadInConfig(); err != nil {
+	defaultsPath := filepath.Join(filepath.Dir(configPath), conf.DefaultsFileName)
+	v, _, err := conf.LoadLayeredConfig(defaultsPath, configPath)
+	if err != nil {
 		return nil, err
 	}
 	if v.Get("mysql_test") == nil {
@@ -90,7 +88,7 @@ func mysqlDSN(configuration conf.MysqlTest, database string) string {
 	)
 }
 
-// MySQLDSN builds a DSN from the config.yaml mysql_test settings.
+// MySQLDSN builds a DSN from the layered mysql_test settings.
 func MySQLDSN(configuration conf.MysqlTest, database string) string {
 	return mysqlDSN(configuration, database)
 }
@@ -132,7 +130,7 @@ func closeMySQL(db *gorm.DB) {
 	}
 }
 
-// OpenMySQL 解析 config.yaml 的 mysql_test 配置并打开测试库连接。
+// OpenMySQL 解析分层配置的 mysql_test 配置并打开测试库连接。
 // 以下情况统一 t.Skip 并输出醒目原因（t.Logf + fmt.Println 双通道）：
 //   - config.yaml 不存在（安装向导模式下同样跳过）
 //   - mysql_test 未配置或 enabled: false

@@ -22,7 +22,6 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -127,9 +126,11 @@ func initConfig() {
 		configPath = filepath.Join(rootPath, configPath)
 	}
 
-	if !utils.PathExists(configPath) {
+	runtimeConfigPath := configPath
+	runtimeConfigExists := utils.PathExists(runtimeConfigPath)
+	if !runtimeConfigExists {
 		// 首次启动不自动复制 config.yaml：安装向导（/install）负责创建它。
-		// serve 默认命令以只读模板启动进入安装向导；其它命令必须已有真实配置。
+		// serve 默认命令以只读基座启动进入安装向导；其它命令必须已有真实配置。
 		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed {
 			panic(fmt.Errorf("config file not found: %s", configPath))
 		}
@@ -147,19 +148,29 @@ func initConfig() {
 			}
 			panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
 		}
-		fmt.Println("config.yaml 不存在，以只读模板启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）")
-		configPath = filepath.Join(rootPath, "config.example.yaml")
+		fmt.Println("config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）")
 	}
 
-	fmt.Println("load config:" + configPath)
+	defaultsPath := filepath.Join(filepath.Dir(runtimeConfigPath), conf.DefaultsFileName)
+	overridePath := ""
+	if runtimeConfigExists {
+		overridePath = runtimeConfigPath
+	} else {
+		configPath = defaultsPath
+	}
+	fmt.Println("load config:" + defaultsPath)
+	if overridePath != "" {
+		fmt.Println("merge config:" + overridePath)
+	}
 
-	v := viper.New()
-	v.SetConfigFile(configPath)
-	v.SetConfigType("yaml")
+	v, deadKeys, err := conf.LoadLayeredConfig(defaultsPath, overridePath)
+	if err != nil {
+		panic(err)
+	}
+	if len(deadKeys) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: config override contains keys missing from %s: %s\n", defaultsPath, strings.Join(deadKeys, ", "))
+	}
 	v.SetDefault("app.user_login_captcha", true)
-	if err := v.ReadInConfig(); err != nil {
-		panic(fmt.Errorf("read config failed: %s \n", err))
-	}
 
 	var nextConfig conf.Configuration
 	if err := v.Unmarshal(&nextConfig); err != nil {

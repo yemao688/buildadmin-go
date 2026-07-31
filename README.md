@@ -33,11 +33,10 @@ go install github.com/air-verse/air@latest
    ```
 
    后端默认监听 `9989`。
-2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会从根目录的 `config.example.yaml` 创建根目录运行配置 `config.yaml`，并执行其中配置的迁移命令。运行配置含凭据，不要提交。
-3. 如果不使用 Web 安装器，可复制配置模板、按环境填写后直接执行数据库迁移：
+2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会在根目录创建只含安装覆盖值的 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
+3. 如果不使用 Web 安装器，请创建只含环境覆盖的 `config.yaml`，按环境填写后直接执行数据库迁移：
 
    ```bash
-   cp config.example.yaml config.yaml
    go run ./cmd/app --conf config.yaml migrate
    ```
 
@@ -77,8 +76,8 @@ app/                 业务、命令、公共组件与中间件
 cmd/app/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 三轨迁移（official/local/business）、迁移模型与内部迁移基础设施
-config.example.yaml  根目录配置模板
-config.yaml          根目录运行配置（忽略，不提交）
+config.defaults.yaml 根目录运行基座（完整默认配置）
+config.yaml          根目录配置覆盖层（忽略，不提交）
 conf/                本地化资源（conf/localize/）
 web/                 Vue/Vite 前端源码
 public/              发布到镜像中的前端和运行时静态资源

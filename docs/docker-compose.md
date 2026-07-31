@@ -23,18 +23,18 @@ make push
 
 * `docker-compose.yaml`
 * `.env`（镜像地址、宿主端口等发布变量）
-* `config.yaml`（根目录应用配置和凭据，不能提交到 Git）
+* `config.yaml`（根目录应用覆盖层和凭据，不能提交到 Git）
 * `runtime/`（日志和运行时文件）
 * `public/storage/`（上传文件）
 
-在发布仓库中从根目录模板准备配置，经安全渠道放到生产机的 `config.yaml`，然后编辑生产连接信息：
+镜像内包含完整的 `config.defaults.yaml` 基座。将本地安装器生成的稀疏 `config.yaml` 经安全渠道放到生产机，然后编辑生产连接信息；不要把完整基座复制成覆盖层：
 
 ```bash
-cp config.example.yaml /path/to/release/config.yaml
+cp /path/to/installed/config.yaml /path/to/release/config.yaml
 # 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/runtime/logs
 ```
 
-应用配置中的 `app.port` 必须保持 `9989`，时区通过应用 YAML 的 `app.time_zone` 设置。`APP_PORT` 只改变宿主机映射端口，不改变容器内监听端口。Compose 会将 `./config.yaml` 只读挂载为 `/app/config.yaml`，并将 `./runtime/` 挂载为 `/app/runtime`。应用 YAML 与 `.env` 是两套配置，不能混用。
+应用配置中的 `app.port` 必须保持 `9989`，时区通过覆盖层或基座中的 `app.time_zone` 设置。`APP_PORT` 只改变宿主机映射端口，不改变容器内监听端口。Compose 会将 `./config.yaml` 以只读 bind mount 挂载为 `/app/config.yaml`，宿主机缺少该文件时明确报错，不会静默创建目录；`./runtime/` 挂载为 `/app/runtime`。应用 YAML 与 `.env` 是两套配置，不能混用。
 
 在生产机执行：
 

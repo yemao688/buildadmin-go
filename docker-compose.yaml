@@ -6,7 +6,12 @@ services:
     ports:
       - "${APP_PORT:-9989}:9989"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
+      - type: bind
+        source: ./config.yaml
+        target: /app/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false
       - ./runtime:/app/runtime
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9989/healthz"]

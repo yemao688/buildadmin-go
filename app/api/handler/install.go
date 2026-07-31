@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"time"
@@ -397,37 +396,30 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	bytesData, err := os.ReadFile(configPath)
+	databasePort, err := strconv.Atoi(databaseParam.Hostport)
 	if err != nil {
-		FailByErr(ctx, err)
+		FailByErr(ctx, cErr.BadRequest("hostport must be a number"))
 		return
 	}
 
-	pattern := regexp.MustCompile(`hostname:(\s+)'` + h.config.Database.Host + `'`)
-	replacedContent := pattern.ReplaceAllString(string(bytesData), "hostname:$1'"+databaseParam.Hostname+"'")
-
-	pattern = regexp.MustCompile(`database:(\s+)'` + h.config.Database.Database + `'`)
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "database:$1'"+databaseParam.Database+"'")
-
-	pattern = regexp.MustCompile(`username:(\s+)'` + h.config.Database.UserName + `'`)
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "username:$1'"+databaseParam.Username+"'")
-
-	pattern = regexp.MustCompile(`password:(\s+)'` + h.config.Database.Password + `'`)
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "password:$1'"+databaseParam.Password+"'")
-
-	pattern = regexp.MustCompile(`hostport:(\s+)` + strconv.Itoa(h.config.Database.Port))
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "hostport:$1"+databaseParam.Hostport)
-
-	pattern = regexp.MustCompile(`prefix:(\s+)'` + h.config.Database.Prefix + `'`)
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "prefix:$1'"+databaseParam.Prefix+"'")
-
-	//新的token key
+	// config.yaml is a sparse override layer. Only values collected by this
+	// installation and the generated token key are written; all other settings
+	// continue to come from config.defaults.yaml.
 	newTokenKey := random.Build("alnum", 32)
-	pattern = regexp.MustCompile(`key:(\s+)'` + h.config.Token.Key + `'`)
-	replacedContent = pattern.ReplaceAllString(string(replacedContent), "key:$1'"+newTokenKey+"'")
-
-	err = os.WriteFile(configPath, []byte(replacedContent), 0644)
-	if err != nil {
+	overrides := map[string]any{
+		"mysql": map[string]any{
+			"host":     databaseParam.Hostname,
+			"port":     databasePort,
+			"database": databaseParam.Database,
+			"username": databaseParam.Username,
+			"password": databaseParam.Password,
+			"prefix":   databaseParam.Prefix,
+		},
+		"token": map[string]any{
+			"key": newTokenKey,
+		},
+	}
+	if err := conf.WriteConfigOverrides(configPath, overrides); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -452,8 +444,8 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	})
 }
 
-// ensureConfigFile creates the editable runtime configuration from the tracked
-// example when an installation starts on a fresh checkout.
+// ensureConfigFile creates the editable sparse override layer when an
+// installation starts on a fresh checkout.
 func ensureConfigFile() error {
 	return utils.EnsureConfigFile(utils.RootPath())
 }

@@ -9,7 +9,12 @@ import (
 
 func writeMySQLTestConfig(t *testing.T, content string) string {
 	t.Helper()
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	dir := t.TempDir()
+	defaultsPath := filepath.Join(dir, "config.defaults.yaml")
+	if err := os.WriteFile(defaultsPath, []byte("app:\n  env: debug\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}

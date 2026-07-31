@@ -105,10 +105,9 @@ air
 
 浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。安装器会在仓库根目录生成被 Git 忽略的 `config.yaml` 并执行其中的迁移命令。
 
-**手动配置和迁移：** 从模板复制运行配置，按目标环境填写数据库、密钥等值，再执行迁移：
+**手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。未写入的键由根目录 `config.defaults.yaml` 在启动时提供：
 
 ```bash
-cp config.example.yaml config.yaml
 go run ./cmd/app --conf config.yaml migrate
 ```
 
@@ -208,7 +207,7 @@ git push origin master
 | `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
 | `router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
-| `config.example.yaml` | 以框架新增字段为基础；业务运行值放在根目录被忽略的 `config.yaml`，不要把凭据合入模板。 |
+| `config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `config.yaml` 覆盖层，不要把凭据合入基座。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
 | 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/local 注册表冲突。 |
 
