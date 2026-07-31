@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.3.0
+
+- **Breaking (CRUD spec 契约):** `isCommonModel` 弃用并暂时禁用——非零值在生成/apply 时被拒绝（错误信息含指引），model 一律输出到 `app/admin/model`；历史 common model 模块的 `crud:delete` 不受影响。`app/common/model` 自此仅保留既有手写基础设施（`BaseModel`、`User` struct 等），不再接受任何新生成输出。
+
 ## v2.2.0
 
 - **Breaking (CRUD 生成器命名约定):** 业务模块路径推导统一为蛇形实体约定。`generateRelativePath` 省略时兜底默认等于表名（规范仍要求显式写出，标准值即表名）；单段路径在第一个下划线处拆分——表 `ops_user_test_xxx` 生成 handler/model `ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.UserTestXxx`、菜单 `ops/userTestXxx`。路由保持"目录段小写 + 实体段 PascalCase"的既有形式（对齐 PHP 实际 URL 如 `/admin/country.LanguageContent/index`）：显式路径模块（含 `country.*`）重新生成后**路由不变**；仅旧版省略路径自动推导出的扁平路由（`countryLanguageContent` 形态）在重新生成时变为带命名空间形式（`country.LanguageContent`）。显式路径中蛇形末段的视图叶子从原样保留改为 lcfirst 驼峰化（`test_xxx` → `testXxx`）。旧的自动推导（Go 文件扁平落根目录、视图末两段合并驼峰、路由扁平无命名空间）已移除。

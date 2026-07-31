@@ -97,7 +97,7 @@ fields:
 | `controllerFile`       | `string`，默认自动推导     | Go handler 文件逻辑路径，是 PHP controller 的对应物。显式值优先。                                                                                                                                                        |
 | `webViewsDir`          | `string`，默认自动推导     | `web/src/views/backend` 下的视图目录。显式值优先。                                                                                                                                                                       |
 | `databaseConnection`   | `string`，默认 `mysql`     | 当前 Go 应用只有一条注入连接。空值和 `mysql` 解析并持久化为 `mysql`；其它标识符失败。                                                                                                                                    |
-| `isCommonModel`        | `int`，默认 `0`            | 非零时 model 输出到 `app/common/model`；handler 仍在 admin。                                                                                                                                                             |
+| `isCommonModel`        | `int`，默认 `0`            | **已弃用并暂时禁用**：非零值会被生成器/apply 拒绝；model 一律输出到 `app/admin/model`。历史 common model 模块仍可通过 `crud:delete` 清理。                                                             |
 | `quickSearchField`     | `[]string`，默认空         | 公共快速搜索字段；生成器会确保主键也可用于快速搜索。                                                                                                                                                                     |
 | `defaultSortField`     | `string`，默认空           | 默认排序字段。                                                                                                                                                                                                           |
 | `defaultSortType`      | `string`，默认空           | 通常为 `asc` 或 `desc`。                                                                                                                                                                                                 |
@@ -525,7 +525,6 @@ type: create
 rebuild: "No"
 generateRelativePath: order_sales_item
 databaseConnection: mysql
-isCommonModel: 0
 quickSearchField: [order_no, reviewer_admin_ids]
 defaultSortField: weigh
 defaultSortType: desc

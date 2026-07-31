@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+func TestNormalizeTableConfigurationRejectsIsCommonModel(t *testing.T) {
+	if err := normalizeTableConfiguration(&crudmodel.Table{Name: "order_item", IsCommonModel: 1}); err == nil {
+		t.Fatal("isCommonModel=1 was accepted")
+	} else if !strings.Contains(err.Error(), "isCommonModel") {
+		t.Fatalf("rejection reason = %v", err)
+	}
+	if err := normalizeTableConfiguration(&crudmodel.Table{Name: "order_item"}); err != nil {
+		t.Fatalf("isCommonModel=0 rejected: %v", err)
+	}
+}
+
 func TestValidateGenerationInputRejectsInjectedIdentifiersAndTypes(t *testing.T) {
 	base := crudmodel.Table{Name: "orders"}
 	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "name`); DROP TABLE users;--", Type: "varchar"}}); err == nil {

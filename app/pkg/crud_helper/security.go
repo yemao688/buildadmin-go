@@ -388,6 +388,11 @@ func normalizeTableConfiguration(table *crudmodel.Table) error {
 	if table.DatabaseConnection != "mysql" {
 		return fmt.Errorf("unknown database connection %q; only \"mysql\" is available", table.DatabaseConnection)
 	}
+	// isCommonModel 已弃用并暂时禁用：仅拒绝新生成/apply；
+	// crud:delete 不经过本函数，历史 common model 模块仍可按 manifest 清理。
+	if table.IsCommonModel != 0 {
+		return fmt.Errorf("isCommonModel 已弃用并暂时禁用：model 一律输出到 app/admin/model；历史 common model 模块仍可通过 crud:delete 清理")
+	}
 	if table.GenerateRelativePath == "" {
 		table.GenerateRelativePath = table.Name
 	}
