@@ -1,20 +1,17 @@
 package handler
 
 import (
-	"database/sql"
-	"fmt"
 	adminauth "go-build-admin/app/admin/model/auth"
 	siteconfig "go-build-admin/app/common/siteconfig"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
+	"go-build-admin/app/pkg/installer"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/app/pkg/validator"
 	"go-build-admin/app/pkg/version"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
-	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,11 +21,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gopkg.in/natefinch/lumberjack.v2"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-	"gorm.io/gorm/schema"
 )
 
 // 环境检查状态
@@ -37,7 +30,7 @@ const FAIL = "fail"
 const WARN = "warn"
 
 // 安装锁文件名称
-const LockFileName = "install.lock"
+const LockFileName = installer.LockFileName
 
 // 配置文件
 const ConfigFileName = "config.yaml"
@@ -60,7 +53,7 @@ var NeedDependentVersion = map[string]string{
  * 执行命令成功执行再写入标记到lock文件
  * 实现命令执行失败，重载页面可重新执行
  */
-const InstallationCompletionMark = "install-end"
+const InstallationCompletionMark = installer.InstallationCompletionMark
 
 const installCompleteMessage = "The system has completed installation. If you need to reinstall, please delete public/install.lock first"
 
@@ -343,22 +336,7 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 	})
 }
 
-type Database struct {
-	Database string `json:"database" binding:"required"`
-	Hostname string `json:"hostname" binding:"required"`
-	Hostport string `json:"hostport" binding:"required"`
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Prefix   string `json:"prefix"`
-}
-
-func (v Database) GetMessages() validator.ValidatorMessages {
-	return validator.ValidatorMessages{
-		"hostname.required": "hostname required",
-		"username.required": "username required",
-		"password.required": "password required",
-	}
-}
+type Database = installer.Database
 
 // 测试数据库连接
 func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
@@ -368,7 +346,7 @@ func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
 		return
 	}
 
-	result, err := h.getDatabases(params)
+	result, err := installer.GetDatabases(params)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -405,7 +383,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	err := h.initDatabase(databaseParam)
+	err := installer.CreateDatabase(databaseParam)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -416,7 +394,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	databasePort, err := strconv.Atoi(databaseParam.Hostport)
+	_, err = strconv.Atoi(databaseParam.Hostport)
 	if err != nil {
 		FailByErr(ctx, cErr.BadRequest("hostport must be a number"))
 		return
@@ -425,26 +403,13 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	// config.yaml is a sparse override layer. Only values collected by this
 	// installation and the generated token key are written; all other settings
 	// continue to come from config.defaults.yaml.
-	newTokenKey := random.Build("alnum", 32)
-	overrides := map[string]any{
-		"mysql": map[string]any{
-			"host":     databaseParam.Hostname,
-			"port":     databasePort,
-			"database": databaseParam.Database,
-			"username": databaseParam.Username,
-			"password": databaseParam.Password,
-			"prefix":   databaseParam.Prefix,
-		},
-		"token": map[string]any{
-			"key": newTokenKey,
-		},
-	}
-	if err := conf.WriteConfigOverrides(configPath, overrides); err != nil {
+	newTokenKey := installer.GenerateTokenKey()
+	if err := installer.WriteBaseConfig(configPath, databaseParam, newTokenKey); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	db, err := h.newDB(databaseParam)
+	db, err := installer.NewDB(databaseParam)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -463,72 +428,8 @@ func ensureConfigFile() error {
 	return utils.EnsureConfigFile(utils.RootPath())
 }
 
-func (h *InstallHandler) newDB(dbConfig Database) (*gorm.DB, error) {
-	logConfig := h.config.Log
-
-	var writer io.Writer
-	var logMode logger.LogLevel
-
-	logFileDir := logConfig.RootDir
-	if !filepath.IsAbs(logFileDir) {
-		logFileDir = filepath.Join(utils.RootPath(), logFileDir)
-	}
-	// 自定义 Writer
-	writer = &lumberjack.Logger{
-		Filename:   filepath.Join(logFileDir, "/sql", time.Now().Format("2006-01-02")+".log"),
-		MaxSize:    logConfig.MaxSize,
-		MaxBackups: logConfig.MaxBackups,
-		MaxAge:     logConfig.MaxAge,
-		Compress:   logConfig.Compress,
-	}
-
-	logMode = logger.Info
-	newLogger := logger.New(
-		log.New(writer, "\r\n", log.LstdFlags), // io writer
-		logger.Config{
-			SlowThreshold:             time.Second, // 慢查询 SQL 阈值
-			Colorful:                  false,       // 禁用彩色打印
-			IgnoreRecordNotFoundError: false,       // 忽略ErrRecordNotFound（记录未找到）错误
-			LogLevel:                  logMode,     // Log lever
-		},
-	)
-
-	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		dbConfig.Username,
-		dbConfig.Password,
-		dbConfig.Hostname,
-		dbConfig.Hostport,
-		dbConfig.Database,
-	)
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true,
-			TablePrefix:   dbConfig.Prefix, // 表前缀
-		},
-		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
-		Logger:                                   newLogger, // 使用自定义 Logger
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	sqlDB, _ := db.DB()
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(100 * time.Second)
-	return db, nil
-}
-
 func (h *InstallHandler) isInstallComplete() bool {
-	path := filepath.Join(utils.RootPath(), "public", LockFileName)
-	_, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	content, _ := os.ReadFile(path)
-	return string(content) == InstallationCompletionMark
+	return installer.IsComplete(utils.RootPath())
 }
 
 // 标记命令执行完毕
@@ -575,8 +476,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 	}
 
-	path := filepath.Join(utils.RootPath(), "public", LockFileName)
-	if err := os.WriteFile(path, []byte(InstallationCompletionMark), 0644); err != nil {
+	if err := installer.WriteCompletionLock(utils.RootPath()); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
@@ -617,72 +517,4 @@ func (h *InstallHandler) MvDist(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
-}
-
-func (h *InstallHandler) getDatabases(params Database) ([]string, error) {
-	var databases []string
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local", params.Username, params.Password, params.Hostname, params.Hostport))
-	if err != nil {
-		return databases, err
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SHOW DATABASES")
-	if err != nil {
-		return databases, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbName string
-		if err := rows.Scan(&dbName); err != nil {
-			return databases, err
-		}
-
-		if !slices.Contains([]string{"information_schema", "mysql", "performance_schema", "sys"}, dbName) {
-			databases = append(databases, dbName)
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return databases, err
-	}
-	return databases, err
-}
-
-func (h *InstallHandler) initDatabase(params Database) error {
-	var databases []string
-
-	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/?charset=utf8mb4&parseTime=True&loc=Local", params.Username, params.Password, params.Hostname, params.Hostport))
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SHOW DATABASES")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbName string
-		if err := rows.Scan(&dbName); err != nil {
-			return err
-		}
-
-		if !slices.Contains([]string{"information_schema", "mysql", "performance_schema", "sys"}, dbName) {
-			databases = append(databases, dbName)
-		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	if !slices.Contains(databases, params.Database) {
-		_, err := db.Exec("CREATE DATABASE IF NOT EXISTS " + params.Database + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-		return err
-	}
-	return nil
 }
