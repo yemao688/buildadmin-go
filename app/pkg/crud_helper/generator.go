@@ -1005,7 +1005,8 @@ var runWire = executeWire
 func executeWire() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "wire")
+	// 与 cmd/app 的 //go:generate 声明一致，经 go run 运行 wire，不要求开发机单独安装 wire 二进制。
+	cmd := exec.CommandContext(ctx, "go", "run", "-mod=mod", "github.com/google/wire/cmd/wire")
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
