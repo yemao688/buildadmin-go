@@ -7,6 +7,7 @@
 - **Changed:** 安装成功响应发出后进程延迟 1 秒以 code 0 退出并打印重启提示——air/docker `restart: unless-stopped` 自动拉起加载新配置，裸 `go run` 需手动重启；安装锁统一在完成时以 `install-end` 写入，移除 BaseConfig 早期的日期内容锁。
 
 - **Fixed:** `crud:validate` 删除 relationFields 误报检查——它错误地把 relationFields 对照本 spec 字段列表，而契约中 relationFields 是**远端表列**（canonical 写法 `admin_id → relationFields: username` 在本 spec 字段列表中永远不存在，真实业务 spec 100% 误报）。无 DB 的校验器无法内省远端表列，relationFields 的格式校验仍由生成期 `validateRelationField` 负责。
+- **Changed (migrations):** `admin_log` 属主常驻校验放宽——失败登录产生的 `admin_id=0` 匿名尝试行视为合法数据，仅拒绝非零悬空引用；其余属主表（security_*、crud_log、user 系）保持严格校验。与成功登录日志写入真实 `admin_id` 配合，登录日志不再误伤 `migrate`。
 
 - **Changed (config):** 配置体系改为分层加载——`config.example.yaml` 改名 `config.defaults.yaml` 并升级为运行时基座（启动时实际加载，提供全键默认值）；`config.yaml` 退化为稀疏覆盖层，只存用户改过的键。基座新增配置键随框架升级自动生效，无需再全量拷贝比对；存量全量 `config.yaml` 是合法覆盖集，无感继续工作。viper 合并语义：map 深合并、list 整体替换。
 - **Added (config):** 覆盖层含基座不存在的死键（框架改名/删除配置后的残留）时启动向 stderr 输出 warning 并列出键名，不阻塞启动。

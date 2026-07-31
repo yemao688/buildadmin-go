@@ -140,7 +140,12 @@ func verifyOwnerColumns(db *gorm.DB, config *conf.Configuration, logicalTables [
 			return fmt.Errorf("%s.idx_admin_id invalid", t)
 		}
 		if core.TableExists(db, adminTable) {
-			if err := validateMigrationOwners(db, t, adminTable); err != nil {
+			validate := validateMigrationOwners
+			if logical == "admin_log" {
+				// 失败登录会留下 admin_id=0 的匿名尝试行，属合法数据
+				validate = validateMigrationOwnersAnonymousOK
+			}
+			if err := validate(db, t, adminTable); err != nil {
 				return err
 			}
 		}

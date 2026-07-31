@@ -84,6 +84,19 @@ func validateMigrationOwners(db *gorm.DB, table, adminTable string) error {
 	return nil
 }
 
+// validateMigrationOwnersAnonymousOK 容忍匿名行（admin_id=0/NULL）——失败登录
+// 会在 admin_log 留下合法的匿名尝试行；仅拒绝引用了不存在 admin 的非零 admin_id。
+func validateMigrationOwnersAnonymousOK(db *gorm.DB, table, adminTable string) error {
+	var invalid int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(table) + " t LEFT JOIN " + core.QuoteIdentifier(adminTable) + " a ON a.id=t.admin_id WHERE t.admin_id <> 0 AND a.id IS NULL").Scan(&invalid).Error; err != nil {
+		return err
+	}
+	if invalid != 0 {
+		return fmt.Errorf("%s contains %d invalid admin owner(s)", table, invalid)
+	}
+	return nil
+}
+
 func migrationTablesHaveRows(db *gorm.DB, tables []string) (bool, error) {
 	for _, table := range tables {
 		if !core.TableExists(db, table) {
