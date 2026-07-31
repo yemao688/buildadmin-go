@@ -261,7 +261,9 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	handlerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
 
 	// 开启字段排序
-	if _, ok := fieldsMap["weigh"]; ok {
+	_, hasWeigh := fieldsMap["weigh"]
+	applyDefaultSort(&handlerData, &indexVueData, table, hasWeigh)
+	if hasWeigh {
 		indexVueData.EnableDragSort = "true"
 		modelData.AfterInsert = assembleStub("mixins/model/afterInsert", map[string]string{
 			"field": "weight",
@@ -1633,17 +1635,38 @@ func parseSundryData(handlerData *HandlerData, indexVueData *IndexVueData, formV
 		formVueData.BigDialog = "true"
 		handlerData.FilterRule = append(handlerData.FilterRule, "clean_xss")
 	}
+}
 
-	//默认排序字段
-	if table.DefaultSortField != "" && table.DefaultSortType != "" {
-		defaultSortField := table.DefaultSortField + "," + table.DefaultSortType
-		if defaultSortField == "id,desc" {
-			handlerData.Attr["defaultSortField"] = ""
-		} else {
-			handlerData.Attr["defaultSortField"] = defaultSortField
-			indexVueData.DefaultOrder = buildDefaultOrder(table.DefaultSortField, table.DefaultSortType)
-		}
+// applyDefaultSort keeps the handler and index.vue defaults in lockstep. PHP
+// BuildAdmin puts heavier rows first when a table exposes the conventional
+// weigh column, unless the spec explicitly chooses another field.
+func applyDefaultSort(handlerData *HandlerData, indexVueData *IndexVueData, table crudmodel.Table, hasWeigh bool) {
+	if handlerData.Attr == nil {
+		handlerData.Attr = map[string]string{}
 	}
+	field, sortType := resolveDefaultSort(table, hasWeigh)
+	if field == "" || sortType == "" {
+		return
+	}
+
+	defaultSortField := field + "," + sortType
+	if defaultSortField == "id,desc" {
+		handlerData.Attr["defaultSortField"] = ""
+		indexVueData.DefaultOrder = ""
+		return
+	}
+	handlerData.Attr["defaultSortField"] = defaultSortField
+	indexVueData.DefaultOrder = buildDefaultOrder(field, sortType)
+}
+
+func resolveDefaultSort(table crudmodel.Table, hasWeigh bool) (string, string) {
+	if table.DefaultSortField != "" {
+		return table.DefaultSortField, table.DefaultSortType
+	}
+	if hasWeigh {
+		return "weigh", "desc"
+	}
+	return "", ""
 }
 
 func buildDefaultOrder(field string, sortType string) string {
