@@ -11,6 +11,7 @@ type TrackedMigration struct {
 	ID       string
 	Revision uint64
 	Up       MigrationFn
+	Down     MigrationFn
 	// VerifyBaseline runs only while applying a migration, after Up succeeds.
 	// A failed baseline check is retried with the migration; completed records
 	// do not run it again. VerifySchema and VerifyUpgradeData are standing runtime
@@ -21,8 +22,10 @@ type TrackedMigration struct {
 }
 
 type TrackedRunnerOptions struct {
-	TrackName   string
-	AdoptedFrom func(TrackedMigration) *string
+	TrackName    string
+	AdoptedFrom  func(TrackedMigration) *string
+	IncludeBatch bool
+	Batch        uint64
 }
 
 func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName string, migrations []TrackedMigration, options TrackedRunnerOptions) (int, error) {
@@ -33,10 +36,28 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 	if trackName == "" {
 		trackName = "tracked"
 	}
+	batch := uint64(0)
+	if options.IncludeBatch {
+		batch = options.Batch
+		if batch == 0 {
+			var err error
+			batch, err = NextTrackedBatch(db, config, tableName)
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
 	count := 0
 	for _, m := range migrations {
 		var record TrackedMigrationRecord
-		q := db.Table(TableName(config, tableName)).Where("sequence = ?", m.Sequence).First(&record)
+		selectRecord := func() *gorm.DB {
+			query := db.Table(TableName(config, tableName)).Select("sequence,migration_id,revision,start_time,end_time")
+			if options.IncludeBatch {
+				query = query.Select("sequence,batch,migration_id,revision,start_time,end_time")
+			}
+			return query
+		}
+		q := selectRecord().Where("sequence = ?", m.Sequence).First(&record)
 		exists := q.Error == nil
 		if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
 			return count, q.Error
@@ -45,7 +66,7 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 			return count, fmt.Errorf("%s sequence %d collision", trackName, m.Sequence)
 		}
 		if !exists {
-			q = db.Table(TableName(config, tableName)).Where("migration_id = ?", m.ID).First(&record)
+			q = selectRecord().Where("migration_id = ?", m.ID).First(&record)
 			if q.Error == nil && (record.Sequence != m.Sequence || record.Revision != m.Revision) {
 				return count, fmt.Errorf("%s migration %s collision", trackName, m.ID)
 			}
@@ -57,7 +78,13 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 				if options.AdoptedFrom != nil {
 					adoptedFrom = options.AdoptedFrom(m)
 				}
-				if err := InsertPendingTrackedMigration(db, config, tableName, m, adoptedFrom); err != nil {
+				var err error
+				if options.IncludeBatch {
+					err = InsertPendingTrackedMigrationWithBatch(db, config, tableName, m, batch, adoptedFrom)
+				} else {
+					err = InsertPendingTrackedMigration(db, config, tableName, m, adoptedFrom)
+				}
+				if err != nil {
 					return count, err
 				}
 			}

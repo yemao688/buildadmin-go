@@ -58,6 +58,9 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
 			return fmt.Errorf("business ledger schema: %w", err)
 		}
+		if err := ValidateBusinessBreakpointSchema(pinned, config); err != nil {
+			return fmt.Errorf("business breakpoint schema: %w", err)
+		}
 		official, locals := OfficialMigrations(), LocalMigrations()
 		businessMigrations, err := business.Migrations()
 		if err != nil {
@@ -97,4 +100,78 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		return nil
 	})
 	return report, err
+}
+
+func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) (report RollbackReport, err error) {
+	err = WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+		if err := ValidatePrefix(config); err != nil {
+			return err
+		}
+		if err := BootstrapBusinessLedger(pinned, config); err != nil {
+			return fmt.Errorf("business ledger bootstrap: %w", err)
+		}
+		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+			return fmt.Errorf("business ledger schema: %w", err)
+		}
+		if err := ValidateBusinessBreakpointSchema(pinned, config); err != nil {
+			return fmt.Errorf("business breakpoint schema: %w", err)
+		}
+		list, err := business.Migrations()
+		if err != nil {
+			return fmt.Errorf("business migration registry: %w", err)
+		}
+		report, err = RollbackBusinessMigrations(pinned, config, list, options)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return report, err
+}
+
+func SetBreakpoint(db *gorm.DB, config *conf.Configuration, sequence uint64) error {
+	return WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+		if err := ValidatePrefix(config); err != nil {
+			return err
+		}
+		if err := BootstrapBusinessLedger(pinned, config); err != nil {
+			return err
+		}
+		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+			return err
+		}
+		return SetBusinessBreakpoint(pinned, config, sequence)
+	})
+}
+
+func ClearBreakpoint(db *gorm.DB, config *conf.Configuration) error {
+	return WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+		if err := ValidatePrefix(config); err != nil {
+			return err
+		}
+		if err := BootstrapBusinessLedger(pinned, config); err != nil {
+			return err
+		}
+		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+			return err
+		}
+		return ClearBusinessBreakpoint(pinned, config)
+	})
+}
+
+func GetBreakpoint(db *gorm.DB, config *conf.Configuration) (breakpoint *BusinessBreakpoint, err error) {
+	err = WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+		if err := ValidatePrefix(config); err != nil {
+			return err
+		}
+		if err := BootstrapBusinessLedger(pinned, config); err != nil {
+			return err
+		}
+		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+			return err
+		}
+		breakpoint, err = ReadBusinessBreakpoint(pinned, config)
+		return err
+	})
+	return breakpoint, err
 }

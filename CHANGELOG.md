@@ -2,6 +2,8 @@
 
 ## v2.4.0
 
+- **Added (migrations):** business 迁移轨道支持回滚与断点——`Migration` 增加可选 `Down`（与 `Up` 同签名）；business 账本新增 `batch` 列（存量账本自动回填升级），断点持久化于 `business_breakpoints` 表；新增 `migrate rollback [--steps N] [--to-breakpoint]`（默认回滚最近批次，缺 `Down` 或涉及 official/local 时明确报错且账本不动）与 `migrate breakpoint set|clear|list`；基座 `terminal.commands.migrate` 的 rollback/breakpoint 空槽填入真实命令，后台终端可直接调用。official/local 轨道保持仅前向。
+
 - **Changed (config):** `app.port`/`app.time_zone` 移出 YAML 配置，改由环境变量 `APP_PORT`/`APP_TIME_ZONE` 提供——启动时自动复制缺失的 `.env`（←`.env.example`，godotenv 加载且不覆盖已有环境变量），缺省兜底 `9989`/`Asia/Shanghai`；compose 经 `environment` 显式传递两变量，端口映射与 healthcheck 全插值化。新增依赖 `github.com/joho/godotenv`。
 - **Removed (config):** 删除 `app.app_name`——仅启动横幅与测试邮件 Subject 两处引用，一并移除（配置键、conf 字段、基座键同步删除）。
 - **Fixed (dev):** air 入口移除冗余的显式 `--conf` 传参——`--conf` 默认值本即根目录 `config.yaml`，显式传参会置 Changed 标记，文件缺失时硬 panic，导致全新检出/重装向导模式在 air 下无法进入；现无参启动，三形态各归其位（有配置正常合并、无配置基座向导、显式 `--conf` 缺失仍报错）。

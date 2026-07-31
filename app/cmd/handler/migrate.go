@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"fmt"
+	"strconv"
+
 	helper "go-build-admin/app/pkg/crud_helper"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations"
@@ -57,6 +60,83 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) {
-	//TODO:
+func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) error {
+	if len(args) > 1 {
+		return fmt.Errorf("usage: migrate rollback [business]")
+	}
+	if len(args) == 1 && args[0] != "business" {
+		return fmt.Errorf("%s migration rollback is unsupported; official and local migrations are forward-only", args[0])
+	}
+	steps, err := cmd.Flags().GetUint64("steps")
+	if err != nil {
+		return err
+	}
+	toBreakpoint, err := cmd.Flags().GetBool("to-breakpoint")
+	if err != nil {
+		return err
+	}
+	report, err := migrations.Rollback(h.db, h.config, migrations.RollbackOptions{Steps: steps, ToBreakpoint: toBreakpoint})
+	for _, entry := range report.Entries {
+		status := "not-rolled-back"
+		if entry.DownExecuted && entry.LedgerRemoved {
+			status = "rolled-back"
+		} else if entry.DownExecuted {
+			status = "down-applied-ledger-retained"
+		}
+		cmd.Printf("business migration %-28s sequence=%d batch=%d %s\n", entry.ID, entry.Sequence, entry.Batch, status)
+	}
+	if err != nil {
+		cmd.Printf("database rollback error: %v (rolled back %d, not rolled back %d)\n", err, report.RolledBack(), report.NotRolledBack())
+		return err
+	}
+	if len(report.Entries) == 0 {
+		cmd.Println("no business migrations to rollback")
+		return nil
+	}
+	cmd.Printf("rolled back %d business migration(s)\n", report.RolledBack())
+	return nil
+}
+
+func (h *MigrateHandler) SetBreakpoint(cmd *cobra.Command, args []string) error {
+	sequence, err := parseBreakpointSequence(args)
+	if err != nil {
+		return err
+	}
+	if err := migrations.SetBreakpoint(h.db, h.config, sequence); err != nil {
+		return fmt.Errorf("set business migration breakpoint: %w", err)
+	}
+	cmd.Printf("business migration breakpoint set: %d\n", sequence)
+	return nil
+}
+
+func (h *MigrateHandler) ClearBreakpoint(cmd *cobra.Command, args []string) error {
+	if err := migrations.ClearBreakpoint(h.db, h.config); err != nil {
+		return fmt.Errorf("clear business migration breakpoint: %w", err)
+	}
+	cmd.Println("business migration breakpoint cleared")
+	return nil
+}
+
+func (h *MigrateHandler) ListBreakpoints(cmd *cobra.Command, args []string) error {
+	breakpoint, err := migrations.GetBreakpoint(h.db, h.config)
+	if err != nil {
+		return fmt.Errorf("list business migration breakpoint: %w", err)
+	}
+	if breakpoint == nil {
+		cmd.Println("business migration breakpoint: none")
+		return nil
+	}
+	cmd.Printf("business migration breakpoint: %d (set at %s)\n", breakpoint.Sequence, breakpoint.SetTime.Format("2006-01-02 15:04:05.000000"))
+	return nil
+}
+
+func parseBreakpointSequence(args []string) (uint64, error) {
+	if len(args) != 1 {
+		return 0, fmt.Errorf("usage: migrate breakpoint set <version>")
+	}
+	sequence, err := strconv.ParseUint(args[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid breakpoint version %q: %w", args[0], err)
+	}
+	return sequence, nil
 }

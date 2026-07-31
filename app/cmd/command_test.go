@@ -13,6 +13,13 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 		args []string
 	}{
 		{name: "migrate", args: []string{"migrate"}},
+		{name: "migrate run", args: []string{"migrate", "run"}},
+		{name: "migrate rollback", args: []string{"migrate", "rollback"}},
+		{name: "migrate rollback steps", args: []string{"migrate", "rollback", "--steps", "2"}},
+		{name: "migrate breakpoint", args: []string{"migrate", "breakpoint"}},
+		{name: "migrate breakpoint set", args: []string{"migrate", "breakpoint", "set", "1"}},
+		{name: "migrate breakpoint clear", args: []string{"migrate", "breakpoint", "clear"}},
+		{name: "migrate breakpoint list", args: []string{"migrate", "breakpoint", "list"}},
 		{name: "crud:generate", args: []string{"crud:generate", "spec.yaml"}},
 		{name: "crud:delete", args: []string{"crud:delete", "orders"}},
 		{name: "crud:apply", args: []string{"crud:apply"}},

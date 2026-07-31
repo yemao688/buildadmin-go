@@ -20,11 +20,16 @@ func resetRegistryForTest() {
 
 func TestRegistryValidationSortingCopyAndFreeze(t *testing.T) {
 	resetRegistryForTest()
-	Register(validMigration(2, "two"))
+	second := validMigration(2, "two")
+	second.Down = func(*gorm.DB, *conf.Configuration) error { return nil }
+	Register(second)
 	Register(validMigration(1, "one"))
 	got, err := Migrations()
 	if err != nil || len(got) != 2 || got[0].ID != "one" || got[1].ID != "two" {
 		t.Fatalf("got migrations=%v, err=%v", got, err)
+	}
+	if got[1].Down == nil {
+		t.Fatal("optional Down function was not retained")
 	}
 	got[0].ID = "changed"
 	again, err := Migrations()

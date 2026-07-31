@@ -101,11 +101,11 @@ terminal:
         cwd: 'cmd/app'
         command: 'go run . --conf config.yaml migrate run'
       rollback:
-        cwd: ''
-        command: ''
+        cwd: 'cmd/app'
+        command: 'go run . --conf config.yaml migrate rollback'
       breakpoint:
-        cwd: ''
-        command: ''
+        cwd: 'cmd/app'
+        command: 'go run . --conf config.yaml migrate breakpoint'
     install:
       yarn:
         cwd: ''
