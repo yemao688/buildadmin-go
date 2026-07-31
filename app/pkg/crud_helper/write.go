@@ -44,6 +44,9 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	if err := writeGoFile(modelFile.ParseFile, modelContent); err != nil {
 		return "", err
 	}
+	if err := writeCustomSkeleton(modelFile, "model"); err != nil {
+		return "", err
+	}
 
 	if err := writeProvider(modelFile.RootFileName, modelData.ClassName+"Model"); err != nil {
 		return "", err
@@ -205,6 +208,9 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	}
 	//写入文件
 	if err := writeGoFile(handlerFile.ParseFile, handlerContent); err != nil {
+		return err
+	}
+	if err := writeCustomSkeleton(handlerFile, "handler"); err != nil {
 		return err
 	}
 	//写入provider
@@ -378,6 +384,48 @@ func writeRegistrarFile(handlerData HandlerData, handlerFile NameInfo) error {
 
 func registrarFilePath(handlerFile NameInfo) string {
 	return strings.TrimSuffix(handlerFile.ParseFile, filepath.Ext(handlerFile.ParseFile)) + "_route.go"
+}
+
+type customSkeletonTarget struct {
+	path    string
+	content string
+}
+
+func customSkeletonPath(file NameInfo) string {
+	return strings.TrimSuffix(file.ParseFile, filepath.Ext(file.ParseFile)) + "_custom.go"
+}
+
+func customSkeletonTargets(modelFile, handlerFile NameInfo) []customSkeletonTarget {
+	return []customSkeletonTarget{
+		{path: customSkeletonPath(modelFile), content: customSkeletonContent(modelFile.Namespace, modelFile.LastName, "model")},
+		{path: customSkeletonPath(handlerFile), content: customSkeletonContent(handlerFile.Namespace, handlerFile.LastName, "handler")},
+	}
+}
+
+func customSkeletonContent(namespace, className, kind string) string {
+	receiver := "m"
+	if kind == "handler" {
+		receiver = "h"
+	}
+	return fmt.Sprintf(`package %s
+
+// This file is generated only once for business customization.
+// CRUD regeneration never overwrites this file.
+// Add custom methods and hooks here.
+//
+// Example:
+//
+// func (%s *%s) CustomHook() {
+// }
+`, namespace, receiver, className)
+}
+
+func writeCustomSkeleton(file NameInfo, kind string) error {
+	path := customSkeletonPath(file)
+	if fileExists(path) {
+		return nil
+	}
+	return writeGoFile(path, customSkeletonContent(file.Namespace, file.LastName, kind))
 }
 
 func lowerFirst(value string) string {

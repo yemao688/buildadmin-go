@@ -108,6 +108,18 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
+	modelFile, err := ParseNameData("admin", opts.Table.Name, "model", opts.Table.ModelFile)
+	if opts.Table.IsCommonModel != 0 {
+		modelFile, err = ParseNameData("common", opts.Table.Name, "model", opts.Table.ModelFile)
+	}
+	if err != nil {
+		return nil, err
+	}
+	handlerFile, err := ParseNameData("admin", opts.Table.Name, "handler", opts.Table.ControllerFile)
+	if err != nil {
+		return nil, err
+	}
+	manifest = appendCustomSkeletonManifest(manifest, modelFile, handlerFile)
 	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
 	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
@@ -341,15 +353,32 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
+	module := "admin"
+	if log.Table.IsCommonModel != 0 {
+		module = "common"
+	}
+	modelFile, err := ParseNameData(module, log.Table.Name, "model", log.Table.ModelFile)
+	if err != nil {
+		return err
+	}
+	handlerFile, err := ParseNameData("admin", log.Table.Name, "handler", log.Table.ControllerFile)
+	if err != nil {
+		return err
+	}
 	manifest, err = historicalDeleteManifest(manifest, crudmodel.Table(log.Table))
 	if err != nil {
 		return err
 	}
+	manifest = appendCustomSkeletonManifest(manifest, modelFile, handlerFile)
 	manifest, err = prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
 	}
-	quarantine, err := NewQuarantine(manifest.Generated)
+	generatedPaths, preservedCustomPaths, err := splitCustomSkeletonManifest(manifest.Generated, modelFile, handlerFile)
+	if err != nil {
+		return err
+	}
+	quarantine, err := NewQuarantine(generatedPaths)
 	if err != nil {
 		return err
 	}
@@ -383,18 +412,6 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		}
 		_ = recordCrudDeleteError(db, cfg, log.ID, message)
 		return fmt.Errorf("%s", message)
-	}
-	module := "admin"
-	if log.Table.IsCommonModel != 0 {
-		module = "common"
-	}
-	modelFile, err := ParseNameData(module, log.Table.Name, "model", log.Table.ModelFile)
-	if err != nil {
-		return fail("model manifest", err)
-	}
-	handlerFile, err := ParseNameData("admin", log.Table.Name, "handler", log.Table.ControllerFile)
-	if err != nil {
-		return fail("handler manifest", err)
 	}
 	menuName := GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir))
 	menuSnapshot, err = snapshotMenuRules(db, cfg, menuName)
@@ -461,6 +478,9 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := updateCrudStatus(db, cfg, log.ID, "delete"); err != nil {
 		_ = recordCrudError(db, cfg, log.ID, "stage=delete log update: "+err.Error())
 		return err
+	}
+	if warning := customSkeletonWarning(preservedCustomPaths); warning != "" {
+		fmt.Println(warning)
 	}
 	return nil
 }
@@ -675,8 +695,8 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
-	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
-	previous := normalizedPathSet(log.Table.GeneratedFiles)
+	current := normalizedPathSetWithoutCustom(append(append([]string{}, manifest.Generated...), manifest.Shared...))
+	previous := normalizedPathSetWithoutCustom(log.Table.GeneratedFiles)
 	if len(current) != len(previous) {
 		return false
 	}
@@ -686,6 +706,62 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 		}
 	}
 	return true
+}
+
+func appendCustomSkeletonManifest(manifest FileManifest, modelFile, handlerFile NameInfo) FileManifest {
+	for _, target := range customSkeletonTargets(modelFile, handlerFile) {
+		if !containsPath(manifest.Generated, target.path) {
+			manifest.Generated = append(manifest.Generated, target.path)
+		}
+	}
+	return manifest
+}
+
+func splitCustomSkeletonManifest(paths []string, modelFile, handlerFile NameInfo) ([]string, []string, error) {
+	targets := customSkeletonTargets(modelFile, handlerFile)
+	byPath := make(map[string]customSkeletonTarget, len(targets))
+	for _, target := range targets {
+		byPath[target.path] = target
+	}
+
+	generated := make([]string, 0, len(paths))
+	preserved := []string{}
+	for _, path := range paths {
+		target, ok := byPath[path]
+		if !ok {
+			generated = append(generated, path)
+			continue
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read CRUD custom skeleton %q: %w", path, err)
+		}
+		if string(content) == target.content {
+			generated = append(generated, path)
+		} else {
+			preserved = append(preserved, path)
+		}
+	}
+	return generated, preserved, nil
+}
+
+func customSkeletonWarning(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	displayed := make([]string, 0, len(paths))
+	for _, path := range paths {
+		displayed = append(displayed, customSkeletonDisplayPath(path))
+	}
+	return "WARNING: preserved customized CRUD custom skeletons: " + strings.Join(displayed, ", ")
+}
+
+func customSkeletonDisplayPath(path string) string {
+	relative, err := filepath.Rel(utils.RootPath(), path)
+	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || relative == ".." {
+		return filepath.ToSlash(path)
+	}
+	return filepath.ToSlash(relative)
 }
 
 // canonicalManifestLangPath migrates only the legacy backend language layout.
@@ -730,11 +806,45 @@ func canonicalManifestLangPath(path string) string {
 func manifestConflicts(manifest FileManifest) []string {
 	conflicts := []string{}
 	for _, path := range manifest.Generated {
+		if isCustomSkeletonPath(path) {
+			continue
+		}
 		if fileExists(path) {
 			conflicts = append(conflicts, filepath.Clean(path))
 		}
 	}
 	return conflicts
+}
+
+func normalizedPathSetWithoutCustom(paths []string) map[string]bool {
+	filtered := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if !isCustomSkeletonPath(path) {
+			filtered = append(filtered, path)
+		}
+	}
+	return normalizedPathSet(filtered)
+}
+
+func isCustomSkeletonPath(path string) bool {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if !strings.HasSuffix(filepath.Base(clean), "_custom.go") {
+		return false
+	}
+	root := filepath.Clean(utils.RootPath())
+	if !filepath.IsAbs(clean) {
+		clean = filepath.Join(root, clean)
+	}
+	for _, parent := range []string{
+		filepath.Join(root, "app", "admin", "model"),
+		filepath.Join(root, "app", "common", "model"),
+		filepath.Join(root, "app", "admin", "handler"),
+	} {
+		if clean == parent || strings.HasPrefix(clean, parent+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizedPathSet(paths []string) map[string]bool {
