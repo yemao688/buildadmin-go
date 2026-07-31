@@ -165,8 +165,8 @@ fields:
       remoteField: username
       relationFields: username
       remoteSourceConfigType: crud
-      remoteController: app/admin/handler/admin.go
-      remoteModel: app/admin/model/admin.go
+      remoteController: app/admin/handler/auth/admin.go
+      remoteModel: app/admin/model/auth/admin.go
 ```
 
 `formBuildExclude: true` 让操作员不能手工选择 owner，由 `assignOnCreate` 自动写入；这里不要再加 `tableBuildExclude: true`，因为保留表格列才能同时获得自动隐藏的原始 FK 搜索和可见的 relation display 列（规则见"关系"）。owner/admin 归属列通常展示 `username`，reviewer 这类独立审批人语义再单独使用 `nickname` 等字段。
@@ -362,7 +362,7 @@ modelFile: app/admin/model/custom/model.go
     remoteField: username
     relationFields: username
     remoteSourceConfigType: crud
-    remoteController: app/admin/handler/admin.go
+    remoteController: app/admin/handler/auth/admin.go
   table:
     label: 上级代理
     comSearchRender: remoteSelect
@@ -382,7 +382,7 @@ modelFile: app/admin/model/custom/model.go
     remoteField: nickname
     relationFields: nickname,email
     remoteSourceConfigType: crud
-    remoteController: app/admin/handler/admin.go
+    remoteController: app/admin/handler/auth/admin.go
   table:
     comSearchRender: remoteSelect
     show: "false"
@@ -421,8 +421,8 @@ form:
   remoteField: nickname_text
   relationFields: username
   remoteSourceConfigType: crud
-  remoteController: app/admin/handler/user.go
-  remoteModel: app/admin/model/user.go
+  remoteController: app/admin/handler/user/user.go
+  remoteModel: app/admin/model/user/user.go
 ```
 
 ### custom 来源
@@ -563,8 +563,8 @@ fields:
       remoteField: username
       relationFields: username
       remoteSourceConfigType: crud
-      remoteController: app/admin/handler/admin.go
-      remoteModel: app/admin/model/admin.go
+      remoteController: app/admin/handler/auth/admin.go
+      remoteModel: app/admin/model/auth/admin.go
   - name: order_no
     type: varchar
     length: 64
