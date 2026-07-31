@@ -7,7 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
+
+// TableName 经全局命名策略解析（前缀安全），对齐真实表 user_rule。
+func (Rule) TableName(namer schema.Namer) string {
+	return namer.TableName("user_rule")
+}
 
 // Rule 会员菜单权限规则表
 type Rule struct {

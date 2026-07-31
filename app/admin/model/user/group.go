@@ -5,7 +5,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
+
+// TableName 经全局命名策略解析（前缀安全），对齐真实表 user_group。
+func (Group) TableName(namer schema.Namer) string {
+	return namer.TableName("user_group")
+}
 
 // Group 会员组表
 type Group struct {

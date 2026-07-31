@@ -2,6 +2,8 @@
 
 ## v2.3.0
 
+- **Fixed:** 修复去冗余前缀重命名引入的 GORM 表名回归——`UserMoneyLog→MoneyLog`、`UserScoreLog→ScoreLog`、`UserRule→Rule`、`UserGroup→Group`、`CrudLog→Log` 五个 struct 改名后，`.Model(&Struct{})` 驱动查询的表名被命名策略推导为不存在的 `money_log`/`score_log`/`rule`/`group`/`log`（真实表 `user_money_log` 等），对应后台列表/详情/删除 1146；现经 `TablerWithNamer` 按命名策略解析回真实表（前缀安全），并补 schema 断言回归测试。该回归随 v2.2.0 发布，仅影响 struct 驱动查询路径（List 走显式表名字符串未受影响）。
+- **Breaking (test 门禁):** 移除 `BUILDADMIN_TEST_MYSQL_DSN` 环境变量；MySQL 集成测试改由 `config.yaml` 的 `mysql_test` 段驱动——开发机需自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限（recovery 测试会动态创建 `<库名>_fresh_*` fixture 库）并置 `enabled: true`；未配置或禁用时测试统一提示并跳过。新增 `app/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）统一门禁解析与 fixture 库管理，原约 30 处重复门禁全部收编。
 - **Fixed:** 首次启动不再自动复制 `config.yaml`——`serve` 默认命令在配置缺失时以只读模板进入安装向导（`/install` 可访问），`config.yaml` 改由安装器在安装时创建；无配置文件的非 serve 命令与显式 `--conf` 缺失均明确报错，不再静默使用模板值。
 - **Breaking (CRUD spec 契约):** `isCommonModel` 弃用并暂时禁用——非零值在生成/apply 时被拒绝（错误信息含指引），model 一律输出到 `app/admin/model`；历史 common model 模块的 `crud:delete` 不受影响。`app/common/model` 自此仅保留既有手写基础设施（`BaseModel`、`User` struct 等），不再接受任何新生成输出。
 

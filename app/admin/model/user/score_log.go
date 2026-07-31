@@ -12,7 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
 )
+
+// TableName 经全局命名策略解析（前缀安全），对齐真实表 user_score_log。
+func (ScoreLog) TableName(namer schema.Namer) string {
+	return namer.TableName("user_score_log")
+}
 
 // ScoreLog 会员积分变动表
 type ScoreLog struct {

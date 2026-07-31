@@ -12,7 +12,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
+
+// TableName 经全局命名策略解析（前缀安全），对齐真实表 crud_log。
+func (Log) TableName(namer schema.Namer) string {
+	return namer.TableName("crud_log")
+}
 
 // Log CRUD记录表
 type Log struct {

@@ -13,7 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
 )
+
+// TableName 经全局命名策略解析（前缀安全），对齐真实表 user_money_log。
+func (MoneyLog) TableName(namer schema.Namer) string {
+	return namer.TableName("user_money_log")
+}
 
 // MoneyLog 会员余额变动表
 type MoneyLog struct {
