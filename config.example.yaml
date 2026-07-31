@@ -57,6 +57,17 @@ mysql:
   log_filename: 'sql.log'
   prefix: 'ba_'
 
+# MySQL 集成测试数据库（可选）。开发机自建一次性测试库并授权后启用；
+# 未配置或 enabled: false 时，需要真实 MySQL 的测试将统一提示并跳过。
+mysql_test:
+  enabled: false
+  host: '127.0.0.1'
+  port: 3306
+  database: 'buildadmin_test'
+  username: 'buildadmin_go'
+  password: ''
+  charset: 'utf8mb4'
+
 jwt:
   secret: ''
   jwt_ttl: 86400
