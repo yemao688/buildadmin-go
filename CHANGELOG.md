@@ -2,6 +2,7 @@
 
 ## v2.4.0
 
+- **Fixed (dev):** air 入口移除冗余的显式 `--conf` 传参——`--conf` 默认值本即根目录 `config.yaml`，显式传参会置 Changed 标记，文件缺失时硬 panic，导致全新检出/重装向导模式在 air 下无法进入；现无参启动，三形态各归其位（有配置正常合并、无配置基座向导、显式 `--conf` 缺失仍报错）。
 - **Changed (installer):** 安装完成流程加固——`CommandExecComplete` 写锁前校验 `public/index.html` 存在（误完成不再封死向导后续步骤）；已安装时重试改为幂等成功返回，`/api/install/commandExecComplete` 从 InstallGuard 豁免以让重试拿到友好提示而非 403；其余安装接口保持已安装即封禁。
 - **Fixed:** 成功登录的后台日志写入真实 `admin_id`——登录 handler 认证成功后经新增的 canonical setter `header.SetAdminAuth` 把 admin 身份写入 gin context（登录中间件同步改为该 setter）；此前登录请求无认证上下文，`AdminLogModel.Add` 只能记出 `admin_id=0` 的无效属主行并触发迁移不变量失败。失败登录仍记 `admin_id=0`（匿名尝试，合法）。
 - **Fixed:** 修复安装向导模式启动即崩的既有缺陷——基座占位 DB 凭据不可达时，`ReportUnprotectedRoutes` 启动诊断 goroutine 拿到 nil gorm 句柄 SIGSEGV 带走进程；现对 DB 可用性做 nil/Ping 检查，不可用时跳过诊断并告警，向导模式正常存活。
