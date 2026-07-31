@@ -13,11 +13,11 @@ type TrackedMigration struct {
 	Up       MigrationFn
 	// VerifyBaseline runs only while applying a migration, after Up succeeds.
 	// A failed baseline check is retried with the migration; completed records
-	// do not run it again. VerifySchema and VerifyData are standing runtime
+	// do not run it again. VerifySchema and VerifyUpgradeData are standing runtime
 	// invariants and run on every migrate, so their predicates must be business-compatible.
-	VerifyBaseline MigrationFn
-	VerifySchema   MigrationFn
-	VerifyData     MigrationFn
+	VerifyBaseline    MigrationFn
+	VerifySchema      MigrationFn
+	VerifyUpgradeData MigrationFn
 }
 
 type TrackedRunnerOptions struct {
@@ -67,8 +67,8 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 					return count, err
 				}
 			}
-			if m.VerifyData != nil {
-				if err := m.VerifyData(db, config); err != nil {
+			if m.VerifyUpgradeData != nil {
+				if err := m.VerifyUpgradeData(db, config); err != nil {
 					return count, err
 				}
 			}
@@ -87,8 +87,8 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 				return count, err
 			}
 		}
-		if m.VerifyData != nil {
-			if err := m.VerifyData(db, config); err != nil {
+		if m.VerifyUpgradeData != nil {
+			if err := m.VerifyUpgradeData(db, config); err != nil {
 				return count, err
 			}
 		}

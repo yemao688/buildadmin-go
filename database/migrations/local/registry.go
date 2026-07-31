@@ -17,7 +17,17 @@ func officialKeysThrough(official []core.OfficialMigration, version int64) []cor
 }
 
 func Migrations(official []core.OfficialMigration) []core.LocalMigration {
-	requiresOfficial := officialKeysThrough(official, 20250412134127)
+	requiresOfficial := []core.OfficialKey{}
+	if len(official) > 0 {
+		maxVersion := official[0].Key.Version
+		for _, migration := range official[1:] {
+			if migration.Key.Version > maxVersion {
+				maxVersion = migration.Key.Version
+			}
+		}
+		requiresOfficial = officialKeysThrough(official, maxVersion)
+	}
+	// An empty official list has no dependency, matching the old result.
 	return []core.LocalMigration{
 		{Sequence: 1, ID: "account-status-protocol", Revision: 1, RequiresOfficial: requiresOfficial, Up: local0001Up, VerifySchema: verifyStatusContract, VerifyUpgradeData: verifyStatusContract},
 		{Sequence: 2, ID: "admin-hierarchy", Revision: 1, RequiresOfficial: requiresOfficial, Up: version224, VerifySchema: verifyHierarchyContract, VerifyUpgradeData: verifyHierarchyContract},

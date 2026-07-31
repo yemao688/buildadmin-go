@@ -25,7 +25,7 @@ func init() {
 		VerifySchema: func(db *gorm.DB, config *conf.Configuration) error {
 			return nil
 		},
-		VerifyData: func(db *gorm.DB, config *conf.Configuration) error {
+		VerifyUpgradeData: func(db *gorm.DB, config *conf.Configuration) error {
 			return nil
 		},
 	})
@@ -40,7 +40,7 @@ official or local tables unless that data is owned by the business migration.
 `VerifyBaseline` is an apply-time, one-shot contract: it runs after `Up`, is
 retried when applying a failed migration, and does not run again after the
 ledger record is complete. It may therefore assert the exact schema baseline
-created by that migration. `VerifySchema` and `VerifyData` are standing
+created by that migration. `VerifySchema` and `VerifyUpgradeData` are standing
 invariants: they run on every `migrate`, and their predicates must remain
 compatible with valid business changes.
 
