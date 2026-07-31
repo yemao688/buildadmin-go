@@ -75,18 +75,22 @@ func ValidateOfficialLedgerSchema(db *gorm.DB, config *conf.Configuration) error
 	if engine != "InnoDB" {
 		return fmt.Errorf("official migrations ledger engine=%q", engine)
 	}
-	var columns []struct{ Name, Type, Nullable string }
-	if err := db.Raw("SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY ORDINAL_POSITION", TableName(config, "migrations")).Scan(&columns).Error; err != nil {
+	columns, err := queryLedgerColumns(db, TableName(config, "migrations"))
+	if err != nil {
 		return err
 	}
-	want := []struct{ name, typ, nullable string }{{"version", "bigint", "NO"}, {"migration_name", "varchar(100)", "YES"}, {"start_time", "timestamp", "YES"}, {"end_time", "timestamp", "YES"}, {"breakpoint", "tinyint(1)", "NO"}}
-	if len(columns) != len(want) {
-		return fmt.Errorf("official migrations ledger column count=%d", len(columns))
+	want := []ledgerColumnSpec{
+		{Name: "version", Type: "bigint", Nullable: "NO", AcceptUnsigned: true},
+		{Name: "migration_name", Type: "varchar(100)", Nullable: "YES"},
+		{Name: "start_time", Type: "timestamp", Nullable: "YES"},
+		{Name: "end_time", Type: "timestamp", Nullable: "YES"},
+		{Name: "breakpoint", Type: "tinyint(1)", Nullable: "NO"},
 	}
-	for i, column := range columns {
-		if column.Name != want[i].name || (i == 0 && column.Type != "bigint" && column.Type != "bigint unsigned") || (i != 0 && column.Type != want[i].typ) || column.Nullable != want[i].nullable {
-			return fmt.Errorf("official migrations ledger schema mismatch at %s", column.Name)
+	if mismatch := compareLedgerColumns(columns, want); mismatch != nil {
+		if mismatch.columnName == "" {
+			return fmt.Errorf("official migrations ledger column count=%d", mismatch.actualCount)
 		}
+		return fmt.Errorf("official migrations ledger schema mismatch at %s", mismatch.columnName)
 	}
 	return nil
 }

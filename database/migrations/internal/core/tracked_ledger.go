@@ -1,9 +1,7 @@
 package core
 
 import (
-	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"go-build-admin/conf"
@@ -20,13 +18,6 @@ type TrackedMigrationRecord struct {
 
 type TrackedLedgerOptions struct {
 	IncludeAdoptedFrom bool
-}
-
-func precisionValue(value sql.NullInt64) int {
-	if !value.Valid {
-		return 0
-	}
-	return int(value.Int64)
 }
 
 func BootstrapTrackedLedger(db *gorm.DB, config *conf.Configuration, logicalName string, options TrackedLedgerOptions) error {
@@ -55,35 +46,25 @@ func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logica
 	if engine != "InnoDB" {
 		return fmt.Errorf("%s schema mismatch: engine=%q", logicalName, engine)
 	}
-	type column struct {
-		Name, Type, IsNullable string
-		Precision              sql.NullInt64
-		Default                sql.NullString
-	}
-	var rows []column
-	if err := db.Raw("SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS is_nullable, DATETIME_PRECISION AS `precision`, COLUMN_DEFAULT AS `default` FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", table).Scan(&rows).Error; err != nil {
+	rows, err := queryLedgerColumns(db, table)
+	if err != nil {
 		return err
 	}
-	want := []struct {
-		typ, nullable string
-		precision     int
-	}{{"bigint unsigned", "NO", 0}, {"varchar(191)", "NO", 0}, {"bigint unsigned", "NO", 0}, {"timestamp(6)", "NO", 6}, {"timestamp(6)", "YES", 6}}
-	wantNames := []string{"sequence", "migration_id", "revision", "start_time", "end_time"}
+	want := []ledgerColumnSpec{
+		{Name: "sequence", Type: "bigint unsigned", Nullable: "NO", CheckPrecision: true, RequireNoDefault: true},
+		{Name: "migration_id", Type: "varchar(191)", Nullable: "NO", CheckPrecision: true, RequireNoDefault: true},
+		{Name: "revision", Type: "bigint unsigned", Nullable: "NO", CheckPrecision: true, RequireNoDefault: true},
+		{Name: "start_time", Type: "timestamp(6)", Nullable: "NO", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
+		{Name: "end_time", Type: "timestamp(6)", Nullable: "YES", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
+	}
 	if options.IncludeAdoptedFrom {
-		want = append(want, struct {
-			typ, nullable string
-			precision     int
-		}{"varchar(191)", "YES", 0})
-		wantNames = append(wantNames, "adopted_from")
+		want = append(want, ledgerColumnSpec{Name: "adopted_from", Type: "varchar(191)", Nullable: "YES", CheckPrecision: true, RequireNoDefault: true})
 	}
-	if len(rows) != len(want) {
-		return fmt.Errorf("%s schema mismatch: got %d columns", logicalName, len(rows))
-	}
-	for i, row := range rows {
-		w := want[i]
-		if row.Name != wantNames[i] || strings.ToLower(row.Type) != w.typ || row.IsNullable != w.nullable || precisionValue(row.Precision) != w.precision || row.Default.Valid {
-			return fmt.Errorf("%s schema mismatch at %s", logicalName, row.Name)
+	if mismatch := compareLedgerColumns(rows, want); mismatch != nil {
+		if mismatch.columnName == "" {
+			return fmt.Errorf("%s schema mismatch: got %d columns", logicalName, mismatch.actualCount)
 		}
+		return fmt.Errorf("%s schema mismatch at %s", logicalName, mismatch.columnName)
 	}
 	type indexColumn struct {
 		Name, Column string
