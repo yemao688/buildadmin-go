@@ -62,6 +62,10 @@ var NeedDependentVersion = map[string]string{
  */
 const InstallationCompletionMark = "install-end"
 
+const installCompleteMessage = "The system has completed installation. If you need to reinstall, please delete public/install.lock first"
+
+const frontendBuildArtifactMissingMessage = "前端构建产物缺失，请先完成前端构建（web-install 命令与 mvDist 步骤）"
+
 type InstallHandler struct {
 	log      *zap.Logger
 	config   *conf.Configuration
@@ -530,9 +534,14 @@ func (h *InstallHandler) isInstallComplete() bool {
 // 标记命令执行完毕
 func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
-			"lock": "public/" + LockFileName,
-		})))
+		SuccessWithMessage(ctx, installCompleteMessage)
+		return
+	}
+
+	artifactPath := filepath.Join(utils.RootPath(), "public", "index.html")
+	artifact, err := os.Stat(artifactPath)
+	if err != nil || artifact.IsDir() {
+		FailByErr(ctx, cErr.BadRequest(frontendBuildArtifactMissingMessage))
 		return
 	}
 

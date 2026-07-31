@@ -29,6 +29,18 @@ func Success(c *gin.Context, data interface{}) {
 	})
 }
 
+func SuccessWithMessage(c *gin.Context, message string) {
+	if requesttx.Stage(c, requesttx.Outcome{HTTPCode: http.StatusOK, BusinessCode: 1, Message: message}) {
+		return
+	}
+	c.JSON(http.StatusOK, Response{
+		1,
+		nil,
+		message,
+		0,
+	})
+}
+
 // 失败返回
 func Fail(c *gin.Context, httpCode int, code int, msg string) {
 	msg = utils.Lang(c, msg, nil)

@@ -114,27 +114,30 @@ func TestInstallRoutesRespectInstallLock(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name          string
-		createLock    bool
-		installStatus int
-		apiStatus     int
-		location      string
-		apiCode       int
-		installBody   string
+		name           string
+		createLock     bool
+		installStatus  int
+		apiStatus      int
+		completeStatus int
+		location       string
+		apiCode        int
+		installBody    string
 	}{
 		{
-			name:          "installer is available before completion",
-			installStatus: http.StatusOK,
-			apiStatus:     http.StatusNoContent,
-			installBody:   "installer",
+			name:           "installer is available before completion",
+			installStatus:  http.StatusOK,
+			apiStatus:      http.StatusNoContent,
+			completeStatus: http.StatusNoContent,
+			installBody:    "installer",
 		},
 		{
-			name:          "installer is blocked after lock exists",
-			createLock:    true,
-			installStatus: http.StatusFound,
-			apiStatus:     http.StatusOK,
-			location:      "/",
-			apiCode:       http.StatusForbidden,
+			name:           "installer is blocked after lock exists",
+			createLock:     true,
+			installStatus:  http.StatusFound,
+			apiStatus:      http.StatusOK,
+			completeStatus: http.StatusNoContent,
+			location:       "/",
+			apiCode:        http.StatusForbidden,
 		},
 	}
 
@@ -156,6 +159,9 @@ func TestInstallRoutesRespectInstallLock(t *testing.T) {
 			engine.GET("/api/install/envBaseCheck", func(c *gin.Context) {
 				c.Status(http.StatusNoContent)
 			})
+			engine.POST("/api/install/commandExecComplete", func(c *gin.Context) {
+				c.Status(http.StatusNoContent)
+			})
 
 			installRecorder := httptest.NewRecorder()
 			engine.ServeHTTP(installRecorder, httptest.NewRequest(http.MethodGet, "/install", nil))
@@ -175,6 +181,10 @@ func TestInstallRoutesRespectInstallLock(t *testing.T) {
 				require.NoError(t, json.Unmarshal(apiRecorder.Body.Bytes(), &response))
 				require.Equal(t, test.apiCode, response.Code)
 			}
+
+			completeRecorder := httptest.NewRecorder()
+			engine.ServeHTTP(completeRecorder, httptest.NewRequest(http.MethodPost, "/api/install/commandExecComplete", nil))
+			require.Equal(t, test.completeStatus, completeRecorder.Code)
 		})
 	}
 }

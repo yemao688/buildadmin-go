@@ -10,11 +10,17 @@ import (
 
 const installCompleteMessage = "The system has completed installation. If you need to reinstall, please delete the install.lock file first"
 
+const installCompletePath = "/api/install/commandExecComplete"
+
 // InstallGuard blocks the installer after the installation lock exists. The
 // installer API follows the application's existing business-error response
 // convention: HTTP 200 with a 403 business code.
 func InstallGuard(lockPath string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == installCompletePath {
+			c.Next()
+			return
+		}
 		if !isInstallPath(c.Request.URL.Path) || !pathExists(lockPath) {
 			c.Next()
 			return
