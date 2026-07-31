@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.2.0
+
+- **Breaking (CRUD 生成器命名约定):** 业务模块路径推导统一为蛇形实体约定。`generateRelativePath` 省略时兜底默认等于表名（规范仍要求显式写出，标准值即表名）；单段路径在第一个下划线处拆分——表 `ops_user_test_xxx` 生成 handler/model `ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.UserTestXxx`、菜单 `ops/userTestXxx`。路由保持"目录段小写 + 实体段 PascalCase"的既有形式（对齐 PHP 实际 URL 如 `/admin/country.LanguageContent/index`）：显式路径模块（含 `country.*`）重新生成后**路由不变**；仅旧版省略路径自动推导出的扁平路由（`countryLanguageContent` 形态）在重新生成时变为带命名空间形式（`country.LanguageContent`）。显式路径中蛇形末段的视图叶子从原样保留改为 lcfirst 驼峰化（`test_xxx` → `testXxx`）。旧的自动推导（Go 文件扁平落根目录、视图末两段合并驼峰、路由扁平无命名空间）已移除。
+- **Breaking (核心模块导出符号重命名):** `app/admin/handler/user`、`app/admin/model/user`、`app/admin/handler/crud`、`app/admin/model/crud` 中冗余分类前缀已去除：`UserGroupHandler→GroupHandler`、`UserRuleHandler→RuleHandler`、`UserMoneyLogHandler→MoneyLogHandler`、`UserScoreLogHandler→ScoreLogHandler`、`CrudLogHandler→LogHandler` 及 model 层对应类型（`UserGroup→Group`、`UserRule→Rule`、`UserMoneyLog→MoneyLog`、`UserScoreLog→ScoreLog`、`CrudLog→Log` 与构造器）。路由字符串（`user.Group`、`crud.Log` 等）、admin_rule 菜单名、前端视图与 API URL 均不变；下游 fork 在 Go 代码中引用旧类型名需同步改名。
+- **Breaking (model 包路径迁移):** 手写 model 按边界归位，旧包路径移除（无别名兼容层）：`app/common/model` 的 `AuthModel` → `app/common/member.Service`；`UserModel`/`UserMoneyLogModel`/`UserScoreLogModel` → `app/api/model/user`；scoped `AttachmentModel` → `app/admin/model/routine`；`UploadHelper`/`AliossStorage`/`Attachment` struct → `app/common/upload`；`AreaModel` → `app/common/area`；`country.Service` → `app/common/country`；api 侧的 `app/admin/validate` 用法 → `app/pkg/validator`；`app/internal/permissioncache` 与 `internal/advisorylock` → `app/pkg/` 同名包。`ConfigModel.GetKVByGroup/GetValueByName` 的共享读取 → `app/common/siteconfig.Service`。admin 会员 handler 改注 `MemberPermissionInvalidator` 小接口（Wire 绑定同一 `member.Service` 实例）。下游 fork 有相应 import 的需按此映射表更新。
+- **Fixed:** 后台附件管理列表 500——`Attachment` 的 `Admin`/`User` 关联改为经全局命名策略解析到真实（带前缀）admin/user 表；此前按结构体名推导到不存在的 `attachment_admin`/`attachment_user` 表导致 MySQL 1146。含 sqlite 回归测试。
+- **Fixed:** `UploadHelper` 并发竞态——改为无状态服务（请求文件与细目经 `UploadParams` 逐调用传入）；此前 Wire 单例持有请求级可变字段，admin 与 api 并发上传会互相覆盖。含 `-race` 竞态回归测试。
+- **Fixed:** `crud:delete` 删除多模块共享包中的单模块时误摘整包 `ProviderSet` 导致 wire 失败；现仅在该包 provider.go 无存留条目时摘除，delete→regenerate 往返对共享文件字节级还原。
+- **Added:** import 边界守护测试（`app/boundary_test.go`）：AST 扫描强制 `admin↔api` 禁止互引、`common` 禁引两侧 handler；现存违规以白名单棘轮管理（当前仅 1 条安装引导永久例外）。
+- **Added:** 会员权限缓存失效接口化——admin 会员 handler 依赖 `MemberPermissionInvalidator`，后台修改会员/分组/规则后即时失效会员侧缓存（与 API 读取同一 `member.Service` 实例）。
+- **Changed:** `app/common/model` 收缩为 `isCommonModel` 生成器兼容区；手写共享服务全部迁入按能力命名的 `app/common/<capability>` 包（member/upload/area/country/siteconfig）。
+- **Changed:** `country_language_content` 以蛇形路径重新生成（`country/language_content.go`），路由、视图、菜单与表数据不变；内部工具文件蛇形统一（`treeT.go→tree_t.go`、`Lange.go→lang.go`）；web/ 忽略 tsc/vue-tsc 产物。
+
+### Upgrade
+
+1. 下游业务 fork 若 import 了迁移的包或引用了重命名的类型，按上述映射表机械替换后运行 `go build ./...` 核对；本版不提供别名兼容层。
+2. 业务 CRUD spec 的 `generateRelativePath` 按新约定显式写为表名本身（如 `ops_user_test_xxx`）；`/`、`.` 分隔符仅在需要更深业务子目录时使用。
+3. fork 自定义 handler 若注入了会员 `AuthModel`，改为注入 `*member.Service`；仅需失效会员权限缓存的场景改注 `MemberPermissionInvalidator`。
+
 ## v2.1.0
 
 - 修复 migrations 包 4 个腐化的 MySQL E2E 测试（install/recovery/upgrade 家族）：`TestInstall`、`TestFreshSeedPendingRetryAfterOverlayFailure`、`TestUpstreamSecurityBaselineThenLocalOverlay`、`TestInstallRecoveryDecisionFourStates` 子测试。
@@ -12,7 +31,6 @@
 - 删除 `database/buildadmin.sql` 及其升级合约测试（该 SQL 仅为测试夹具；生产安装使用 AutoMigrate + Go 种子，不受影响）。
 - **迁移运行时文件：** 执行 `git mv storage runtime`，并将已有配置中的 `log.root_dir` 改为 `runtime/logs`。上传文件现位于 `public/storage/`；如需保留历史上传，将 `storage/default` 等内容移入 `public/storage/`。
 - **迁移部署配置：** Docker 入口改为 `--conf /app/config.yaml`，Compose 挂载改为 `./config.yaml` 与 `./runtime`。
-- **Breaking (CRUD 生成器命名约定):** 业务模块路径推导统一为蛇形实体约定。`generateRelativePath` 省略时兜底默认等于表名（规范仍要求显式写出，标准值即表名）；单段路径在第一个下划线处拆分——表 `ops_user_test_xxx` 生成 handler/model `ops/user_test_xxx.go`、视图 `ops/userTestXxx/`、路由 `ops.UserTestXxx`、菜单 `ops/userTestXxx`。路由保持"目录段小写 + 实体段 PascalCase"的既有形式（对齐 PHP 实际 URL 如 `/admin/country.LanguageContent/index`）：显式路径模块（含 `country.*`）重新生成后**路由不变**；仅旧版省略路径自动推导出的扁平路由（`countryLanguageContent` 形态）在重新生成时变为带命名空间形式（`country.LanguageContent`）。显式路径中蛇形末段的视图叶子从原样保留改为 lcfirst 驼峰化（`test_xxx` → `testXxx`）。旧的自动推导（Go 文件扁平落根目录、视图末两段合并驼峰、路由扁平无命名空间）已移除。
 
 ## v2.0.2
 
