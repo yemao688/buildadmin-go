@@ -2,6 +2,8 @@ package header
 
 import "github.com/gin-gonic/gin"
 
+const adminAuthKey = "AdminAuth"
+
 type AdminAuth struct {
 	Version      string `form:"version"`
 	Language     string `form:"language"`
@@ -12,11 +14,15 @@ type AdminAuth struct {
 }
 
 func GetAdminAuth(c *gin.Context) (adminAuth AdminAuth) {
-	v, _ := c.Get("AdminAuth")
+	v, _ := c.Get(adminAuthKey)
 	if v != nil {
 		adminAuth = v.(AdminAuth)
 	}
 	return adminAuth
+}
+
+func SetAdminAuth(c *gin.Context, adminAuth AdminAuth) {
+	c.Set(adminAuthKey, adminAuth)
 }
 
 type UserAuth struct {

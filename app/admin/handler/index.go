@@ -136,6 +136,23 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			FailByErr(ctx, err)
 			return
 		}
+		loginResult, ok := result.(map[string]interface{})
+		if !ok {
+			FailByErr(ctx, cErr.InternalServer("Invalid login result"))
+			return
+		}
+		adminID, ok := loginResult["id"].(int32)
+		if !ok || adminID == 0 {
+			FailByErr(ctx, cErr.InternalServer("Invalid login result"))
+			return
+		}
+		loginToken, _ := loginResult["token"].(string)
+		header.SetAdminAuth(ctx, header.AdminAuth{
+			Language: ctx.GetHeader("Accept-Language"),
+			IsLogin:  true,
+			Id:       adminID,
+			Token:    loginToken,
+		})
 		Success(ctx, map[string]interface{}{
 			"userInfo":  result,
 			"routePath": "/admin",

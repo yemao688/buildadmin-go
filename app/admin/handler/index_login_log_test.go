@@ -1,0 +1,128 @@
+package handler
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"testing"
+	"time"
+
+	adminauth "go-build-admin/app/admin/model/auth"
+	"go-build-admin/app/middleware"
+	"go-build-admin/app/pkg/testutil"
+	"go-build-admin/app/pkg/token"
+	"go-build-admin/utils"
+
+	ginI18n "github.com/gin-contrib/i18n"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/text/language"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
+)
+
+func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
+	db, handler, record := newAdminLoginLogFixture(t)
+	admin := adminauth.Admin{
+		Username: "login-admin",
+		Nickname: "Login Admin",
+		Password: utils.EncryptPassword("correct horse battery staple", "login-salt"),
+		Salt:     "login-salt",
+		Status:   "enable",
+	}
+	require.NoError(t, db.Create(&admin).Error)
+
+	router := newLoginLogRouter(handler, record)
+	success := performAdminLogin(t, router, admin.Username, "correct horse battery staple")
+	require.Equal(t, http.StatusOK, success.Code)
+
+	var successLog adminauth.AdminLog
+	require.NoError(t, db.Order("id DESC").First(&successLog).Error)
+	require.Equal(t, admin.ID, successLog.AdminID)
+	require.Equal(t, admin.Username, successLog.Username)
+
+	failure := performAdminLogin(t, router, admin.Username, "wrong password")
+	require.Equal(t, http.StatusOK, failure.Code)
+
+	var failureLog adminauth.AdminLog
+	require.NoError(t, db.Order("id DESC").First(&failureLog).Error)
+	require.Equal(t, int32(0), failureLog.AdminID)
+	require.Equal(t, admin.Username, failureLog.Username)
+
+}
+
+func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware.Record) {
+	t.Helper()
+	db, config := testutil.OpenMySQL(t)
+	prefix := "login_log_test_" + strconv.FormatInt(time.Now().UnixNano(), 10) + "_"
+	config.Database.Prefix = prefix
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
+	tables := []string{"admin", "admin_log", "admin_rule", "token"}
+	for _, table := range tables {
+		require.NoError(t, db.Exec("DROP TABLE IF EXISTS `"+prefix+table+"`").Error)
+	}
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		for _, table := range tables {
+			_ = db.Exec("DROP TABLE IF EXISTS `" + prefix + table + "`").Error
+		}
+		_ = sqlDB.Close()
+	})
+	config.App.AdminLoginCaptcha = false
+	config.App.AdminLoginRetry = 0
+	config.App.AdminTokenKeepTime = 3600
+	config.App.AutoWriteAdminLog = true
+	config.Token.Default = "mysql"
+	config.Token.Algo = "sha256"
+	config.Token.Key = "admin-login-log-test-key"
+
+	require.NoError(t, db.AutoMigrate(
+		&adminauth.Admin{},
+		&adminauth.AdminLog{},
+		&adminauth.AdminRule{},
+		&token.Token{},
+	))
+
+	tokenHelper := token.NewTokenHelper(config, nil, db, nil)
+	authModel := adminauth.NewAuthModel(db, tokenHelper, config)
+	logModel := adminauth.NewAdminLogModel(db, config)
+	return db, NewIndexHandler(config, nil, authModel, nil, nil, nil), middleware.NewRecord(config, logModel)
+}
+
+func newLoginLogRouter(handler *IndexHandler, record *middleware.Record) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
+		RootPath:         utils.RootPath() + "/conf/localize",
+		AcceptLanguage:   []language.Tag{language.English},
+		DefaultLanguage:  language.English,
+		UnmarshalFunc:    json.Unmarshal,
+		FormatBundleFile: "json",
+	})))
+	router.Use(record.Handler())
+	router.POST("/admin/Index/login", handler.Login)
+	registerPasswordValidation()
+	return router
+}
+
+func registerPasswordValidation() {
+	if engine, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		_ = engine.RegisterValidation("password", utils.ValidatePassword)
+	}
+}
+
+func performAdminLogin(t *testing.T, router *gin.Engine, username, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(Login{Username: username, Password: password})
+	require.NoError(t, err)
+	request := httptest.NewRequest(http.MethodPost, "/admin/Index/login", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	return recorder
+}

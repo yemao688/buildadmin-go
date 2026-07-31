@@ -70,7 +70,7 @@ func (m *Login) Handler() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": http.StatusInternalServerError, "msg": "invalid authenticated actor"})
 			return
 		}
-		c.Set("AdminAuth", authParam)
+		header.SetAdminAuth(c, authParam)
 	}
 }
 
