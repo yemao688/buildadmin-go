@@ -141,6 +141,10 @@ func initConfig() {
 				}
 				continue
 			}
+			if args[i] == "crud:validate" {
+				// crud:validate 是纯 spec 校验，不依赖运行配置，与其 spec 参数一起豁免缺配置检查
+				break
+			}
 			panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
 		}
 		fmt.Println("config.yaml 不存在，以只读模板启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）")

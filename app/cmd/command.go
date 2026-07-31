@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"go-build-admin/app/cmd/handler"
+	helper "go-build-admin/app/pkg/crud_helper"
 
 	"github.com/spf13/cobra"
 )
@@ -26,6 +28,20 @@ func NewCommand(
 }
 
 func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
+	validateCmd := &cobra.Command{
+		Use:           "crud:validate <spec.yaml...>",
+		Short:         "纯校验 CRUD spec，不连接数据库或生成文件",
+		Args:          cobra.MinimumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			warnings, err := helper.ValidateSpecs(args)
+			for _, warning := range warnings {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %s\n", warning.SpecPath, warning.Message)
+			}
+			return err
+		},
+	}
 	generateCmd := &cobra.Command{
 		Use:           "crud:generate <spec.yaml>",
 		Short:         "根据 YAML spec 生成 CRUD",
@@ -108,5 +124,6 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 		generateCmd,
 		deleteCmd,
 		applyCmd,
+		validateCmd,
 	)
 }

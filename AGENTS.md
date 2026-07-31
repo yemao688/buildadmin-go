@@ -78,6 +78,7 @@ When asked to generate a module, read that doc, create `crud_specs/<module>.yaml
 
 ```bash
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/app crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...]
 go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ```
 

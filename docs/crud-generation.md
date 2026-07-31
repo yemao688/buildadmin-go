@@ -25,11 +25,14 @@
 在仓库根目录执行：
 
 ```bash
+go run ./cmd/app crud:validate crud_specs/<module>.yaml
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml
 go build ./...
 ```
 
-退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器会为每个后台 handler 旁生成 `<name>_route.go` RouteRegistrar，并更新 handler `provider.go` 与 `router/registrar_set.go`；不再修改 `router/router.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
+提交 spec 前可运行 `crud:validate <spec.yaml...>` 做纯校验。该命令不连接数据库、不生成文件，也不修改菜单或 spec；它检查恰好一个主键、`relationFields` 是否引用 spec 自己的字段、`remoteController`/`remoteModel` 文件是否存在、`generateRelativePath` 路径是否合法，以及 `default`/`defaultType` 是否配对。已存在但无法反查 route 常量的控制器，以及实体段使用大写/驼峰的非标准路径，会输出 `warning:`，不会导致失败。发现任意 error 时退出码为 `1`；只有 warning 或全部通过时退出码为 `0`，warning 和错误均输出到 stderr。
+
+生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器会为每个后台 handler 旁生成 `<name>_route.go` RouteRegistrar，并更新 handler `provider.go` 与 `router/registrar_set.go`；不再修改 `router/router.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 
 所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 `provider.go`、`router/registrar_set.go` 这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
 
