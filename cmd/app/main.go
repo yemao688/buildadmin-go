@@ -121,6 +121,13 @@ func versionRequested(args []string) bool {
 	return false
 }
 
+func missingConfigMessage(setupRequested bool) string {
+	if setupRequested {
+		return "config.yaml 不存在，setup 将以只读基座引导 CLI 安装"
+	}
+	return "config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）"
+}
+
 func initConfig() {
 	if !filepath.IsAbs(configPath) {
 		configPath = filepath.Join(rootPath, configPath)
@@ -129,26 +136,35 @@ func initConfig() {
 	runtimeConfigPath := configPath
 	runtimeConfigExists := utils.PathExists(runtimeConfigPath)
 	if !runtimeConfigExists {
-		// 首次启动不自动复制 config.yaml：安装向导（/install）负责创建它。
-		// serve 默认命令以只读基座启动进入安装向导；其它命令必须已有真实配置。
-		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed {
-			panic(fmt.Errorf("config file not found: %s", configPath))
-		}
 		args := os.Args[1:]
-		for i := 0; i < len(args); i++ {
-			if strings.HasPrefix(args[i], "-") {
-				if args[i] == "--conf" || args[i] == "-conf" {
-					i++ // 跳过 --conf 的值
-				}
-				continue
-			}
-			if args[i] == "crud:validate" {
-				// crud:validate 是纯 spec 校验，不依赖运行配置，与其 spec 参数一起豁免缺配置检查
+		setupRequested := false
+		for _, arg := range args {
+			if arg == "setup" {
+				setupRequested = true
 				break
 			}
-			panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
 		}
-		fmt.Println("config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）")
+		// 首次启动不自动复制 config.yaml：安装向导（/install）负责创建它。
+		// serve 默认命令以只读基座启动进入安装向导；其它命令必须已有真实配置。
+		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed && !setupRequested {
+			panic(fmt.Errorf("config file not found: %s", configPath))
+		}
+		if !setupRequested {
+			for i := 0; i < len(args); i++ {
+				if strings.HasPrefix(args[i], "-") {
+					if args[i] == "--conf" || args[i] == "-conf" {
+						i++ // 跳过 --conf 的值
+					}
+					continue
+				}
+				if args[i] == "crud:validate" {
+					// crud:validate 是纯 spec 校验，不依赖运行配置，与其 spec 参数一起豁免缺配置检查
+					break
+				}
+				panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
+			}
+		}
+		fmt.Println(missingConfigMessage(setupRequested))
 	}
 
 	defaultsPath := filepath.Join(filepath.Dir(runtimeConfigPath), conf.DefaultsFileName)

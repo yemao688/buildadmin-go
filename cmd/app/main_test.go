@@ -24,6 +24,15 @@ func TestVersionRequested(t *testing.T) {
 	}
 }
 
+func TestMissingConfigMessage(t *testing.T) {
+	if got := missingConfigMessage(true); got != "config.yaml 不存在，setup 将以只读基座引导 CLI 安装" {
+		t.Fatalf("setup missing config message = %q", got)
+	}
+	if got := missingConfigMessage(false); got != "config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）" {
+		t.Fatalf("default missing config message = %q", got)
+	}
+}
+
 func TestApplyTimeZone(t *testing.T) {
 	original := time.Local
 	t.Cleanup(func() { time.Local = original })

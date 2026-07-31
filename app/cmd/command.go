@@ -220,6 +220,7 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 		},
 
 		migrateCmd,
+		newSetupCommand(),
 		generateCmd,
 		deleteCmd,
 		applyCmd,

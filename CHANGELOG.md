@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.5.0
+
+- **Added:** 新增 CLI 交互式安装命令 `setup`，与 Web 安装向导并存二选一——交互收集 MySQL 连接（密码遮蔽输入）→ 连接测试与建库 → 写稀疏 `config.yaml` → 进程内执行迁移 → 前端构建/跳过/中止三选 → 自定义或默认管理员与站点名 → 写安装锁；支持全 flags + `--yes` 的无人值守模式（CI/容器可用），已安装时拒绝执行，`--conf` 未显式指定时始终以根目录 `config.yaml` 为写入目标。安装逻辑同步抽取为 `app/pkg/installer` 共享包，Web 向导改为调用同一事实源，行为不变。新增依赖 `golang.org/x/term`。
+
 ## v2.4.0
 
 - **Docs:** CRUD spec 编写前必须经过引导式需求确认——AGENTS.md 与 `docs/crud-generation.md` 规定 AI 须提供 2-3 个确定性字段集方案，并确认归属与数据权限、审批/状态流、软删除、列表与表单字段取舍、预期关系等业务关键点后才能落 YAML。
