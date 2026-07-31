@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.0
+
+- **Changed (config):** 配置体系改为分层加载——`config.example.yaml` 改名 `config.defaults.yaml` 并升级为运行时基座（启动时实际加载，提供全键默认值）；`config.yaml` 退化为稀疏覆盖层，只存用户改过的键。基座新增配置键随框架升级自动生效，无需再全量拷贝比对；存量全量 `config.yaml` 是合法覆盖集，无感继续工作。viper 合并语义：map 深合并、list 整体替换。
+- **Added (config):** 覆盖层含基座不存在的死键（框架改名/删除配置后的残留）时启动向 stderr 输出 warning 并列出键名，不阻塞启动。
+- **Changed (installer):** Web 安装器与终端配置改为写稀疏覆盖层——安装只写 `mysql` 连接与生成的 `token.key`；终端包管理器/端口变更只写 `terminal` 两个键，且写入路径从历史错误的 `conf/config.yaml` 修正为根目录 `config.yaml`。不再正则改写全量模板。
+- **Added (router):** 未安装（`public/install.lock` 不存在）时访问首页 302 跳转 `/install`；已安装照常服务 `index.html`。
+- **Changed (docker):** 镜像内置 `config.defaults.yaml` 基座（镜像升级即默认值升级，生产覆盖层无需变动）；compose 的 `config.yaml` 挂载改长语法并设 `create_host_path: false`，宿主缺文件时明确报错而非静默创建目录。
+
 ## v2.3.1
 
 - **Fixed:** `crud:generate` 内部 wire 调用改为 `go run -mod=mod github.com/google/wire/cmd/wire`，与 `//go:generate` 声明一致——开发机不再需要单独安装 wire 二进制。
