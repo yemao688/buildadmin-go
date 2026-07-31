@@ -20,7 +20,7 @@ func TestInstallRecoveryDecisionFourStates(t *testing.T) {
 	}
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
-	for _, state := range []struct {
+	for index, state := range []struct {
 		name  string
 		setup func(*testing.T, *gorm.DB, *conf.Configuration)
 		want  InstallRecoveryState
@@ -51,7 +51,7 @@ func TestInstallRecoveryDecisionFourStates(t *testing.T) {
 		}, "", true},
 	} {
 		t.Run(state.name, func(t *testing.T) {
-			cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("recovery_%s_%d_", state.name, os.Getpid())}}
+			cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("recovery_%d_%d_", os.Getpid(), index)}}
 			t.Cleanup(func() {
 				db.Exec("DROP TABLE IF EXISTS `" + tableName(cfg, "admin") + "`")
 				db.Exec("DROP TABLE IF EXISTS `" + tableName(cfg, "migrations") + "`")

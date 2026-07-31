@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -372,7 +373,7 @@ func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing
 	if db == nil {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
-	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("business_override_%d_", time.Now().UnixNano()))
+	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("biz_ovr_%d_", os.Getpid()))
 	section := &migrationCriticalSection{}
 	if _, err := runMigrationLifecycle(db, cfg, section); err != nil {
 		t.Fatal(err)

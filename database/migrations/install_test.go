@@ -35,6 +35,17 @@ func TestInstall(t *testing.T) {
 	if db == nil {
 		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
 	}
+	// 本测试使用固定 go_ 前缀且不随运行变化：前一次运行的遗留表会让安装重入失败
+	// （重播种子会把 owner 置回 0 而 local 迁移已被账本跳过），每次先清出干净起点。
+	var leftovers []string
+	if err := db.Raw("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'go\\_%'").Scan(&leftovers).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range leftovers {
+		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
 	err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...)
 	fmt.Println("生成数据表:", err)
 
