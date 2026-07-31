@@ -90,6 +90,23 @@ func mysqlDSN(configuration conf.MysqlTest, database string) string {
 	)
 }
 
+// MySQLDSN builds a DSN from the config.yaml mysql_test settings.
+func MySQLDSN(configuration conf.MysqlTest, database string) string {
+	return mysqlDSN(configuration, database)
+}
+
+func withMySQLTestDatabase(configuration *conf.Configuration, database string) *conf.Configuration {
+	copy := *configuration
+	copy.Database.Driver = "mysql"
+	copy.Database.Host = copy.MysqlTest.Host
+	copy.Database.Port = copy.MysqlTest.Port
+	copy.Database.Database = database
+	copy.Database.UserName = copy.MysqlTest.UserName
+	copy.Database.Password = copy.MysqlTest.Password
+	copy.Database.Charset = copy.MysqlTest.Charset
+	return &copy
+}
+
 func openMySQL(configuration conf.MysqlTest, database, tablePrefix string) (*gorm.DB, error) {
 	return gorm.Open(mysql.Open(mysqlDSN(configuration, database)), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
@@ -130,7 +147,7 @@ func OpenMySQL(t *testing.T) (*gorm.DB, *conf.Configuration) {
 		skipMySQL(t, fmt.Sprintf("测试库连接失败: %v", err))
 		return nil, nil
 	}
-	return db, configuration
+	return db, withMySQLTestDatabase(configuration, configuration.MysqlTest.Database)
 }
 
 // OpenFixtureDatabase 为需要"独立数据库"的测试（如 recovery 判定）创建
@@ -168,5 +185,7 @@ func OpenFixtureDatabase(t *testing.T, tablePrefix string) (*gorm.DB, *conf.Conf
 		skipMySQL(t, fmt.Sprintf("独立测试库连接失败: %v", err))
 		return nil, nil
 	}
-	return fixtureDB, configuration
+	fixtureConfiguration := withMySQLTestDatabase(configuration, fixtureName)
+	fixtureConfiguration.Database.Prefix = tablePrefix
+	return fixtureDB, fixtureConfiguration
 }
