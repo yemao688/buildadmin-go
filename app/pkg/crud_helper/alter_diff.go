@@ -28,11 +28,28 @@ const (
 	DiffUnmanaged        DiffClass = "unmanaged"
 )
 
+type ApprovalCategory string
+
+const (
+	ApprovalDefaults      ApprovalCategory = "defaults"
+	ApprovalAutoIncrement ApprovalCategory = "auto-increment"
+	ApprovalTypeWidening  ApprovalCategory = "type-widening"
+	ApprovalAttributes    ApprovalCategory = "attributes"
+)
+
+var approvalCategories = []ApprovalCategory{
+	ApprovalDefaults,
+	ApprovalAutoIncrement,
+	ApprovalTypeWidening,
+	ApprovalAttributes,
+}
+
 type AlterDiff struct {
 	Change    crudmodel.ChangeField
 	Field     crudmodel.Field
 	Column    *model.Column
 	Class     DiffClass
+	Category  ApprovalCategory
 	Reason    string
 	Unmanaged []string
 }
@@ -306,7 +323,7 @@ func legalDefaultForNewField(field crudmodel.Field) bool {
 	return field.Default != ""
 }
 
-func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool) (DiffClass, string) {
+func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool) (DiffClass, ApprovalCategory, string) {
 	typeChanged := fieldTypeChanged(field, column)
 	unsignedChanged := field.Unsigned != columnUnsigned(column)
 	nullableChangedValue := nullableChanged(field, column)
@@ -314,38 +331,38 @@ func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool)
 	autoChanged := autoIncrementChanged(field, column)
 	commentChanged := column.COLUMN_COMMENT != field.Comment
 	if primary && (typeChanged || unsignedChanged || nullableChangedValue || autoChanged || defaultChangedValue || commentChanged) {
-		return DiffRejected, "primary key column attribute drift requires a business migration"
+		return DiffRejected, "", "primary key column attribute drift requires a business migration"
 	}
 	if unsignedChanged {
-		return DiffRejected, "unsigned attribute changes are rejected"
+		return DiffRejected, "", "unsigned attribute changes are rejected"
 	}
 	if nullableChangedValue && strings.EqualFold(column.IS_NULLABLE, "YES") && !specFieldNullable(field) {
-		return DiffRejected, "nullable to NOT NULL may reject existing rows"
+		return DiffRejected, "", "nullable to NOT NULL may reject existing rows"
 	}
 	if typeChanged {
 		actual := column.COLUMN_TYPE
 		desired := specColumnType(field)
 		if typeNarrowing(actual, desired) {
-			return DiffRejected, "type narrowing may truncate existing data"
+			return DiffRejected, "", "type narrowing may truncate existing data"
 		}
 		if explicitWideningMatrix(actual, desired) {
-			return DiffRequiresApproval, "type widening is covered by the explicit safety matrix"
+			return DiffRequiresApproval, ApprovalTypeWidening, "type widening is covered by the explicit safety matrix"
 		}
-		return DiffRejected, "type change is outside the explicit safety matrix"
+		return DiffRejected, "", "type change is outside the explicit safety matrix"
 	}
 	if defaultChangedValue {
-		return DiffRequiresApproval, "default value change requires approval"
+		return DiffRequiresApproval, ApprovalDefaults, "default value change requires approval"
 	}
 	if autoChanged {
-		return DiffRequiresApproval, "auto_increment change requires approval"
+		return DiffRequiresApproval, ApprovalAutoIncrement, "auto_increment change requires approval"
 	}
 	if commentChanged {
-		return DiffSafeAuto, "comment-only change"
+		return DiffSafeAuto, "", "comment-only change"
 	}
 	if nullableChangedValue {
-		return DiffSafeAuto, "nullable expansion"
+		return DiffSafeAuto, "", "nullable expansion"
 	}
-	return DiffRequiresApproval, "column attribute change requires approval"
+	return DiffRequiresApproval, ApprovalAttributes, "column attribute change requires approval"
 }
 
 // specFieldMatchesColumn 判断 spec 字段与实际列是否完全一致（无漂移）。
@@ -393,10 +410,10 @@ func deriveAlterDiff(columns []model.Column, fields []crudmodel.Field) []AlterDi
 		if specFieldMatchesColumn(field, column) {
 			continue
 		}
-		class, reason := classifyFieldDiff(field, column, primary[strings.ToLower(field.Name)])
+		class, category, reason := classifyFieldDiff(field, column, primary[strings.ToLower(field.Name)])
 		changes = append(changes, AlterDiff{
 			Change: crudmodel.ChangeField{Type: "change-field-attr", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
-			Field:  field, Column: &column, Class: class, Reason: reason, Unmanaged: unmanagedColumnAttributes(column),
+			Field:  field, Column: &column, Class: class, Category: category, Reason: reason, Unmanaged: unmanagedColumnAttributes(column),
 		})
 	}
 	return changes

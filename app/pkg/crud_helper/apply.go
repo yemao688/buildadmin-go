@@ -39,18 +39,22 @@ const (
 )
 
 type ApplyOptions struct {
-	AllowRebuild bool // 允许对已有表发生主键漂移时删除重建（数据丢失，仅限可丢弃环境）
-	SkipMenu     bool
-	AdminID      int32
-	Plan         bool
+	AllowRebuild       bool // 允许对已有表发生主键漂移时删除重建（数据丢失，仅限可丢弃环境）
+	SkipMenu           bool
+	AdminID            int32
+	Plan               bool
+	ApprovedCategories map[ApprovalCategory]bool
 }
 
 type ApplyChange struct {
-	Field     string
-	Type      string
-	Class     DiffClass
-	Reason    string
-	DDL       string
+	Field    string
+	Type     string
+	Class    DiffClass
+	Category ApprovalCategory
+	Reason   string
+	DDL      string
+	Approved bool
+
 	Unmanaged []string
 }
 
@@ -66,13 +70,77 @@ type ApplyTableResult struct {
 }
 
 type ApplyBlockedError struct {
-	Table   string
-	Class   DiffClass
-	Reasons []string
+	Table      string
+	Class      DiffClass
+	Reasons    []string
+	Categories []ApprovalCategory
 }
 
 func (e *ApplyBlockedError) Error() string {
-	return fmt.Sprintf("crud apply for %q blocked by %s changes: %s; use a reviewed business migration or explicitly reconcile the spec", e.Table, e.Class, strings.Join(e.Reasons, "; "))
+	message := fmt.Sprintf("crud apply for %q blocked by %s changes: %s; use a reviewed business migration or explicitly reconcile the spec", e.Table, e.Class, strings.Join(e.Reasons, "; "))
+	if len(e.Categories) > 0 {
+		categories := make([]string, 0, len(e.Categories))
+		for _, category := range e.Categories {
+			categories = append(categories, string(category))
+		}
+		message += "; approvable via --approve=" + strings.Join(categories, ",")
+	}
+	return message
+}
+
+// ParseApprovalCategories parses the comma-separated --approve value. An empty
+// value keeps the historical behavior: no requires-approval diff is allowed.
+func ParseApprovalCategories(value string) (map[ApprovalCategory]bool, error) {
+	approved := make(map[ApprovalCategory]bool)
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return approved, nil
+	}
+	for _, raw := range strings.Split(value, ",") {
+		category := ApprovalCategory(strings.TrimSpace(raw))
+		if category == "" {
+			continue
+		}
+		if category == "all" {
+			for _, valid := range approvalCategories {
+				approved[valid] = true
+			}
+			continue
+		}
+		if !isApprovalCategory(category) {
+			return nil, fmt.Errorf("unknown approval category %q; valid values: %s, all", category, strings.Join(approvalCategoryNames(), ", "))
+		}
+		approved[category] = true
+	}
+	return approved, nil
+}
+
+func approvalCategoryNames() []string {
+	names := make([]string, 0, len(approvalCategories))
+	for _, category := range approvalCategories {
+		names = append(names, string(category))
+	}
+	return names
+}
+
+func isApprovalCategory(category ApprovalCategory) bool {
+	for _, valid := range approvalCategories {
+		if category == valid {
+			return true
+		}
+	}
+	return false
+}
+
+func isApprovedDiff(class DiffClass, category ApprovalCategory, approved map[ApprovalCategory]bool) bool {
+	return class == DiffRequiresApproval && category != "" && approved[category]
+}
+
+func isBlockingDiff(class DiffClass, category ApprovalCategory, approved map[ApprovalCategory]bool) bool {
+	if class == DiffRejected {
+		return true
+	}
+	return class == DiffRequiresApproval && !isApprovedDiff(class, category, approved)
 }
 
 // decideApplyAction 计算已有表的应用动作与拒绝原因（纯函数，便于测试）。
@@ -176,21 +244,19 @@ func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts Ap
 		}
 		results = append(results, *result)
 	}
-	if err := planBlockingError(results, opts.AllowRebuild); err != nil {
+	if err := planBlockingError(results, opts.AllowRebuild, opts.ApprovedCategories); err != nil {
 		return results, err
 	}
 	return results, nil
 }
 
-func planBlockingError(results []ApplyTableResult, allowRebuild bool) error {
+func planBlockingError(results []ApplyTableResult, allowRebuild bool, approved map[ApprovalCategory]bool) error {
 	for _, result := range results {
 		if result.Destructive && allowRebuild {
 			continue
 		}
-		for _, change := range result.Diffs {
-			if change.Class == DiffRejected || change.Class == DiffRequiresApproval {
-				return &ApplyBlockedError{Table: result.Table, Class: change.Class, Reasons: []string{change.Field + ": " + change.Reason}}
-			}
+		if blocked := blockedApplyChanges(result.Diffs, approved); len(blocked) > 0 {
+			return newApplyBlockedError(result.Table, blocked)
 		}
 	}
 	return nil
@@ -245,11 +311,11 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel,
 		if ddlErr != nil {
 			return nil, ddlErr
 		}
-		result.Diffs = append(result.Diffs, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Reason: diff.Reason, DDL: ddl, Unmanaged: diff.Unmanaged})
+		result.Diffs = append(result.Diffs, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Category: diff.Category, Reason: diff.Reason, DDL: ddl, Approved: isApprovedDiff(diff.Class, diff.Category, opts.ApprovedCategories), Unmanaged: diff.Unmanaged})
 	}
 	if len(diffs) == 0 {
 		result.Action = ApplyUnchanged
-	} else if firstBlockingDiff(diffs) != nil {
+	} else if firstBlockingDiff(diffs, opts.ApprovedCategories) != nil {
 		result.Action = ApplyBlocked
 	} else {
 		result.Action = ApplyAltered
@@ -289,9 +355,9 @@ func alterChangeDDL(tableName string, diff AlterDiff) (string, error) {
 	return "ALTER TABLE `" + tableName + "` MODIFY " + fieldData, nil
 }
 
-func firstBlockingDiff(diffs []AlterDiff) *AlterDiff {
+func firstBlockingDiff(diffs []AlterDiff, approved map[ApprovalCategory]bool) *AlterDiff {
 	for i := range diffs {
-		if diffs[i].Class == DiffRejected || diffs[i].Class == DiffRequiresApproval {
+		if isBlockingDiff(diffs[i].Class, diffs[i].Category, approved) {
 			return &diffs[i]
 		}
 	}
@@ -361,26 +427,20 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 			}
 		} else {
 			diffs := deriveAlterDiff(current, spec.Fields)
-			if blocking := firstBlockingDiff(diffs); blocking != nil {
-				reasons := make([]string, 0, len(diffs))
-				for _, diff := range diffs {
-					if diff.Class == DiffRejected || diff.Class == DiffRequiresApproval {
-						reasons = append(reasons, diff.Field.Name+": "+diff.Reason)
-					}
-				}
-				result.Diffs = applyChangesFromDiffs(diffs)
+			result.Diffs = applyChangesFromDiffs(diffs, opts.ApprovedCategories)
+			if blocking := firstBlockingDiff(diffs, opts.ApprovedCategories); blocking != nil {
 				result.Action = ApplyBlocked
-				return result, &ApplyBlockedError{Table: spec.Table.Name, Class: blocking.Class, Reasons: reasons}
+				return result, newApplyBlockedError(spec.Table.Name, blockedApplyChanges(result.Diffs, opts.ApprovedCategories))
 			}
 			spec.Table.DesignChange = make([]crudmodel.ChangeField, 0, len(diffs))
 			for _, diff := range diffs {
-				if diff.Class != DiffSafeAuto {
+				if diff.Class != DiffSafeAuto && !isApprovedDiff(diff.Class, diff.Category, opts.ApprovedCategories) {
 					continue
 				}
+				diff.Change.Sync = true
 				spec.Table.DesignChange = append(spec.Table.DesignChange, diff.Change)
 				result.Changes = append(result.Changes, diff.Change.Type+" "+diff.Change.NewName)
 			}
-			result.Diffs = applyChangesFromDiffs(diffs)
 			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 {
 				result.Action = ApplyUnchanged
 			}
@@ -405,13 +465,59 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	return result, nil
 }
 
-func applyChangesFromDiffs(diffs []AlterDiff) []ApplyChange {
+func applyChangesFromDiffs(diffs []AlterDiff, approved map[ApprovalCategory]bool) []ApplyChange {
 	changes := make([]ApplyChange, 0, len(diffs))
 	for _, diff := range diffs {
 		ddl, _ := alterChangeDDL("<table>", diff)
-		changes = append(changes, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Reason: diff.Reason, DDL: ddl, Unmanaged: diff.Unmanaged})
+		changes = append(changes, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Category: diff.Category, Reason: diff.Reason, DDL: ddl, Approved: isApprovedDiff(diff.Class, diff.Category, approved), Unmanaged: diff.Unmanaged})
 	}
 	return changes
+}
+
+func blockedApplyChanges(changes []ApplyChange, approved map[ApprovalCategory]bool) []ApplyChange {
+	blocked := make([]ApplyChange, 0)
+	for _, change := range changes {
+		if isBlockingDiff(change.Class, change.Category, approved) {
+			blocked = append(blocked, change)
+		}
+	}
+	return blocked
+}
+
+func newApplyBlockedError(table string, changes []ApplyChange) *ApplyBlockedError {
+	if len(changes) == 0 {
+		return &ApplyBlockedError{Table: table}
+	}
+	categories := make([]ApprovalCategory, 0, len(changes))
+	for _, change := range changes {
+		if change.Class != DiffRequiresApproval || change.Category == "" {
+			continue
+		}
+		seen := false
+		for _, category := range categories {
+			if category == change.Category {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			categories = append(categories, change.Category)
+		}
+	}
+	return &ApplyBlockedError{
+		Table:      table,
+		Class:      changes[0].Class,
+		Reasons:    applyChangeReasons(changes),
+		Categories: categories,
+	}
+}
+
+func applyChangeReasons(changes []ApplyChange) []string {
+	reasons := make([]string, 0, len(changes))
+	for _, change := range changes {
+		reasons = append(reasons, change.Field+": "+change.Reason)
+	}
+	return reasons
 }
 
 // adoptCrudLog 确保目标库存在与当前 spec 一致的 success 记录：无则新建，

@@ -75,15 +75,15 @@ func TestPrimaryKeyDriftComparesCompleteColumnSetAndAttributes(t *testing.T) {
 
 func TestPlanBlockingErrorGatesRiskyPlans(t *testing.T) {
 	rejected := []ApplyTableResult{{Table: "orders", Diffs: []ApplyChange{{Field: "id", Class: DiffRejected, Reason: "primary key drift"}}}}
-	if err := planBlockingError(rejected, false); err == nil {
+	if err := planBlockingError(rejected, false, nil); err == nil {
 		t.Fatal("rejected plan returned nil error")
 	}
 	approval := []ApplyTableResult{{Table: "orders", Diffs: []ApplyChange{{Field: "name", Class: DiffRequiresApproval, Reason: "widening"}}}}
-	if err := planBlockingError(approval, false); err == nil {
+	if err := planBlockingError(approval, false, nil); err == nil {
 		t.Fatal("requires-approval plan returned nil error")
 	}
 	rebuild := []ApplyTableResult{{Table: "orders", Destructive: true, Diffs: []ApplyChange{{Field: "id", Class: DiffRejected, Reason: "primary key drift"}}}}
-	if err := planBlockingError(rebuild, true); err != nil {
+	if err := planBlockingError(rebuild, true, nil); err != nil {
 		t.Fatalf("explicit rebuild plan was blocked: %v", err)
 	}
 }

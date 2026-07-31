@@ -2,6 +2,7 @@
 
 ## v2.3.0
 
+- **Added:** `crud:apply` 支持 `--approve=defaults,type-widening` 分类批准通道（也可使用 `all`），逐项审计实际放行的变更；`rejected` 变更仍不可批准，`--plan` 会显示可放行类别或业务迁移提示。
 - **Added:** `crud:validate` 纯校验 CRUD spec，在提交前检查主键、关系字段、路径、远程文件和默认值契约，并对未登记路由控制器及非标准驼峰路径输出 warning；不连接数据库、不生成文件。
 - **Added:** 生成器为每个模块的 model/handler 产出 `_custom.go` 一次性定制骨架：已存在时绝不覆盖，`crud:delete` 删除逐字节未改的骨架、保留已定制文件并输出 warning——与双 commit 工作流共存，业务定制多一层结构化落点。
 - **Changed:** 含 `weigh` 字段的表在 spec 未显式指定 `defaultSortField` 时自动生成 `weigh,desc` 默认排序（对齐 PHP 上游习惯）；spec 显式配置优先。

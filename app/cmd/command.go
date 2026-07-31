@@ -91,6 +91,7 @@ func Register(rootCmd *cobra.Command, newCmd func() (*Command, func(), error)) {
 	}
 	applyCmd.Flags().Bool("allow-rebuild", false, "allow destructive drop-and-recreate for primary-key drift (data loss, disposable environments only)")
 	applyCmd.Flags().Bool("plan", false, "print the classified CRUD plan without executing changes")
+	applyCmd.Flags().String("approve", "", "approve requires-approval categories: defaults,auto-increment,type-widening,attributes, or all")
 	applyCmd.Flags().Bool("skip-menu", false, "skip menu sync")
 	applyCmd.Flags().Int32("admin-id", 1, "administrator ID recorded for adopted CRUD logs")
 	rootCmd.AddCommand(

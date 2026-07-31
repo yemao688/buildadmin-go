@@ -475,10 +475,13 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 ```bash
 go run ./cmd/app --conf config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
 go run ./cmd/app --conf config.yaml crud:apply crud_specs/<module>.yaml
-# flags: --plan / --allow-rebuild（主键漂移时破坏性重建，仅限可丢弃环境） / --skip-menu / --admin-id
+# flags: --plan / --approve=<类别> / --allow-rebuild（主键漂移时破坏性重建，仅限可丢弃环境） / --skip-menu / --admin-id
+# example: crud:apply --approve=defaults,type-widening
 ```
 
-`crud:apply --plan` 只读取数据库并逐表逐列输出风险等级和 DDL，不执行 schema、菜单或 `crud_log` 变更；存在 `rejected` 时返回非零退出码。`migrate` 只有在 `crud.apply_on_migrate: true` 时才会自动执行 apply，缺省关闭。
+`--approve` 以逗号分隔批准类别，也可使用 `--approve=all` 全选。固定类别及语义为：`defaults`（默认值变更）、`auto-increment`（自增属性变更）、`type-widening`（命中显式安全矩阵的类型扩宽）、`attributes`（其它列属性变更）。未指定时行为与默认部署语义一致。批准只放行对应的 `requires-approval` diff；`rejected`（主键漂移、unsigned 变更、nullable→NOT NULL、类型收窄及安全矩阵外类型变更等）永不可批准，`--allow-rebuild` 仍只控制主键漂移的破坏性重建。
+
+`crud:apply --plan` 只读取数据库并逐表逐列输出风险等级和 DDL，不执行 schema、菜单或 `crud_log` 变更；阻塞的 `requires-approval` diff 会标注 `可被 --approve=<类别> 放行`，`rejected` 会标注必须使用业务迁移。未批准的 `requires-approval` 或存在 `rejected` 时返回非零退出码。`migrate` 只有在 `crud.apply_on_migrate: true` 时才会自动执行 apply，缺省关闭。
 
 `migrate` 尾部启用后执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
 
@@ -493,7 +496,7 @@ git pull && go run ./cmd/app --conf config.yaml migrate        # 框架三轨道
 | 表不存在 | 按 spec 初始建表（安全，不是"重建"） |
 | 表已存在，无漂移 | `unchanged`，只同步表注释（幂等） |
 | 新增 nullable 列、带合法默认值的新增列、字段 comment-only | `safe-auto`，自动执行 |
-| 类型扩宽命中显式安全矩阵、默认值变更 | `requires-approval`，计划中明示，默认跳过并非零退出 |
+| 类型扩宽命中显式安全矩阵、默认值变更 | `requires-approval`，计划中明示，默认阻塞；可用对应 `--approve=<类别>` 放行 |
 | unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键列属性/列集合漂移 | `rejected`，拒绝并指向 business 迁移；`--allow-rebuild` 只对主键漂移允许破坏性重建 |
 
 关键约定：
