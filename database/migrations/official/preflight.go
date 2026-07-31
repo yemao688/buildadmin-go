@@ -48,20 +48,20 @@ func normalizeLegacyColumns(db *gorm.DB, config *conf.Configuration, onlyTable s
 		}
 		if core.ColumnExists(db, t, item.new) {
 			var n int64
-			q := "SELECT COUNT(*) FROM `" + t + "` WHERE `" + item.old + "` IS NOT NULL AND `" + item.old + "` <> '' AND `" + item.new + "` IS NOT NULL AND `" + item.new + "` <> '' AND NOT (`" + item.old + "` <=> `" + item.new + "`)"
+			q := "SELECT COUNT(*) FROM " + core.QuoteIdentifier(t) + " WHERE " + core.QuoteIdentifier(item.old) + " IS NOT NULL AND " + core.QuoteIdentifier(item.old) + " <> '' AND " + core.QuoteIdentifier(item.new) + " IS NOT NULL AND " + core.QuoteIdentifier(item.new) + " <> '' AND NOT (" + core.QuoteIdentifier(item.old) + " <=> " + core.QuoteIdentifier(item.new) + ")"
 			if err := db.Raw(q).Scan(&n).Error; err != nil {
 				return err
 			}
 			if n != 0 {
 				return fmt.Errorf("conflicting columns %s.%s and %s", t, item.old, item.new)
 			}
-			if err := db.Exec("UPDATE `" + t + "` SET `" + item.new + "`=`" + item.old + "` WHERE (`" + item.new + "` IS NULL OR `" + item.new + "`='') AND `" + item.old + "` IS NOT NULL").Error; err != nil {
+			if err := db.Exec("UPDATE " + core.QuoteIdentifier(t) + " SET " + core.QuoteIdentifier(item.new) + "=" + core.QuoteIdentifier(item.old) + " WHERE (" + core.QuoteIdentifier(item.new) + " IS NULL OR " + core.QuoteIdentifier(item.new) + "='') AND " + core.QuoteIdentifier(item.old) + " IS NOT NULL").Error; err != nil {
 				return err
 			}
-			if err := db.Exec("ALTER TABLE `" + t + "` DROP COLUMN `" + item.old + "`").Error; err != nil {
+			if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(t) + " DROP COLUMN " + core.QuoteIdentifier(item.old)).Error; err != nil {
 				return err
 			}
-		} else if err := db.Exec("ALTER TABLE `" + t + "` CHANGE COLUMN `" + item.old + "` `" + item.new + "` " + item.typ).Error; err != nil {
+		} else if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(t) + " CHANGE COLUMN " + core.QuoteIdentifier(item.old) + " " + core.QuoteIdentifier(item.new) + " " + item.typ).Error; err != nil {
 			return err
 		}
 	}
@@ -88,7 +88,7 @@ func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error
 			return fmt.Errorf("backup table %s already exists while menu_rule is present; refusing to overwrite", backup)
 		}
 		if !core.TableExists(db, admin) {
-			if err := db.Exec("RENAME TABLE `" + menu + "` TO `" + admin + "`").Error; err != nil {
+			if err := db.Exec("RENAME TABLE " + core.QuoteIdentifier(menu) + " TO " + core.QuoteIdentifier(admin)).Error; err != nil {
 				return fmt.Errorf("rename menu_rule: %w", err)
 			}
 		} else {
@@ -111,7 +111,7 @@ func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error
 			for _, c := range cols {
 				if core.ColumnExists(db, menu, c) && core.ColumnExists(db, admin, c) {
 					var n int64
-					q := "SELECT COUNT(*) FROM `" + menu + "` m JOIN `" + admin + "` a ON m.id=a.id WHERE NOT (m.`" + c + "` <=> a.`" + c + "`)"
+					q := "SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m JOIN " + core.QuoteIdentifier(admin) + " a ON m.id=a.id WHERE NOT (m." + core.QuoteIdentifier(c) + " <=> a." + core.QuoteIdentifier(c) + ")"
 					if err := db.Raw(q).Scan(&n).Error; err != nil {
 						return err
 					}
@@ -146,7 +146,7 @@ func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error
 				}
 			}
 			var broken int64
-			if err := db.Raw("SELECT COUNT(*) FROM `" + menu + "` m WHERE m.pid <> 0 AND NOT EXISTS (SELECT 1 FROM `" + admin + "` a WHERE a.id=m.pid)").Scan(&broken).Error; err != nil {
+			if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m WHERE m.pid <> 0 AND NOT EXISTS (SELECT 1 FROM " + core.QuoteIdentifier(admin) + " a WHERE a.id=m.pid)").Scan(&broken).Error; err != nil {
 				return err
 			}
 			if broken != 0 {
@@ -165,7 +165,7 @@ func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error
 	} {
 		t := core.TableName(config, item.table)
 		if core.TableExists(db, t) && core.ColumnExists(db, t, item.column) {
-			if err := db.Exec("ALTER TABLE `" + t + "` MODIFY COLUMN `" + item.column + "` " + item.typ).Error; err != nil {
+			if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(t) + " MODIFY COLUMN " + core.QuoteIdentifier(item.column) + " " + item.typ).Error; err != nil {
 				return fmt.Errorf("alter %s.%s: %w", t, item.column, err)
 			}
 		}

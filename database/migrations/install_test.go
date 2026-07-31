@@ -17,17 +17,6 @@ func getDB() *gorm.DB {
 		return nil
 	}
 	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		dsn = fmt.Sprintf(
-			"%s:%s@tcp(%s:%s)/%s?charset=%s&parseTime=True&loc=Local",
-			"root",
-			"root",
-			"127.0.0.1",
-			"3306",
-			"test_go",
-			"utf8mb4",
-		)
-	}
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,
