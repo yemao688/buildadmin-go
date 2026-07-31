@@ -35,6 +35,8 @@ go install github.com/air-verse/air@latest
 
    后端默认监听 `9989`；修改端口使用 `APP_PORT`。未安装时访问首页会 302 到 `/install`；安装完成后 `/install` 会 302 到 `/`，安装 API 会被封禁（幂等的完成回调除外）。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
 2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会在根目录创建只含 MySQL 连接和 `token.key` 的稀疏 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
+
+   也可以使用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app setup`——交互收集数据库连接、建库、执行迁移并初始化管理员；加全部 flags 与 `--yes` 时可无人值守运行（CI/容器适用）。
 3. 如果不使用 Web 安装器，请创建只含目标环境覆盖值的 `config.yaml`，按环境填写后直接执行数据库迁移。未写入的配置由 `config.defaults.yaml` 基座提供，端口和时区仍只通过 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
    ```bash
