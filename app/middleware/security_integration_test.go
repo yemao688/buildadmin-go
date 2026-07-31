@@ -17,9 +17,9 @@ import (
 	securitymodel "go-build-admin/app/admin/model/security"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 	"go.uber.org/zap"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -34,17 +34,14 @@ type securityFixture struct {
 
 func newSecurityFixture(t *testing.T) *securityFixture {
 	t.Helper()
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN is not set")
-	}
 	prefix := fmt.Sprintf("it_%d_", os.Getpid())
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}, DisableForeignKeyConstraintWhenMigrating: true})
-	require.NoError(t, err)
+	db, config := testutil.OpenMySQL(t)
+	config.Database.Prefix = prefix
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
+	var err error
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	f := &securityFixture{db: db, sqlDB: sqlDB, prefix: prefix, root: 1}
-	f.config = &conf.Configuration{Database: conf.Database{Prefix: prefix}}
+	f := &securityFixture{db: db, sqlDB: sqlDB, prefix: prefix, config: config, root: 1}
 	tables := []string{"admin", "admin_closure", "admin_hierarchy_lock", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log", "user"}
 	for _, name := range tables {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + name + "`")

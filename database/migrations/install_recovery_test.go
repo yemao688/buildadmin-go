@@ -6,20 +6,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
 func TestInstallRecoveryDecisionFourStates(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
+	db, baseCfg := testutil.OpenMySQL(t)
 	for index, state := range []struct {
 		name  string
 		setup func(*testing.T, *gorm.DB, *conf.Configuration)
@@ -51,7 +46,9 @@ func TestInstallRecoveryDecisionFourStates(t *testing.T) {
 		}, "", true},
 	} {
 		t.Run(state.name, func(t *testing.T) {
-			cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("recovery_%d_%d_", os.Getpid(), index)}}
+			cfgValue := *baseCfg
+			cfgValue.Database.Prefix = fmt.Sprintf("recovery_%d_%d_", os.Getpid(), index)
+			cfg := &cfgValue
 			t.Cleanup(func() {
 				db.Exec("DROP TABLE IF EXISTS `" + tableName(cfg, "admin") + "`")
 				db.Exec("DROP TABLE IF EXISTS `" + tableName(cfg, "migrations") + "`")

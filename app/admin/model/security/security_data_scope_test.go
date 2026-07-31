@@ -8,8 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -22,18 +22,15 @@ type securityModelFixture struct {
 
 func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	t.Helper()
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN is not set")
-	}
 	prefix := fmt.Sprintf("sm_it_%d_", os.Getpid())
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}, DisableForeignKeyConstraintWhenMigrating: true})
-	require.NoError(t, err)
+	db, config := testutil.OpenMySQL(t)
+	config.Database.Prefix = prefix
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	db = db.Debug()
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	f := &securityModelFixture{db: db, prefix: prefix, config: &conf.Configuration{Database: conf.Database{Prefix: prefix}}}
-	tables := []string{"admin", "admin_closure", "user", "security_data_recycle_log", "security_sensitive_data_log"}
+	f := &securityModelFixture{db: db, prefix: prefix, config: config}
+	tables := []string{"admin", "admin_closure", "user", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log"}
 	for _, table := range tables {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + table + "`")
 	}
@@ -53,9 +50,13 @@ func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	} {
 		require.NoError(t, db.Exec(stmt).Error)
 	}
+	require.NoError(t, db.Table(prefix+"security_data_recycle").AutoMigrate(&SecurityDataRecycle{}))
+	require.NoError(t, db.Table(prefix+"security_sensitive_data").AutoMigrate(&SecuritySensitiveData{}))
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin")+" VALUES (1,NULL),(2,1)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin_closure")+" VALUES (1,1,0),(1,2,1),(2,2,0)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (20,2,'after',''),(21,2,'after-2','')").Error)
+	require.NoError(t, db.Table(prefix+"security_data_recycle").Create(&SecurityDataRecycle{ID: 1, AdminID: 2, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", OwnerColumn: "admin_id", PrimaryKey: "id", Status: "1"}).Error)
+	require.NoError(t, db.Table(prefix+"security_sensitive_data").Create(&SecuritySensitiveData{ID: 1, AdminID: 2, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", OwnerColumn: "admin_id", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1"}).Error)
 	return f
 }
 

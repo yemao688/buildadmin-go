@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
 	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -35,17 +34,14 @@ type scopeFixture struct {
 
 func newScopeFixture(t *testing.T) *scopeFixture {
 	t.Helper()
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
 	prefix := fmt.Sprintf("it_%d_", time.Now().UnixNano())
-	cfg := &conf.Configuration{}
+	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = prefix
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}, DisableForeignKeyConstraintWhenMigrating: true})
-	require.NoError(t, err)
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	f := &scopeFixture{db: db, cfg: cfg, admins: map[int32]Admin{}, users: map[int32]User{}}
-	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &Group{}, &User{}, &MoneyLog{}, &ScoreLog{}))
+	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &Group{}, &User{}))
+	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, money INT NOT NULL, `before` INT NOT NULL, `after` INT NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
+	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_score_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, score INT NOT NULL, `before` INT NOT NULL, `after` INT NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
 	require.NoError(t, db.Exec("CREATE TABLE `"+closure+"` (`ancestor_id` INT NOT NULL, `descendant_id` INT NOT NULL, `depth` INT NOT NULL, PRIMARY KEY (`ancestor_id`,`descendant_id`), KEY (`descendant_id`,`ancestor_id`)) ENGINE=InnoDB").Error)

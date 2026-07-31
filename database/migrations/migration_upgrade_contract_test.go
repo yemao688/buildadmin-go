@@ -1,58 +1,21 @@
 package migrations
 
 import (
-	"database/sql"
-	"fmt"
-	"os"
-	"strings"
 	"testing"
-	"time"
 
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 
-	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
-	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-func quoteTestDatabase(name string) string {
-	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
-}
-
 func openEmptyTestDatabase(t *testing.T, prefix string) (*gorm.DB, *conf.Configuration) {
-	t.Helper()
-	parsed, err := mysqlDriver.ParseDSN(os.Getenv("BUILDADMIN_TEST_MYSQL_DSN"))
-	require.NoError(t, err)
-	adminConfig := *parsed
-	adminConfig.DBName = ""
-	adminDB, err := sql.Open("mysql", adminConfig.FormatDSN())
-	require.NoError(t, err)
-	require.NoError(t, adminDB.Ping())
-	databaseName := fmt.Sprintf("p3fresh_%d", time.Now().UnixNano())
-	_, err = adminDB.Exec("CREATE DATABASE " + quoteTestDatabase(databaseName) + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		adminDB.Exec("DROP DATABASE IF EXISTS " + quoteTestDatabase(databaseName))
-		adminDB.Close()
-	})
-	dbConfig := *parsed
-	dbConfig.DBName = databaseName
-	dbConfig.MultiStatements = true
-	dsn := dbConfig.FormatDSN()
-	gormDB, err := gorm.Open(gormmysql.Open(dsn), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: prefix},
-	})
-	require.NoError(t, err)
-	cfg := &conf.Configuration{Database: conf.Database{Prefix: prefix, Database: databaseName}}
-	return gormDB, cfg
+	return testutil.OpenFixtureDatabase(t, prefix)
 }
 
 func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
-	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
 	for _, fixture := range []string{"ledger_only", "pending_partial", "snapshot_complete_pending"} {
 		t.Run(fixture, func(t *testing.T) {
 			db, cfg := openEmptyTestDatabase(t, "ba_")

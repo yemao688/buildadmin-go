@@ -2,7 +2,6 @@ package migrations
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -151,12 +150,7 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 }
 
 func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db := getDB()
-	require.NotNil(t, db)
+	db := getDB(t)
 	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("migration_fresh_%d_", time.Now().UnixNano()))
 	lock := cfg.Database.Prefix + "dual-track-migrations"
 	section := &migrationCriticalSection{}

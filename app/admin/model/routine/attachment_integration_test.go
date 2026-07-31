@@ -2,16 +2,16 @@ package routine
 
 import (
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/common/upload"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 type attachmentRuntimeRow struct {
@@ -33,12 +33,8 @@ type attachmentRuntimeRow struct {
 }
 
 func TestAttachmentModelMySQLDataScope(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
+	db.Config.NamingStrategy = schema.NamingStrategy{}
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	prefix := "att_rt_"

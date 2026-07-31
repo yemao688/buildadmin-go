@@ -6,10 +6,10 @@ import (
 	"go-build-admin/app/admin/model"
 	crudmodel "go-build-admin/app/admin/model/crud"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/testutil"
 	"go/format"
 	"go/parser"
 	"go/token"
-	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -19,8 +19,6 @@ import (
 	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/utils"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 func TestGetPk(t *testing.T) {
@@ -313,16 +311,11 @@ func TestBuildSimpleArray(t *testing.T) {
 }
 
 func TestHandleTableDesign(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping DB mutation test")
-	}
+	db, _ := testutil.OpenMySQL(t)
 	table := getTestTableData()
 	fields := getTestFieldData()
 	fullTableName := "ba_test1"
 
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
 	HandleTableDesign(db, fullTableName, table, fields)
 }
 

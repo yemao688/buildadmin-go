@@ -17,10 +17,7 @@ import (
 )
 
 func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "phase1_"
 	if err := db.Exec("DROP TABLE IF EXISTS `phase1_local_migrations`").Error; err != nil {
@@ -128,10 +125,7 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 }
 
 func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("pinned_%d_", time.Now().UnixNano())}}
 	q := func(logical string) string { return quoteIdentifier(tableName(config, logical)) }
 	for _, logical := range []string{"admin", "user", "attachment", "user_money_log", "user_score_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_hierarchy_lock", "admin_rule", "config", "country_language", "country_language_content", "country_currency"} {
@@ -277,10 +271,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 }
 
 func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("retry_order_%d_", time.Now().UnixNano())}}
 	requireNoError := func(err error) {
 		if err != nil {
@@ -327,10 +318,7 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 }
 
 func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_%d_", time.Now().UnixNano())}}
 	if err := BootstrapLocalLedger(db, cfg); err != nil {
 		t.Fatal(err)
@@ -369,10 +357,7 @@ func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *test
 }
 
 func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("biz_ovr_%d_", os.Getpid()))
 	section := &migrationCriticalSection{}
 	if _, err := runMigrationLifecycle(db, cfg, section); err != nil {
@@ -394,10 +379,7 @@ func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing
 }
 
 func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "matrix_"
 	for _, table := range []string{"matrix_local_migrations", "matrix_migrations"} {
@@ -534,10 +516,7 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 }
 
 func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	variants := []string{"engine", "signed-revision", "timestamp", "default", "missing-unique", "wrong-unique"}
 	for i, variant := range variants {
 		config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("negative_%d_", i)}}

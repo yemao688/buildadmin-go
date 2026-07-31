@@ -7,21 +7,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go-build-admin/conf"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/database/migrations/internal/core"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
 func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("fresh_retry_%d_", os.Getpid())}}
+	db, cfg := testutil.OpenMySQL(t)
+	cfg.Database.Prefix = fmt.Sprintf("fresh_retry_%d_", os.Getpid())
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
 	models := core.CoreModels()
 	migrateDB := db.Session(&gorm.Session{NewDB: true})
@@ -33,7 +27,7 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 	})
 	require.NoError(t, BootstrapOfficialLedger(migrateDB, cfg))
 	require.NoError(t, MarkSeedPending(migrateDB, cfg))
-	_, err = RunOfficialMigrations(migrateDB, cfg, OfficialMigrations())
+	_, err := RunOfficialMigrations(migrateDB, cfg, OfficialMigrations())
 	require.NoError(t, err)
 	require.NoError(t, migrateDB.Exec("INSERT INTO `"+tableName(cfg, "security_data_recycle")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (1,0,'会员','user/User.php','auth/user','user','id'),(5,0,'会员','user/User.php','user/user','user','id')").Error)
 	require.NoError(t, migrateDB.Exec("INSERT INTO `"+tableName(cfg, "security_sensitive_data")+"` (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (1,0,'会员数据','user/User.php','auth/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\",\"password\":\"密码\"}'),(2,0,'会员数据','user/User.php','user/user','user','id', '{\"username\":\"用户名\",\"mobile\":\"手机号\"}')").Error)
@@ -71,13 +65,8 @@ func TestFreshSeedPendingRetryAfterOverlayFailure(t *testing.T) {
 }
 
 func TestUpstreamSecurityBaselineThenLocalOverlay(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
-	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_overlay_%d_", time.Now().UnixNano())}}
+	db, cfg := testutil.OpenMySQL(t)
+	cfg.Database.Prefix = fmt.Sprintf("baseline_overlay_%d_", time.Now().UnixNano())
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
 	models := core.CoreModels()
 	require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(models...))

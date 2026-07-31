@@ -2,27 +2,14 @@ package crud_helper
 
 import (
 	"go-build-admin/app/pkg/advisorylock"
-	"os"
+	"go-build-admin/app/pkg/testutil"
 	"testing"
 	"time"
-
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 func TestCrudAdvisoryLockBlocksAnotherSession(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db1, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	db2, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db1, _ := testutil.OpenMySQL(t)
+	db2, _ := testutil.OpenMySQL(t)
 	name := generationAdvisoryLockName("crud-test", "ba_lock_test_") + time.Now().Format("150405.000000")
 	_, first, err := advisorylock.Acquire(db1, name, time.Second)
 	if err != nil {

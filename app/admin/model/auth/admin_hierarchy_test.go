@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"net/http/httptest"
-	"os"
 	"sort"
 	"sync"
 	"testing"
 	"time"
 
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -33,19 +32,10 @@ func hierarchyRequestContext(t *testing.T) *gin.Context {
 
 func openAdminHierarchyTestDB(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true,
-			TablePrefix:   prefix,
-		},
-		DisableForeignKeyConstraintWhenMigrating: true,
-	})
-	if err != nil {
-		t.Fatalf("open database: %v", err)
+	db, _ := testutil.OpenMySQL(t)
+	db.Config.NamingStrategy = schema.NamingStrategy{
+		SingularTable: true,
+		TablePrefix:   prefix,
 	}
 	return db
 }

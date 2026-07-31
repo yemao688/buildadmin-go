@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	crudmodel "go-build-admin/app/admin/model/crud"
+	"go-build-admin/app/pkg/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,10 +13,11 @@ import (
 )
 
 func TestGeneratedCRUDClosureMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping generated CRUD ClosureEnforcer E2E")
-	}
+	db, cfg := testutil.OpenMySQL(t)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	dsn := testutil.MySQLDSN(cfg.MysqlTest, cfg.Database.Database)
 
 	tmp := t.TempDir()
 	autoCode := renderE2EModel(t, crudmodel.Table{
@@ -37,7 +39,7 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	writeE2EFixture(t, tmp, autoCode, globalCode)
 	run := exec.Command("go", "test", "./app/admin/model", "-run", "TestGeneratedClosureBehavior", "-count=1", "-v")
 	run.Dir = tmp
-	run.Env = append(os.Environ(), "BUILDADMIN_TEST_MYSQL_DSN="+dsn)
+	run.Env = append(os.Environ(), "GO_BUILD_ADMIN_TEST_CHILD_DSN="+dsn)
 	out, err := run.CombinedOutput()
 	if err != nil {
 		t.Logf("generated E2E output:\n%s", out)
@@ -120,7 +122,7 @@ import (
 )
 
 func TestGeneratedClosureBehavior(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
+	dsn := os.Getenv("GO_BUILD_ADMIN_TEST_CHILD_DSN")
 	db, err := gorm.Open(mysql.Open(dsn))
 	require.NoError(t, err)
 	prefix := fmt.Sprintf("ba_e2e_%d_", os.Getpid())

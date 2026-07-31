@@ -4,25 +4,17 @@ import (
 	"fmt"
 	adminauth "go-build-admin/app/admin/model/auth"
 	crudmodel "go-build-admin/app/admin/model/crud"
-	"go-build-admin/conf"
-	"os"
+	"go-build-admin/app/pkg/testutil"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 func TestAlter(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping DB mutation test")
-	}
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 	comment := "test表"
 	if err := db.Exec("ALTER TABLE `"+"ba_test5"+"` COMMENT = ?", comment).Error; err != nil {
 		fmt.Println(err)
@@ -81,12 +73,7 @@ func TestGetDDLFieldDataNoDefaultFamilies(t *testing.T) {
 }
 
 func TestHasColumnMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping hasColumn integration test")
-	}
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 	tableName := fmt.Sprintf("crud_has_column_%d", time.Now().UnixNano())
 	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (id INT PRIMARY KEY, name VARCHAR(32))").Error)
 	t.Cleanup(func() { _ = db.Exec("DROP TABLE IF EXISTS `" + tableName + "`").Error })
@@ -100,12 +87,7 @@ func TestHasColumnMySQL(t *testing.T) {
 }
 
 func TestActualPrimaryKeyMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping primary key integration test")
-	}
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 	tableName := fmt.Sprintf("crud_primary_key_%d", time.Now().UnixNano())
 	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (order_id INT PRIMARY KEY, name VARCHAR(32))").Error)
 	t.Cleanup(func() { _ = db.Exec("DROP TABLE IF EXISTS `" + tableName + "`").Error })
@@ -115,14 +97,9 @@ func TestActualPrimaryKeyMySQL(t *testing.T) {
 }
 
 func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping menu snapshot integration test")
-	}
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
-	cfg := &conf.Configuration{}
+	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = "ba_"
+	require.NoError(t, db.Table("ba_admin_rule").AutoMigrate(&adminauth.AdminRule{}))
 	menuName := fmt.Sprintf("oracle_menu_snapshot_%d", time.Now().UnixNano())
 	rows := []adminauth.AdminRule{
 		{Name: menuName, Path: menuName, Title: "snapshot", Type: "menu", Status: "1"},
@@ -145,12 +122,7 @@ func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 }
 
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN not set; skipping MySQL index integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 
 	newTable := func(t *testing.T, suffix string) string {
 		t.Helper()

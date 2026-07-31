@@ -8,9 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 type runtimeScopeItem struct {
@@ -24,12 +23,7 @@ type runtimeScopeAdmin struct {
 }
 
 func TestClosureEnforcerMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("BUILDADMIN_TEST_MYSQL_DSN is not set")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 

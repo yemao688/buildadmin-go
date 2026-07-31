@@ -1,32 +1,16 @@
 package crud_helper
 
 import (
-	"go-build-admin/conf"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/utils"
-	"os"
 	"path/filepath"
 	"testing"
-
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 )
 
 func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_country_apply_test_"
-	var databaseName string
-	if err := db.Raw("SELECT DATABASE()").Scan(&databaseName).Error; err != nil {
-		t.Fatal(err)
-	}
-	cfg := &conf.Configuration{Database: conf.Database{Database: databaseName, Prefix: prefix}}
+	cfg.Database.Prefix = prefix
 	tables := []string{"country_language", "country_language_content", "country_currency", "crud_log"}
 	for _, table := range tables {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + prefix + table + "`").Error; err != nil {

@@ -12,8 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -39,13 +39,7 @@ func (m *scopeE2EModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 func TestBaseScopedCRUDMySQL(t *testing.T) {
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Fatal("BUILDADMIN_TEST_MYSQL_DSN must point to disposable MySQL 8.4")
-	}
-
-	db, err := gorm.Open(mysql.Open(dsn))
-	require.NoError(t, err)
+	db, _ := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("ba_base_scope_%d_", os.Getpid())
 	db.Config.NamingStrategy = schema.NamingStrategy{TablePrefix: prefix}
 	items := prefix + "items"

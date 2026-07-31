@@ -3,16 +3,15 @@ package auth
 import (
 	"errors"
 	"net/http/httptest"
-	"os"
 	"slices"
 	"testing"
 
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -47,19 +46,10 @@ func openAdminTestDB(t *testing.T) *gorm.DB {
 
 func openMySQLAdminTestDB(t *testing.T, prefix string) *gorm.DB {
 	t.Helper()
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	if dsn == "" {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true,
-			TablePrefix:   prefix,
-		},
-		DisableForeignKeyConstraintWhenMigrating: true,
-	})
-	if err != nil {
-		t.Fatalf("open database: %v", err)
+	db, _ := testutil.OpenMySQL(t)
+	db.Config.NamingStrategy = schema.NamingStrategy{
+		SingularTable: true,
+		TablePrefix:   prefix,
 	}
 	return db
 }

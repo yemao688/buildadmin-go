@@ -2,39 +2,27 @@ package migrations
 
 import (
 	"fmt"
+	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
-	"os"
 	"testing"
 
-	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
-func getDB() *gorm.DB {
-	if os.Getenv("BUILDADMIN_TEST_MYSQL_DSN") == "" {
-		return nil
-	}
-	dsn := os.Getenv("BUILDADMIN_TEST_MYSQL_DSN")
-	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{
-			SingularTable: true,
-			TablePrefix:   "go_", // 表前缀
-		},
-		DisableForeignKeyConstraintWhenMigrating: true, // 禁用自动创建外键约束
-	})
-	if err != nil {
-		return nil
+func getDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, _ := testutil.OpenMySQL(t)
+	db.Config.NamingStrategy = schema.NamingStrategy{
+		SingularTable: true,
+		TablePrefix:   "go_", // 表前缀
 	}
 	return db
 }
 
 func TestInstall(t *testing.T) {
-	db := getDB()
-	if db == nil {
-		t.Skip("set BUILDADMIN_TEST_MYSQL_DSN to run MySQL integration tests")
-	}
+	db := getDB(t)
 	// 本测试使用固定 go_ 前缀且不随运行变化：前一次运行的遗留表会让安装重入失败
 	// （重播种子会把 owner 置回 0 而 local 迁移已被账本跳过），每次先清出干净起点。
 	var leftovers []string
