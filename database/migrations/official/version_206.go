@@ -12,6 +12,30 @@ import (
 )
 
 func version206(db *gorm.DB, config *conf.Configuration) error {
+	if err := core.ValidatePrefix(config); err != nil {
+		return err
+	}
+	configTable := core.TableName(config, "config")
+	if core.TableExists(db, configTable) {
+		var count int64
+		if err := db.Raw("SELECT COUNT(*) FROM "+core.QuoteIdentifier(configTable)+" WHERE "+core.QuoteIdentifier("name")+" = ?", "backend_entrance").Scan(&count).Error; err != nil {
+			return fmt.Errorf("check backend_entrance config: %w", err)
+		}
+		if count == 0 {
+			var configID int64
+			if err := db.Raw("SELECT COALESCE(MAX(" + core.QuoteIdentifier("id") + "), 0) + 1 FROM " + core.QuoteIdentifier(configTable)).Scan(&configID).Error; err != nil {
+				return fmt.Errorf("allocate backend_entrance config id: %w", err)
+			}
+			// Keep IDs 14-19 available for the local upload-config migration.
+			if configID < 20 {
+				configID = 20
+			}
+			if err := db.Exec("INSERT INTO "+core.QuoteIdentifier(configTable)+" (`id`, `name`, `group`, `title`, `type`, `value`, `rule`, `weigh`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", configID, "backend_entrance", "basics", "Backend entrance", "string", "/admin", "required", 1).Error; err != nil {
+				return fmt.Errorf("insert backend_entrance config: %w", err)
+			}
+		}
+	}
+
 	tables := []struct {
 		name  string
 		model any
