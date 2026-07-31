@@ -2,6 +2,8 @@
 
 ## v2.4.0
 
+- **Docs:** CRUD spec 编写前必须经过引导式需求确认——AGENTS.md 与 `docs/crud-generation.md` 规定 AI 须提供 2-3 个确定性字段集方案，并确认归属与数据权限、审批/状态流、软删除、列表与表单字段取舍、预期关系等业务关键点后才能落 YAML。
+- **Docs:** 全仓文档统一中文并同步新契约——`database/migrations/business/README.md` 全量中文化并补回滚/断点契约；AGENTS.md 精简重复并明确三层文档职责（AGENTS.md 规则速查、framework-workflow.md 业务流程、framework-maintenance.md 框架深契约）；README、docker-compose、framework-workflow 同步 env 化配置与安装流闭环。
 - **Added (migrations):** business 迁移轨道支持回滚与断点——`Migration` 增加可选 `Down`（与 `Up` 同签名）；business 账本新增 `batch` 列（存量账本自动回填升级），断点持久化于 `business_breakpoints` 表；新增 `migrate rollback [--steps N] [--to-breakpoint]`（默认回滚最近批次，缺 `Down` 或涉及 official/local 时明确报错且账本不动）与 `migrate breakpoint set|clear|list`；基座 `terminal.commands.migrate` 的 rollback/breakpoint 空槽填入真实命令，后台终端可直接调用。official/local 轨道保持仅前向。
 
 - **Changed (config):** `app.port`/`app.time_zone` 移出 YAML 配置，改由环境变量 `APP_PORT`/`APP_TIME_ZONE` 提供——启动时自动复制缺失的 `.env`（←`.env.example`，godotenv 加载且不覆盖已有环境变量），缺省兜底 `9989`/`Asia/Shanghai`；compose 经 `environment` 显式传递两变量，端口映射与 healthcheck 全插值化。新增依赖 `github.com/joho/godotenv`。
