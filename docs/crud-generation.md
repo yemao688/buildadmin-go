@@ -22,6 +22,8 @@
 
 ## 概述与标准流程
 
+写 spec 之前先与用户对齐需求：给出 2-3 个确定性的字段集方案供选择（例如方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/…`），并问清影响 spec 形态的业务关键点——归属与数据权限（是否 `admin_id` 属主）、审批/状态流、软删除、列表与表单的字段取舍、预期关系（`remoteSelect` 目标）。用户拍板后再落 YAML，不要凭空补全字段。
+
 在仓库根目录执行：
 
 ```bash
@@ -30,7 +32,7 @@ go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml
 go build ./...
 ```
 
-提交 spec 前可运行 `crud:validate <spec.yaml...>` 做纯校验。该命令不连接数据库、不生成文件，也不修改菜单或 spec；它检查恰好一个主键、`relationFields` 是否引用 spec 自己的字段、`remoteController`/`remoteModel` 文件是否存在、`generateRelativePath` 路径是否合法，以及 `default`/`defaultType` 是否配对。已存在但无法反查 route 常量的控制器，以及实体段使用大写/驼峰的非标准路径，会输出 `warning:`，不会导致失败。发现任意 error 时退出码为 `1`；只有 warning 或全部通过时退出码为 `0`，warning 和错误均输出到 stderr。
+提交 spec 前可运行 `crud:validate <spec.yaml...>` 做纯校验。该命令不连接数据库、不生成文件，也不修改菜单或 spec；它检查恰好一个主键、`remoteController`/`remoteModel` 文件是否存在、`generateRelativePath` 路径是否合法，以及 `default`/`defaultType` 是否配对（`relationFields` 是远端表列，其真实性由生成期校验负责，不在此检查）。已存在但无法反查 route 常量的控制器，以及实体段使用大写/驼峰的非标准路径，会输出 `warning:`，不会导致失败。发现任意 error 时退出码为 `1`；只有 warning 或全部通过时退出码为 `0`，warning 和错误均输出到 stderr。
 
 生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器会为每个后台 handler 旁生成 `<name>_route.go` RouteRegistrar，并更新 handler `provider.go` 与 `router/registrar_set.go`；不再修改 `router/router.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 

@@ -74,6 +74,8 @@ pnpm build                             # emits web/dist/
 
 YAML contract, field/designType rules, relation and time-field JSON contracts: [`docs/crud-generation.md`](docs/crud-generation.md). Read it before writing any spec.
 
+**Before writing any spec, confirm the requirements with the user through guided questions.** Never invent the field set silently. Present 2-3 deterministic field-set options for the user to pick from (e.g. 方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/...`) and clarify the business key points that shape the spec: ownership and data-scope (`admin_id` owner or not), approval/status flows, soft delete, which fields belong to the list vs the form, and expected relations (`remoteSelect` targets). Only write `crud_specs/<module>.yaml` after the user has made these choices.
+
 When asked to generate a module, read that doc, create `crud_specs/<module>.yaml`, then run:
 
 ```bash
