@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/permissioncache"
@@ -68,9 +69,31 @@ func (s *AuthModel) InvalidateAll() {
 	s.cache.InvalidateAll()
 }
 
+// DatabaseAvailable checks the database before diagnostic startup work uses it.
+func (s *AuthModel) DatabaseAvailable() error {
+	if s == nil || s.sqlDB == nil {
+		return errors.New("authorization database is unavailable")
+	}
+
+	db, err := s.sqlDB.DB()
+	if err != nil {
+		return err
+	}
+	if db == nil {
+		return errors.New("authorization database is unavailable")
+	}
+	if err := db.Ping(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetAllRuleNames returns the names of every admin rule, independent of the
 // current administrator's permissions.
 func (s *AuthModel) GetAllRuleNames() ([]string, error) {
+	if s == nil || s.sqlDB == nil {
+		return nil, errors.New("authorization database is unavailable")
+	}
 	return s.cache.AllRuleNames(func() ([]string, error) {
 		var names []string
 		if err := s.sqlDB.Model(&AdminRule{}).Pluck("name", &names).Error; err != nil {

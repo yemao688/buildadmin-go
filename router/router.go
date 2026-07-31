@@ -59,6 +59,9 @@ func InitRouter(
 	)
 
 	rootDir := utils.RootPath()
+	lockPath := filepath.Join(rootDir, "public", api.LockFileName)
+	router.Use(middleware.InstallGuard(lockPath))
+	router.StaticFile("/install", filepath.Join(rootDir, "public/install/index.html"))
 	router.Static("/install", filepath.Join(rootDir, "public/install"))
 	router.POST("/api/install/changePackageManager", apiInstallHandler.ChangePackageManager)
 	router.GET("/api/install/envBaseCheck", apiInstallHandler.EnvBaseCheck)

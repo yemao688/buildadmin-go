@@ -69,8 +69,24 @@ type InstallHandler struct {
 	db       *gorm.DB
 }
 
+const installRestartDelay = time.Second
+
+const installRestartMessage = "安装完成，进程退出以便加载新配置重启；air/docker 会自动拉起，裸 go run 请手动重启"
+
 func NewInstallHandler(log *zap.Logger, config *conf.Configuration, terminal *terminal.Terminal) *InstallHandler {
 	return &InstallHandler{log: log, config: config, terminal: terminal}
+}
+
+func scheduleProcessExit(logger *zap.Logger, delay time.Duration, exit func(int)) *time.Timer {
+	if logger != nil {
+		logger.Warn(installRestartMessage)
+	}
+	if exit == nil {
+		return nil
+	}
+	return time.AfterFunc(delay, func() {
+		exit(0)
+	})
 }
 
 // 命令执行窗口
@@ -424,13 +440,6 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	// 建立安装锁文件
-	err = os.WriteFile(filepath.Join(utils.RootPath(), "public", LockFileName), []byte(time.Now().Format("2006-01-02")), 0644)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
 	db, err := h.newDB(databaseParam)
 	if err != nil {
 		FailByErr(ctx, err)
@@ -540,13 +549,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		return
 	}
 
-	if params.Type == "web" {
-		path := filepath.Join(utils.RootPath(), "public", LockFileName)
-		if err := os.WriteFile(path, []byte(InstallationCompletionMark), 0644); err != nil {
-			FailByErr(ctx, validator.GetError(params, err))
-			return
-		}
-	} else {
+	if params.Type != "web" {
 		salt := random.Build("alnum", 16)
 		password := utils.EncryptPassword(params.Adminpassword, salt)
 		// 管理员配置入库
@@ -562,7 +565,14 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 			"value": params.Sitename,
 		})
 	}
+
+	path := filepath.Join(utils.RootPath(), "public", LockFileName)
+	if err := os.WriteFile(path, []byte(InstallationCompletionMark), 0644); err != nil {
+		FailByErr(ctx, validator.GetError(params, err))
+		return
+	}
 	Success(ctx, "")
+	scheduleProcessExit(h.log, installRestartDelay, os.Exit)
 }
 
 // 获取命令执行检查的结果

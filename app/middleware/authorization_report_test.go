@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	adminauth "go-build-admin/app/admin/model/auth"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T) {
@@ -25,4 +27,15 @@ func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T)
 	if len(got) != len(want) || got[0] != want[0] {
 		t.Fatalf("missing routes = %#v, want %#v", got, want)
 	}
+}
+
+func TestReportUnprotectedRoutesSkipsNilDatabase(t *testing.T) {
+	authorization := NewAuthorization(adminauth.NewAuthModel(nil, nil, nil), zap.NewNop())
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("ReportUnprotectedRoutes panicked with nil database: %v", recovered)
+		}
+	}()
+	authorization.ReportUnprotectedRoutes(gin.RoutesInfo{{Method: "GET", Path: "/admin/missing.Route/run"}})
 }

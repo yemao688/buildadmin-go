@@ -2,6 +2,10 @@
 
 ## v2.4.0
 
+- **Fixed:** 修复安装向导模式启动即崩的既有缺陷——基座占位 DB 凭据不可达时，`ReportUnprotectedRoutes` 启动诊断 goroutine 拿到 nil gorm 句柄 SIGSEGV 带走进程；现对 DB 可用性做 nil/Ping 检查，不可用时跳过诊断并告警，向导模式正常存活。
+- **Added:** 已安装（`public/install.lock` 存在）即禁止访问安装程序——`/install` 页面 302 回首页，`/api/install/*` 返回业务 403；与"未安装时首页 302 到 `/install`"形成完整闭环。bare `/install` 路径补注册 GET/HEAD（此前仅 `/install/*filepath` 通配）。
+- **Changed:** 安装成功响应发出后进程延迟 1 秒以 code 0 退出并打印重启提示——air/docker `restart: unless-stopped` 自动拉起加载新配置，裸 `go run` 需手动重启；安装锁统一在完成时以 `install-end` 写入，移除 BaseConfig 早期的日期内容锁。
+
 - **Fixed:** `crud:validate` 删除 relationFields 误报检查——它错误地把 relationFields 对照本 spec 字段列表，而契约中 relationFields 是**远端表列**（canonical 写法 `admin_id → relationFields: username` 在本 spec 字段列表中永远不存在，真实业务 spec 100% 误报）。无 DB 的校验器无法内省远端表列，relationFields 的格式校验仍由生成期 `validateRelationField` 负责。
 
 - **Changed (config):** 配置体系改为分层加载——`config.example.yaml` 改名 `config.defaults.yaml` 并升级为运行时基座（启动时实际加载，提供全键默认值）；`config.yaml` 退化为稀疏覆盖层，只存用户改过的键。基座新增配置键随框架升级自动生效，无需再全量拷贝比对；存量全量 `config.yaml` 是合法覆盖集，无感继续工作。viper 合并语义：map 深合并、list 整体替换。

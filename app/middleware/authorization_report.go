@@ -26,6 +26,13 @@ func (m *Authorization) ReportUnprotectedRoutes(routes gin.RoutesInfo) {
 		return
 	}
 
+	if err := m.authM.DatabaseAvailable(); err != nil {
+		if m.log != nil {
+			m.log.Warn("admin route protection report skipped: database unavailable", zap.Error(err))
+		}
+		return
+	}
+
 	ruleNames, err := m.authM.GetAllRuleNames()
 	if err != nil {
 		if m.log != nil {
