@@ -32,20 +32,9 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 		return nil, err
 	}
 
-	fieldNames := make(map[string]struct{}, len(opts.Fields))
-	for _, field := range opts.Fields {
-		fieldNames[field.Name] = struct{}{}
-	}
-
 	warnings := make([]ValidationWarning, 0)
 	errorsFound := make([]error, 0)
 	for index, field := range opts.Fields {
-		for _, relationField := range splitRelationFields(field.Form.RelationFields) {
-			if _, ok := fieldNames[relationField]; !ok {
-				errorsFound = append(errorsFound, fmt.Errorf("field %q relationFields references unknown spec column %q", field.Name, relationField))
-			}
-		}
-
 		if index >= len(metadata.Fields) {
 			errorsFound = append(errorsFound, fmt.Errorf("field %q could not be read from the spec YAML", field.Name))
 			continue
@@ -108,19 +97,6 @@ func ValidateSpecs(paths []string) ([]ValidationWarning, error) {
 		return warnings, errors.Join(errorsFound...)
 	}
 	return warnings, nil
-}
-
-func splitRelationFields(value string) []string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	fields := make([]string, 0)
-	for _, item := range strings.Split(value, ",") {
-		if item = strings.TrimSpace(item); item != "" {
-			fields = append(fields, item)
-		}
-	}
-	return fields
 }
 
 func validateRemoteFile(kind, fieldName, value string) (bool, error) {

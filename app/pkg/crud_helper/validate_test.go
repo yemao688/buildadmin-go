@@ -13,8 +13,6 @@ fields:
     primaryKey: true
   - name: name
     type: varchar
-  - name: username
-    type: varchar
   - name: owner_id
     type: bigint
     designType: remoteSelect
@@ -57,18 +55,6 @@ fields:
   - {name: other_id, type: bigint, primaryKey: true}
 `,
 			want: "exactly one primary key",
-		},
-		{
-			name: "relation column",
-			yaml: `name: bad_relation
-fields:
-  - {name: id, type: bigint, primaryKey: true}
-  - name: owner_id
-    type: bigint
-    form:
-      relationFields: missing_name
-`,
-			want: "unknown spec column",
 		},
 		{
 			name: "remote controller",
