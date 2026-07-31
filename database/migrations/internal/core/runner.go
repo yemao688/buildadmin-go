@@ -65,6 +65,8 @@ func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
 }
 
 func ValidateOfficialLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
+	// Advisory-lock callers normally provide a fresh handle; isolate direct callers from stale statement state too.
+	db = db.Session(&gorm.Session{NewDB: true})
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
@@ -96,6 +98,8 @@ func ValidateOfficialLedgerSchema(db *gorm.DB, config *conf.Configuration) error
 }
 
 func RunOfficialMigrations(db *gorm.DB, config *conf.Configuration, list []OfficialMigration) (int, error) {
+	// Advisory-lock callers normally provide a fresh handle; isolate direct callers from stale statement state too.
+	db = db.Session(&gorm.Session{NewDB: true})
 	if err := ValidateOfficialMigrations(list); err != nil {
 		return 0, err
 	}

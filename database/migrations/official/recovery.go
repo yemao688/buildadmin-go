@@ -49,6 +49,10 @@ func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallReco
 	}
 	businessExists := false
 	for _, name := range core.CoreLogicalNames() {
+		if name == "migrations" {
+			// The official ledger tracks installation state; it is not business schema.
+			continue
+		}
 		ok, err := core.LegacyTableExists(db, core.TableName(config, name))
 		if err != nil {
 			return "", err
