@@ -1,7 +1,7 @@
 app:
   env: 'debug' #运行模式: debug=开发调试模式, release=生产模式
   port: 9989
-  app_name: 'go-build-admin'
+  app_name: 'buildadmin-go'
   time_zone: 'Asia/Shanghai'
   cors_request_domain:  'localhost,127.0.0.1' #允许跨域访问的域名
   admin_login_captcha: true #是否开启管理员登录验证码
@@ -63,8 +63,8 @@ mysql_test:
   enabled: false
   host: '127.0.0.1'
   port: 3306
-  database: 'buildadmin_test'
-  username: 'buildadmin_go'
+  database: 'buildadmin_go_test' #推荐名称 业务库名称_test
+  username: 'buildadmin_go_test'
   password: ''
   charset: 'utf8mb4'
 
