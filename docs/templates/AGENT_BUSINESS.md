@@ -21,6 +21,14 @@
 - 模块、表名及对应 `crud_specs/*.yaml`：
 - 模块负责人或特殊依赖：
 
+## 生成后定制清单（regenerate 核对表）
+
+CRUD 双 commit 工作流见 `AGENTS.md` "Framework usage best practices"：生成 commit 必须是纯生成器产物，业务定制一律独立 commit。重新生成模块时，重跑 `crud:generate` 后对照本表逐条回补被覆盖的定制（每次回补同样单独 commit）。
+
+| 模块 | 定制点 | 对应 commit | 备注 |
+|---|---|---|---|
+| （示例）ops_banner | 列表接口委托审批服务 | `a1b2c3d` | 回补时确认生成器新版字段顺序 |
+
 ## 业务专属规则/约定
 
 - 权限、数据范围、命名和状态约定：

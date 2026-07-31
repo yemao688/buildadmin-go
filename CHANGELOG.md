@@ -2,6 +2,8 @@
 
 ## v2.3.0
 
+- **Docs:** 扩展 CRUD 双 commit 工作流指南（`AGENTS.md` 业务最佳实践节）——生成 commit 必须是纯生成器产物并在 message 标注框架版本，业务定制一律独立 commit 并写明动机；重新生成时重跑生成器后 `git diff` 对照定制 commit 逐条回补；业务模板 `AGENT_BUSINESS.md` 新增"生成后定制清单"核对表作为 regenerate 时的回补清单。
+- **Removed:** 删除 `app/admin/model/gorm_test.go`——无断言、硬编码 `root:root@localhost/buildadmin` 凭据的早期开发草稿（`TestBelong` 长期失败源）；其唯一触碰的表名行为已由 `table_name_test.go` 回归测试覆盖。
 - **Fixed:** 修复去冗余前缀重命名引入的 GORM 表名回归——`UserMoneyLog→MoneyLog`、`UserScoreLog→ScoreLog`、`UserRule→Rule`、`UserGroup→Group`、`CrudLog→Log` 五个 struct 改名后，`.Model(&Struct{})` 驱动查询的表名被命名策略推导为不存在的 `money_log`/`score_log`/`rule`/`group`/`log`（真实表 `user_money_log` 等），对应后台列表/详情/删除 1146；现经 `TablerWithNamer` 按命名策略解析回真实表（前缀安全），并补 schema 断言回归测试。该回归随 v2.2.0 发布，仅影响 struct 驱动查询路径（List 走显式表名字符串未受影响）。
 - **Breaking (test 门禁):** 移除 `BUILDADMIN_TEST_MYSQL_DSN` 环境变量；MySQL 集成测试改由 `config.yaml` 的 `mysql_test` 段驱动——开发机需自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限（recovery 测试会动态创建 `<库名>_fresh_*` fixture 库）并置 `enabled: true`；未配置或禁用时测试统一提示并跳过。新增 `app/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）统一门禁解析与 fixture 库管理，原约 30 处重复门禁全部收编。
 - **Fixed:** 首次启动不再自动复制 `config.yaml`——`serve` 默认命令在配置缺失时以只读模板进入安装向导（`/install` 可访问），`config.yaml` 改由安装器在安装时创建；无配置文件的非 serve 命令与显式 `--conf` 缺失均明确报错，不再静默使用模板值。
