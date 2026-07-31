@@ -7,6 +7,7 @@ import (
 	"go-build-admin/app/middleware"
 	"go-build-admin/utils"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	ginI18n "github.com/gin-contrib/i18n"
@@ -97,7 +98,7 @@ func InitRouter(
 	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
 	router.Static("/static", filepath.Join(rootDir, "public/static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "public/storage/default"))
-	router.StaticFile("/", filepath.Join(rootDir, "public/index.html"))
+	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
 	for _, registrar := range registrars {
@@ -123,6 +124,23 @@ func InitRouter(
 	admin.CollectRoutes(router)
 
 	return router
+}
+
+func registerRootRoute(router *gin.Engine, rootDir string) {
+	indexPath := filepath.Join(rootDir, "public", "index.html")
+	// InstallHandler.isInstallComplete also checks the completion marker, while
+	// this route treats any existing rootDir/public/install.lock as installed.
+	lockPath := filepath.Join(rootDir, "public", api.LockFileName)
+	serveIndex := func(c *gin.Context) {
+		if _, err := os.Stat(lockPath); err != nil {
+			c.Redirect(http.StatusFound, "/install")
+			return
+		}
+		c.File(indexPath)
+	}
+
+	router.GET("/", serveIndex)
+	router.HEAD("/", serveIndex)
 }
 
 func registerHealthRoute(router *gin.Engine) {
