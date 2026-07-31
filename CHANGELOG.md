@@ -1,6 +1,11 @@
 # Changelog
 
-## v2.3.0
+## v2.3.1
+
+- **Fixed:** `crud:generate` 内部 wire 调用改为 `go run -mod=mod github.com/google/wire/cmd/wire`，与 `//go:generate` 声明一致——开发机不再需要单独安装 wire 二进制。
+- **Docs:** README 全面更新——明确 Wire 无需手动安装、CRUD 命令补 `crud:validate`、MySQL 集成测试门禁改述为 `config.yaml` 的 `mysql_test` 配置（`BUILDADMIN_TEST_MYSQL_DSN` 已移除）、CRUD 提交节奏升级为双 commit 工作流、压缩与 AGENTS.md 重复的路径约定及 Docker 段落。
+- **Docs:** `docs/docker-compose.md` 补本地开发镜像（`make run-docker-dev`）说明；修复 Makefile `run-docker-dev` 引用不存在 compose 文件的问题；`docker-compose.dev.yml` 更名为 `docker-compose.dev.yaml`。
+- **Removed (docs):** 删除 `docs/route-registrar-migration.md`——下游业务 fork 均已完成 RouteRegistrar 迁移；其中长期有效的约定（registrar 契约、共享追加点冲突处理、路由黄金快照测试）压缩并入 `docs/framework-workflow.md` "业务代码边界"一节。
 
 - **Added:** `crud:apply` 支持 `--approve=defaults,type-widening` 分类批准通道（也可使用 `all`），逐项审计实际放行的变更；`rejected` 变更仍不可批准，`--plan` 会显示可放行类别或业务迁移提示。
 - **Added:** `crud:validate` 纯校验 CRUD spec，在提交前检查主键、关系字段、路径、远程文件和默认值契约，并对未登记路由控制器及非标准驼峰路径输出 warning；不连接数据库、不生成文件。
