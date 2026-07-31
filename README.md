@@ -8,6 +8,7 @@
 - 数据库：MySQL。
 - 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
 - 包管理：`pnpm`，不要使用 npm。
+- 应用端口和时区：只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`，默认分别为 `9989` 和 `Asia/Shanghai`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制，已有环境变量不会被覆盖。
 - 可选工具：Air 用于后端开发热重载。Wire 无需单独安装——`go generate ./cmd/app` 与 `crud:generate` 均通过 `go run` 按模块依赖运行 wire。
 
 ```bash
@@ -25,16 +26,16 @@ go install github.com/air-verse/air@latest
 
 ## 快速开始
 
-1. 在项目根目录启动后端：
+1. 在项目根目录启动后端。端口和时区通过 `APP_PORT`、`APP_TIME_ZONE` 设置；缺少 `.env` 时启动会自动复制 `.env.example`：
 
    ```bash
    air
    # 或：go run ./cmd/app --conf config.yaml
    ```
 
-   后端默认监听 `9989`。
-2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会在根目录创建只含安装覆盖值的 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
-3. 如果不使用 Web 安装器，请创建只含环境覆盖的 `config.yaml`，按环境填写后直接执行数据库迁移：
+   后端默认监听 `9989`；修改端口使用 `APP_PORT`。未安装时访问首页会 302 到 `/install`；安装完成后 `/install` 会 302 到 `/`，安装 API 会被封禁（幂等的完成回调除外）。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
+2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会在根目录创建只含 MySQL 连接和 `token.key` 的稀疏 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
+3. 如果不使用 Web 安装器，请创建只含目标环境覆盖值的 `config.yaml`，按环境填写后直接执行数据库迁移。未写入的配置由 `config.defaults.yaml` 基座提供，端口和时区仍只通过 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
    ```bash
    go run ./cmd/app --conf config.yaml migrate
@@ -48,11 +49,11 @@ go install github.com/air-verse/air@latest
    pnpm dev
    ```
 
-   Vite 默认监听 `9988`，开发 API 地址为 `http://localhost:9989`。
+   Vite 默认监听 `9988`，开发 API 地址默认使用 `APP_PORT=9989` 的 `http://localhost:9989`。
 
 ## Docker Compose 部署
 
-发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（包含 `APP_PORT`/`APP_TIME_ZONE` 和发布变量）、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 
@@ -78,6 +79,7 @@ router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 三轨迁移（official/local/business）、迁移模型与内部迁移基础设施
 config.defaults.yaml 根目录运行基座（完整默认配置）
 config.yaml          根目录配置覆盖层（忽略，不提交）
+.env                 根目录运行环境与 Compose 变量（忽略，不提交）
 conf/                本地化资源（conf/localize/）
 web/                 Vue/Vite 前端源码
 public/              发布到镜像中的前端和运行时静态资源

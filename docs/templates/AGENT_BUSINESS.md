@@ -23,7 +23,7 @@
 
 ## 生成后定制清单（regenerate 核对表）
 
-CRUD 双 commit 工作流见 `AGENTS.md` "Framework usage best practices"：生成 commit 必须是纯生成器产物，业务定制一律独立 commit。重新生成模块时，重跑 `crud:generate` 后对照本表逐条回补被覆盖的定制（每次回补同样单独 commit）。
+CRUD 双 commit 工作流见 `AGENTS.md` 的“业务仓库中的框架使用最佳实践”：生成 commit 必须是纯生成器产物，业务定制一律独立 commit。重新生成模块时，重跑 `crud:generate` 后对照本表逐条回补被覆盖的定制（每次回补同样单独 commit）。
 
 | 模块 | 定制点 | 对应 commit | 备注 |
 |---|---|---|---|

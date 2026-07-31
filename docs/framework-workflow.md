@@ -103,9 +103,9 @@ air
 # 或：go run ./cmd/app --conf config.yaml
 ```
 
-浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。安装器会在仓库根目录生成被 Git 忽略的 `config.yaml` 并执行其中的迁移命令。
+启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9989` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
 
-**手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。未写入的键由根目录 `config.defaults.yaml` 在启动时提供：
+**手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。`config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
 ```bash
 go run ./cmd/app --conf config.yaml migrate
@@ -121,13 +121,14 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-后端默认端口是 `9989`，Vite 默认端口是 `9988`。
+后端默认使用 `APP_PORT=9989`，Vite 默认端口是 `9988`；修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
 
 ### 业务 CRUD
 
 生成业务模块前必须先阅读 [`crud-generation.md`](crud-generation.md)，在 `crud_specs/` 编写模块 YAML，然后使用生成链：
 
 ```bash
+go run ./cmd/app crud:validate crud_specs/<module>.yaml
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
 go build ./...
 ```

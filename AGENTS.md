@@ -1,4 +1,4 @@
-# Repository Notes
+# 仓库说明
 
 ## 仓库身份自检（每次会话先做）
 
@@ -21,25 +21,26 @@
 | 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支通常为 `master` |
 | PHP 上游 | BuildAdmin PHP 原版项目，仅框架维护时需要参考 |
 | 框架版本 | 根目录 `VERSION_FRAMEWORK`，框架发行 semver |
-| 上游版本 | PHP BuildAdmin 兼容基线，事实源为 `web/package.json` 与 `composer.json` |
+| PHP 上游兼容版本 | PHP BuildAdmin 兼容基线，事实源为 `web/package.json` 与 `composer.json` |
 | 业务版本 | 业务仓库根 `VERSION`，框架不提供该文件 |
 
 全仓库文档禁止裸用"上游"，必须带限定词。本文未标注读者的章节对两类仓库同时生效；标注"仅框架维护者"的内容在业务仓库中不适用。
 
-## Project identity and status semantics
+## 项目身份与状态语义
 
-- 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
+- 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端使用 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
 - 账户状态迁移由 `database/migrations/local/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 
-## Toolchain and boundaries
+## 工具链与边界
 
-- Trust `go.mod`: use Go 1.25.x; do not retain the stale Go 1.21.8 requirement.
-- This repository contains two projects. The Gin/GORM/Wire backend is rooted here; `web/` is the BuildAdmin v2.3.8 Vue/Vite 8 frontend with its own `pnpm-lock.yaml`. Run frontend commands from `web/` with pnpm, never npm.
-- Real entrypoints and wiring are `cmd/app/main.go`, `cmd/app/wire.go`, `router/router.go`, and `web/src/main.ts`. Cobra commands live under `app/cmd/`.
-- `config.defaults.yaml` is the tracked full default configuration at the repository root and is loaded as the runtime base. Runtime `config.yaml` at the repository root is an ignored sparse override layer written by the web installer (`/install`); on a fresh checkout the server boots from the read-only base in install-wizard mode instead of copying it, and non-serve commands fail fast without a real config. Never commit installer-written credentials.
+- 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
+- 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
+- 真实入口和 wiring 是 `cmd/app/main.go`、`cmd/app/wire.go`、`router/router.go` 与 `web/src/main.ts`；Cobra 命令位于 `app/cmd/`。
+- `config.defaults.yaml` 是根目录受跟踪的完整运行基座，启动时实际加载。根目录 `config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
+- `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9989` 和 `Asia/Shanghai`。应用名称配置项已删除。
 
-## AI development protocol
+## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的 model、handler、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
@@ -48,7 +49,7 @@
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
 - 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户和安装 API。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。
 
-## Commands
+## 常用命令
 
 ```bash
 # backend, repository root
@@ -66,17 +67,17 @@ pnpm typecheck
 pnpm build                             # emits web/dist/
 ```
 
-- Backend changes: run affected package tests and `go build ./...`. Frontend changes: run `pnpm lint`, `pnpm typecheck`, then `pnpm build` from `web/`.
-- `pnpm lint` uses the flat config `web/eslint.config.mjs`, a 1:1 port of the PHP upstream v2.3.8 `web/.eslintrc.js` ruleset (lenient: most rules off, findings are warn-level). Warnings on pre-existing code (`vue/no-required-prop-with-default`, `no-unused-vars`, `indent`) are upstream-inherited noise — ignore them; do not touch existing source or tighten the config to silence them. Only act on warnings introduced by your own new/changed code.
-- Do not require default `go test ./...` or `go vet`; choose affected tests because some tests and generators need MySQL or have incomplete application DI. There is no repository CI workflow, task runner, Makefile, or configured Go linter.
+- 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
+- `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
+- 不要求默认运行 `go test ./...` 或 `go vet`；按影响范围选择测试，因为部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow、任务运行器、Makefile 或已配置的 Go linter。
 
-## CRUD module generation (AI-driven)
+## CRUD 模块生成（AI 驱动）
 
-YAML contract, field/designType rules, relation and time-field JSON contracts: [`docs/crud-generation.md`](docs/crud-generation.md). Read it before writing any spec.
+YAML 契约、字段/designType 规则、关系和时间字段 JSON 契约见 [`docs/crud-generation.md`](docs/crud-generation.md)。编写 spec 前必须阅读该文档。
 
-**Before writing any spec, confirm the requirements with the user through guided questions.** Never invent the field set silently. Present 2-3 deterministic field-set options for the user to pick from (e.g. 方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/...`) and clarify the business key points that shape the spec: ownership and data-scope (`admin_id` owner or not), approval/status flows, soft delete, which fields belong to the list vs the form, and expected relations (`remoteSelect` targets). Only write `crud_specs/<module>.yaml` after the user has made these choices.
+**编写 spec 前必须通过引导式问题与用户确认需求。** 不要默默臆造字段集；应提供 2-3 个确定性的字段集方案供用户选择（例如方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/...`），并确认影响 spec 形态的业务关键点：归属与数据权限（是否以 `admin_id` 为属主）、审批/状态流、软删除、列表与表单的字段取舍，以及预期关系（`remoteSelect` 目标）。用户确认后才能写入 `crud_specs/<module>.yaml`。
 
-When asked to generate a module, read that doc, create `crud_specs/<module>.yaml`, then run:
+需要生成模块时，先阅读该文档、创建 `crud_specs/<module>.yaml`，再运行：
 
 ```bash
 go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
@@ -84,44 +85,38 @@ go run ./cmd/app crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...]
 go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ```
 
-Exit code 0 means success and 1 means failure (reason on stderr). Files auto-restore on failure, but MySQL DDL is not rollbackable. Protected core tables are refused.
+退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。
 
-Every business table should carry `create_time` and `update_time` as `bigint`; the generated CRUD code maintains both and they stay out of the request DTO.
+每张业务表都应带有 `bigint` 类型的 `create_time` 和 `update_time`；生成的 CRUD 代码维护这两个字段，它们不进入请求 DTO。
 
-## Migrations and generated/deployed files
+## 迁移以及生成/部署文件
 
-- The migration system has three tracks: `database/migrations/official/` contains PHP 上游 migrations and the official install seed (never rewrite their identities), `database/migrations/local/` contains six Go framework semantic migrations (仅框架维护者可改), and `database/migrations/business/` is the business-repository extension track registered with `Register`/`init` and recorded in the independent `business_migrations` ledger. Its contract is documented in `database/migrations/business/README.md`.
-- Migration contracts are split by execution lifetime: `VerifyBaseline` runs once after an applied `Up` succeeds, with failed application retried and completed migrations not rerun; it may use an exact baseline predicate. `VerifySchema` and `VerifyUpgradeData` are standing invariants rerun on every `migrate`, so their predicates must remain compatible with valid business changes.
-- The business track is the final source of schema shape and may override framework core columns after the framework baseline. Changing an amount column to `decimal` is a domain change and requires corresponding app-model and arithmetic changes; do not change the column alone. After business migrations, local `VerifySchema`/`VerifyUpgradeData`, `local.VerifyCurrent` (cross-table ownership, closure self-rows, security seed identity, and legacy installer-rule rejection), and `official.ValidateCurrentSchema` (current `user_rule` columns and rule enum) remain standing checks.
-- Migration `Up` functions must be idempotent, prefix-safe, and deduplicate by business keys. Do not use table-empty or `id=1` checks to infer official seed state; the orchestrator guarantees the official seed runs before local/business `Up` functions.
+- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/local/` 保存 6 条 Go 框架语义迁移（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册、记录到独立 `business_migrations` 账本的业务仓库扩展轨道。契约见 `database/migrations/business/README.md`。
+- 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
+- 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 local `VerifySchema`/`VerifyUpgradeData`、`local.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）以及 `official.ValidateCurrentSchema`（当前 `user_rule` 列和规则枚举）。
+- 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 local/business 的 `Up` 之前执行。
+- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/local 仅前向。账本按批次记录，断点存放在 `business_breakpoints`；完整契约见 `database/migrations/business/README.md`。
 - 迁移编排顺序、official/local 维护契约和 epoch reset 历史仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
-- Every migration is prefix-safe (`mysql.prefix` is variable; never hard-code `ba_`). Destructive renames, type changes, and backfills must not rely on AutoMigrate.
-- Never hand-edit `cmd/app/wire_gen.go`; after provider or `cmd/app/wire.go` changes run `go generate ./cmd/app`.
-- `go run ./cmd/generate` is hazardous: it uses a hard-coded local MySQL DSN and can overwrite generated models relative to the current directory. Inspect it before use.
-- `database/migrations/model/*.gen.go` drives the fresh-snapshot AutoMigrate; preserve its tags and migration contracts. `pnpm dev` regenerates `web/types/tableRenderer.d.ts` and i18n Ally language indexes; edit the TypeScript sources under `web/src/lang/` instead. Frontend builds remain in `web/dist/`, while deployment may copy assets into ignored `public/` paths.
+- 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
+- 不要手改 `cmd/app/wire_gen.go`；provider 或 `cmd/app/wire.go` 变更后运行 `go generate ./cmd/app`。
+- `go run ./cmd/generate` 有风险：它使用硬编码的本地 MySQL DSN，并可能相对于当前目录覆盖生成 model。运行前必须检查其实现。
+- `database/migrations/model/*.gen.go` 驱动全新快照的 AutoMigrate；保留其中的 tags 和迁移契约。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
-## Framework usage best practices (business repositories)
+## 业务仓库中的框架使用最佳实践
 
-These rules apply when the repository is used as a framework for a business project, not only when developing the framework itself.
+以下规则适用于将本仓库作为业务项目框架使用的场景，不仅适用于框架自身开发。fork、安装、CRUD 与升级的流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)；这里保留 AI 首读所需的规则速查。
 
-- **Table naming: group business tables by category prefix.** Use `<category>_<entity>` so tables, menus, and generated code self-organize: 运营类 `ops_banner`/`ops_support`/`ops_help`, 订单类 `order_recharge`/`order_withdraw`, 用户类 `user_wallet`/`user_level`. Simple names, clear ownership.
-- **Business table paths: always set `generateRelativePath` explicitly — the standard value is the table name itself.** The first table-name segment is the business category and directory: `generateRelativePath: ops_user_test_xxx` → handler/model `ops/user_test_xxx.go`, views `ops/userTestXxx/`, route `ops.UserTestXxx`, rule name `ops/userTestXxx`. A single-segment path splits at the first underscore; Go files keep the entity name verbatim (snake_case), view directories lcfirst-camelize it, route names dot-join lowercase directories with the PascalCase entity (aligned with PHP upstream URLs such as `/admin/country.LanguageContent/index`), and rule names mirror the views directory (slash-joined, consistent with the framework's seeded menus). Omission falls back to the table name, but specs must not rely on omission — write it out so the five outputs are self-evident. Use `/` or `.` separators only for a genuinely deeper business subdirectory (`ops/user/test_xxx` → three-level layout). `webViewsDir` (as in `crud_specs/country_language_content.yaml`) remains the lower-level single-path override.
-- **Commit CRUD modules with the dual-commit workflow: a pure generation commit, then separate customization commits.** Generation touches the model, handler, provider wiring, router, menu rows, and Vue scaffold together; one generation commit per module keeps the change reviewable and `crud:delete`/regenerate round-trips byte-identical.
-  - **Generation commit**: `crud_specs/<module>.yaml` plus all generated artifacts only — never mix in hand edits. Mark the framework/generator version in the message, e.g. `chore: 以框架 vX.Y 生成器生成 xxx 模块`.
-  - **Customization commits**: every post-generation business tweak (password hashing, approval-service delegation, custom buttons, …) lands as its own commit whose message states the motivation; a module may accumulate several.
-  - **Regeneration**: re-run `crud:generate`, let the generator overwrite artifacts, then `git diff` against the customization commits to see exactly which tweaks were clobbered; reapply them one by one, each reapplication again a separate commit.
-  - **Review**: skim generation commits as machine output and focus review effort on customization commits — git history becomes the module's customization ledger.
-  - **Round-trip check**: with no hand edits in generation commits, `crud:delete` + regenerate must be byte-identical; any drift exposes generator or spec changes.
-  - Maintain a **customization ledger** (module → customization points → commit hashes) in the business repository's `AGENT_BUSINESS.md` as the regeneration checklist.
-- **Business schema changes go to the business migration track.** Add one Go file under `database/migrations/business/` calling `business.Register(...)` from `init()` (contract: `database/migrations/business/README.md`). Never add project tables to `official/` or `local/`. Ups must be idempotent, prefix-safe, dedupe by business keys, and must not infer seed state from table emptiness or `id=1`.
-- **业务仓库中的 AI 禁止改动框架轨道与框架级文档。** 不向 `official/`、`local/` 添加或修改迁移；不按业务需要改写框架级文档（含本文的维护条款与 `docs/framework-maintenance.md`）。这些文件保持与框架上游一致，业务仓库才能干净地合并框架升级。
-- **Set `columnFields` explicitly to control list display.** Omitted `columnFields` puts every field into the admin list page. Keep form-only fields — `password` design types, secrets/tokens, long text such as remarks or large `content` — in `formFields` only, so they never leak into the list. Keep relation-enriched `remoteSelect`/`remoteSelects` FKs in `columnFields`: the raw FK column is auto-hidden while search and the relation display column keep working.
-- **The permission system is complete — build role hierarchies on `admin` + role groups.** 超级管理员 / 总代理 / 代理 / 员工 style agent systems are implemented with `admin` rows + `admin_group` role assignments + `admin.parent_id` (hierarchy with the `admin_closure` table) — no new auth tables needed. `admin` fields may be fine-tuned (add business columns, drop unused ones); pair every such change with a business-track migration, since destructive column changes must not rely on AutoMigrate.
-- **The `user` table is yours to shape.** For frontend-member business you may modify any `user` field, delete unused fields, and adjust the backend member pages (`web/src/views/backend/user`) to match; same migration discipline as `admin`.
-- **Frontend portal (`web/src/views/frontend/`) is an example — restyle freely.** Rebuild it into any business-facing portal. Do **not** restyle the admin backend (`web/src/views/backend/`) or alter the admin design system: backend consistency is what lets the project keep merging framework updates cleanly; business admin pages come from the CRUD generator and follow its patterns.
+- **表命名：按业务分类加前缀。** 使用 `<category>_<entity>`，让表、菜单和生成代码自然归类：运营类 `ops_banner`/`ops_support`/`ops_help`，订单类 `order_recharge`/`order_withdraw`，用户类 `user_wallet`/`user_level`。命名保持简单并明确归属。
+- **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** 首段是业务分类和目录：`generateRelativePath: ops_user_test_xxx` → handler/model 为 `ops/user_test_xxx.go`，views 为 `ops/userTestXxx/`，路由为 `ops.UserTestXxx`，规则名为 `ops/userTestXxx`。单段输入在第一个下划线处分割；Go 文件保留实体蛇形名，视图目录使用 lcfirst 驼峰，路由名用小写目录加 PascalCase 实体（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`），规则名与视图目录一致。省略时虽会回退到表名，spec 不得依赖该回退；只有真正需要更深业务子目录时才使用 `/` 或 `.`（如 `ops/user/test_xxx`）。`webViewsDir` 仍是较低层级的单路径覆盖项。
+- **CRUD 模块采用双提交工作流。** 生成提交只包含 `crud_specs/<module>.yaml` 和全部生成产物，提交信息标注框架/生成器版本；业务定制每项单独提交并写明动机。重新生成后用 `git diff` 对照定制提交，逐项回补被覆盖的修改；生成提交不含手改时，`crud:delete` + 重新生成必须逐字节一致。生成提交作为机器产物快速浏览，重点审查定制提交；在业务仓库 `AGENT_BUSINESS.md` 维护模块、定制点和提交哈希的清单。
+- **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`local/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
+- **显式设置 `columnFields` 控制列表展示。** 省略时所有字段都会进入后台列表；密码、密钥/令牌、长备注或大段 `content` 等仅表单字段只放进 `formFields`。带关系增强的 `remoteSelect`/`remoteSelects` 外键保留在 `columnFields`，原始 FK 列会自动隐藏，同时保留搜索和关系展示列。
+- **权限体系已经完整。** 使用 `admin`、`admin_group` 和 `admin.parent_id`（配合 `admin_closure`）建立超级管理员、总代理、代理、员工等层级，不要新建认证表。`admin` 字段变更必须配套 business 迁移，破坏性列变更不能依赖 AutoMigrate。
+- **`user` 表可按前台会员业务塑形。** 可以修改或删除字段，并同步调整 `web/src/views/backend/user`；同样遵守迁移纪律。
+- **前台门户可以重构，后台设计系统不要改。** `web/src/views/frontend/` 只是业务门户示例；不要重做 `web/src/views/backend/` 的样式或管理后台设计系统，业务后台页面使用 CRUD 生成器模式。
 
-## Installation and test risks
+## 安装与测试风险
 
-- Web installation creates `config.yaml` at the repository root and invokes the configured `terminal.commands.migrate.run`; keep that command able to run Cobra `migrate`. The installer is served at `/install` on port 9989.
-- MySQL integration tests are gated by the `mysql_test` section in the layered configuration; the complete defaults are in `config.defaults.yaml`, and a developer can override only `mysql_test.enabled`/connection fields in `config.yaml`. Each developer self-provisions a disposable test database and grants the account privileges on it plus a `<database>%` wildcard (recovery tests dynamically create `<database>_fresh_*` fixture databases), then sets `enabled: true`. When `mysql_test` is missing or disabled, those tests skip with an explicit notice — they never mutate a development or production database. `app/pkg/testutil` (`OpenMySQL`/`OpenFixtureDatabase`) is the single gate; the legacy `BUILDADMIN_TEST_MYSQL_DSN` environment variable was removed. Some legacy tests/generators also assume local MySQL or execute DDL.
-- Air ignores `web/`, tests, and generated Go files and waits 10 seconds before rebuilding. Run Vite separately; if CRUD generation races Air, temporarily increase `.air.toml`’s `build.delay`.
+- Web 安装会在根目录创建 `config.yaml`，并调用配置中的 `terminal.commands.migrate.run`；该命令必须能够运行 Cobra `migrate`。安装器由 `/install` 提供，端口由 `APP_PORT` 控制，默认 `9989`。未安装时访问首页会 302 到 `/install`；已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有 `commandExecComplete` 豁免且幂等。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
+- MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `config.defaults.yaml`，开发者只在 `config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`app/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
+- Air 忽略 `web/`、测试和生成的 Go 文件，并在 10 秒后重新构建。Vite 需单独运行；如果 CRUD 生成与 Air 发生竞态，可临时增大 `.air.toml` 的 `build.delay`。
