@@ -20,6 +20,7 @@ type redisStore interface {
 	SMembers(context.Context, string) ([]string, error)
 	Del(context.Context, ...string) (int64, error)
 	SRem(context.Context, string, ...interface{}) (int64, error)
+	Eval(context.Context, string, []string, ...interface{}) error
 }
 
 type redisClientStore struct {
@@ -52,6 +53,10 @@ func (s redisClientStore) Del(ctx context.Context, keys ...string) (int64, error
 
 func (s redisClientStore) SRem(ctx context.Context, key string, members ...interface{}) (int64, error) {
 	return s.client.SRem(ctx, key, members...).Result()
+}
+
+func (s redisClientStore) Eval(ctx context.Context, script string, keys []string, args ...interface{}) error {
+	return s.client.Eval(ctx, script, keys, args...).Err()
 }
 
 type RedisDriver struct {
@@ -96,23 +101,22 @@ func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) er
 
 	ctx := context.Background()
 	store := d.client()
-	if expire > 0 {
-		ttl := time.Duration(expire) * time.Second
-		if t == "admin" || t == "user" {
-			// Keep access tokens available after their logical expiry so Get can
-			// return the same refreshable expiration error as the MySQL driver.
-			ttl *= 2
-		}
-		if _, err := store.SetEX(ctx, encryptToken, dataBytes, ttl); err != nil {
-			return err
-		}
-	} else {
-		if _, err := store.Set(ctx, encryptToken, dataBytes, 0); err != nil {
-			return err
-		}
+	ttl := expire
+	if ttl > 0 && (t == "admin" || t == "user") {
+		// Keep access tokens available after their logical expiry so Get can
+		// return the same refreshable expiration error as the MySQL driver.
+		ttl *= 2
 	}
-	_, err = store.SAdd(ctx, d.GetUserKeyFor(t, user_id), encryptToken)
-	return err
+	const setTokenAndIndex = `
+redis.call('SADD', KEYS[1], KEYS[2])
+if tonumber(ARGV[1]) > 0 then
+  return redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[1])
+end
+return redis.call('SET', KEYS[2], ARGV[2])`
+	if err := store.Eval(ctx, setTokenAndIndex, []string{d.GetUserKeyFor(t, user_id), encryptToken}, ttl, string(dataBytes)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d RedisDriver) Get(token string) (*Token, error) {
@@ -238,6 +242,10 @@ func (d RedisDriver) GetUserKey(user_id int32) string {
 
 func (d RedisDriver) GetUserKeyFor(t string, user_id int32) string {
 	return "up:" + tokenIndexType(t) + ":" + com.ToStr(user_id)
+}
+
+func (d RedisDriver) GetTypeUserKey(t string, user_id int32) string {
+	return d.GetUserKeyFor(t, user_id)
 }
 
 func tokenIndexType(t string) string {

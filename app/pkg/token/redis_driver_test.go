@@ -5,13 +5,125 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/conf"
 )
+
+type failIndexRemoveOnceHook struct {
+	userKey string
+	mu      sync.Mutex
+	failed  bool
+}
+
+func (h *failIndexRemoveOnceHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
+	if cmd.Name() != "srem" {
+		return ctx, nil
+	}
+	args := cmd.Args()
+	if len(args) != 3 || args[1] != h.userKey {
+		return ctx, nil
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.failed {
+		return ctx, nil
+	}
+	h.failed = true
+	return ctx, errors.New("injected user index remove failure")
+}
+
+func (h *failIndexRemoveOnceHook) AfterProcess(context.Context, redis.Cmder) error {
+	return nil
+}
+
+func (h *failIndexRemoveOnceHook) BeforeProcessPipeline(ctx context.Context, _ []redis.Cmder) (context.Context, error) {
+	return ctx, nil
+}
+
+func (h *failIndexRemoveOnceHook) AfterProcessPipeline(context.Context, []redis.Cmder) error {
+	return nil
+}
+
+func TestRedisDriverClearRetriesStaleIndexAfterIndexRemoveFailure(t *testing.T) {
+	miniRedis, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(miniRedis.Close)
+
+	client := redis.NewClient(&redis.Options{Addr: miniRedis.Addr()})
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	driver := NewRedisDriver(client, newMysqlDriverTestConfig())
+
+	const userID int32 = 42
+	require.NoError(t, driver.Set("retry-token", "user", userID, 3600))
+	encryptedToken, err := GetEncryptedToken("retry-token", driver.config.Token.Algo, driver.config.Token.Key)
+	require.NoError(t, err)
+	userKey := driver.GetUserKeyFor("user", userID)
+	client.AddHook(&failIndexRemoveOnceHook{userKey: userKey})
+
+	require.Error(t, driver.Clear("user", userID))
+	require.Equal(t, int64(0), client.Exists(context.Background(), encryptedToken).Val())
+	require.Equal(t, int64(1), client.Exists(context.Background(), userKey).Val())
+
+	require.NoError(t, driver.Clear("user", userID))
+	require.Equal(t, int64(0), client.Exists(context.Background(), userKey).Val())
+}
+
+func TestRedisDriverClearScopesTokensByType(t *testing.T) {
+	miniRedis, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(miniRedis.Close)
+	client := redis.NewClient(&redis.Options{Addr: miniRedis.Addr()})
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	driver := NewRedisDriver(client, newMysqlDriverTestConfig())
+
+	const userID int32 = 7
+	require.NoError(t, driver.Set("user-token", "user", userID, 3600))
+	require.NoError(t, driver.Set("admin-token", "admin", userID, 3600))
+	require.NoError(t, driver.Set("refresh-token", "user-refresh", userID, 3600))
+	encryptedUserToken, err := GetEncryptedToken("user-token", driver.config.Token.Algo, driver.config.Token.Key)
+	require.NoError(t, err)
+	require.True(t, client.SIsMember(context.Background(), driver.GetUserKeyFor("user", userID), encryptedUserToken).Val())
+	require.Equal(t, int64(0), client.Exists(context.Background(), driver.GetUserKey(userID)).Val())
+
+	require.NoError(t, driver.Clear("user", userID))
+	require.False(t, driver.Check("user-token", "user", userID))
+	require.True(t, driver.Check("admin-token", "admin", userID))
+	require.True(t, driver.Check("refresh-token", "user-refresh", userID))
+}
+
+func TestRedisDriverClearTransitionsMixedLegacyIndexByType(t *testing.T) {
+	miniRedis, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(miniRedis.Close)
+	client := redis.NewClient(&redis.Options{Addr: miniRedis.Addr()})
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	driver := NewRedisDriver(client, newMysqlDriverTestConfig())
+
+	const userID int32 = 8
+	for _, tokenType := range []string{"admin", "user", "user-refresh"} {
+		require.NoError(t, driver.Set(tokenType+"-token", tokenType, userID, 3600))
+	}
+	legacyUserKey := driver.GetUserKey(userID)
+	for _, tokenName := range []string{"admin-token", "user-token", "user-refresh-token"} {
+		encryptedToken, err := GetEncryptedToken(tokenName, driver.config.Token.Algo, driver.config.Token.Key)
+		require.NoError(t, err)
+		require.NoError(t, client.SAdd(context.Background(), legacyUserKey, encryptedToken).Err())
+	}
+
+	require.NoError(t, driver.Clear("user", userID))
+	require.False(t, driver.Check("user-token", "user", userID))
+	require.True(t, driver.Check("admin-token", "admin", userID))
+	require.True(t, driver.Check("user-refresh-token", "user-refresh", userID))
+	legacyMembers, err := client.SMembers(context.Background(), legacyUserKey).Result()
+	require.NoError(t, err)
+	require.Len(t, legacyMembers, 2)
+}
 
 type redisStoreFake struct {
 	values map[string]string
@@ -120,6 +232,38 @@ func (f *redisStoreFake) SRem(_ context.Context, key string, members ...interfac
 		}
 	}
 	return removed, nil
+}
+
+func (f *redisStoreFake) Eval(_ context.Context, _ string, keys []string, args ...interface{}) error {
+	if f.setEXErr != nil {
+		return f.setEXErr
+	}
+	if f.saddErr != nil {
+		return f.saddErr
+	}
+	if len(keys) != 2 || len(args) < 2 {
+		return errors.New("invalid eval arguments")
+	}
+	ttl := time.Duration(0)
+	switch value := args[0].(type) {
+	case int64:
+		ttl = time.Duration(value) * time.Second
+	case int:
+		ttl = time.Duration(value) * time.Second
+	case time.Duration:
+		ttl = value
+	case string:
+		var seconds int64
+		_, _ = fmt.Sscan(value, &seconds)
+		ttl = time.Duration(seconds) * time.Second
+	}
+	f.values[keys[1]] = stringValue(args[1])
+	f.ttls[keys[1]] = ttl
+	if f.sets[keys[0]] == nil {
+		f.sets[keys[0]] = make(map[string]struct{})
+	}
+	f.sets[keys[0]][keys[1]] = struct{}{}
+	return nil
 }
 
 func stringValue(value interface{}) string {

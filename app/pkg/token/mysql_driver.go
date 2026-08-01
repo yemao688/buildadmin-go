@@ -86,11 +86,9 @@ func (d MysqlDriver) Delete(token string) error {
 	if err != nil {
 		return err
 	}
-	d.sqlDB.Where("token = ? ", token).Delete(&Token{})
-	return nil
+	return d.sqlDB.Where("token = ? ", token).Delete(&Token{}).Error
 }
 
 func (d MysqlDriver) Clear(t string, user_id int32) error {
-	d.sqlDB.Where("type = ? AND user_id = ? ", t, user_id).Delete(&Token{})
-	return nil
+	return d.sqlDB.Where("type = ? AND user_id = ? ", t, user_id).Delete(&Token{}).Error
 }
