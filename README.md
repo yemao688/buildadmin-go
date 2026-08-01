@@ -4,9 +4,8 @@
 
 ## 当前实现基线
 
-- 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用 MySQL 命名锁与事务内锚定行锁。
-- 密码使用 bcrypt，不使用 salt 列；security 规则全局化，规则表不含 `admin_id`/`owner_column`，日志表的 `admin_id` 只表示操作者。
-- 后台管理功能完整；前台 `/` 是自包含占位页，当前只提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`。
+- 全新安装建立 24 张表；后台管理功能完整（权限、安全、常规、字典、CRUD 代码生成）。
+- 前台 `/` 是自包含占位页，提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`，作为业务门户的开发起点。
 
 ## 技术栈与要求
 
@@ -39,7 +38,7 @@ go install github.com/air-verse/air@latest
    # 或：go run ./cmd/app
    ```
 
-   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/app --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。
+   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/app --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
 2. 启动前端（必须在 `web/` 目录执行）：
 
    ```bash

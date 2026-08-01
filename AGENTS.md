@@ -31,7 +31,7 @@
 - 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端使用 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
 - 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
-- 全新安装当前建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用 MySQL 命名锁 `GET_LOCK` 与事务内锚定行 `FOR UPDATE`。密码使用 bcrypt，不使用 salt 列。
+- 全新安装建立 24 张表，覆盖权限、安全、字典、附件、配置与三轨迁移台账。
 - security 四表与 PHP 语义对齐：规则表全局化，不含 `admin_id`/`owner_column`；日志表的 `admin_id` 只表示操作者。安全种子使用 Go 点形 controller 名（如 `security.DataRecycle`）。
 - 前台 `/` 是自包含占位页，当前只提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`；后台管理功能完整。
 
@@ -46,6 +46,7 @@
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
+- 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的 model、handler、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
