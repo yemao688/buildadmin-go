@@ -3,6 +3,12 @@
 ## v2.5.0
 
 - **Added:** 新增 CLI 交互式安装命令 `setup`，与 Web 安装向导并存二选一——交互收集 MySQL 连接（密码遮蔽输入）→ 连接测试与建库 → 写稀疏 `config.yaml` → 进程内执行迁移 → 前端构建/跳过/中止三选 → 自定义或默认管理员与站点名 → 写安装锁；支持全 flags + `--yes` 的无人值守模式（CI/容器可用），已安装时拒绝执行，`--conf` 未显式指定时始终以根目录 `config.yaml` 为写入目标。安装逻辑同步抽取为 `app/pkg/installer` 共享包，Web 向导改为调用同一事实源，行为不变。新增依赖 `golang.org/x/term`。
+- **Security:** 后台菜单按当前登录管理员加载——`Index` 此前硬编码 `GetMenus(ctx, 1)`，任何登录管理员都拿到超级管理员菜单树（接口级规则校验不受影响，但后台菜单结构整体泄露）；改为按认证身份 `info.Id` 加载，附回归测试。
+- **Security:** 用户刷新令牌签发事务化——`RefreshUserAccessToken` 在事务内以 `SELECT FOR UPDATE` 行锁读取用户行，锁内复查账户启用状态并二次读取刷新令牌校验一致性（防并发重放），再签发新 access token；附并发测试。
+- **Added (data_scope):** `dataScope.readExtraOwners` 多属主读范围——订单类资源可同时按主属主列（如代理 `admin_id`）与额外属主列（如买家归属 `user.admin_id`）做 OR 数据范围；新增可选接口 `ReadScopeEnforcer`（刻意不扩展既有 `Enforcer`，旧实现契约不变）与 `ScopeRead` 助手（无额外属主时精确回落旧查询路径）；每个 OwnerRef 先校验再拼 OR 闭表 EXISTS 分支，标识符全转义；CRUD spec 支持 `dataScope.readExtraOwners` 声明与生成器校验（标识符合法、非主属主、字段存在且整数兼容），`FormBuildExclude` 字段与额外属主列自动排除出客户端可设 handler 参数（防归属伪造）；生成模型模板 emit 策略字面量并新增 `readScopedDB`——`GetOne`/`List` 读路径自动应用 OR 读范围，`Edit`/`Del` 写路径保持主属主单列范围，存量无额外属主模块重新生成零行为变化。
+- **Fixed (crud):** 路由解析目录布局精确匹配优先——`routeIndexURLForController` 此前递归搜索同名 `<stem>_route.go` 基名，业务子目录同名文件（如 `seller/user_route.go`）按目录字母序抢先命中框架控制器（`user/user_route.go`），把框架控制器误解析到业务模块路由；现先查 `handlerRoot/<stem>/<stem>_route.go` 精确路径，未命中再回落递归搜索。
+- **Fixed (migrations):** `signedDelta` 基线校验接受 decimal/double/float——`isSignedDeltaColumn` 此前精确匹配 `int`/`int(11)`，与"有符号数值 + NOT NULL + 零默认"的校验意图不符（金额列用 decimal 是常见业务选择）；现剥离 `(M,D)` 精度后缀后比较基类型（int/double/float/decimal），零默认改按数值解析判定（MySQL 将 decimal 零值默认渲染为 `0.00`）。
+- **Fixed (token):** token 存储驱动加固——MySQL 驱动 `Delete`/`Clear` 不再吞掉 GORM 错误；Redis 驱动 `Set` 改为 Lua 脚本原子执行（SADD 用户令牌索引与 SET/SETEX 令牌本体一次往返），消除索引与本体不一致窗口；引入 miniredis 进程内测试范式。
 
 ## v2.4.0
 
