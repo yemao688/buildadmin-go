@@ -40,7 +40,7 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	f := &scopeFixture{db: db, cfg: cfg, admins: map[int32]Admin{}, users: map[int32]User{}}
 	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &Group{}, &User{}))
-	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, money INT NOT NULL, `before` INT NOT NULL, `after` INT NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
+	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, money DECIMAL(12,2) NOT NULL, `before` DECIMAL(12,2) NOT NULL, `after` DECIMAL(12,2) NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
 	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_score_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, score INT NOT NULL, `before` INT NOT NULL, `after` INT NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
@@ -150,7 +150,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	require.Error(t, f.root.Add(ctx, &blocked))
 
 	transfer := f.addUser(t, ctx, 20, "transfer")
-	require.NoError(t, f.db.Create(&MoneyLog{UserID: transfer.ID, AdminID: 20, Money: 1}).Error)
+	require.NoError(t, f.db.Create(&MoneyLog{UserID: transfer.ID, AdminID: 20, Money: 1.00}).Error)
 	require.NoError(t, f.db.Create(&ScoreLog{UserID: transfer.ID, AdminID: 20, Score: 1}).Error)
 	transfer.AdminID = 30
 	require.NoError(t, f.root.Edit(ctx, &transfer, ""))
@@ -161,7 +161,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	require.Equal(t, int32(30), scoreOwner)
 
 	mismatch := f.addUser(t, ctx, 20, "mismatch")
-	require.NoError(t, f.db.Create(&MoneyLog{UserID: mismatch.ID, AdminID: 30, Money: 1}).Error)
+	require.NoError(t, f.db.Create(&MoneyLog{UserID: mismatch.ID, AdminID: 30, Money: 1.00}).Error)
 	mismatch.AdminID = 30
 	require.Error(t, f.root.Edit(ctx, &mismatch, ""))
 	var unchanged int32

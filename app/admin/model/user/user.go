@@ -29,7 +29,7 @@ type User struct {
 	Avatar        string       `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
 	Gender        int32        `gorm:"column:gender;not null;comment:性别:0=未知,1=男,2=女" json:"gender"`                                         // 性别:0=未知,1=男,2=女
 	Birthday      time.Time    `gorm:"column:birthday;comment:生日" json:"birthday"`                                                           // 生日
-	Money         int32        `gorm:"column:money;not null;comment:余额" json:"money"`                                                        // 余额
+	Money         float64      `gorm:"column:money;not null;comment:余额" json:"money"`                                                        // 余额
 	Score         int32        `gorm:"column:score;not null;comment:积分" json:"score"`                                                        // 积分
 	LastLoginTime int64        `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                         // 上次登录时间
 	LastLoginIP   string       `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                    // 上次登录IP
@@ -72,7 +72,7 @@ func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
 		return nil, err
 	}
 	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
-	outUser.Money = fmt.Sprintf("%.2f", float64(data.Money)/100)
+	outUser.Money = fmt.Sprintf("%.2f", data.Money)
 	outUser.Birthday = ""
 	if data.Birthday.Unix() > 100 {
 		outUser.Birthday = data.Birthday.Format("2006-01-02")

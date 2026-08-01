@@ -268,7 +268,7 @@ func (s *Service) FilterData(user model.User) map[string]any {
 		"avatar":          user.Avatar,
 		"gender":          user.Gender,
 		"birthday":        birthday,
-		"money":           fmt.Sprintf("%.2f", float64(user.Money/100)),
+		"money":           fmt.Sprintf("%.2f", user.Money),
 		"score":           user.Score,
 		"join_time":       user.JoinTime,
 		"motto":           user.Motto,

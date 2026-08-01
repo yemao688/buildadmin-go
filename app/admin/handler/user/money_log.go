@@ -2,10 +2,13 @@ package user
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
-	"go-build-admin/app/pkg/safeint"
+	"math"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -44,9 +47,9 @@ func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 			"admin":       v.Admin,
 			"id":          v.ID,
 			"user_id":     v.UserID,
-			"money":       fmt.Sprintf("%.2f", float64(v.Money)/100),
-			"before":      fmt.Sprintf("%.2f", float64(v.Before)/100),
-			"after":       fmt.Sprintf("%.2f", float64(v.After)/100),
+			"money":       fmt.Sprintf("%.2f", v.Money),
+			"before":      fmt.Sprintf("%.2f", v.Before),
+			"after":       fmt.Sprintf("%.2f", v.After),
 			"memo":        v.Memo,
 			"create_time": v.CreateTime,
 			"user":        v.User,
@@ -73,6 +76,45 @@ func (v Money) GetMessages() validate.ValidatorMessages {
 	}
 }
 
+func parseMoneyAmount(raw []byte) (float64, error) {
+	s := strings.TrimSpace(string(raw))
+	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		s = s[1 : len(s)-1]
+	}
+	if s == "" || strings.ContainsAny(s, "eE+") {
+		return 0, errors.New("invalid money amount")
+	}
+
+	negative := false
+	if s[0] == '-' {
+		negative = true
+		s = s[1:]
+	}
+	if s == "" {
+		return 0, errors.New("invalid money amount")
+	}
+	parts := strings.Split(s, ".")
+	if len(parts) > 2 || parts[0] == "" || (len(parts) == 2 && len(parts[1]) > 2) {
+		return 0, errors.New("money must have at most two decimals")
+	}
+	for _, part := range parts {
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return 0, errors.New("invalid money amount")
+			}
+		}
+	}
+
+	amount, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return 0, errors.New("invalid money amount")
+	}
+	if negative {
+		amount = -amount
+	}
+	return amount, nil
+}
+
 func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	var params Money
 	if err := ctx.ShouldBindJSON(&params); err != nil {
@@ -81,7 +123,7 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	}
 
 	userMoneyLog := adminmodel.MoneyLog{}
-	cents, err := safeint.ParseDecimalCents(params.Money)
+	amount, err := parseMoneyAmount(params.Money)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -90,8 +132,7 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	userMoneyLog.Money = cents
-	userMoneyLog.MoneyCents = true
+	userMoneyLog.Money = amount
 
 	err = h.userMoneyLogM.Add(ctx, &userMoneyLog)
 	// Add takes a pointer so the caller can inspect the generated ID.

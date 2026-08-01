@@ -7,7 +7,6 @@ import (
 	"go-build-admin/app/admin/model/simple"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/safeint"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
@@ -23,13 +22,12 @@ func (MoneyLog) TableName(namer schema.Namer) string {
 
 // MoneyLog 会员余额变动表
 type MoneyLog struct {
-	ID         int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
-	AdminID    int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`       // 管理员ID
-	UserID     int32        `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`          // 会员ID
-	Money      int32        `gorm:"column:money;not null;comment:变更余额" json:"money"`              // 变更余额
-	MoneyCents bool         `gorm:"-" json:"-"`
-	Before     int32        `gorm:"column:before;not null;comment:变更前余额" json:"before"`                // 变更前余额
-	After      int32        `gorm:"column:after;not null;comment:变更后余额" json:"after"`                  // 变更后余额
+	ID         int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`      // ID
+	AdminID    int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`            // 管理员ID
+	UserID     int32        `gorm:"column:user_id;not null;comment:会员ID" json:"user_id"`               // 会员ID
+	Money      float64      `gorm:"column:money;not null;comment:变更余额" json:"money"`                   // 变更余额
+	Before     float64      `gorm:"column:before;not null;comment:变更前余额" json:"before"`                // 变更前余额
+	After      float64      `gorm:"column:after;not null;comment:变更后余额" json:"after"`                  // 变更后余额
 	Memo       string       `gorm:"column:memo;not null;comment:备注" json:"memo"`                       // 备注
 	CreateTime int64        `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
 	Admin      simple.Admin `gorm:"foreignKey:AdminID" json:"admin"`
@@ -101,7 +99,7 @@ func (s *MoneyLogModel) List(ctx *gin.Context) (list []MoneyLog, total int64, er
 
 // Add creates a balance change log in a single transaction. The target user is
 // selected with FOR UPDATE under the actor's scope, the new balance is computed
-// with int64 overflow checks and must not become negative, then the user row is
+// and must not become negative, then the user row is
 // updated and the log (owned by user.AdminID) is inserted. Any failure rolls
 // back both changes.
 func (s *MoneyLogModel) Add(ctx *gin.Context, userMoneyLog *MoneyLog) error {
@@ -121,21 +119,9 @@ func (s *MoneyLogModel) Add(ctx *gin.Context, userMoneyLog *MoneyLog) error {
 			return fmt.Errorf("target user has no owner")
 		}
 
-		// HTTP handlers parse yuan exactly into cents. Keep the old model-level
-		// integer contract for callers which construct this model directly.
 		delta := userMoneyLog.Money
-		var err error
-		if !userMoneyLog.MoneyCents {
-			delta, err = safeint.MulInt32(delta, 100)
-			if err != nil {
-				return cErr.BadRequest("money amount out of range")
-			}
-		}
 		before := user.Money
-		after, err := safeint.AddInt32(before, delta)
-		if err != nil {
-			return cErr.BadRequest("balance overflow")
-		}
+		after := before + delta
 		if after < 0 {
 			return cErr.BadRequest("insufficient balance")
 		}

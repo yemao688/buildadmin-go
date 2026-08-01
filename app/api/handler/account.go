@@ -44,7 +44,7 @@ func (h *AccountHandler) Overview(ctx *gin.Context) {
 		score = append(score, scoreNum)
 
 		moneyNum, _ := h.userMoneyLogM.GetDayMoney(ctx, sevenDays.AddDate(0, 0, i), userAuth.Id)
-		money = append(money, fmt.Sprintf("%.2f", float64(moneyNum/100)))
+		money = append(money, fmt.Sprintf("%.2f", moneyNum))
 	}
 
 	Success(ctx, map[string]any{
