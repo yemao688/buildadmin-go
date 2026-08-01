@@ -2,6 +2,7 @@ package local
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"go-build-admin/conf"
@@ -181,7 +182,19 @@ func verifySignedDeltaContract(db *gorm.DB, config *conf.Configuration) error {
 
 func isSignedDeltaColumn(def core.MigrationColumn) bool {
 	typ := strings.ToLower(def.ColumnType)
-	return (typ == "int" || typ == "int(11)") && strings.EqualFold(def.Nullable, "NO") && def.Default != nil && *def.Default == "0"
+	if precision := strings.IndexByte(typ, '('); precision >= 0 {
+		typ = typ[:precision]
+	}
+	switch typ {
+	case "int", "double", "float", "decimal":
+	default:
+		return false
+	}
+	if !strings.EqualFold(def.Nullable, "NO") || def.Default == nil {
+		return false
+	}
+	defaultValue, err := strconv.ParseFloat(*def.Default, 64)
+	return err == nil && defaultValue == 0
 }
 
 func verifyTargetContract(db *gorm.DB, config *conf.Configuration) error {
