@@ -2,6 +2,8 @@
 
 ## v2.5.0
 
+- **Changed (breaking):** user 系金额从 int 分语义改为 `decimal(12,2)` 元语义——`user.money` 与 `user_money_log.{money,before,after}` 四列由 local 迁移 0007 转换（逐列类型家族分派幂等：已是 `decimal(12,2)` 跳过；`decimal/double/float`（业务仓库已自行十进制化）仅规整类型、绝不重复换算；int 家族 ALTER 后立即 ÷100 换算存量分值数据，含负 delta 精确两位；异类类型明确报错）；全新安装快照直接建 decimal 列。Go 实体字段改 `float64`，输出 DTO 保持 `"%.2f"` 字符串（API 响应形状不变）；`safeint.ParseDecimalCents`/`MulInt32` 随分语义消亡移除；后台金额调整直接按元输入（允许负值，最多两位小数）；前端 store 金额类型对齐为 string。积分列（`user_score_log`）不受影响。**业务仓库合并注意**：合并后首次 `migrate` 会把存量分值数据 ÷100；已自行 decimal 化的仓库被类型守卫安全跳过。
+
 - **Added:** 新增 CLI 交互式安装命令 `setup`，与 Web 安装向导并存二选一——交互收集 MySQL 连接（密码遮蔽输入）→ 连接测试与建库 → 写稀疏 `config.yaml` → 进程内执行迁移 → 前端构建/跳过/中止三选 → 自定义或默认管理员与站点名 → 写安装锁；支持全 flags + `--yes` 的无人值守模式（CI/容器可用），已安装时拒绝执行，`--conf` 未显式指定时始终以根目录 `config.yaml` 为写入目标。安装逻辑同步抽取为 `app/pkg/installer` 共享包，Web 向导改为调用同一事实源，行为不变。新增依赖 `golang.org/x/term`。
 - **Security:** 后台菜单按当前登录管理员加载——`Index` 此前硬编码 `GetMenus(ctx, 1)`，任何登录管理员都拿到超级管理员菜单树（接口级规则校验不受影响，但后台菜单结构整体泄露）；改为按认证身份 `info.Id` 加载，附回归测试。
 - **Security:** 用户刷新令牌签发事务化——`RefreshUserAccessToken` 在事务内以 `SELECT FOR UPDATE` 行锁读取用户行，锁内复查账户启用状态并二次读取刷新令牌校验一致性（防并发重放），再签发新 access token；附并发测试。
