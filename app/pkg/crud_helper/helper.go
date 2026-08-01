@@ -986,7 +986,18 @@ func routeIndexURLForController(controller string) string {
 			return "/admin/" + string(m[1]) + "/index"
 		}
 	}
-	if registrarPath = findRouteRegistrarPath(filepath.Join(utils.RootPath(), "app/admin/handler"), stem); registrarPath != "" {
+	// Prefer the exact directory layout before recursive basename search. A
+	// flat controller such as user.go maps to user/user_route.go; otherwise a
+	// same-named business registrar can win based on directory traversal order.
+	handlerRoot := filepath.Join(utils.RootPath(), "app/admin/handler")
+	dirLayoutPath := filepath.Join(handlerRoot, stem, stem+"_route.go")
+	if data, err := os.ReadFile(dirLayoutPath); err == nil {
+		re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
+		if m := re.FindSubmatch(data); m != nil {
+			return "/admin/" + string(m[1]) + "/index"
+		}
+	}
+	if registrarPath = findRouteRegistrarPath(handlerRoot, stem); registrarPath != "" {
 		if data, err := os.ReadFile(registrarPath); err == nil {
 			re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
 			if m := re.FindSubmatch(data); m != nil {
