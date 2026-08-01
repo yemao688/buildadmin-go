@@ -31,10 +31,7 @@ var coreTables = []CoreTable{
 	{LogicalName: "security_sensitive_data", NewModel: func() any { return &model.SecuritySensitiveData{} }},
 	{LogicalName: "test_build", NewModel: func() any { return &model.TestBuild{} }},
 	{LogicalName: "token", NewModel: func() any { return &model.Token{} }},
-	{LogicalName: "user_group", NewModel: func() any { return &model.UserGroup{} }},
 	{LogicalName: "user_money_log", NewModel: func() any { return &model.UserMoneyLog{} }},
-	{LogicalName: "user_rule", NewModel: func() any { return &model.UserRule{} }},
-	{LogicalName: "user_score_log", NewModel: func() any { return &model.UserScoreLog{} }},
 	{LogicalName: "user", NewModel: func() any { return &model.User{} }},
 }
 

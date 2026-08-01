@@ -212,7 +212,7 @@ git push origin master
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
 | `config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `config.yaml` 覆盖层，不要把凭据合入基座。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
-| 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/local 注册表冲突。 |
+| 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/framework 注册表冲突。 |
 
 ## 业务版本约定
 
@@ -224,7 +224,7 @@ git push origin master
 
 路由注册走 RouteRegistrar 体系，业务路由不进 `router/router.go`：每个后台/API 模块由自己的 `<name>_route.go` registrar 承载——`Group()` 声明分组（`admin`/`api`/`root`）、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力；CRUD 生成器自动产出该文件并维护 `provider.go` 与 `router/registrar_set.go` 的共享追加条目，`crud:delete` 反向移除。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
 
-以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`router/router.go` 的既有框架区域、`database/migrations/official/` 和 `local/` 的历史、`database/migrations/model/` 生成模型，以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
+以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`router/router.go` 的既有框架区域、`database/migrations/official/` 和 `database/migrations/framework/` 的历史、`database/migrations/model/` 生成模型，以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
 ## AI agent 协议
 

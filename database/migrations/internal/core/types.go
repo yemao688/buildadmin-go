@@ -22,12 +22,12 @@ type OfficialMigration struct {
 	Up     MigrationFn
 }
 
-type LocalMigration struct {
+type FrameworkMigration struct {
 	Sequence uint64
 	ID       string
 	Revision uint64
 	// RequiresOfficial is retained in the core track contract because the
-	// local runner enforces official completion before executing local Up.
+	// framework runner enforces official completion before executing framework Up.
 	RequiresOfficial  []OfficialKey
 	Up                MigrationFn
 	VerifyBaseline    MigrationFn
@@ -35,16 +35,15 @@ type LocalMigration struct {
 	VerifyUpgradeData func(*gorm.DB, *conf.Configuration) error
 }
 
-type LocalMigrationRecord struct {
+type FrameworkMigrationRecord struct {
 	Sequence    uint64     `gorm:"column:sequence"`
 	MigrationID string     `gorm:"column:migration_id"`
 	Revision    uint64     `gorm:"column:revision"`
 	StartTime   time.Time  `gorm:"column:start_time"`
 	EndTime     *time.Time `gorm:"column:end_time"`
-	AdoptedFrom *string    `gorm:"column:adopted_from"`
 }
 
-func (LocalMigrationRecord) TableName() string { return "local_migrations" }
+func (FrameworkMigrationRecord) TableName() string { return "framework_migrations" }
 
 func ValidateOfficialMigrations(list []OfficialMigration) error {
 	var previous int64
@@ -62,7 +61,7 @@ func ValidateOfficialMigrations(list []OfficialMigration) error {
 	return nil
 }
 
-func ValidateLocalMigrations(list []LocalMigration, official []OfficialMigration) error {
+func ValidateFrameworkMigrations(list []FrameworkMigration, official []OfficialMigration) error {
 	if err := ValidateOfficialMigrations(official); err != nil {
 		return err
 	}
@@ -74,11 +73,11 @@ func ValidateLocalMigrations(list []LocalMigration, official []OfficialMigration
 	var previousSequence uint64
 	for i, m := range list {
 		if m.Sequence == 0 || m.Sequence <= previousSequence || strings.TrimSpace(m.ID) == "" || m.Revision == 0 || m.Up == nil || seenID[m.ID] || seenSeq[m.Sequence] {
-			return fmt.Errorf("invalid local migration at index %d", i)
+			return fmt.Errorf("invalid framework migration at index %d", i)
 		}
 		for _, key := range m.RequiresOfficial {
 			if !officialKeys[key] {
-				return fmt.Errorf("local migration %s requires unknown official migration %d/%s", m.ID, key.Version, key.Name)
+				return fmt.Errorf("framework migration %s requires unknown official migration %d/%s", m.ID, key.Version, key.Name)
 			}
 		}
 		seenID[m.ID], seenSeq[m.Sequence] = true, true

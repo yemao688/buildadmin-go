@@ -5,18 +5,18 @@ import (
 	"gorm.io/gorm"
 )
 
-func BootstrapLocalLedger(db *gorm.DB, config *conf.Configuration) error {
-	return BootstrapTrackedLedger(db, config, "local_migrations", TrackedLedgerOptions{IncludeAdoptedFrom: true})
+func BootstrapFrameworkLedger(db *gorm.DB, config *conf.Configuration) error {
+	return BootstrapTrackedLedger(db, config, "framework_migrations", TrackedLedgerOptions{})
 }
 
-func ValidateLocalLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
-	return ValidateTrackedLedgerSchema(db, config, "local_migrations", TrackedLedgerOptions{IncludeAdoptedFrom: true})
+func ValidateFrameworkLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
+	return ValidateTrackedLedgerSchema(db, config, "framework_migrations", TrackedLedgerOptions{})
 }
 
-func InsertPendingLocalMigration(db *gorm.DB, config *conf.Configuration, m LocalMigration, adoptedFrom *string) error {
-	return InsertPendingTrackedMigration(db, config, "local_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up}, adoptedFrom)
+func InsertPendingFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
+	return InsertPendingTrackedMigration(db, config, "framework_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up})
 }
 
-func CompleteLocalMigration(db *gorm.DB, config *conf.Configuration, m LocalMigration) error {
-	return CompleteTrackedMigration(db, config, "local_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision}, "local")
+func CompleteFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
+	return CompleteTrackedMigration(db, config, "framework_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision}, "framework")
 }

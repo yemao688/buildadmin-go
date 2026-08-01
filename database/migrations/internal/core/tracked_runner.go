@@ -23,7 +23,6 @@ type TrackedMigration struct {
 
 type TrackedRunnerOptions struct {
 	TrackName    string
-	AdoptedFrom  func(TrackedMigration) *string
 	IncludeBatch bool
 	Batch        uint64
 }
@@ -74,15 +73,11 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 				return count, q.Error
 			}
 			if q.Error == gorm.ErrRecordNotFound {
-				var adoptedFrom *string
-				if options.AdoptedFrom != nil {
-					adoptedFrom = options.AdoptedFrom(m)
-				}
 				var err error
 				if options.IncludeBatch {
-					err = InsertPendingTrackedMigrationWithBatch(db, config, tableName, m, batch, adoptedFrom)
+					err = InsertPendingTrackedMigrationWithBatch(db, config, tableName, m, batch)
 				} else {
-					err = InsertPendingTrackedMigration(db, config, tableName, m, adoptedFrom)
+					err = InsertPendingTrackedMigration(db, config, tableName, m)
 				}
 				if err != nil {
 					return count, err

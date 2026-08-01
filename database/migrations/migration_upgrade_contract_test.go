@@ -34,9 +34,9 @@ func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, InstallInterrupted, result.recovery)
 			require.Equal(t, len(OfficialMigrations()), result.official)
-			require.Equal(t, len(LocalMigrations()), result.local)
+			require.Equal(t, len(FrameworkMigrations()), result.framework)
 			require.True(t, result.seeded)
-			require.NoError(t, LocalVerifyCurrent(db, cfg))
+			require.NoError(t, FrameworkVerifyCurrent(db, cfg))
 		})
 	}
 

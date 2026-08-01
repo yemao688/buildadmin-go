@@ -13,51 +13,51 @@ import (
 
 func TestDualTrackValidation(t *testing.T) {
 	official := []OfficialMigration{{Key: OfficialKey{Version: 1, Name: "Version200"}, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
-	local := []LocalMigration{{Sequence: 1, ID: "account-status-protocol", Revision: 1, RequiresOfficial: []OfficialKey{{Version: 1, Name: "Version200"}}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
-	if err := ValidateLocalMigrations(local, official); err != nil {
+	framework := []FrameworkMigration{{Sequence: 1, ID: "framework-final-seed-and-integrity", Revision: 1, RequiresOfficial: []OfficialKey{{Version: 1, Name: "Version200"}}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
+	if err := ValidateFrameworkMigrations(framework, official); err != nil {
 		t.Fatal(err)
 	}
-	local[0].RequiresOfficial[0].Name = "collision"
-	if err := ValidateLocalMigrations(local, official); err == nil {
+	framework[0].RequiresOfficial[0].Name = "collision"
+	if err := ValidateFrameworkMigrations(framework, official); err == nil {
 		t.Fatal("unknown official dependency accepted")
 	}
 }
 
 func TestPhase2RegistrySplit(t *testing.T) {
-	official, local := OfficialMigrations(), LocalMigrations()
-	if len(official) != 6 || len(local) != 7 {
-		t.Fatalf("official=%d local=%d", len(official), len(local))
+	official, framework := OfficialMigrations(), FrameworkMigrations()
+	if len(official) != 6 || len(framework) != 1 {
+		t.Fatalf("official=%d framework=%d", len(official), len(framework))
 	}
 	if err := ValidateOfficialMigrations(official); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateLocalMigrations(local, official); err != nil {
+	if err := ValidateFrameworkMigrations(framework, official); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"account-status-protocol", "admin-hierarchy", "ownership-and-audit-integrity", "security-rule-normalization", "country-dictionary", "upload-config", "user-money-decimal"}
-	for i, migration := range local {
-		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || (i < 5 && (migration.VerifySchema == nil || migration.VerifyUpgradeData == nil)) || ((i == 2 || i == 6) && migration.VerifyBaseline == nil) {
-			t.Fatalf("invalid local registry entry %d: %#v", i, migration)
+	want := []string{"framework-final-seed-and-integrity"}
+	for i, migration := range framework {
+		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil || migration.VerifyBaseline != nil {
+			t.Fatalf("invalid framework registry entry %d: %#v", i, migration)
 		}
 	}
 }
 
-func TestLocalValidationRequiresStrictSequenceAndTrimmedID(t *testing.T) {
+func TestFrameworkValidationRequiresStrictSequenceAndTrimmedID(t *testing.T) {
 	up := func(*gorm.DB, *conf.Configuration) error { return nil }
-	base := []LocalMigration{{Sequence: 1, ID: "one", Revision: 1, Up: up}}
-	for name, list := range map[string][]LocalMigration{
+	base := []FrameworkMigration{{Sequence: 1, ID: "one", Revision: 1, Up: up}}
+	for name, list := range map[string][]FrameworkMigration{
 		"same sequence":       {{Sequence: 1, ID: "one", Revision: 1, Up: up}, {Sequence: 1, ID: "two", Revision: 1, Up: up}},
 		"decreasing sequence": {{Sequence: 2, ID: "two", Revision: 1, Up: up}, {Sequence: 1, ID: "one", Revision: 1, Up: up}},
 		"duplicate id":        {{Sequence: 1, ID: "one", Revision: 1, Up: up}, {Sequence: 2, ID: "one", Revision: 2, Up: up}},
 		"trimmed id":          {{Sequence: 1, ID: "  ", Revision: 1, Up: up}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := ValidateLocalMigrations(list, nil); err == nil {
-				t.Fatal("invalid local registry accepted")
+			if err := ValidateFrameworkMigrations(list, nil); err == nil {
+				t.Fatal("invalid framework registry accepted")
 			}
 		})
 	}
-	if err := ValidateLocalMigrations(base, nil); err != nil {
+	if err := ValidateFrameworkMigrations(base, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -76,8 +76,8 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 	}
 }
 
-func TestLocalRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
-	if (LocalMigrationRecord{}).TableName() != "local_migrations" {
+func TestFrameworkRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
+	if (FrameworkMigrationRecord{}).TableName() != "framework_migrations" {
 		t.Fatal("unexpected model table name")
 	}
 }

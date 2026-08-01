@@ -3,7 +3,6 @@ package official
 import (
 	"errors"
 	"fmt"
-	"strings"
 
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
@@ -86,7 +85,6 @@ func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
 	checks := []struct{ table, column, value string }{
 		{"admin_rule", "name", "dashboard"}, {"admin_rule", "name", "auth/rule"}, {"admin_rule", "name", "dashboard/index"},
 		{"admin_group", "id", "1"}, {"admin", "id", "1"}, {"config", "id", "1"},
-		{"user_group", "id", "1"}, {"user", "id", "1"},
 	}
 	for _, check := range checks {
 		t := core.TableName(config, check.table)
@@ -102,19 +100,4 @@ func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
 		}
 	}
 	return true, nil
-}
-
-func ValidateCurrentSchema(db *gorm.DB, config *conf.Configuration) error {
-	t := core.TableName(config, "user_rule")
-	if !core.TableExists(db, t) || !core.ColumnExists(db, t, "no_login_valid") {
-		return fmt.Errorf("%s.no_login_valid is missing after AutoMigrate", t)
-	}
-	var columnType string
-	if err := db.Raw("SELECT column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='type'", t).Scan(&columnType).Error; err != nil {
-		return err
-	}
-	if !strings.Contains(columnType, "menu_dir") || !strings.Contains(columnType, "button") {
-		return fmt.Errorf("%s.type does not contain the current rule enum", t)
-	}
-	return nil
 }

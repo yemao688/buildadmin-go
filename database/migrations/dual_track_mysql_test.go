@@ -20,21 +20,21 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "phase1_"
-	if err := db.Exec("DROP TABLE IF EXISTS `phase1_local_migrations`").Error; err != nil {
+	if err := db.Exec("DROP TABLE IF EXISTS `phase1_framework_migrations`").Error; err != nil {
 		t.Fatal(err)
 	}
-	defer db.Exec("DROP TABLE IF EXISTS `phase1_local_migrations`")
-	if err := BootstrapLocalLedger(db, config); err != nil {
+	defer db.Exec("DROP TABLE IF EXISTS `phase1_framework_migrations`")
+	if err := BootstrapFrameworkLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateLocalLedgerSchema(db, config); err != nil {
+	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
 		t.Fatal(err)
 	}
-	local := LocalMigration{Sequence: 1, ID: "retryable", Revision: 1, Up: func(_ *gorm.DB, _ *conf.Configuration) error { return nil }}
-	if err := InsertPendingLocalMigration(db, config, local, nil); err != nil {
+	framework := FrameworkMigration{Sequence: 1, ID: "retryable", Revision: 1, Up: func(_ *gorm.DB, _ *conf.Configuration) error { return nil }}
+	if err := InsertPendingFrameworkMigration(db, config, framework); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, config, nil, []LocalMigration{local}); err != nil {
+	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
 	var locks sync.WaitGroup
@@ -124,11 +124,11 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	}
 }
 
-func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
+func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 	db := getDB(t)
 	config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("pinned_%d_", time.Now().UnixNano())}}
 	q := func(logical string) string { return quoteIdentifier(tableName(config, logical)) }
-	for _, logical := range []string{"admin", "user", "attachment", "user_money_log", "user_score_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_hierarchy_lock", "admin_rule", "config", "country_language", "country_language_content", "country_currency"} {
+	for _, logical := range []string{"admin", "user", "attachment", "user_money_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_hierarchy_lock", "admin_rule", "config", "country_language", "country_language_content", "country_currency"} {
 		db.Exec("DROP TABLE IF EXISTS " + q(logical))
 		table := q(logical)
 		t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS " + table) })
@@ -138,7 +138,6 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		"CREATE TABLE " + q("attachment") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL DEFAULT 'enable', money INT UNSIGNED NULL)",
 		"CREATE TABLE " + q("user_money_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, money INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
-		"CREATE TABLE " + q("user_score_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, score INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
 		"CREATE TABLE " + q("admin_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("security_data_recycle_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, target_admin_id INT UNSIGNED NOT NULL DEFAULT 0, data TEXT)",
 		"CREATE TABLE " + q("security_sensitive_data_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, target_admin_id INT UNSIGNED NOT NULL DEFAULT 0, `before` TEXT)",
@@ -157,65 +156,34 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := db.Exec("INSERT INTO " + q("admin") + " VALUES (1,NULL),(2,1)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO " + q("user") + " VALUES (10,2,'enable',1050),(20,0,'enable',250)").Error; err != nil {
+	if err := db.Exec("INSERT INTO " + q("user") + " VALUES (10,2,'enable',1050),(20,1,'enable',250)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO " + q("user_money_log") + " VALUES (1,10,0,5,0,5),(2,20,0,3,0,3)").Error; err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Exec("INSERT INTO " + q("user_score_log") + " VALUES (1,10,0,5,0,5)").Error; err != nil {
+	if err := db.Exec("INSERT INTO " + q("user_money_log") + " VALUES (1,10,2,5,0,5),(2,20,1,3,0,3)").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO " + q("admin_hierarchy_lock") + " VALUES (1)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO "+q("security_data_recycle")+" (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (?, ?, ?, ?, ?, ?, ?)", 5, 0, "会员", "user/User.php", "auth/user", "user", "id").Error; err != nil {
+	if err := db.Exec("INSERT INTO "+q("security_data_recycle")+" (id,admin_id,name,controller,controller_as,data_table,primary_key) VALUES (?, ?, ?, ?, ?, ?, ?)", 5, 0, "会员", "user/User.php", "user/user", "user", "id").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO "+q("security_sensitive_data")+" (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 2, 0, "会员数据", "user/User.php", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`).Error; err != nil {
+	if err := db.Exec("INSERT INTO "+q("security_sensitive_data")+" (id,admin_id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 2, 0, "会员数据", "user/User.php", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO "+q("config")+" (id,name,`group`,title,tip,type,value,content,rule,extend,allow_del,weigh) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 1, "config_group", "basics", "Config group", "", "array", `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"}]`, "", "required", "", 0, -1).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := BootstrapOfficialLedger(db, config); err != nil {
-		t.Fatal(err)
+	registry := FrameworkMigrations()
+	if len(registry) != 1 {
+		t.Fatalf("current framework migration registry length=%d, want 1", len(registry))
 	}
-	if err := BootstrapLocalLedger(db, config); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(config, "local_migrations")))
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(config, "migrations")))
-	})
-	for _, migration := range OfficialMigrations() {
-		if err := db.Exec("INSERT INTO "+quoteIdentifier(tableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, NOW(6), NOW(6), 0)", migration.Key.Version, migration.Key.Name).Error; err != nil {
-			t.Fatal(err)
-		}
-	}
-	// The current epoch-reset registry has seven semantic tracks. Sequence 3
-	// folds the former ownership, signed-delta, target-owner, legacy-target,
-	// commit-state, and security-owner-column migrations together; sequences 4
-	// through 7 are security normalization, country dictionary, upload
-	// config, and user money decimal. Start at index 2 so the folded track is
-	// exercised as well; sequence 7 must convert the fixture's INT money
-	// columns through this same pinned advisory-lock handle.
-	registry := LocalMigrations()
-	if len(registry) != 7 {
-		t.Fatalf("current local migration registry length=%d, want 7", len(registry))
-	}
-	locals := registry[2:7]
-	if err := WithMigrationLock(db, "pinned-local-registry", time.Second, func(pinned *gorm.DB) error {
-		_, err := RunLocalMigrations(pinned, config, OfficialMigrations(), locals)
-		return err
+	if err := WithMigrationLock(db, "pinned-framework-registry", time.Second, func(pinned *gorm.DB) error {
+		return registry[0].Up(pinned, config)
 	}); err != nil {
 		t.Fatal(err)
 	}
 	check := db.Session(&gorm.Session{NewDB: true})
-	var completed int64
-	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 3 AND 7 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 5 {
-		t.Fatalf("completed local sequence 3-7=%d err=%v", completed, err)
-	}
 	var invalid int64
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user") + " u LEFT JOIN " + q("admin") + " a ON a.id=u.admin_id WHERE a.id IS NULL OR u.admin_id=0").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("user owners invalid=%d err=%v", invalid, err)
@@ -223,69 +191,13 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user_money_log") + " l JOIN " + q("user") + " u ON u.id=l.user_id WHERE l.admin_id<>u.admin_id").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("money owners invalid=%d err=%v", invalid, err)
 	}
-	if err := locals[0].VerifySchema(check, config); err != nil {
-		t.Fatal(err)
-	}
-	var owner int32
-	if err := check.Table(tableName(config, "user")).Where("id=20").Pluck("admin_id", &owner).Error; err != nil || owner != 1 {
-		t.Fatalf("historical user owner=%d err=%v", owner, err)
-	}
-	for _, item := range []struct{ table, column string }{{tableName(config, "user_money_log"), "money"}, {tableName(config, "user_score_log"), "score"}} {
-		def, ok, err := core.MigrationColumnInfo(check, item.table, item.column)
-		if err != nil || !ok || strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
-			t.Fatalf("signed delta %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
-		}
-	}
-	for _, item := range []struct{ table, column string }{{tableName(config, "user"), "money"}, {tableName(config, "user_money_log"), "money"}, {tableName(config, "user_money_log"), "before"}, {tableName(config, "user_money_log"), "after"}} {
-		def, ok, err := core.MigrationColumnInfo(check, item.table, item.column)
-		if err != nil || !ok || strings.ToLower(def.ColumnType) != "decimal(12,2)" {
-			t.Fatalf("money decimal %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
-		}
-	}
-	var convertedMoney string
-	if err := check.Raw("SELECT CAST(money AS CHAR) FROM " + q("user") + " WHERE id=10").Row().Scan(&convertedMoney); err != nil || convertedMoney != "10.50" {
-		t.Fatalf("converted user money=%q err=%v", convertedMoney, err)
-	}
-	if err := check.Raw("SELECT CAST(money AS CHAR) FROM " + q("user_money_log") + " WHERE id=1").Row().Scan(&convertedMoney); err != nil || convertedMoney != "0.05" {
-		t.Fatalf("converted log money=%q err=%v", convertedMoney, err)
-	}
-	if err := locals[1].VerifySchema(check, config); err != nil {
-		t.Fatal(err)
-	}
-	for _, logical := range []string{"security_data_recycle_log", "security_sensitive_data_log"} {
-		table := tableName(config, logical)
-		def, ok, err := core.MigrationColumnInfo(check, table, "target_admin_id")
-		if err != nil || !ok {
-			t.Fatalf("target column %s err=%v", table, err)
-		}
-		has, first, err := core.MigrationIndexInfo(check, table, "idx_target_admin_id")
-		if err != nil || !has || first != "target_admin_id" {
-			t.Fatalf("target index %s has=%v first=%s err=%v", table, has, first, err)
-		}
-		if !strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
-			t.Fatalf("target column %s is not unsigned: %#v", table, def)
-		}
-		for _, column := range []string{"legacy_unrecoverable", "is_committed"} {
-			definition, ok, err := core.MigrationColumnInfo(check, table, column)
-			if err != nil || !ok {
-				t.Fatalf("security flag %s.%s=%#v ok=%v err=%v", table, column, definition, ok, err)
-			}
-		}
-	}
-	if err := locals[2].VerifySchema(check, config); err != nil {
-		t.Fatal(err)
-	}
 	var uploadCount int64
 	if err := check.Table(tableName(config, "config")).Where("`group` = ?", "upload").Count(&uploadCount).Error; err != nil || uploadCount != 6 {
 		t.Fatalf("upload config rows=%d err=%v", uploadCount, err)
 	}
-	var groupValue string
-	if err := check.Table(tableName(config, "config")).Where("name = ?", "config_group").Pluck("value", &groupValue).Error; err != nil || !strings.Contains(groupValue, `"key":"upload"`) {
-		t.Fatalf("upload config group=%q err=%v", groupValue, err)
-	}
 }
 
-func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
+func TestOfficialFailureRetryAndFrameworkPostVerifyOrder(t *testing.T) {
 	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("retry_order_%d_", time.Now().UnixNano())}}
 	requireNoError := func(err error) {
@@ -294,9 +206,9 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 		}
 	}
 	requireNoError(BootstrapOfficialLedger(db, cfg))
-	requireNoError(BootstrapLocalLedger(db, cfg))
+	requireNoError(BootstrapFrameworkLedger(db, cfg))
 	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "local_migrations")))
+		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "framework_migrations")))
 		db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, "migrations")))
 	})
 	key := OfficialKey{Version: time.Now().UnixNano(), Name: "RetryOfficial"}
@@ -308,15 +220,15 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 		}
 		return nil
 	}}}
-	localRan, schemaVerified, dataVerified := false, false, false
-	local := []LocalMigration{{Sequence: 1, ID: "retry-local", Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { localRan = true; return nil }, VerifySchema: func(*gorm.DB, *conf.Configuration) error { schemaVerified = true; return nil }, VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { dataVerified = true; return nil }}}
+	frameworkRan, schemaVerified, dataVerified := false, false, false
+	framework := []FrameworkMigration{{Sequence: 1, ID: "retry-framework", Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { frameworkRan = true; return nil }, VerifySchema: func(*gorm.DB, *conf.Configuration) error { schemaVerified = true; return nil }, VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { dataVerified = true; return nil }}}
 	_, err := RunOfficialMigrations(db, cfg, official)
 	requireNoErrorCheck := err != nil
 	if !requireNoErrorCheck {
 		t.Fatal("official failure was accepted")
 	}
-	if localRan {
-		t.Fatal("local callback ran after official failure")
+	if frameworkRan {
+		t.Fatal("framework callback ran after official failure")
 	}
 	var count int64
 	requireNoError(db.Table(tableName(cfg, "migrations")).Where("version=?", key.Version).Count(&count).Error)
@@ -325,25 +237,25 @@ func TestOfficialFailureRetryAndLocalPostVerifyOrder(t *testing.T) {
 	}
 	_, err = RunOfficialMigrations(db, cfg, official)
 	requireNoError(err)
-	_, err = RunLocalMigrations(db, cfg, official, local)
+	_, err = RunFrameworkMigrations(db, cfg, official, framework)
 	requireNoError(err)
-	if !localRan || !schemaVerified || !dataVerified {
-		t.Fatalf("local order ran=%v schema=%v data=%v", localRan, schemaVerified, dataVerified)
+	if !frameworkRan || !schemaVerified || !dataVerified {
+		t.Fatalf("framework order ran=%v schema=%v data=%v", frameworkRan, schemaVerified, dataVerified)
 	}
 }
 
-func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *testing.T) {
+func TestFrameworkBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *testing.T) {
 	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_%d_", time.Now().UnixNano())}}
-	if err := BootstrapLocalLedger(db, cfg); err != nil {
+	if err := BootstrapFrameworkLedger(db, cfg); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS " + core.QuoteIdentifier(core.TableName(cfg, "local_migrations")))
+		db.Exec("DROP TABLE IF EXISTS " + core.QuoteIdentifier(core.TableName(cfg, "framework_migrations")))
 	})
 
 	var upCalls, baselineCalls, schemaCalls int
-	local := LocalMigration{
+	framework := FrameworkMigration{
 		Sequence: 1,
 		ID:       "baseline-contract",
 		Revision: 1,
@@ -360,10 +272,10 @@ func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *test
 			return nil
 		},
 	}
-	if _, err := RunLocalMigrations(db, cfg, nil, []LocalMigration{local}); err != nil {
+	if _, err := RunFrameworkMigrations(db, cfg, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, cfg, nil, []LocalMigration{local}); err != nil {
+	if _, err := RunFrameworkMigrations(db, cfg, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
 	if upCalls != 1 || baselineCalls != 1 || schemaCalls != 2 {
@@ -371,7 +283,7 @@ func TestLocalBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *test
 	}
 }
 
-func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing.T) {
+func TestBusinessMoneyColumnOverrideSurvivesFrameworkStandingVerification(t *testing.T) {
 	db := getDB(t)
 	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("biz_ovr_%d_", os.Getpid()))
 	section := &migrationCriticalSection{}
@@ -382,13 +294,10 @@ func TestBusinessMoneyColumnOverrideSurvivesLocalStandingVerification(t *testing
 	if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(moneyTable) + " MODIFY COLUMN " + core.QuoteIdentifier("money") + " decimal(12,2) NOT NULL DEFAULT 0.00").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, cfg, OfficialMigrations(), LocalMigrations()); err != nil {
+	if _, err := RunFrameworkMigrations(db, cfg, OfficialMigrations(), FrameworkMigrations()); err != nil {
 		t.Fatal(err)
 	}
-	if err := LocalVerifyCurrent(db, cfg); err != nil {
-		t.Fatal(err)
-	}
-	if err := ValidateCurrentSchema(db, cfg); err != nil {
+	if err := FrameworkVerifyCurrent(db, cfg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -397,7 +306,7 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "matrix_"
-	for _, table := range []string{"matrix_local_migrations", "matrix_migrations"} {
+	for _, table := range []string{"matrix_framework_migrations", "matrix_migrations"} {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
 			t.Fatal(err)
 		}
@@ -406,35 +315,35 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if err := db.Exec("CREATE TABLE `matrix_migrations` (`version` BIGINT NOT NULL PRIMARY KEY, `migration_name` VARCHAR(100), `start_time` TIMESTAMP NULL, `end_time` TIMESTAMP NULL) ENGINE=InnoDB").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := BootstrapLocalLedger(db, config); err != nil {
+	if err := BootstrapFrameworkLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("ALTER TABLE `matrix_local_migrations` ADD `unexpected` INT NULL").Error; err != nil {
+	if err := db.Exec("ALTER TABLE `matrix_framework_migrations` ADD `unexpected` INT NULL").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateLocalLedgerSchema(db, config); err == nil {
+	if err := ValidateFrameworkLedgerSchema(db, config); err == nil {
 		t.Fatal("unexpected ledger column accepted")
 	}
-	if err := db.Exec("ALTER TABLE `matrix_local_migrations` DROP COLUMN `unexpected`").Error; err != nil {
+	if err := db.Exec("ALTER TABLE `matrix_framework_migrations` DROP COLUMN `unexpected`").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateLocalLedgerSchema(db, config); err != nil {
+	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
 		t.Fatal(err)
 	}
 
 	var calls []string
-	local := LocalMigration{Sequence: 1, ID: "ordered", Revision: 1,
+	framework := FrameworkMigration{Sequence: 1, ID: "ordered", Revision: 1,
 		Up:                func(*gorm.DB, *conf.Configuration) error { calls = append(calls, "up"); return nil },
 		VerifySchema:      func(*gorm.DB, *conf.Configuration) error { calls = append(calls, "schema"); return nil },
 		VerifyUpgradeData: func(*gorm.DB, *conf.Configuration) error { calls = append(calls, "data"); return nil }}
-	if _, err := RunLocalMigrations(db, config, nil, []LocalMigration{local}); err != nil {
+	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
 	if got := fmt.Sprint(calls); got != "[up schema data]" {
 		t.Fatalf("missing order=%s", got)
 	}
 	calls = nil
-	if _, err := RunLocalMigrations(db, config, nil, []LocalMigration{local}); err != nil {
+	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
 	if got := fmt.Sprint(calls); got != "[schema data]" {
@@ -442,11 +351,11 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	}
 
 	retryCalls := 0
-	retry := LocalMigration{Sequence: 2, ID: "retry", Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { retryCalls++; return nil }}
-	if err := InsertPendingLocalMigration(db, config, retry, nil); err != nil {
+	retry := FrameworkMigration{Sequence: 2, ID: "retry", Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { retryCalls++; return nil }}
+	if err := InsertPendingFrameworkMigration(db, config, retry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, config, nil, []LocalMigration{local, retry}); err != nil {
+	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework, retry}); err != nil {
 		t.Fatal(err)
 	}
 	if retryCalls != 1 {
@@ -455,30 +364,30 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	noOp := func(*gorm.DB, *conf.Configuration) error { return nil }
 	for _, collision := range []struct {
 		name, want     string
-		row, migration LocalMigration
+		row, migration FrameworkMigration
 	}{
-		{"sequence", "local sequence 3 collision", LocalMigration{Sequence: 3, ID: "existing", Revision: 1, Up: noOp}, LocalMigration{Sequence: 3, ID: "other", Revision: 1, Up: noOp}},
-		{"id", "local migration same-id collision", LocalMigration{Sequence: 4, ID: "same-id", Revision: 1, Up: noOp}, LocalMigration{Sequence: 5, ID: "same-id", Revision: 1, Up: noOp}},
-		{"revision", "local sequence 6 collision", LocalMigration{Sequence: 6, ID: "same-revision", Revision: 1, Up: noOp}, LocalMigration{Sequence: 6, ID: "same-revision", Revision: 2, Up: noOp}},
+		{"sequence", "framework sequence 3 collision", FrameworkMigration{Sequence: 3, ID: "existing", Revision: 1, Up: noOp}, FrameworkMigration{Sequence: 3, ID: "other", Revision: 1, Up: noOp}},
+		{"id", "framework migration same-id collision", FrameworkMigration{Sequence: 4, ID: "same-id", Revision: 1, Up: noOp}, FrameworkMigration{Sequence: 5, ID: "same-id", Revision: 1, Up: noOp}},
+		{"revision", "framework sequence 6 collision", FrameworkMigration{Sequence: 6, ID: "same-revision", Revision: 1, Up: noOp}, FrameworkMigration{Sequence: 6, ID: "same-revision", Revision: 2, Up: noOp}},
 	} {
-		if err := InsertPendingLocalMigration(db, config, collision.row, nil); err != nil {
+		if err := InsertPendingFrameworkMigration(db, config, collision.row); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := RunLocalMigrations(db, config, nil, []LocalMigration{collision.migration}); err == nil || !strings.Contains(err.Error(), collision.want) {
+		if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{collision.migration}); err == nil || !strings.Contains(err.Error(), collision.want) {
 			t.Fatalf("%s collision error=%v", collision.name, err)
 		}
 	}
-	completed := LocalMigration{Sequence: 20, ID: "complete-me", Revision: 9, Up: noOp}
-	if err := InsertPendingLocalMigration(db, config, completed, nil); err != nil {
+	completed := FrameworkMigration{Sequence: 20, ID: "complete-me", Revision: 9, Up: noOp}
+	if err := InsertPendingFrameworkMigration(db, config, completed); err != nil {
 		t.Fatal(err)
 	}
-	if err := CompleteLocalMigration(db, config, completed); err != nil {
+	if err := CompleteFrameworkMigration(db, config, completed); err != nil {
 		t.Fatal("first completion:", err)
 	}
-	if err := CompleteLocalMigration(db, config, completed); err == nil {
+	if err := CompleteFrameworkMigration(db, config, completed); err == nil {
 		t.Fatal("second completion accepted")
 	}
-	for name, wrong := range map[string]LocalMigration{
+	for name, wrong := range map[string]FrameworkMigration{
 		"id":       {Sequence: 21, ID: "wrong-id", Revision: 1, Up: noOp},
 		"revision": {Sequence: 22, ID: "wrong-revision", Revision: 1, Up: noOp},
 		"sequence": {Sequence: 23, ID: "wrong-sequence", Revision: 1, Up: noOp},
@@ -493,29 +402,29 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 		if name == "sequence" {
 			correct.Sequence = 24
 		}
-		if err := InsertPendingLocalMigration(db, config, correct, nil); err != nil {
+		if err := InsertPendingFrameworkMigration(db, config, correct); err != nil {
 			t.Fatal(err)
 		}
-		if err := CompleteLocalMigration(db, config, wrong); err == nil {
+		if err := CompleteFrameworkMigration(db, config, wrong); err == nil {
 			t.Fatalf("%s mismatch accepted", name)
 		}
-		if err := CompleteLocalMigration(db, config, correct); err != nil {
+		if err := CompleteFrameworkMigration(db, config, correct); err != nil {
 			t.Fatal("correct completion:", err)
 		}
 	}
 
 	official := []OfficialMigration{{Key: OfficialKey{Version: 1, Name: "Official"}, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
-	dependent := LocalMigration{Sequence: 7, ID: "dependent", Revision: 1, RequiresOfficial: []OfficialKey{official[0].Key}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
+	dependent := FrameworkMigration{Sequence: 7, ID: "dependent", Revision: 1, RequiresOfficial: []OfficialKey{official[0].Key}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
 	for _, row := range []string{"", ", 'Official', NOW(6), NULL", ", 'Wrong', NOW(6), NOW(6)"} {
 		if row == "" {
-			if _, err := RunLocalMigrations(db, config, official, []LocalMigration{dependent}); err == nil {
+			if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err == nil {
 				t.Fatal("missing official accepted")
 			}
 		} else {
 			if err := db.Exec("INSERT INTO `matrix_migrations` VALUES (1" + row + ")").Error; err != nil {
 				t.Fatal(err)
 			}
-			if _, err := RunLocalMigrations(db, config, official, []LocalMigration{dependent}); err == nil {
+			if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err == nil {
 				t.Fatal("pending/collision official accepted")
 			}
 			db.Exec("DELETE FROM `matrix_migrations`")
@@ -524,7 +433,7 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if err := db.Exec("INSERT INTO `matrix_migrations` VALUES (1, 'Official', NOW(6), NOW(6))").Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, config, official, []LocalMigration{dependent}); err != nil {
+	if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err != nil {
 		t.Fatal("completed official rejected:", err)
 	}
 
@@ -535,14 +444,14 @@ func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 	variants := []string{"engine", "signed-revision", "timestamp", "default", "missing-unique", "wrong-unique"}
 	for i, variant := range variants {
 		config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("negative_%d_", i)}}
-		table := config.Database.Prefix + "local_migrations"
+		table := config.Database.Prefix + "framework_migrations"
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
 			t.Fatal(err)
 		}
 		if err := createLedgerVariant(db, table, variant); err != nil {
 			t.Fatal(variant, err)
 		}
-		if err := ValidateLocalLedgerSchema(db, config); err == nil {
+		if err := ValidateFrameworkLedgerSchema(db, config); err == nil {
 			t.Fatalf("%s schema accepted", variant)
 		}
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
@@ -564,7 +473,7 @@ func createLedgerVariant(db *gorm.DB, table, variant string) error {
 	if variant == "default" {
 		start += " DEFAULT CURRENT_TIMESTAMP(6)"
 	}
-	unique := "UNIQUE KEY `uq_local_migrations_id` (`migration_id`)"
+	unique := "UNIQUE KEY `uq_framework_migrations_id` (`migration_id`)"
 	if variant == "missing-unique" {
 		unique = ""
 	}
@@ -575,7 +484,7 @@ func createLedgerVariant(db *gorm.DB, table, variant string) error {
 	if variant == "engine" {
 		engine = "MyISAM"
 	}
-	return db.Exec("CREATE TABLE `" + table + "` (`sequence` BIGINT UNSIGNED NOT NULL, `migration_id` VARCHAR(191) NOT NULL, `revision` " + revision + " NOT NULL, " + start + ", `end_time` " + stamp + " NULL DEFAULT NULL, `adopted_from` VARCHAR(191) NULL DEFAULT NULL, PRIMARY KEY (`sequence`)" + func() string {
+	return db.Exec("CREATE TABLE `" + table + "` (`sequence` BIGINT UNSIGNED NOT NULL, `migration_id` VARCHAR(191) NOT NULL, `revision` " + revision + " NOT NULL, " + start + ", `end_time` " + stamp + " NULL DEFAULT NULL, PRIMARY KEY (`sequence`)" + func() string {
 		if unique == "" {
 			return ""
 		}

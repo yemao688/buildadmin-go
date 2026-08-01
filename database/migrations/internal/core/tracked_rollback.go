@@ -45,7 +45,7 @@ func RollbackTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableNam
 		if trackName == "" {
 			trackName = "unknown"
 		}
-		return RollbackReport{}, fmt.Errorf("%s migration rollback is unsupported; official and local migrations are forward-only", trackName)
+		return RollbackReport{}, fmt.Errorf("%s migration rollback is unsupported; official and framework migrations are forward-only", trackName)
 	}
 	if err := ValidatePrefix(config); err != nil {
 		return RollbackReport{}, err

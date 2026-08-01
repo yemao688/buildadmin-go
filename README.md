@@ -78,7 +78,7 @@ pnpm build
 app/                 业务、命令、公共组件与中间件
 cmd/app/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
-database/migrations/ 三轨迁移（official/local/business）、迁移模型与内部迁移基础设施
+database/migrations/ 三轨迁移（official/framework/business）、迁移模型与内部迁移基础设施
 config.defaults.yaml 根目录运行基座（完整默认配置）
 config.yaml          根目录配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）
@@ -105,7 +105,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移、生成文件与测试注意事项
 
-- 迁移采用三条轨道：`database/migrations/official/` 跟随 PHP 上游更新，`database/migrations/local/` 承载框架自身的 7 条语义迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 迁移采用三条轨道：`database/migrations/official/` 跟随 PHP 上游更新，`database/migrations/framework/` 承载框架自身的终态完整性迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试由 `config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
@@ -125,7 +125,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ### 业务迁移：只加文件，不动框架
 
-业务表结构变更写进 `database/migrations/business/`：新增一个 Go 文件，在 `init()` 里调用 `business.Register(...)` 即可，编排器会自动发现并执行，记录到独立的 `business_migrations` 账本，与框架的 official/local 互不冲突。契约（幂等、前缀安全、按业务键判重等）见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `local/`。
+业务表结构变更写进 `database/migrations/business/`：新增一个 Go 文件，在 `init()` 里调用 `business.Register(...)` 即可，编排器会自动发现并执行，记录到独立的 `business_migrations` 账本，与框架的 official/framework 互不冲突。契约（幂等、前缀安全、按业务键判重等）见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `framework/`。
 
 ### 权限体系：直接在 admin 上建模，不要新建认证表
 

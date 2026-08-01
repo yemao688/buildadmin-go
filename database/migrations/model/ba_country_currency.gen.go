@@ -2,7 +2,7 @@ package model
 
 type CountryCurrency struct {
 	ID     int64   `gorm:"column:id;type:bigint unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	Code   string  `gorm:"column:code;type:varchar(20);not null;default:'';comment:货币代码" json:"code"`
+	Code   string  `gorm:"column:code;type:varchar(20);not null;default:'';uniqueIndex:uk_country_currency_code;comment:货币代码" json:"code"`
 	Name   string  `gorm:"column:name;type:varchar(50);not null;default:'';comment:货币名称" json:"name"`
 	Symbol string  `gorm:"column:symbol;type:varchar(20);not null;default:'';comment:货币符号" json:"symbol"`
 	Rate   float64 `gorm:"column:rate;type:decimal(20,8);not null;default:1;comment:汇率" json:"rate"`

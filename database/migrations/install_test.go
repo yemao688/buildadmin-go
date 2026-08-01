@@ -24,7 +24,7 @@ func getDB(t *testing.T) *gorm.DB {
 func TestInstall(t *testing.T) {
 	db := getDB(t)
 	// 本测试使用固定 go_ 前缀且不随运行变化：前一次运行的遗留表会让安装重入失败
-	// （重播种子会把 owner 置回 0 而 local 迁移已被账本跳过），每次先清出干净起点。
+	// （重播种子会把 owner 置回 0 而 framework 迁移已被账本跳过），每次先清出干净起点。
 	var leftovers []string
 	if err := db.Raw("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name LIKE 'go\\_%'").Scan(&leftovers).Error; err != nil {
 		t.Fatal(err)
@@ -46,7 +46,7 @@ func TestInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	if baselineOwner != 0 {
-		t.Fatalf("upstream baseline wrote local owner %d", baselineOwner)
+		t.Fatalf("upstream baseline wrote framework owner %d", baselineOwner)
 	}
 	seedConfig := &conf.Configuration{Database: conf.Database{Prefix: "go_"}}
 	if err := MarkSeedPending(db, seedConfig); err != nil {
@@ -58,10 +58,10 @@ func TestInstall(t *testing.T) {
 	if err := RunOfficialFreshSeed(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}
-	if err := BootstrapLocalLedger(db, seedConfig); err != nil {
+	if err := BootstrapFrameworkLedger(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunLocalMigrations(db, seedConfig, OfficialMigrations(), LocalMigrations()); err != nil {
+	if _, err := RunFrameworkMigrations(db, seedConfig, OfficialMigrations(), FrameworkMigrations()); err != nil {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {

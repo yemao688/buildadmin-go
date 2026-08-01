@@ -30,7 +30,7 @@
 
 - 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端使用 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
-- 账户状态迁移由 `database/migrations/local/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
+- 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 
 ## 工具链与边界
 
@@ -91,12 +91,12 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移以及生成/部署文件
 
-- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/local/` 保存 7 条 Go 框架语义迁移（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册、记录到独立 `business_migrations` 账本的业务仓库扩展轨道。契约见 `database/migrations/business/README.md`。
+- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/framework/` 保存 7 条 Go 框架语义迁移（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册、记录到独立 `business_migrations` 账本的业务仓库扩展轨道。契约见 `database/migrations/business/README.md`。
 - 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
-- 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 local `VerifySchema`/`VerifyUpgradeData`、`local.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）以及 `official.ValidateCurrentSchema`（当前 `user_rule` 列和规则枚举）。
-- 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 local/business 的 `Up` 之前执行。
-- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/local 仅前向。账本按批次记录，断点存放在 `business_breakpoints`；完整契约见 `database/migrations/business/README.md`。
-- 迁移编排顺序、official/local 维护契约和 epoch reset 历史仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
+- 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 framework `VerifySchema`/`VerifyUpgradeData`、`framework.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）以及 `official.ValidateCurrentSchema`（当前 `user_rule` 列和规则枚举）。
+- 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 framework/business 的 `Up` 之前执行。
+- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。账本按批次记录，断点存放在 `business_breakpoints`；完整契约见 `database/migrations/business/README.md`。
+- 迁移编排顺序、official/framework 维护契约和 epoch reset 历史仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go`；provider 或 `cmd/app/wire.go` 变更后运行 `go generate ./cmd/app`。
 - `go run ./cmd/generate` 有风险：它使用硬编码的本地 MySQL DSN，并可能相对于当前目录覆盖生成 model。运行前必须检查其实现。
@@ -109,7 +109,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 - **表命名：按业务分类加前缀。** 使用 `<category>_<entity>`，让表、菜单和生成代码自然归类：运营类 `ops_banner`/`ops_support`/`ops_help`，订单类 `order_recharge`/`order_withdraw`，用户类 `user_wallet`/`user_level`。命名保持简单并明确归属。
 - **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** 首段是业务分类和目录：`generateRelativePath: ops_user_test_xxx` → handler/model 为 `ops/user_test_xxx.go`，views 为 `ops/userTestXxx/`，路由为 `ops.UserTestXxx`，规则名为 `ops/userTestXxx`。单段输入在第一个下划线处分割；Go 文件保留实体蛇形名，视图目录使用 lcfirst 驼峰，路由名用小写目录加 PascalCase 实体（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`），规则名与视图目录一致。省略时虽会回退到表名，spec 不得依赖该回退；只有真正需要更深业务子目录时才使用 `/` 或 `.`（如 `ops/user/test_xxx`）。`webViewsDir` 仍是较低层级的单路径覆盖项。
 - **CRUD 模块采用双提交工作流。** 生成提交只包含 `crud_specs/<module>.yaml` 和全部生成产物，提交信息标注框架/生成器版本；业务定制每项单独提交并写明动机。重新生成后用 `git diff` 对照定制提交，逐项回补被覆盖的修改；生成提交不含手改时，`crud:delete` + 重新生成必须逐字节一致。生成提交作为机器产物快速浏览，重点审查定制提交；在业务仓库 `AGENT_BUSINESS.md` 维护模块、定制点和提交哈希的清单。
-- **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`local/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
+- **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`framework/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
 - **显式设置 `columnFields` 控制列表展示。** 省略时所有字段都会进入后台列表；密码、密钥/令牌、长备注或大段 `content` 等仅表单字段只放进 `formFields`。带关系增强的 `remoteSelect`/`remoteSelects` 外键保留在 `columnFields`，原始 FK 列会自动隐藏，同时保留搜索和关系展示列。
 - **权限体系已经完整。** 使用 `admin`、`admin_group` 和 `admin.parent_id`（配合 `admin_closure`）建立超级管理员、总代理、代理、员工等层级，不要新建认证表。`admin` 字段变更必须配套 business 迁移，破坏性列变更不能依赖 AutoMigrate。
 - **`user` 表可按前台会员业务塑形。** 可以修改或删除字段，并同步调整 `web/src/views/backend/user`；同样遵守迁移纪律。

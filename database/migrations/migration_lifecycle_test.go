@@ -32,10 +32,10 @@ func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB,
 }
 
 type migrationLifecycleResult struct {
-	recovery        InstallRecoveryState
-	official, local int
-	seeded          bool
-	events          []string
+	recovery            InstallRecoveryState
+	official, framework int
+	seeded              bool
+	events              []string
 }
 
 type migrationCriticalSection struct {
@@ -93,10 +93,10 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if err := ValidateOfficialLedgerSchema(db, cfg); err != nil {
 		return result, err
 	}
-	if err := BootstrapLocalLedger(db, cfg); err != nil {
+	if err := BootstrapFrameworkLedger(db, cfg); err != nil {
 		return result, err
 	}
-	if err := ValidateLocalLedgerSchema(db, cfg); err != nil {
+	if err := ValidateFrameworkLedgerSchema(db, cfg); err != nil {
 		return result, err
 	}
 	if err := BootstrapBusinessLedger(db, cfg); err != nil {
@@ -105,7 +105,7 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if err := ValidateBusinessLedgerSchema(db, cfg); err != nil {
 		return result, err
 	}
-	official, locals := OfficialMigrations(), LocalMigrations()
+	official, frameworks := OfficialMigrations(), FrameworkMigrations()
 	business, err := BusinessMigrations()
 	if err != nil {
 		return result, err
@@ -130,8 +130,8 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 			return result, err
 		}
 	}
-	event("local")
-	result.local, err = RunLocalMigrations(db, cfg, official, locals)
+	event("framework")
+	result.framework, err = RunFrameworkMigrations(db, cfg, official, frameworks)
 	if err != nil {
 		return result, err
 	}
@@ -139,11 +139,7 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	if _, err := RunBusinessMigrations(db, cfg, business); err != nil {
 		return result, err
 	}
-	if err := LocalVerifyCurrent(db, cfg); err != nil {
-		return result, err
-	}
-	event("schema")
-	if err := ValidateCurrentSchema(db, cfg); err != nil {
+	if err := FrameworkVerifyCurrent(db, cfg); err != nil {
 		return result, err
 	}
 	return result, nil
@@ -162,17 +158,17 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	}))
 	require.Equal(t, InstallFresh, first.recovery)
 	require.Equal(t, len(OfficialMigrations()), first.official)
-	require.Equal(t, len(LocalMigrations()), first.local)
+	require.Equal(t, len(FrameworkMigrations()), first.framework)
 	require.True(t, first.seeded)
-	require.Equal(t, []string{"neutral-prep", "recovery", "snapshot", "ledgers", "official", "reconcile", "seed", "local", "business", "schema"}, first.events)
+	require.Equal(t, []string{"neutral-prep", "recovery", "snapshot", "ledgers", "official", "reconcile", "seed", "framework", "business"}, first.events)
 
 	var completed int64
 	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	// The official ledger also contains the completed InstallData seed marker.
 	require.Equal(t, int64(len(OfficialMigrations())+1), completed)
-	require.NoError(t, db.Table(tableName(cfg, "local_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
-	require.Equal(t, int64(len(LocalMigrations())), completed)
-	require.NoError(t, LocalVerifyCurrent(db, cfg))
+	require.NoError(t, db.Table(tableName(cfg, "framework_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
+	require.Equal(t, int64(len(FrameworkMigrations())), completed)
+	require.NoError(t, FrameworkVerifyCurrent(db, cfg))
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
@@ -197,12 +193,12 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	for result := range results {
 		require.Equal(t, InstallStrictUpgrade, result.recovery)
 		require.Zero(t, result.official)
-		require.Zero(t, result.local)
+		require.Zero(t, result.framework)
 		require.False(t, result.seeded)
-		require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "official", "reconcile", "seed", "local", "business", "schema"}, result.events)
+		require.Equal(t, []string{"neutral-prep", "recovery", "ledgers", "official", "reconcile", "seed", "framework", "business"}, result.events)
 	}
 	require.Equal(t, 1, section.max)
-	require.NoError(t, LocalVerifyCurrent(db, cfg))
+	require.NoError(t, FrameworkVerifyCurrent(db, cfg))
 
 	var count int64
 	require.NoError(t, db.Table(tableName(cfg, "security_data_recycle")).Where("id=5").Count(&count).Error)

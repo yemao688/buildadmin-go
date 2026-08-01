@@ -1,4 +1,4 @@
-package local
+package framework
 
 import (
 	"fmt"

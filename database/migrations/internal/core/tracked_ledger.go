@@ -18,8 +18,7 @@ type TrackedMigrationRecord struct {
 }
 
 type TrackedLedgerOptions struct {
-	IncludeAdoptedFrom bool
-	IncludeBatch       bool
+	IncludeBatch bool
 }
 
 func BootstrapTrackedLedger(db *gorm.DB, config *conf.Configuration, logicalName string, options TrackedLedgerOptions) error {
@@ -30,13 +29,9 @@ func BootstrapTrackedLedger(db *gorm.DB, config *conf.Configuration, logicalName
 	if options.IncludeBatch {
 		batch = "`batch` BIGINT UNSIGNED NOT NULL, "
 	}
-	adopted := ""
-	if options.IncludeAdoptedFrom {
-		adopted = ", `adopted_from` VARCHAR(191) NULL DEFAULT NULL"
-	}
 	if err := db.Exec("CREATE TABLE IF NOT EXISTS " + QuoteIdentifier(TableName(config, logicalName)) + " (" +
 		"`sequence` BIGINT UNSIGNED NOT NULL, " + batch + "`migration_id` VARCHAR(191) NOT NULL, `revision` BIGINT UNSIGNED NOT NULL, " +
-		"`start_time` TIMESTAMP(6) NOT NULL, `end_time` TIMESTAMP(6) NULL DEFAULT NULL" + adopted +
+		"`start_time` TIMESTAMP(6) NOT NULL, `end_time` TIMESTAMP(6) NULL DEFAULT NULL" +
 		", PRIMARY KEY (`sequence`), UNIQUE KEY `uq_" + logicalName + "_id` (`migration_id`)) ENGINE=InnoDB").Error; err != nil {
 		return err
 	}
@@ -88,9 +83,6 @@ func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logica
 		ledgerColumnSpec{Name: "start_time", Type: "timestamp(6)", Nullable: "NO", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
 		ledgerColumnSpec{Name: "end_time", Type: "timestamp(6)", Nullable: "YES", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
 	)
-	if options.IncludeAdoptedFrom {
-		want = append(want, ledgerColumnSpec{Name: "adopted_from", Type: "varchar(191)", Nullable: "YES", CheckPrecision: true, RequireNoDefault: true})
-	}
 	if mismatch := compareLedgerColumns(rows, want); mismatch != nil {
 		if mismatch.columnName == "" {
 			return fmt.Errorf("%s schema mismatch: got %d columns", logicalName, mismatch.actualCount)
@@ -112,18 +104,18 @@ func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logica
 	return nil
 }
 
-func InsertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration, adoptedFrom *string) error {
-	return insertPendingTrackedMigration(db, config, logicalName, m, 0, adoptedFrom)
+func InsertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration) error {
+	return insertPendingTrackedMigration(db, config, logicalName, m, 0)
 }
 
-func InsertPendingTrackedMigrationWithBatch(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration, batch uint64, adoptedFrom *string) error {
+func InsertPendingTrackedMigrationWithBatch(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration, batch uint64) error {
 	if batch == 0 {
 		return fmt.Errorf("%s migration %s has invalid batch 0", logicalName, m.ID)
 	}
-	return insertPendingTrackedMigration(db, config, logicalName, m, batch, adoptedFrom)
+	return insertPendingTrackedMigration(db, config, logicalName, m, batch)
 }
 
-func insertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration, batch uint64, adoptedFrom *string) error {
+func insertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration, batch uint64) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
@@ -131,13 +123,7 @@ func insertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logi
 	table := QuoteIdentifier(TableName(config, logicalName))
 	if batch != 0 {
 		record.Batch = batch
-		if adoptedFrom != nil {
-			return db.Table(TableName(config, logicalName)).Exec("INSERT INTO "+table+" (sequence,batch,migration_id,revision,start_time,adopted_from) VALUES (?,?,?,?,?,?)", record.Sequence, record.Batch, record.MigrationID, record.Revision, record.StartTime, adoptedFrom).Error
-		}
 		return db.Table(TableName(config, logicalName)).Exec("INSERT INTO "+table+" (sequence,batch,migration_id,revision,start_time) VALUES (?,?,?,?,?)", record.Sequence, record.Batch, record.MigrationID, record.Revision, record.StartTime).Error
-	}
-	if adoptedFrom != nil {
-		return db.Table(TableName(config, logicalName)).Exec("INSERT INTO "+table+" (sequence,migration_id,revision,start_time,adopted_from) VALUES (?,?,?,?,?)", record.Sequence, record.MigrationID, record.Revision, record.StartTime, adoptedFrom).Error
 	}
 	return db.Table(TableName(config, logicalName)).Exec("INSERT INTO "+table+" (sequence,migration_id,revision,start_time) VALUES (?,?,?,?)", record.Sequence, record.MigrationID, record.Revision, record.StartTime).Error
 }

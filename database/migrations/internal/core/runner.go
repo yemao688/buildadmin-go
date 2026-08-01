@@ -21,8 +21,8 @@ func ValidateMigrationLockRelease(released sql.NullInt64) error {
 	return nil
 }
 
-func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, local []LocalMigration) (int, error) {
-	if err := ValidateLocalMigrations(local, official); err != nil {
+func RunFrameworkMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, framework []FrameworkMigration) (int, error) {
+	if err := ValidateFrameworkMigrations(framework, official); err != nil {
 		return 0, err
 	}
 	if err := ValidatePrefix(config); err != nil {
@@ -39,8 +39,8 @@ func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []Offi
 		}
 		return nil
 	}
-	tracked := make([]TrackedMigration, 0, len(local))
-	for _, m := range local {
+	tracked := make([]TrackedMigration, 0, len(framework))
+	for _, m := range framework {
 		for _, key := range m.RequiresOfficial {
 			if err := completedOfficial(key); err != nil {
 				return 0, err
@@ -48,12 +48,12 @@ func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []Offi
 		}
 		tracked = append(tracked, TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up, VerifyBaseline: m.VerifyBaseline, VerifySchema: m.VerifySchema, VerifyUpgradeData: m.VerifyUpgradeData})
 	}
-	return RunTrackedMigrations(db, config, "local_migrations", tracked, TrackedRunnerOptions{TrackName: "local"})
+	return RunTrackedMigrations(db, config, "framework_migrations", tracked, TrackedRunnerOptions{TrackName: "framework"})
 }
 
 // Official ledger operations remain here with the shared runner: moving them
 // into official would make core depend on the official package through the
-// local dependency gate and introduce an import cycle.
+// framework dependency gate and introduce an import cycle.
 func BootstrapOfficialLedger(db *gorm.DB, config *conf.Configuration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err

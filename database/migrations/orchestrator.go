@@ -11,10 +11,10 @@ import (
 )
 
 type Report struct {
-	Official int
-	Local    int
-	Business int
-	Seeded   bool
+	Official  int
+	Framework int
+	Business  int
+	Seeded    bool
 }
 
 func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
@@ -46,11 +46,11 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err := ValidateOfficialLedgerSchema(pinned, config); err != nil {
 			return fmt.Errorf("official ledger schema: %w", err)
 		}
-		if err := BootstrapLocalLedger(pinned, config); err != nil {
-			return fmt.Errorf("local ledger bootstrap: %w", err)
+		if err := BootstrapFrameworkLedger(pinned, config); err != nil {
+			return fmt.Errorf("framework ledger bootstrap: %w", err)
 		}
-		if err := ValidateLocalLedgerSchema(pinned, config); err != nil {
-			return fmt.Errorf("local ledger schema: %w", err)
+		if err := ValidateFrameworkLedgerSchema(pinned, config); err != nil {
+			return fmt.Errorf("framework ledger schema: %w", err)
 		}
 		if err := BootstrapBusinessLedger(pinned, config); err != nil {
 			return fmt.Errorf("business ledger bootstrap: %w", err)
@@ -61,7 +61,7 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err := ValidateBusinessBreakpointSchema(pinned, config); err != nil {
 			return fmt.Errorf("business breakpoint schema: %w", err)
 		}
-		official, locals := OfficialMigrations(), LocalMigrations()
+		official, frameworks := OfficialMigrations(), FrameworkMigrations()
 		businessMigrations, err := business.Migrations()
 		if err != nil {
 			return fmt.Errorf("business migration registry: %w", err)
@@ -83,19 +83,16 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 			}
 			report.Seeded = true
 		}
-		report.Local, err = RunLocalMigrations(pinned, config, official, locals)
+		report.Framework, err = RunFrameworkMigrations(pinned, config, official, frameworks)
 		if err != nil {
-			return fmt.Errorf("local migration: %w", err)
+			return fmt.Errorf("framework migration: %w", err)
 		}
 		report.Business, err = RunBusinessMigrations(pinned, config, businessMigrations)
 		if err != nil {
 			return fmt.Errorf("business migration: %w", err)
 		}
-		if err := LocalVerifyCurrent(pinned, config); err != nil {
-			return fmt.Errorf("local current validation: %w", err)
-		}
-		if err := ValidateCurrentSchema(pinned, config); err != nil {
-			return fmt.Errorf("database schema validation: %w", err)
+		if err := FrameworkVerifyCurrent(pinned, config); err != nil {
+			return fmt.Errorf("framework current validation: %w", err)
 		}
 		return nil
 	})

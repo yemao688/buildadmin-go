@@ -17,7 +17,6 @@ type Admin struct {
 	LastLoginTime int64  `gorm:"column:last_login_time;type:bigint(16) unsigned;default:null;comment:上次登录时间" json:"last_login_time"`       // 上次登录时间
 	LastLoginIP   string `gorm:"column:last_login_ip;type:varchar(50) default '';not null;comment:上次登录IP" json:"last_login_ip"`            // 上次登录IP
 	Password      string `gorm:"column:password;type:varchar(255) default '';not null;comment:密码" json:"password"`                         // 密码
-	Salt          string `gorm:"column:salt;type:varchar(30) default '';not null;comment:密码盐" json:"salt"`                                 // 密码盐
 	Motto         string `gorm:"column:motto;type:varchar(255) default '';not null;comment:签名" json:"motto"`                               // 签名
 	Status        string `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`     // 状态:enable=启用,disable=禁用
 	UpdateTime    int64  `gorm:"column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`                 // 更新时间

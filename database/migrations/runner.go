@@ -17,6 +17,6 @@ func WithMigrationLock(db *gorm.DB, name string, timeout time.Duration, fn func(
 	return core.WithMigrationLock(db, name, timeout, fn)
 }
 
-func RunLocalMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, local []LocalMigration) (int, error) {
-	return core.RunLocalMigrations(db, config, official, local)
+func RunFrameworkMigrations(db *gorm.DB, config *conf.Configuration, official []OfficialMigration, framework []FrameworkMigration) (int, error) {
+	return core.RunFrameworkMigrations(db, config, official, framework)
 }

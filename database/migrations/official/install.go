@@ -31,7 +31,7 @@ func (s Install) InsertData() error {
 			return err
 		}
 		seed.rootAdminID = rootID
-		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData, seed.UserGroup, seed.UserRule, seed.User} {
+		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData} {
 			if err := fn(); err != nil {
 				return err
 			}
@@ -81,7 +81,7 @@ func (s Install) AdminGroup() error {
 				ID:         2,
 				Pid:        1,
 				Name:       "一级管理员",
-				Rules:      "1,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,77,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,89",
+				Rules:      "1,21,22,23,24,25,26,38,39,40,44,45,46,47,77,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,89",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -89,7 +89,7 @@ func (s Install) AdminGroup() error {
 				ID:         3,
 				Pid:        2,
 				Name:       "二级管理员",
-				Rules:      "21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43",
+				Rules:      "21,22,23,24,25,26,38,39,40",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -389,117 +389,6 @@ func (s Install) AdminRule() error {
 				CreateTime: time.Now().Unix(),
 			},
 			{
-				ID:         27,
-				Pid:        21,
-				Type:       "menu",
-				Title:      "会员分组管理",
-				Name:       "user/group",
-				Path:       "user/group",
-				Icon:       "fa fa-group",
-				MenuType:   "tab",
-				Component:  "/src/views/backend/user/group/index.vue",
-				Keepalive:  1,
-				Weigh:      93,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         28,
-				Pid:        27,
-				Type:       "button",
-				Title:      "查看",
-				Name:       "user/group/index",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         29,
-				Pid:        27,
-				Type:       "button",
-				Title:      "添加",
-				Name:       "user/group/add",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         30,
-				Pid:        27,
-				Type:       "button",
-				Title:      "编辑",
-				Name:       "user/group/edit",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         31,
-				Pid:        27,
-				Type:       "button",
-				Title:      "删除",
-				Name:       "user/group/del",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         32,
-				Pid:        21,
-				Type:       "menu",
-				Title:      "会员规则管理",
-				Name:       "user/rule",
-				Path:       "user/rule",
-				Icon:       "fa fa-th-list",
-				MenuType:   "tab",
-				Component:  "/src/views/backend/user/rule/index.vue",
-				Keepalive:  1,
-				Weigh:      92,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         33,
-				Pid:        32,
-				Type:       "button",
-				Title:      "查看",
-				Name:       "user/rule/index",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         34,
-				Pid:        32,
-				Type:       "button",
-				Title:      "添加",
-				Name:       "user/rule/add",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         35,
-				Pid:        32,
-				Type:       "button",
-				Title:      "编辑",
-				Name:       "user/rule/edit",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         36,
-				Pid:        32,
-				Type:       "button",
-				Title:      "删除",
-				Name:       "user/rule/del",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         37,
-				Pid:        32,
-				Type:       "button",
-				Title:      "快速排序",
-				Name:       "user/rule/sortable",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
 				ID:         38,
 				Pid:        21,
 				Type:       "menu",
@@ -529,39 +418,6 @@ func (s Install) AdminRule() error {
 				Type:       "button",
 				Title:      "添加",
 				Name:       "user/moneyLog/add",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         41,
-				Pid:        21,
-				Type:       "menu",
-				Title:      "会员积分管理",
-				Name:       "user/scoreLog",
-				Path:       "user/scoreLog",
-				Icon:       "el-icon-Discount",
-				MenuType:   "tab",
-				Component:  "/src/views/backend/user/scoreLog/index.vue",
-				Keepalive:  1,
-				Weigh:      90,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         42,
-				Pid:        41,
-				Type:       "button",
-				Title:      "查看",
-				Name:       "user/scoreLog/index",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         43,
-				Pid:        41,
-				Type:       "button",
-				Title:      "添加",
-				Name:       "user/scoreLog/add",
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
@@ -1228,7 +1084,7 @@ func (s Install) SecurityDataRecycle() error {
 		{ID: 2, AdminID: 0, Name: "管理员日志", Controller: "auth/AdminLog.php", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 		{ID: 3, AdminID: 0, Name: "菜单规则", Controller: "auth/Menu.php", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 		{ID: 4, AdminID: 0, Name: "系统配置项", Controller: "routine/Config.php", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 5, AdminID: 0, Name: "会员", Controller: "user/User.php", ControllerAs: "auth/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 5, AdminID: 0, Name: "会员", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 		{ID: 6, AdminID: 0, Name: "数据回收规则", Controller: "security/DataRecycle.php", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
@@ -1260,7 +1116,7 @@ func (s Install) SecuritySensitiveData() error {
 			UpdateTime:   time.Now().Unix(),
 			CreateTime:   time.Now().Unix(),
 		},
-		{ID: 2, AdminID: 0, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","password":"密码","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 2, AdminID: 0, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 		{ID: 3, AdminID: 0, Name: "管理员权限", Controller: "auth/Group.php", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
@@ -1273,154 +1129,6 @@ func (s Install) SecuritySensitiveData() error {
 		} else if err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func (s Install) UserGroup() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.UserGroup{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-
-		dataList := []*model.UserGroup{
-			{
-				ID:         1,
-				Name:       "默认分组",
-				Rules:      "*",
-				Status:     "1",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-		}
-		if err := s.sqlDB.Create(dataList).Error; err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s Install) UserRule() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.UserRule{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		dataList := []*model.UserRule{
-			{
-				ID:         1,
-				Pid:        0,
-				Type:       "menu_dir",
-				Title:      "我的账户",
-				Name:       "account",
-				Path:       "account",
-				Icon:       "fa fa-user-circle",
-				MenuType:   "tab",
-				Weigh:      98,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         2,
-				Pid:        1,
-				Type:       "menu",
-				Title:      "账户概览",
-				Name:       "account/overview",
-				Path:       "account/overview",
-				Icon:       "fa fa-home",
-				MenuType:   "tab",
-				Component:  "/src/views/frontend/user/account/overview.vue",
-				Weigh:      99,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         3,
-				Pid:        1,
-				Type:       "menu",
-				Title:      "个人资料",
-				Name:       "account/profile",
-				Path:       "account/profile",
-				Icon:       "fa fa-user-circle-o",
-				MenuType:   "tab",
-				Component:  "/src/views/frontend/user/account/profile.vue",
-				Weigh:      98,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         4,
-				Pid:        1,
-				Type:       "menu",
-				Title:      "修改密码",
-				Name:       "account/changePassword",
-				Path:       "account/changePassword",
-				Icon:       "fa fa-shield",
-				MenuType:   "tab",
-				Component:  "/src/views/frontend/user/account/changePassword.vue",
-				Weigh:      97,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         5,
-				Pid:        1,
-				Type:       "menu",
-				Title:      "积分记录",
-				Name:       "account/integral",
-				Path:       "account/integral",
-				Icon:       "fa fa-tag",
-				MenuType:   "tab",
-				Component:  "/src/views/frontend/user/account/integral.vue",
-				Weigh:      96,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-			{
-				ID:         6,
-				Pid:        1,
-				Type:       "menu",
-				Title:      "余额记录",
-				Name:       "account/balance",
-				Path:       "account/balance",
-				Icon:       "fa fa-money",
-				MenuType:   "tab",
-				Component:  "/src/views/frontend/user/account/balance.vue",
-				Weigh:      95,
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-		}
-		if err := s.sqlDB.Create(dataList).Error; err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s Install) User() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.User{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-
-		dataList := []*model.User{
-			{
-				ID:         1,
-				GroupID:    1,
-				Username:   "user",
-				Nickname:   "User",
-				Email:      "18888888888@qq.com",
-				Mobile:     "18888888888",
-				Gender:     2,
-				Birthday:   time.Now(),
-				Status:     "enable",
-				UpdateTime: time.Now().Unix(),
-				CreateTime: time.Now().Unix(),
-			},
-		}
-		if err := s.sqlDB.Create(dataList).Error; err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
 	}
 	return nil
 }

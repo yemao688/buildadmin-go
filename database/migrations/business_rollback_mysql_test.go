@@ -103,7 +103,7 @@ func TestBusinessRollbackMissingDownLeavesLedgerAndRejectsUnsupportedTracks(t *t
 	require.NoError(t, db.Table(core.TableName(config, businessLedgerName)).Count(&count).Error)
 	require.Equal(t, int64(1), count)
 
-	for _, track := range []string{"official", "local"} {
+	for _, track := range []string{"official", "framework"} {
 		_, err := core.RollbackTrackedMigrations(nil, config, track+"_migrations", nil, core.RollbackOptions{TrackName: track})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), track+" migration rollback is unsupported")

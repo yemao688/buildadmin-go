@@ -36,7 +36,7 @@ func init() {
 }
 ```
 
-`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `local` 表中的数据。
+`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
 `VerifyBaseline` 是应用时执行一次的契约：它在 `Up` 成功后运行；应用失败时会随迁移重试；账本记录完成后不再运行。因此，它可以断言该迁移刚建立的精确 schema 基线。`VerifySchema` 和 `VerifyUpgradeData` 是常驻不变量：每次执行 `migrate` 都会运行，判据必须兼容基线之上的合法业务变更。
 
@@ -44,9 +44,8 @@ func init() {
 
 业务迁移完成后，以下常驻检查仍然适用：
 
-- local `VerifySchema` 检查每条已完成 local 迁移的常驻 schema 契约，local `VerifyUpgradeData` 检查其常驻数据契约。
-- `local.VerifyCurrent` 检查跨表所有权、闭包表自引用行、安全 seed 身份，以及已知旧安装规则的拒绝情况。
-- `official.ValidateCurrentSchema` 检查当前 official schema 要求，包括 `user_rule.no_login_valid` 和当前规则枚举值。
+- framework `VerifySchema` 检查每条已完成 framework 迁移的常驻 schema 契约，framework `VerifyUpgradeData` 检查其常驻数据契约。
+- `framework.VerifyCurrent` 检查跨表所有权、闭包表自引用行、安全 seed 身份，以及已知旧安装规则的拒绝情况。
 
 ## 回滚与断点
 
@@ -68,7 +67,7 @@ go run ./cmd/app --conf config.yaml migrate breakpoint clear
 go run ./cmd/app --conf config.yaml migrate breakpoint list
 ```
 
-不带参数的 `migrate rollback` 默认回滚最近一次应用批次，并按逆序处理该批次中的业务迁移。`--steps N` 最多回滚 N 条已完成的业务迁移；`--to-breakpoint` 回滚保存断点之后的全部业务迁移，未设置断点时直接报错，二者不能同时使用。也可以在 `rollback` 后显式写 `business`，但业务轨道是唯一支持的轨道；official 和 local 始终只支持前向迁移。
+不带参数的 `migrate rollback` 默认回滚最近一次应用批次，并按逆序处理该批次中的业务迁移。`--steps N` 最多回滚 N 条已完成的业务迁移；`--to-breakpoint` 回滚保存断点之后的全部业务迁移，未设置断点时直接报错，二者不能同时使用。也可以在 `rollback` 后显式写 `business`，但业务轨道是唯一支持的轨道；official 和 framework 始终只支持前向迁移。
 
 业务迁移账本 `business_migrations` 包含 `batch` 列，用于确定最近批次。`breakpoint set` 保存业务迁移序号，`clear` 清除保存的断点，`list` 显示当前断点。断点存放在带配置前缀的 `business_breakpoints` 表中。
 

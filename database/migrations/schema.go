@@ -66,6 +66,3 @@ func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
 func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
 	return official.SeedCurrentData(db, config)
 }
-func ValidateCurrentSchema(db *gorm.DB, config *conf.Configuration) error {
-	return official.ValidateCurrentSchema(db, config)
-}

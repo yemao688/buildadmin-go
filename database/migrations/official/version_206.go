@@ -26,7 +26,7 @@ func version206(db *gorm.DB, config *conf.Configuration) error {
 			if err := db.Raw("SELECT COALESCE(MAX(" + core.QuoteIdentifier("id") + "), 0) + 1 FROM " + core.QuoteIdentifier(configTable)).Scan(&configID).Error; err != nil {
 				return fmt.Errorf("allocate backend_entrance config id: %w", err)
 			}
-			// Keep IDs 14-19 available for the local upload-config migration.
+			// Keep IDs 14-19 available for the framework upload-config seed.
 			if configID < 20 {
 				configID = 20
 			}
