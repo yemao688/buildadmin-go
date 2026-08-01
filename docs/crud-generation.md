@@ -270,6 +270,8 @@ Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/se
 
 ### `table` 属性
 
+主键字段（`designType: pk`/`spk`）的 `comment` 必须统一写为 `ID`，不要写`主键`或其它描述。字段 `comment` 会进入 zh-cn 语言包并作为后台列标题，因此 `id` 列在后台必须显示为 `ID`。
+
 | 键                   | 类型          | 语义                                                |
 | -------------------- | ------------- | --------------------------------------------------- |
 | `width`              | `int`（px，可选） | 列宽，单位为 px；不填写时按 `designType` 使用默认值（如 `pk` 为 70、`timestamp`/`datetime` 为 160）。 |

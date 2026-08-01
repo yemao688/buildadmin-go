@@ -41,10 +41,12 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 三轨职责（完整契约见根目录 `AGENTS.md` 和 [`../database/migrations/business/README.md`](../database/migrations/business/README.md)）：
 
 - `official/`：PHP 上游迁移与官方安装 seed，只跟随 PHP 上游同步，不做框架私有改动。
-- `framework/`：框架自身的 7 条语义迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
+- `framework/`：框架自身唯一的 `framework-final-seed-and-integrity` 迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
 - `business/`：下游扩展轨道，框架仓库自身不放业务表。
 
-新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）；启动 debug 模式会输出未登记也未豁免的路由告警。
+三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；业务轨道不使用 `batch`/`revision`，也没有独立断点表。
+
+新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 属于显式豁免。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由，新增非三段式路由必须在评审中显式处理；启动 debug 模式会输出未登记也未豁免的路由告警。
 
 迁移回调分为两类契约：`VerifyBaseline` 是应用迁移时的一次性基线契约，只在对应 `Up` 成功后执行；失败会随应用重试，已完成的迁移记录不再执行它，因此判据可以精确描述该迁移刚建立的基线。`VerifySchema` 与 `VerifyUpgradeData` 是 standing 运行时不变量，每次 migrate 都会执行，判据必须兼容业务仓库在基线之上的合法改造。
 
@@ -63,12 +65,9 @@ prefix validation → migration lock → upstream-compatible preflight
 - 不得用表为空或 `id=1` 检查推断官方 seed 状态；seed 拥有的写入只有在官方 seed 之后才可靠，编排器保证它在 framework/business 的 `Up` 之前运行。
 - 破坏性重命名、类型变更和回填不得依赖 AutoMigrate。
 
-## Epoch reset 与账本历史
+## 账本与当前基线
 
-以下事实**只对框架源仓库的开发数据库成立**，不得推广到任何业务仓库环境：
-
-- 框架开发数据库已经历批准的 epoch reset；framework 账本重建过一次，并由 `go_migrations` 更名为 `framework_migrations`。
-- 官方迁移身份始终保持不可变。
+- 官方迁移身份（ID、名称、内容）一经发布永不重写；兼容问题只能用新增迁移解决。
 - 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
-
-业务仓库的首次安装会按当前快照正常建立全部账本，不存在"需要补做 epoch reset"的情况。
+- 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用 MySQL 命名锁与事务内锚定行锁。
+- 业务仓库首次安装按当前快照建立三张带前缀的迁移台账；业务回滚只作用于 business 轨道，默认回滚最近一条已完成迁移，也支持 `--to-breakpoint`。

@@ -2,6 +2,12 @@
 
 这是一个将 **BuildAdmin PHP 生态及其业务行为迁移到 Go** 的管理后台框架：后端使用 Go，前端基于 BuildAdmin v2.3.8。项目目标是让开发者和 AI agent 快速开发管理后台业务。它不是 PHP 的逐行翻译，而是在保持兼容性和业务语义的基础上，采用强类型的 Go、Gin、GORM 和 Wire 实现。
 
+## 当前实现基线
+
+- 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用 MySQL 命名锁与事务内锚定行锁。
+- 密码使用 bcrypt，不使用 salt 列；security 规则全局化，规则表不含 `admin_id`/`owner_column`，日志表的 `admin_id` 只表示操作者。
+- 后台管理功能完整；前台 `/` 是自包含占位页，当前只提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`。
+
 ## 技术栈与要求
 
 - Go：以 `go.mod` 的 `go 1.25.x` 为准。
@@ -30,20 +36,11 @@ go install github.com/air-verse/air@latest
 
    ```bash
    air
-   # 或：go run ./cmd/app --conf config.yaml
+   # 或：go run ./cmd/app
    ```
 
-   后端默认监听 `9900`；修改端口使用 `APP_PORT`。未安装时访问首页会 302 到 `/install`；安装完成后 `/install` 会 302 到 `/`，安装 API 会被封禁（幂等的完成回调除外）。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
-2. 浏览器打开 `http://127.0.0.1:9900/install`，按引导完成 Web 安装。安装器会在根目录创建只含 MySQL 连接和 `token.key` 的稀疏 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
-
-   也可以使用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app setup`——交互收集数据库连接、建库、执行迁移并初始化管理员；加全部 flags 与 `--yes` 时可无人值守运行（CI/容器适用）。
-3. 如果不使用 Web 安装器，请创建只含目标环境覆盖值的 `config.yaml`，按环境填写后直接执行数据库迁移。未写入的配置由 `config.defaults.yaml` 基座提供，端口和时区仍只通过 `APP_PORT`/`APP_TIME_ZONE` 设置：
-
-   ```bash
-   go run ./cmd/app --conf config.yaml migrate
-   ```
-
-4. 启动前端（必须在 `web/` 目录执行）：
+   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/app --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。
+2. 启动前端（必须在 `web/` 目录执行）：
 
    ```bash
    cd web
@@ -51,7 +48,7 @@ go install github.com/air-verse/air@latest
    pnpm dev
    ```
 
-   Vite 默认监听 `9918`，开发 API 地址默认使用 `APP_PORT=9900` 的 `http://localhost:9900`。
+   Vite 默认监听 `9918` 并绑定 `0.0.0.0`，开发 API 地址默认使用 `VITE_AXIOS_BASE_URL` 指向 `APP_PORT=9900` 的 `http://localhost:9900`。
 
 ## Docker Compose 部署
 
@@ -105,7 +102,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移、生成文件与测试注意事项
 
-- 迁移采用三条轨道：`database/migrations/official/` 跟随 PHP 上游更新，`database/migrations/framework/` 承载框架自身的终态完整性迁移，`database/migrations/business/` 留给你注册业务迁移（独立 `business_migrations` 账本）。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试由 `config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
@@ -125,7 +122,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ### 业务迁移：只加文件，不动框架
 
-业务表结构变更写进 `database/migrations/business/`：新增一个 Go 文件，在 `init()` 里调用 `business.Register(...)` 即可，编排器会自动发现并执行，记录到独立的 `business_migrations` 账本，与框架的 official/framework 互不冲突。契约（幂等、前缀安全、按业务键判重等）见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `framework/`。
+业务表结构变更只写进 `database/migrations/business/`，由 `Register`/`init` 注册；完整的台账、回滚和幂等契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `framework/`。
 
 ### 权限体系：直接在 admin 上建模，不要新建认证表
 
@@ -133,13 +130,15 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 - 超级管理员、总代理、代理、员工等角色 = `admin` 记录 + `admin_group` 角色组分配；
 - 上下级关系 = `admin.parent_id`（配 `admin_closure` 闭包表，层级查询现成）；
-- 数据权限隔离 = 各业务表的 `admin_id` 属主列（框架迁移已建立并回填）。
+- 数据权限隔离 = 业务表按需使用精确 `admin_id` 属主列，并由 CRUD `dataScope` 配置。
+
+安全规则是全局资源，不通过规则表属主列隔离；安全日志中的 `admin_id` 只记录操作者。
 
 `admin` 表字段允许微调：加业务字段、删掉用不到的字段都可以，但每个字段变更都要配一条 business 迁移（破坏性列变更不能依赖 AutoMigrate）。`user` 表同理：做前台会员业务时可以任意改造字段、删除闲置字段，并同步调整后台会员页面（`web/src/views/backend/user/`）。
 
 ### 前台随意改，后台不要动
 
-- `web/src/views/frontend/`（用户端前台）**只是示例**，可以重构成任何业务门户样式，随便改；
+- `web/src/views/frontend/`（用户端前台）当前是自包含占位页，**只是示例**，可以重构成任何业务门户样式；
 - `web/src/views/backend/`（管理后台）**不要改样式**：保持与框架一致才能干净地合并后续框架更新；业务后台页面走 CRUD 生成，遵循生成器的既有模式。
 
 ## 鸣谢

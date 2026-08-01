@@ -100,12 +100,12 @@ git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 
 ```bash
 air
-# 或：go run ./cmd/app --conf config.yaml
+# 或：go run ./cmd/app
 ```
 
 启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
 
-也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app setup` 交互收集数据库连接并执行迁移与初始化；`setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。
+也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app --conf config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/app --conf config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
 
 **手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。`config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
@@ -123,7 +123,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-后端默认使用 `APP_PORT=9900`，Vite 默认端口是 `9918`；修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
+后端默认使用 `APP_PORT=9900`，Vite 默认端口是 `9918` 并绑定 `0.0.0.0`；开发环境的 `VITE_AXIOS_BASE_URL` 默认指向 `http://localhost:9900`。修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
 
 ### 业务 CRUD
 
@@ -146,6 +146,8 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ### 后台路由权限
 
 CRUD 生成器自动建规则无需处理；手写路由按同一规则二选一：声明 `middleware.RegisterPermissionExempt` 豁免，或通过 business 迁移补充 `admin_rule`，参考 [`framework-maintenance.md`](framework-maintenance.md) 的条款。
+
+业务表迁移使用三轨台账中的 business 轨道；台账字段、断点列和 `migrate rollback` 语义以 [`database/migrations/business/README.md`](../database/migrations/business/README.md) 为准。
 
 ## 标准框架升级流程
 

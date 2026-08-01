@@ -67,7 +67,7 @@ docker compose logs -f app
 docker compose run --rm app migrate
 ```
 
-这只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行 Web 安装，也不创建安装锁。执行迁移前确认配置中的外部 MySQL 可达；容器内 `127.0.0.1` 不是宿主机或数据库。
+这只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行 Web 安装，也不创建安装锁。执行迁移前确认配置中的外部 MySQL 可达；容器内 `127.0.0.1` 不是宿主机或数据库。三轨台账、business 断点和回滚语义见 [`database/migrations/business/README.md`](../database/migrations/business/README.md)。
 
 ## 升级与精确回滚
 
