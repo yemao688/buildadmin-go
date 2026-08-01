@@ -34,7 +34,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 	info := header.GetAdminAuth(ctx)
 	adminInfo, _ := h.authM.GetInfo(ctx, info.Id)
 
-	menus, _ := h.authM.GetMenus(ctx, 1)
+	menus, _ := h.authM.GetMenus(ctx, info.Id)
 	if len(menus) == 0 {
 		FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!"))
 		return
