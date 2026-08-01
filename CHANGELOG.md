@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.7.2
+
+> 延续破坏性直改原则：只保证全新安装优雅，不提供旧库升级迁移。
+
+- **Fixed (权限):** 后台权限全覆盖审计（101 条 `/admin/*` 路由 × admin_rule × 豁免矩阵），修复三类"该通不通"——种子补 `auth/adminLog/del` 与 `routine/config/sendtestmail` 两条规则（Authorization 的"规则未登记"前置 fail-closed 连超管都会被 403，日志页删除按钮与配置页发测试邮件此前全员不可用）；`module/index` 加入 module 豁免（模块市场页此前全员 403）。country 三模块规则经核对齐全（framework 种子五件套 ×3），启动诊断与非三段式路由盲区已写入文档。
+- **Fixed (回收站死锁):** `AdminLogRegistrar.Capabilities()` 补原子路由能力声明（admin_log 有回收站种子规则，删除时此前报 "atomic route capability missing"）；`AdminLogModel.Del` 与 `money_log`、`attachment` 共四处裸 `s.DB().Transaction()` 归一为 `s.Transaction(ctx, ...)` 共享请求事务——此前回收审计的 FOR UPDATE 锁（请求事务）与 handler 删除（另起连接事务）分属两个连接，删除 admin_log 必现 50 秒锁等待超时（请求内自死锁）。
+- **Fixed (security):** 规则种子/表单去 PHP 化——种子 `controller` 由 `security/DataRecycle.php` 改为 Go 点形 `security.DataRecycle`；`getRouteList` 下拉选项同步点形化并修复两个永不命中的死排除项。**存量 bug**：handler 四处 `controller_as = controller` 无归一化复制（表单新建规则的 controller_as 存为点形，中间件按小写斜杠形匹配，新建规则永远不触发），统一归一化（点转斜杠 + 小写，抽为共享函数）。
+- **Fixed (setup):** `setup --conf` 显式路径此前完全不生效——`initConfig` 在 overlay 缺失分支把 defaults 路径回写进与 `--conf` flag 绑定同一存储的全局变量，setup 读到被污染的 defaults 路径、误判"配置已存在"而跳过写盘；已删除该污染赋值（加载器本就不依赖它）。另修复删除 `install.lock` 后的重装流程：`updateSetupAdmin` 按硬编码初始用户名 `admin` 更新必 0 行报错，改为按种子主键 `id=1` 定位 + 存在性检查（`site_name` 值不变时 MySQL 报 0 affected 的同型误报一并修）。
+- **Fixed:** fresh 安装 `/admin/Index/index` 的 `languageTabs` 为空——补 `country_language` 种子（zh-cn/en，幂等按 `lan` 判重）；`TestBuildSuffixSvg` 多年既有失败修复（期望值抄自 PHP unpack 小端序解释，Go 返回标准大端 adler32，SVG 色相仅装饰）。
+- **Added (web):** 用户编辑表单恢复"调整余额"按钮（编辑态只读余额框 + append 按钮，跳转 `user/moneyLog` 页并携带 `user_id`）；用户列表新增余额列（位于手机号后）、移除头像列；货币/语言页 ID 列标题由"主键"修正为"ID"（spec 早已改 `comment: ID` 后未再生成的陈旧产物，country 模型 gorm 注释同步）。
+- **Added (crud):** `docs/crud-generation.md` 新增约定——主键字段 `comment` 必须写 `ID`（链路 comment → zh-cn 语言包 → 后台列标题），禁止"主键"作为 id 列文案出现在后台。
+- **Changed (docs):** README/AGENTS/docs 全面更新至当前版本——三轨台账五列与断点列、24 表、GET_LOCK 层级锁、security 规则全局化、端口 9900/9918、前台空架子；重复的安装/迁移/端口段落收敛到各自唯一 owner；补充"非三段式 /admin 路由会同时绕过权限中间件与启动诊断"的注意事项。
+- **Changed (chore):** 清理 salt 死引用（data_scope 敏感字段黑名单、admin_log 脱敏正则）、CRUD 引导文案中的 test_build 残留提示、security 表单中已删除表的死排除项。
+
 ## v2.7.0
 
 > **破坏性版本，无升级路径。** 与 v2.6.0 同一原则：直接改写 schema 与种子，不支持对旧库执行 migrate 升级；所有环境（含下游业务仓库）必须用安装器全新安装后重新开始业务数据。
