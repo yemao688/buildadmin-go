@@ -5,7 +5,7 @@ export default {
     status: '状态',
     "status 1": '启用',
     weigh: '权重',
-    id: '主键',
+    id: 'ID',
     "status 0": '禁用',
     "quick Search Fields": '语言代码、语言名称',
 }

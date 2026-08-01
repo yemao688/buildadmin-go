@@ -7,6 +7,7 @@ export default {
     'Last login': 'Last login',
     email: 'Email',
     balance: 'Balance',
+    'Adjustment balance': 'Adjust balance',
     password: 'Password',
     'Please leave blank if not modified': 'Please leave blank if you do not modify',
     'Login account': 'Login account name',

@@ -7,6 +7,7 @@ export default {
     'Last login': '最后登录',
     email: '电子邮箱',
     balance: '余额',
+    'Adjustment balance': '调整余额',
     password: '密码',
     'Please leave blank if not modified': '不修改请留空',
     'Login account': '登录账户名',

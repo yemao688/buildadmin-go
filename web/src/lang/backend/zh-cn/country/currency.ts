@@ -7,6 +7,6 @@ export default {
     symbol: '货币符号',
     weigh: '权重',
     "quick Search Fields": '货币代码、货币名称',
-    id: '主键',
+    id: 'ID',
     code: '货币代码',
 }

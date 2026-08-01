@@ -49,7 +49,7 @@ export default {
     'experience 1 3': '（站点端口为：1818）',
     'experience 2 1': '在本页点击',
     'experience 2 2': '选择数据表',
-    'experience 2 3': '（可选择 test_build 数据表）',
+    'experience 2 3': '',
     'experience 3 1': '点击',
     'experience 3 2': '生成 CRUD 代码',
     'experience 3 3': '，点击',

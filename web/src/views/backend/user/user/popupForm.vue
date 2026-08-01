@@ -69,7 +69,11 @@
                         ></el-input>
                     </el-form-item>
                     <el-form-item v-if="baTable.form.operate == 'Edit'" :label="t('user.user.balance')">
-                        <el-input v-model="baTable.form.items!.money" readonly></el-input>
+                        <el-input v-model="baTable.form.items!.money" readonly>
+                            <template #append>
+                                <el-button @click="changeAccount('money')">{{ t('user.user.Adjustment balance') }}</el-button>
+                            </template>
+                        </el-input>
                     </el-form-item>
                     <el-form-item prop="password" :label="t('user.user.password')">
                         <el-input
@@ -113,6 +117,7 @@ import type baTableClass from '/@/utils/baTable'
 import { regularPassword } from '/@/utils/validate'
 import type { FormItemRule } from 'element-plus'
 import FormItem from '/@/components/formItem/index.vue'
+import router from '/@/router/index'
 import { buildValidatorData } from '/@/utils/validate'
 import { useConfig } from '/@/stores/config'
 
@@ -121,6 +126,20 @@ const formRef = useTemplateRef('formRef')
 const baTable = inject('baTable') as baTableClass
 
 const { t } = useI18n()
+
+const changeAccount = (type: 'money') => {
+    if (type !== 'money') {
+        return
+    }
+
+    baTable.toggleForm()
+    router.push({
+        name: 'user/moneyLog',
+        query: {
+            user_id: baTable.form.items!.id,
+        },
+    })
+}
 
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     username: [buildValidatorData({ name: 'required', title: t('user.user.User name') }), buildValidatorData({ name: 'account' })],

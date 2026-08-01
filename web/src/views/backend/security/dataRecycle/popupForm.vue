@@ -64,7 +64,7 @@
                             params: {
                                 connection: baTable.form.items!.connection,
                                 samePrefix: 1,
-                                excludeTable: ['area', 'token', 'captcha', 'admin_group_access', 'user_money_log', 'user_score_log'],
+                                excludeTable: ['area', 'token', 'captcha', 'admin_group_access', 'user_money_log'],
                             },
                             remoteUrl: getTableListUrl,
                             onRow: onTableChange,

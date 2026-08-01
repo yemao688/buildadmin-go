@@ -49,7 +49,7 @@ export default {
     'experience 1 3': '(The site port is 1818)',
     'experience 2 1': 'On this page, click to',
     'experience 2 2': 'Select data table',
-    'experience 2 3': '(You can select the test_build data table)',
+    'experience 2 3': '',
     'experience 3 1': 'Click',
     'experience 3 2': 'Generate CRUD Code',
     'experience 3 3': ', and click ',

@@ -41,8 +41,8 @@ const baTable = new baTableClass(
             { label: t('user.user.Superior agent'), prop: 'admin_id', align: 'center', operator: '=', operatorPlaceholder: t('user.user.Superior agent'), comSearchRender: 'remoteSelect', remote: { pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true } }, formatter: (row: anyObj, _column: any, cellValue: any, _index: number) => row.admin?.username || cellValue || '-', width: 130 },
             { label: t('user.user.User name'), prop: 'username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('user.user.nickname'), prop: 'nickname', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            { label: t('user.user.avatar'), prop: 'avatar', align: 'center', render: 'image', operator: false },
             { label: t('user.user.mobile'), prop: 'mobile', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
+            { label: t('user.user.balance'), prop: 'money', align: 'center', operator: false },
             {
                 label: t('user.user.Last login IP'),
                 prop: 'last_login_ip',
