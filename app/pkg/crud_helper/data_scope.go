@@ -12,7 +12,7 @@ import (
 // tables contain handwritten security and lifecycle semantics.
 var protectedTableNames = []string{
 	"admin", "admin_closure", "admin_log", "admin_rule",
-	"user", "user_money_log", "user_score_log", "user_rule", "user_group",
+	"user", "user_money_log",
 	"attachment", "crud_log", "data_recycle_log", "sensitive_data_log",
 	"security_rule", "table",
 	"security_data_recycle", "security_sensitive_data", "admin_group", "admin_group_access", "config",

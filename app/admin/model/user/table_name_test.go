@@ -14,9 +14,6 @@ func TestRenamedStructTableNames(t *testing.T) {
 	namer := schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"}
 	cases := map[string]any{
 		"ba_user_money_log": MoneyLog{},
-		"ba_user_score_log": ScoreLog{},
-		"ba_user_rule":      Rule{},
-		"ba_user_group":     Group{},
 	}
 	for want, model := range cases {
 		s, err := schema.Parse(model, &sync.Map{}, namer)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/pkg/installer"
+	"go-build-admin/app/pkg/password"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations"
 	"io"
@@ -290,7 +291,6 @@ func TestUpdateSetupAdminUpdatesSiteName(t *testing.T) {
 		"username": "admin",
 		"nickname": "Admin",
 		"password": "old",
-		"salt":     "old",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -306,12 +306,11 @@ func TestUpdateSetupAdminUpdatesSiteName(t *testing.T) {
 		Username string
 		Nickname string
 		Password string
-		Salt     string
 	}
 	if err := db.Table("admins").Where("username = ?", "operator").First(&admin).Error; err != nil {
 		t.Fatal(err)
 	}
-	if admin.Nickname != "operator" || admin.Password == "old" || admin.Salt == "old" {
+	if admin.Nickname != "operator" || admin.Password == "old" || password.Compare(admin.Password, "new-password") != nil {
 		t.Fatalf("updated admin = %#v", admin)
 	}
 	var site siteconfig.Config
@@ -335,7 +334,6 @@ func TestUpdateSetupAdminRejectsMissingSiteName(t *testing.T) {
 		"username": "admin",
 		"nickname": "Admin",
 		"password": "old",
-		"salt":     "old",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +350,6 @@ func createSetupAdminTestTables(db *gorm.DB) error {
 		username TEXT NOT NULL,
 		nickname TEXT NOT NULL,
 		password TEXT NOT NULL,
-		salt TEXT NOT NULL,
 		update_time INTEGER
 	)`).Error; err != nil {
 		return err

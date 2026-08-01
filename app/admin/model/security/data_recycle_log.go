@@ -145,11 +145,6 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 				return err
 			}
 
-			//gorm scan到map会包含时间,还原时需要去掉时间
-			if v.DataTable == "user" && data["birthday"] != "" {
-				data["birthday"] = data["birthday"].(string)[:10]
-			}
-
 			// Fail-closed: refuse to restore into tables that cannot carry ownership.
 			var rule SecurityDataRecycle
 			if err := tx.Table(s.config.Database.Prefix+"security_data_recycle").Where("id=?", v.RecycleID).Take(&rule).Error; err != nil {

@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -58,39 +57,6 @@ func newContractTestRouter() *gin.Engine {
 		FormatBundleFile: "json",
 	})))
 	return router
-}
-
-func TestIndexRequiredLoginIncludesPHPType(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	driver := &handlerContractTokenDriver{getErr: errors.New("not logged in")}
-	h := &IndexHandler{
-		authM: member.NewService(nil, &token.TokenHelper{Driver: driver}, nil),
-	}
-	router := newContractTestRouter()
-	router.GET("/", h.Index)
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/?requiredLogin=1", nil))
-
-	response := decodeHandlerResponse(t, recorder)
-	require.Equal(t, 303, response.Code)
-	data, ok := response.Data.(map[string]interface{})
-	require.True(t, ok)
-	require.Equal(t, "need login", data["type"])
-}
-
-func TestEmsSendRejectsUnknownEventBeforeExternalServices(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	h := &EmsHandler{}
-	router := newContractTestRouter()
-	router.POST("/", h.Send)
-	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"email":"person@example.com","event":"unknown","captchaId":"id","captchaInfo":"info"}`))
-	request.Header.Set("Content-Type", "application/json")
-	router.ServeHTTP(recorder, request)
-
-	response := decodeHandlerResponse(t, recorder)
-	require.Equal(t, 400, response.Code)
-	require.Equal(t, "event invalid", response.Msg)
 }
 
 func TestRefreshTokenRejectsUnknownTypeWithoutCreatingToken(t *testing.T) {

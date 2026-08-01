@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/common/model"
+	"go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
-	"go-build-admin/utils"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -51,6 +51,13 @@ func authTestContext() *gin.Context {
 	return ctx
 }
 
+func hashForTest(t *testing.T, plain string) string {
+	t.Helper()
+	hash, err := password.Hash(plain)
+	require.NoError(t, err)
+	return hash
+}
+
 func TestAuthIsLoginRejectsAdminToken(t *testing.T) {
 	m, _ := newAuthTestModel(t)
 	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}}
@@ -68,35 +75,18 @@ func TestAuthLoginMissingAccountIsNotDisabled(t *testing.T) {
 	require.EqualError(t, err, "Account not exist")
 }
 
-func TestAuthLoginAllowsLegacyStatuses(t *testing.T) {
+func TestAuthLoginUsesBcryptAndStrictStatuses(t *testing.T) {
 	m, db := newAuthTestModel(t)
-	for _, status := range []string{"0", "1", "other"} {
-		salt := "salt-" + status
-		user := model.User{Username: "user_" + status, Password: utils.EncryptPassword("password", salt), Salt: salt, Status: status}
+	for _, status := range []string{"enable", "disable"} {
+		user := model.User{Username: "user_" + status, Password: hashForTest(t, "password"), Status: status}
 		require.NoError(t, db.Create(&user).Error)
 		_, err := m.Login(authTestContext(), user.Username, "password", false)
-		require.NoError(t, err)
+		if status == "enable" {
+			require.NoError(t, err)
+		} else {
+			require.EqualError(t, err, "Account disabled")
+		}
 	}
-	user := model.User{Username: "disabled", Password: utils.EncryptPassword("password", "disabled-salt"), Salt: "disabled-salt", Status: "disable"}
-	require.NoError(t, db.Create(&user).Error)
-	_, err := m.Login(authTestContext(), user.Username, "password", false)
-	require.EqualError(t, err, "Account disabled")
-}
-
-func TestAuthLoginUsesMobileBeforeUsername(t *testing.T) {
-	m, db := newAuthTestModel(t)
-	salt := "mobile-salt"
-	user := model.User{
-		Username: "phone_user",
-		Mobile:   "18888888888",
-		Password: utils.EncryptPassword("password", salt),
-		Salt:     salt,
-		Status:   "enable",
-	}
-	require.NoError(t, db.Create(&user).Error)
-
-	_, err := m.Login(authTestContext(), user.Mobile, "password", false)
-	require.NoError(t, err)
 }
 
 func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
@@ -104,8 +94,7 @@ func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 	m.config.App.UserLoginRetry = 2
 	user := model.User{
 		Username:      "cooldown_user",
-		Password:      utils.EncryptPassword("correct", "cooldown-salt"),
-		Salt:          "cooldown-salt",
+		Password:      hashForTest(t, "correct"),
 		Status:        "enable",
 		LoginFailure:  2,
 		LastLoginTime: time.Now().Unix() - 86400,
@@ -121,13 +110,7 @@ func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 
 func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	m, db := newAuthTestModel(t)
-	salt := "response-salt"
-	user := model.User{
-		Username: "response_user",
-		Password: utils.EncryptPassword("password", salt),
-		Salt:     salt,
-		Status:   "enable",
-	}
+	user := model.User{Username: "response_user", Password: hashForTest(t, "password"), Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
 	ctx := authTestContext()
 	ctx.Request.RemoteAddr = "203.0.113.9:1234"
@@ -139,21 +122,11 @@ func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	require.NotZero(t, data["last_login_time"])
 }
 
-func TestAuthRegisterRejectsExistingContactFields(t *testing.T) {
-	for _, test := range []struct {
-		name, username, email, mobile, message string
-	}{
-		{"username", "existing", "", "", "Username is exist!"},
-		{"email", "", "existing@example.com", "", "Email is exist!"},
-		{"mobile", "", "", "13800000000", "Mobile is exist!"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			m, db := newAuthTestModel(t)
-			require.NoError(t, db.Create(&model.User{Username: test.username, Email: test.email, Mobile: test.mobile}).Error)
-			_, err := m.Register(authTestContext(), test.username, "password", test.mobile, test.email)
-			require.EqualError(t, err, test.message)
-		})
-	}
+func TestAuthRegisterRejectsExistingUsername(t *testing.T) {
+	m, db := newAuthTestModel(t)
+	require.NoError(t, db.Create(&model.User{Username: "existing"}).Error)
+	_, err := m.Register(authTestContext(), "existing", "password")
+	require.EqualError(t, err, "Username is exist!")
 }
 
 func TestAuthRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
@@ -161,7 +134,7 @@ func TestAuthRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	require.NoError(t, sqlDB.Close())
-	_, err = m.Register(authTestContext(), "new-user", "password", "", "")
+	_, err = m.Register(authTestContext(), "new-user", "password")
 	require.Error(t, err)
 	require.NotEqual(t, "Username is exist!", err.Error())
 }

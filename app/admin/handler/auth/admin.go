@@ -13,9 +13,8 @@ import (
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
-	"go-build-admin/app/pkg/random"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/tree"
-	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -172,9 +171,13 @@ func isMovingUnderSelf(nodeID int32, parentID *int32) bool {
 	return nodeID > 0 && parentID != nil && *parentID == nodeID
 }
 
-func setAdminPassword(admin *adminmodel.Admin, plaintext string) {
-	admin.Salt = random.Build("alnum", 16)
-	admin.Password = utils.EncryptPassword(plaintext, admin.Salt)
+func setAdminPassword(admin *adminmodel.Admin, plaintext string) error {
+	hash, err := passwordutil.Hash(plaintext)
+	if err != nil {
+		return err
+	}
+	admin.Password = hash
+	return nil
 }
 
 func (h *AdminHandler) Add(ctx *gin.Context) {
@@ -219,7 +222,10 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 	var admin adminmodel.Admin
 	copier.Copy(&admin, params)
 
-	setAdminPassword(&admin, params.Password)
+	if err := setAdminPassword(&admin, params.Password); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 	admin.ParentID = parentID
 
 	if err := h.adminM.Add(ctx, admin, params.GroupArr); err != nil {
@@ -367,7 +373,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 
 	omit := []string{"login_failure", "last_login_time", "parent_id"}
 	if params.Password == "" {
-		omit = append(omit, "password", "salt")
+		omit = append(omit, "password")
 	}
 
 	checkGroups := []string{}
@@ -400,7 +406,10 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	// Hash only after copier.Copy: the DTO password is plaintext and must never
 	// survive into the model passed to the transactional writer.
 	if params.Password != "" {
-		setAdminPassword(&admin, params.Password)
+		if err := setAdminPassword(&admin, params.Password); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 	}
 	admin.ParentID = parentID
 

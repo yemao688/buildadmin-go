@@ -4,6 +4,7 @@ import (
 	"errors"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/permissioncache"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/conf"
@@ -167,7 +168,7 @@ func (s *AuthModel) Login(ctx *gin.Context, username string, password string, ke
 		return nil, cErr.BadRequest("Please try again after 1 day")
 	}
 
-	if admin.Password != utils.EncryptPassword(password, admin.Salt) {
+	if err := passwordutil.Compare(admin.Password, password); err != nil {
 		s.sqlDB.Model(&Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
 			"login_failure":   admin.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),

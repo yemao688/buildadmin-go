@@ -49,7 +49,7 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 	}}
 	authModel := member.NewService(db, tokenHelper, config)
 	username := "refresh_" + strconv.FormatInt(time.Now().UnixNano(), 10)
-	user := commonmodel.User{Username: username, Status: "enable", Birthday: time.Now()}
+	user := commonmodel.User{Username: username, Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
 	const refreshToken = "refresh-race-token"
 	require.NoError(t, tokenHelper.Set(refreshToken, "user-refresh", user.ID, 3600))

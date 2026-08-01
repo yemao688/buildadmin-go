@@ -7,7 +7,7 @@ import (
 	adminauth "go-build-admin/app/admin/model/auth"
 	siteconfig "go-build-admin/app/common/siteconfig"
 	"go-build-admin/app/pkg/installer"
-	"go-build-admin/app/pkg/random"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/app/pkg/version"
 	"go-build-admin/conf"
@@ -203,7 +203,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		fmt.Fprintf(r.out, "数据库迁移失败: %v\n", err)
 		return err
 	}
-	fmt.Fprintf(r.out, "执行 %d 个迁移（official=%d, local=%d, business=%d）", report.Official+report.Local+report.Business, report.Official, report.Local, report.Business)
+	fmt.Fprintf(r.out, "执行 %d 个迁移（official=%d, framework=%d, business=%d）", report.Official+report.Framework+report.Business, report.Official, report.Framework, report.Business)
 	if report.Seeded {
 		fmt.Fprint(r.out, "，已写入初始数据")
 	}
@@ -679,12 +679,14 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 }
 
 func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
-	salt := random.Build("alnum", 16)
+	hash, err := passwordutil.Hash(password)
+	if err != nil {
+		return err
+	}
 	result := db.Model(&adminauth.Admin{}).Where("username = ?", "admin").Updates(map[string]any{
 		"username": username,
 		"nickname": username,
-		"password": utils.EncryptPassword(password, salt),
-		"salt":     salt,
+		"password": hash,
 	})
 	if result.Error != nil {
 		return result.Error

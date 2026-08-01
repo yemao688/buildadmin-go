@@ -6,70 +6,29 @@ import (
 	"go-build-admin/app/common/model"
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/header"
-	"go-build-admin/app/pkg/permissioncache"
+	"go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/systemroot"
+	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"regexp"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"go-build-admin/app/pkg/token"
 	"go-build-admin/utils"
 )
-
-type AuthGroup struct {
-	UID     int32  `json:"uid"`      // 用户ID
-	GroupID int32  `json:"group_id"` // 分组ID
-	ID      int32  `json:"id"`       // ID
-	Name    string `json:"name"`     // 组名
-	Rules   string `json:"rules"`    // 权限规则ID
-}
-
-type Rule struct {
-	ID           int32  `json:"id"`             // ID
-	Pid          int32  `json:"pid"`            // 上级菜单
-	Type         string `json:"type"`           // 类型:menu_dir=菜单目录,menu=菜单项,button=页面按钮
-	Title        string `json:"title"`          // 标题
-	Name         string `json:"name"`           // 规则名称
-	Path         string `json:"path"`           // 路由路径
-	Icon         string `json:"icon"`           // 图标
-	MenuType     string `json:"menu_type"`      // 菜单类型:tab=选项卡,link=链接,iframe=Iframe
-	URL          string `json:"url"`            // Url
-	Component    string `json:"component"`      // 组件路径
-	NoLoginValid string `json:"no_login_valid"` // 未登录有效:0=否,1=是
-	Extend       string `json:"extend"`         // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
-	Children     []Rule `json:"children"`
-}
 
 type Service struct {
 	sqlDB       *gorm.DB
 	tokenHelper *token.TokenHelper
 	config      *conf.Configuration
-	cache       permissioncache.Cache[AuthGroup, Rule]
 }
 
 func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *Service {
-	return &Service{
-		sqlDB:       sqlDB,
-		tokenHelper: tokenHelper,
-		config:      config,
-	}
-}
-
-// InvalidateUser clears the cached permissions for one user.
-func (s *Service) InvalidateUser(uid int32) {
-	s.cache.InvalidateUser(uid)
-}
-
-// InvalidateAll clears all cached user permissions.
-func (s *Service) InvalidateAll() {
-	s.cache.InvalidateAll()
+	return &Service{sqlDB: sqlDB, tokenHelper: tokenHelper, config: config}
 }
 
 func (s *Service) IsLogin(ctx *gin.Context) (*token.Token, bool) {
@@ -87,21 +46,6 @@ func (s *Service) IsEnabledUser(id int32) bool {
 	var user model.User
 	err := s.sqlDB.Model(&model.User{}).Select("status").Where("id=?", id).First(&user).Error
 	return err == nil && user.Status == "enable"
-}
-
-func (s *Service) SetVerificationToken(t string, id int32) string {
-	tokenStr := random.Uuid()
-	s.tokenHelper.Set(tokenStr, t, id, 600) //30天
-	return tokenStr
-}
-
-func (s *Service) VerificationToken(token string, t string, user_id int32) bool {
-	result := s.tokenHelper.Check(token, t, user_id)
-	return result
-}
-
-func (s *Service) DelVerificationToken(token string) {
-	s.tokenHelper.Delete(token)
 }
 
 func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) (string, error) {
@@ -140,12 +84,6 @@ func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) 
 	return newToken, nil
 }
 
-func (s *Service) GetInfo(ctx *gin.Context, id int32) (model.User, error) {
-	user := model.User{}
-	err := s.sqlDB.Model(&model.User{}).Where("id=?", id).Scan(&user).Error
-	return user, err
-}
-
 func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
 	var user model.User
 	if err := s.sqlDB.Where("id=?", id).First(&user).Error; err != nil {
@@ -164,8 +102,7 @@ func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error
 	}).Error
 }
 
-func (s *Service) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
-	// 判断账户类型
+func (s *Service) Login(ctx *gin.Context, username string, plainPassword string, keep bool) (interface{}, error) {
 	accountType := ""
 	phoneRegex := regexp.MustCompile(`^1[3-9]\d{9}$`)
 	if phoneRegex.MatchString(username) {
@@ -175,7 +112,6 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 	} else if usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`); usernameRegex.MatchString(username) {
 		accountType = "username"
 	}
-
 	if accountType == "" {
 		return nil, cErr.BadRequest("Account not exist")
 	}
@@ -188,7 +124,6 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 	if result.RowsAffected == 0 {
 		return nil, cErr.BadRequest("Account not exist")
 	}
-
 	if !utils.AccountStatusEnabled(user.Status) {
 		return nil, cErr.BadRequest("Account disabled")
 	}
@@ -197,9 +132,7 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 	if retry > 0 && user.LastLoginTime > 0 {
 		now := time.Now().Unix()
 		if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
-			if err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]any{
-				"login_failure": 0,
-			}).Error; err != nil {
+			if err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]any{"login_failure": 0}).Error; err != nil {
 				return nil, err
 			}
 			result = s.sqlDB.Model(&model.User{}).Where(accountType+"=?", username).Scan(&user)
@@ -212,7 +145,7 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 		}
 	}
 
-	if user.Password != utils.EncryptPassword(password, user.Salt) {
+	if err := password.Compare(user.Password, plainPassword); err != nil {
 		s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
 			"login_failure":   user.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),
@@ -225,14 +158,13 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 		s.tokenHelper.Clear("user", user.ID)
 		s.tokenHelper.Clear("user-refresh", user.ID)
 	}
-
 	refreshToken := ""
 	if keep {
 		refreshToken = random.Uuid()
-		s.tokenHelper.Set(refreshToken, "user-refresh", user.ID, 2592000) //30天
+		s.tokenHelper.Set(refreshToken, "user-refresh", user.ID, 2592000)
 	}
-	token := random.Uuid()
-	if err := s.tokenHelper.Set(token, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {
+	tokenStr := random.Uuid()
+	if err := s.tokenHelper.Set(tokenStr, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {
 		return nil, err
 	}
 
@@ -248,17 +180,12 @@ func (s *Service) Login(ctx *gin.Context, username string, password string, keep
 	user.LastLoginIP = loginIP
 
 	userInfo := s.FilterData(user)
-	userInfo["token"] = token
+	userInfo["token"] = tokenStr
 	userInfo["refresh_token"] = refreshToken
 	return userInfo, err
 }
 
 func (s *Service) FilterData(user model.User) map[string]any {
-
-	birthday := ""
-	if user.Birthday.Unix() > 100 {
-		birthday = user.Birthday.Format("2006-01-02")
-	}
 	return map[string]any{
 		"id":              user.ID,
 		"username":        user.Username,
@@ -266,50 +193,26 @@ func (s *Service) FilterData(user model.User) map[string]any {
 		"email":           user.Email,
 		"mobile":          user.Mobile,
 		"avatar":          user.Avatar,
-		"gender":          user.Gender,
-		"birthday":        birthday,
 		"money":           fmt.Sprintf("%.2f", user.Money),
-		"score":           user.Score,
 		"join_time":       user.JoinTime,
-		"motto":           user.Motto,
 		"last_login_time": user.LastLoginTime,
 		"last_login_ip":   user.LastLoginIP,
 	}
 }
 
-func (s *Service) Register(ctx *gin.Context, username string, password string, mobile string, email string) (interface{}, error) {
-	if username != "" {
-		exists, err := s.accountExists("username", username)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, cErr.BadRequest("Username is exist!")
-		}
+func (s *Service) Register(ctx *gin.Context, username string, plainPassword string) (interface{}, error) {
+	exists, err := s.accountExists("username", username)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, cErr.BadRequest("Username is exist!")
 	}
 
-	if email != "" {
-		exists, err := s.accountExists("email", email)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, cErr.BadRequest("Email is exist!")
-		}
+	hash, err := password.Hash(plainPassword)
+	if err != nil {
+		return nil, err
 	}
-
-	if mobile != "" {
-		exists, err := s.accountExists("mobile", mobile)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return nil, cErr.BadRequest("Mobile is exist!")
-		}
-	}
-
-	salt := random.Build("alnum", 16)
-	password = utils.EncryptPassword(password, salt)
 	rootID, err := (systemroot.Resolver{
 		DB:         s.sqlDB,
 		AdminTable: s.config.Database.Prefix + "admin",
@@ -318,38 +221,29 @@ func (s *Service) Register(ctx *gin.Context, username string, password string, m
 		return nil, cErr.BadRequest("system root administrator is not configured")
 	}
 
-	nickname := utils.MaskPhone(username)
+	now := time.Now().Unix()
 	user := model.User{
 		AdminID:       rootID,
-		GroupID:       1,
 		Username:      username,
-		Nickname:      nickname,
-		Email:         email,
-		Mobile:        mobile,
+		Nickname:      utils.MaskPhone(username),
 		Avatar:        "",
-		Gender:        0,
-		LastLoginTime: time.Now().Unix(),
-		LastLoginIP:   ctx.ClientIP(),
-		LoginFailure:  0,
-		JoinIP:        ctx.ClientIP(),
-		JoinTime:      time.Now().Unix(),
-		Motto:         "",
-		Password:      password,
-		Salt:          salt,
+		Password:      hash,
 		Status:        "enable",
+		LastLoginTime: now,
+		LastLoginIP:   ctx.ClientIP(),
+		JoinIP:        ctx.ClientIP(),
+		JoinTime:      now,
 	}
-
 	if err := s.sqlDB.Create(&user).Error; err != nil {
 		return nil, err
 	}
 
-	token := random.Uuid()
-	if err := s.tokenHelper.Set(token, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {
+	tokenStr := random.Uuid()
+	if err := s.tokenHelper.Set(tokenStr, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {
 		return nil, err
 	}
-
 	userInfo := s.FilterData(user)
-	userInfo["token"] = token
+	userInfo["token"] = tokenStr
 	userInfo["refresh_token"] = ""
 	return userInfo, nil
 }
@@ -370,176 +264,5 @@ func (s *Service) Logout(ctx *gin.Context, refreshToken string) error {
 		}
 	}
 	userAuth := header.GetUserAuth(ctx)
-	if err := s.tokenHelper.Delete(userAuth.Token); err != nil {
-		return err
-	}
-	return nil
-}
-
-// 获取菜单规则列表
-func (s *Service) GetMenus(ctx *gin.Context, uid int32) (rules []Rule, err error) {
-	ruleList, ok := s.cachedRules(uid)
-	if !ok {
-		if _, err = s.GetRuleList(ctx, uid); err != nil {
-			return
-		}
-		ruleList, _ = s.cachedRules(uid)
-	}
-	if len(ruleList) == 0 {
-		rules = []Rule{}
-		return
-	}
-	children := map[int32][]Rule{}
-	for _, v := range ruleList {
-		children[v.Pid] = append(children[v.Pid], v)
-	}
-
-	if len(children) == 0 {
-		return
-	}
-	rules = s.getChildren(children, children[0])
-	return
-}
-
-// 获取传递的菜单规则的子规则
-func (s *Service) getChildren(children map[int32][]Rule, rules []Rule) []Rule {
-	for key, v := range rules {
-		if _, ok := children[v.ID]; ok {
-			rules[key].Children = s.getChildren(children, children[v.ID])
-		}
-	}
-	return rules
-}
-
-/**
- *检查是否有某权限
- *name  菜单规则的 name，可以传递两个，以','号隔开
- *uid   用户ID
- *relation 如果出现两个 name,是两个都通过(and)还是一个通过即可(or)
- */
-func (s *Service) Check(name string, id int32, relation string) bool {
-	ruleNameList := s.cache.RuleNames(id)
-	if slices.Contains(ruleNameList, "*") {
-		return true
-	}
-	result := false
-	checkNameArr := strings.Split(strings.ToLower(name), ",")
-	for _, v := range checkNameArr {
-		if slices.Contains(ruleNameList, v) {
-			result = true
-		}
-
-		if relation == "or" && result {
-			break
-		}
-
-		if relation == "and" && !result {
-			break
-		}
-	}
-	return result
-}
-
-// 获得权限规则列表
-func (s *Service) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
-	return s.cache.ReloadRules(uid, func() ([]Rule, []string, error) {
-		ids, err := s.GetRuleIds(uid)
-		if err != nil {
-			return nil, nil, err
-		}
-		if len(ids) == 0 {
-			return []Rule{}, []string{}, nil
-		}
-
-		tx := s.sqlDB.Table(s.config.Database.Prefix+"user_rule").Where("status=?", "1")
-		if !slices.Contains(ids, "*") {
-			tx = tx.Where("id in ?", ids)
-		}
-		var ruleRows []userRuleAuthRow
-		tx.Order("weigh desc,id asc").Scan(&ruleRows)
-		ruleList := make([]Rule, len(ruleRows))
-		for i, row := range ruleRows {
-			ruleList[i] = Rule{
-				ID:           row.ID,
-				Pid:          row.Pid,
-				Type:         row.Type,
-				Title:        row.Title,
-				Name:         row.Name,
-				Path:         row.Path,
-				Icon:         row.Icon,
-				MenuType:     row.MenuType,
-				URL:          row.URL,
-				Component:    row.Component,
-				NoLoginValid: row.NoLoginValid,
-				Extend:       row.Extend,
-			}
-		}
-
-		ruleNameList := []string{}
-		if slices.Contains(ids, "*") {
-			ruleNameList = append(ruleNameList, "*")
-		}
-
-		seen := make(map[string]bool)
-		for _, v := range ruleList {
-			if _, ok := seen[v.Name]; !ok {
-				seen[v.Name] = true
-				ruleNameList = append(ruleNameList, v.Name)
-			}
-		}
-		return ruleList, ruleNameList, nil
-	})
-}
-
-// 获取权限规则ids
-func (s *Service) GetRuleIds(uid int32) ([]string, error) {
-	groups, err := s.GetGroups(uid)
-	if err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]bool)
-	var result []string
-	for _, v := range groups {
-		strList := strings.Split(v.Rules, ",")
-		for _, strItem := range strList {
-			if _, ok := seen[strItem]; !ok {
-				seen[strItem] = true
-				result = append(result, strItem)
-			}
-		}
-	}
-	return result, nil
-}
-
-// 获取用户所有分组和对应权限规则
-func (s *Service) GetGroups(uid int32) ([]AuthGroup, error) {
-	return s.cache.GetOrLoadGroups(uid, func() ([]AuthGroup, error) {
-		prefix := s.config.Database.Prefix
-		var authGroups []AuthGroup
-		err := s.sqlDB.Table(prefix+"user").
-			Joins("left join "+prefix+"user_group on "+prefix+"user_group.id="+prefix+"user.group_id").
-			Where(prefix+"user.id=? and "+prefix+"user_group.status='1'", uid).
-			Scan(&authGroups).Error
-		return authGroups, err
-	})
-}
-
-type userRuleAuthRow struct {
-	ID           int32  `gorm:"column:id"`
-	Pid          int32  `gorm:"column:pid"`
-	Type         string `gorm:"column:type"`
-	Title        string `gorm:"column:title"`
-	Name         string `gorm:"column:name"`
-	Path         string `gorm:"column:path"`
-	Icon         string `gorm:"column:icon"`
-	MenuType     string `gorm:"column:menu_type"`
-	URL          string `gorm:"column:url"`
-	Component    string `gorm:"column:component"`
-	NoLoginValid string `gorm:"column:no_login_valid"`
-	Extend       string `gorm:"column:extend"`
-}
-
-func (s *Service) cachedRules(uid int32) ([]Rule, bool) {
-	return s.cache.Rules(uid)
+	return s.tokenHelper.Delete(userAuth.Token)
 }

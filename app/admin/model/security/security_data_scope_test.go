@@ -44,7 +44,7 @@ func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	for _, stmt := range []string{
 		"CREATE TABLE " + q("admin") + " (id INT PRIMARY KEY, parent_id INT NULL)",
 		"CREATE TABLE " + q("admin_closure") + " (ancestor_id INT NOT NULL, descendant_id INT NOT NULL, depth INT NOT NULL, PRIMARY KEY (ancestor_id,descendant_id))",
-		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT NOT NULL, username VARCHAR(64) NOT NULL, birthday VARCHAR(32) NOT NULL DEFAULT '')",
+		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT NOT NULL, username VARCHAR(64) NOT NULL)",
 		"CREATE TABLE " + q("security_data_recycle_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, target_admin_id INT NOT NULL, recycle_id INT NOT NULL, data LONGTEXT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, is_restore INT NOT NULL DEFAULT 0, is_committed INT NOT NULL DEFAULT 0, legacy_unrecoverable INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, create_time BIGINT NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("security_sensitive_data_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, target_admin_id INT NOT NULL, sensitive_id INT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, data_field VARCHAR(64) NOT NULL, data_comment VARCHAR(255) NOT NULL, id_value INT NOT NULL, `before` TEXT NOT NULL, `after` TEXT NOT NULL, is_rollback INT NOT NULL DEFAULT 0, is_committed INT NOT NULL DEFAULT 0, legacy_unrecoverable INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, create_time BIGINT NOT NULL DEFAULT 0)",
 	} {
@@ -54,7 +54,7 @@ func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	require.NoError(t, db.Table(prefix+"security_sensitive_data").AutoMigrate(&SecuritySensitiveData{}))
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin")+" VALUES (1,NULL),(2,1)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin_closure")+" VALUES (1,1,0),(1,2,1),(2,2,0)").Error)
-	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (20,2,'after',''),(21,2,'after-2','')").Error)
+	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (20,2,'after'),(21,2,'after-2')").Error)
 	require.NoError(t, db.Table(prefix+"security_data_recycle").Create(&SecurityDataRecycle{ID: 1, AdminID: 2, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", OwnerColumn: "admin_id", PrimaryKey: "id", Status: "1"}).Error)
 	require.NoError(t, db.Table(prefix+"security_sensitive_data").Create(&SecuritySensitiveData{ID: 1, AdminID: 2, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", OwnerColumn: "admin_id", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1"}).Error)
 	return f
@@ -75,14 +75,14 @@ func TestSecurityDataScopeRestoreRollbackFailClosedAndAtomic(t *testing.T) {
 		stmt := "INSERT INTO " + q("security_data_recycle_log") + " (id,admin_id,target_admin_id,recycle_id,data,data_table,primary_key,is_committed,legacy_unrecoverable,ip,useragent) VALUES (?,?,?,?,?,'user','id',?,?,?,'test')"
 		require.NoError(t, f.db.Exec(stmt, id, 2, owner, 1, data, committed, legacy, "127.0.0.1").Error)
 	}
-	insertRecycle(1, 0, 0, 2, `{"id":22,"admin_id":2,"username":"restored","birthday":""}`)
+	insertRecycle(1, 0, 0, 2, `{"id":22,"admin_id":2,"username":"restored"}`)
 	require.Error(t, recycle.Restore(f.context(), []int32{1}))
-	insertRecycle(2, 1, 1, 2, `{"id":23,"admin_id":2,"username":"legacy","birthday":""}`)
+	insertRecycle(2, 1, 1, 2, `{"id":23,"admin_id":2,"username":"legacy"}`)
 	require.Error(t, recycle.Restore(f.context(), []int32{2}))
-	insertRecycle(3, 1, 0, 0, `{"id":24,"admin_id":2,"username":"no-owner","birthday":""}`)
+	insertRecycle(3, 1, 0, 0, `{"id":24,"admin_id":2,"username":"no-owner"}`)
 	require.Error(t, recycle.Restore(f.context(), []int32{3}))
-	insertRecycle(4, 1, 0, 2, `{"id":25,"admin_id":2,"username":"ok","birthday":""}`)
-	insertRecycle(5, 1, 0, 2, `{"id":26,"admin_id":2,"username":"ok2","birthday":""}`)
+	insertRecycle(4, 1, 0, 2, `{"id":25,"admin_id":2,"username":"ok"}`)
+	insertRecycle(5, 1, 0, 2, `{"id":26,"admin_id":2,"username":"ok2"}`)
 	require.NoError(t, recycle.Restore(f.context(), []int32{4}))
 	var restored int64
 	f.db.Table(q("user")).Where("id=25").Count(&restored)

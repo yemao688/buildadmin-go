@@ -20,6 +20,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.2
 	go.uber.org/zap v1.27.0
+	golang.org/x/crypto v0.54.0
 	golang.org/x/image v0.19.0
 	golang.org/x/term v0.45.0
 	golang.org/x/text v0.40.0
@@ -96,7 +97,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.25.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.7.0 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0

@@ -363,7 +363,6 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 		"config",
 		"admin_log",
 		"user_money_log",
-		"user_score_log",
 	}
 
 	outTables := map[string]string{}

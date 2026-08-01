@@ -22,18 +22,12 @@ func newAPIRouteSet(root gin.IRoutes, authenticated gin.IRoutes) gin.IRoutes {
 		root:          root,
 		authenticated: authenticated,
 		public: map[string]struct{}{
-			http.MethodPost + " account/retrievePassword": {},
-			http.MethodPost + " ajax/area":                {},
-			http.MethodPost + " ajax/buildSuffixSvg":      {},
-			http.MethodPost + " Ems/send":                 {},
-			http.MethodGet + " index/index":               {},
-			http.MethodGet + " user/checkIn":              {},
-			http.MethodPost + " user/checkIn":             {},
+			http.MethodPost + " user/login":               {},
+			http.MethodPost + " user/register":            {},
 			http.MethodGet + " common/captcha":            {},
 			http.MethodGet + " common/clickCaptcha":       {},
 			http.MethodPost + " common/checkClickCaptcha": {},
 			http.MethodPost + " common/refreshToken":      {},
-			http.MethodPost + " demo/index":               {},
 		},
 	}
 }

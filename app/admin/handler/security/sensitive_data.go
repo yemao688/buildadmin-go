@@ -208,7 +208,6 @@ func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
 		"admin/Index",
 		"admin/routine.AdminInfo",
 		"admin/user.MoneyLog",
-		"admin/user.ScoreLog",
 		"routine/Config",
 		"auth/AdminLog",
 	}
@@ -241,7 +240,6 @@ func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string 
 		"config",
 		"admin_log",
 		"user_money_log",
-		"user_score_log",
 	}
 
 	outTables := map[string]string{}

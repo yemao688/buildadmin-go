@@ -16,20 +16,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPublicRetrievePasswordRouteUsesFrontendPath(t *testing.T) {
+func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	apiRoutes := newAPIRouteSet(router, router.Group("/api/"))
-	api.NewAccountRegistrar(&api.AccountHandler{}).Register(apiRoutes)
+	api.NewUserRegistrar(&api.UserHandler{}).Register(apiRoutes)
 
-	found := false
-	for _, route := range router.Routes() {
-		if route.Method == http.MethodPost && route.Path == "/api/account/retrievePassword" {
-			found = true
-		}
-		require.NotEqual(t, "/api/account/RetrievePassword", route.Path)
+	want := map[string]bool{
+		"/api/user/login":    false,
+		"/api/user/register": false,
+		"/api/user/logout":   false,
 	}
-	require.True(t, found, "public retrieve-password route is not registered")
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost {
+			if _, ok := want[route.Path]; ok {
+				want[route.Path] = true
+			}
+		}
+	}
+	for path, found := range want {
+		require.True(t, found, "public user route %s is not registered", path)
+	}
 }
 
 func TestAdminLogDeleteRoute(t *testing.T) {

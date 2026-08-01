@@ -6,8 +6,7 @@ import (
 	adminmodel "go-build-admin/app/admin/model/user"
 	"go-build-admin/app/admin/validate"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/random"
-	"go-build-admin/utils"
+	passwordutil "go-build-admin/app/pkg/password"
 	"io"
 	"math"
 	"strconv"
@@ -22,15 +21,10 @@ type UserHandler struct {
 	Base
 	log   *zap.Logger
 	userM *adminmodel.UserModel
-	authM MemberPermissionInvalidator
 }
 
 func NewUserHandler(log *zap.Logger, userM *adminmodel.UserModel) *UserHandler {
-	return newUserHandler(log, userM, nil)
-}
-
-func NewUserHandlerWithAuth(log *zap.Logger, userM *adminmodel.UserModel, authM MemberPermissionInvalidator) *UserHandler {
-	return newUserHandler(log, userM, authM)
+	return &UserHandler{Base: NewBase(userM), log: log, userM: userM}
 }
 
 func validateAccountStatusValue(value any) error {
@@ -39,15 +33,6 @@ func validateAccountStatusValue(value any) error {
 		return cErr.BadRequest("status must be enable or disable")
 	}
 	return nil
-}
-
-func newUserHandler(log *zap.Logger, userM *adminmodel.UserModel, authM MemberPermissionInvalidator) *UserHandler {
-	return &UserHandler{
-		Base:  NewBase(userM),
-		log:   log,
-		userM: userM,
-		authM: authM,
-	}
 }
 
 func (h *UserHandler) Index(ctx *gin.Context) {
@@ -70,17 +55,13 @@ func (h *UserHandler) Index(ctx *gin.Context) {
 
 type User struct {
 	AdminID  int32  `json:"admin_id"`
-	GroupID  int32  `json:"group_id"`
 	Username string `json:"username" binding:"required"`
 	Nickname string `json:"nickname" binding:"required"`
 	Email    string `json:"email"`
 	Mobile   string `json:"mobile"`
 	Avatar   string `json:"avatar"`
-	Gender   int32  `json:"gender"`
-	Birthday string `json:"birthday" binding:"omitempty,datetime=2006-01-02"`
 	JoinIP   string `json:"join_ip"`
 	JoinTime int64  `json:"join_time"`
-	Motto    string `json:"motto"`
 	Password string `json:"password"`
 	Status   string `json:"status" binding:"oneof=enable disable"`
 }
@@ -125,17 +106,15 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	}
 
 	var user adminmodel.User
-	if params.Birthday == "" {
-		params.Birthday = "0000-00-00"
-	}
 	copier.Copy(&user, params)
 	if hasAdminID {
 		user.AdminID = adminID
 	}
-	birthday, _ := utils.ParseTimeShort(params.Birthday)
-	user.Birthday = birthday
-	user.Salt = random.Build("alnum", 16)
-	user.Password = utils.EncryptPassword(params.Password, user.Salt)
+	user.Password, err = passwordutil.Hash(params.Password)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
 	err = h.userM.Add(ctx, &user)
 	if err != nil {
@@ -143,11 +122,6 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
-	invalidateAfterMutation(ctx, func() {
-		if h.authM != nil {
-			h.authM.InvalidateUser(user.ID)
-		}
-	})
 }
 
 func (h *UserHandler) One(ctx *gin.Context) {
@@ -240,20 +214,12 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 	} else {
 		user.AdminID = currentAdminID
 	}
-	birthday, _ := utils.ParseTimeShort(params.Birthday)
-	user.Birthday = birthday
-
 	err = h.userM.Edit(ctx, &user, params.Password)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
-	invalidateAfterMutation(ctx, func() {
-		if h.authM != nil {
-			h.authM.InvalidateUser(user.ID)
-		}
-	})
 }
 
 func requestedAdminID(body []byte) (int32, bool, error) {
@@ -288,13 +254,6 @@ func (h *UserHandler) Del(ctx *gin.Context) {
 		return
 	}
 	Success(ctx, "")
-	invalidateAfterMutation(ctx, func() {
-		if h.authM != nil {
-			for _, id := range params.Ids {
-				h.authM.InvalidateUser(id)
-			}
-		}
-	})
 }
 
 func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {

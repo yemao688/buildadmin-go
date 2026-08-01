@@ -18,8 +18,8 @@ func NewUserRegistrar(handler *UserHandler) *UserRegistrar {
 func (r *UserRegistrar) Group() string { return "api" }
 
 func (r *UserRegistrar) Register(g gin.IRoutes) {
-	g.GET("user/checkIn", r.handler.CheckIn)
-	g.POST("user/checkIn", r.handler.CheckIn)
+	g.POST("user/login", r.handler.Login)
+	g.POST("user/register", r.handler.Register)
 	g.POST("user/logout", r.handler.Logout)
 }
 

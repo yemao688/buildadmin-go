@@ -6,10 +6,9 @@ import (
 	"go-build-admin/app/admin/model/simple"
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/random"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -21,35 +20,27 @@ import (
 type User struct {
 	ID            int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                         // ID
 	AdminID       int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                               // 管理员ID
-	GroupID       int32        `gorm:"column:group_id;not null;comment:分组ID" json:"group_id"`                                                // 分组ID
 	Username      string       `gorm:"column:username;not null;comment:用户名" json:"username"`                                                 // 用户名
 	Nickname      string       `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                  // 昵称
+	Avatar        string       `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
 	Email         string       `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                        // 邮箱
 	Mobile        string       `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                      // 手机
-	Avatar        string       `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
-	Gender        int32        `gorm:"column:gender;not null;comment:性别:0=未知,1=男,2=女" json:"gender"`                                         // 性别:0=未知,1=男,2=女
-	Birthday      time.Time    `gorm:"column:birthday;comment:生日" json:"birthday"`                                                           // 生日
+	Password      string       `gorm:"column:password;not null;comment:密码" json:"password"`                                                  // 密码
+	Status        string       `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"` // 状态:enable=启用,disable=禁用
 	Money         float64      `gorm:"column:money;not null;comment:余额" json:"money"`                                                        // 余额
-	Score         int32        `gorm:"column:score;not null;comment:积分" json:"score"`                                                        // 积分
 	LastLoginTime int64        `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                         // 上次登录时间
 	LastLoginIP   string       `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                    // 上次登录IP
 	LoginFailure  int32        `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                    // 登录失败次数
 	JoinIP        string       `gorm:"column:join_ip;not null;comment:加入IP" json:"join_ip"`                                                  // 加入IP
 	JoinTime      int64        `gorm:"column:join_time;comment:加入时间" json:"join_time"`                                                       // 加入时间
-	Motto         string       `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                        // 签名
-	Password      string       `gorm:"column:password;not null;comment:密码" json:"password"`                                                  // 密码
-	Salt          string       `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                         // 密码盐
-	Status        string       `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"` // 状态:enable=启用,disable=禁用
 	UpdateTime    int64        `gorm:"autoCreateTime;column:update_time;comment:更新时间" json:"update_time"`                                    // 更新时间
 	CreateTime    int64        `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                    // 创建时间
 	Admin         simple.Admin `gorm:"foreignKey:AdminID" json:"admin"`
-	Group         Group        `gorm:"foreignKey:GroupID" json:"group"`
 }
 
 type OutUser struct {
 	User
-	Birthday string `json:"birthday"`
-	Money    string `json:"money"`
+	Money string `json:"money"`
 }
 
 type UserModel struct {
@@ -73,10 +64,6 @@ func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
 	}
 	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 	outUser.Money = fmt.Sprintf("%.2f", data.Money)
-	outUser.Birthday = ""
-	if data.Birthday.Unix() > 100 {
-		outUser.Birthday = data.Birthday.Format("2006-01-02")
-	}
 	return &outUser, nil
 }
 
@@ -95,7 +82,7 @@ func (s *UserModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 
 func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
 	data := User{}
-	err := s.DBFor(ctx).Model(&User{}).Scopes(s.scoped(ctx)).Preload("Admin").Omit("password", "salt").Where("`"+s.TableName+"`.id = ?", id).First(&data).Error
+	err := s.DBFor(ctx).Model(&User{}).Scopes(s.scoped(ctx)).Preload("Admin").Omit("password").Where("`"+s.TableName+"`.id = ?", id).First(&data).Error
 	return data, err
 }
 
@@ -107,14 +94,14 @@ func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	var total int64 = 0
 	list := []*User{}
 
-	db := s.DBFor(ctx).Model(&User{}).Joins("Group").Where(whereS, whereP...)
-	db = db.Preload("Admin").Preload("Group")
+	db := s.DBFor(ctx).Model(&User{}).Where(whereS, whereP...)
+	db = db.Preload("Admin")
 	db = db.Scopes(s.scoped(ctx))
 	if err = db.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := db.Omit("password", "salt").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+	if err := db.Omit("password").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -182,23 +169,21 @@ func (s *UserModel) UsernameExists(ctx *gin.Context, username string) (bool, err
 
 func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
 	updates := map[string]interface{}{
-		"group_id":  user.GroupID,
 		"username":  user.Username,
 		"nickname":  user.Nickname,
 		"email":     user.Email,
 		"mobile":    user.Mobile,
 		"avatar":    user.Avatar,
-		"gender":    user.Gender,
-		"birthday":  user.Birthday,
 		"join_ip":   user.JoinIP,
 		"join_time": user.JoinTime,
-		"motto":     user.Motto,
 		"status":    user.Status,
 	}
 	if password != "" {
-		salt := random.Build("alnum", 16)
-		updates["salt"] = salt
-		updates["password"] = utils.EncryptPassword(password, salt)
+		hash, err := passwordutil.Hash(password)
+		if err != nil {
+			return err
+		}
+		updates["password"] = hash
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		if ctx == nil || ctx.Request == nil {
@@ -261,7 +246,7 @@ func (s *UserModel) validateUserOwner(ctx *gin.Context, tx *gorm.DB, ownerID int
 }
 
 func (s *UserModel) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
-	for _, table := range []string{s.config.Database.Prefix + "user_money_log", s.config.Database.Prefix + "user_score_log"} {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
 		var logs []struct{ AdminID *int32 }
 		if err := tx.Table(table).Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
 			return err
@@ -276,7 +261,7 @@ func (s *UserModel) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) er
 }
 
 func (s *UserModel) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
-	for _, table := range []string{s.config.Database.Prefix + "user_money_log", s.config.Database.Prefix + "user_score_log"} {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
 		if err := tx.Table(table).Where("user_id = ?", userID).Update("admin_id", ownerID).Error; err != nil {
 			return err
 		}
@@ -285,13 +270,14 @@ func (s *UserModel) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error 
 }
 
 func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
-	salt := random.Build("alnum", 16)
-	password = utils.EncryptPassword(password, salt)
+	hash, err := passwordutil.Hash(password)
+	if err != nil {
+		return err
+	}
 	var result *gorm.DB
-	err := s.Transaction(ctx, func(tx *gorm.DB) error {
+	err = s.Transaction(ctx, func(tx *gorm.DB) error {
 		result = tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Updates(map[string]interface{}{
-			"salt":     salt,
-			"password": password,
+			"password": hash,
 		})
 		return result.Error
 	})
@@ -340,27 +326,21 @@ func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []User
 		scoped := tx.Model(&User{}).Scopes(s.scoped(ctx))
-		// User deletion and balance/score changes use the same user-row lock
-		// protocol.  Lock every requested row before consulting the log tables.
+		// User deletion and balance changes use the same user-row lock protocol.
 		if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id IN ?", normalized).Find(&list).Error; err != nil {
 			return err
 		}
 		if len(list) != len(normalized) {
 			return gorm.ErrRecordNotFound
 		}
-		// Reject deletion if any user still has money/score logs to prevent new orphans.
+		// Reject deletion if any user still has money logs to prevent new orphans.
 		moneyTable := s.config.Database.Prefix + "user_money_log"
-		scoreTable := s.config.Database.Prefix + "user_score_log"
 		var moneyLogs []struct{ ID int32 }
 		if err := tx.Table(moneyTable).Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("user_id IN ?", normalized).Find(&moneyLogs).Error; err != nil {
 			return err
 		}
-		var scoreLogs []struct{ ID int32 }
-		if err := tx.Table(scoreTable).Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("user_id IN ?", normalized).Find(&scoreLogs).Error; err != nil {
-			return err
-		}
-		if len(moneyLogs)+len(scoreLogs) > 0 {
-			return cErr.BadRequest("user has money or score logs, cannot delete")
+		if len(moneyLogs) > 0 {
+			return cErr.BadRequest("user has money logs, cannot delete")
 		}
 		del := scoped.Where("`"+s.TableName+"`.id IN ?", normalized).Delete(nil)
 		if del.Error != nil {

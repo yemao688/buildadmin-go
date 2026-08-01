@@ -23,7 +23,6 @@ import (
 	adminHandler "go-build-admin/app/admin/handler"
 	adminModel "go-build-admin/app/admin/model"
 	apiHandler "go-build-admin/app/api/handler"
-	apiUserModel "go-build-admin/app/api/model/user"
 	"go-build-admin/app/cmd"
 	commandHandler "go-build-admin/app/cmd/handler"
 	"go-build-admin/app/common/area"
@@ -58,7 +57,6 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		upload.ProviderSet,
 		siteconfig.ProviderSet,
 		member.ProviderSet,
-		apiUserModel.ProviderSet,
 		adminHandler.ProviderSet,
 		countryHandler.ProviderSet,
 		authHandler.ProviderSet,

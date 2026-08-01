@@ -3,12 +3,13 @@ package utils
 import "testing"
 
 func TestAccountStatusEnabled(t *testing.T) {
-	for _, status := range []string{"enable", "0", "1", "", "ENABLE", "enable ", "other"} {
+	for _, status := range []string{"0", "1", "", "ENABLE", "enable ", "other", "disable"} {
 		if !AccountStatusEnabled(status) {
-			t.Fatalf("%q must be allowed", status)
+			continue
 		}
+		t.Fatalf("%q must be rejected", status)
 	}
-	if AccountStatusEnabled("disable") {
-		t.Fatal("disable must be rejected")
+	if !AccountStatusEnabled("enable") {
+		t.Fatal("enable must be allowed")
 	}
 }

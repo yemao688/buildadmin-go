@@ -7,8 +7,8 @@ import (
 
 	adminmodel "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/pkg/data_scope"
+	"go-build-admin/app/pkg/password"
 	"go-build-admin/conf"
-	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -174,12 +174,14 @@ func TestBuildFlatAdminOptions(t *testing.T) {
 
 func TestSetAdminPasswordHashesAfterCopy(t *testing.T) {
 	admin := adminmodel.Admin{Password: "plaintext"}
-	setAdminPassword(&admin, "correct horse battery staple")
+	if err := setAdminPassword(&admin, "correct horse battery staple"); err != nil {
+		t.Fatal(err)
+	}
 	if admin.Password == "correct horse battery staple" || admin.Password == "" {
 		t.Fatalf("password was not hashed: %q", admin.Password)
 	}
-	if admin.Salt == "" || admin.Password != utils.EncryptPassword("correct horse battery staple", admin.Salt) {
-		t.Fatal("password hash cannot be verified with the generated salt")
+	if err := password.Compare(admin.Password, "correct horse battery staple"); err != nil {
+		t.Fatalf("password hash cannot be verified: %v", err)
 	}
 }
 

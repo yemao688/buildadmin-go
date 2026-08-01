@@ -6,7 +6,7 @@ import (
 
 	"go-build-admin/app/pkg/data_scope"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/random"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 
@@ -26,7 +26,6 @@ type Admin struct {
 	LastLoginTime int64         `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                             // 上次登录时间
 	LastLoginIP   string        `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                        // 上次登录IP
 	Password      string        `gorm:"column:password;not null;comment:密码" json:"password"`                                                      // 密码
-	Salt          string        `gorm:"column:salt;not null;comment:密码盐" json:"salt"`                                                             // 密码盐
 	Motto         string        `gorm:"column:motto;not null;comment:签名" json:"motto"`                                                            // 签名
 	Status        string        `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"`     // 状态:enable=启用,disable=禁用
 	UpdateTime    int64         `gorm:"autoUpdateTime;column:update_time;comment:更新时间" json:"update_time"`                                        // 更新时间
@@ -104,7 +103,7 @@ func (s *AdminModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 
 func (s *AdminModel) GetOne(ctx *gin.Context, id int32) (Admin, error) {
 	data := Admin{}
-	if err := s.DBFor(ctx).Scopes(s.scoped(ctx)).Omit("password", "salt", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
+	if err := s.DBFor(ctx).Scopes(s.scoped(ctx)).Omit("password", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
 		return data, err
 	}
 	if err := s.DealData(ctx, &data); err != nil {
@@ -137,7 +136,7 @@ func (s *AdminModel) List(ctx *gin.Context) (list []*Admin, total int64, err err
 	if err = db.Count(&total).Error; err != nil {
 		return
 	}
-	err = db.Omit("password", "salt", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	err = db.Omit("password", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	if err != nil {
 		return
 	}
@@ -322,11 +321,12 @@ func (s *AdminModel) SelfEdit(ctx *gin.Context, admin Admin, selectField []strin
 }
 
 func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
-	salt := random.Build("alnum", 16)
-	password = utils.EncryptPassword(password, salt)
+	hash, err := passwordutil.Hash(password)
+	if err != nil {
+		return err
+	}
 	result := s.DBFor(ctx).Model(&Admin{}).Where("id=?", id).Updates(map[string]interface{}{
-		"salt":     salt,
-		"password": password,
+		"password": hash,
 	})
 	if result.Error != nil {
 		return result.Error

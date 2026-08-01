@@ -27,7 +27,6 @@ type scopeFixture struct {
 	cfg    *conf.Configuration
 	root   *UserModel
 	money  *MoneyLogModel
-	score  *ScoreLogModel
 	admins map[int32]Admin
 	users  map[int32]User
 }
@@ -39,9 +38,8 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	cfg.Database.Prefix = prefix
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	f := &scopeFixture{db: db, cfg: cfg, admins: map[int32]Admin{}, users: map[int32]User{}}
-	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &Group{}, &User{}))
+	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &User{}))
 	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, money DECIMAL(12,2) NOT NULL, `before` DECIMAL(12,2) NOT NULL, `after` DECIMAL(12,2) NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
-	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_score_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, score INT NOT NULL, `before` INT NOT NULL, `after` INT NOT NULL, memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
 	require.NoError(t, db.Exec("CREATE TABLE `"+closure+"` (`ancestor_id` INT NOT NULL, `descendant_id` INT NOT NULL, `depth` INT NOT NULL, PRIMARY KEY (`ancestor_id`,`descendant_id`), KEY (`descendant_id`,`ancestor_id`)) ENGINE=InnoDB").Error)
@@ -49,10 +47,8 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	require.NoError(t, db.Exec("CREATE TABLE `"+lockTable+"` (`id` tinyint(3) unsigned NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB").Error)
 	require.NoError(t, db.Exec("INSERT IGNORE INTO `"+lockTable+"` (`id`) VALUES (1)").Error)
 	t.Cleanup(func() {
-		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user_score_log`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user_money_log`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user`")
-		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user_group`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin_hierarchy_lock`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin_closure`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin`")
@@ -67,7 +63,6 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	}
 	f.root = NewUserModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
 	f.money = NewMoneyLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
-	f.score = NewScoreLogModel(db, cfg, data_scope.NewClosureEnforcer(cfg))
 	return f
 }
 
@@ -81,8 +76,7 @@ func scopeCtx(t *testing.T, id int32, unrestricted bool) *gin.Context {
 }
 
 func (f *scopeFixture) addUser(t *testing.T, ctx *gin.Context, adminID int32, name string) User {
-	u := User{AdminID: adminID, Username: name, Nickname: name, Password: "p", Salt: "s", Status: "enable"}
-	u.Birthday = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	u := User{AdminID: adminID, Username: name, Nickname: name, Password: "p", Status: "enable"}
 	require.NoError(t, f.db.Create(&u).Error)
 	f.users[u.ID] = u
 	return u
@@ -118,8 +112,7 @@ func TestUserClosureScopeCRUDAndSelect(t *testing.T) {
 		require.Error(t, f.root.Edit(c, &u, ""))
 		require.Error(t, f.root.UpdateStatus(c, u40.ID, "disable"))
 	}
-	newUser := User{AdminID: 30, Username: "forged", Nickname: "forged", Password: "p", Salt: "s", Status: "enable"}
-	newUser.Birthday = time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
+	newUser := User{AdminID: 30, Username: "forged", Nickname: "forged", Password: "p", Status: "enable"}
 	require.NoError(t, f.root.Add(child, &newUser))
 	require.Equal(t, int32(30), newUser.AdminID)
 	require.Error(t, f.root.Del(leaf, []int32{u20.ID}))
@@ -136,29 +129,24 @@ func TestUserClosureScopeCRUDAndSelect(t *testing.T) {
 func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
-	birthday := time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	defaultOwner := User{Username: "default-owner", Nickname: "default-owner", Password: "p", Salt: "s", Status: "enable", Birthday: birthday}
+	defaultOwner := User{Username: "default-owner", Nickname: "default-owner", Password: "p", Status: "enable"}
 	require.NoError(t, f.root.Add(ctx, &defaultOwner))
 	require.Equal(t, int32(20), defaultOwner.AdminID)
 
-	specified := User{AdminID: 30, Username: "specified-owner", Nickname: "specified-owner", Password: "p", Salt: "s", Status: "enable", Birthday: birthday}
+	specified := User{AdminID: 30, Username: "specified-owner", Nickname: "specified-owner", Password: "p", Status: "enable"}
 	require.NoError(t, f.root.Add(ctx, &specified))
 	require.Equal(t, int32(30), specified.AdminID)
 
-	blocked := User{AdminID: 40, Username: "blocked-owner", Nickname: "blocked-owner", Password: "p", Salt: "s", Status: "enable", Birthday: birthday}
+	blocked := User{AdminID: 40, Username: "blocked-owner", Nickname: "blocked-owner", Password: "p", Status: "enable"}
 	require.Error(t, f.root.Add(ctx, &blocked))
 
 	transfer := f.addUser(t, ctx, 20, "transfer")
 	require.NoError(t, f.db.Create(&MoneyLog{UserID: transfer.ID, AdminID: 20, Money: 1.00}).Error)
-	require.NoError(t, f.db.Create(&ScoreLog{UserID: transfer.ID, AdminID: 20, Score: 1}).Error)
 	transfer.AdminID = 30
 	require.NoError(t, f.root.Edit(ctx, &transfer, ""))
-	var moneyOwner, scoreOwner int32
+	var moneyOwner int32
 	require.NoError(t, f.db.Table(f.cfg.Database.Prefix+"user_money_log").Where("user_id = ?", transfer.ID).Pluck("admin_id", &moneyOwner).Error)
-	require.NoError(t, f.db.Table(f.cfg.Database.Prefix+"user_score_log").Where("user_id = ?", transfer.ID).Pluck("admin_id", &scoreOwner).Error)
 	require.Equal(t, int32(30), moneyOwner)
-	require.Equal(t, int32(30), scoreOwner)
 
 	mismatch := f.addUser(t, ctx, 20, "mismatch")
 	require.NoError(t, f.db.Create(&MoneyLog{UserID: mismatch.ID, AdminID: 30, Money: 1.00}).Error)
@@ -168,7 +156,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	require.NoError(t, f.db.Table(f.cfg.Database.Prefix+"user").Where("id = ?", mismatch.ID).Pluck("admin_id", &unchanged).Error)
 	require.Equal(t, int32(20), unchanged)
 	require.NoError(t, f.db.Model(&Admin{}).Where("id = ?", 30).Update("status", "disable").Error)
-	disabled := User{AdminID: 30, Username: "disabled-owner", Nickname: "disabled-owner", Password: "p", Salt: "s", Status: "enable"}
+	disabled := User{AdminID: 30, Username: "disabled-owner", Nickname: "disabled-owner", Password: "p", Status: "enable"}
 	require.Error(t, f.root.Add(ctx, &disabled))
 
 	// An unchanged disabled owner must not block ordinary profile edits.
@@ -182,7 +170,7 @@ func TestUserOwnerAssignmentInvalidTargetStates(t *testing.T) {
 	ctx := scopeCtx(t, 20, false)
 
 	for _, adminID := range []int32{0, -1} {
-		invalid := User{AdminID: adminID, Username: "invalid-owner", Nickname: "invalid-owner", Password: "p", Salt: "s", Status: "enable"}
+		invalid := User{AdminID: adminID, Username: "invalid-owner", Nickname: "invalid-owner", Password: "p", Status: "enable"}
 		require.Error(t, f.root.Add(ctx, &invalid))
 	}
 

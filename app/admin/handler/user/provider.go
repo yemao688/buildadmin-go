@@ -1,23 +1,10 @@
 package user
 
-import (
-	"github.com/google/wire"
-	"go-build-admin/app/common/member"
-)
-
-func NewMemberPermissionInvalidator(s *member.Service) MemberPermissionInvalidator {
-	return s
-}
+import "github.com/google/wire"
 
 var ProviderSet = wire.NewSet(
-	NewMemberPermissionInvalidator,
-	NewUserHandlerWithAuth,
+	NewUserHandler,
 	NewUserRegistrar,
-	NewGroupHandlerWithAuth,
-	NewGroupRegistrar,
-	NewRuleHandlerWithAuth,
-	NewRuleRegistrar,
 	NewMoneyLogHandler,
-	NewScoreLogHandler,
 	NewUserLogRegistrar,
 )

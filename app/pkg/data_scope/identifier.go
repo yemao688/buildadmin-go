@@ -26,8 +26,8 @@ type RulePolicy struct {
 var tablePolicies = map[string]TablePolicy{
 	"user": {
 		Recycle: true, Sensitive: true, PrimaryKey: "id", OwnerColumn: "admin_id",
-		AuditFields:    map[string]struct{}{"username": {}, "nickname": {}, "email": {}, "mobile": {}, "avatar": {}, "gender": {}, "birthday": {}, "motto": {}, "status": {}},
-		RollbackFields: map[string]struct{}{"username": {}, "nickname": {}, "email": {}, "mobile": {}, "avatar": {}, "gender": {}, "birthday": {}, "motto": {}, "status": {}},
+		AuditFields:    map[string]struct{}{"username": {}, "nickname": {}, "email": {}, "mobile": {}, "avatar": {}, "status": {}},
+		RollbackFields: map[string]struct{}{"username": {}, "nickname": {}, "email": {}, "mobile": {}, "avatar": {}, "status": {}},
 	},
 }
 

@@ -89,7 +89,6 @@ func TestTrim(t *testing.T) {
 		"admin_group_access",
 		// 无删除功能
 		"user_money_log",
-		"user_score_log",
 	}
 
 	if !slices.Contains(outExcludeTable, strings.TrimLeft("ba_area", "ba_")) {

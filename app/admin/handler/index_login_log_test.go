@@ -11,6 +11,7 @@ import (
 
 	adminauth "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/middleware"
+	"go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/utils"
@@ -30,8 +31,7 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	admin := adminauth.Admin{
 		Username: "login-admin",
 		Nickname: "Login Admin",
-		Password: utils.EncryptPassword("correct horse battery staple", "login-salt"),
-		Salt:     "login-salt",
+		Password: hashLoginTestPassword(t),
 		Status:   "enable",
 	}
 	require.NoError(t, db.Create(&admin).Error)
@@ -53,6 +53,13 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	require.Equal(t, int32(0), failureLog.AdminID)
 	require.Equal(t, admin.Username, failureLog.Username)
 
+}
+
+func hashLoginTestPassword(t *testing.T) string {
+	t.Helper()
+	hash, err := password.Hash("correct horse battery staple")
+	require.NoError(t, err)
+	return hash
 }
 
 func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware.Record) {

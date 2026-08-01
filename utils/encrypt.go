@@ -7,17 +7,6 @@ import (
 	"strings"
 )
 
-func EncryptPassword(content, salt string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(content))
-	md5Hex := hex.EncodeToString(hasher.Sum(nil)) + salt
-
-	hasher.Reset()
-	hasher.Write([]byte(md5Hex))
-	md5Hex = hex.EncodeToString(hasher.Sum(nil))
-	return md5Hex
-}
-
 func Md5(content string) string {
 	// 创建一个新的MD5散列对象
 	hasher := md5.New()

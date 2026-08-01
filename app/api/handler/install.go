@@ -6,7 +6,7 @@ import (
 	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/app/pkg/filesystem"
 	"go-build-admin/app/pkg/installer"
-	"go-build-admin/app/pkg/random"
+	passwordutil "go-build-admin/app/pkg/password"
 	"go-build-admin/app/pkg/terminal"
 	"go-build-admin/app/pkg/validator"
 	"go-build-admin/app/pkg/version"
@@ -460,14 +460,16 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 	}
 
 	if params.Type != "web" {
-		salt := random.Build("alnum", 16)
-		password := utils.EncryptPassword(params.Adminpassword, salt)
+		password, err := passwordutil.Hash(params.Adminpassword)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 		// 管理员配置入库
 		h.db.Model(&adminauth.Admin{}).Where("username=?", "admin").Updates(map[string]any{
 			"username": params.Adminname,
 			"nickname": params.Adminname,
 			"password": password,
-			"salt":     salt,
 		})
 
 		// 修改站点名称

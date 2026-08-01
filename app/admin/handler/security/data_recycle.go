@@ -173,7 +173,6 @@ func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 		"admin/Index",
 		"admin/routine.AdminInfo",
 		"admin/user.MoneyLog",
-		"admin/user.ScoreLog",
 	}
 
 	outRoutes := map[string]string{}
@@ -202,7 +201,6 @@ func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {
 		"captcha",
 		"admin_group_access",
 		"user_money_log",
-		"user_score_log",
 	}
 
 	outTables := map[string]string{}

@@ -514,7 +514,6 @@ func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
 		Username: a.Username,
 		Nickname: a.Nickname,
 		Password: "new-password-123",
-		Salt:     "new-salt-1234567",
 		ParentID: &missing,
 		Status:   "enable",
 	}
