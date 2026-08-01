@@ -33,6 +33,43 @@ fields:
 	}
 }
 
+func TestValidateSpecPrimaryKeyAutoIncrementRequiresUnsigned(t *testing.T) {
+	signed := `name: signed_auto_increment
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+`
+	if _, err := ValidateSpec(writeSpecTest(t, signed)); err == nil ||
+		!strings.Contains(err.Error(), `field "id"`) ||
+		!strings.Contains(err.Error(), "unsigned: true") {
+		t.Fatalf("signed auto-increment primary key error = %v", err)
+	}
+
+	unsigned := `name: unsigned_auto_increment
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    unsigned: true
+`
+	if _, err := ValidateSpec(writeSpecTest(t, unsigned)); err != nil {
+		t.Fatalf("unsigned auto-increment primary key rejected: %v", err)
+	}
+
+	nonAutoIncrement := `name: signed_non_auto_increment
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+`
+	if _, err := ValidateSpec(writeSpecTest(t, nonAutoIncrement)); err != nil {
+		t.Fatalf("non-auto-increment primary key rejected: %v", err)
+	}
+}
+
 func TestValidateSpecRejectsPrimaryKeyRelationAndRemoteFiles(t *testing.T) {
 	tests := []struct {
 		name string

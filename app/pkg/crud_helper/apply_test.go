@@ -57,7 +57,7 @@ func newApplyTestDB(t *testing.T) (*gorm.DB, *conf.Configuration) {
 }
 
 func applyTestSpec(tableName string) *GenerateOptions {
-	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DesignType: "pk", Comment: "ID"}}
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true, DesignType: "pk", Comment: "ID"}}
 	table := crudmodel.Table{Name: tableName, Comment: "测试表", QuickSearchField: []string{"id"}}
 	return &GenerateOptions{Table: table, Fields: fields, Type: "create", AdminID: 1}
 }
@@ -114,7 +114,7 @@ func TestAdoptCrudLogCreatesAndRefreshesSuccessRecord(t *testing.T) {
 func writeApplySpec(t *testing.T, name, tableName, specType string) string {
 	t.Helper()
 	dir := t.TempDir()
-	content := "name: " + tableName + "\ncomment: 测试\ntype: " + specType + "\nfields:\n  - name: id\n    type: bigint\n    primaryKey: true\n    autoIncrement: true\n    designType: pk\n    comment: ID\n  - name: title\n    type: varchar\n    length: 50\n    comment: 标题\n"
+	content := "name: " + tableName + "\ncomment: 测试\ntype: " + specType + "\nfields:\n  - name: id\n    type: bigint\n    primaryKey: true\n    autoIncrement: true\n    unsigned: true\n    designType: pk\n    comment: ID\n  - name: title\n    type: varchar\n    length: 50\n    comment: 标题\n"
 	path := filepath.Join(dir, name+".yaml")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)

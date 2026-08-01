@@ -105,6 +105,7 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 		{"nullable addition", crudmodel.Field{Name: "note", Type: "varchar", Length: 20, Null: true}, model.Column{}, DiffSafeAuto},
 		{"defaulted addition", crudmodel.Field{Name: "enabled", Type: "tinyint", DefaultType: "INPUT", Default: "1"}, model.Column{}, DiffSafeAuto},
 		{"comment only", fields[1], alterTestColumn("name", "varchar(20)", "NO", "", "", "旧名称"), DiffSafeAuto},
+		{"primary key comment only", crudmodel.Field{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, AutoIncrement: true, DefaultType: "NONE", Comment: "编号"}, actual[0], DiffSafeAuto},
 		{"type widening", crudmodel.Field{Name: "name", Type: "varchar", Length: 40, DefaultType: "EMPTY STRING", Comment: "名称"}, actual[1], DiffRequiresApproval},
 		{"default change", crudmodel.Field{Name: "amount", Type: "decimal", Length: 10, Precision: 2, DefaultType: "INPUT", Default: "2", Comment: "金额"}, actual[2], DiffRequiresApproval},
 		{"unsigned flip", crudmodel.Field{Name: "status", Type: "tinyint", DefaultType: "INPUT", Default: "1", Comment: "状态"}, actual[3], DiffRejected},
@@ -129,6 +130,48 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 	primaryDrift := deriveAlterDiff(actual, []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Comment: "ID"}})
 	if len(primaryDrift) != 1 || primaryDrift[0].Class != DiffRejected {
 		t.Fatalf("primary drift = %+v", primaryDrift)
+	}
+}
+
+func TestAlterDiffRejectsPrimaryKeyNonCommentAttributeDrift(t *testing.T) {
+	cases := []struct {
+		name   string
+		field  crudmodel.Field
+		column model.Column
+	}{
+		{
+			name:   "type",
+			field:  crudmodel.Field{Name: "id", Type: "int", Unsigned: true, PrimaryKey: true, DefaultType: "NONE", Comment: "ID"},
+			column: alterTestColumn("id", "bigint unsigned", "NO", nil, "", "ID"),
+		},
+		{
+			name:   "unsigned",
+			field:  crudmodel.Field{Name: "id", Type: "bigint", PrimaryKey: true, DefaultType: "NONE", Comment: "ID"},
+			column: alterTestColumn("id", "bigint unsigned", "NO", nil, "", "ID"),
+		},
+		{
+			name:   "nullable",
+			field:  crudmodel.Field{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, DefaultType: "NONE", Comment: "ID"},
+			column: alterTestColumn("id", "bigint unsigned", "YES", nil, "", "ID"),
+		},
+		{
+			name:   "auto increment",
+			field:  crudmodel.Field{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, DefaultType: "NONE", Comment: "ID"},
+			column: alterTestColumn("id", "bigint unsigned", "NO", nil, "auto_increment", "ID"),
+		},
+		{
+			name:   "default",
+			field:  crudmodel.Field{Name: "id", Type: "bigint", Unsigned: true, PrimaryKey: true, DefaultType: "INPUT", Default: "2", Comment: "ID"},
+			column: alterTestColumn("id", "bigint unsigned", "NO", "1", "", "ID"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diffs := deriveAlterDiff([]model.Column{tc.column}, []crudmodel.Field{tc.field})
+			if len(diffs) != 1 || diffs[0].Class != DiffRejected {
+				t.Fatalf("primary key %s drift = %+v", tc.name, diffs)
+			}
+		})
 	}
 }
 

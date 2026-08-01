@@ -378,7 +378,14 @@ func primaryKeyDrift(actualPKs []string, fields []crudmodel.Field, columns []mod
 			continue
 		}
 		column, ok := byName[strings.ToLower(field.Name)]
-		if !ok || !specFieldMatchesColumn(field, column) {
+		if !ok {
+			return true, fmt.Sprintf("primary key column %q has attribute drift", field.Name)
+		}
+		if fieldTypeChanged(field, column) ||
+			field.Unsigned != columnUnsigned(column) ||
+			nullableChanged(field, column) ||
+			autoIncrementChanged(field, column) ||
+			defaultChanged(field, column) {
 			return true, fmt.Sprintf("primary key column %q has attribute drift", field.Name)
 		}
 	}

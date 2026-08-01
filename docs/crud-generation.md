@@ -270,7 +270,7 @@ Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/se
 
 ### `table` 属性
 
-主键字段（`designType: pk`/`spk`）的 `comment` 必须统一写为 `ID`，不要写`主键`或其它描述。字段 `comment` 会进入 zh-cn 语言包并作为后台列标题，因此 `id` 列在后台必须显示为 `ID`。
+主键字段（`designType: pk`/`spk`）的 `comment` 必须统一写为 `ID`，不要写`主键`或其它描述。字段 `comment` 会进入 zh-cn 语言包并作为后台列标题，因此 `id` 列在后台必须显示为 `ID`。对存量表，将主键注释对齐为 `comment: ID` 属于 comment-only 漂移，`crud:apply` 会自动放行，无需业务迁移。
 
 | 键                   | 类型          | 语义                                                |
 | -------------------- | ------------- | --------------------------------------------------- |

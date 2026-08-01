@@ -157,6 +157,9 @@ func validatePrimaryKeyTypes(fields []crudmodel.Field) error {
 		if _, err := primaryKeyGoType(field); err != nil {
 			return err
 		}
+		if field.AutoIncrement && !field.Unsigned {
+			return fmt.Errorf("auto-increment primary key field %q must declare unsigned: true", field.Name)
+		}
 	}
 	return nil
 }

@@ -330,7 +330,7 @@ func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool)
 	defaultChangedValue := defaultChanged(field, column)
 	autoChanged := autoIncrementChanged(field, column)
 	commentChanged := column.COLUMN_COMMENT != field.Comment
-	if primary && (typeChanged || unsignedChanged || nullableChangedValue || autoChanged || defaultChangedValue || commentChanged) {
+	if primary && (typeChanged || unsignedChanged || nullableChangedValue || autoChanged || defaultChangedValue) {
 		return DiffRejected, "", "primary key column attribute drift requires a business migration"
 	}
 	if unsignedChanged {
@@ -357,6 +357,9 @@ func classifyFieldDiff(field crudmodel.Field, column model.Column, primary bool)
 		return DiffRequiresApproval, ApprovalAutoIncrement, "auto_increment change requires approval"
 	}
 	if commentChanged {
+		if primary {
+			return DiffSafeAuto, "", "comment-only change on primary key"
+		}
 		return DiffSafeAuto, "", "comment-only change"
 	}
 	if nullableChangedValue {

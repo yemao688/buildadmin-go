@@ -159,7 +159,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}
-	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true}}
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true}}
 	table := crudmodel.Table{
 		Name:           tableName,
 		ModelFile:      filepath.ToSlash(filepath.Join("app", "admin", "model", dirName, "deleteFault.go")),

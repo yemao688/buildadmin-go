@@ -512,6 +512,7 @@ fields:
     type: bigint
     primaryKey: true
     autoIncrement: true
+    unsigned: true
   - name: amount_number
     type: int
     table:

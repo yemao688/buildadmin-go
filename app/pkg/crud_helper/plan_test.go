@@ -67,6 +67,11 @@ func TestPrimaryKeyDriftComparesCompleteColumnSetAndAttributes(t *testing.T) {
 	if drift, _ := primaryKeyDrift([]string{"id"}, fields, columns); !drift {
 		t.Fatal("missing composite primary-key column was not rejected")
 	}
+	fields[0].Comment = "编号"
+	if drift, reason := primaryKeyDrift([]string{"id", "tenant_id"}, fields, columns); drift {
+		t.Fatalf("primary-key comment-only drift was rejected: %s", reason)
+	}
+	fields[0].Comment = "ID"
 	fields[0].Unsigned = true
 	if drift, _ := primaryKeyDrift([]string{"id", "tenant_id"}, fields, columns); !drift {
 		t.Fatal("primary-key attribute drift was not rejected")
