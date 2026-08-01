@@ -160,7 +160,7 @@ export interface UserInfo {
     mobile: string
     gender: number
     birthday: string
-    money: number
+    money: string
     score: number
     avatar: string
     last_login_time: string

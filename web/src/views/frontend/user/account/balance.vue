@@ -10,7 +10,7 @@
             <div v-loading="state.pageLoading" class="logs">
                 <div class="log-item" v-for="(item, idx) in state.logs" :key="idx">
                     <div class="log-title">{{ item.memo }}</div>
-                    <div v-if="item.money > 0" class="log-change-amount increase">{{ $t('Balance') + '：+' + item.money }}</div>
+                    <div v-if="Number(item.money) > 0" class="log-change-amount increase">{{ $t('Balance') + '：+' + item.money }}</div>
                     <div v-else class="log-change-amount reduce">{{ $t('Balance') + '：' + item.money }}</div>
                     <div class="log-after">{{ $t('user.account.balance.Balance after change') + '：' + item.after }}</div>
                     <div class="log-change-time">{{ $t('user.account.balance.Change time') + '：' + timeFormat(item.create_time) }}</div>
@@ -46,8 +46,8 @@ const state: {
     logs: {
         memo: string
         create_time: number
-        money: number
-        after: number
+        money: string
+        after: string
     }[]
     currentPage: number
     total: number

@@ -16,7 +16,7 @@ export const useBaAccount = defineStore('baAccount', {
             avatar: '',
             gender: 0,
             birthday: '',
-            money: 0,
+            money: '0',
             score: 0,
             motto: '',
             token: '',

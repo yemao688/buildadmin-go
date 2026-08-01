@@ -171,7 +171,7 @@ onMounted(() => {
     overview().then((res) => {
         state.days = res.data.days
         state.score = res.data.score
-        state.money = res.data.money
+        state.money = res.data.money.map(Number)
         initUserGrowthChart()
     })
     useEventListener(window, 'resize', echartsResize)

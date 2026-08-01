@@ -16,7 +16,7 @@ export const useUserInfo = defineStore('userInfo', {
             avatar: '',
             gender: 0,
             birthday: '',
-            money: 0,
+            money: '0',
             score: 0,
             last_login_time: '',
             last_login_ip: '',
