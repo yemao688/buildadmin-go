@@ -139,7 +139,7 @@ func TestSecurityMySQLScopeInheritanceAndAtomicDelete(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			f.db.Exec("DELETE FROM " + q + " WHERE id=12")
 			if tc.name == "sibling" || tc.name == "unrestricted" {
-				f.db.Exec("INSERT IGNORE INTO " + q + " VALUES (12,3,'sibling','old-sibling','',3)")
+				f.db.Exec("INSERT IGNORE INTO " + q + " VALUES (12,3,'sibling','old-sibling',3)")
 			}
 			r := f.router(tc.actor, tc.unrestricted, http.MethodDelete, func(c *gin.Context) {
 				deleteRequested(t, c, f.prefix)
@@ -150,7 +150,7 @@ func TestSecurityMySQLScopeInheritanceAndAtomicDelete(t *testing.T) {
 		})
 	}
 	// Mixed IDs are checked as a set before either row is deleted.
-	f.db.Exec("INSERT IGNORE INTO " + q + " VALUES (10,2,'owned','old','',1),(12,3,'sibling','old-sibling','',3)")
+	f.db.Exec("INSERT IGNORE INTO " + q + " VALUES (10,2,'owned','old',1),(12,3,'sibling','old-sibling',3)")
 	r := f.router(2, false, http.MethodDelete, func(c *gin.Context) { stage(c, 1, "ok") })
 	rec := f.request(t, r, http.MethodDelete, "/admin/auth.Admin/del?ids[]=10&ids[]=12", "")
 	require.Equal(t, http.StatusForbidden, rec.Code)

@@ -169,7 +169,9 @@ func TestUserOwnerAssignmentInvalidTargetStates(t *testing.T) {
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 
-	for _, adminID := range []int32{0, -1} {
+	// admin_id=0 means "assign to the actor" (covered by
+	// TestUserOwnerAssignmentAndLogTransfer); only negative owners are invalid.
+	for _, adminID := range []int32{-1} {
 		invalid := User{AdminID: adminID, Username: "invalid-owner", Nickname: "invalid-owner", Password: "p", Status: "enable"}
 		require.Error(t, f.root.Add(ctx, &invalid))
 	}
