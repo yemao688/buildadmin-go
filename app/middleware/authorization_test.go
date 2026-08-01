@@ -138,6 +138,16 @@ func TestAuthorizationAllowsPermissionExemptRoute(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+func TestAuthorizationAllowsIndexIndexPermissionExempt(t *testing.T) {
+	fixture := newAuthorizationFixture(t)
+	RegisterPermissionExempt("index", "index")
+	t.Cleanup(func() { UnregisterPermissionExempt("index", "index") })
+
+	recorder := fixture.request(t, "/admin/Index/index", 1)
+
+	require.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
 func TestAuthorizationAllowsSuperAdmin(t *testing.T) {
 	fixture := newAuthorizationFixture(t)
 	fixture.addRule(t, "country/currency/index")

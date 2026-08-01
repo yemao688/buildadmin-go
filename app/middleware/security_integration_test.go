@@ -42,7 +42,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	f := &securityFixture{db: db, sqlDB: sqlDB, prefix: prefix, config: config, root: 1}
-	tables := []string{"admin", "admin_closure", "admin_hierarchy_lock", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log", "user"}
+	tables := []string{"admin", "admin_closure", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log", "user"}
 	for _, name := range tables {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + name + "`")
 	}
@@ -58,23 +58,21 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	stmts := []string{
 		"CREATE TABLE " + q("admin") + " (id INT PRIMARY KEY, parent_id INT NULL, username VARCHAR(64) NOT NULL)",
 		"CREATE TABLE " + q("admin_closure") + " (ancestor_id INT NOT NULL, descendant_id INT NOT NULL, depth INT NOT NULL, PRIMARY KEY (ancestor_id, descendant_id))",
-		"CREATE TABLE " + q("admin_hierarchy_lock") + " (id TINYINT UNSIGNED PRIMARY KEY)",
 		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT NOT NULL, name VARCHAR(64) NOT NULL, username VARCHAR(64) NOT NULL, value INT NOT NULL DEFAULT 0)",
-		"CREATE TABLE " + q("security_data_recycle") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, name VARCHAR(64) NOT NULL, controller VARCHAR(64) NOT NULL, controller_as VARCHAR(64) NOT NULL, data_table VARCHAR(64) NOT NULL, owner_column VARCHAR(64) NOT NULL DEFAULT 'admin_id', primary_key VARCHAR(64) NOT NULL, status VARCHAR(8) NOT NULL, connection VARCHAR(64) NOT NULL DEFAULT '', update_time BIGINT NOT NULL DEFAULT 0, create_time BIGINT NOT NULL DEFAULT 0)",
-		"CREATE TABLE " + q("security_data_recycle_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, target_admin_id INT NOT NULL, recycle_id INT NOT NULL, data LONGTEXT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, is_restore INT NOT NULL DEFAULT 0, is_committed INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, create_time BIGINT NOT NULL DEFAULT 0, legacy_unrecoverable INT NOT NULL DEFAULT 0)",
-		"CREATE TABLE " + q("security_sensitive_data") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, name VARCHAR(64) NOT NULL, controller VARCHAR(64) NOT NULL, controller_as VARCHAR(64) NOT NULL, data_table VARCHAR(64) NOT NULL, owner_column VARCHAR(64) NOT NULL DEFAULT 'admin_id', primary_key VARCHAR(64) NOT NULL, data_fields TEXT NOT NULL, status VARCHAR(8) NOT NULL, connection VARCHAR(64) NOT NULL DEFAULT '', update_time BIGINT NOT NULL DEFAULT 0, create_time BIGINT NOT NULL DEFAULT 0)",
-		"CREATE TABLE " + q("security_sensitive_data_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, target_admin_id INT NOT NULL, sensitive_id INT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, data_field VARCHAR(64) NOT NULL, data_comment VARCHAR(255) NOT NULL, id_value INT NOT NULL, `before` TEXT NOT NULL, `after` TEXT NOT NULL, ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, is_rollback INT NOT NULL DEFAULT 0, is_committed INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', create_time BIGINT NOT NULL DEFAULT 0, legacy_unrecoverable INT NOT NULL DEFAULT 0)",
+		"CREATE TABLE " + q("security_data_recycle") + " (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64) NOT NULL, controller VARCHAR(64) NOT NULL, controller_as VARCHAR(64) NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, status VARCHAR(8) NOT NULL, connection VARCHAR(64) NOT NULL DEFAULT '', update_time BIGINT NOT NULL DEFAULT 0, create_time BIGINT NOT NULL DEFAULT 0)",
+		"CREATE TABLE " + q("security_data_recycle_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, recycle_id INT NOT NULL, data LONGTEXT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, is_restore INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, create_time BIGINT NOT NULL DEFAULT 0)",
+		"CREATE TABLE " + q("security_sensitive_data") + " (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(64) NOT NULL, controller VARCHAR(64) NOT NULL, controller_as VARCHAR(64) NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, data_fields TEXT NOT NULL, status VARCHAR(8) NOT NULL, connection VARCHAR(64) NOT NULL DEFAULT '', update_time BIGINT NOT NULL DEFAULT 0, create_time BIGINT NOT NULL DEFAULT 0)",
+		"CREATE TABLE " + q("security_sensitive_data_log") + " (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, sensitive_id INT NOT NULL, data_table VARCHAR(64) NOT NULL, primary_key VARCHAR(64) NOT NULL, data_field VARCHAR(64) NOT NULL, data_comment VARCHAR(255) NOT NULL, id_value INT NOT NULL, `before` TEXT NOT NULL, `after` TEXT NOT NULL, ip VARCHAR(64) NOT NULL, useragent VARCHAR(255) NOT NULL, is_rollback INT NOT NULL DEFAULT 0, connection VARCHAR(64) NOT NULL DEFAULT '', create_time BIGINT NOT NULL DEFAULT 0)",
 	}
 	for _, stmt := range stmts {
 		require.NoError(t, db.Exec(stmt).Error)
 	}
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin")+" VALUES (1,NULL,'root'),(2,1,'self'),(3,1,'sibling'),(4,2,'child')").Error)
-	require.NoError(t, db.Exec("INSERT INTO "+q("admin_hierarchy_lock")+" (id) VALUES (1)").Error)
 	closure := "(1,1,0),(1,2,1),(1,3,1),(1,4,2),(2,2,0),(2,4,1),(3,3,0),(4,4,0)"
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin_closure")+" (ancestor_id,descendant_id,depth) VALUES "+closure).Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (10,2,'owned','old',1),(11,4,'child','old-child',2),(12,3,'sibling','old-sibling',3)").Error)
-	require.NoError(t, db.Exec("INSERT INTO "+q("security_data_recycle")+" (admin_id,name,controller,controller_as,data_table,primary_key,status) VALUES (1,'root-items','items','auth/admin','user','id','1'),(2,'child-items','items','auth/admin','user','id','1')").Error)
-	require.NoError(t, db.Exec("INSERT INTO "+q("security_sensitive_data")+" (admin_id,name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES (1,'root-items','items','auth/admin','user','id','{\"username\":\"username\"}','1'),(2,'child-items','items','auth/admin','user','id','{\"username\":\"username\"}','1')").Error)
+	require.NoError(t, db.Exec("INSERT INTO "+q("security_data_recycle")+" (name,controller,controller_as,data_table,primary_key,status) VALUES ('root-items','items','auth/admin','user','id','1'),('child-items','items','auth/admin','user','id','1')").Error)
+	require.NoError(t, db.Exec("INSERT INTO "+q("security_sensitive_data")+" (name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES ('root-items','items','auth/admin','user','id','{\"username\":\"username\"}','1'),('child-items','items','auth/admin','user','id','{\"username\":\"username\"}','1')").Error)
 	return f
 }
 
@@ -163,8 +161,8 @@ func TestSecurityMySQLRootRuleInheritedByChild(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
 	// Remove the child-owned rules so this request can only use the root rule.
-	require.NoError(t, f.db.Exec("DELETE FROM "+f.table("security_data_recycle")+" WHERE admin_id=2").Error)
-	require.NoError(t, f.db.Exec("DELETE FROM "+f.table("security_sensitive_data")+" WHERE admin_id=2").Error)
+	require.NoError(t, f.db.Exec("DELETE FROM "+f.table("security_data_recycle")+" WHERE id > 1").Error)
+	require.NoError(t, f.db.Exec("DELETE FROM "+f.table("security_sensitive_data")+" WHERE id > 1").Error)
 
 	deleteRouter := f.router(2, false, http.MethodDelete, func(c *gin.Context) {
 		deleteRequested(t, c, f.prefix)
@@ -188,16 +186,12 @@ func TestSecurityMySQLRootRuleInheritedByChild(t *testing.T) {
 	require.NoError(t, f.db.Table(f.table("security_sensitive_data_log")).Count(&sensitiveLogs).Error)
 	require.Equal(t, int64(1), sensitiveLogs)
 	var audit struct {
-		AdminID       int32
-		TargetAdminID int32
-		IsCommitted   int32
-		Before        string
-		After         string
+		AdminID int32
+		Before  string
+		After   string
 	}
-	require.NoError(t, f.db.Raw("SELECT admin_id, target_admin_id, is_committed, `before`, `after` FROM "+f.table("security_sensitive_data_log")+" WHERE data_table=? AND id_value=? LIMIT 1", "user", 11).Scan(&audit).Error)
+	require.NoError(t, f.db.Raw("SELECT admin_id, `before`, `after` FROM "+f.table("security_sensitive_data_log")+" WHERE data_table=? AND id_value=? LIMIT 1", "user", 11).Scan(&audit).Error)
 	require.Equal(t, int32(2), audit.AdminID)
-	require.Equal(t, int32(4), audit.TargetAdminID)
-	require.Equal(t, int32(1), audit.IsCommitted)
 	require.Equal(t, "old-child", audit.Before)
 	require.Equal(t, "root-inherited", audit.After)
 
@@ -227,12 +221,12 @@ func TestSecurityMySQLDeleteCommitRollbackAndRestore(t *testing.T) {
 	rec := f.request(t, r, http.MethodDelete, "/admin/auth.Admin/del?ids[]=10", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var logID int32
-	require.NoError(t, f.db.Table(f.table("security_data_recycle_log")).Select("id").Where("is_committed=1").Scan(&logID).Error)
+	require.NoError(t, f.db.Table(f.table("security_data_recycle_log")).Select("id").Where("is_restore=0").Scan(&logID).Error)
 	require.NotZero(t, logID)
 	var rowCount int64
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Zero(t, rowCount)
-	recycleModel := securitymodel.NewDataRecycleLogModel(f.db, f.config, data_scope.NewClosureEnforcer(f.config))
+	recycleModel := securitymodel.NewDataRecycleLogModel(f.db, f.config)
 	require.NoError(t, recycleModel.Restore(f.actorContext(2, false), []int32{logID}))
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Equal(t, int64(1), rowCount)
@@ -298,7 +292,9 @@ func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *test
 	f := newSecurityFixture(t)
 	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
 		tx := requesttx.DB(c.Request.Context())
-		require.NoError(t, model.NewAdminHierarchy(f.config).LockHierarchy(c.Request.Context(), tx))
+		release, err := model.NewAdminHierarchy(f.config).LockHierarchy(c.Request.Context(), tx)
+		require.NoError(t, err)
+		defer release()
 		require.NoError(t, tx.Exec("UPDATE `"+f.prefix+"user` SET username='relocked' WHERE id=10").Error)
 		stage(c, 1, "ok")
 	})
@@ -316,7 +312,13 @@ func TestSecurityMySQLSensitivePostCancellationInterruptsHierarchyLock(t *testin
 	holder := f.db.Begin()
 	require.NoError(t, holder.Error)
 	defer holder.Rollback()
-	require.NoError(t, holder.Exec("SELECT id FROM "+f.table("admin_hierarchy_lock")+" WHERE id=1 FOR UPDATE").Error)
+	var acquired int
+	require.NoError(t, holder.Raw("SELECT GET_LOCK(?, ?)", "ba_admin_hierarchy", 10).Scan(&acquired).Error)
+	require.Equal(t, 1, acquired)
+	defer func() {
+		var released int
+		_ = holder.Raw("SELECT RELEASE_LOCK(?)", "ba_admin_hierarchy").Scan(&released).Error
+	}()
 
 	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
 		t.Fatal("request reached business handler while hierarchy lock was held")
@@ -385,7 +387,7 @@ func TestSecurityMySQLFailClosedWriterAndPanic(t *testing.T) {
 
 func TestSecurityMySQLUnregisteredRouteFailsClosed(t *testing.T) {
 	f := newSecurityFixture(t)
-	require.NoError(t, f.db.Exec("INSERT INTO "+f.table("security_sensitive_data")+" (admin_id,name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES (1,'unknown','unknown','unknown/action','user','id','{\"username\":\"username\"}','1')").Error)
+	require.NoError(t, f.db.Exec("INSERT INTO "+f.table("security_sensitive_data")+" (name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES ('unknown','unknown','unknown/action','user','id','{\"username\":\"username\"}','1')").Error)
 	r := gin.New()
 	s := NewSecurity(f.config, zap.NewNop(), f.db, data_scope.NewClosureEnforcer(f.config))
 	r.Use(func(c *gin.Context) { _ = data_scope.SetActor(c, data_scope.Actor{AdminID: 2}) }, s.Handler())

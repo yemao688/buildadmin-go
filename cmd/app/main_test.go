@@ -88,7 +88,7 @@ func TestApplyAppRuntimeEnvironmentFallbacks(t *testing.T) {
 
 	configuration := &conf.Configuration{}
 	applyAppRuntimeEnvironment(configuration)
-	if configuration.App.Port != "9989" || configuration.App.TimeZone != "Asia/Shanghai" {
+	if configuration.App.Port != "9900" || configuration.App.TimeZone != "Asia/Shanghai" {
 		t.Fatalf("configuration app fallback values = %#v", configuration.App)
 	}
 }

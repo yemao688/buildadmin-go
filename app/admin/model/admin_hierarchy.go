@@ -39,7 +39,6 @@ func NewAdminHierarchy(config *conf.Configuration) *AdminHierarchy {
 
 func (h *AdminHierarchy) adminTable() string   { return h.prefix + "admin" }
 func (h *AdminHierarchy) closureTable() string { return h.prefix + "admin_closure" }
-func (h *AdminHierarchy) lockTable() string    { return h.prefix + "admin_hierarchy_lock" }
 
 func quoteIdentifier(value string) string {
 	if value == "" {
@@ -58,32 +57,46 @@ func int32PtrEqual(a, b *int32) bool {
 	return *a == *b
 }
 
-// lockHierarchy acquires a real SELECT ... FOR UPDATE lock on the single row
-// of the independent admin_hierarchy_lock table. LinkNewNode and MoveSubtree
-// share this lock so that all hierarchy mutations are serialized before any
-// reads. The lock is released when the caller commits or rolls back the
-// supplied transaction. If the lock row is missing the writer fails closed.
-func (h *AdminHierarchy) lockHierarchy(ctx context.Context, tx *gorm.DB) error {
-	var id uint8
-	result := tx.WithContext(ctx).Raw(
-		"SELECT id FROM " + quoteIdentifier(h.lockTable()) + " WHERE id = 1 FOR UPDATE",
-	).Scan(&id)
+// lockHierarchy acquires a process-wide MySQL named lock on the transaction's
+// connection. The returned release function is deliberately explicit because
+// named locks are not released by COMMIT or ROLLBACK.
+func (h *AdminHierarchy) lockHierarchy(tx *gorm.DB) (func(), error) {
+	var acquired int
+	result := tx.Raw("SELECT GET_LOCK(?, ?)", "ba_admin_hierarchy", 10).Scan(&acquired)
 	if result.Error != nil {
-		return result.Error
+		return nil, fmt.Errorf("%w: hierarchy lock acquire failed: %v", ErrHierarchyIntegrity, result.Error)
 	}
-	if result.RowsAffected != 1 {
-		return fmt.Errorf("%w: hierarchy lock row missing", ErrHierarchyIntegrity)
+	if acquired != 1 {
+		return nil, fmt.Errorf("%w: hierarchy lock acquire failed", ErrHierarchyIntegrity)
 	}
-	return nil
+
+	released := false
+	release := func() {
+		if released {
+			return
+		}
+		released = true
+		var resultCode int
+		_ = tx.Raw("SELECT RELEASE_LOCK(?)", "ba_admin_hierarchy").Scan(&resultCode).Error
+	}
+	// Keep a database row lock for the transaction as well. The named lock is
+	// connection-scoped and must be released while the GORM transaction is
+	// still usable; this row lock carries serialization through COMMIT/ROLLBACK.
+	var anchorID int32
+	if result := tx.Raw("SELECT id FROM " + quoteIdentifier(h.adminTable()) + " ORDER BY id LIMIT 1 FOR UPDATE").Scan(&anchorID); result.Error != nil {
+		release()
+		return nil, fmt.Errorf("%w: hierarchy anchor lock failed: %v", ErrHierarchyIntegrity, result.Error)
+	}
+	return release, nil
 }
 
 // LockHierarchy serializes non-hierarchy owner assignments with hierarchy
 // mutations. Callers must acquire it before locking user or owner-log rows.
-func (h *AdminHierarchy) LockHierarchy(ctx context.Context, tx *gorm.DB) error {
+func (h *AdminHierarchy) LockHierarchy(ctx context.Context, tx *gorm.DB) (func(), error) {
 	if err := data_scope.ValidateTablePrefix(h.prefix); err != nil {
-		return err
+		return nil, err
 	}
-	return h.lockHierarchy(ctx, tx)
+	return h.lockHierarchy(tx)
 }
 
 func (h *AdminHierarchy) adminRowExists(ctx context.Context, tx *gorm.DB, id int32) error {
@@ -167,9 +180,11 @@ func (h *AdminHierarchy) LinkNewNode(ctx context.Context, tx *gorm.DB, nodeID in
 	if nodeID <= 0 {
 		return fmt.Errorf("%w: nodeID must be positive", ErrHierarchyNodeNotFound)
 	}
-	if err := h.lockHierarchy(ctx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	return h.linkNewNodeLocked(ctx, tx, nodeID, parentID)
 }
 
@@ -187,9 +202,11 @@ func (h *AdminHierarchy) LinkNewNodeWithScope(ctx *gin.Context, tx *gorm.DB, nod
 		return data_scope.ErrScopedAccessDenied
 	}
 	reqCtx := ctx.Request.Context()
-	if err := h.lockHierarchy(reqCtx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	if parentID != nil {
 		if err := h.verifyInScope(ctx, tx, actor, enforcer, *parentID); err != nil {
 			return err
@@ -263,9 +280,11 @@ func (h *AdminHierarchy) MoveSubtree(ctx context.Context, tx *gorm.DB, nodeID in
 	if nodeID <= 0 {
 		return fmt.Errorf("%w: nodeID must be positive", ErrHierarchyNodeNotFound)
 	}
-	if err := h.lockHierarchy(ctx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	return h.moveSubtreeLocked(ctx, tx, nodeID, newParentID)
 }
 
@@ -283,9 +302,11 @@ func (h *AdminHierarchy) MoveSubtreeWithScope(ctx *gin.Context, tx *gorm.DB, nod
 		return data_scope.ErrScopedAccessDenied
 	}
 	reqCtx := ctx.Request.Context()
-	if err := h.lockHierarchy(reqCtx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	ids := []int32{nodeID}
 	if newParentID != nil {
 		ids = append(ids, *newParentID)
@@ -308,9 +329,11 @@ func (h *AdminHierarchy) ValidateOrMoveWithScope(ctx *gin.Context, tx *gorm.DB, 
 		return data_scope.ErrScopedAccessDenied
 	}
 	reqCtx := ctx.Request.Context()
-	if err := h.lockHierarchy(reqCtx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	ids := []int32{nodeID}
 	if changeParent && newParentID != nil {
 		ids = append(ids, *newParentID)
@@ -461,9 +484,11 @@ func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32
 	}
 
 	reqCtx := ctx.Request.Context()
-	if err := h.lockHierarchy(reqCtx, tx); err != nil {
+	release, err := h.lockHierarchy(tx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	if err := h.verifyInScope(ctx, tx, actor, enforcer, unique...); err != nil {
 		return err
 	}

@@ -9,8 +9,6 @@ var ProviderSet = wire.NewSet(
 	NewDashboardHandler,
 	NewDashboardRegistrar,
 	NewIndexHandler,
-	NewTestBuildHandler,
-	NewTestBuildRegistrar,
 	NewModuleHandler,
 	NewModuleRegistrar,
 )

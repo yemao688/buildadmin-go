@@ -7,39 +7,6 @@ import (
 	"time"
 )
 
-func extractOwnerID(row map[string]any, column string) (int32, error) {
-	value, ok := row[column]
-	if !ok {
-		return 0, fmt.Errorf("target owner column %s missing", column)
-	}
-	var owner int64
-	switch v := value.(type) {
-	case int:
-		owner = int64(v)
-	case int32:
-		owner = int64(v)
-	case int64:
-		owner = v
-	case uint:
-		owner = int64(v)
-	case uint32:
-		owner = int64(v)
-	case uint64:
-		if v > uint64(^uint32(0)) {
-			return 0, fmt.Errorf("target owner out of range")
-		}
-		owner = int64(v)
-	case float64:
-		owner = int64(v)
-	default:
-		return 0, fmt.Errorf("target owner column %s has unsupported type", column)
-	}
-	if owner <= 0 || owner > int64(^uint32(0)>>1) {
-		return 0, fmt.Errorf("target owner missing")
-	}
-	return int32(owner), nil
-}
-
 func normalizePrimaryKeyValue(value any) (string, error) {
 	switch v := value.(type) {
 	case string:

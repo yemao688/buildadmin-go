@@ -15,7 +15,6 @@ import (
 func ProvideRegistrars(
 	log *crud.LogRegistrar,
 	module *admin.ModuleRegistrar,
-	testBuild *admin.TestBuildRegistrar,
 	adminGroup *auth.AdminGroupRegistrar,
 	adminRule *auth.AdminRuleRegistrar,
 	config *routine.ConfigRegistrar,
@@ -40,7 +39,6 @@ func ProvideRegistrars(
 	return []RouteRegistrar{
 		log,
 		module,
-		testBuild,
 		adminGroup,
 		adminRule,
 		config,

@@ -8,7 +8,7 @@ import (
 
 func TestEnsureEnvFileCopiesExampleOnlyWhenMissing(t *testing.T) {
 	root := t.TempDir()
-	example := []byte("APP_PORT=9989\nAPP_TIME_ZONE=Asia/Shanghai\n")
+	example := []byte("APP_PORT=9900\nAPP_TIME_ZONE=Asia/Shanghai\n")
 	if err := os.WriteFile(filepath.Join(root, EnvExampleFileName), example, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestResolveAppRuntimeEnvironmentUsesEnvAndFallbacks(t *testing.T) {
 	}
 
 	settings = ResolveAppRuntimeEnvironment(func(string) (string, bool) { return "", false })
-	if settings.Port != "9989" || settings.TimeZone != "Asia/Shanghai" {
+	if settings.Port != "9900" || settings.TimeZone != "Asia/Shanghai" {
 		t.Fatalf("fallback settings = %#v", settings)
 	}
 
@@ -84,7 +84,7 @@ func TestResolveAppRuntimeEnvironmentUsesEnvAndFallbacks(t *testing.T) {
 		}
 		return "", false
 	})
-	if settings.Port != "9989" || settings.TimeZone != "Asia/Shanghai" {
+	if settings.Port != "9900" || settings.TimeZone != "Asia/Shanghai" {
 		t.Fatalf("empty env fallback settings = %#v", settings)
 	}
 }

@@ -50,7 +50,7 @@ func ResolveAppRuntimeEnvironment(getenv func(string) (string, bool)) AppRuntime
 		getenv = os.LookupEnv
 	}
 	return AppRuntimeEnvironment{
-		Port:     envOrDefault(getenv, "APP_PORT", "9989"),
+		Port:     envOrDefault(getenv, "APP_PORT", "9900"),
 		TimeZone: envOrDefault(getenv, "APP_TIME_ZONE", "Asia/Shanghai"),
 	}
 }

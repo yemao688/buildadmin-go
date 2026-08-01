@@ -78,6 +78,9 @@ func InitRouter(
 	router.POST("/admin/Index/login", indexHandler.Login)
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
 	router.GET("/admin/ajax/terminal", ajaxHandler.Terminal)
+	middleware.RegisterPermissionExempt("index", "index", "logout")
+	middleware.RegisterPermissionExempt("ajax", "*")
+	middleware.RegisterPermissionExempt("alioss", "callback")
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), authorizationM.Handler(), securityM.Handler())

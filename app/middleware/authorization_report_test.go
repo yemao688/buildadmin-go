@@ -29,6 +29,16 @@ func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T)
 	}
 }
 
+func TestCollectUnprotectedRoutesReportsIndexIndexWhenNotExempt(t *testing.T) {
+	UnregisterPermissionExempt("index", "index")
+
+	routes := gin.RoutesInfo{{Method: "GET", Path: "/admin/Index/index"}}
+	got := collectUnprotectedRoutes(routes, map[string]struct{}{})
+	if len(got) != 1 || got[0] != "GET /admin/Index/index" {
+		t.Fatalf("missing routes = %#v, want index/index", got)
+	}
+}
+
 func TestReportUnprotectedRoutesSkipsNilDatabase(t *testing.T) {
 	authorization := NewAuthorization(adminauth.NewAuthModel(nil, nil, nil), zap.NewNop())
 

@@ -221,7 +221,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 
 	portValue := os.Getenv("APP_PORT")
 	if portValue == "" {
-		portValue = "9989"
+		portValue = "9900"
 	}
 	fmt.Fprintf(r.out, "安装完成\n登录地址: http://127.0.0.1:%s/\n管理员用户名: %s\n", portValue, input.admin)
 	return nil

@@ -8,7 +8,6 @@ import (
 
 	"go-build-admin/app/admin/model"
 	securitymodel "go-build-admin/app/admin/model/security"
-	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/app/pkg/requesttx"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -27,11 +26,11 @@ func (a *recycleAuditor) run() {
 	if !ok {
 		return
 	}
-	db, resolvedTable, policy, rows, ok := a.loadRows(normalizedIDs)
+	db, resolvedTable, rows, ok := a.loadRows(normalizedIDs)
 	if !ok {
 		return
 	}
-	logs, ok := a.snapshotRows(policy, rows)
+	logs, ok := a.snapshotRows(rows)
 	if !ok {
 		return
 	}
@@ -86,54 +85,58 @@ func (a *recycleAuditor) readIDs() ([]string, bool) {
 	return normalizedIDs, true
 }
 
-func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, data_scope.RulePolicy, []map[string]any, bool) {
+func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, []map[string]any, bool) {
 	w := a.work
 	db := w.db()
-	resolvedTable, err := data_scope.ResolveBusinessTable(db, w.prefix(), a.rule.DataTable)
-	policy, policyErr := data_scope.ResolveRulePolicy(db, w.prefix(), a.rule.DataTable, "recycle", a.rule.PrimaryKey, nil, a.rule.OwnerColumn)
-	if err != nil || policyErr != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, a.rule.PrimaryKey) != nil {
+	resolvedTable, _, ownerColumn, err := resolveSecurityTarget(db, w.prefix(), a.rule.DataTable, "recycle", a.rule.PrimaryKey, nil)
+	if err != nil {
 		w.abort(http.StatusInternalServerError, "invalid security rule identifier")
-		return nil, "", data_scope.RulePolicy{}, nil, false
+		return nil, "", nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		if err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db); err != nil {
+		release, err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
-			return nil, "", data_scope.RulePolicy{}, nil, false
+			return nil, "", nil, false
 		}
+		defer release()
 	}
 	rows := []map[string]any{}
-	err = w.scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
+	query := db.Table(resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"})
+	if ownerColumn != "" {
+		query = w.scope(query, resolvedTable, ownerColumn)
+	}
+	err = query.
 		Where("`"+a.rule.PrimaryKey+"` IN ?", normalizedIDs).Find(&rows).Error
 	if err != nil {
 		w.security.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
 		w.abort(http.StatusInternalServerError, "target lookup failed")
-		return nil, "", data_scope.RulePolicy{}, nil, false
+		return nil, "", nil, false
 	}
 	if len(rows) != len(normalizedIDs) {
 		w.abort(http.StatusForbidden, "target scope incomplete")
-		return nil, "", data_scope.RulePolicy{}, nil, false
+		return nil, "", nil, false
 	}
 	matched := make(map[string]struct{}, len(rows))
 	for _, row := range rows {
 		id, err := normalizePrimaryKeyValue(row[a.rule.PrimaryKey])
 		if err != nil {
 			w.abort(http.StatusInternalServerError, "invalid target primary key")
-			return nil, "", data_scope.RulePolicy{}, nil, false
+			return nil, "", nil, false
 		}
 		matched[id] = struct{}{}
 	}
 	for _, id := range normalizedIDs {
 		if _, ok := matched[id]; !ok {
 			w.abort(http.StatusForbidden, "target scope incomplete")
-			return nil, "", data_scope.RulePolicy{}, nil, false
+			return nil, "", nil, false
 		}
 	}
-	return db, resolvedTable, policy, rows, true
+	return db, resolvedTable, rows, true
 }
 
-func (a *recycleAuditor) snapshotRows(policy data_scope.RulePolicy, rows []map[string]any) ([]securitymodel.SecurityDataRecycleLog, bool) {
+func (a *recycleAuditor) snapshotRows(rows []map[string]any) ([]securitymodel.SecurityDataRecycleLog, bool) {
 	w := a.work
 	logs := []securitymodel.SecurityDataRecycleLog{}
 	for _, row := range rows {
@@ -142,21 +145,14 @@ func (a *recycleAuditor) snapshotRows(policy data_scope.RulePolicy, rows []map[s
 			w.abort(http.StatusInternalServerError, "snapshot failed")
 			return nil, false
 		}
-		targetOwner, ownerErr := extractOwnerID(row, policy.Table.OwnerColumn)
-		if ownerErr != nil {
-			w.abort(http.StatusInternalServerError, "target owner missing")
-			return nil, false
-		}
 		logs = append(logs, securitymodel.SecurityDataRecycleLog{
-			AdminID:       w.actor.AdminID,
-			TargetAdminID: targetOwner,
-			IsCommitted:   1,
-			RecycleID:     a.rule.ID,
-			Data:          string(data),
-			DataTable:     a.rule.DataTable,
-			PrimaryKey:    a.rule.PrimaryKey,
-			IP:            w.context.ClientIP(),
-			Useragent:     w.context.Request.Header.Get("User-Agent"),
+			AdminID:    w.actor.AdminID,
+			RecycleID:  a.rule.ID,
+			Data:       string(data),
+			DataTable:  a.rule.DataTable,
+			PrimaryKey: a.rule.PrimaryKey,
+			IP:         w.context.ClientIP(),
+			Useragent:  w.context.Request.Header.Get("User-Agent"),
 		})
 	}
 	if len(logs) == 0 {

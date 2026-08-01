@@ -46,7 +46,7 @@ func (a *sensitiveAuditor) run() {
 	if !ok {
 		return
 	}
-	targetOwner, idValue, ok := a.auditIdentity(beforeRow, policy, primaryValue)
+	idValue, ok := a.auditIdentity(primaryValue)
 	if !ok {
 		return
 	}
@@ -59,13 +59,16 @@ func (a *sensitiveAuditor) run() {
 		return
 	}
 	afterRow := map[string]any{}
-	err := a.work.scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).
-		Where("`"+a.rule.PrimaryKey+"`=?", primaryValue).Take(&afterRow).Error
+	query := db.Table(resolvedTable)
+	if policy.Table.OwnerColumn != "" {
+		query = a.work.scope(query, resolvedTable, policy.Table.OwnerColumn)
+	}
+	err := query.Where("`"+a.rule.PrimaryKey+"`=?", primaryValue).Take(&afterRow).Error
 	if err != nil {
 		a.work.abort(http.StatusInternalServerError, "after-state lookup failed")
 		return
 	}
-	logs := a.changedFieldLogs(dataFields, beforeRow, afterRow, targetOwner, idValue)
+	logs := a.changedFieldLogs(dataFields, beforeRow, afterRow, idValue)
 	if len(logs) == 0 {
 		return
 	}
@@ -108,22 +111,26 @@ func (a *sensitiveAuditor) readRequestParams() (map[string]interface{}, bool) {
 func (a *sensitiveAuditor) loadBeforeRow(primaryValue any) (*gorm.DB, string, data_scope.RulePolicy, map[string]any, bool) {
 	w := a.work
 	db := w.db()
-	resolvedTable, err := data_scope.ResolveBusinessTable(db, w.prefix(), a.rule.DataTable)
-	policy, policyErr := data_scope.ResolveRulePolicy(db, w.prefix(), a.rule.DataTable, "sensitive", a.rule.PrimaryKey, nil, a.rule.OwnerColumn)
-	if err != nil || policyErr != nil || data_scope.ResolveBusinessColumn(db, resolvedTable, a.rule.PrimaryKey) != nil {
+	resolvedTable, policy, ownerColumn, err := resolveSecurityTarget(db, w.prefix(), a.rule.DataTable, "sensitive", a.rule.PrimaryKey, nil)
+	if err != nil {
 		w.abort(http.StatusInternalServerError, "invalid security rule identifier")
 		return nil, "", data_scope.RulePolicy{}, nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		if err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db); err != nil {
+		release, err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
 			return nil, "", data_scope.RulePolicy{}, nil, false
 		}
+		defer release()
 	}
 	row := map[string]any{}
-	err = w.scope(db.Table(resolvedTable), resolvedTable, policy.Table.OwnerColumn).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
+	query := db.Table(resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"})
+	if ownerColumn != "" {
+		query = w.scope(query, resolvedTable, ownerColumn)
+	}
+	err = query.
 		Where("`"+a.rule.PrimaryKey+"`=?", primaryValue).Take(&row).Error
 	if err != nil {
 		w.security.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
@@ -153,28 +160,23 @@ func (a *sensitiveAuditor) loadDataFields(db *gorm.DB, resolvedTable string) (ma
 	return dataFields, true
 }
 
-func (a *sensitiveAuditor) auditIdentity(row map[string]any, policy data_scope.RulePolicy, primaryValue any) (int32, int32, bool) {
-	targetOwner, ownerErr := extractOwnerID(row, policy.Table.OwnerColumn)
-	if ownerErr != nil {
-		a.work.abort(http.StatusInternalServerError, "target owner missing")
-		return 0, 0, false
-	}
+func (a *sensitiveAuditor) auditIdentity(primaryValue any) (int32, bool) {
 	idText, idErr := normalizePrimaryKeyValue(primaryValue)
 	if idErr != nil {
 		a.work.abort(http.StatusInternalServerError, "invalid target primary key")
-		return 0, 0, false
+		return 0, false
 	}
 	idValue, idErr := strconv.ParseInt(idText, 10, 32)
 	if idErr != nil {
 		// id_value is the existing int32 audit column. Never truncate an
 		// int64 or string key; a future schema migration must add text storage.
 		a.work.abort(http.StatusInternalServerError, "string or oversized primary keys require text audit storage")
-		return 0, 0, false
+		return 0, false
 	}
-	return targetOwner, int32(idValue), true
+	return int32(idValue), true
 }
 
-func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, targetOwner, idValue int32) []securitymodel.SecuritySensitiveDataLog {
+func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, idValue int32) []securitymodel.SecuritySensitiveDataLog {
 	w := a.work
 	logs := []securitymodel.SecuritySensitiveDataLog{}
 	for field, comment := range dataFields {
@@ -182,7 +184,7 @@ func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, before
 		afterV, newOK := afterRow[field]
 		if oldOK && newOK && normalizeAuditValue(beforeV) != normalizeAuditValue(afterV) {
 			logs = append(logs, securitymodel.SecuritySensitiveDataLog{
-				AdminID: w.actor.AdminID, TargetAdminID: targetOwner, IsCommitted: 1,
+				AdminID:     w.actor.AdminID,
 				SensitiveID: a.rule.ID, DataTable: a.rule.DataTable, PrimaryKey: a.rule.PrimaryKey,
 				DataField: field, DataComment: comment, IDValue: idValue,
 				Before: normalizeAuditValue(beforeV), After: normalizeAuditValue(afterV),

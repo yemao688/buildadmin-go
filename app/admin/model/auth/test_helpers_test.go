@@ -34,19 +34,6 @@ func ensureAdminDefaults(t *testing.T, db *gorm.DB) {
 	}
 }
 
-func ensureLockTable(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	if err := db.Exec("CREATE TABLE IF NOT EXISTS `ba_admin_hierarchy_lock` (" +
-		"`id` tinyint(3) unsigned NOT NULL," +
-		"PRIMARY KEY (`id`)" +
-		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").Error; err != nil {
-		t.Fatalf("create lock table: %v", err)
-	}
-	if err := db.Exec("INSERT IGNORE INTO `ba_admin_hierarchy_lock` (id) VALUES (1)").Error; err != nil {
-		t.Fatalf("seed lock row: %v", err)
-	}
-}
-
 func countClosureRows(t *testing.T, db *gorm.DB) int64 {
 	t.Helper()
 	var count int64

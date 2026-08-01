@@ -142,8 +142,6 @@ func prepareAdminModelMySQL(t *testing.T) *gorm.DB {
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Exec("DROP TRIGGER IF EXISTS ba_admin_closure_delete_block")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -369,8 +367,6 @@ func TestValidateOrMoveWithoutParentChangeChecksOnlyTargetAndClosure(t *testing.
 func TestSelectTreeExcludesDescendants(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -416,8 +412,6 @@ func TestSelectTreeExcludesDescendants(t *testing.T) {
 func TestSwitchStatusScoped(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -452,8 +446,6 @@ func TestSwitchStatusScoped(t *testing.T) {
 func TestAdminModelDeleteRejectsSubordinates(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -487,8 +479,6 @@ func TestAdminModelDeleteRejectsSubordinates(t *testing.T) {
 func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}

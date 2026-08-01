@@ -15,7 +15,6 @@ DELETE /admin/security.DataRecycle/del
 DELETE /admin/security.DataRecycleLog/del
 DELETE /admin/security.SensitiveData/del
 DELETE /admin/security.SensitiveDataLog/del
-DELETE /admin/testBuild/del
 DELETE /admin/user.User/del
 GET /
 GET /admin/Dashboard/index
@@ -60,8 +59,6 @@ GET /admin/security.SensitiveData/edit
 GET /admin/security.SensitiveData/index
 GET /admin/security.SensitiveDataLog/index
 GET /admin/security.SensitiveDataLog/info
-GET /admin/testBuild/edit
-GET /admin/testBuild/index
 GET /admin/user.MoneyLog/add
 GET /admin/user.MoneyLog/index
 GET /admin/user.User/edit
@@ -124,8 +121,6 @@ POST /admin/security.DataRecycleLog/restore
 POST /admin/security.SensitiveData/add
 POST /admin/security.SensitiveData/edit
 POST /admin/security.SensitiveDataLog/rollback
-POST /admin/testBuild/add
-POST /admin/testBuild/edit
 POST /admin/user.MoneyLog/add
 POST /admin/user.User/add
 POST /admin/user.User/edit

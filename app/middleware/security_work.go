@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -75,6 +76,61 @@ func (w *securityWork) resolveRule(table, route string, rule any) error {
 	return (&securityRuleResolver{work: w}).resolve(table, route, rule)
 }
 
+func resolveSecurityTarget(db *gorm.DB, prefix, logical, kind, primary string, fields []string) (string, data_scope.RulePolicy, string, error) {
+	if primary == "" {
+		primary = "id"
+	}
+	resolvedTable, err := data_scope.ResolveBusinessTable(db, prefix, logical)
+	if err != nil {
+		return "", data_scope.RulePolicy{}, "", err
+	}
+	if err := data_scope.ValidateBusinessIdentifier(primary); err != nil {
+		return "", data_scope.RulePolicy{}, "", err
+	}
+	if err := data_scope.ResolveBusinessColumn(db, resolvedTable, primary); err != nil {
+		return "", data_scope.RulePolicy{}, "", err
+	}
+	actualPrimary, err := data_scope.ResolveBusinessPrimaryKey(db, resolvedTable)
+	if err != nil {
+		return "", data_scope.RulePolicy{}, "", err
+	}
+	if actualPrimary != primary {
+		return "", data_scope.RulePolicy{}, "", fmt.Errorf("rule primary key %q does not match target table primary key %q", primary, actualPrimary)
+	}
+
+	var ownerCount int64
+	if err := db.Raw(
+		"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='admin_id'",
+		resolvedTable,
+	).Scan(&ownerCount).Error; err != nil {
+		return "", data_scope.RulePolicy{}, "", err
+	}
+	if ownerCount == 1 {
+		policy, err := data_scope.ResolveRulePolicy(db, prefix, logical, kind, primary, fields)
+		return resolvedTable, policy, "admin_id", err
+	}
+
+	if kind != "recycle" && kind != "sensitive" {
+		return "", data_scope.RulePolicy{}, "", fmt.Errorf("invalid security rule kind %q", kind)
+	}
+	for _, field := range fields {
+		if err := data_scope.ValidateSecurityField(field); err != nil {
+			return "", data_scope.RulePolicy{}, "", err
+		}
+		if err := data_scope.ResolveBusinessColumn(db, resolvedTable, field); err != nil {
+			return "", data_scope.RulePolicy{}, "", err
+		}
+	}
+	return resolvedTable, data_scope.RulePolicy{
+		Table: data_scope.TablePolicy{
+			Recycle:    kind == "recycle",
+			Sensitive:  kind == "sensitive",
+			PrimaryKey: primary,
+		},
+		TableName: resolvedTable,
+	}, "", nil
+}
+
 type securityRuleResolver struct {
 	work *securityWork
 }
@@ -89,20 +145,9 @@ func (r *securityRuleResolver) resolve(table, route string, rule any) error {
 		return err
 	}
 	db := w.db()
-	adminTable := prefix + "admin"
-	base := db.Table(table).
-		Joins("JOIN `"+adminTable+"` AS rule_owner ON rule_owner.id = `"+table+"`.admin_id").
-		Where("`"+table+"`.status = ? AND `"+table+"`.controller_as = ?", "1", route)
-	if !w.actor.Unrestricted {
-		closure := prefix + "admin_closure"
-		base = base.Joins("JOIN `"+closure+"` AS owner_scope ON owner_scope.ancestor_id = `"+table+"`.admin_id AND owner_scope.descendant_id = ?", w.actor.AdminID).
-			Order("owner_scope.depth ASC").Order("`" + table + "`.admin_id ASC")
-	} else {
-		// Unrestricted is deterministic too: only a rule owned by the
-		// hierarchy root is eligible, and the join proves that owner exists.
-		base = base.Where("rule_owner.parent_id IS NULL").Order("rule_owner.id ASC")
-	}
-	return base.First(rule).Error
+	return db.Table(table).
+		Where("status = ? AND controller_as = ?", "1", route).
+		Order("id ASC").First(rule).Error
 }
 
 func (w *securityWork) prefix() string {

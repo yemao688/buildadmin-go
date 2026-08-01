@@ -9,7 +9,7 @@ import (
 
 func TestMergeConfigMapsDeepMergeAndListReplacement(t *testing.T) {
 	base := map[string]any{
-		"app":     map[string]any{"env": "debug", "port": 9989},
+		"app":     map[string]any{"env": "debug", "port": 9900},
 		"servers": []any{"default"},
 	}
 	override := map[string]any{
@@ -25,7 +25,7 @@ func TestMergeConfigMapsDeepMergeAndListReplacement(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("merged config = %#v, want %#v", got, want)
 	}
-	if base["app"].(map[string]any)["port"] != 9989 {
+	if base["app"].(map[string]any)["port"] != 9900 {
 		t.Fatal("merge mutated base config")
 	}
 }
@@ -52,7 +52,7 @@ func TestLoadLayeredConfigSparseOverride(t *testing.T) {
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, DefaultsFileName)
 	overridePath := filepath.Join(root, "config.yaml")
-	defaults := []byte("app:\n  env: debug\n  port: 9989\nmysql:\n  host: 127.0.0.1\n  port: 3306\n  database: buildadmin\nmysql_test:\n  enabled: false\n")
+	defaults := []byte("app:\n  env: debug\n  port: 9900\nmysql:\n  host: 127.0.0.1\n  port: 3306\n  database: buildadmin\nmysql_test:\n  enabled: false\n")
 	override := []byte("mysql:\n  host: db.internal\n  database: custom\n")
 	if err := os.WriteFile(defaultsPath, defaults, 0600); err != nil {
 		t.Fatal(err)

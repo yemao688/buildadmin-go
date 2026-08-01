@@ -139,7 +139,6 @@ func completeRegistrars() []RouteRegistrar {
 	return ProvideRegistrars(
 		crudhandler.NewLogRegistrar(&crudhandler.LogHandler{}),
 		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
-		admin.NewTestBuildRegistrar(&admin.TestBuildHandler{}),
 		authhandler.NewAdminGroupRegistrar(&authhandler.AdminGroupHandler{}),
 		authhandler.NewAdminRuleRegistrar(&authhandler.AdminRuleHandler{}),
 		routinehandler.NewConfigRegistrar(&routinehandler.ConfigHandler{}),

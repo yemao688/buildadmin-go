@@ -43,13 +43,9 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
 	require.NoError(t, db.Exec("CREATE TABLE `"+closure+"` (`ancestor_id` INT NOT NULL, `descendant_id` INT NOT NULL, `depth` INT NOT NULL, PRIMARY KEY (`ancestor_id`,`descendant_id`), KEY (`descendant_id`,`ancestor_id`)) ENGINE=InnoDB").Error)
-	lockTable := prefix + "admin_hierarchy_lock"
-	require.NoError(t, db.Exec("CREATE TABLE `"+lockTable+"` (`id` tinyint(3) unsigned NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB").Error)
-	require.NoError(t, db.Exec("INSERT IGNORE INTO `"+lockTable+"` (`id`) VALUES (1)").Error)
 	t.Cleanup(func() {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user_money_log`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user`")
-		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin_hierarchy_lock`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin_closure`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "admin_group`")

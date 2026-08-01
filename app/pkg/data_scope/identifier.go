@@ -75,10 +75,20 @@ func ValidateRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fiel
 	return resolved.TableName, nil
 }
 
-// ResolveRulePolicy resolves the persisted owner override. Static legacy
-// policies retain their exact behavior; generated/custom tables default to
-// admin_id and may explicitly declare another validated owner column.
+// ResolveRulePolicy resolves a rule and validates its conventional admin_id
+// owner column. Static policies retain their exact behavior; generated/custom
+// tables default to admin_id and may explicitly declare another owner column.
 func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string, ownerColumns ...string) (RulePolicy, error) {
+	return resolveRulePolicy(db, prefix, logical, kind, primary, fields, true, ownerColumns...)
+}
+
+// ResolveRulePolicyWithoutOwner validates a rule whose target table has no
+// admin_id column. The caller must skip data-scope predicates for that target.
+func ResolveRulePolicyWithoutOwner(db *gorm.DB, prefix, logical, kind, primary string, fields []string) (RulePolicy, error) {
+	return resolveRulePolicy(db, prefix, logical, kind, primary, fields, false)
+}
+
+func resolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string, requireOwner bool, ownerColumns ...string) (RulePolicy, error) {
 	if primary == "" {
 		primary = "id"
 	}
@@ -104,8 +114,19 @@ func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, field
 	} else if owner != policy.OwnerColumn {
 		return RulePolicy{}, fmt.Errorf("%w: static table policy owner must remain %s", ErrInvalidIdentifier, policy.OwnerColumn)
 	}
-	if err := ValidateBusinessIdentifier(owner); err != nil {
-		return RulePolicy{}, fmt.Errorf("invalid owner column: %w", err)
+	table, err := ResolveBusinessTable(db, prefix, logical)
+	if err != nil {
+		return RulePolicy{}, err
+	}
+	if requireOwner {
+		if err := ValidateBusinessIdentifier(owner); err != nil {
+			return RulePolicy{}, fmt.Errorf("invalid owner column: %w", err)
+		}
+		if err := ResolveBusinessColumn(db, table, owner); err != nil {
+			return RulePolicy{}, fmt.Errorf("owner column %s.%s is invalid: %w", table, owner, err)
+		}
+	} else {
+		owner = ""
 	}
 	policy.OwnerColumn = owner
 	if kind == "recycle" && !policy.Recycle || kind == "sensitive" && !policy.Sensitive {
@@ -113,13 +134,6 @@ func ResolveRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, field
 	}
 	if primary != policy.PrimaryKey {
 		return RulePolicy{}, fmt.Errorf("%w: rule primary key does not match policy", ErrInvalidIdentifier)
-	}
-	table, err := ResolveBusinessTable(db, prefix, logical)
-	if err != nil {
-		return RulePolicy{}, err
-	}
-	if err := ResolveBusinessColumn(db, table, owner); err != nil {
-		return RulePolicy{}, fmt.Errorf("owner column %s.%s is invalid: %w", table, owner, err)
 	}
 	actualPrimary, err := ResolveBusinessPrimaryKey(db, table)
 	if err != nil {

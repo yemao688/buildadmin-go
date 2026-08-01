@@ -85,8 +85,6 @@ func adminParentID(t *testing.T, db *gorm.DB, id int32) *int32 {
 func TestAdminHierarchyLinkNewNode(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -114,8 +112,6 @@ func TestAdminHierarchyLinkNewNode(t *testing.T) {
 func TestAdminHierarchyLinkNewNodeOrphanParent(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -139,8 +135,6 @@ func TestAdminHierarchyLinkNewNodeOrphanParent(t *testing.T) {
 func TestAdminHierarchyMoveRootToRoot(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -166,8 +160,6 @@ func TestAdminHierarchyMoveRootToRoot(t *testing.T) {
 func TestAdminHierarchyMoveRootUnderParent(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -200,8 +192,6 @@ func TestAdminHierarchyMoveRootUnderParent(t *testing.T) {
 func TestAdminHierarchyMoveSubtree(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -245,8 +235,6 @@ func TestAdminHierarchyMoveSubtree(t *testing.T) {
 func TestAdminHierarchyMoveRejectsInvalid(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -292,8 +280,6 @@ func TestAdminHierarchyMoveRejectsInvalid(t *testing.T) {
 func TestAdminHierarchyMoveRejectsInconsistentParent(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -326,8 +312,6 @@ func TestAdminHierarchyMoveRejectsInconsistentParent(t *testing.T) {
 func TestAdminHierarchyConcurrentMoves(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -400,8 +384,6 @@ func TestAdminHierarchyConcurrentMoves(t *testing.T) {
 func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -434,8 +416,6 @@ func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
 func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &AdminGroupAccess{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}, &AdminGroupAccess{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -463,51 +443,44 @@ func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 	}
 }
 
-func lockTable(t *testing.T, db *gorm.DB) string {
-	t.Helper()
-	return "ba_admin_hierarchy_lock"
-}
-
-func assertLockRowExists(t *testing.T, db *gorm.DB) {
-	t.Helper()
-	var id uint8
-	if err := db.Raw("SELECT id FROM `ba_admin_hierarchy_lock` WHERE id = 1").Scan(&id).Error; err != nil {
-		t.Fatalf("lock row missing: %v", err)
-	}
-	if id != 1 {
-		t.Fatalf("lock row id = %d, want 1", id)
-	}
-}
-
-func TestAdminHierarchyLockRowMissingFailsClosed(t *testing.T) {
+func TestAdminHierarchyNamedLockBusyFailsClosed(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
-	if err := db.Exec("DELETE FROM `ba_admin_hierarchy_lock`").Error; err != nil {
-		t.Fatalf("delete lock row: %v", err)
+	holder := db.Begin()
+	if holder.Error != nil {
+		t.Fatalf("begin lock holder: %v", holder.Error)
 	}
+	defer holder.Rollback()
+	var acquired int
+	if err := holder.Raw("SELECT GET_LOCK(?, ?)", "ba_admin_hierarchy", 0).Scan(&acquired).Error; err != nil {
+		t.Fatalf("acquire named lock: %v", err)
+	}
+	if acquired != 1 {
+		t.Fatalf("named lock acquired = %d, want 1", acquired)
+	}
+	defer func() {
+		var released int
+		_ = holder.Raw("SELECT RELEASE_LOCK(?)", "ba_admin_hierarchy").Scan(&released).Error
+	}()
 
 	h := newAdminHierarchy("ba_")
 	a := createAdminForHierarchy(t, db, "nolock")
-	err := db.Transaction(func(tx *gorm.DB) error {
-		return h.LinkNewNode(context.Background(), tx, a.ID, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return h.LinkNewNode(ctx, tx, a.ID, nil)
 	})
-	if err == nil {
-		t.Fatal("expected error when lock row is missing")
+	if !errors.Is(err, ErrHierarchyIntegrity) {
+		t.Fatalf("expected ErrHierarchyIntegrity, got %v", err)
 	}
 }
 
 func TestAdminHierarchyClosureOnlyRealAdmins(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -558,15 +531,11 @@ func TestAdminHierarchyClosureOnlyRealAdmins(t *testing.T) {
 	if depthZeroCount != adminCount {
 		t.Fatalf("depth=0 rows = %d, admin rows = %d", depthZeroCount, adminCount)
 	}
-	assertLockRowExists(t, db)
 }
 
 func TestAdminHierarchyMoveRejectsTwoDirectParents(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
-	_ = db.Migrator().DropTable("ba_admin_hierarchy_lock")
-	ensureLockTable(t, db)
-	ensureLockTable(t, db)
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
