@@ -19,10 +19,16 @@ func TestValidateBusinessIdentifierAcceptsPlainName(t *testing.T) {
 }
 
 func TestStaticPolicyRejectsSensitiveFields(t *testing.T) {
-	for _, field := range []string{"admin_id", "password", "salt", "token", "secret"} {
+	for _, field := range []string{"admin_id", "password", "token", "secret"} {
 		if err := ValidateSecurityField(field); err == nil {
 			t.Fatalf("expected sensitive field %q to be rejected", field)
 		}
+	}
+}
+
+func TestValidateSecurityFieldAllowsRemovedSalt(t *testing.T) {
+	if err := ValidateSecurityField("salt"); err != nil {
+		t.Fatalf("removed salt field should be allowed: %v", err)
 	}
 }
 

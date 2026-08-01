@@ -12,7 +12,7 @@ import (
 )
 
 var adminLogSkipURLPattern = regexp.MustCompile(`(?i)/(select|index|logout)$`)
-var adminLogSensitiveKeyPattern = regexp.MustCompile(`(?i)(password|salt|token)`)
+var adminLogSensitiveKeyPattern = regexp.MustCompile(`(?i)(password|token)`)
 
 func skipAdminLogURL(url string) bool {
 	return adminLogSkipURLPattern.MatchString(url)
@@ -166,7 +166,7 @@ func (s *AdminLogModel) Del(ctx *gin.Context, ids interface{}) error {
 			normalized = append(normalized, id)
 		}
 	}
-	return s.DB().Transaction(func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var count int64
 		if err := tx.Model(&AdminLog{}).Where("id IN ?", normalized).Count(&count).Error; err != nil {
 			return err

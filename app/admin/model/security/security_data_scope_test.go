@@ -54,8 +54,8 @@ func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin")+" VALUES (1,NULL),(2,1),(3,1)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("admin_closure")+" VALUES (1,1,0),(1,2,1),(1,3,1),(2,2,0),(3,3,0)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (20,2,'before'),(21,3,'sibling')").Error)
-	require.NoError(t, db.Table(prefix+"security_data_recycle").Create(&SecurityDataRecycle{ID: 1, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "1"}).Error)
-	require.NoError(t, db.Table(prefix+"security_sensitive_data").Create(&SecuritySensitiveData{ID: 1, Name: "user", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1"}).Error)
+	require.NoError(t, db.Table(prefix+"security_data_recycle").Create(&SecurityDataRecycle{ID: 1, Name: "user", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "1"}).Error)
+	require.NoError(t, db.Table(prefix+"security_sensitive_data").Create(&SecuritySensitiveData{ID: 1, Name: "user", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1"}).Error)
 	return f
 }
 

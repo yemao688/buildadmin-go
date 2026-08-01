@@ -32,7 +32,7 @@ var tablePolicies = map[string]TablePolicy{
 }
 
 var forbiddenSecurityFields = map[string]struct{}{
-	"id": {}, "admin_id": {}, "password": {}, "salt": {}, "token": {}, "secret": {},
+	"id": {}, "admin_id": {}, "password": {}, "token": {}, "secret": {},
 	"authorization": {}, "cookie": {}, "api_key": {}, "access_key": {}, "private_key": {},
 }
 

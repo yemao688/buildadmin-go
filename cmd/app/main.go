@@ -171,9 +171,9 @@ func initConfig() {
 	overridePath := ""
 	if runtimeConfigExists {
 		overridePath = runtimeConfigPath
-	} else {
-		configPath = defaultsPath
 	}
+	// 注意：不要把 defaultsPath 回写进全局 configPath——它与 --conf flag 绑定同一存储，
+	// 覆写会让 setup 等后续读取 --conf 的流程拿到 defaults 路径而非用户指定路径。
 	fmt.Println("load config:" + defaultsPath)
 	if overridePath != "" {
 		fmt.Println("merge config:" + overridePath)

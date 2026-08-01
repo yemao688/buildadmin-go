@@ -110,7 +110,7 @@ func (s *MoneyLogModel) Add(ctx *gin.Context, userMoneyLog *MoneyLog) error {
 		return err
 	}
 
-	return s.DB().Transaction(func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var user User
 		if err := tx.Model(&User{}).Scopes(s.userScope(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", userMoneyLog.UserID).Take(&user).Error; err != nil {
 			return err
@@ -159,7 +159,7 @@ func (s *MoneyLogModel) Del(ctx *gin.Context, ids interface{}) error {
 			normalized = append(normalized, id)
 		}
 	}
-	return s.DB().Transaction(func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []MoneyLog
 		scoped := tx.Model(&MoneyLog{}).Scopes(s.scoped(ctx))
 		if err := scoped.Where(quote(s.TableName)+".id IN ?", normalized).Find(&list).Error; err != nil {

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -93,6 +94,27 @@ func TestResolveSetupConfigPathUsesExplicitConf(t *testing.T) {
 	root := t.TempDir()
 	if got := resolveSetupConfigPath(root, true, "custom/config.yaml"); got != filepath.Join(root, "custom/config.yaml") {
 		t.Fatalf("resolveSetupConfigPath() = %q, want %q", got, filepath.Join(root, "custom/config.yaml"))
+	}
+}
+
+func TestSetupConfigPathReadsExplicitConfFromRootPFlag(t *testing.T) {
+	root := t.TempDir()
+	customPath := filepath.Join(root, "custom", "config.yaml")
+	previous := pflag.CommandLine
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("conf", filepath.Join(root, "config.yaml"), "config path")
+	if err := flags.Set("conf", customPath); err != nil {
+		t.Fatal(err)
+	}
+	pflag.CommandLine = flags
+	defer func() { pflag.CommandLine = previous }()
+
+	got, err := setupConfigPath(root)
+	if err != nil {
+		t.Fatalf("setupConfigPath() error = %v", err)
+	}
+	if got != customPath {
+		t.Fatalf("setupConfigPath() = %q, want %q", got, customPath)
 	}
 }
 
@@ -339,7 +361,7 @@ func TestUpdateSetupAdminRejectsMissingSiteName(t *testing.T) {
 	}
 
 	err = updateSetupAdmin(db, "operator", "new-password", "Example")
-	if err == nil || !strings.Contains(err.Error(), "site_name update affected 0 rows") {
+	if err == nil || !strings.Contains(err.Error(), "site_name config not found") {
 		t.Fatalf("updateSetupAdmin() error = %v", err)
 	}
 }

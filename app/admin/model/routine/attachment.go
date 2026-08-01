@@ -112,7 +112,7 @@ func (s *AttachmentModel) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}
 	var list []upload.Attachment
-	err := s.DB().Transaction(func(tx *gorm.DB) error {
+	err := s.Transaction(ctx, func(tx *gorm.DB) error {
 		scoped := s.scoped(ctx, tx.Table(s.TableName+" AS attachment"))
 		if err := scoped.Where("attachment.id IN ?", normalized).Find(&list).Error; err != nil {
 			return err

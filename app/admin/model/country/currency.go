@@ -14,7 +14,7 @@ import (
 
 // Currency 全局货币
 type Currency struct {
-	ID     int64   `gorm:"column:id;primaryKey;autoIncrement:true;comment:主键" json:"id"`        // 主键
+	ID     int64   `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`        // 主键
 	Code   string  `gorm:"column:code;not null;comment:货币代码" json:"code"`                       // 货币代码
 	Name   string  `gorm:"column:name;not null;comment:货币名称" json:"name"`                       // 货币名称
 	Symbol string  `gorm:"column:symbol;not null;comment:货币符号" json:"symbol"`                   // 货币符号

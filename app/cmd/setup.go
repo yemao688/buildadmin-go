@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"golang.org/x/term"
 	"gorm.io/gorm"
@@ -109,13 +110,9 @@ func newSetupCommand() *cobra.Command {
 				opts.provided[name] = cmd.Flags().Changed(name)
 			}
 			rootPath := utils.RootPath()
-			configPath := filepath.Join(rootPath, "config.yaml")
-			if flag := cmd.Flags().Lookup("conf"); flag != nil {
-				value, err := cmd.Flags().GetString("conf")
-				if err != nil {
-					return err
-				}
-				configPath = resolveSetupConfigPath(rootPath, flag.Changed, value)
+			configPath, err := setupConfigPath(rootPath)
+			if err != nil {
+				return err
 			}
 			runner := setupRunner{
 				rootPath:   rootPath,
@@ -270,6 +267,18 @@ func resolveSetupConfigPath(rootPath string, flagChanged bool, flagValue string)
 		return flagValue
 	}
 	return filepath.Join(rootPath, flagValue)
+}
+
+func setupConfigPath(rootPath string) (string, error) {
+	configPath := filepath.Join(rootPath, "config.yaml")
+	if flag := pflag.Lookup("conf"); flag != nil {
+		value, err := pflag.CommandLine.GetString("conf")
+		if err != nil {
+			return "", err
+		}
+		configPath = resolveSetupConfigPath(rootPath, flag.Changed, value)
+	}
+	return configPath, nil
 }
 
 func (r setupRunner) openSetupDatabase(database installer.Database, console *setupConsole) (*gorm.DB, error) {
@@ -683,7 +692,16 @@ func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
 	if err != nil {
 		return err
 	}
-	result := db.Model(&adminauth.Admin{}).Where("username = ?", "admin").Updates(map[string]any{
+	// 种子管理员固定为 id=1；不能按初始用户名 'admin' 匹配——安装后它已被改名，
+	// 删除 install.lock 的重装流程下按用户名匹配会 0 行报错。
+	var adminCount int64
+	if err := db.Model(&adminauth.Admin{}).Where("id = ?", 1).Count(&adminCount).Error; err != nil {
+		return err
+	}
+	if adminCount != 1 {
+		return errors.New("seed admin not found")
+	}
+	result := db.Model(&adminauth.Admin{}).Where("id = ?", 1).Updates(map[string]any{
 		"username": username,
 		"nickname": username,
 		"password": hash,
@@ -691,15 +709,14 @@ func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
 	if result.Error != nil {
 		return result.Error
 	}
-	if result.RowsAffected != 1 {
-		return fmt.Errorf("seed admin update affected %d rows", result.RowsAffected)
+	var siteCount int64
+	if err := db.Model(&siteconfig.Config{}).Where("name = ?", "site_name").Count(&siteCount).Error; err != nil {
+		return err
 	}
+	if siteCount != 1 {
+		return errors.New("site_name config not found")
+	}
+	// site_name 值未变化时 MySQL 报 0 rows affected，属正常幂等，不做行数断言。
 	result = db.Model(&siteconfig.Config{}).Where("name = ?", "site_name").Updates(map[string]any{"value": siteName})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return fmt.Errorf("site_name update affected %d rows", result.RowsAffected)
-	}
-	return nil
+	return result.Error
 }

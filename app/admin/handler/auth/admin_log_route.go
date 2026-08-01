@@ -3,6 +3,7 @@ package auth
 
 import (
 	"go-build-admin/app/middleware"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,4 +23,7 @@ func (r *AdminLogRegistrar) Register(g gin.IRoutes) {
 	g.DELETE("auth.AdminLog/del", r.handler.Del)
 }
 
-func (r *AdminLogRegistrar) Capabilities() []middleware.AtomicRoute { return nil }
+func (r *AdminLogRegistrar) Capabilities() []middleware.AtomicRoute {
+	// AdminLog 仅有 del 写操作；声明 add/edit 会导致与注册路由不匹配
+	return []middleware.AtomicRoute{{Route: "auth/adminlog", Action: "del", Method: http.MethodDelete}}
+}

@@ -88,7 +88,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	params.ControllerAs = params.Controller
+	params.ControllerAs = normalizeControllerAs(params.Controller)
 	var sensitiveData securitymodel.SecuritySensitiveData
 	copier.Copy(&sensitiveData, params)
 
@@ -169,7 +169,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	params.ControllerAs = params.Controller
+	params.ControllerAs = normalizeControllerAs(params.Controller)
 	copier.Copy(&data, params)
 	dateField := map[string]string{}
 	for _, v := range params.Fields {
@@ -200,31 +200,29 @@ func (h *SensitiveDataHandler) Del(ctx *gin.Context) {
 
 func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
 	outExcludeRoute := []string{
-		"admin/addon",
-		"admin/ajax",
-		"admin/module",
-		"admin/terminal",
-		"admin/Dashboard",
-		"admin/Index",
-		"admin/routine.AdminInfo",
-		"admin/user.MoneyLog",
-		"routine/Config",
-		"auth/AdminLog",
+		"addon",
+		"ajax",
+		"module",
+		"terminal",
+		"Dashboard",
+		"Index",
+		"routine.AdminInfo",
+		"user.MoneyLog",
+		"routine.Config",
+		"auth.AdminLog",
 	}
 
 	outRoutes := map[string]string{}
 	routes := adminhandler.GetAllRoutes()
 	for _, r := range routes {
-		for _, v := range outExcludeRoute {
-			if !strings.HasPrefix(r.Path, "/admin") {
-				continue
-			}
-			segments := strings.Split(r.Path, "/")
-			if len(segments) >= 3 {
-				path := segments[1] + "/" + segments[2]
-				if path != v {
-					outRoutes[path] = path
-				}
+		if !strings.HasPrefix(r.Path, "/admin") {
+			continue
+		}
+		segments := strings.Split(r.Path, "/")
+		if len(segments) >= 3 {
+			path := segments[2]
+			if !slices.Contains(outExcludeRoute, path) {
+				outRoutes[path] = path
 			}
 		}
 	}

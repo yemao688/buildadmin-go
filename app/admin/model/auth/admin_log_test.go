@@ -138,8 +138,8 @@ func TestAdminLogAddSanitizesNestedParamsAndTruncates(t *testing.T) {
 		t.Fatalf("sensitive values were not sanitized: %#v", got)
 	}
 	items := got["profile"].(map[string]interface{})["items"].([]interface{})
-	if items[0].(map[string]interface{})["saltValue"] != "***" {
-		t.Fatalf("nested slice value was not sanitized: %#v", got)
+	if items[0].(map[string]interface{})["saltValue"] != "salt-secret" {
+		t.Fatalf("removed salt field was sanitized: %#v", got)
 	}
 }
 

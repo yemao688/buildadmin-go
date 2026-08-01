@@ -94,7 +94,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	params.ControllerAs = params.Controller
+	params.ControllerAs = normalizeControllerAs(params.Controller)
 	var data securitymodel.SecurityDataRecycle
 	copier.Copy(&data, params)
 	if err := h.dataRecycleM.Add(ctx, data); err != nil {
@@ -140,7 +140,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		adminhandler.FailByErr(ctx, err)
 		return
 	}
-	params.ControllerAs = params.Controller
+	params.ControllerAs = normalizeControllerAs(params.Controller)
 	copier.Copy(&data, params)
 	if err := h.dataRecycleM.Edit(ctx, data); err != nil {
 		adminhandler.FailByErr(ctx, err)
@@ -165,29 +165,29 @@ func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 
 func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 	outExcludeRoute := []string{
-		"admin/addon",
-		"admin/ajax",
-		"admin/module",
-		"admin/terminal",
-		"admin/Dashboard",
-		"admin/Index",
-		"admin/routine.AdminInfo",
-		"admin/user.MoneyLog",
+		"addon",
+		"ajax",
+		"module",
+		"terminal",
+		"Dashboard",
+		"Index",
+		"routine.AdminInfo",
+		"user.MoneyLog",
+		"routine.Config",
+		"auth.AdminLog",
 	}
 
 	outRoutes := map[string]string{}
 	routes := adminhandler.GetAllRoutes()
 	for _, r := range routes {
-		for _, v := range outExcludeRoute {
-			if !strings.HasPrefix(r.Path, "/admin") {
-				continue
-			}
-			segments := strings.Split(r.Path, "/")
-			if len(segments) >= 3 {
-				path := segments[1] + "/" + segments[2]
-				if path != v {
-					outRoutes[path] = path
-				}
+		if !strings.HasPrefix(r.Path, "/admin") {
+			continue
+		}
+		segments := strings.Split(r.Path, "/")
+		if len(segments) >= 3 {
+			path := segments[2]
+			if !slices.Contains(outExcludeRoute, path) {
+				outRoutes[path] = path
 			}
 		}
 	}
