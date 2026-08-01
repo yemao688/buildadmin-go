@@ -91,7 +91,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移以及生成/部署文件
 
-- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/local/` 保存 6 条 Go 框架语义迁移（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册、记录到独立 `business_migrations` 账本的业务仓库扩展轨道。契约见 `database/migrations/business/README.md`。
+- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/local/` 保存 7 条 Go 框架语义迁移（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册、记录到独立 `business_migrations` 账本的业务仓库扩展轨道。契约见 `database/migrations/business/README.md`。
 - 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
 - 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 local `VerifySchema`/`VerifyUpgradeData`、`local.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）以及 `official.ValidateCurrentSchema`（当前 `user_rule` 列和规则枚举）。
 - 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 local/business 的 `Up` 之前执行。

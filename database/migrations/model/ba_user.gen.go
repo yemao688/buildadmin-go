@@ -20,7 +20,7 @@ type User struct {
 	Avatar        string    `gorm:"column:avatar;type:varchar(255) default '';not null;comment:头像" json:"avatar"`                              // 头像
 	Gender        int32     `gorm:"column:gender;type:tinyint(4) unsigned;not null;default:0;comment:性别:0=未知,1=男,2=女" json:"gender"`           // 性别:0=未知,1=男,2=女
 	Birthday      time.Time `gorm:"column:birthday;type:date default null;comment:生日" json:"birthday"`                                         // 生日
-	Money         int32     `gorm:"column:money;type:int(11) unsigned;not null;default:0;comment:余额" json:"money"`                             // 余额
+	Money         float64   `gorm:"column:money;type:decimal(12,2);not null;default:0.00;comment:余额" json:"money"`                             // 余额
 	Score         int32     `gorm:"column:score;type:int(11) unsigned;not null;default:0;comment:积分" json:"score"`                             // 积分
 	LastLoginTime int64     `gorm:"column:last_login_time;type:bigint(16) unsigned;default:null;comment:上次登录时间" json:"last_login_time"`        // 上次登录时间
 	LastLoginIP   string    `gorm:"column:last_login_ip;type:varchar(50) default '';not null;comment:上次登录IP" json:"last_login_ip"`             // 上次登录IP

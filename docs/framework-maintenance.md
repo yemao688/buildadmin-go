@@ -41,7 +41,7 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 三轨职责（完整契约见根目录 `AGENTS.md` 和 [`../database/migrations/business/README.md`](../database/migrations/business/README.md)）：
 
 - `official/`：PHP 上游迁移与官方安装 seed，只跟随 PHP 上游同步，不做框架私有改动。
-- `local/`：框架自身的 6 条语义迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
+- `local/`：框架自身的 7 条语义迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
 - `business/`：下游扩展轨道，框架仓库自身不放业务表。
 
 新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）；启动 debug 模式会输出未登记也未豁免的路由告警。

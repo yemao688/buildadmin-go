@@ -35,6 +35,7 @@ func Migrations(official []core.OfficialMigration) []core.LocalMigration {
 		{Sequence: 4, ID: "security-rule-normalization", Revision: 1, RequiresOfficial: requiresOfficial, Up: securityRuleNormalization, VerifySchema: verifySecurityRuleContract, VerifyUpgradeData: verifySecurityRuleContract},
 		{Sequence: 5, ID: "country-dictionary", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0013, VerifySchema: verifyCountryDictionaryContract, VerifyUpgradeData: verifyCountryDictionaryContract},
 		{Sequence: 6, ID: "upload-config", Revision: 1, RequiresOfficial: requiresOfficial, Up: version0014},
+		{Sequence: 7, ID: "user-money-decimal", Revision: 1, RequiresOfficial: requiresOfficial, Up: userMoneyDecimalUp, VerifyBaseline: verifyUserMoneyDecimalBaseline},
 	}
 }
 
