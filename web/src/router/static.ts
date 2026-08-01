@@ -13,8 +13,11 @@ const staticRoutes: Array<RouteRecordRaw> = [
     {
         // 首页
         path: '/',
-        name: '/',
-        redirect: adminBaseRoutePath + '/login',
+        name: 'home',
+        component: () => import('/@/views/frontend/index.vue'),
+        meta: {
+            title: pageTitle('home'),
+        },
     },
     {
         // 管理员登录页 - 不放在 adminBaseRoute.children 因为登录页不需要使用后台的布局

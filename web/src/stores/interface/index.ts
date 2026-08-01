@@ -133,6 +133,21 @@ export interface AdminInfo {
     super: boolean
 }
 
+export interface UserInfo {
+    id: number
+    username: string
+    nickname: string
+    avatar: string
+    email: string
+    mobile: string
+    money: string
+    last_login_time: string
+    last_login_ip: string
+    join_time: string
+    token: string
+    refresh_token: string
+}
+
 export interface TaskItem {
     // 任务唯一标识
     uuid: string

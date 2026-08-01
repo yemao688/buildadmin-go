@@ -9,11 +9,14 @@ import { useAdminInfo } from '/@/stores/adminInfo'
 import { useBaAccount } from '/@/stores/baAccount'
 import { useConfig } from '/@/stores/config'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
+import { useUserInfo } from '/@/stores/userInfo'
 import { isAdminApp } from '/@/utils/common'
 
 window.requests = []
 window.tokenRefreshing = false
 const pendingMap = new Map()
+let userTokenRefreshing = false
+const userRequests: Array<(token: string) => void> = []
 const loadingInstance: LoadingInstance = {
     target: null,
     count: 0,
@@ -35,6 +38,31 @@ export const getUrlPort = (): string => {
     return new URL(url).port
 }
 
+function refreshUserToken(lang: string, refreshToken: string, token: string) {
+    return axios
+        .post(
+            '/api/common/refreshToken',
+            {
+                refreshToken,
+            },
+            {
+                baseURL: getUrl(),
+                headers: {
+                    'think-lang': lang,
+                    server: true,
+                    'ba-user-token': token,
+                },
+                responseType: 'json',
+            }
+        )
+        .then((response) => {
+            if (response.data?.code !== 1 || !response.data.data?.token) {
+                return Promise.reject(response.data)
+            }
+            return response.data.data.token as string
+        })
+}
+
 /**
  * 创建`Axios`
  * 默认开启`reductDataFormat(简洁响应)`,返回类型为`ApiPromise`
@@ -44,6 +72,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
     const config = useConfig()
     const adminInfo = useAdminInfo()
     const baAccount = useBaAccount()
+    const userInfo = useUserInfo()
 
     const Axios = axios.create({
         baseURL: getUrl(),
@@ -74,6 +103,40 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         options
     )
 
+    const isUserRequest = (url?: string) => !isAdminApp() && /^\/api\//.test(url ?? '')
+    const retryUserRequest = (requestConfig: AxiosRequestConfig) => {
+        if (!userTokenRefreshing) {
+            userTokenRefreshing = true
+            return refreshUserToken(config.lang.defaultLang, userInfo.getToken('refresh'), userInfo.getToken('auth'))
+                .then((token) => {
+                    userInfo.setToken(token, 'auth')
+                    userTokenRefreshing = false
+                    userRequests.forEach((callback) => callback(token))
+                    userRequests.length = 0
+                    return Axios(requestConfig)
+                })
+                .catch((err) => {
+                    userInfo.removeToken()
+                    userTokenRefreshing = false
+                    userRequests.forEach((callback) => callback(''))
+                    userRequests.length = 0
+                    return Promise.reject(err)
+                })
+                .finally(() => {
+                    userTokenRefreshing = false
+                })
+        }
+
+        return new Promise((resolve) => {
+            userRequests.push((token) => {
+                const headers = (requestConfig.headers ?? {}) as anyObj
+                headers['ba-user-token'] = token
+                requestConfig.headers = headers
+                resolve(Axios(requestConfig))
+            })
+        })
+    }
+
     // 请求拦截
     Axios.interceptors.request.use(
         (config) => {
@@ -93,6 +156,10 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                 if (token) (config.headers as anyObj).batoken = token
                 const userToken = options.anotherToken
                 if (userToken) (config.headers as anyObj)['ba-user-token'] = userToken
+                if (!options.anotherToken && isUserRequest(config.url)) {
+                    const frontendUserToken = userInfo.getToken()
+                    if (frontendUserToken) (config.headers as anyObj)['ba-user-token'] = frontendUserToken
+                }
             }
 
             return config
@@ -110,6 +177,9 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
 
             if (response.config.responseType == 'json') {
                 if (response.data && response.data.code !== 1) {
+                    if (isUserRequest(response.config.url) && userInfo.getToken() && (response.data.code == 401 || response.data.code == 409)) {
+                        return retryUserRequest(response.config)
+                    }
                     if (response.data.code == 409) {
                         if (!window.tokenRefreshing) {
                             window.tokenRefreshing = true
@@ -205,6 +275,9 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         (error) => {
             error.config && removePending(error.config)
             options.loading && closeLoading(options) // 关闭loading
+            if (error.config && isUserRequest(error.config.url) && userInfo.getToken() && [401, 409].includes(error.response?.status)) {
+                return retryUserRequest(error.config)
+            }
             options.showErrorMessage && httpErrorStatusHandle(error) // 处理错误状态码
             return Promise.reject(error) // 错误继续返回给到具体页面
         }

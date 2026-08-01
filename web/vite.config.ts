@@ -25,6 +25,7 @@ const viteConfig = ({ mode }: ConfigEnv): UserConfig => {
         resolve: { alias },
         base: VITE_BASE_PATH,
         server: {
+            host: '0.0.0.0',
             port: parseInt(VITE_PORT),
             open: VITE_OPEN != 'false',
         },

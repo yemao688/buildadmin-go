@@ -34,18 +34,18 @@ cp /path/to/installed/config.yaml /path/to/release/config.yaml
 # 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/runtime/logs
 ```
 
-应用端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，镜像内不再有应用 YAML 的端口/时区概念。Compose 通过 `environment:` 将两变量传入容器，并在端口映射和健康检查中使用 `${APP_PORT:-9989}` 插值；容器监听端口与宿主机映射端口相同。Compose 会将 `./config.yaml` 以只读 bind mount 挂载为 `/app/config.yaml`，宿主机缺少该文件时明确报错，不会静默创建目录；`./runtime/` 挂载为 `/app/runtime`。应用 YAML 负责其它配置，`.env` 负责运行环境和 Compose 变量。
+应用端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，镜像内不再有应用 YAML 的端口/时区概念。Compose 通过 `environment:` 将两变量传入容器，并在端口映射和健康检查中使用 `${APP_PORT:-9900}` 插值；容器监听端口与宿主机映射端口相同。Compose 会将 `./config.yaml` 以只读 bind mount 挂载为 `/app/config.yaml`，宿主机缺少该文件时明确报错，不会静默创建目录；`./runtime/` 挂载为 `/app/runtime`。应用 YAML 负责其它配置，`.env` 负责运行环境和 Compose 变量。
 
 对应的 Compose 关键配置为：
 
 ```yaml
 environment:
-  APP_PORT: ${APP_PORT:-9989}
+  APP_PORT: ${APP_PORT:-9900}
   APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
 ports:
-  - "${APP_PORT:-9989}:${APP_PORT:-9989}"
+  - "${APP_PORT:-9900}:${APP_PORT:-9900}"
 healthcheck:
-  test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9989}/healthz"]
+  test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
 ```
 
 在生产机执行：
@@ -92,7 +92,7 @@ tar czf config-and-runtime.tgz config.yaml runtime/ public/storage/
 
 默认 token 存储不是 Redis。只有应用 YAML 中 `token.default: redis` 时，才配置可达的外部 Redis 地址、端口、数据库和密码；Compose 不创建 Redis 服务。
 
-Compose healthcheck 请求容器内的 `GET http://127.0.0.1:${APP_PORT:-9989}/healthz`。应用直接提供 HTTP，生产环境应在独立反向代理或负载均衡器处终止 TLS、配置域名和证书，再转发到 `APP_PORT` 映射的宿主端口；Compose 不提供 TLS。
+Compose healthcheck 请求容器内的 `GET http://127.0.0.1:${APP_PORT:-9900}/healthz`。应用直接提供 HTTP，生产环境应在独立反向代理或负载均衡器处终止 TLS、配置域名和证书，再转发到 `APP_PORT` 映射的宿主端口；Compose 不提供 TLS。
 
 ## 本地开发镜像
 

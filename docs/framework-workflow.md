@@ -103,7 +103,7 @@ air
 # 或：go run ./cmd/app --conf config.yaml
 ```
 
-启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9989` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9989/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
+启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
 
 也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app setup` 交互收集数据库连接并执行迁移与初始化；`setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。
 
@@ -123,7 +123,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-后端默认使用 `APP_PORT=9989`，Vite 默认端口是 `9988`；修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
+后端默认使用 `APP_PORT=9900`，Vite 默认端口是 `9918`；修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
 
 ### 业务 CRUD
 

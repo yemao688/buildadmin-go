@@ -22,7 +22,7 @@
 
 ## 概述与标准流程
 
-写 spec 之前先与用户对齐需求：给出 2-3 个确定性的字段集方案供选择（例如方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/…`），并问清影响 spec 形态的业务关键点——归属与数据权限（是否 `admin_id` 属主）、审批/状态流、软删除、列表与表单的字段取舍、预期关系（`remoteSelect` 目标）。用户拍板后再落 YAML，不要凭空补全字段。
+写 spec 之前先与用户对齐需求：给出 2-3 个确定性的字段集方案供选择（例如方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/…`），并问清影响 spec 形态的业务关键点——归属与数据权限（是否 `admin_id` 属主）、审批/状态流、软删除、列表与表单的字段取舍、预期关系（`remoteSelect` 目标）。用户拍板后再落 YAML，不要凭空补全字段。编写 spec 时，为标题、内容、备注、URL、地址、名称等内容较长的列预设合适的 `table.width`，建议使用 `140–260` px，减少生成后的手工调整；操作列已固定为 `140` px，无需配置。
 
 在仓库根目录执行：
 
@@ -272,7 +272,7 @@ Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/se
 
 | 键                   | 类型          | 语义                                                |
 | -------------------- | ------------- | --------------------------------------------------- |
-| `width`              | `int`         | 列宽。                                              |
+| `width`              | `int`（px，可选） | 列宽，单位为 px；不填写时按 `designType` 使用默认值（如 `pk` 为 70、`timestamp`/`datetime` 为 160）。 |
 | `operator`           | `string`      | 搜索操作符，如 `LIKE`、`RANGE`、`eq`、`false`。     |
 | `sortable`           | `string`      | 如 `custom`、`false`。                              |
 | `render`             | `string`      | 如 `none`、`tag`、`tags`、`switch`、`datetime`。    |
@@ -284,6 +284,15 @@ Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/se
 | `remote`             | `string`      | 远程列配置片段，必须是数据型配置，不能注入任意 JS。 |
 
 `comSearchInputAttr` 支持设计器 textarea：每行一个属性，空行忽略，保留第一个 `=` 之后的全部文本；字面量 `true`/`false` 转 bool，数字转 number，其它为 string。
+
+例如：
+
+```yaml
+table:
+  width: 180
+```
+
+生成的列配置会将宽度作为数字通过 `v-bind` 透传给 `el-table-column`，例如 `{ label: ..., prop: "code", width: 180 }`。
 
 ```yaml
 comSearchInputAttr: |

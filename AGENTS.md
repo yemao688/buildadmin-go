@@ -38,7 +38,7 @@
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
 - 真实入口和 wiring 是 `cmd/app/main.go`、`cmd/app/wire.go`、`router/router.go` 与 `web/src/main.ts`；Cobra 命令位于 `app/cmd/`。
 - `config.defaults.yaml` 是根目录受跟踪的完整运行基座，启动时实际加载。根目录 `config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
-- `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9989` 和 `Asia/Shanghai`。应用名称配置项已删除。
+- `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 
 ## AI 开发协议
 
@@ -53,7 +53,7 @@
 
 ```bash
 # backend, repository root
-air                                    # builds ./cmd/app; serves on 9989
+air                                    # builds ./cmd/app; serves on 9900
 go build ./...
 go test ./path/to/package -run '^TestName$'
 go run ./cmd/app --conf config.yaml migrate
@@ -61,7 +61,7 @@ go generate ./cmd/app                  # after provider or cmd/app/wire.go chang
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
 pnpm install --frozen-lockfile
-pnpm dev                               # Vite 9988; API http://localhost:9989
+pnpm dev                               # Vite 9918; API http://localhost:9900
 pnpm lint
 pnpm typecheck
 pnpm build                             # emits web/dist/
@@ -117,6 +117,6 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 安装与测试风险
 
-- Web 安装会在根目录创建 `config.yaml`，并调用配置中的 `terminal.commands.migrate.run`；该命令必须能够运行 Cobra `migrate`。安装器由 `/install` 提供，端口由 `APP_PORT` 控制，默认 `9989`。未安装时访问首页会 302 到 `/install`；已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有 `commandExecComplete` 豁免且幂等。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
+- Web 安装会在根目录创建 `config.yaml`，并调用配置中的 `terminal.commands.migrate.run`；该命令必须能够运行 Cobra `migrate`。安装器由 `/install` 提供，端口由 `APP_PORT` 控制，默认 `9900`。未安装时访问首页会 302 到 `/install`；已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有 `commandExecComplete` 豁免且幂等。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
 - MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `config.defaults.yaml`，开发者只在 `config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`app/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
 - Air 忽略 `web/`、测试和生成的 Go 文件，并在 10 秒后重新构建。Vite 需单独运行；如果 CRUD 生成与 Air 发生竞态，可临时增大 `.air.toml` 的 `build.delay`。

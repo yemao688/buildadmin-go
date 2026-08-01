@@ -93,7 +93,7 @@ crud:
 
 terminal:
   npm_package_manager: 'pnpm'
-  install_service_port: '9989'
+  install_service_port: '9900'
   commands:
     migrate:
       run:

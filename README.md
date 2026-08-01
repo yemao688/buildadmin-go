@@ -8,7 +8,7 @@
 - 数据库：MySQL。
 - 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
 - 包管理：`pnpm`，不要使用 npm。
-- 应用端口和时区：只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`，默认分别为 `9989` 和 `Asia/Shanghai`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制，已有环境变量不会被覆盖。
+- 应用端口和时区：只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`，默认分别为 `9900` 和 `Asia/Shanghai`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制，已有环境变量不会被覆盖。
 - 可选工具：Air 用于后端开发热重载。Wire 无需单独安装——`go generate ./cmd/app` 与 `crud:generate` 均通过 `go run` 按模块依赖运行 wire。
 
 ```bash
@@ -33,8 +33,8 @@ go install github.com/air-verse/air@latest
    # 或：go run ./cmd/app --conf config.yaml
    ```
 
-   后端默认监听 `9989`；修改端口使用 `APP_PORT`。未安装时访问首页会 302 到 `/install`；安装完成后 `/install` 会 302 到 `/`，安装 API 会被封禁（幂等的完成回调除外）。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
-2. 浏览器打开 `http://127.0.0.1:9989/install`，按引导完成 Web 安装。安装器会在根目录创建只含 MySQL 连接和 `token.key` 的稀疏 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
+   后端默认监听 `9900`；修改端口使用 `APP_PORT`。未安装时访问首页会 302 到 `/install`；安装完成后 `/install` 会 302 到 `/`，安装 API 会被封禁（幂等的完成回调除外）。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。
+2. 浏览器打开 `http://127.0.0.1:9900/install`，按引导完成 Web 安装。安装器会在根目录创建只含 MySQL 连接和 `token.key` 的稀疏 `config.yaml`，配置基座 `config.defaults.yaml` 会在启动时自动合并。运行配置含凭据，不要提交。
 
    也可以使用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app setup`——交互收集数据库连接、建库、执行迁移并初始化管理员；加全部 flags 与 `--yes` 时可无人值守运行（CI/容器适用）。
 3. 如果不使用 Web 安装器，请创建只含目标环境覆盖值的 `config.yaml`，按环境填写后直接执行数据库迁移。未写入的配置由 `config.defaults.yaml` 基座提供，端口和时区仍只通过 `APP_PORT`/`APP_TIME_ZONE` 设置：
@@ -51,7 +51,7 @@ go install github.com/air-verse/air@latest
    pnpm dev
    ```
 
-   Vite 默认监听 `9988`，开发 API 地址默认使用 `APP_PORT=9989` 的 `http://localhost:9989`。
+   Vite 默认监听 `9918`，开发 API 地址默认使用 `APP_PORT=9900` 的 `http://localhost:9900`。
 
 ## Docker Compose 部署
 

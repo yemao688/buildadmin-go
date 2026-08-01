@@ -23,5 +23,5 @@ COPY config.defaults.yaml /app/config.defaults.yaml
 COPY public/ /app/public/
 RUN chown -R app:app /app
 USER 1000:1000
-EXPOSE 9989
+EXPOSE 9900
 ENTRYPOINT ["/app/app", "--conf", "/app/config.yaml"]
