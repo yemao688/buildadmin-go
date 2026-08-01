@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.1
+
+- **Fixed (migrations):** local 迁移 0007（user 金额 decimal 化）在经编排器 advisory lock 的迁移路径（CLI `setup`/`migrate`、Web 安装向导）上必然失败——`convertUserMoneyColumn` 使用 `db.Connection()`，而 gorm 的 `Connection()` 对非 `*sql.DB` 连接池一律返回 `ErrInvalidDB`（锁内 pinned 句柄为 `*sql.Conn`），报 `local migration: invalid db`；存量 int 金额列升级被完全阻断（下游实测），全新安装则把 0007 静默留在半完成态（账本 `end_time` 为空，列由快照直接建成 decimal 而不易察觉）。现按连接池类型分派：池句柄仍走 `Connection()` 保证 ALTER+UPDATE 单连接相邻，pinned 句柄直接在既有单连接上执行。账本半完成行无需人工修复，重跑 `migrate` 自动续跑完成。
+- **Fixed (tests):** pinned 句柄注册表升级 fixture 纳入 0007——该测试此前停留在 6 条注册表的旧断言（套件直接失败），且 `registry[2:6]` 切片从未覆盖 0007，正是本 bug 漏出 v2.5.0 的覆盖空洞；现断言注册表 7 条、切片 `registry[2:7]`，fixture 的 `user` 表补 `INT UNSIGNED` 存量金额列，断言经 advisory-lock pinned 句柄完成 int→`decimal(12,2)` 转换与分值 ÷100 数据换算。
+
 ## v2.5.0
 
 - **Changed (breaking):** user 系金额从 int 分语义改为 `decimal(12,2)` 元语义——`user.money` 与 `user_money_log.{money,before,after}` 四列由 local 迁移 0007 转换（逐列类型家族分派幂等：已是 `decimal(12,2)` 跳过；`decimal/double/float`（业务仓库已自行十进制化）仅规整类型、绝不重复换算；int 家族 ALTER 后立即 ÷100 换算存量分值数据，含负 delta 精确两位；异类类型明确报错）；全新安装快照直接建 decimal 列。Go 实体字段改 `float64`，输出 DTO 保持 `"%.2f"` 字符串（API 响应形状不变）；`safeint.ParseDecimalCents`/`MulInt32` 随分语义消亡移除；后台金额调整直接按元输入（允许负值，最多两位小数）；前端 store 金额类型对齐为 string。积分列（`user_score_log`）不受影响。**业务仓库合并注意**：合并后首次 `migrate` 会把存量分值数据 ÷100；已自行 decimal 化的仓库被类型守卫安全跳过。

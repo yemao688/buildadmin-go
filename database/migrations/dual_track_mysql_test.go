@@ -136,7 +136,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	for _, ddl := range []string{
 		"CREATE TABLE " + q("admin") + " (id INT PRIMARY KEY, parent_id INT NULL)",
 		"CREATE TABLE " + q("attachment") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
-		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL DEFAULT 'enable')",
+		"CREATE TABLE " + q("user") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0, status VARCHAR(30) NOT NULL DEFAULT 'enable', money INT UNSIGNED NULL)",
 		"CREATE TABLE " + q("user_money_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, money INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
 		"CREATE TABLE " + q("user_score_log") + " (id INT PRIMARY KEY, user_id INT, admin_id INT UNSIGNED NOT NULL DEFAULT 0, score INT UNSIGNED, `before` INT UNSIGNED, `after` INT UNSIGNED)",
 		"CREATE TABLE " + q("admin_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
@@ -157,7 +157,7 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	if err := db.Exec("INSERT INTO " + q("admin") + " VALUES (1,NULL),(2,1)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO " + q("user") + " VALUES (10,2,'enable'),(20,0,'enable')").Error; err != nil {
+	if err := db.Exec("INSERT INTO " + q("user") + " VALUES (10,2,'enable',1050),(20,0,'enable',250)").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO " + q("user_money_log") + " VALUES (1,10,0,5,0,5),(2,20,0,3,0,3)").Error; err != nil {
@@ -193,16 +193,18 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// The current epoch-reset registry has six semantic tracks. Sequence 3
+	// The current epoch-reset registry has seven semantic tracks. Sequence 3
 	// folds the former ownership, signed-delta, target-owner, legacy-target,
 	// commit-state, and security-owner-column migrations together; sequences 4
-	// through 6 are security normalization, country dictionary, and upload
-	// config. Start at index 2 so the folded track is exercised as well.
+	// through 7 are security normalization, country dictionary, upload
+	// config, and user money decimal. Start at index 2 so the folded track is
+	// exercised as well; sequence 7 must convert the fixture's INT money
+	// columns through this same pinned advisory-lock handle.
 	registry := LocalMigrations()
-	if len(registry) != 6 {
-		t.Fatalf("current local migration registry length=%d, want 6", len(registry))
+	if len(registry) != 7 {
+		t.Fatalf("current local migration registry length=%d, want 7", len(registry))
 	}
-	locals := registry[2:6]
+	locals := registry[2:7]
 	if err := WithMigrationLock(db, "pinned-local-registry", time.Second, func(pinned *gorm.DB) error {
 		_, err := RunLocalMigrations(pinned, config, OfficialMigrations(), locals)
 		return err
@@ -211,8 +213,8 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 	}
 	check := db.Session(&gorm.Session{NewDB: true})
 	var completed int64
-	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 3 AND 6 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 4 {
-		t.Fatalf("completed local sequence 3-6=%d err=%v", completed, err)
+	if err := check.Table(tableName(config, "local_migrations")).Where("sequence BETWEEN 3 AND 7 AND end_time IS NOT NULL").Count(&completed).Error; err != nil || completed != 5 {
+		t.Fatalf("completed local sequence 3-7=%d err=%v", completed, err)
 	}
 	var invalid int64
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user") + " u LEFT JOIN " + q("admin") + " a ON a.id=u.admin_id WHERE a.id IS NULL OR u.admin_id=0").Scan(&invalid).Error; err != nil || invalid != 0 {
@@ -233,6 +235,19 @@ func TestLocalRegistryPinnedConnection0004Through0009(t *testing.T) {
 		if err != nil || !ok || strings.Contains(strings.ToLower(def.ColumnType), "unsigned") {
 			t.Fatalf("signed delta %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
 		}
+	}
+	for _, item := range []struct{ table, column string }{{tableName(config, "user"), "money"}, {tableName(config, "user_money_log"), "money"}, {tableName(config, "user_money_log"), "before"}, {tableName(config, "user_money_log"), "after"}} {
+		def, ok, err := core.MigrationColumnInfo(check, item.table, item.column)
+		if err != nil || !ok || strings.ToLower(def.ColumnType) != "decimal(12,2)" {
+			t.Fatalf("money decimal %s.%s=%#v ok=%v err=%v", item.table, item.column, def, ok, err)
+		}
+	}
+	var convertedMoney string
+	if err := check.Raw("SELECT CAST(money AS CHAR) FROM " + q("user") + " WHERE id=10").Row().Scan(&convertedMoney); err != nil || convertedMoney != "10.50" {
+		t.Fatalf("converted user money=%q err=%v", convertedMoney, err)
+	}
+	if err := check.Raw("SELECT CAST(money AS CHAR) FROM " + q("user_money_log") + " WHERE id=1").Row().Scan(&convertedMoney); err != nil || convertedMoney != "0.05" {
+		t.Fatalf("converted log money=%q err=%v", convertedMoney, err)
 	}
 	if err := locals[1].VerifySchema(check, config); err != nil {
 		t.Fatal(err)

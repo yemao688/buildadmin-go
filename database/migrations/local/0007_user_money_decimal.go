@@ -1,6 +1,7 @@
 package local
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 
@@ -35,7 +36,7 @@ func userMoneyDecimalUp(db *gorm.DB, config *conf.Configuration) error {
 
 func convertUserMoneyColumn(db *gorm.DB, config *conf.Configuration, logicalTable, column string) error {
 	table := core.TableName(config, logicalTable)
-	return db.Connection(func(conn *gorm.DB) error {
+	convert := func(conn *gorm.DB) error {
 		definition, ok, err := core.MigrationColumnInfo(conn, table, column)
 		if err != nil {
 			return fmt.Errorf("inspect %s.%s: %w", table, column, err)
@@ -76,7 +77,17 @@ func convertUserMoneyColumn(db *gorm.DB, config *conf.Configuration, logicalTabl
 			return fmt.Errorf("convert %s.%s data from cents to yuan: %w", table, column, err)
 		}
 		return nil
-	})
+	}
+
+	// gorm's Connection() resolves a *sql.DB from the handle and returns
+	// ErrInvalidDB for any other ConnPool — e.g. the *sql.Conn pinned by the
+	// migration advisory lock. A pinned handle already executes every
+	// statement on that one connection, so only route through Connection()
+	// when this handle wraps a pool.
+	if _, ok := db.Statement.ConnPool.(*sql.DB); ok {
+		return db.Connection(convert)
+	}
+	return convert(db)
 }
 
 func userMoneyColumnBaseType(columnType string) string {
