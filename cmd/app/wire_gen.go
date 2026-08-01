@@ -138,7 +138,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	accountRegistrar := handler2.NewAccountRegistrar(accountHandler)
 	handlerAjaxHandler := handler2.NewAjaxHandler(zapLogger, areaModel, uploadHelper)
 	ajaxRegistrar := handler2.NewAjaxRegistrar(handlerAjaxHandler)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper, configuration)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaCaptcha, tokenHelper, service, configuration)
 	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
 	emsHandler := handler2.NewEmsHandler(zapLogger, siteconfigService, captchaCaptcha, clickCaptcha, userUserModel, service)
 	emsRegistrar := handler2.NewEmsRegistrar(emsHandler)

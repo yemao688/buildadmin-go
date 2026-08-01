@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/utils"
@@ -101,6 +102,42 @@ func (s *Service) VerificationToken(token string, t string, user_id int32) bool 
 
 func (s *Service) DelVerificationToken(token string) {
 	s.tokenHelper.Delete(token)
+}
+
+func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) (string, error) {
+	initial, err := s.tokenHelper.Get(refreshToken)
+	if err != nil {
+		return "", err
+	}
+	if initial.Type != "user-refresh" {
+		return "", cErr.BadRequest("Invalid token")
+	}
+
+	newToken := ""
+	err = s.sqlDB.Transaction(func(tx *gorm.DB) error {
+		var user model.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", initial.UserID).First(&user).Error; err != nil {
+			return err
+		}
+		if !utils.AccountStatusEnabled(user.Status) {
+			return cErr.BadRequest("Account disabled")
+		}
+
+		current, err := s.tokenHelper.Get(refreshToken)
+		if err != nil {
+			return err
+		}
+		if current.Type != "user-refresh" || current.UserID != initial.UserID {
+			return cErr.BadRequest("Invalid token")
+		}
+
+		newToken = random.Uuid()
+		return s.tokenHelper.Set(newToken, "user", user.ID, s.config.App.UserTokenKeepTime)
+	})
+	if err != nil {
+		return "", err
+	}
+	return newToken, nil
 }
 
 func (s *Service) GetInfo(ctx *gin.Context, id int32) (model.User, error) {

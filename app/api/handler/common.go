@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"go-build-admin/app/common/member"
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
@@ -21,11 +22,12 @@ type CommonHandler struct {
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	captcha      *captcha.Captcha
 	tokenHelper  *token.TokenHelper
+	authM        *member.Service
 	config       *conf.Configuration
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, config *conf.Configuration) *CommonHandler {
-	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, config: config}
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
 }
 
 func FailByErrWithData(c *gin.Context, err error, data interface{}) {
@@ -145,13 +147,21 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 	}
 
 	newToken := random.Uuid()
-	keepTime := h.config.App.UserTokenKeepTime
-	if accessType == "admin" {
-		keepTime = h.config.App.AdminTokenKeepTime
-	}
-	if err := h.tokenHelper.Set(newToken, accessType, result.UserID, keepTime); err != nil {
-		FailByErr(ctx, err)
-		return
+	if accessType == "user" {
+		if h.authM == nil {
+			FailByErr(ctx, cErr.InternalServer("token service unavailable"))
+			return
+		}
+		newToken, err = h.authM.RefreshUserAccessToken(ctx, params.RefreshToken)
+		if err != nil {
+			FailByErr(ctx, err)
+			return
+		}
+	} else {
+		if err := h.tokenHelper.Set(newToken, accessType, result.UserID, h.config.App.AdminTokenKeepTime); err != nil {
+			FailByErr(ctx, err)
+			return
+		}
 	}
 
 	Success(ctx, map[string]any{

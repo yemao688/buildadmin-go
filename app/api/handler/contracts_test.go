@@ -12,10 +12,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/app/common/member"
+	commonmodel "go-build-admin/app/common/model"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
 	"golang.org/x/text/language"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type handlerContractTokenDriver struct {
@@ -112,7 +115,12 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user-refresh", UserID: 1}}
 	config := &conf.Configuration{}
 	config.App.UserTokenKeepTime = 259200
-	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}, config: config}
+	db, err := gorm.Open(sqlite.Open("file:refresh-contract?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&commonmodel.User{}))
+	require.NoError(t, db.Create(&commonmodel.User{ID: 1, Status: "enable"}).Error)
+	tokenHelper := &token.TokenHelper{Driver: driver}
+	h := &CommonHandler{tokenHelper: tokenHelper, authM: member.NewService(db, tokenHelper, config), config: config}
 	router := newContractTestRouter()
 	router.POST("/", h.RefreshToken)
 	recorder := httptest.NewRecorder()
