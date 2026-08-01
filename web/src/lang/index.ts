@@ -36,16 +36,12 @@ export async function loadLang(app: App) {
     if (locale == 'zh-cn') {
         window.loadLangHandle = {
             ...import.meta.glob('./backend/zh-cn/**/*.ts'),
-            ...import.meta.glob('./frontend/zh-cn/**/*.ts'),
             ...import.meta.glob('./backend/zh-cn.ts'),
-            ...import.meta.glob('./frontend/zh-cn.ts'),
         }
     } else {
         window.loadLangHandle = {
             ...import.meta.glob('./backend/en/**/*.ts'),
-            ...import.meta.glob('./frontend/en/**/*.ts'),
             ...import.meta.glob('./backend/en.ts'),
-            ...import.meta.glob('./frontend/en.ts'),
         }
     }
 

@@ -62,11 +62,16 @@ export function baAccountGetUserInfo() {
 export function baAccountLogout() {
     const siteConfig = useSiteConfig()
     const baAccount = useBaAccount()
-    return createAxios({
-        url: siteConfig.apiUrl + '/api/user/logout',
-        method: 'POST',
-        data: {
-            refreshToken: baAccount.getToken('refresh'),
+    return createAxios(
+        {
+            url: siteConfig.apiUrl + '/api/user/logout',
+            method: 'POST',
+            data: {
+                refreshToken: baAccount.getToken('refresh'),
+            },
         },
-    })
+        {
+            anotherToken: baAccount.getToken('auth'),
+        }
+    )
 }

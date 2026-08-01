@@ -2,7 +2,7 @@ import createAxios from '/@/utils/axios'
 import { isAdminApp, checkFileMimetype } from '/@/utils/common'
 import { getUrl } from '/@/utils/axios'
 import { useAdminInfo } from '/@/stores/adminInfo'
-import { useUserInfo } from '/@/stores/userInfo'
+import { useBaAccount } from '/@/stores/baAccount'
 import { ElNotification, type UploadRawFile } from 'element-plus'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { state as uploadExpandState, fileUpload as uploadExpand } from '/@/components/mixins/baUpload'
@@ -272,16 +272,16 @@ export function getTableFieldList(table: string, clean = true, connection = '') 
     })
 }
 
-export function refreshToken() {
+export function refreshToken(type: 'admin' | 'baAccount' = 'admin') {
     const adminInfo = useAdminInfo()
-    const userInfo = useUserInfo()
+    const baAccount = useBaAccount()
     return createAxios({
         url: refreshTokenUrl,
         method: 'POST',
         data: {
-            refreshToken: isAdminApp() ? adminInfo.getToken('refresh') : userInfo.getToken('refresh'),
+            refreshToken: type == 'admin' ? adminInfo.getToken('refresh') : baAccount.getToken('refresh'),
         },
-    })
+    }, type == 'baAccount' ? { anotherToken: baAccount.getToken('auth') } : {})
 }
 
 /**

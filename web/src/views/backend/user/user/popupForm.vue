@@ -43,18 +43,6 @@
                     </el-form-item>
                     <FormItem
                         type="remoteSelect"
-                        :label="t('user.user.group')"
-                        v-model.number="baTable.form.items!.group_id"
-                        prop="group_id"
-                        :placeholder="t('user.user.group')"
-                        :input-attr="{
-                            params: { isTree: true, search: [{ field: 'status', val: '1', operator: 'eq' }] },
-                            field: 'name',
-                            remoteUrl: '/admin/user.Group/index',
-                        }"
-                    />
-                    <FormItem
-                        type="remoteSelect"
                         :label="t('user.user.Superior agent')"
                         v-model.number="baTable.form.items!.admin_id"
                         prop="admin_id"
@@ -80,37 +68,8 @@
                             :placeholder="t('Please input field', { field: t('user.user.mobile') })"
                         ></el-input>
                     </el-form-item>
-                    <FormItem
-                        :label="t('user.user.Gender')"
-                        v-model.number="baTable.form.items!.gender"
-                        type="radio"
-                        :input-attr="{
-                            border: true,
-                            content: { 0: t('Unknown'), 1: t('user.user.male'), 2: t('user.user.female') },
-                        }"
-                    />
-                    <el-form-item :label="t('user.user.birthday')">
-                        <el-date-picker
-                            class="w100"
-                            value-format="YYYY-MM-DD"
-                            v-model="baTable.form.items!.birthday"
-                            type="date"
-                            :placeholder="t('Please select field', { field: t('user.user.birthday') })"
-                        />
-                    </el-form-item>
                     <el-form-item v-if="baTable.form.operate == 'Edit'" :label="t('user.user.balance')">
-                        <el-input v-model="baTable.form.items!.money" readonly>
-                            <template #append>
-                                <el-button @click="changeAccount('money')">{{ t('user.user.Adjustment balance') }}</el-button>
-                            </template>
-                        </el-input>
-                    </el-form-item>
-                    <el-form-item v-if="baTable.form.operate == 'Edit'" :label="t('user.user.integral')">
-                        <el-input v-model="baTable.form.items!.score" readonly>
-                            <template #append>
-                                <el-button @click="changeAccount('score')">{{ t('user.user.Adjust integral') }}</el-button>
-                            </template>
-                        </el-input>
+                        <el-input v-model="baTable.form.items!.money" readonly></el-input>
                     </el-form-item>
                     <el-form-item prop="password" :label="t('user.user.password')">
                         <el-input
@@ -122,15 +81,6 @@
                                     ? t('Please input field', { field: t('user.user.password') })
                                     : t('user.user.Please leave blank if not modified')
                             "
-                        ></el-input>
-                    </el-form-item>
-                    <el-form-item prop="motto" :label="t('user.user.Personal signature')">
-                        <el-input
-                            @keyup.enter.stop=""
-                            @keyup.ctrl.enter="baTable.onSubmit(formRef)"
-                            v-model="baTable.form.items!.motto"
-                            type="textarea"
-                            :placeholder="t('Please input field', { field: t('user.user.Personal signature') })"
                         ></el-input>
                     </el-form-item>
                     <FormItem
@@ -163,7 +113,6 @@ import type baTableClass from '/@/utils/baTable'
 import { regularPassword } from '/@/utils/validate'
 import type { FormItemRule } from 'element-plus'
 import FormItem from '/@/components/formItem/index.vue'
-import router from '/@/router/index'
 import { buildValidatorData } from '/@/utils/validate'
 import { useConfig } from '/@/stores/config'
 
@@ -176,7 +125,6 @@ const { t } = useI18n()
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
     username: [buildValidatorData({ name: 'required', title: t('user.user.User name') }), buildValidatorData({ name: 'account' })],
     nickname: [buildValidatorData({ name: 'required', title: t('user.user.nickname') })],
-    group_id: [buildValidatorData({ name: 'required', message: t('Please select field', { field: t('user.user.group') }) })],
     email: [buildValidatorData({ name: 'email', title: t('user.user.email') })],
     mobile: [buildValidatorData({ name: 'mobile' })],
     password: [
@@ -200,16 +148,6 @@ const rules: Partial<Record<string, FormItemRule[]>> = reactive({
         },
     ],
 })
-
-const changeAccount = (type: string) => {
-    baTable.toggleForm()
-    router.push({
-        name: type == 'money' ? 'user/moneyLog' : 'user/scoreLog',
-        query: {
-            user_id: baTable.form.items!.id,
-        },
-    })
-}
 
 watch(
     () => baTable.form.operate,

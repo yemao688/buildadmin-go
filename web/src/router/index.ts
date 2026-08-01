@@ -6,7 +6,6 @@ import { loadAndMergeMessages } from '/@/lang/index'
 import staticRoutes from '/@/router/static'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useConfig } from '/@/stores/config'
-import { isAdminApp } from '/@/utils/common'
 import { loading } from '/@/utils/loading'
 
 const router = createRouter({
@@ -29,17 +28,11 @@ router.beforeEach(async (to) => {
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
-    let prefix = ''
-    if (isAdminApp(to.fullPath)) {
-        prefix = './backend/' + lang
+    const prefix = './backend/' + lang
 
-        // 去除 path 中的 /admin
-        const adminPath = to.path.slice(to.path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
-        if (adminPath) loadPath.push(prefix + adminPath + '.ts')
-    } else {
-        prefix = './frontend/' + lang
-        loadPath.push(prefix + to.path + '.ts')
-    }
+    // 去除 path 中的 /admin
+    const adminPath = to.path.slice(to.path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
+    if (adminPath) loadPath.push(prefix + adminPath + '.ts')
 
     // 根据路由 name 加载的语言包
     if (to.name) {

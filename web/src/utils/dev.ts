@@ -149,21 +149,6 @@ async function loadLocale(locale: string): Promise<anyObj> {
         mergeModule(messages, mod.default, pathName)
     }
 
-    // 5. frontend 公共语言包（根层）
-    const frontendRoot = join(LANG_DIR, 'frontend', `${locale}.ts`)
-    if (existsSync(frontendRoot)) {
-        const mod = await loadTs(frontendRoot)
-        mergeModule(messages, mod.default)
-    }
-
-    // 6. frontend 页面语言包，文件路径作为命名空间
-    const frontendBase = join(LANG_DIR, 'frontend', locale)
-    for (const file of collectTsFiles(frontendBase)) {
-        const mod = await loadTs(file)
-        const pathName = getNestedPathName(file, frontendBase)
-        mergeModule(messages, mod.default, pathName)
-    }
-
     return messages
 }
 

@@ -15,14 +15,12 @@
 <script setup lang="ts">
 import { onUnmounted, reactive } from 'vue'
 import router from '/@/router/index'
-import { useMemberCenter } from '/@/stores/memberCenter'
 import { useNavTabs } from '/@/stores/navTabs'
 import { isAdminApp } from '/@/utils/common'
 import { getFirstRoute, routePush } from '/@/utils/router'
 let timer: number
 
 const navTabs = useNavTabs()
-const memberCenter = useMemberCenter()
 const state = reactive({
     maximumWait: 1000 * 6,
     showReload: false,
@@ -34,9 +32,6 @@ const refresh = () => {
 
 if (isAdminApp() && navTabs.state.tabsViewRoutes) {
     let firstRoute = getFirstRoute(navTabs.state.tabsViewRoutes)
-    if (firstRoute) routePush(firstRoute.path)
-} else if (memberCenter.state.viewRoutes) {
-    let firstRoute = getFirstRoute(memberCenter.state.viewRoutes)
     if (firstRoute) routePush(firstRoute.path)
 }
 

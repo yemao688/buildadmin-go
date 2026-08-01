@@ -11,7 +11,6 @@ import { getUrl } from './axios'
 import Icon from '/@/components/icon/index.vue'
 import router from '/@/router/index'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { useMemberCenter } from '/@/stores/memberCenter'
 import { useNavTabs } from '/@/stores/navTabs'
 
 export function registerIcons(app: App) {
@@ -194,7 +193,7 @@ export function auth(node: { name: string; subNodeName?: string }): boolean
  * @param node
  */
 export function auth(node: string | { name: string; subNodeName?: string }) {
-    const store = isAdminApp() ? useNavTabs() : useMemberCenter()
+    const store = useNavTabs()
     if (typeof node === 'string') {
         const path = getCurrentRoutePath()
         if (store.state.authNode.has(path)) {

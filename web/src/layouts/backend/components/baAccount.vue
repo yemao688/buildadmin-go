@@ -6,18 +6,8 @@
                 <div v-loading="state.loading" class="userinfo">
                     <div class="user-avatar-box">
                         <img class="user-avatar" :src="baAccount.avatar" alt="" />
-                        <Icon
-                            class="user-avatar-gender"
-                            :name="baAccount.getGenderIcon()['name']"
-                            size="14"
-                            :color="baAccount.getGenderIcon()['color']"
-                        />
                     </div>
                     <p class="username">{{ baAccount.nickname }}</p>
-                    <p class="user-info">
-                        <span>{{ $t('Integral') + ' ' + baAccount.score }}</span>
-                        <span>{{ $t('Balance') + ' ' + baAccount.money }}</span>
-                    </p>
                     <div class="userinfo-buttons">
                         <a href="https://uni.buildadmin.com/user" target="_blank" rel="noopener noreferrer">
                             <el-button v-blur size="default" type="primary">
@@ -175,16 +165,6 @@ watch(
         font-size: var(--el-font-size-large);
         font-weight: bold;
     }
-    .user-info {
-        display: block;
-        text-align: center;
-        width: 100%;
-        padding: 10px 0;
-        font-size: var(--el-font-size-base);
-        span {
-            padding: 0 4px;
-        }
-    }
     .user-avatar-box {
         position: relative;
         cursor: pointer;
@@ -194,19 +174,6 @@ watch(
         width: 100px;
         border-radius: 50%;
         border: 1px solid var(--el-border-color-extra-light);
-    }
-    .user-avatar-gender {
-        position: absolute;
-        bottom: 0px;
-        right: 10px;
-        height: 22px;
-        width: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: #fff;
-        border-radius: 50%;
-        box-shadow: var(--el-box-shadow);
     }
     .userinfo-buttons {
         margin-top: 10px;

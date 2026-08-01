@@ -5,11 +5,10 @@ import { refreshToken } from '/@/api/common'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
 import adminBaseRoute from '/@/router/static/adminBase'
-import { memberCenterBaseRoutePath } from '/@/router/static/memberCenterBase'
 import { useAdminInfo } from '/@/stores/adminInfo'
+import { useBaAccount } from '/@/stores/baAccount'
 import { useConfig } from '/@/stores/config'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
-import { useUserInfo } from '/@/stores/userInfo'
 import { isAdminApp } from '/@/utils/common'
 
 window.requests = []
@@ -44,7 +43,7 @@ export const getUrlPort = (): string => {
 function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequestConfig, options: Options = {}, loading: LoadingOptions = {}): T {
     const config = useConfig()
     const adminInfo = useAdminInfo()
-    const userInfo = useUserInfo()
+    const baAccount = useBaAccount()
 
     const Axios = axios.create({
         baseURL: getUrl(),
@@ -92,7 +91,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
             if (config.headers) {
                 const token = adminInfo.getToken()
                 if (token) (config.headers as anyObj).batoken = token
-                const userToken = options.anotherToken || userInfo.getToken()
+                const userToken = options.anotherToken
                 if (userToken) (config.headers as anyObj)['ba-user-token'] = userToken
             }
 
@@ -114,14 +113,14 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                     if (response.data.code == 409) {
                         if (!window.tokenRefreshing) {
                             window.tokenRefreshing = true
-                            return refreshToken()
+                            return refreshToken(options.anotherToken ? 'baAccount' : 'admin')
                                 .then((res) => {
                                     if (res.data.type == 'admin-refresh') {
                                         adminInfo.setToken(res.data.token, 'auth')
                                         response.headers.batoken = `${res.data.token}`
                                         window.requests.forEach((cb) => cb(res.data.token, 'admin-refresh'))
                                     } else if (res.data.type == 'user-refresh') {
-                                        userInfo.setToken(res.data.token, 'auth')
+                                        baAccount.setToken(res.data.token, 'auth')
                                         response.headers['ba-user-token'] = `${res.data.token}`
                                         window.requests.forEach((cb) => cb(res.data.token, 'user-refresh'))
                                     }
@@ -129,7 +128,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                                     return Axios(response.config)
                                 })
                                 .catch((err) => {
-                                    if (isAdminApp()) {
+                                    if (!options.anotherToken && isAdminApp()) {
                                         adminInfo.removeToken()
                                         if (router.currentRoute.value.name != 'adminLogin') {
                                             router.push({ name: 'adminLogin' })
@@ -141,16 +140,11 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                                             return Axios(response.config)
                                         }
                                     } else {
-                                        userInfo.removeToken()
-                                        if (router.currentRoute.value.name != 'userLogin') {
-                                            router.push({ name: 'userLogin' })
-                                            return Promise.reject(err)
-                                        } else {
-                                            response.headers['ba-user-token'] = ''
-                                            window.requests.forEach((cb) => cb('', 'user-refresh'))
-                                            window.requests = []
-                                            return Axios(response.config)
-                                        }
+                                        baAccount.removeToken()
+                                        response.headers['ba-user-token'] = ''
+                                        window.requests.forEach((cb) => cb('', 'user-refresh'))
+                                        window.requests = []
+                                        return Axios(response.config)
                                     }
                                 })
                                 .finally(() => {
@@ -182,15 +176,14 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                         router.push({ path: response.data.data.routePath ?? '', name: response.data.data.routeName ?? '' })
                     }
                     if (response.data.code == 303) {
-                        const isAdminAppFlag = isAdminApp()
-                        let routerPath = isAdminAppFlag ? adminBaseRoute.path : memberCenterBaseRoutePath
+                        let routerPath = adminBaseRoute.path
 
                         // 需要登录，清理 token，转到登录页
                         if (response.data.data.type == 'need login') {
-                            if (isAdminAppFlag) {
+                            if (isAdminApp()) {
                                 adminInfo.removeToken()
                             } else {
-                                userInfo.removeToken()
+                                baAccount.removeToken()
                             }
                             routerPath += '/login'
                         }

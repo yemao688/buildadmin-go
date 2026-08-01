@@ -1,6 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { memberCenterBaseRoutePath } from '/@/router/static/memberCenterBase'
 
 const pageTitle = (name: string): string => {
     return `pagesTitle.${name}`
@@ -15,10 +14,7 @@ const staticRoutes: Array<RouteRecordRaw> = [
         // 首页
         path: '/',
         name: '/',
-        component: () => import('/@/views/frontend/index.vue'),
-        meta: {
-            title: pageTitle('home'),
-        },
+        redirect: adminBaseRoutePath + '/login',
     },
     {
         // 管理员登录页 - 不放在 adminBaseRoute.children 因为登录页不需要使用后台的布局
@@ -27,15 +23,6 @@ const staticRoutes: Array<RouteRecordRaw> = [
         component: () => import('/@/views/backend/login.vue'),
         meta: {
             title: pageTitle('adminLogin'),
-        },
-    },
-    {
-        // 会员登录页
-        path: memberCenterBaseRoutePath + '/login',
-        name: 'userLogin',
-        component: () => import('/@/views/frontend/user/login.vue'),
-        meta: {
-            title: pageTitle('userLogin'),
         },
     },
     {
@@ -57,21 +44,6 @@ const staticRoutes: Array<RouteRecordRaw> = [
         redirect: (to) => {
             return {
                 name: 'adminMainLoading',
-                params: {
-                    to: JSON.stringify({
-                        path: to.path,
-                        query: to.query,
-                    }),
-                },
-            }
-        },
-    },
-    {
-        // 会员中心找不到页面了
-        path: memberCenterBaseRoutePath + ':path(.*)*',
-        redirect: (to) => {
-            return {
-                name: 'userMainLoading',
                 params: {
                     to: JSON.stringify({
                         path: to.path,

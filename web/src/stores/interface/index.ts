@@ -121,25 +121,6 @@ export interface NavTabs {
     authNode: Map<string, string[]>
 }
 
-export interface MemberCenter {
-    // 是否开启会员中心
-    open: boolean
-    // 布局模式
-    layoutMode: string
-    // 从后台加载到的菜单
-    viewRoutes: RouteRecordRaw[]
-    // 是否显示一级菜单标题（当有多个一级菜单分组时显示）
-    showHeadline: boolean
-    // 权限节点
-    authNode: Map<string, string[]>
-    // 收缩布局（小屏设备）
-    shrink: boolean
-    // 菜单展开状态（小屏设备）
-    menuExpand: boolean
-    // 顶栏会员菜单下拉项
-    navUserMenus: RouteRecordRaw[]
-}
-
 export interface AdminInfo {
     id: number
     username: string
@@ -150,25 +131,6 @@ export interface AdminInfo {
     refresh_token: string
     // 是否是 superAdmin，用于判定是否显示终端按钮等，不做任何权限判断
     super: boolean
-}
-
-export interface UserInfo {
-    id: number
-    username: string
-    nickname: string
-    email: string
-    mobile: string
-    gender: number
-    birthday: string
-    money: string
-    score: number
-    avatar: string
-    last_login_time: string
-    last_login_ip: string
-    join_time: string
-    motto: string
-    token: string
-    refresh_token: string
 }
 
 export interface TaskItem {
@@ -227,10 +189,6 @@ export interface SiteConfig {
         mode: string
         [key: string]: any
     }
-    // 顶部导航菜单数据
-    headNav: RouteRecordRaw[]
-    // 备案号
-    recordNumber?: string
     // 内容分发网络URL的参数，格式如 imageMogr2/format/heif
     cdnUrlParams: string
 

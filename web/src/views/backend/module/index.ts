@@ -19,7 +19,7 @@ import router from '/@/router/index'
 import { useBaAccount } from '/@/stores/baAccount'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 import { taskStatus } from '/@/stores/constant/terminalTaskStatus'
-import type { UserInfo } from '/@/stores/interface'
+import type { AdminInfo } from '/@/stores/interface'
 import { useTerminal } from '/@/stores/terminal'
 import { fullUrl } from '/@/utils/common'
 import { uuid } from '/@/utils/random'
@@ -553,8 +553,8 @@ export const execCommand = (data: anyObj) => {
     }
 }
 
-export const specificUserName = (userInfo: Partial<UserInfo>) => {
-    return userInfo.nickname + '（' + (userInfo.email || userInfo.mobile || 'ID:' + userInfo.id) + '）'
+export const specificUserName = (userInfo: Partial<AdminInfo>) => {
+    return userInfo.nickname + '（ID:' + userInfo.id + '）'
 }
 
 export const currency = (price: number, val: number) => {
