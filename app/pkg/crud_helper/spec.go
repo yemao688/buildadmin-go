@@ -34,9 +34,10 @@ type specFile struct {
 }
 
 type specDataScope struct {
-	Mode           data_scope.Mode `mapstructure:"mode"`
-	OwnerColumn    string          `mapstructure:"ownerColumn"`
-	AssignOnCreate *bool           `mapstructure:"assignOnCreate"`
+	Mode            data_scope.Mode `mapstructure:"mode"`
+	OwnerColumn     string          `mapstructure:"ownerColumn"`
+	ReadExtraOwners []string        `mapstructure:"readExtraOwners"`
+	AssignOnCreate  *bool           `mapstructure:"assignOnCreate"`
 }
 
 type specMenu struct {
@@ -182,7 +183,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	}
 	dataScope := &data_scope.Config{Mode: data_scope.ModeAuto}
 	if raw.DataScope != nil {
-		dataScope = &data_scope.Config{Mode: raw.DataScope.Mode, OwnerColumn: raw.DataScope.OwnerColumn, AssignOnCreate: raw.DataScope.AssignOnCreate}
+		dataScope = &data_scope.Config{Mode: raw.DataScope.Mode, OwnerColumn: raw.DataScope.OwnerColumn, ReadExtraOwners: raw.DataScope.ReadExtraOwners, AssignOnCreate: raw.DataScope.AssignOnCreate}
 	}
 	typeName := raw.Type
 	if typeName == "" {

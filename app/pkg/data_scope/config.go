@@ -58,6 +58,7 @@ func ResolveConfigWithOptions(cfg *Config, hasAdminID bool, opts ResolveOptions)
 	}
 
 	resolved := Resolved{Mode: mode, Source: "config"}
+	resolved.ReadExtraOwners = append([]string(nil), cfg.ReadExtraOwners...)
 
 	switch mode {
 	case ModeAuto:

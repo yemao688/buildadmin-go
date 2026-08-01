@@ -132,6 +132,16 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	if ds.OwnerColumn != "" {
 		handlerData.ExcludeParamFields = []string{ds.OwnerColumn}
 	}
+	for _, field := range fields {
+		if !field.PrimaryKey && field.FormBuildExclude && !slices.Contains(handlerData.ExcludeParamFields, field.Name) {
+			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, field.Name)
+		}
+	}
+	for _, column := range ds.Policy.ReadExtraOwners {
+		if !slices.Contains(handlerData.ExcludeParamFields, column) {
+			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, column)
+		}
+	}
 	for _, name := range []string{"create_time", "createtime", "update_time", "updatetime"} {
 		if searchField(fields, name).Name == "" {
 			continue

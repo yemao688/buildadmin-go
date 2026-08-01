@@ -129,6 +129,9 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 	if err != nil {
 		return ResolvedDataScope{}, err
 	}
+	if err := validateReadExtraOwners(cfg.ReadExtraOwners, resolved.OwnerColumn, fields); err != nil {
+		return ResolvedDataScope{}, err
+	}
 
 	idx, err := proveIndexStrategy(resolved.OwnerColumn, fields, opts.ProveIndex)
 	if err != nil {
@@ -146,6 +149,24 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 		HasAdminID:     hasAdminID,
 		IndexStrategy:  idx,
 	}, nil
+}
+
+func validateReadExtraOwners(columns []string, primary string, fields []crudmodel.Field) error {
+	for _, column := range columns {
+		if err := data_scope.ValidateIdentifier(column); err != nil {
+			return fmt.Errorf("data_scope: invalid read extra owner %q: %w", column, err)
+		}
+		if column == primary {
+			return fmt.Errorf("data_scope: read extra owner %q must be a non-primary owner column", column)
+		}
+		if !hasExactField(fields, column) {
+			return fmt.Errorf("data_scope: read extra owner %q not found in table metadata", column)
+		}
+		if !isIntegerCompatible(fields, column) {
+			return fmt.Errorf("data_scope: read extra owner %q is not integer-compatible", column)
+		}
+	}
+	return nil
 }
 
 // proveIndexStrategy requires a proven index for any non-empty owner column.

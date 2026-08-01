@@ -33,25 +33,28 @@ const (
 // Config is the persisted generator/user input. A nil Config resolves to
 // ModeAuto, preserving legacy behavior.
 type Config struct {
-	Mode           Mode   `json:"mode"`
-	OwnerColumn    string `json:"ownerColumn,omitempty"`
-	AssignOnCreate *bool  `json:"assignOnCreate,omitempty"`
+	Mode            Mode     `json:"mode"`
+	OwnerColumn     string   `json:"ownerColumn,omitempty"`
+	ReadExtraOwners []string `json:"readExtraOwners,omitempty"`
+	AssignOnCreate  *bool    `json:"assignOnCreate,omitempty"`
 }
 
 // Resolved is the effective policy after applying conventions and defaults.
 type Resolved struct {
-	Mode           Mode
-	OwnerColumn    string
-	OwnerGoField   string
-	AssignOnCreate bool
-	Source         string
+	Mode            Mode
+	OwnerColumn     string
+	OwnerGoField    string
+	ReadExtraOwners []string
+	AssignOnCreate  bool
+	Source          string
 }
 
 // ResourcePolicy is the compact runtime policy derived from Resolved.
 type ResourcePolicy struct {
-	Mode           Mode
-	OwnerColumn    string
-	AssignOnCreate bool
+	Mode            Mode
+	OwnerColumn     string
+	ReadExtraOwners []string
+	AssignOnCreate  bool
 }
 
 // Actor carries the authenticated administrator identity and an explicit
@@ -76,6 +79,26 @@ type OwnerRef struct {
 type Enforcer interface {
 	Actor(ctx *gin.Context) (Actor, error)
 	Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *gorm.DB
+}
+
+// ReadScopeEnforcer is an optional capability for read queries that may be
+// visible through additional owner columns. It deliberately does not extend
+// Enforcer so existing implementations retain their contract.
+type ReadScopeEnforcer interface {
+	ScopeWithExtraOwners(ctx *gin.Context, db *gorm.DB, primary OwnerRef, extras []OwnerRef) *gorm.DB
+}
+
+// ScopeRead applies a dual-owner read scope when supported. With no extra
+// owners it calls Scope directly, preserving the legacy query path exactly.
+func ScopeRead(ctx *gin.Context, db *gorm.DB, enforcer Enforcer, primary OwnerRef, extras []OwnerRef) *gorm.DB {
+	if len(extras) == 0 {
+		return enforcer.Scope(ctx, db, primary)
+	}
+	capability, ok := enforcer.(ReadScopeEnforcer)
+	if !ok {
+		return addScopeError(db, ErrScopedAccessDenied)
+	}
+	return capability.ScopeWithExtraOwners(ctx, db, primary, extras)
 }
 
 // HierarchyWriter maintains the admin_closure read model. Implementations
@@ -182,9 +205,10 @@ func ActorFromContext(ctx context.Context) (Actor, bool) {
 // Policy returns the compact runtime policy for a resolved configuration.
 func (r Resolved) Policy() ResourcePolicy {
 	return ResourcePolicy{
-		Mode:           r.Mode,
-		OwnerColumn:    r.OwnerColumn,
-		AssignOnCreate: r.AssignOnCreate,
+		Mode:            r.Mode,
+		OwnerColumn:     r.OwnerColumn,
+		ReadExtraOwners: append([]string(nil), r.ReadExtraOwners...),
+		AssignOnCreate:  r.AssignOnCreate,
 	}
 }
 

@@ -183,6 +183,18 @@ func TestResolveDataScope_NoProverFailsClosed(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot prove an index")
 }
 
+func TestResolveDataScope_ReadExtraOwnersValidation(t *testing.T) {
+	fields := []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false), newField("secondary_admin_id", "bigint", false)}
+	resolved, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "admin_id", ReadExtraOwners: []string{"secondary_admin_id"}, AssignOnCreate: ptr(true)}, fields, DataScopeResolveOptions{ProveIndex: proveAll})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"secondary_admin_id"}, resolved.Policy.ReadExtraOwners)
+
+	for _, extra := range []string{"missing_admin_id", "seller.admin_id", "admin_id"} {
+		_, err = ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "admin_id", ReadExtraOwners: []string{extra}, AssignOnCreate: ptr(true)}, fields, DataScopeResolveOptions{ProveIndex: proveAll})
+		assert.Error(t, err, extra)
+	}
+}
+
 func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) {
 	adminIDFields := []crudmodel.Field{
 		newField("id", "bigint", true),
@@ -222,7 +234,7 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	})
 
 	assert.Contains(t, out, "Enforcer data_scope.Enforcer")
-	assert.Contains(t, out, "func (s *DemoModel) scopedDB")
+	assert.NotContains(t, out, "func (s *DemoModel) scopedDB")
 	assert.Contains(t, out, "func (s *DemoModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}")
 	assert.Contains(t, out, "demo.AdminID = int32(actor.AdminID)")
@@ -233,6 +245,36 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 	assert.Contains(t, out, `return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)`)
 	assert.NotContains(t, out, "LimitAdminIds")
 	assert.NotContains(t, out, ".Save(&demo)")
+}
+
+func TestModelTemplate_ReadExtraOwners(t *testing.T) {
+	out := renderModelString(t, ModelData{
+		Namespace: "model",
+		Name:      "demo",
+		ClassName: "Demo",
+		ModelVar:  "demo",
+		Pk:        "id",
+		PkGoField: "ID",
+		DataScopePolicy: data_scope.ResourcePolicy{
+			Mode:            data_scope.ModeRequired,
+			OwnerColumn:     "admin_id",
+			ReadExtraOwners: []string{"seller_id", "hotel_id"},
+		},
+		DataScopeOwnerGoField: "AdminID",
+		EditableColumns:       []string{"name"},
+		EditableColumnsGo:     `"name"`,
+	})
+
+	assert.Contains(t, out, `ReadExtraOwners: []string{"seller_id", "hotel_id"}`)
+	assert.Contains(t, out, "func (s *DemoModel) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
+	assert.Contains(t, out, "return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)")
+	assert.Contains(t, out, "db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
+	assert.Contains(t, out, "countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
+	assert.Contains(t, out, "findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
+
+	editStart := strings.Index(out, "func (s *DemoModel) Edit")
+	require.GreaterOrEqual(t, editStart, 0)
+	assert.Contains(t, out[editStart:], "tx = s.scopeDB(ctx, tx)")
 }
 
 func TestModelTemplate_EditNoOpUsesGeneratedPrimaryKeyAndScopedDB(t *testing.T) {
@@ -430,8 +472,8 @@ func TestModelTemplate_DataScopeNone(t *testing.T) {
 	})
 
 	assert.Contains(t, out, "Policy   data_scope.ResourcePolicy")
-	assert.Contains(t, out, `Mode:           "none"`)
-	assert.Contains(t, out, "return s.scopeDB(ctx, s.DBFor(ctx))")
+	assert.Contains(t, out, `Mode:            "none"`)
+	assert.Contains(t, out, "s.readScopedDB(ctx, s.DBFor(ctx))")
 	assert.Contains(t, out, "return s.scopeDB(ctx, db)")
 	assert.NotContains(t, out, "actor.AdminID")
 	assert.NotContains(t, out, "LimitAdminIds")
@@ -682,7 +724,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 			assert.NotContains(t, modelCode, ".Save(&")
 			assert.Contains(t, modelCode, "RowsAffected")
 			if tc.cfg != nil && tc.cfg.Mode == data_scope.ModeNone {
-				assert.Contains(t, modelCode, `Mode:           "none"`)
+				assert.Contains(t, modelCode, `Mode:            "none"`)
 			}
 			if tc.ownerCol != "" && tc.ownerCol != "id" && !(tc.cfg != nil && tc.cfg.Mode == data_scope.ModeNone) {
 				assert.NotContains(t, handlerCode, `json:"`+tc.ownerCol+`"`)

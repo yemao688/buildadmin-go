@@ -247,6 +247,40 @@ func TestClosureEnforcerPrefixAndSQLShape(t *testing.T) {
 	}
 }
 
+func TestClosureEnforcerExtraOwnerSQLGroupsPrimaryOrExtra(t *testing.T) {
+	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	a, err := NewActor(7)
+	require.NoError(t, err)
+	ctx.Set(actorContextKey, a)
+	db := e.ScopeWithExtraOwners(ctx, openTestDB(t).Table("resource"), OwnerRef{TableAlias: "resource", Column: "admin_id"}, []OwnerRef{{TableAlias: "resource", Column: "secondary_admin_id"}})
+	where := fmt.Sprintf("%v", db.Statement.Clauses["WHERE"].Expression)
+	assert.Contains(t, where, "AND (EXISTS")
+	assert.Contains(t, where, "closure.descendant_id = `resource`.`admin_id`")
+	assert.Contains(t, where, " OR EXISTS")
+	assert.Contains(t, where, "closure.descendant_id = `resource`.`secondary_admin_id`")
+}
+
+func TestClosureEnforcerExtraOwnerRejectsInvalidActorOrIdentifier(t *testing.T) {
+	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Set(actorContextKey, Actor{AdminID: 0})
+	assert.ErrorIs(t, e.ScopeWithExtraOwners(ctx, openTestDB(t), OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "secondary_admin_id"}}).Error, ErrScopedAccessDenied)
+	a, _ := NewActor(7)
+	ctx.Set(actorContextKey, a)
+	assert.ErrorIs(t, e.ScopeWithExtraOwners(ctx, openTestDB(t), OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "t.secondary_admin_id"}}).Error, ErrScopedAccessDenied)
+}
+
+func TestClosureEnforcerExtraOwnerUnrestrictedBypass(t *testing.T) {
+	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	a, _ := NewUnrestrictedActor(7)
+	ctx.Set(actorContextKey, a)
+	db := openTestDB(t)
+	assert.Same(t, db, e.ScopeWithExtraOwners(ctx, db, OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "secondary_admin_id"}}))
+	assert.Empty(t, db.Statement.Clauses["WHERE"])
+}
+
 func TestClosureEnforcerInvalidPrefixesFailClosed(t *testing.T) {
 	for _, prefix := range []string{"bad.prefix", "bad`prefix", "bad prefix"} {
 		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: prefix}})

@@ -158,7 +158,7 @@ func TestGeneratedClosureBehavior(t *testing.T) {
 	require.Equal(t, int64(2), total)
 	require.Len(t, list, 2)
 	var aggregate struct{ Total int64 }
-	require.NoError(t, model.scopedDB(ctx).Table(model.TableName).Select("COUNT(*) AS total").Scan(&aggregate).Error)
+	require.NoError(t, model.readScopedDB(ctx, model.DBFor(ctx)).Table(model.TableName).Select("COUNT(*) AS total").Scan(&aggregate).Error)
 	require.Equal(t, total, aggregate.Total)
 	_, err = model.GetOne(ctx, 2)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)

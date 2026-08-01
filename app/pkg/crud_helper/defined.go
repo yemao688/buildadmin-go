@@ -550,17 +550,14 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 			sqlDB:            sqlDB,
 		},{{end}}
 		Policy: data_scope.ResourcePolicy{
-			Mode:           "{{.DataScopePolicy.Mode}}",
-			OwnerColumn:    "{{.DataScopePolicy.OwnerColumn}}",
-			AssignOnCreate: {{.DataScopePolicy.AssignOnCreate}},
+			Mode:            "{{.DataScopePolicy.Mode}}",
+			OwnerColumn:     "{{.DataScopePolicy.OwnerColumn}}",
+			ReadExtraOwners: []string{ {{range $i, $column := .DataScopePolicy.ReadExtraOwners}}{{if $i}}, {{end}}{{printf "%q" $column}}{{end}} },
+			AssignOnCreate:  {{.DataScopePolicy.AssignOnCreate}},
 		},
 		Enforcer: enforcer,
 		config:   config,
 	}
-}
-
-func (s *{{.ClassName}}Model) scopedDB(ctx *gin.Context) *gorm.DB {
-	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
 func (s *{{.ClassName}}Model) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
@@ -575,6 +572,23 @@ func (s *{{.ClassName}}Model) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.Enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn})
 }
 
+// readScopedDB applies the primary and optional extra owner read scope.
+func (s *{{.ClassName}}Model) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	if s.Policy.Mode == data_scope.ModeNone {
+		return db
+	}
+	if s.Enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	extras := make([]data_scope.OwnerRef, 0, len(s.Policy.ReadExtraOwners))
+	for _, column := range s.Policy.ReadExtraOwners {
+		extras = append(extras, data_scope.OwnerRef{TableAlias: s.TableName, Column: column})
+	}
+	return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)
+}
+
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
 func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
@@ -583,7 +597,7 @@ func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 {{.RelationLoaders}}
 
 func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} {{.ClassName}}, err error) {
-	db := s.scopedDB(ctx).Session(&gorm.Session{})
+	db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
 	{{if .Relations}}if err == nil {
@@ -601,13 +615,13 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	if err != nil {
 		return nil, 0, err
 	}
-	countDB := s.scopedDB(ctx).Session(&gorm.Session{})
+	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
 	countDB.Statement.Table = s.TableName
 	countDB = countDB.Where(whereS, whereP...)
 	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	findDB := s.scopedDB(ctx).Session(&gorm.Session{})
+	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
 	findDB.Statement.Table = s.TableName
 	findDB = findDB.Where(whereS, whereP...)
 	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error

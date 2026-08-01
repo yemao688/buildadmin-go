@@ -176,6 +176,20 @@ fields:
 
 `formBuildExclude: true` 让操作员不能手工选择 owner，由 `assignOnCreate` 自动写入；这里不要再加 `tableBuildExclude: true`，因为保留表格列才能同时获得自动隐藏的原始 FK 搜索和可见的 relation display 列（规则见"关系"）。owner/admin 归属列通常展示 `username`，reviewer 这类独立审批人语义再单独使用 `nickname` 等字段。
 
+### 多属主读范围
+
+`dataScope.readExtraOwners` 是可选的字符串列表，用于声明除 `ownerColumn` 外也能看到该行的属主列。列表中的每一列必须存在于 spec 字段、是整数兼容类型，并且不能与主属主列相同。例如订单既按 `admin_id` 归属，也允许对应的卖家读取时，可以写：
+
+```yaml
+dataScope:
+  mode: required
+  ownerColumn: admin_id
+  readExtraOwners: [seller_id]
+  assignOnCreate: true
+```
+
+读范围按主属主列和所有额外属主列进行 OR 匹配；未配置额外属主时保持原有单属主读范围。额外属主列只参与读范围，不能由客户端通过 Add/Edit 参数提交，生成器会将其加入 handler 参数排除列表。`mode: none` 仍表示全局资源，不应用属主读范围。
+
 ## 字段契约与默认值
 
 | 键                  | 类型和默认值                | 语义                                                  |

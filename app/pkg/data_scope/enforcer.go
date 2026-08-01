@@ -65,6 +65,16 @@ func (ClosureEnforcer) Actor(ctx *gin.Context) (Actor, error) {
 // original DB. The returned DB is never the original input for scoped
 // (non-bypass) requests, and the original shared DB is never mutated.
 func (e ClosureEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *gorm.DB {
+	return e.scopeOwners(ctx, db, owner, nil)
+}
+
+// ScopeWithExtraOwners scopes rows owned by the primary owner or any extra
+// owner column. Every owner reference is validated before SQL is constructed.
+func (e ClosureEnforcer) ScopeWithExtraOwners(ctx *gin.Context, db *gorm.DB, primary OwnerRef, extras []OwnerRef) *gorm.DB {
+	return e.scopeOwners(ctx, db, primary, extras)
+}
+
+func (e ClosureEnforcer) scopeOwners(ctx *gin.Context, db *gorm.DB, primary OwnerRef, extras []OwnerRef) *gorm.DB {
 	if db == nil {
 		// The interface does not allow returning an error. Return nil so the
 		// caller panics deterministically rather than silently running
@@ -77,8 +87,13 @@ func (e ClosureEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *g
 		return addScopeError(db, err, ErrScopedAccessDenied)
 	}
 
-	if err := ValidateOwnerRef(owner); err != nil {
+	if err := ValidateOwnerRef(primary); err != nil {
 		return addScopeError(db, err, ErrScopedAccessDenied)
+	}
+	for _, extra := range extras {
+		if err := ValidateOwnerRef(extra); err != nil {
+			return addScopeError(db, err, ErrScopedAccessDenied)
+		}
 	}
 
 	if actor.Unrestricted {
@@ -89,8 +104,15 @@ func (e ClosureEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *g
 		return addScopeError(db, fmt.Errorf("%w: closure table is not configured", ErrScopedAccessDenied))
 	}
 	closure := quoteIdentifier(e.closureTable)
-	condition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?) AND EXISTS (SELECT 1 FROM %s AS closure WHERE closure.ancestor_id = ? AND closure.descendant_id = %s.%s)", closure, closure, quoteIdentifier(owner.TableAlias), quoteIdentifier(owner.Column))
-	return db.Session(&gorm.Session{}).Where(condition, actor.AdminID, actor.AdminID, actor.AdminID)
+	refs := append([]OwnerRef{primary}, extras...)
+	branches := make([]string, 0, len(refs))
+	args := []interface{}{actor.AdminID, actor.AdminID}
+	for _, ref := range refs {
+		branches = append(branches, fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS closure WHERE closure.ancestor_id = ? AND closure.descendant_id = %s.%s)", closure, quoteIdentifier(ref.TableAlias), quoteIdentifier(ref.Column)))
+		args = append(args, actor.AdminID)
+	}
+	condition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?) AND (%s)", closure, strings.Join(branches, " OR "))
+	return db.Session(&gorm.Session{}).Where(condition, args...)
 }
 
 func quoteIdentifier(s string) string { return "`" + strings.ReplaceAll(s, "`", "``") + "`" }
