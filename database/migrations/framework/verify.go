@@ -70,7 +70,7 @@ func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration) error {
 			return err
 		}
 		var duplicates int64
-		if err := db.Table(table).Where("name=? AND controller=? AND controller_as=? AND data_table=? AND primary_key=?", check.name, "user/User.php", check.controllerAs, check.dataTable, "id").Count(&duplicates).Error; err != nil {
+		if err := db.Table(table).Where("name=? AND controller=? AND controller_as=? AND data_table=? AND primary_key=?", check.name, "user.User", check.controllerAs, check.dataTable, "id").Count(&duplicates).Error; err != nil {
 			return err
 		}
 		if duplicates != 1 {

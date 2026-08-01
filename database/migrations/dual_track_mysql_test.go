@@ -146,6 +146,7 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 		"CREATE TABLE " + q("crud_log") + " (id INT PRIMARY KEY, admin_id INT UNSIGNED NOT NULL DEFAULT 0)",
 		"CREATE TABLE " + q("admin_closure") + " (ancestor_id INT UNSIGNED NOT NULL, descendant_id INT UNSIGNED NOT NULL, depth INT UNSIGNED NOT NULL DEFAULT 0, PRIMARY KEY (ancestor_id, descendant_id), KEY idx_descendant_ancestor (descendant_id, ancestor_id), KEY idx_ancestor_depth (ancestor_id, depth))",
 		"CREATE TABLE " + q("admin_rule") + " (id INT UNSIGNED NOT NULL AUTO_INCREMENT, pid INT UNSIGNED NOT NULL DEFAULT 0, type VARCHAR(30) NOT NULL DEFAULT '', title VARCHAR(100) NOT NULL DEFAULT '', name VARCHAR(100) NOT NULL DEFAULT '', path VARCHAR(100) NOT NULL DEFAULT '', menu_type VARCHAR(30) NOT NULL DEFAULT '', component VARCHAR(255) NOT NULL DEFAULT '', weigh INT NOT NULL DEFAULT 0, status VARCHAR(10) NOT NULL DEFAULT '1', PRIMARY KEY (id))",
+		"CREATE TABLE " + q("country_language") + " (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, lan VARCHAR(20) NOT NULL DEFAULT '', name VARCHAR(50) NOT NULL DEFAULT '', remark VARCHAR(255) NOT NULL DEFAULT '', status TINYINT UNSIGNED NOT NULL DEFAULT 1, weigh INT NOT NULL DEFAULT 0, PRIMARY KEY (id), UNIQUE KEY uk_country_language_lan (lan))",
 		"CREATE TABLE " + q("config") + " (id INT UNSIGNED NOT NULL AUTO_INCREMENT, name VARCHAR(30) NOT NULL DEFAULT '', `group` VARCHAR(30) NOT NULL DEFAULT '', title VARCHAR(50) NOT NULL DEFAULT '', tip VARCHAR(100) NOT NULL DEFAULT '', type VARCHAR(30) NOT NULL DEFAULT '', value LONGTEXT, content LONGTEXT, rule VARCHAR(100) NOT NULL DEFAULT '', extend VARCHAR(255) NOT NULL DEFAULT '', allow_del TINYINT UNSIGNED NOT NULL DEFAULT 0, weigh INT NOT NULL DEFAULT 0, PRIMARY KEY (id), UNIQUE KEY uq_config_name (name))",
 	} {
 		if err := db.Exec(ddl).Error; err != nil {
@@ -161,10 +162,10 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 	if err := db.Exec("INSERT INTO " + q("user_money_log") + " VALUES (1,10,2,5,0,5),(2,20,1,3,0,3)").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO "+q("security_data_recycle")+" (id,name,controller,controller_as,data_table,primary_key) VALUES (?, ?, ?, ?, ?, ?)", 5, "会员", "user/User.php", "user/user", "user", "id").Error; err != nil {
+	if err := db.Exec("INSERT INTO "+q("security_data_recycle")+" (id,name,controller,controller_as,data_table,primary_key) VALUES (?, ?, ?, ?, ?, ?)", 5, "会员", "user.User", "user/user", "user", "id").Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Exec("INSERT INTO "+q("security_sensitive_data")+" (id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (?, ?, ?, ?, ?, ?, ?)", 2, "会员数据", "user/User.php", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
+	if err := db.Exec("INSERT INTO "+q("security_sensitive_data")+" (id,name,controller,controller_as,data_table,primary_key,data_fields) VALUES (?, ?, ?, ?, ?, ?, ?)", 2, "会员数据", "user.User", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("INSERT INTO "+q("config")+" (id,name,`group`,title,tip,type,value,content,rule,extend,allow_del,weigh) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 1, "config_group", "basics", "Config group", "", "array", `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"}]`, "", "required", "", 0, -1).Error; err != nil {
@@ -190,6 +191,19 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 	var uploadCount int64
 	if err := check.Table(tableName(config, "config")).Where("`group` = ?", "upload").Count(&uploadCount).Error; err != nil || uploadCount != 6 {
 		t.Fatalf("upload config rows=%d err=%v", uploadCount, err)
+	}
+	var languages []struct {
+		Lan    string
+		Name   string
+		Remark string
+		Status int8
+		Weigh  int32
+	}
+	if err := check.Table(tableName(config, "country_language")).Order("weigh DESC, id ASC").Find(&languages).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(languages) != 2 || languages[0].Lan != "zh-cn" || languages[0].Name != "简体中文" || languages[0].Remark != "简体中文" || languages[0].Status != 1 || languages[1].Lan != "en" || languages[1].Name != "English" || languages[1].Remark != "English" || languages[1].Status != 1 {
+		t.Fatalf("country languages=%+v", languages)
 	}
 }
 

@@ -899,6 +899,24 @@ func (s Install) AdminRule() error {
 				UpdateTime: time.Now().Unix(),
 				CreateTime: time.Now().Unix(),
 			},
+			{
+				ID:         109,
+				Pid:        19,
+				Type:       "button",
+				Title:      "删除",
+				Name:       "auth/adminLog/del",
+				UpdateTime: time.Now().Unix(),
+				CreateTime: time.Now().Unix(),
+			},
+			{
+				ID:         110,
+				Pid:        45,
+				Type:       "button",
+				Title:      "发送测试邮件",
+				Name:       "routine/config/sendtestmail",
+				UpdateTime: time.Now().Unix(),
+				CreateTime: time.Now().Unix(),
+			},
 		}
 		if err := s.sqlDB.Create(dataList).Error; err != nil {
 			return err
@@ -1073,18 +1091,18 @@ func (s Install) SecurityDataRecycle() error {
 		{
 			ID:           1,
 			Name:         "管理员",
-			Controller:   "auth/Admin.php",
+			Controller:   "auth.Admin",
 			ControllerAs: "auth/admin",
 			DataTable:    "admin",
 			PrimaryKey:   "id",
 			UpdateTime:   time.Now().Unix(),
 			CreateTime:   time.Now().Unix(),
 		},
-		{ID: 2, Name: "管理员日志", Controller: "auth/AdminLog.php", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 3, Name: "菜单规则", Controller: "auth/Menu.php", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 4, Name: "系统配置项", Controller: "routine/Config.php", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 5, Name: "会员", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 6, Name: "数据回收规则", Controller: "security/DataRecycle.php", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 2, Name: "管理员日志", Controller: "auth.AdminLog", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, Name: "菜单规则", Controller: "auth.Rule", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 4, Name: "系统配置项", Controller: "routine.Config", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 5, Name: "会员", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 6, Name: "数据回收规则", Controller: "security.DataRecycle", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
 		var existing model.SecurityDataRecycle
@@ -1105,7 +1123,7 @@ func (s Install) SecuritySensitiveData() error {
 		{
 			ID:           1,
 			Name:         "管理员数据",
-			Controller:   "auth/Admin.php",
+			Controller:   "auth.Admin",
 			ControllerAs: "auth/admin",
 			DataTable:    "admin",
 			PrimaryKey:   "id",
@@ -1114,8 +1132,8 @@ func (s Install) SecuritySensitiveData() error {
 			UpdateTime:   time.Now().Unix(),
 			CreateTime:   time.Now().Unix(),
 		},
-		{ID: 2, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 3, Name: "管理员权限", Controller: "auth/Group.php", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 2, Name: "会员数据", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, Name: "管理员权限", Controller: "auth.Group", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
 		var existing model.SecuritySensitiveData

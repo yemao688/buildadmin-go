@@ -38,12 +38,15 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	if err := seedCountryMenus(db, config); err != nil {
 		return err
 	}
+	if err := seedCountryLanguages(db, config); err != nil {
+		return err
+	}
 	return seedUploadConfig(db, config)
 }
 
 func normalizeFreshSensitiveSeed(db *gorm.DB, config *conf.Configuration) error {
 	table := core.TableName(config, "security_sensitive_data")
-	if err := db.Table(table).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", 2, "会员数据", "user/User.php", "user/user", "user", "id").Update("data_fields", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
+	if err := db.Table(table).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", 2, "会员数据", "user.User", "user/user", "user", "id").Update("data_fields", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
 		return fmt.Errorf("normalize %s sensitive seed: %w", table, err)
 	}
 	return nil
@@ -102,6 +105,27 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 			if err := ensure(menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
 				return fmt.Errorf("seed country menu %s%s: %w", menu.name, button.suffix, err)
 			}
+		}
+	}
+	return nil
+}
+
+func seedCountryLanguages(db *gorm.DB, config *conf.Configuration) error {
+	table := core.TableName(config, "country_language")
+	rows := []model.CountryLanguage{
+		{Lan: "zh-cn", Name: "简体中文", Remark: "简体中文", Status: 1, Weigh: 2},
+		{Lan: "en", Name: "English", Remark: "English", Status: 1, Weigh: 1},
+	}
+	for _, row := range rows {
+		var count int64
+		if err := db.Table(table).Where("lan = ?", row.Lan).Count(&count).Error; err != nil {
+			return err
+		}
+		if count != 0 {
+			continue
+		}
+		if err := db.Table(table).Create(&row).Error; err != nil {
+			return err
 		}
 	}
 	return nil
@@ -315,6 +339,13 @@ func verifyCountryDictionaryContract(db *gorm.DB, config *conf.Configuration) er
 		if invalid != 0 {
 			return fmt.Errorf("%s.status contains invalid values", table)
 		}
+	}
+	var enabledLanguages int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(core.TableName(config, "country_language")) + " WHERE status = 1").Scan(&enabledLanguages).Error; err != nil {
+		return err
+	}
+	if enabledLanguages == 0 {
+		return fmt.Errorf("%s has no enabled language", core.TableName(config, "country_language"))
 	}
 	return nil
 }
