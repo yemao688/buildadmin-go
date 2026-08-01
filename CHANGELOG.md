@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.6.0
+
+> **破坏性版本，无升级路径。** 本版直接改写迁移轨道与种子，不支持对旧库执行 migrate 升级；所有环境（含下游业务仓库）必须用安装器全新安装后重新开始业务数据。
+
+- **Changed (breaking, migrations):** local 迁移轨道整体更名并改写为 framework 轨道——账本表 `local_migrations` → `framework_migrations`，`Report.Local` → `Report.Framework`，`LocalMigration`→`FrameworkMigration`、`RunLocalMigrations`→`RunFrameworkMigrations` 等全族 API 更名；删除无使用方的 `adopted_from` 账本列与配套代码。旧 7 条迁移压缩为单条 `framework-final-seed-and-integrity`（层级锁、闭包自引用行、seed owner 归一化、country 菜单、upload 配置 + 终态 `VerifySchema`/`VerifyUpgradeData`），全部旧库升级转换逻辑删除。official 历史迁移身份不动；official 当前 installer seed/recovery 同步改写（删 UserGroup/UserRule/User 种子与 14 个 admin_rule 条目、`ValidateCurrentSchema` 整体删除）。
+- **Changed (breaking, user 模块):** user 表删除 `gender`、`birthday`、`score`、`motto`、`group_id`、`salt` 六字段；`user_score_log`、`user_group`、`user_rule` 三表连同后端模块、后台页面、种子、菜单整体删除。框架不再提供积分/分组/前台会员 RBAC——user token 仅证明"已认证"，下游自建 API 需自定义业务授权与数据归属。user 最终字段：`id, admin_id, username, nickname, avatar, email, mobile, password, status, money, last_login_time, last_login_ip, login_failure, join_ip, join_time, create_time, update_time`；后台 user 管理与 `user_money_log`（money `decimal(12,2)`）保留，余额只经 MoneyLog 调整。
+- **Changed (breaking, 密码):** 全框架密码哈希统一为 bcrypt——新增 `app/pkg/password`（`Hash`/`Compare`，`bcrypt.DefaultCost`），删除 `utils.EncryptPassword`（md5(md5(pw)+salt)）与 user/admin 两表 `salt` 列；旧 MD5 哈希不可验证，全新安装即 bcrypt，既有用户密码只能由后台重置。
+- **Changed (breaking, 门户):** 前台门户与会员 API 整体删除，框架交付 headless 认证 API + 完善后台——`web/src/views/frontend`、`web/src/api/frontend`、`userInfo` store、memberCenter 全删，`/` 重定向到 `/admin/login`；`/api` 仅保留 `POST /api/user/{login,register,logout}`、`POST /api/common/refreshToken`、图形/点选验证码与 `/api/install/*`；注册精简为 username+password+点选验证码（自助找回密码、邮箱验证、资料维护、积分/余额展示等会员接口全部移除）；`app.open_member_center` 配置删除。
+- **Fixed:** `app/pkg/version.Framework` 常量与根目录 `VERSION_FRAMEWORK` 恢复同步（此前停留在 2.1.0 导致 version_test 长期失败）。
+
 ## v2.5.1
 
 - **Fixed (migrations):** local 迁移 0007（user 金额 decimal 化）在经编排器 advisory lock 的迁移路径（CLI `setup`/`migrate`、Web 安装向导）上必然失败——`convertUserMoneyColumn` 使用 `db.Connection()`，而 gorm 的 `Connection()` 对非 `*sql.DB` 连接池一律返回 `ErrInvalidDB`（锁内 pinned 句柄为 `*sql.Conn`），报 `local migration: invalid db`；存量 int 金额列升级被完全阻断（下游实测），全新安装则把 0007 静默留在半完成态（账本 `end_time` 为空，列由快照直接建成 decimal 而不易察觉）。现按连接池类型分派：池句柄仍走 `Connection()` 保证 ALTER+UPDATE 单连接相邻，pinned 句柄直接在既有单连接上执行。账本半完成行无需人工修复，重跑 `migrate` 自动续跑完成。
