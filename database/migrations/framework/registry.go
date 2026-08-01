@@ -25,9 +25,8 @@ func Migrations(official []core.OfficialMigration) []core.FrameworkMigration {
 	}
 	// An empty official list has no dependency, matching the old result.
 	return []core.FrameworkMigration{{
-		Sequence:          1,
-		ID:                "framework-final-seed-and-integrity",
-		Revision:          1,
+		Version:           1,
+		MigrationName:     "framework-final-seed-and-integrity",
 		RequiresOfficial:  requiresOfficial,
 		Up:                finalSeedAndIntegrity,
 		VerifySchema:      verifyFinalTableContract,

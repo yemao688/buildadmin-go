@@ -21,9 +21,8 @@ func TestBusinessDownRunsAndRemovesLedgerRecord(t *testing.T) {
 
 	var up, down int
 	migration := business.Migration{
-		Sequence: 1,
-		ID:       "down-execution",
-		Revision: 1,
+		Version:       1,
+		MigrationName: "down-execution",
 		Up: func(*gorm.DB, *conf.Configuration) error {
 			up++
 			return nil
@@ -46,38 +45,37 @@ func TestBusinessDownRunsAndRemovesLedgerRecord(t *testing.T) {
 	require.Zero(t, count)
 }
 
-func TestBusinessRollbackUsesBatchesAndSteps(t *testing.T) {
-	db, config := testutil.OpenFixtureDatabase(t, "rollback_batch_")
+func TestBusinessRollbackUsesLatestVersionAndSteps(t *testing.T) {
+	db, config := testutil.OpenFixtureDatabase(t, "rollback_version_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 
 	var down []string
-	makeMigration := func(sequence uint64, id string) business.Migration {
+	makeMigration := func(version uint64, name string) business.Migration {
 		return business.Migration{
-			Sequence: sequence,
-			ID:       id,
-			Revision: 1,
-			Up:       func(*gorm.DB, *conf.Configuration) error { return nil },
+			Version:       version,
+			MigrationName: name,
+			Up:            func(*gorm.DB, *conf.Configuration) error { return nil },
 			Down: func(*gorm.DB, *conf.Configuration) error {
-				down = append(down, id)
+				down = append(down, name)
 				return nil
 			},
 		}
 	}
-	first := makeMigration(1, "first-batch")
-	second := makeMigration(2, "second-batch")
-	third := makeMigration(3, "third-batch")
+	first := makeMigration(1, "first")
+	second := makeMigration(2, "second")
+	third := makeMigration(3, "third")
 	requireRunCount(t, db, config, []business.Migration{first, second}, 2)
 	requireRunCount(t, db, config, []business.Migration{first, second, third}, 1)
 
 	report, err := RollbackBusinessMigrations(db, config, []business.Migration{first, second, third}, RollbackOptions{})
 	require.NoError(t, err)
 	require.Equal(t, 1, report.RolledBack())
-	require.Equal(t, []string{"third-batch"}, down)
+	require.Equal(t, []string{"third"}, down)
 
 	report, err = RollbackBusinessMigrations(db, config, []business.Migration{first, second}, RollbackOptions{Steps: 1})
 	require.NoError(t, err)
 	require.Equal(t, 1, report.RolledBack())
-	require.Equal(t, []string{"third-batch", "second-batch"}, down)
+	require.Equal(t, []string{"third", "second"}, down)
 
 	var remaining int64
 	require.NoError(t, db.Table(core.TableName(config, businessLedgerName)).Where("end_time IS NOT NULL").Count(&remaining).Error)
@@ -87,12 +85,7 @@ func TestBusinessRollbackUsesBatchesAndSteps(t *testing.T) {
 func TestBusinessRollbackMissingDownLeavesLedgerAndRejectsUnsupportedTracks(t *testing.T) {
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_guard_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
-	migration := business.Migration{
-		Sequence: 1,
-		ID:       "missing-down",
-		Revision: 1,
-		Up:       func(*gorm.DB, *conf.Configuration) error { return nil },
-	}
+	migration := business.Migration{Version: 1, MigrationName: "missing-down", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
 	requireRunCount(t, db, config, []business.Migration{migration}, 1)
 	report, err := RollbackBusinessMigrations(db, config, []business.Migration{migration}, RollbackOptions{})
 	require.Error(t, err)
@@ -104,7 +97,7 @@ func TestBusinessRollbackMissingDownLeavesLedgerAndRejectsUnsupportedTracks(t *t
 	require.Equal(t, int64(1), count)
 
 	for _, track := range []string{"official", "framework"} {
-		_, err := core.RollbackTrackedMigrations(nil, config, track+"_migrations", nil, core.RollbackOptions{TrackName: track})
+		_, err := core.RollbackTrackedMigrations(nil, config, "migrations_"+track, nil, core.RollbackOptions{TrackName: track})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), track+" migration rollback is unsupported")
 	}
@@ -114,14 +107,13 @@ func TestBusinessBreakpointSetClearListAndRollbackTarget(t *testing.T) {
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_breakpoint_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	var down []string
-	makeMigration := func(sequence uint64, id string) business.Migration {
+	makeMigration := func(version uint64, name string) business.Migration {
 		return business.Migration{
-			Sequence: sequence,
-			ID:       id,
-			Revision: 1,
-			Up:       func(*gorm.DB, *conf.Configuration) error { return nil },
+			Version:       version,
+			MigrationName: name,
+			Up:            func(*gorm.DB, *conf.Configuration) error { return nil },
 			Down: func(*gorm.DB, *conf.Configuration) error {
-				down = append(down, id)
+				down = append(down, name)
 				return nil
 			},
 		}
@@ -129,11 +121,11 @@ func TestBusinessBreakpointSetClearListAndRollbackTarget(t *testing.T) {
 	first := makeMigration(1, "breakpoint-first")
 	second := makeMigration(2, "breakpoint-second")
 	requireRunCount(t, db, config, []business.Migration{first}, 1)
-	require.NoError(t, SetBreakpoint(db, config, first.Sequence))
+	require.NoError(t, SetBreakpoint(db, config, first.Version))
 	breakpoint, err := GetBreakpoint(db, config)
 	require.NoError(t, err)
 	require.NotNil(t, breakpoint)
-	require.Equal(t, first.Sequence, breakpoint.Sequence)
+	require.Equal(t, first.Version, breakpoint.Version)
 
 	requireRunCount(t, db, config, []business.Migration{first, second}, 1)
 	report, err := RollbackBusinessMigrations(db, config, []business.Migration{first, second}, RollbackOptions{ToBreakpoint: true})
@@ -158,11 +150,10 @@ func TestBusinessRollbackReportsDownFailureProgress(t *testing.T) {
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_failure_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	failing := business.Migration{
-		Sequence: 1,
-		ID:       "down-failure",
-		Revision: 1,
-		Up:       func(*gorm.DB, *conf.Configuration) error { return nil },
-		Down:     func(*gorm.DB, *conf.Configuration) error { return fmt.Errorf("cannot undo") },
+		Version:       1,
+		MigrationName: "down-failure",
+		Up:            func(*gorm.DB, *conf.Configuration) error { return nil },
+		Down:          func(*gorm.DB, *conf.Configuration) error { return fmt.Errorf("cannot undo") },
 	}
 	requireRunCount(t, db, config, []business.Migration{failing}, 1)
 	report, err := RollbackBusinessMigrations(db, config, []business.Migration{failing}, RollbackOptions{})

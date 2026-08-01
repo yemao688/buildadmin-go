@@ -7,8 +7,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func validMigration(sequence uint64, id string) Migration {
-	return Migration{Sequence: sequence, ID: id, Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
+func validMigration(version uint64, name string) Migration {
+	return Migration{Version: version, MigrationName: name, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
 }
 
 func resetRegistryForTest() {
@@ -25,15 +25,15 @@ func TestRegistryValidationSortingCopyAndFreeze(t *testing.T) {
 	Register(second)
 	Register(validMigration(1, "one"))
 	got, err := Migrations()
-	if err != nil || len(got) != 2 || got[0].ID != "one" || got[1].ID != "two" {
+	if err != nil || len(got) != 2 || got[0].MigrationName != "one" || got[1].MigrationName != "two" {
 		t.Fatalf("got migrations=%v, err=%v", got, err)
 	}
 	if got[1].Down == nil {
 		t.Fatal("optional Down function was not retained")
 	}
-	got[0].ID = "changed"
+	got[0].MigrationName = "changed"
 	again, err := Migrations()
-	if err != nil || again[0].ID != "one" {
+	if err != nil || again[0].MigrationName != "one" {
 		t.Fatalf("registry was not copied: %v, err=%v", again, err)
 	}
 	assertRegisterPanics(t, validMigration(3, "three"))
@@ -42,9 +42,9 @@ func TestRegistryValidationSortingCopyAndFreeze(t *testing.T) {
 func TestRegistryValidationErrors(t *testing.T) {
 	cases := [][]Migration{
 		{validMigration(2, "one")},
-		{{Sequence: 1, ID: " ", Revision: 1, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}},
-		{{Sequence: 1, ID: "one", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}},
-		{{Sequence: 1, ID: "one", Revision: 1}},
+		{{Version: 1, MigrationName: " ", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}},
+		{{Version: 1, MigrationName: "one"}},
+		{{Version: 1, MigrationName: "one", Up: nil}},
 		{validMigration(1, "one"), validMigration(1, "two")},
 		{validMigration(1, "one"), validMigration(2, "one")},
 	}

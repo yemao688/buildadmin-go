@@ -2,29 +2,23 @@ package core
 
 import (
 	"fmt"
+
 	"go-build-admin/conf"
 	"gorm.io/gorm"
 )
 
 type TrackedMigration struct {
-	Sequence uint64
-	ID       string
-	Revision uint64
-	Up       MigrationFn
-	Down     MigrationFn
-	// VerifyBaseline runs only while applying a migration, after Up succeeds.
-	// A failed baseline check is retried with the migration; completed records
-	// do not run it again. VerifySchema and VerifyUpgradeData are standing runtime
-	// invariants and run on every migrate, so their predicates must be business-compatible.
+	Version           uint64
+	MigrationName     string
+	Up                MigrationFn
+	Down              MigrationFn
 	VerifyBaseline    MigrationFn
 	VerifySchema      MigrationFn
 	VerifyUpgradeData MigrationFn
 }
 
 type TrackedRunnerOptions struct {
-	TrackName    string
-	IncludeBatch bool
-	Batch        uint64
+	TrackName string
 }
 
 func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName string, migrations []TrackedMigration, options TrackedRunnerOptions) (int, error) {
@@ -35,51 +29,30 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 	if trackName == "" {
 		trackName = "tracked"
 	}
-	batch := uint64(0)
-	if options.IncludeBatch {
-		batch = options.Batch
-		if batch == 0 {
-			var err error
-			batch, err = NextTrackedBatch(db, config, tableName)
-			if err != nil {
-				return 0, err
-			}
-		}
-	}
 	count := 0
 	for _, m := range migrations {
 		var record TrackedMigrationRecord
 		selectRecord := func() *gorm.DB {
-			query := db.Table(TableName(config, tableName)).Select("sequence,migration_id,revision,start_time,end_time")
-			if options.IncludeBatch {
-				query = query.Select("sequence,batch,migration_id,revision,start_time,end_time")
-			}
-			return query
+			return db.Table(TableName(config, tableName)).Select("version,migration_name,start_time,end_time,breakpoint")
 		}
-		q := selectRecord().Where("sequence = ?", m.Sequence).First(&record)
+		q := selectRecord().Where("version = ?", m.Version).First(&record)
 		exists := q.Error == nil
 		if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
 			return count, q.Error
 		}
-		if exists && (record.MigrationID != m.ID || record.Revision != m.Revision) {
-			return count, fmt.Errorf("%s sequence %d collision", trackName, m.Sequence)
+		if exists && record.MigrationName != m.MigrationName {
+			return count, fmt.Errorf("%s version %d collision", trackName, m.Version)
 		}
 		if !exists {
-			q = selectRecord().Where("migration_id = ?", m.ID).First(&record)
-			if q.Error == nil && (record.Sequence != m.Sequence || record.Revision != m.Revision) {
-				return count, fmt.Errorf("%s migration %s collision", trackName, m.ID)
+			q = selectRecord().Where("migration_name = ?", m.MigrationName).First(&record)
+			if q.Error == nil && record.Version != m.Version {
+				return count, fmt.Errorf("%s migration %s collision", trackName, m.MigrationName)
 			}
 			if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
 				return count, q.Error
 			}
 			if q.Error == gorm.ErrRecordNotFound {
-				var err error
-				if options.IncludeBatch {
-					err = InsertPendingTrackedMigrationWithBatch(db, config, tableName, m, batch)
-				} else {
-					err = InsertPendingTrackedMigration(db, config, tableName, m)
-				}
-				if err != nil {
+				if err := InsertPendingTrackedMigration(db, config, tableName, m); err != nil {
 					return count, err
 				}
 			}

@@ -18,68 +18,15 @@ func verifyFinalDataContract(db *gorm.DB, config *conf.Configuration) error {
 	return verifyFinalDataContractImpl(db, config)
 }
 
-func verifyHierarchyContract(db *gorm.DB, config *conf.Configuration) error {
-	admin := core.TableName(config, "admin")
-	if err := requireTable(db, admin); err != nil {
-		return err
-	}
-	if err := requireColumn(db, admin, "parent_id"); err != nil {
-		return err
-	}
-	if err := requireIndexColumns(db, admin, "idx_parent_id", []string{"parent_id"}); err != nil {
-		return err
-	}
-	closure := core.TableName(config, "admin_closure")
-	if err := requireTable(db, closure); err != nil {
-		return err
-	}
-	for _, column := range []string{"ancestor_id", "descendant_id", "depth"} {
-		if !core.ColumnExists(db, closure, column) {
-			return fmt.Errorf("%s.%s missing", closure, column)
-		}
-	}
-	for _, index := range []struct {
-		name    string
-		columns []string
-	}{
-		{"PRIMARY", []string{"ancestor_id", "descendant_id"}},
-		{"idx_descendant_ancestor", []string{"descendant_id", "ancestor_id"}},
-		{"idx_ancestor_depth", []string{"ancestor_id", "depth"}},
-	} {
-		if err := requireIndexColumns(db, closure, index.name, index.columns); err != nil {
-			return err
-		}
-	}
-	if err := validateClosureSelfRows(db, config); err != nil {
-		return err
-	}
-	lock := core.TableName(config, "admin_hierarchy_lock")
-	if !core.TableExists(db, lock) {
-		return fmt.Errorf("%s missing", lock)
-	}
-	var count int64
-	if err := db.Table(lock).Where("id = 1").Count(&count).Error; err != nil {
-		return err
-	}
-	if count != 1 {
-		return fmt.Errorf("%s lock row missing", lock)
-	}
-	return nil
-}
-
 // VerifyCurrent validates cross-table invariants after framework and business migrations.
 func VerifyCurrent(db *gorm.DB, config *conf.Configuration) error {
-	root, err := migrationRootID(db, config)
-	if err != nil {
-		return err
-	}
 	if err := validateMigrationOwners(db, core.TableName(config, "user"), core.TableName(config, "admin")); err != nil {
 		return err
 	}
 	if err := validateClosureSelfRows(db, config); err != nil {
 		return err
 	}
-	return verifySecuritySeedIdentity(db, config, root)
+	return verifySecuritySeedIdentity(db, config)
 }
 
 func validateMigrationOwners(db *gorm.DB, table, adminTable string) error {
@@ -107,7 +54,7 @@ func validateLogOwnerMatchesUser(db *gorm.DB, logTable, userTable string) error 
 	return nil
 }
 
-func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration, root int32) error {
+func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration) error {
 	for _, check := range []struct {
 		table, id, name, controllerAs, dataTable string
 	}{
@@ -118,10 +65,7 @@ func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration, root in
 		if err := requireTable(db, table); err != nil {
 			return err
 		}
-		var row struct {
-			AdminID                       int32
-			Name, ControllerAs, DataTable string
-		}
+		var row struct{ Name, ControllerAs, DataTable string }
 		if err := db.Table(table).Where("id = ?", check.id).First(&row).Error; err != nil {
 			return err
 		}
@@ -132,8 +76,8 @@ func verifySecuritySeedIdentity(db *gorm.DB, config *conf.Configuration, root in
 		if duplicates != 1 {
 			return fmt.Errorf("%s final installer identity count=%d", table, duplicates)
 		}
-		if row.AdminID != root || row.Name != check.name || row.ControllerAs != check.controllerAs || row.DataTable != check.dataTable {
-			return fmt.Errorf("%s seed %s has unexpected identity or owner", table, check.id)
+		if row.Name != check.name || row.ControllerAs != check.controllerAs || row.DataTable != check.dataTable {
+			return fmt.Errorf("%s seed %s has unexpected identity", table, check.id)
 		}
 		if check.table == "security_sensitive_data" {
 			var fields string

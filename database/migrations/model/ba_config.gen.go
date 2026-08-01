@@ -20,5 +20,3 @@ type Config struct {
 	AllowDel int32  `gorm:"column:allow_del;type:tinyint(4) unsigned;not null;default:0;comment:允许删除:0=否,1=是" json:"allow_del"` // 允许删除:0=否,1=是
 	Weigh    int32  `gorm:"column:weigh;type:int(11);not null;default:0;comment:权重" json:"weigh"`                   // 权重
 }
-
-

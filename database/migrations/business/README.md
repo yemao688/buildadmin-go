@@ -12,9 +12,8 @@ import (
 
 func init() {
 	Register(Migration{
-		Sequence: 1,
-		ID:       "shop-orders",
-		Revision: 1,
+		Version:       1,
+		MigrationName: "shop-orders",
 		Up: func(db *gorm.DB, config *conf.Configuration) error {
 			// 只创建或修改本业务迁移拥有的表。
 			return nil
@@ -36,41 +35,39 @@ func init() {
 }
 ```
 
-`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
+`Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
 `VerifyBaseline` 是应用时执行一次的契约：它在 `Up` 成功后运行；应用失败时会随迁移重试；账本记录完成后不再运行。因此，它可以断言该迁移刚建立的精确 schema 基线。`VerifySchema` 和 `VerifyUpgradeData` 是常驻不变量：每次执行 `migrate` 都会运行，判据必须兼容基线之上的合法业务变更。
 
-业务轨道是 schema 形状的最终事实源。业务迁移可以在框架基线建立后覆盖框架核心列，但随后必须负责最终契约。例如，将金额改为 `decimal` 是业务域变更，必须同步修改应用 model 以及读写该金额的全部算术逻辑；只改列类型是不安全的。
+## 台账
 
-业务迁移完成后，以下常驻检查仍然适用：
+业务台账是带配置前缀的 `migrations_business` 表，使用与官方台账相同的五列：
 
-- framework `VerifySchema` 检查每条已完成 framework 迁移的常驻 schema 契约，framework `VerifyUpgradeData` 检查其常驻数据契约。
-- `framework.VerifyCurrent` 检查跨表所有权、闭包表自引用行、安全 seed 身份，以及已知旧安装规则的拒绝情况。
+| 列 | 设计 |
+| --- | --- |
+| `version` | `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY` |
+| `migration_name` | `VARCHAR(191) NOT NULL UNIQUE` |
+| `start_time` | `TIMESTAMP(6) NOT NULL` |
+| `end_time` | `TIMESTAMP(6) NULL`，NULL 表示 pending |
+| `breakpoint` | `TINYINT(1) NOT NULL DEFAULT 0` |
+
+framework 台账名为 `migrations_framework`，同样使用这五列。业务台账不再有 `sequence`、`migration_id`、`revision` 或 `batch`；也没有独立断点表，断点直接存放在 `breakpoint` 列。
 
 ## 回滚与断点
-
-业务 `Migration` 的 `Down` 是可选回调，签名与 `Up` 相同：
-
-```go
-Down: func(db *gorm.DB, config *conf.Configuration) error {
-	// 撤销对应 Up 的结构和数据变更。
-	return nil
-},
-```
 
 只有业务轨道支持回滚。使用以下命令：
 
 ```bash
 go run ./cmd/app --conf config.yaml migrate rollback [--steps N] [--to-breakpoint]
-go run ./cmd/app --conf config.yaml migrate breakpoint set <sequence>
+go run ./cmd/app --conf config.yaml migrate breakpoint set <version>
 go run ./cmd/app --conf config.yaml migrate breakpoint clear
 go run ./cmd/app --conf config.yaml migrate breakpoint list
 ```
 
-不带参数的 `migrate rollback` 默认回滚最近一次应用批次，并按逆序处理该批次中的业务迁移。`--steps N` 最多回滚 N 条已完成的业务迁移；`--to-breakpoint` 回滚保存断点之后的全部业务迁移，未设置断点时直接报错，二者不能同时使用。也可以在 `rollback` 后显式写 `business`，但业务轨道是唯一支持的轨道；official 和 framework 始终只支持前向迁移。
+不带参数的 `migrate rollback` 默认回滚 `version` 最大且已完成的单条业务迁移。`--steps N` 最多回滚 N 条已完成迁移；`--to-breakpoint` 回滚所有 `version` 大于断点版本的已完成迁移，未设置断点时直接报错，二者不能同时使用。回滚执行 `Down` 成功后才删除对应台账行；如果被删除行带有断点标记，标记随行删除，不保留独立断点状态。
 
-业务迁移账本 `business_migrations` 包含 `batch` 列，用于确定最近批次。`breakpoint set` 保存业务迁移序号，`clear` 清除保存的断点，`list` 显示当前断点。断点存放在带配置前缀的 `business_breakpoints` 表中。
+`Down` 必须幂等，因为回滚过程中可能已经执行成功但台账删除失败，重试时会再次调用它。回滚会先检查选中的每条迁移都存在 `Down`；缺少任一 `Down` 时直接报错且不修改台账。实际执行时，每条 `Down` 成功后才删除对应台账记录；任一步失败都会停止并报告每条迁移的状态、已回滚数量和未回滚数量。
 
-`Down` 必须幂等，因为回滚过程中可能已经执行成功但账本删除失败，重试时会再次调用它。回滚会先检查选中的每条迁移都存在 `Down`；缺少任一 `Down` 时直接报错且不修改账本。实际执行时，每条 `Down` 成功后才删除对应账本记录；任一步失败都会停止并报告每条迁移的状态、已回滚数量和未回滚数量。已经完成的条目保持已删除，`Down` 已成功但账本删除失败的条目会保留账本记录并在报告中明确标记，便于修复后重试。
+framework 和 official 始终只支持前向迁移。
 
 不要在 `Migrations` 已调用后注册迁移。注册表第一次读取时会冻结。

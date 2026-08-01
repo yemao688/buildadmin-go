@@ -29,13 +29,10 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	if err := core.ValidatePrefix(config); err != nil {
 		return err
 	}
-	if err := db.Exec("INSERT IGNORE INTO " + core.QuoteIdentifier(core.TableName(config, "admin_hierarchy_lock")) + " (id) VALUES (1)").Error; err != nil {
-		return fmt.Errorf("seed admin hierarchy lock: %w", err)
-	}
 	if err := EnsureAdminClosureSelfRows(db, config); err != nil {
 		return err
 	}
-	if err := normalizeFreshSeedOwnership(db, config); err != nil {
+	if err := normalizeFreshSensitiveSeed(db, config); err != nil {
 		return err
 	}
 	if err := seedCountryMenus(db, config); err != nil {
@@ -44,37 +41,12 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	return seedUploadConfig(db, config)
 }
 
-func normalizeFreshSeedOwnership(db *gorm.DB, config *conf.Configuration) error {
-	rootID, err := migrationRootID(db, config)
-	if err != nil {
-		return err
-	}
-	for _, seed := range []struct {
-		logical string
-		id      int
-		name    string
-		as      string
-	}{
-		{"security_data_recycle", 5, "会员", "user/user"},
-		{"security_sensitive_data", 2, "会员数据", "user/user"},
-	} {
-		table := core.TableName(config, seed.logical)
-		if err := db.Table(table).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ? AND admin_id = 0", seed.id, seed.name, "user/User.php", seed.as, "user", "id").Update("admin_id", rootID).Error; err != nil {
-			return fmt.Errorf("normalize %s seed owner: %w", table, err)
-		}
+func normalizeFreshSensitiveSeed(db *gorm.DB, config *conf.Configuration) error {
+	table := core.TableName(config, "security_sensitive_data")
+	if err := db.Table(table).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", 2, "会员数据", "user/User.php", "user/user", "user", "id").Update("data_fields", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
+		return fmt.Errorf("normalize %s sensitive seed: %w", table, err)
 	}
 	return nil
-}
-
-func migrationRootID(db *gorm.DB, config *conf.Configuration) (int32, error) {
-	var id int32
-	if err := db.Table(core.TableName(config, "admin")).Order("id").Limit(1).Pluck("id", &id).Error; err != nil {
-		return 0, fmt.Errorf("resolve root admin: %w", err)
-	}
-	if id == 0 {
-		return 0, fmt.Errorf("admin table %s has no root admin", core.TableName(config, "admin"))
-	}
-	return id, nil
 }
 
 func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
@@ -214,21 +186,8 @@ func verifyFinalTableContractImpl(db *gorm.DB, config *conf.Configuration) error
 	if err := verifyMoneyDecimalContract(db, config); err != nil {
 		return err
 	}
-	if err := verifyHierarchyContract(db, config); err != nil {
-		return err
-	}
-	for _, logical := range []string{"user", "user_money_log", "attachment", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log"} {
+	for _, logical := range []string{"user", "user_money_log", "attachment", "admin_log", "crud_log"} {
 		if err := verifyOwnerColumnSchema(db, config, logical); err != nil {
-			return err
-		}
-	}
-	for _, logical := range []string{"security_data_recycle_log", "security_sensitive_data_log"} {
-		if err := verifyTargetColumnSchema(db, config, logical); err != nil {
-			return err
-		}
-	}
-	for _, logical := range []string{"security_data_recycle", "security_sensitive_data"} {
-		if err := verifyRuleSchema(db, config, logical); err != nil {
 			return err
 		}
 	}
@@ -236,20 +195,13 @@ func verifyFinalTableContractImpl(db *gorm.DB, config *conf.Configuration) error
 }
 
 func verifyFinalDataContractImpl(db *gorm.DB, config *conf.Configuration) error {
-	if err := verifyHierarchyContract(db, config); err != nil {
-		return err
-	}
-	root, err := migrationRootID(db, config)
-	if err != nil {
-		return err
-	}
 	if err := validateMigrationOwners(db, core.TableName(config, "user"), core.TableName(config, "admin")); err != nil {
 		return err
 	}
 	if err := validateLogOwnerMatchesUser(db, core.TableName(config, "user_money_log"), core.TableName(config, "user")); err != nil {
 		return err
 	}
-	if err := verifySecuritySeedIdentity(db, config, root); err != nil {
+	if err := verifySecuritySeedIdentity(db, config); err != nil {
 		return err
 	}
 	if err := verifyCountryMenuData(db, config); err != nil {
@@ -326,52 +278,6 @@ func verifyOwnerColumnSchema(db *gorm.DB, config *conf.Configuration, logical st
 		return fmt.Errorf("%s.admin_id has invalid owner schema", table)
 	}
 	return requireIndexColumns(db, table, "idx_admin_id", []string{"admin_id"})
-}
-
-func verifyTargetColumnSchema(db *gorm.DB, config *conf.Configuration, logical string) error {
-	table := core.TableName(config, logical)
-	def, ok, err := core.MigrationColumnInfo(db, table, "target_admin_id")
-	if err != nil {
-		return err
-	}
-	if !ok || !validOwnerColumn(def) {
-		return fmt.Errorf("%s.target_admin_id has invalid owner schema", table)
-	}
-	if err := requireIndexColumns(db, table, "idx_target_admin_id", []string{"target_admin_id"}); err != nil {
-		return err
-	}
-	for _, column := range []string{"legacy_unrecoverable", "is_committed"} {
-		def, ok, err := core.MigrationColumnInfo(db, table, column)
-		if err != nil {
-			return err
-		}
-		if !ok || !isTinyUnsignedZero(def) {
-			return fmt.Errorf("%s.%s has invalid schema", table, column)
-		}
-	}
-	return nil
-}
-
-func verifyRuleSchema(db *gorm.DB, config *conf.Configuration, logical string) error {
-	table := core.TableName(config, logical)
-	def, ok, err := core.MigrationColumnInfo(db, table, "admin_id")
-	if err != nil {
-		return err
-	}
-	if !ok || !validOwnerColumn(def) {
-		return fmt.Errorf("%s.admin_id has invalid owner schema", table)
-	}
-	if err := requireIndexColumns(db, table, "idx_admin_id", []string{"admin_id"}); err != nil {
-		return err
-	}
-	def, ok, err = core.MigrationColumnInfo(db, table, "owner_column")
-	if err != nil {
-		return err
-	}
-	if !ok || !strings.EqualFold(def.Nullable, "NO") {
-		return fmt.Errorf("%s.owner_column has invalid schema", table)
-	}
-	return nil
 }
 
 func verifyCountryDictionaryContract(db *gorm.DB, config *conf.Configuration) error {
@@ -452,9 +358,4 @@ func verifyUploadConfigData(db *gorm.DB, config *conf.Configuration) error {
 func validOwnerColumn(def core.MigrationColumn) bool {
 	typ := strings.ToLower(def.ColumnType)
 	return strings.Contains(typ, "int") && strings.Contains(typ, "unsigned") && strings.EqualFold(def.Nullable, "NO") && def.Default != nil && *def.Default == "0"
-}
-
-func isTinyUnsignedZero(def core.MigrationColumn) bool {
-	typ := strings.ToLower(def.ColumnType)
-	return strings.HasPrefix(typ, "tinyint") && strings.Contains(typ, "unsigned") && strings.EqualFold(def.Nullable, "NO") && def.Default != nil && *def.Default == "0"
 }

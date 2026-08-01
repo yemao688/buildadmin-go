@@ -8,15 +8,18 @@ import (
 )
 
 type RollbackOptions struct {
-	Steps          uint64
-	TargetSequence *uint64
-	TrackName      string
+	Steps         uint64
+	TargetVersion *uint64
+	TrackName     string
 }
 
 type RollbackEntry struct {
+	Version       uint64
+	MigrationName string
+	// These aliases preserve the existing CLI output contract. They are not
+	// used for ledger queries or rollback ordering.
 	Sequence      uint64
 	ID            string
-	Revision      uint64
 	Batch         uint64
 	DownExecuted  bool
 	LedgerRemoved bool
@@ -50,7 +53,7 @@ func RollbackTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableNam
 	if err := ValidatePrefix(config); err != nil {
 		return RollbackReport{}, err
 	}
-	if options.Steps > 0 && options.TargetSequence != nil {
+	if options.Steps > 0 && options.TargetVersion != nil {
 		return RollbackReport{}, fmt.Errorf("rollback steps cannot be combined with a breakpoint target")
 	}
 	table := QuoteIdentifier(TableName(config, tableName))
@@ -63,22 +66,15 @@ func RollbackTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableNam
 	}
 
 	var rows []TrackedMigrationRecord
-	query := db.Table(TableName(config, tableName)).Select("sequence,batch,migration_id,revision,start_time,end_time").Where("end_time IS NOT NULL")
-	if options.TargetSequence != nil {
-		query = query.Where("sequence > ?", *options.TargetSequence)
+	query := db.Table(TableName(config, tableName)).Select("version,migration_name,start_time,end_time,breakpoint").Where("end_time IS NOT NULL")
+	if options.TargetVersion != nil {
+		query = query.Where("version > ?", *options.TargetVersion)
 	}
-	if err := query.Order("batch DESC, sequence DESC").Find(&rows).Error; err != nil {
+	if err := query.Order("version DESC").Find(&rows).Error; err != nil {
 		return RollbackReport{}, err
 	}
-	if options.TargetSequence == nil && options.Steps == 0 && len(rows) > 0 {
-		latestBatch := rows[0].Batch
-		filtered := rows[:0]
-		for _, row := range rows {
-			if row.Batch == latestBatch {
-				filtered = append(filtered, row)
-			}
-		}
-		rows = filtered
+	if options.TargetVersion == nil && options.Steps == 0 && len(rows) > 1 {
+		rows = rows[:1]
 	}
 	if options.Steps > 0 && uint64(len(rows)) > options.Steps {
 		rows = rows[:options.Steps]
@@ -87,38 +83,43 @@ func RollbackTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableNam
 		return RollbackReport{}, nil
 	}
 
-	bySequence := make(map[uint64]TrackedMigration, len(migrations))
+	byVersion := make(map[uint64]TrackedMigration, len(migrations))
 	for _, migration := range migrations {
-		bySequence[migration.Sequence] = migration
+		byVersion[migration.Version] = migration
 	}
 	report := RollbackReport{Entries: make([]RollbackEntry, len(rows))}
 	for i, row := range rows {
-		migration, ok := bySequence[row.Sequence]
-		if !ok || migration.ID != row.MigrationID || migration.Revision != row.Revision {
-			return report, fmt.Errorf("business migration ledger entry sequence %d/%s is missing from or collides with the registered migrations", row.Sequence, row.MigrationID)
+		migration, ok := byVersion[row.Version]
+		if !ok || migration.MigrationName != row.MigrationName {
+			return report, fmt.Errorf("business migration ledger entry version %d/%s is missing from or collides with the registered migrations", row.Version, row.MigrationName)
 		}
-		report.Entries[i] = RollbackEntry{Sequence: row.Sequence, ID: row.MigrationID, Revision: row.Revision, Batch: row.Batch}
+		report.Entries[i] = RollbackEntry{
+			Version:       row.Version,
+			MigrationName: row.MigrationName,
+			Sequence:      row.Version,
+			ID:            row.MigrationName,
+		}
 		if migration.Down == nil {
-			return report, fmt.Errorf("business migration %s (sequence %d) has no Down function", row.MigrationID, row.Sequence)
+			return report, fmt.Errorf("business migration %s (version %d) has no Down function", row.MigrationName, row.Version)
 		}
 	}
 
 	for i := range report.Entries {
 		entry := &report.Entries[i]
-		migration := bySequence[entry.Sequence]
+		migration := byVersion[entry.Version]
 		if err := migration.Down(db, config); err != nil {
 			entry.Error = fmt.Sprintf("Down failed: %v", err)
-			return report, fmt.Errorf("business migration %s rollback failed: %w (rolled back %d, not rolled back %d)", entry.ID, err, report.RolledBack(), report.NotRolledBack())
+			return report, fmt.Errorf("business migration %s rollback failed: %w (rolled back %d, not rolled back %d)", entry.MigrationName, err, report.RolledBack(), report.NotRolledBack())
 		}
 		entry.DownExecuted = true
-		result := db.Exec("DELETE FROM "+table+" WHERE sequence = ? AND migration_id = ? AND revision = ? AND end_time IS NOT NULL", entry.Sequence, entry.ID, entry.Revision)
+		result := db.Exec("DELETE FROM "+table+" WHERE version = ? AND migration_name = ? AND end_time IS NOT NULL", entry.Version, entry.MigrationName)
 		if result.Error != nil {
 			entry.Error = fmt.Sprintf("ledger delete failed: %v", result.Error)
-			return report, fmt.Errorf("business migration %s Down succeeded but ledger removal failed: %w (rolled back %d, not rolled back %d)", entry.ID, result.Error, report.RolledBack(), report.NotRolledBack())
+			return report, fmt.Errorf("business migration %s Down succeeded but ledger removal failed: %w (rolled back %d, not rolled back %d)", entry.MigrationName, result.Error, report.RolledBack(), report.NotRolledBack())
 		}
 		if result.RowsAffected != 1 {
 			entry.Error = fmt.Sprintf("ledger delete affected %d rows", result.RowsAffected)
-			return report, fmt.Errorf("business migration %s ledger removal affected %d rows after Down (rolled back %d, not rolled back %d)", entry.ID, result.RowsAffected, report.RolledBack(), report.NotRolledBack())
+			return report, fmt.Errorf("business migration %s ledger removal affected %d rows after Down (rolled back %d, not rolled back %d)", entry.MigrationName, result.RowsAffected, report.RolledBack(), report.NotRolledBack())
 		}
 		entry.LedgerRemoved = true
 	}

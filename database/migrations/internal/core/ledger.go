@@ -6,17 +6,17 @@ import (
 )
 
 func BootstrapFrameworkLedger(db *gorm.DB, config *conf.Configuration) error {
-	return BootstrapTrackedLedger(db, config, "framework_migrations", TrackedLedgerOptions{})
+	return BootstrapTrackedLedger(db, config, "migrations_framework")
 }
 
 func ValidateFrameworkLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
-	return ValidateTrackedLedgerSchema(db, config, "framework_migrations", TrackedLedgerOptions{})
+	return ValidateTrackedLedgerSchema(db, config, "migrations_framework")
 }
 
 func InsertPendingFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
-	return InsertPendingTrackedMigration(db, config, "framework_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up})
+	return InsertPendingTrackedMigration(db, config, "migrations_framework", TrackedMigration{Version: m.Version, MigrationName: m.MigrationName, Up: m.Up})
 }
 
 func CompleteFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
-	return CompleteTrackedMigration(db, config, "framework_migrations", TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision}, "framework")
+	return CompleteTrackedMigration(db, config, "migrations_framework", TrackedMigration{Version: m.Version, MigrationName: m.MigrationName}, "framework")
 }

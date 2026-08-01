@@ -13,16 +13,19 @@ type ledgerColumn struct {
 	Nullable  string         `gorm:"column:nullable"`
 	Precision sql.NullInt64  `gorm:"column:precision"`
 	Default   sql.NullString `gorm:"column:default"`
+	Extra     string         `gorm:"column:extra"`
 }
 
 type ledgerColumnSpec struct {
-	Name             string
-	Type             string
-	Nullable         string
-	Precision        int
-	CheckPrecision   bool
-	RequireNoDefault bool
-	AcceptUnsigned   bool
+	Name                 string
+	Type                 string
+	Nullable             string
+	Precision            int
+	CheckPrecision       bool
+	RequireNoDefault     bool
+	AcceptUnsigned       bool
+	RequireAutoIncrement bool
+	ExpectedDefault      *string
 }
 
 type ledgerColumnMismatch struct {
@@ -32,7 +35,7 @@ type ledgerColumnMismatch struct {
 
 func queryLedgerColumns(db *gorm.DB, table string) ([]ledgerColumn, error) {
 	var columns []ledgerColumn
-	if err := db.Raw("SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, DATETIME_PRECISION AS `precision`, COLUMN_DEFAULT AS `default` FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", table).Scan(&columns).Error; err != nil {
+	if err := db.Raw("SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, DATETIME_PRECISION AS `precision`, COLUMN_DEFAULT AS `default`, EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION", table).Scan(&columns).Error; err != nil {
 		return nil, err
 	}
 	return columns, nil
@@ -55,6 +58,12 @@ func compareLedgerColumns(actual []ledgerColumn, expected []ledgerColumnSpec) *l
 			return &ledgerColumnMismatch{columnName: column.Name}
 		}
 		if spec.RequireNoDefault && column.Default.Valid {
+			return &ledgerColumnMismatch{columnName: column.Name}
+		}
+		if spec.ExpectedDefault != nil && (!column.Default.Valid || column.Default.String != *spec.ExpectedDefault) {
+			return &ledgerColumnMismatch{columnName: column.Name}
+		}
+		if spec.RequireAutoIncrement && !strings.Contains(strings.ToLower(column.Extra), "auto_increment") {
 			return &ledgerColumnMismatch{columnName: column.Name}
 		}
 	}

@@ -8,8 +8,8 @@ import (
 )
 
 func TestRollbackRejectsOfficialAndFrameworkTracks(t *testing.T) {
-	for _, track := range []string{"official", "framework"} {
-		_, err := RollbackTrackedMigrations(nil, &conf.Configuration{}, track+"_migrations", nil, RollbackOptions{TrackName: track})
+	for track, table := range map[string]string{"official": "migrations", "framework": "migrations_framework"} {
+		_, err := RollbackTrackedMigrations(nil, &conf.Configuration{}, table, nil, RollbackOptions{TrackName: track})
 		if err == nil || !strings.Contains(err.Error(), track+" migration rollback is unsupported") {
 			t.Fatalf("track %s rollback error=%v", track, err)
 		}

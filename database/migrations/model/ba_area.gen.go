@@ -8,7 +8,7 @@ package model
 // Area 省份地区表
 type Area struct {
 	ID        int32  `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"` // ID
-	Pid       int32  `gorm:"column:pid;type:int(11) unsigned;not null;index:pid;comment:父id" json:"pid"`                            // 父id
+	Pid       int32  `gorm:"column:pid;type:int(11) unsigned;not null;index:pid;comment:父id" json:"pid"`                           // 父id
 	Shortname string `gorm:"column:shortname;type:varchar(100) default null;comment:简称" json:"shortname"`                 // 简称
 	Name      string `gorm:"column:name;type:varchar(100) default null;comment:名称" json:"name"`                           // 名称
 	Mergename string `gorm:"column:mergename;type:varchar(255) default null;comment:全称" json:"mergename"`                 // 全称
@@ -20,4 +20,3 @@ type Area struct {
 	Lng       string `gorm:"column:lng;type:varchar(50) default null;comment:经度" json:"lng"`                             // 经度
 	Lat       string `gorm:"column:lat;type:varchar(50) default null;comment:纬度" json:"lat"`                             // 纬度
 }
-

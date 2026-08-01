@@ -13,7 +13,7 @@ import (
 
 func TestDualTrackValidation(t *testing.T) {
 	official := []OfficialMigration{{Key: OfficialKey{Version: 1, Name: "Version200"}, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
-	framework := []FrameworkMigration{{Sequence: 1, ID: "framework-final-seed-and-integrity", Revision: 1, RequiresOfficial: []OfficialKey{{Version: 1, Name: "Version200"}}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
+	framework := []FrameworkMigration{{Version: 1, MigrationName: "framework-final-seed-and-integrity", RequiresOfficial: []OfficialKey{{Version: 1, Name: "Version200"}}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	if err := ValidateFrameworkMigrations(framework, official); err != nil {
 		t.Fatal(err)
 	}
@@ -36,20 +36,20 @@ func TestPhase2RegistrySplit(t *testing.T) {
 	}
 	want := []string{"framework-final-seed-and-integrity"}
 	for i, migration := range framework {
-		if migration.Sequence != uint64(i+1) || migration.ID != want[i] || migration.Revision != 1 || migration.Up == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil || migration.VerifyBaseline != nil {
+		if migration.Version != uint64(i+1) || migration.MigrationName != want[i] || migration.Up == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil || migration.VerifyBaseline != nil {
 			t.Fatalf("invalid framework registry entry %d: %#v", i, migration)
 		}
 	}
 }
 
-func TestFrameworkValidationRequiresStrictSequenceAndTrimmedID(t *testing.T) {
+func TestFrameworkValidationRequiresStrictVersionAndTrimmedName(t *testing.T) {
 	up := func(*gorm.DB, *conf.Configuration) error { return nil }
-	base := []FrameworkMigration{{Sequence: 1, ID: "one", Revision: 1, Up: up}}
+	base := []FrameworkMigration{{Version: 1, MigrationName: "one", Up: up}}
 	for name, list := range map[string][]FrameworkMigration{
-		"same sequence":       {{Sequence: 1, ID: "one", Revision: 1, Up: up}, {Sequence: 1, ID: "two", Revision: 1, Up: up}},
-		"decreasing sequence": {{Sequence: 2, ID: "two", Revision: 1, Up: up}, {Sequence: 1, ID: "one", Revision: 1, Up: up}},
-		"duplicate id":        {{Sequence: 1, ID: "one", Revision: 1, Up: up}, {Sequence: 2, ID: "one", Revision: 2, Up: up}},
-		"trimmed id":          {{Sequence: 1, ID: "  ", Revision: 1, Up: up}},
+		"same version":       {{Version: 1, MigrationName: "one", Up: up}, {Version: 1, MigrationName: "two", Up: up}},
+		"decreasing version": {{Version: 2, MigrationName: "two", Up: up}, {Version: 1, MigrationName: "one", Up: up}},
+		"duplicate name":     {{Version: 1, MigrationName: "one", Up: up}, {Version: 2, MigrationName: "one", Up: up}},
+		"trimmed name":       {{Version: 1, MigrationName: "  ", Up: up}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := ValidateFrameworkMigrations(list, nil); err == nil {
@@ -77,7 +77,7 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 }
 
 func TestFrameworkRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
-	if (FrameworkMigrationRecord{}).TableName() != "framework_migrations" {
+	if (FrameworkMigrationRecord{}).TableName() != "migrations_framework" {
 		t.Fatal("unexpected model table name")
 	}
 }

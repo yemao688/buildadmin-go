@@ -17,4 +17,3 @@ type Migrations struct {
 	EndTime       time.Time `gorm:"column:end_time;type:timestamp null default null" json:"end_time"`
 	Breakpoint    bool      `gorm:"column:breakpoint;type:tinyint(1);not null;default:0" json:"breakpoint"`
 }
-

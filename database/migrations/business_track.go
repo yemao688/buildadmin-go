@@ -11,42 +11,39 @@ import (
 	"gorm.io/gorm"
 )
 
-const businessLedgerName = "business_migrations"
+const businessLedgerName = "migrations_business"
 
 func BusinessMigrations() ([]business.Migration, error) {
 	return business.Migrations()
 }
 
 func BootstrapBusinessLedger(db *gorm.DB, config *conf.Configuration) error {
-	if err := core.BootstrapTrackedLedger(db, config, businessLedgerName, core.TrackedLedgerOptions{IncludeBatch: true}); err != nil {
-		return err
-	}
-	return BootstrapBusinessBreakpoint(db, config)
+	return core.BootstrapTrackedLedger(db, config, businessLedgerName)
 }
 
 func ValidateBusinessLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
-	return core.ValidateTrackedLedgerSchema(db, config, businessLedgerName, core.TrackedLedgerOptions{IncludeBatch: true})
+	return core.ValidateTrackedLedgerSchema(db, config, businessLedgerName)
 }
 
 func RunBusinessMigrations(db *gorm.DB, config *conf.Configuration, list []business.Migration) (int, error) {
 	tracked := make([]core.TrackedMigration, 0, len(list))
 	for _, migration := range list {
-		tracked = append(tracked, core.TrackedMigration{Sequence: migration.Sequence, ID: migration.ID, Revision: migration.Revision, Up: migration.Up, Down: migration.Down, VerifyBaseline: migration.VerifyBaseline, VerifySchema: migration.VerifySchema, VerifyUpgradeData: migration.VerifyUpgradeData})
+		tracked = append(tracked, core.TrackedMigration{Version: migration.Version, MigrationName: migration.MigrationName, Up: migration.Up, Down: migration.Down, VerifyBaseline: migration.VerifyBaseline, VerifySchema: migration.VerifySchema, VerifyUpgradeData: migration.VerifyUpgradeData})
 	}
-	return core.RunTrackedMigrations(db, config, businessLedgerName, tracked, core.TrackedRunnerOptions{TrackName: "business", IncludeBatch: true})
+	return core.RunTrackedMigrations(db, config, businessLedgerName, tracked, core.TrackedRunnerOptions{TrackName: "business"})
 }
 
 type RollbackOptions struct {
-	Steps          uint64
-	ToBreakpoint   bool
-	TargetSequence *uint64
+	Steps         uint64
+	ToBreakpoint  bool
+	TargetVersion *uint64
 }
 
 type RollbackReport = core.RollbackReport
 type RollbackEntry = core.RollbackEntry
 
 func RollbackBusinessMigrations(db *gorm.DB, config *conf.Configuration, list []business.Migration, options RollbackOptions) (RollbackReport, error) {
-	target := options.TargetSequence
+	target := options.TargetVersion
 	if options.ToBreakpoint {
 		breakpoint, err := ReadBusinessBreakpoint(db, config)
 		if err != nil {
@@ -55,72 +52,60 @@ func RollbackBusinessMigrations(db *gorm.DB, config *conf.Configuration, list []
 		if breakpoint == nil {
 			return RollbackReport{}, errors.New("no business migration breakpoint is set")
 		}
-		target = &breakpoint.Sequence
+		target = &breakpoint.Version
 	}
 	tracked := make([]core.TrackedMigration, 0, len(list))
 	for _, migration := range list {
-		tracked = append(tracked, core.TrackedMigration{Sequence: migration.Sequence, ID: migration.ID, Revision: migration.Revision, Up: migration.Up, Down: migration.Down})
+		tracked = append(tracked, core.TrackedMigration{Version: migration.Version, MigrationName: migration.MigrationName, Up: migration.Up, Down: migration.Down})
 	}
-	return core.RollbackTrackedMigrations(db, config, businessLedgerName, tracked, core.RollbackOptions{Steps: options.Steps, TargetSequence: target, TrackName: "business"})
+	return core.RollbackTrackedMigrations(db, config, businessLedgerName, tracked, core.RollbackOptions{Steps: options.Steps, TargetVersion: target, TrackName: "business"})
 }
-
-const businessBreakpointTableName = "business_breakpoints"
 
 type BusinessBreakpoint struct {
-	ID       uint8     `gorm:"column:id"`
-	Sequence uint64    `gorm:"column:sequence"`
-	SetTime  time.Time `gorm:"column:set_time"`
+	Version  uint64
+	Sequence uint64
+	SetTime  time.Time
 }
 
-func BootstrapBusinessBreakpoint(db *gorm.DB, config *conf.Configuration) error {
+func SetBusinessBreakpoint(db *gorm.DB, config *conf.Configuration, version uint64) error {
 	if err := core.ValidatePrefix(config); err != nil {
 		return err
 	}
-	return db.Exec("CREATE TABLE IF NOT EXISTS " + core.QuoteIdentifier(core.TableName(config, businessBreakpointTableName)) + " (" +
-		"`id` TINYINT UNSIGNED NOT NULL, `sequence` BIGINT UNSIGNED NOT NULL, `set_time` TIMESTAMP(6) NOT NULL, " +
-		"PRIMARY KEY (`id`)) ENGINE=InnoDB").Error
-}
-
-func SetBusinessBreakpoint(db *gorm.DB, config *conf.Configuration, sequence uint64) error {
-	if err := BootstrapBusinessBreakpoint(db, config); err != nil {
+	table := core.QuoteIdentifier(core.TableName(config, businessLedgerName))
+	if err := db.Exec("UPDATE " + table + " SET breakpoint = 0").Error; err != nil {
 		return err
 	}
-	table := core.QuoteIdentifier(core.TableName(config, businessBreakpointTableName))
-	return db.Exec("INSERT INTO "+table+" (id,sequence,set_time) VALUES (1,?,?) ON DUPLICATE KEY UPDATE sequence=VALUES(sequence), set_time=VALUES(set_time)", sequence, time.Now()).Error
+	result := db.Exec("UPDATE "+table+" SET breakpoint = 1 WHERE version = ?", version)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("business migration version %d does not exist", version)
+	}
+	return nil
 }
 
 func ReadBusinessBreakpoint(db *gorm.DB, config *conf.Configuration) (*BusinessBreakpoint, error) {
-	if err := BootstrapBusinessBreakpoint(db, config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return nil, err
 	}
-	var breakpoint BusinessBreakpoint
-	result := db.Table(core.TableName(config, businessBreakpointTableName)).Where("id = 1").First(&breakpoint)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return nil, nil
+	var row struct {
+		Version   uint64
+		StartTime time.Time `gorm:"column:start_time"`
 	}
+	result := db.Raw("SELECT version,start_time FROM " + core.QuoteIdentifier(core.TableName(config, businessLedgerName)) + " WHERE breakpoint = 1 LIMIT 1").Scan(&row)
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &breakpoint, nil
+	if result.RowsAffected == 0 {
+		return nil, nil
+	}
+	return &BusinessBreakpoint{Version: row.Version, Sequence: row.Version, SetTime: row.StartTime}, nil
 }
 
 func ClearBusinessBreakpoint(db *gorm.DB, config *conf.Configuration) error {
-	if err := BootstrapBusinessBreakpoint(db, config); err != nil {
+	if err := core.ValidatePrefix(config); err != nil {
 		return err
 	}
-	return db.Exec("DELETE FROM " + core.QuoteIdentifier(core.TableName(config, businessBreakpointTableName)) + " WHERE id = 1").Error
-}
-
-func ValidateBusinessBreakpointSchema(db *gorm.DB, config *conf.Configuration) error {
-	if err := BootstrapBusinessBreakpoint(db, config); err != nil {
-		return err
-	}
-	var engine string
-	if err := db.Raw("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", core.TableName(config, businessBreakpointTableName)).Scan(&engine).Error; err != nil {
-		return err
-	}
-	if engine != "InnoDB" {
-		return fmt.Errorf("%s schema mismatch: engine=%q", businessBreakpointTableName, engine)
-	}
-	return nil
+	return db.Exec("UPDATE " + core.QuoteIdentifier(core.TableName(config, businessLedgerName)) + " SET breakpoint = 0").Error
 }

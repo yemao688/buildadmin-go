@@ -46,9 +46,9 @@ func RunFrameworkMigrations(db *gorm.DB, config *conf.Configuration, official []
 				return 0, err
 			}
 		}
-		tracked = append(tracked, TrackedMigration{Sequence: m.Sequence, ID: m.ID, Revision: m.Revision, Up: m.Up, VerifyBaseline: m.VerifyBaseline, VerifySchema: m.VerifySchema, VerifyUpgradeData: m.VerifyUpgradeData})
+		tracked = append(tracked, TrackedMigration{Version: m.Version, MigrationName: m.MigrationName, Up: m.Up, VerifyBaseline: m.VerifyBaseline, VerifySchema: m.VerifySchema, VerifyUpgradeData: m.VerifyUpgradeData})
 	}
-	return RunTrackedMigrations(db, config, "framework_migrations", tracked, TrackedRunnerOptions{TrackName: "framework"})
+	return RunTrackedMigrations(db, config, "migrations_framework", tracked, TrackedRunnerOptions{TrackName: "framework"})
 }
 
 // Official ledger operations remain here with the shared runner: moving them

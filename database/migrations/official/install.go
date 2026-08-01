@@ -1072,7 +1072,6 @@ func (s Install) SecurityDataRecycle() error {
 	dataList := []*model.SecurityDataRecycle{
 		{
 			ID:           1,
-			AdminID:      0,
 			Name:         "管理员",
 			Controller:   "auth/Admin.php",
 			ControllerAs: "auth/admin",
@@ -1081,11 +1080,11 @@ func (s Install) SecurityDataRecycle() error {
 			UpdateTime:   time.Now().Unix(),
 			CreateTime:   time.Now().Unix(),
 		},
-		{ID: 2, AdminID: 0, Name: "管理员日志", Controller: "auth/AdminLog.php", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 3, AdminID: 0, Name: "菜单规则", Controller: "auth/Menu.php", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 4, AdminID: 0, Name: "系统配置项", Controller: "routine/Config.php", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 5, AdminID: 0, Name: "会员", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 6, AdminID: 0, Name: "数据回收规则", Controller: "security/DataRecycle.php", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 2, Name: "管理员日志", Controller: "auth/AdminLog.php", ControllerAs: "auth/adminlog", DataTable: "admin_log", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, Name: "菜单规则", Controller: "auth/Menu.php", ControllerAs: "auth/rule", DataTable: "admin_rule", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 4, Name: "系统配置项", Controller: "routine/Config.php", ControllerAs: "routine/config", DataTable: "config", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 5, Name: "会员", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 6, Name: "数据回收规则", Controller: "security/DataRecycle.php", ControllerAs: "security/datarecycle", DataTable: "security_data_recycle", PrimaryKey: "id", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
 		var existing model.SecurityDataRecycle
@@ -1105,19 +1104,18 @@ func (s Install) SecuritySensitiveData() error {
 	dataList := []*model.SecuritySensitiveData{
 		{
 			ID:           1,
-			AdminID:      0,
 			Name:         "管理员数据",
 			Controller:   "auth/Admin.php",
 			ControllerAs: "auth/admin",
 			DataTable:    "admin",
 			PrimaryKey:   "id",
-			DataFields:   `{"username":"用户名","mobile":"手机","password":"密码","status":"状态"}`,
+			DataFields:   `{"username":"用户名","mobile":"手机","status":"状态"}`,
 			Status:       "1",
 			UpdateTime:   time.Now().Unix(),
 			CreateTime:   time.Now().Unix(),
 		},
-		{ID: 2, AdminID: 0, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
-		{ID: 3, AdminID: 0, Name: "管理员权限", Controller: "auth/Group.php", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 2, Name: "会员数据", Controller: "user/User.php", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
+		{ID: 3, Name: "管理员权限", Controller: "auth/Group.php", ControllerAs: "auth/group", DataTable: "admin_group", PrimaryKey: "id", DataFields: `{"rules":"权限规则ID"}`, Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()},
 	}
 	for _, row := range dataList {
 		var existing model.SecuritySensitiveData

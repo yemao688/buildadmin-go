@@ -20,7 +20,7 @@ func TestFreshSeedPendingRetryAndFrameworkFinalization(t *testing.T) {
 	migrateDB := db.Session(&gorm.Session{NewDB: true})
 	require.NoError(t, migrateDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...))
 	t.Cleanup(func() {
-		for _, logical := range core.CoreLogicalNames() {
+		for _, logical := range freshMigrationTableNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})
@@ -59,7 +59,7 @@ func TestFrameworkFinalSeedOnCurrentSnapshot(t *testing.T) {
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
 	require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...))
 	t.Cleanup(func() {
-		for _, logical := range core.CoreLogicalNames() {
+		for _, logical := range freshMigrationTableNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})

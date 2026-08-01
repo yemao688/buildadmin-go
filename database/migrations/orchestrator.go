@@ -58,9 +58,6 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
 			return fmt.Errorf("business ledger schema: %w", err)
 		}
-		if err := ValidateBusinessBreakpointSchema(pinned, config); err != nil {
-			return fmt.Errorf("business breakpoint schema: %w", err)
-		}
 		official, frameworks := OfficialMigrations(), FrameworkMigrations()
 		businessMigrations, err := business.Migrations()
 		if err != nil {
@@ -110,9 +107,6 @@ func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) 
 		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
 			return fmt.Errorf("business ledger schema: %w", err)
 		}
-		if err := ValidateBusinessBreakpointSchema(pinned, config); err != nil {
-			return fmt.Errorf("business breakpoint schema: %w", err)
-		}
 		list, err := business.Migrations()
 		if err != nil {
 			return fmt.Errorf("business migration registry: %w", err)
@@ -126,7 +120,7 @@ func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) 
 	return report, err
 }
 
-func SetBreakpoint(db *gorm.DB, config *conf.Configuration, sequence uint64) error {
+func SetBreakpoint(db *gorm.DB, config *conf.Configuration, version uint64) error {
 	return WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
@@ -137,7 +131,7 @@ func SetBreakpoint(db *gorm.DB, config *conf.Configuration, sequence uint64) err
 		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
 			return err
 		}
-		return SetBusinessBreakpoint(pinned, config, sequence)
+		return SetBusinessBreakpoint(pinned, config, version)
 	})
 }
 

@@ -13,4 +13,3 @@ type Captcha struct {
 	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
 	ExpireTime int64  `gorm:"column:expire_time;type:bigint(16) unsigned default null;comment:过期时间" json:"expire_time"` // 过期时间
 }
-

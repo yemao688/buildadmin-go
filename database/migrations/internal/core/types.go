@@ -23,9 +23,8 @@ type OfficialMigration struct {
 }
 
 type FrameworkMigration struct {
-	Sequence uint64
-	ID       string
-	Revision uint64
+	Version       uint64
+	MigrationName string
 	// RequiresOfficial is retained in the core track contract because the
 	// framework runner enforces official completion before executing framework Up.
 	RequiresOfficial  []OfficialKey
@@ -36,14 +35,14 @@ type FrameworkMigration struct {
 }
 
 type FrameworkMigrationRecord struct {
-	Sequence    uint64     `gorm:"column:sequence"`
-	MigrationID string     `gorm:"column:migration_id"`
-	Revision    uint64     `gorm:"column:revision"`
-	StartTime   time.Time  `gorm:"column:start_time"`
-	EndTime     *time.Time `gorm:"column:end_time"`
+	Version       uint64     `gorm:"column:version"`
+	MigrationName string     `gorm:"column:migration_name"`
+	StartTime     time.Time  `gorm:"column:start_time"`
+	EndTime       *time.Time `gorm:"column:end_time"`
+	Breakpoint    bool       `gorm:"column:breakpoint"`
 }
 
-func (FrameworkMigrationRecord) TableName() string { return "framework_migrations" }
+func (FrameworkMigrationRecord) TableName() string { return "migrations_framework" }
 
 func ValidateOfficialMigrations(list []OfficialMigration) error {
 	var previous int64
@@ -69,19 +68,19 @@ func ValidateFrameworkMigrations(list []FrameworkMigration, official []OfficialM
 	for _, m := range official {
 		officialKeys[m.Key] = true
 	}
-	seenID, seenSeq := map[string]bool{}, map[uint64]bool{}
-	var previousSequence uint64
+	seenNames, seenVersions := map[string]bool{}, map[uint64]bool{}
+	var previousVersion uint64
 	for i, m := range list {
-		if m.Sequence == 0 || m.Sequence <= previousSequence || strings.TrimSpace(m.ID) == "" || m.Revision == 0 || m.Up == nil || seenID[m.ID] || seenSeq[m.Sequence] {
+		if m.Version == 0 || m.Version <= previousVersion || strings.TrimSpace(m.MigrationName) == "" || m.Up == nil || seenNames[m.MigrationName] || seenVersions[m.Version] {
 			return fmt.Errorf("invalid framework migration at index %d", i)
 		}
 		for _, key := range m.RequiresOfficial {
 			if !officialKeys[key] {
-				return fmt.Errorf("framework migration %s requires unknown official migration %d/%s", m.ID, key.Version, key.Name)
+				return fmt.Errorf("framework migration %s requires unknown official migration %d/%s", m.MigrationName, key.Version, key.Name)
 			}
 		}
-		seenID[m.ID], seenSeq[m.Sequence] = true, true
-		previousSequence = m.Sequence
+		seenNames[m.MigrationName], seenVersions[m.Version] = true, true
+		previousVersion = m.Version
 	}
 	return nil
 }

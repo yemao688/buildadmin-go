@@ -18,13 +18,18 @@ func migrationModels() []any {
 	return core.CoreModels()
 }
 
+func freshMigrationTableNames() []string {
+	names := append([]string(nil), core.CoreLogicalNames()...)
+	return append(names, "migrations_framework", "migrations_business")
+}
+
 func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *conf.Configuration) {
 	t.Helper()
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: prefix}}
 	db = db.Session(&gorm.Session{NewDB: true})
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	t.Cleanup(func() {
-		for _, logical := range core.CoreLogicalNames() {
+		for _, logical := range freshMigrationTableNames() {
 			db.Exec("DROP TABLE IF EXISTS " + quoteIdentifier(tableName(cfg, logical)))
 		}
 	})
@@ -161,12 +166,16 @@ func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
 	require.Equal(t, len(FrameworkMigrations()), first.framework)
 	require.True(t, first.seeded)
 	require.Equal(t, []string{"neutral-prep", "recovery", "snapshot", "ledgers", "official", "reconcile", "seed", "framework", "business"}, first.events)
+	require.Len(t, freshMigrationTableNames(), 24)
+	for _, logical := range freshMigrationTableNames() {
+		require.True(t, tableExists(db, tableName(cfg, logical)), "fresh table %s is missing", logical)
+	}
 
 	var completed int64
 	require.NoError(t, db.Table(tableName(cfg, "migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	// The official ledger also contains the completed InstallData seed marker.
 	require.Equal(t, int64(len(OfficialMigrations())+1), completed)
-	require.NoError(t, db.Table(tableName(cfg, "framework_migrations")).Where("end_time IS NOT NULL").Count(&completed).Error)
+	require.NoError(t, db.Table(tableName(cfg, "migrations_framework")).Where("end_time IS NOT NULL").Count(&completed).Error)
 	require.Equal(t, int64(len(FrameworkMigrations())), completed)
 	require.NoError(t, FrameworkVerifyCurrent(db, cfg))
 

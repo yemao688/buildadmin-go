@@ -5,6 +5,7 @@ import (
 	"go-build-admin/app/pkg/testutil"
 	"go-build-admin/conf"
 	"go-build-admin/database/migrations/internal/core"
+	"strings"
 	"testing"
 
 	"gorm.io/gorm"
@@ -41,12 +42,14 @@ func TestInstall(t *testing.T) {
 	if err := install.InsertData(); err != nil {
 		t.Fatal(err)
 	}
-	var baselineOwner int32
-	if err := db.Table("go_security_data_recycle").Where("id=1").Pluck("admin_id", &baselineOwner).Error; err != nil {
-		t.Fatal(err)
-	}
-	if baselineOwner != 0 {
-		t.Fatalf("upstream baseline wrote framework owner %d", baselineOwner)
+	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
+		var ownerColumns int64
+		if err := db.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN ('admin_id','owner_column')", "go_"+table).Scan(&ownerColumns).Error; err != nil {
+			t.Fatal(err)
+		}
+		if ownerColumns != 0 {
+			t.Fatalf("security seed table %s still has admin_id", table)
+		}
 	}
 	seedConfig := &conf.Configuration{Database: conf.Database{Prefix: "go_"}}
 	if err := MarkSeedPending(db, seedConfig); err != nil {
@@ -65,13 +68,20 @@ func TestInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
-		var ownerCount int64
-		if err := db.Raw("SELECT COUNT(*) FROM `go_" + table + "` r JOIN `go_admin` a ON a.id=r.admin_id WHERE r.data_table='user' AND r.admin_id > 0").Scan(&ownerCount).Error; err != nil {
+		var seedCount int64
+		if err := db.Raw("SELECT COUNT(*) FROM `go_" + table + "` WHERE data_table='user'").Scan(&seedCount).Error; err != nil {
 			t.Fatal(err)
 		}
-		if ownerCount == 0 {
-			t.Fatalf("seed %s user rule has no valid admin owner", table)
+		if seedCount != 1 {
+			t.Fatalf("seed %s user rule count=%d", table, seedCount)
 		}
+	}
+	var fields string
+	if err := db.Table("go_security_sensitive_data").Where("id=2").Pluck("data_fields", &fields).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(fields, "password") {
+		t.Fatal("sensitive seed exposes password")
 	}
 }
 

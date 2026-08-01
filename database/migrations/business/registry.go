@@ -11,9 +11,8 @@ import (
 )
 
 type Migration struct {
-	Sequence          uint64
-	ID                string
-	Revision          uint64
+	Version           uint64
+	MigrationName     string
 	Up                func(*gorm.DB, *conf.Configuration) error
 	Down              func(*gorm.DB, *conf.Configuration) error
 	VerifyBaseline    func(*gorm.DB, *conf.Configuration) error
@@ -41,13 +40,13 @@ func Migrations() ([]Migration, error) {
 	defer mu.Unlock()
 	frozen = true
 	list := append([]Migration(nil), registry...)
-	sort.Slice(list, func(i, j int) bool { return list[i].Sequence < list[j].Sequence })
+	sort.Slice(list, func(i, j int) bool { return list[i].Version < list[j].Version })
 	seen := map[string]bool{}
 	for i, migration := range list {
-		if migration.Sequence != uint64(i+1) || strings.TrimSpace(migration.ID) == "" || seen[migration.ID] || migration.Revision == 0 || migration.Up == nil {
+		if migration.Version != uint64(i+1) || strings.TrimSpace(migration.MigrationName) == "" || seen[migration.MigrationName] || migration.Up == nil {
 			return nil, fmt.Errorf("invalid business migration at index %d", i)
 		}
-		seen[migration.ID] = true
+		seen[migration.MigrationName] = true
 	}
 	return list, nil
 }
