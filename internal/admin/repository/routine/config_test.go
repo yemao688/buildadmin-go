@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	siteconfig "go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/testutil"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -18,7 +19,10 @@ func TestConfigAddAndEditRejectDuplicateNames(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&siteconfig.Config{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteConfigTable(db, "ba_config"))
 	m := NewConfigRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/admin/routine.config/add", nil)

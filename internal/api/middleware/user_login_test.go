@@ -12,6 +12,7 @@ import (
 	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/conf"
 	commonModel "go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
 	"go-build-admin/internal/utils"
 	"golang.org/x/text/language"
@@ -32,7 +33,10 @@ func (userLoginTokenDriver) Clear(string, int32) error        { return nil }
 func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "middleware_user", Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
 	authM := member.NewService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})

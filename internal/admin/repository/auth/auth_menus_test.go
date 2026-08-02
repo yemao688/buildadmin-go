@@ -5,6 +5,7 @@ import (
 
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/testutil"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -18,7 +19,10 @@ func TestGetMenusUsesAdministratorRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.AdminRule{}, &model.AdminGroup{}, &model.AdminGroupAccess{}); err != nil {
+	// The entities carry MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	if err := testutil.CreateSQLiteAdminRuleTables(db, "admin_rule", "admin_group", "admin_group_access"); err != nil {
 		t.Fatal(err)
 	}
 

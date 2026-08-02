@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/utils"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -30,7 +31,10 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Attachment{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAttachmentTables(db, "ba_attachment", "ba_admin", "ba_user"))
 
 	cfg := &conf.Configuration{
 		Upload: conf.Upload{

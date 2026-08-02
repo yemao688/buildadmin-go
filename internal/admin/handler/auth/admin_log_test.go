@@ -10,6 +10,7 @@ import (
 	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,10 @@ func TestAdminLogDel(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminLogTable(db, "ba_admin_log"))
 	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
 	require.NoError(t, db.Create(&model.AdminLog{Username: "two"}).Error)
 
@@ -50,7 +54,10 @@ func TestAdminLogDelRejectsForgedLogFields(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminLogTable(db, "ba_admin_log"))
 	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
 
 	h := NewAdminLogHandler(nil, adminmodel.NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil))

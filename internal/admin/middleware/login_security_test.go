@@ -12,6 +12,7 @@ import (
 	"go-build-admin/internal/conf"
 	commonModel "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
 	"go-build-admin/internal/utils"
 
@@ -124,7 +125,10 @@ func TestLoginStoresAuthenticatedAdminUsername(t *testing.T) {
 func TestUserLoginRejectsAdminToken(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login-security-domain?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "enable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}
 	authM := member.NewService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
@@ -142,7 +146,10 @@ func TestUserLoginRejectsAdminToken(t *testing.T) {
 func TestUserLoginRejectsDisabledUserToken(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login-security-status?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&commonModel.User{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "disable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "user", UserID: 1}}
 	authM := member.NewService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})

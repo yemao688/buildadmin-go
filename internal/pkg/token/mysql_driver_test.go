@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -34,7 +35,10 @@ func TestMysqlDriverDeleteAndClearReturnStorageErrors(t *testing.T) {
 
 func TestMysqlDriverClearScopesByTypeAndUserAndDeleteInvalidatesToken(t *testing.T) {
 	db := newMysqlDriverTestDB(t)
-	require.NoError(t, db.AutoMigrate(&Token{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteTokenTable(db, "tokens"))
 	driver := NewMysqlDriver(db, newMysqlDriverTestConfig())
 
 	require.NoError(t, driver.Set("target", "user", 1, 3600))

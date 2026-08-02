@@ -6,6 +6,7 @@ import (
 	adminmodel "go-build-admin/internal/admin/repository"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
+	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,10 @@ var IsSuperAdmin = adminmodel.IsSuperAdmin
 func TestAdminLogScopeUsesCurrentAdminID(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:admin-log-scope?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&AdminLog{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminLogTable(db, "admin_logs"))
 	for _, adminID := range []int32{1, 2, 3} {
 		require.NoError(t, db.Create(&AdminLog{AdminID: adminID}).Error)
 	}

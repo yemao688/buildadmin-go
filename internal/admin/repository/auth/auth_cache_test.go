@@ -8,6 +8,7 @@ import (
 
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -23,7 +24,10 @@ func newAdminAuthCacheModel(t *testing.T) (*AuthRepository, *gorm.DB, model.Admi
 	if err != nil {
 		t.Fatal(err)
 	}
-	require.NoError(t, db.AutoMigrate(&model.AdminRule{}, &model.AdminGroup{}, &model.AdminGroupAccess{}))
+	// The entities carry MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "admin_rule", "admin_group", "admin_group_access"))
 
 	rule := model.AdminRule{Pid: 0, Type: "menu", Title: "Initial", Name: "auth/initial", Status: "1", Weigh: 1}
 	require.NoError(t, db.Create(&rule).Error)

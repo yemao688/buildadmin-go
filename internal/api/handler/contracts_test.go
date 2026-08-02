@@ -13,6 +13,7 @@ import (
 	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/conf"
 	commonmodel "go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
 	"go-build-admin/internal/utils"
 	"golang.org/x/text/language"
@@ -83,7 +84,10 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	config.App.UserTokenKeepTime = 259200
 	db, err := gorm.Open(sqlite.Open("file:refresh-contract?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&commonmodel.User{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonmodel.User{ID: 1, Status: "enable"}).Error)
 	tokenHelper := &token.TokenHelper{Driver: driver}
 	h := &CommonHandler{tokenHelper: tokenHelper, authM: member.NewService(db, tokenHelper, config), config: config}

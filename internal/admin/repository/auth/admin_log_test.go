@@ -10,6 +10,7 @@ import (
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
+	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,10 @@ func TestAdminLogAddFiltersURLSuffixes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.AdminLog{}); err != nil {
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	if err := testutil.CreateSQLiteAdminLogTable(db, "ba_admin_log"); err != nil {
 		t.Fatal(err)
 	}
 	m := NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
@@ -98,7 +102,7 @@ func TestAdminLogAddUsesRuleTitles(t *testing.T) {
 	}
 	m := NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/admin/auth.model.Admin/edit", nil)
+	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/edit", nil)
 	m.Add(ctx, map[string]interface{}{})
 
 	var row model.AdminLog
@@ -120,14 +124,17 @@ func TestAdminLogAddUsesCachedRuleTitles(t *testing.T) {
 		strconv.Itoa(int(initialRule.ID))+","+strconv.Itoa(int(parent.ID))+","+strconv.Itoa(int(action.ID))).Error)
 	_, err := authM.GetRuleList(nil, 1)
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminLogTable(db, "admin_log"))
 
 	// Remove the source rows after warming the permission cache. A cache miss
 	// would make Add fall back to the database and lose both titles.
 	require.NoError(t, db.Where("id IN ?", []int32{parent.ID, action.ID}).Delete(&model.AdminRule{}).Error)
 	m := NewAdminLogRepository(db, &conf.Configuration{}, authM)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/admin/auth.model.Admin/edit", nil)
+	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/edit", nil)
 	header.SetAdminAuth(ctx, header.AdminAuth{Id: 1, Username: "cached-admin"})
 	m.Add(ctx, nil)
 
@@ -206,7 +213,13 @@ func newAdminLogTestDB(t *testing.T, name string) *gorm.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&model.AdminLog{}, &model.AdminRule{}); err != nil {
+	// The entities carry MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	if err := testutil.CreateSQLiteAdminLogTable(db, "ba_admin_log"); err != nil {
+		t.Fatal(err)
+	}
+	if err := testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"); err != nil {
 		t.Fatal(err)
 	}
 	return db

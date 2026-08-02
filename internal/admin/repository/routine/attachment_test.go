@@ -12,6 +12,7 @@ import (
 	"go-build-admin/internal/common/upload"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/pkg/data_scope"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/utils"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -26,7 +27,10 @@ func TestAttachmentAssociationTableNames(t *testing.T) {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&upload.Attachment{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAttachmentTables(db, "ba_attachment", "ba_admin", "ba_user"))
 	require.True(t, db.Migrator().HasTable("ba_admin"))
 	require.True(t, db.Migrator().HasTable("ba_user"))
 
@@ -52,7 +56,10 @@ func TestAttachmentDeleteHonorsQuoteAndRemovesLocalFileAfterLastReference(t *tes
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&upload.Attachment{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAttachmentTables(db, "ba_attachment", "ba_admin", "ba_user"))
 
 	url := "/storage/quote-tests/" + strings.ReplaceAll(t.Name(), "/", "_") + ".txt"
 	path := filepath.Join(utils.RootPath(), "public", strings.TrimLeft(url, "/"))

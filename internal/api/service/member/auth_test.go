@@ -11,6 +11,7 @@ import (
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/password"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -38,7 +39,10 @@ func newAuthTestModel(t *testing.T) (*Service, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}))
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600

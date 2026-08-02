@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	siteconfig "go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/pkg/installer"
-	"go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/database/migrations"
+	"go-build-admin/internal/pkg/installer"
+	"go-build-admin/internal/pkg/password"
+	"go-build-admin/internal/pkg/testutil"
 	"io"
 	"os"
 	"path/filepath"
@@ -376,7 +377,10 @@ func createSetupAdminTestTables(db *gorm.DB) error {
 	)`).Error; err != nil {
 		return err
 	}
-	return db.AutoMigrate(&siteconfig.Config{})
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	return testutil.CreateSQLiteConfigTable(db, "configs")
 }
 
 func TestRegisterAddsSetupCommand(t *testing.T) {

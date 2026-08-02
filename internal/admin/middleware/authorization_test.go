@@ -12,6 +12,7 @@ import (
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
+	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/utils"
 
 	ginI18n "github.com/gin-contrib/i18n"
@@ -36,7 +37,10 @@ func newAuthorizationFixture(t *testing.T) *authorizationFixture {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.AdminRule{}, &model.AdminGroup{}, &model.AdminGroupAccess{}))
+	// The entities carry MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture tables with
+	// sqlite-native DDL matching the runtime column shape.
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "admin_rule", "admin_group", "admin_group_access"))
 	t.Cleanup(func() {
 		sqlDB, err := db.DB()
 		if err == nil {
