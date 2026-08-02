@@ -35,21 +35,6 @@ type configJSONItem struct {
 	Value string `json:"value"`
 }
 
-func updateConfigValue(currentValue, newValue string, update func() (int64, error)) error {
-	if newValue == currentValue {
-		return nil
-	}
-
-	rowsAffected, err := update()
-	if err != nil {
-		return err
-	}
-	if rowsAffected != 1 {
-		return fmt.Errorf("config update failed: rows affected mismatch")
-	}
-	return nil
-}
-
 func decodeConfigJSON(field, value string) ([]configJSONItem, error) {
 	if strings.TrimSpace(value) == "" {
 		return []configJSONItem{}, nil
@@ -215,27 +200,7 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.configM.Transaction(ctx, func(tx *gorm.DB) error {
-		all := []siteconfig.Config{}
-		if err := tx.Model(&siteconfig.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
-			return err
-		}
-		for _, v := range all {
-			if value, ok := params[v.Name]; ok {
-				if v.Name == "upload_secret_key" && fmt.Sprintf("%v", value) == "" {
-					continue
-				}
-				newValue := v.SetValueAttr(value, v.Type)
-				if err := updateConfigValue(v.Value, newValue, func() (int64, error) {
-					result := tx.Table(h.configM.TableName).Where("id=?", v.ID).Update("value", newValue)
-					return result.RowsAffected, result.Error
-				}); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-	}); err != nil {
+	if err := h.configM.SaveAll(ctx, params); err != nil {
 		adminhandler.FailByErr(ctx, err)
 		return
 	}

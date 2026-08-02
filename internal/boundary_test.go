@@ -39,6 +39,11 @@ var boundaryRules = []boundaryRule{
 	{code: "R1", ownerPrefix: "admin/", bannedPrefixes: []string{modulePath + "/internal/api"}},
 	{code: "R2", ownerPrefix: "api/", bannedPrefixes: []string{modulePath + "/internal/admin"}},
 	{code: "R3", ownerPrefix: "common/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api"}},
+	// Handlers never open persistence connections themselves: all DB access is
+	// mediated by repositories/domain services via DI. (github.com/go-sql-driver/mysql
+	// stays allowed for error-code inspection; the gorm driver is not.)
+	{code: "R4", ownerPrefix: "admin/handler/", bannedPrefixes: []string{modulePath + "/internal/infra/db", "gorm.io/driver/mysql"}},
+	{code: "R5", ownerPrefix: "api/handler/", bannedPrefixes: []string{modulePath + "/internal/infra/db", "gorm.io/driver/mysql"}},
 }
 
 var importBoundaryWhitelist = []whitelistEntry{}

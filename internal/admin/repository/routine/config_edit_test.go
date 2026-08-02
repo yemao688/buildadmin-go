@@ -9,6 +9,11 @@ import (
 	siteconfig "go-build-admin/internal/common/siteconfig"
 )
 
+type configJSONItem struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
 func TestUpdateConfigValueSkipsUnchangedValue(t *testing.T) {
 	called := false
 	err := updateConfigValue("same", "same", func() (int64, error) {
