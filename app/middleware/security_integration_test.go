@@ -292,9 +292,8 @@ func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *test
 	f := newSecurityFixture(t)
 	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
 		tx := requesttx.DB(c.Request.Context())
-		release, err := model.NewAdminHierarchy(f.config).LockHierarchy(c.Request.Context(), tx)
+		err := model.NewAdminHierarchy(f.config).LockHierarchy(c.Request.Context(), tx)
 		require.NoError(t, err)
-		defer release()
 		require.NoError(t, tx.Exec("UPDATE `"+f.prefix+"user` SET username='relocked' WHERE id=10").Error)
 		stage(c, 1, "ok")
 	})
@@ -307,18 +306,14 @@ func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *test
 	require.Equal(t, "relocked", username)
 }
 
-func TestSecurityMySQLSensitivePostCancellationInterruptsHierarchyLock(t *testing.T) {
+func TestSecurityMySQLSensitivePostCancellationInterruptsAnchorLock(t *testing.T) {
 	f := newSecurityFixture(t)
 	holder := f.db.Begin()
 	require.NoError(t, holder.Error)
 	defer holder.Rollback()
-	var acquired int
-	require.NoError(t, holder.Raw("SELECT GET_LOCK(?, ?)", "ba_admin_hierarchy", 10).Scan(&acquired).Error)
-	require.Equal(t, 1, acquired)
-	defer func() {
-		var released int
-		_ = holder.Raw("SELECT RELEASE_LOCK(?)", "ba_admin_hierarchy").Scan(&released).Error
-	}()
+	var anchorID int32
+	require.NoError(t, holder.Raw("SELECT id FROM "+f.table("admin")+" ORDER BY id LIMIT 1 FOR UPDATE").Scan(&anchorID).Error)
+	require.Equal(t, f.root, anchorID)
 
 	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
 		t.Fatal("request reached business handler while hierarchy lock was held")

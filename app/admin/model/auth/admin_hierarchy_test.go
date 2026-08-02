@@ -443,36 +443,38 @@ func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 	}
 }
 
-func TestAdminHierarchyNamedLockBusyFailsClosed(t *testing.T) {
+func TestAdminHierarchyAnchorRowBusyFailsClosed(t *testing.T) {
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&AdminClosure{}, &Admin{})
 	if err := db.AutoMigrate(&Admin{}, &AdminClosure{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
+	h := newAdminHierarchy("ba_")
+	a := createAdminForHierarchy(t, db, "anchor-busy")
 	holder := db.Begin()
 	if holder.Error != nil {
 		t.Fatalf("begin lock holder: %v", holder.Error)
 	}
 	defer holder.Rollback()
-	var acquired int
-	if err := holder.Raw("SELECT GET_LOCK(?, ?)", "ba_admin_hierarchy", 0).Scan(&acquired).Error; err != nil {
-		t.Fatalf("acquire named lock: %v", err)
+	var anchorID int32
+	if err := holder.Raw("SELECT id FROM `ba_admin` ORDER BY id LIMIT 1 FOR UPDATE").Scan(&anchorID).Error; err != nil {
+		t.Fatalf("acquire hierarchy anchor: %v", err)
 	}
-	if acquired != 1 {
-		t.Fatalf("named lock acquired = %d, want 1", acquired)
+	if anchorID != a.ID {
+		t.Fatalf("hierarchy anchor id = %d, want %d", anchorID, a.ID)
 	}
-	defer func() {
-		var released int
-		_ = holder.Raw("SELECT RELEASE_LOCK(?)", "ba_admin_hierarchy").Scan(&released).Error
-	}()
 
-	h := newAdminHierarchy("ba_")
-	a := createAdminForHierarchy(t, db, "nolock")
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	contender := db.Begin()
+	if contender.Error != nil {
+		t.Fatalf("begin lock contender: %v", contender.Error)
+	}
+	defer contender.Rollback()
+	if err := contender.Exec("SET SESSION innodb_lock_wait_timeout = 1").Error; err != nil {
+		t.Fatalf("set lock wait timeout: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return h.LinkNewNode(ctx, tx, a.ID, nil)
-	})
+	err := h.LinkNewNode(ctx, contender.WithContext(ctx), a.ID, nil)
 	if !errors.Is(err, ErrHierarchyIntegrity) {
 		t.Fatalf("expected ErrHierarchyIntegrity, got %v", err)
 	}

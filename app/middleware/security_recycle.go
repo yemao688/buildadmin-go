@@ -94,13 +94,12 @@ func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, []m
 		return nil, "", nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		release, err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
 		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
 			return nil, "", nil, false
 		}
-		defer release()
 	}
 	rows := []map[string]any{}
 	query := db.Table(resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"})

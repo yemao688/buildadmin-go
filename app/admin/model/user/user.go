@@ -130,11 +130,10 @@ func (s *UserModel) Add(ctx *gin.Context, user *User) error {
 		if ctx == nil || ctx.Request == nil {
 			return data_scope.ErrScopedAccessDenied
 		}
-		release, err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
 		if err != nil {
 			return err
 		}
-		defer release()
 		ownerID := user.AdminID
 		if ownerID == 0 {
 			ownerID = actor.AdminID
@@ -209,11 +208,10 @@ func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
 		if ctx == nil || ctx.Request == nil {
 			return data_scope.ErrScopedAccessDenied
 		}
-		release, err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
 		if err != nil {
 			return err
 		}
-		defer release()
 		if err := tx.Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
 			return cErr.BadRequest("Account not exist")
 		}

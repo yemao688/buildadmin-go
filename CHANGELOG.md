@@ -11,7 +11,7 @@
 - **Fixed:** fresh 安装 `/admin/Index/index` 的 `languageTabs` 为空——补 `country_language` 种子（zh-cn/en，幂等按 `lan` 判重）；`TestBuildSuffixSvg` 多年既有失败修复（期望值抄自 PHP unpack 小端序解释，Go 返回标准大端 adler32，SVG 色相仅装饰）。
 - **Added (web):** 用户编辑表单恢复"调整余额"按钮（编辑态只读余额框 + append 按钮，跳转 `user/moneyLog` 页并携带 `user_id`）；用户列表新增余额列（位于手机号后）、移除头像列；货币/语言页 ID 列标题由"主键"修正为"ID"（spec 早已改 `comment: ID` 后未再生成的陈旧产物，country 模型 gorm 注释同步）。
 - **Added (crud):** `docs/crud-generation.md` 新增约定——主键字段 `comment` 必须写 `ID`（链路 comment → zh-cn 语言包 → 后台列标题），禁止"主键"作为 id 列文案出现在后台。
-- **Changed (docs):** README/AGENTS/docs 全面更新至当前版本——三轨台账五列与断点列、24 表、GET_LOCK 层级锁、security 规则全局化、端口 9900/9918、前台空架子；重复的安装/迁移/端口段落收敛到各自唯一 owner；补充"非三段式 /admin 路由会同时绕过权限中间件与启动诊断"的注意事项。
+- **Changed (docs):** README/AGENTS/docs 全面更新至当前版本——三轨台账五列与断点列、24 表、事务内 `admin` 锚定行层级锁、security 规则全局化、端口 9900/9918、前台空架子；重复的安装/迁移/端口段落收敛到各自唯一 owner；补充"非三段式 /admin 路由会同时绕过权限中间件与启动诊断"的注意事项。
 - **Changed (chore):** 清理 salt 死引用（data_scope 敏感字段黑名单、admin_log 脱敏正则）、CRUD 引导文案中的 test_build 残留提示、security 表单中已删除表的死排除项。
 
 ## v2.7.0
@@ -21,7 +21,7 @@
 - **Fixed (权限, v2.6.0 回归):** 恢复 `index index/logout`、`ajax *`、`alioss callback` 三处 PermissionExempt 登记——该三处于 40586a4 登记、v2.6.0 路由重写时丢失，导致全新安装登录后台后 `/admin/Index/index` 与 `/admin/ajax/*` 被 Authorization fail-closed 拒绝（403 "No permission request"）；附启动诊断回归测试（诊断本身工作正常，缺失的是登记）。
 - **Changed (breaking, migrations):** 三轨台账统一为官方五列设计——`framework_migrations`→`migrations_framework`、`business_migrations`→`migrations_business`，统一列 `version/migration_name/start_time/end_time/breakpoint`（`end_time` NULL=pending），废弃 sequence/migration_id/revision/batch 概念；`business_breakpoints` 独立表删除，断点改由 `migrations_business.breakpoint` 列承载（set 先清后置、空断点回滚报错）；业务回滚默认改为回退最近一条已完成迁移（可重复执行），`--to-breakpoint` 语义不变；`business/README.md` 契约重写。
 - **Changed (breaking, security):** security 四表对齐 PHP 上游——规则表（`security_data_recycle`/`security_sensitive_data`）删除 `admin_id`/`owner_column` 列，日志表删除 `target_admin_id`/`legacy_unrecoverable`/`is_committed` 列（`admin_id` 操作者列保留）；规则全局化（PHP 语义），删除规则属主机制（模型 scoped、resolveRule 闭包层级匹配、seed 属主归一化与属主校验、`ValidateRuleIdentityChange`）。保留：sensitive 种子 `data_fields` 不含 password 的加固、中间件对目标行的 scope 防御与 "target scope incomplete" 403（owner 按目标表 `admin_id` 约定探测，无该列的目标表跳过 scope）、`is_restore=1`/`is_rollback=1` 标记式还原/回滚（替代 PHP 的物理删行，列在 PHP 本就有）。
-- **Changed (breaking, schema):** 删除 `test_build` 表与骨架模块（CRUD 生成器演示残留，无前端/种子/测试依赖）；删除 `admin_hierarchy_lock` 单行表——层级互斥改为 MySQL 命名锁 `GET_LOCK('ba_admin_hierarchy')`（幂等 release 闭包，超时/失败 fail-closed 到 `ErrHierarchyIntegrity`）+ 事务内 admin 锚定行 `FOR UPDATE` 提交边界锁的双保险设计（命名锁不随事务释放，行锁兜底提交边界）。全新安装 27→**24 张表**。
+- **Changed (breaking, schema):** 删除 `test_build` 表与骨架模块（CRUD 生成器演示残留，无前端/种子/测试依赖）；删除 `admin_hierarchy_lock` 单行表——层级互斥改为事务内 `admin` 锚定行 `FOR UPDATE`，由 InnoDB 负责死锁检测并以 `innodb_lock_wait_timeout` 兜底超时。全新安装 27→**24 张表**。
 - **Added (web):** 前台会员门户空架子回归——`/` 渲染自包含占位页（站点名 + 进入后台按钮），恢复最小 `userInfo` store（贴合 v2.6.0 字段契约）、`UserInfo` 接口、`/api/user/{login,register,logout}` API 封装与 axios 会员 token 分支（`ba-user-token` 注入 + 401/409 刷新队列）；不恢复 layouts/memberCenter/语言包，供下游业务开发接手。
 - **Added (crud):** `docs/crud-generation.md` 补全 `table.width` 列宽定义（生成器早已支持：int px，缺省按 designType 兜底，生成 `width: N` 数字透传 `el-table-column`）——编写 spec 时为长字段预设宽度（建议 140–260px），减少生成后手改。
 - **Changed:** 默认端口统一——后端 `APP_PORT` 兜底 9989→**9900**（`conf/env.go`、`setup`、`.env.example`、`Dockerfile`、`docker-compose.yaml`、`config.defaults.yaml`、测试断言）；Vite 9988→**9918**（`web/.env`）；`web/.env.development` 的 `VITE_AXIOS_BASE_URL` 指向 9900；`vite.config.ts` server 增加 `host: '0.0.0.0'` 绑定。

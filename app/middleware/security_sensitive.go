@@ -117,13 +117,12 @@ func (a *sensitiveAuditor) loadBeforeRow(primaryValue any) (*gorm.DB, string, da
 		return nil, "", data_scope.RulePolicy{}, nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		release, err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
 		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
 			return nil, "", data_scope.RulePolicy{}, nil, false
 		}
-		defer release()
 	}
 	row := map[string]any{}
 	query := db.Table(resolvedTable).Clauses(clause.Locking{Strength: "UPDATE"})

@@ -69,5 +69,5 @@ prefix validation → migration lock → upstream-compatible preflight
 
 - 官方迁移身份（ID、名称、内容）一经发布永不重写；兼容问题只能用新增迁移解决。
 - 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
-- 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用 MySQL 命名锁与事务内锚定行锁。
+- 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用事务内 `admin` 锚定行 `FOR UPDATE`，由 InnoDB 负责死锁检测并由 `innodb_lock_wait_timeout` 兜底超时。
 - 业务仓库首次安装按当前快照建立三张带前缀的迁移台账；业务回滚只作用于 business 轨道，默认回滚最近一条已完成迁移，也支持 `--to-breakpoint`。
