@@ -5,7 +5,6 @@ import (
 	"go-build-admin/app/pkg/captcha"
 	"go-build-admin/app/pkg/clickcaptcha"
 	cErr "go-build-admin/app/pkg/error"
-	"go-build-admin/app/pkg/random"
 	"go-build-admin/app/pkg/requesttx"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
@@ -27,6 +26,7 @@ type CommonHandler struct {
 }
 
 func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
+	registerBuiltinRefreshTypes()
 	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
 }
 
@@ -110,6 +110,7 @@ func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
 }
 
 func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
+	registerBuiltinRefreshTypes()
 	var params struct {
 		RefreshToken string `json:"refreshToken"`
 	}
@@ -127,41 +128,22 @@ func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
 		return
 	}
 
-	accessType := ""
-	accessHeader := ""
-	switch result.Type {
-	case "admin-refresh":
-		accessType = "admin"
-		accessHeader = "batoken"
-	case "user-refresh":
-		accessType = "user"
-		accessHeader = "ba-user-token"
-	default:
+	desc, ok := lookupRefreshType(result.Type)
+	if !ok {
 		FailByErr(ctx, cErr.BadRequest("Invalid token"))
 		return
 	}
 
-	if ctx.GetHeader(accessHeader) == "" {
+	if ctx.GetHeader(desc.AccessHeader) == "" {
 		FailByErr(ctx, cErr.BadRequest("Invalid token"))
 		return
 	}
 
-	newToken := random.Uuid()
-	if accessType == "user" {
-		if h.authM == nil {
-			FailByErr(ctx, cErr.InternalServer("token service unavailable"))
-			return
-		}
-		newToken, err = h.authM.RefreshUserAccessToken(ctx, params.RefreshToken)
-		if err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	} else {
-		if err := h.tokenHelper.Set(newToken, accessType, result.UserID, h.config.App.AdminTokenKeepTime); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
+	ctx.Set(refreshHandlerContextKey, h)
+	newToken, err := desc.Refresh(ctx, params.RefreshToken, result.UserID)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
 	}
 
 	Success(ctx, map[string]any{
