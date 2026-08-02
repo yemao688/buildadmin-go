@@ -11,15 +11,6 @@ const pageTitle = (name: string): string => {
  */
 const staticRoutes: Array<RouteRecordRaw> = [
     {
-        // 首页
-        path: '/',
-        name: 'home',
-        component: () => import('/@/views/frontend/index.vue'),
-        meta: {
-            title: pageTitle('home'),
-        },
-    },
-    {
         // 管理员登录页 - 不放在 adminBaseRoute.children 因为登录页不需要使用后台的布局
         path: adminBaseRoutePath + '/login',
         name: 'adminLogin',
@@ -69,7 +60,13 @@ const staticRoutes: Array<RouteRecordRaw> = [
 
 const staticFiles: Record<string, Record<string, RouteRecordRaw>> = import.meta.glob('./static/*.ts', { eager: true })
 for (const key in staticFiles) {
-    if (staticFiles[key].default) staticRoutes.push(staticFiles[key].default)
+    const route = staticFiles[key].default
+    if (!route) continue
+    if (route.path == '/') {
+        staticRoutes.unshift(route)
+    } else {
+        staticRoutes.push(route)
+    }
 }
 
 export default staticRoutes

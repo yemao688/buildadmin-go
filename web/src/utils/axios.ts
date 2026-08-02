@@ -425,7 +425,7 @@ interface LoadingInstance {
     target: any
     count: number
 }
-interface Options {
+export interface Options {
     // 是否开启取消重复请求, 默认为 true
     cancelDuplicateRequest?: boolean
     // 是否开启loading层效果, 默认为false

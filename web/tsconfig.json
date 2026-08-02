@@ -8,6 +8,7 @@
         "strict": true,
         "jsx": "preserve",
         "sourceMap": false,
+        "noEmit": true, // 禁止 tsc 向 web/src 发射 .js 产物
         "resolveJsonModule": true,
         "esModuleInterop": true,
         "isolatedModules": true,

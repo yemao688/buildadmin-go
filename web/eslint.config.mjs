@@ -106,6 +106,20 @@ export default tseslint.config(
     },
 
     {
+        name: 'buildadmin/no-src-js-artifacts',
+        files: ['src/**/*.js'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector: 'Program',
+                    message: 'web/src 下禁止 .js 产物，请删除并检查 tsc emit',
+                },
+            ],
+        },
+    },
+
+    {
         // 插件的 flat/recommended 规则块不限定 .vue 文件（会命中 defineComponent 所在的 ts 文件），
         // 与上游 legacy 行为一致：这些 off 全局生效
         name: 'buildadmin/vue-rules',
