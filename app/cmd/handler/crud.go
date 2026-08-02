@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-build-admin/app/middleware"
 	helper "go-build-admin/app/pkg/crud_helper"
+	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
 	"go-build-admin/service/db"
 	"strings"
@@ -47,6 +48,7 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("CRUD generation error: %w", err)
 	}
+	data_scope.InvalidateBusinessIdentifierCache()
 	cmd.Printf("CRUD generation success (log id: %d)\n", result.LogID)
 	for _, file := range result.Files {
 		cmd.Printf("%s\n", file)
@@ -178,6 +180,7 @@ func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 	}); err != nil {
 		return fmt.Errorf("CRUD deletion error: %w", err)
 	}
+	data_scope.InvalidateBusinessIdentifierCache()
 	cmd.Printf("CRUD deletion success: %s\n", args[0])
 	return nil
 }

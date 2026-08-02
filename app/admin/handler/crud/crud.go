@@ -98,6 +98,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	data_scope.InvalidateBusinessIdentifierCache()
 	Success(ctx, map[string]interface{}{})
 }
 
@@ -155,6 +156,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	data_scope.InvalidateBusinessIdentifierCache()
 	Success(ctx, map[string]interface{}{})
 }
 
