@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	adminModel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/common/member"
+	middlewarecore "go-build-admin/internal/api/middleware"
+	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/conf"
-	middlewarecore "go-build-admin/internal/middleware"
 	commonModel "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
 	"go-build-admin/internal/pkg/token"

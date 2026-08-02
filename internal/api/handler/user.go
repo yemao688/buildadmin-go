@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/api/service/member"
+	"go-build-admin/internal/conf"
 	"go-build-admin/internal/pkg/clickcaptcha"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/validator"
-	"go-build-admin/internal/conf"
 	"regexp"
 
 	"github.com/gin-gonic/gin"

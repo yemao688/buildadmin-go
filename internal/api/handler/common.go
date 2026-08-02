@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/pkg/captcha"
 	"go-build-admin/internal/pkg/clickcaptcha"

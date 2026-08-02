@@ -1,8 +1,8 @@
 package member
 
 import (
-	"errors"
 	"fmt"
+	"go-build-admin/internal/api/repository/user"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
@@ -16,13 +16,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"go-build-admin/internal/utils"
 )
 
 type Service struct {
-	sqlDB       *gorm.DB
+	users       *repository.Repository
 	tokenHelper *token.TokenHelper
 	config      *conf.Configuration
 }
@@ -34,7 +33,7 @@ var (
 )
 
 func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *Service {
-	return &Service{sqlDB: sqlDB, tokenHelper: tokenHelper, config: config}
+	return &Service{users: repository.NewRepository(sqlDB), tokenHelper: tokenHelper, config: config}
 }
 
 func (s *Service) IsLogin(ctx *gin.Context) (*token.Token, bool) {
@@ -49,9 +48,7 @@ func (s *Service) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 }
 
 func (s *Service) IsEnabledUser(id int32) bool {
-	var user model.User
-	err := s.sqlDB.Model(&model.User{}).Select("status").Where("id=?", id).First(&user).Error
-	return err == nil && user.Status == "enable"
+	return s.users.IsEnabled(id)
 }
 
 func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) (string, error) {
@@ -64,9 +61,9 @@ func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) 
 	}
 
 	newToken := ""
-	err = s.sqlDB.Transaction(func(tx *gorm.DB) error {
-		var user model.User
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", initial.UserID).First(&user).Error; err != nil {
+	err = s.users.Transaction(func(tx *gorm.DB) error {
+		user, err := s.users.LockByID(tx, initial.UserID)
+		if err != nil {
 			return err
 		}
 		if !utils.AccountStatusEnabled(user.Status) {
@@ -91,21 +88,17 @@ func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) 
 }
 
 func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
-	var user model.User
-	if err := s.sqlDB.Where("id=?", id).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return cErr.BadRequest("Account not exist")
-		}
+	user, err := s.users.GetByID(id)
+	if err != nil {
 		return err
+	}
+	if user == nil {
+		return cErr.BadRequest("Account not exist")
 	}
 	if user.Status != "enable" {
 		return cErr.BadRequest("Account disabled")
 	}
-	return s.sqlDB.Model(&model.User{}).Where("id=?", id).Updates(map[string]any{
-		"login_failure":   0,
-		"last_login_time": time.Now().Unix(),
-		"last_login_ip":   ip,
-	}).Error
+	return s.users.UpdateLoginMeta(id, 0, time.Now().Unix(), ip)
 }
 
 func (s *Service) Login(ctx *gin.Context, username string, plainPassword string, keep bool) (interface{}, error) {
@@ -121,12 +114,11 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 		return nil, cErr.BadRequest("Account not exist")
 	}
 
-	user := model.User{}
-	result := s.sqlDB.Model(&model.User{}).Where(accountType+"=?", username).Scan(&user)
-	if result.Error != nil {
-		return nil, result.Error
+	user, err := s.users.GetByAccount(accountType, username)
+	if err != nil {
+		return nil, err
 	}
-	if result.RowsAffected == 0 {
+	if user == nil {
 		return nil, cErr.BadRequest("Account not exist")
 	}
 	if !utils.AccountStatusEnabled(user.Status) {
@@ -137,12 +129,15 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 	if retry > 0 && user.LastLoginTime > 0 {
 		now := time.Now().Unix()
 		if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
-			if err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]any{"login_failure": 0}).Error; err != nil {
+			if err := s.users.ResetLoginFailure(user.ID); err != nil {
 				return nil, err
 			}
-			result = s.sqlDB.Model(&model.User{}).Where(accountType+"=?", username).Scan(&user)
-			if result.Error != nil {
-				return nil, result.Error
+			user, err = s.users.GetByAccount(accountType, username)
+			if err != nil {
+				return nil, err
+			}
+			if user == nil {
+				return nil, cErr.BadRequest("Account not exist")
 			}
 		}
 		if user.LoginFailure >= int32(retry) {
@@ -151,11 +146,7 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 	}
 
 	if err := password.Compare(user.Password, plainPassword); err != nil {
-		s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
-			"login_failure":   user.LoginFailure + 1,
-			"last_login_time": time.Now().Unix(),
-			"last_login_ip":   ctx.ClientIP(),
-		})
+		s.users.UpdateLoginMeta(user.ID, user.LoginFailure+1, time.Now().Unix(), ctx.ClientIP())
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
@@ -175,16 +166,12 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 
 	loginTime := time.Now().Unix()
 	loginIP := ctx.ClientIP()
-	err := s.sqlDB.Model(&model.User{}).Where("id=?", user.ID).Updates(map[string]interface{}{
-		"login_failure":   0,
-		"last_login_time": loginTime,
-		"last_login_ip":   loginIP,
-	}).Error
+	err = s.users.UpdateLoginMeta(user.ID, 0, loginTime, loginIP)
 	user.LoginFailure = 0
 	user.LastLoginTime = loginTime
 	user.LastLoginIP = loginIP
 
-	userInfo := s.FilterData(user)
+	userInfo := s.FilterData(*user)
 	userInfo["token"] = tokenStr
 	userInfo["refresh_token"] = refreshToken
 	return userInfo, err
@@ -219,7 +206,7 @@ func (s *Service) Register(ctx *gin.Context, username string, plainPassword stri
 		return nil, err
 	}
 	rootID, err := (systemroot.Resolver{
-		DB:         s.sqlDB,
+		DB:         s.users.DB(),
 		AdminTable: s.config.Database.Prefix + "admin",
 	}).Resolve()
 	if err != nil {
@@ -239,7 +226,7 @@ func (s *Service) Register(ctx *gin.Context, username string, plainPassword stri
 		JoinIP:        ctx.ClientIP(),
 		JoinTime:      now,
 	}
-	if err := s.sqlDB.Create(&user).Error; err != nil {
+	if err := s.users.Create(&user); err != nil {
 		return nil, err
 	}
 
@@ -260,12 +247,11 @@ func (s *Service) accountExists(field, value string) (bool, error) {
 		return false, cErr.BadRequest("invalid account field")
 	}
 
-	var user model.User
-	result := s.sqlDB.Model(&model.User{}).Where(field+"=?", value).Scan(&user)
-	if result.Error != nil {
-		return false, result.Error
+	user, err := s.users.GetByAccount(field, value)
+	if err != nil {
+		return false, err
 	}
-	return result.RowsAffected > 0, nil
+	return user != nil, nil
 }
 
 func (s *Service) Logout(ctx *gin.Context, refreshToken string) error {

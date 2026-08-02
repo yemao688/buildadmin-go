@@ -9,14 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// abortLogin is kept for the user lane (user_login.go); AbortLogin is the
-// shared exported form used by the admin middleware package.
-func abortLogin(c *gin.Context, err error) {
-	AbortLogin(c, err)
-}
-
 // AbortLogin rejects a request with an unauthorized payload shaped like the
-// BuildAdmin login response.
+// BuildAdmin login response. Shared by the admin middleware package and the
+// api user-login middleware (api imports the global middleware package).
 func AbortLogin(c *gin.Context, err error) {
 	code := http.StatusUnauthorized
 	message := "Please login first"

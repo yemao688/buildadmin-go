@@ -1,4 +1,4 @@
-package model_test
+package member_test
 
 import (
 	"net/http/httptest"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/api/service/member"
 	commonmodel "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"

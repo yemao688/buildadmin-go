@@ -1,13 +1,15 @@
 package middleware
 
 import (
-	"go-build-admin/internal/common/member"
+	"net/http"
+
+	"go-build-admin/internal/api/service/member"
+	"go-build-admin/internal/conf"
+	core "go-build-admin/internal/middleware"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/header"
 	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,11 +45,11 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 
 		tokenData, err := m.tokenHelper.GetFor(tokenStr, "user")
 		if err != nil {
-			abortLogin(c, err)
+			core.AbortLogin(c, err)
 			return
 		}
 		if !m.authM.IsEnabledUser(tokenData.UserID) {
-			abortLogin(c, cErr.Unauthorized("Please login first"))
+			core.AbortLogin(c, cErr.Unauthorized("Please login first"))
 			return
 		}
 		language := c.GetHeader("Accept-Language")
@@ -59,7 +61,7 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			Token:    tokenStr,
 		}
 		if err := m.authM.ValidateUserToken(c, tokenData.UserID, c.ClientIP()); err != nil {
-			abortLogin(c, err)
+			core.AbortLogin(c, err)
 			return
 		}
 		c.Set("UserAuth", authParam)

@@ -10,7 +10,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/conf"
 	commonmodel "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/token"
