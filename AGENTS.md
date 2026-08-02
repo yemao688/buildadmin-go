@@ -45,27 +45,29 @@
 
 ## 分层与边界（v3.0.0 架构）
 
-后端全部私有代码位于 `internal/`，按"两渠道 + 共享内核"分层：
+后端全部私有代码位于 `internal/`，按"两渠道 + 共享内核"分层。admin 渠道已拍平：`repository`、`dto`、`handler`、`router` 均为单一 package，生成产物文件名恒等于表名，不再有子目录：
 
 | 层 | 职责 | 允许依赖 | 禁止依赖 |
 |---|---|---|---|
-| `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate | 仅外部库 | 各渠道、Gin、service |
+| `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper 等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
-| `internal/admin` | 后台渠道：`repository/`（唯一 GORM 入口，scope 注入）·`dto/`（请求 Param）·`handler/`（薄控制器）·`service/`（按需跨表编排）·`middleware/`（登录/权限/安全审计）·`router/`（/admin/* 自注册） | model、pkg、common | `internal/api` |
+| `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*）·`validate/` | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册） | model、pkg、common | `internal/admin` |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
-| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源 | 全部 | 业务逻辑 |
-| `internal/conf`、`internal/database/migrations`、`internal/infra/{db,rds}`、`internal/utils` | 配置、三轨迁移、连接初始化、工具 | — | — |
+| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源；`registrar_set.go` 只聚合 api 渠道 registrar（admin 侧聚合已收进 `internal/admin/router`） | 全部 | 业务逻辑 |
+| `internal/conf`、`internal/database/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n` | 配置、三轨迁移、连接初始化、工具、本地化 | — | — |
 
 边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
+
+生成器锚点与产物边界：实体/仓库/DTO/handler/registrar 五类 Go 产物全部"文件名=表名"落单包（`internal/model`、`internal/admin/{repository,dto,handler,router}`）；`internal/admin/repository/provider.go` 与 `internal/admin/handler/provider.go` 各为合并 ProviderSet（生成器逐项追加构造器），`internal/admin/router/provider.go` 同时持有合并 ProviderSet 与 `ProvideRegistrars` 锚点（新模块一行 handler 参数 + 返回条目）；生成器不再修改 `cmd/server/wire.go`。
 
 
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
 - 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`configs/config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
-- 业务模块必须使用 CRUD 生成链，不得手写生成的 model、handler、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
+- 业务模块必须使用 CRUD 生成链，不得手写生成的实体、仓库、handler、registrar、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
@@ -129,7 +131,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 以下规则适用于将本仓库作为业务项目框架使用的场景，不仅适用于框架自身开发。fork、安装、CRUD 与升级的流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)；这里保留 AI 首读所需的规则速查。
 
 - **表命名：按业务分类加前缀。** 使用 `<category>_<entity>`，让表、菜单和生成代码自然归类：运营类 `ops_banner`/`ops_support`/`ops_help`，订单类 `order_recharge`/`order_withdraw`，用户类 `user_wallet`/`user_level`。命名保持简单并明确归属。
-- **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** 首段是业务分类和目录：`generateRelativePath: ops_user_test_xxx` → 实体为 `internal/model/user_test_xxx.go`（扁平共享记录层），仓库为 `internal/admin/repository/ops/user_test_xxx.go`，DTO 为 `internal/admin/dto/ops/user_test_xxx.go`，handler/`_route.go` 为 `internal/admin/handler/ops/user_test_xxx.go`，views 为 `ops/userTestXxx/`，路由为 `ops.UserTestXxx`，规则名为 `ops/userTestXxx`。单段输入在第一个下划线处分割；Go 文件保留实体蛇形名，视图目录使用 lcfirst 驼峰，路由名用小写目录加 PascalCase 实体（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`），规则名与视图目录一致。省略时虽会回退到表名，spec 不得依赖该回退；只有真正需要更深业务子目录时才使用 `/` 或 `.`（如 `ops/user/test_xxx`）。`webViewsDir` 仍是较低层级的单路径覆盖项。
+- **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** Go 侧五类产物全部"文件名=表名"落单包，`generateRelativePath` 不再参与 Go 产物落点：实体 → `internal/model/<table>.go`（共享记录层）、仓库 → `internal/admin/repository/<table>.go`、请求 DTO → `internal/admin/dto/<table>.go`、handler → `internal/admin/handler/<table>.go`、路由注册器 → `internal/admin/router/<table>.go`（不再生成 `_route.go`）。`generateRelativePath` 只决定 views 与菜单/路由名形态：`ops_user_test_xxx` → views `ops/userTestXxx/`、路由 `ops.UserTestXxx`、规则名 `ops/userTestXxx`（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`）。单段输入在第一个下划线处分割，分类应为单词；省略时虽会回退到表名，spec 不得依赖该回退。provider 由生成器并入各包合并 ProviderSet（`internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`、`internal/admin/router/provider.go`），路由经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点挂载（新模块一行 handler 参数 + 返回条目）；`webViewsDir` 仍是 views 单路径覆盖项。
 - **CRUD 模块采用双提交工作流。** 生成提交只包含 `crud_specs/<module>.yaml` 和全部生成产物，提交信息标注框架/生成器版本；业务定制每项单独提交并写明动机。重新生成后用 `git diff` 对照定制提交，逐项回补被覆盖的修改；生成提交不含手改时，`crud:delete` + 重新生成必须逐字节一致。生成提交作为机器产物快速浏览，重点审查定制提交；在业务仓库 `AGENT_BUSINESS.md` 维护模块、定制点和提交哈希的清单。
 - **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`framework/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
 - **显式设置 `columnFields` 控制列表展示。** 省略时所有字段都会进入后台列表；密码、密钥/令牌、长备注或大段 `content` 等仅表单字段只放进 `formFields`。带关系增强的 `remoteSelect`/`remoteSelects` 外键保留在 `columnFields`，原始 FK 列会自动隐藏，同时保留搜索和关系展示列。

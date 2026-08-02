@@ -34,15 +34,15 @@ go build ./...
 
 提交 spec 前可运行 `crud:validate <spec.yaml...>` 做纯校验。该命令不连接数据库、不生成文件，也不修改菜单或 spec；它检查恰好一个主键、`remoteController`/`remoteModel` 文件是否存在、`generateRelativePath` 路径是否合法，以及 `default`/`defaultType` 是否配对（`relationFields` 是远端表列，其真实性由生成期校验负责，不在此检查）。已存在但无法反查 route 常量的控制器，以及实体段使用大写/驼峰的非标准路径，会输出 `warning:`，不会导致失败。发现任意 error 时退出码为 `1`；只有 warning 或全部通过时退出码为 `0`，warning 和错误均输出到 stderr。
 
-生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器会为每个后台 handler 旁生成 `<name>_route.go` RouteRegistrar，并更新仓库与 handler 目录的 `provider.go` 与 `internal/router/registrar_set.go`；不再修改 `internal/router/router.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
+生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器为每个后台模块产出五类 Go 产物（实体/仓库/DTO/handler/路由注册器），全部"文件名=表名"落单包，并维护三处共享 provider（`internal/admin/{repository,handler,router}/provider.go`）——路由经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点挂载（新模块一行 handler 参数 + 返回条目），不再生成 `<name>_route.go`，也不修改 `cmd/server/wire.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 
-所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 `provider.go`、`internal/router/registrar_set.go` 这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
+所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 provider（`internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`、`internal/admin/router/provider.go`）与 `internal/router/registrar_set.go`（api 渠道侧）这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
 
 已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
 
 ### `_custom.go` 定制保护与双提交工作流
 
-`crud:generate` 会为每个模块的实体、仓库和 handler 各生成一个一次性定制骨架：实体与仓库各有独立的 `_custom.go` 骨架（handler 也有）。定制文件由对应生成文件的路径去掉扩展名后追加 `_custom.go` 得到：`xxx.go` 对应 `xxx_custom.go`。因此，实体应定制在 `internal/model/<entity>_custom.go`，仓库应定制在 `internal/admin/repository/<path>_custom.go`，handler 应定制在生成 handler 的同包兄弟文件中；视图目录、`_route.go` 和共享 provider 没有对应的 `_custom.go` 骨架。生成器识别的定制文件目录包括 `internal/model`、`internal/admin/repository` 和 `internal/admin/handler` 及其子目录。历史旧布局的 manifest（模型文件位于 `internal/admin/model` 或 `internal/common/model`）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
+`crud:generate` 会为每个模块的实体、仓库和 handler 各生成一个一次性定制骨架：实体与仓库各有独立的 `_custom.go` 骨架（handler 也有）。定制文件由对应生成文件的路径去掉扩展名后追加 `_custom.go` 得到：`<table>.go` 对应 `<table>_custom.go`。因此，实体应定制在 `internal/model/<table>_custom.go`，仓库应定制在 `internal/admin/repository/<table>_custom.go`，handler 应定制在 `internal/admin/handler/<table>_custom.go`；视图目录、路由注册器和共享 provider 没有对应的 `_custom.go` 骨架。生成器识别的定制文件目录包括 `internal/model`、`internal/admin/repository` 和 `internal/admin/handler`。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
 
 首次生成时，目标 `_custom.go` 不存在才会写入骨架；目标文件一旦存在，后续 `crud:generate` 不会覆盖它。对应的 `xxx.go` 仍会按生成结果重写，生成器的 manifest 校验也会把受保护的 `_custom.go` 排除在文件冲突和路径集合比较之外。因此，业务方法和扩展逻辑应优先放入对应的 `_custom.go`，不要直接修改生成的实体/仓库/handler 文件。`_custom.go` 不是视图或路由的通用定制机制。
 
@@ -95,7 +95,7 @@ fields:
     comment: 更新时间
 ```
 
-`default: "1"` 省略 `defaultType` 时按 `INPUT` 处理；`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码维护，不进入请求 DTO。`generateRelativePath` 必须显式设置，标准值就是表名本身（`generateRelativePath: ops_banner`）：推导为目录 `ops` + 实体 `banner`；实体扁平落 `internal/model/banner.go`，仓库/DTO/handler 落在 `internal/admin/{repository,dto,handler}/ops/`，菜单、路由、views 目录路径固定为两级；生成器对省略的兜底默认也是表名，但 spec 不依赖省略（规则见"路径和数据库"）。完整功能示例见文末"完整示例"。
+`default: "1"` 省略 `defaultType` 时按 `INPUT` 处理；`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码维护，不进入请求 DTO。`generateRelativePath` 必须显式设置，标准值就是表名本身（`generateRelativePath: ops_banner`）：Go 侧产物一律按"文件名=表名"落单包（实体 `internal/model/banner.go`、仓库 `internal/admin/repository/banner.go`、DTO `internal/admin/dto/banner.go`、handler `internal/admin/handler/banner.go`、注册器 `internal/admin/router/banner.go`）；`generateRelativePath` 只决定 views 目录（`web/src/views/backend/ops/banner/`）、菜单与路由名的形态（`ops.Banner`/`ops/banner`）。生成器对省略的兜底默认也是表名，但 spec 不依赖省略（规则见"路径和数据库"）。完整功能示例见文末"完整示例"。
 
 ## 顶层 YAML 契约
 
@@ -107,9 +107,9 @@ fields:
 | `comment`              | `string`，默认空           | 表注释。以 `表` 结尾时，管理名称转为 `管理`，如 `会员组表` -> `会员组管理`。                                                                                                                                             |
 | `type`                 | `string`，默认 `create`    | `create` 或 `alter`。日志/数据库/SQL 兼容值会按 `rebuild` 归一化。                                                                                                                                                       |
 | `rebuild`              | `string`，默认空           | PHP 上游生成器选项值通常为 `No`/`Yes`；继续生成时 `Yes` 选择重建，否则选择 alter。                                                                                                                                       |
-| `generateRelativePath` | `string`，默认空           | 生成位置 shorthand，为缺失的实体/仓库/DTO/handler、views 路径提供默认值。**必须显式设置，标准值 = 表名本身**（`ops_user_test_xxx` -> 目录 `ops` + 实体 `user_test_xxx`）；`/` 和 `.` 分隔符仅在需要更深业务子目录时使用（如 `ops/user/test_xxx`）。省略时兜底默认等于表名，但 spec 不应依赖省略。路径规则和示例见下文"路径和数据库"。                  |
-| `modelFile`            | `string`，默认自动推导     | 模块 Go 文件逻辑路径：同时推导实体名和仓库/DTO 的落点，实体固定扁平输出到 `internal/model`。显式值优先，合法根见"路径和数据库"。                                                                                                                        |
-| `controllerFile`       | `string`，默认自动推导     | Go handler 文件逻辑路径，是 PHP controller 的对应物。显式值优先。                                                                                                                                                        |
+| `generateRelativePath` | `string`，默认空           | 生成位置 shorthand。**必须显式设置，标准值 = 表名本身**。Go 侧产物不再由它定位（一律"文件名=表名"落单包）；它只决定 views 目录与菜单/路由名的形态（`ops_user_test_xxx` -> views `ops/userTestXxx/`、路由 `ops.UserTestXxx`）。省略时兜底默认等于表名，但 spec 不应依赖省略。路径规则和示例见下文"路径和数据库"。                                                                  |
+| `modelFile`            | `string`，默认自动推导     | 历史键，仅做安全校验与兼容：Go 产物位置恒由表名决定，显式值不再影响落点（旧布局前缀自动剥离后仅用于实体名兼容推导）。                                                                                                          |
+| `controllerFile`       | `string`，默认自动推导     | 历史键，仅做安全校验与兼容：Go handler 文件位置恒由表名决定（PHP controller 的对应物，不再由该键定位）。                                                                                                                     |
 | `webViewsDir`          | `string`，默认自动推导     | `web/src/views/backend` 下的视图目录。显式值优先。                                                                                                                                                                       |
 | `databaseConnection`   | `string`，默认 `mysql`     | 当前 Go 应用只有一条注入连接。空值和 `mysql` 解析并持久化为 `mysql`；其它标识符失败。                                                                                                                                    |
 | `isCommonModel`        | `int`，默认 `0`            | **已弃用**：新语义下实体一律进入共享记录层 `internal/model`（全部共享），非零值会被生成器/apply 拒绝；历史 common model 模块仍可通过 `crud:delete` 清理（旧布局 manifest 仅删除侧识别）。                             |
@@ -180,7 +180,7 @@ fields:
       remoteField: username
       relationFields: username
       remoteSourceConfigType: crud
-      remoteController: internal/admin/handler/auth/admin.go
+      remoteController: internal/admin/handler/admin.go
       remoteModel: internal/model/admin.go
 ```
 
@@ -341,7 +341,7 @@ Go 生成器的操作列有一个有意不同于 PHP 的前端改进：末列固
 | `remoteField`             | `string`         | label 字段，默认 `name`。                                                        |
 | `remoteTable`             | `string`         | 关联表名。                                                                       |
 | `remoteController`        | `string`         | handler/controller 参考路径，用于 CRUD 来源路由推导。                            |
-| `remoteModel`             | `string`         | 关联实体文件路径，语义为 `internal/model/<entity>.go`（实体扁平；历史 `internal/admin/model/...` 前缀自动剥离后同样解析到扁平实体）。                                       |
+| `remoteModel`             | `string`         | 关联实体文件路径，语义为 `internal/model/<table>.go`（文件名=表名；历史布局前缀如 `internal/admin`、`internal/common` 下的旧 `model` 根会自动剥离后同样解析到该路径）。                                       |
 | `remoteUrl`               | `string`         | custom 来源的站内或 http(s) URL。                                                |
 | `remoteSourceConfigType`  | `crud`/`custom`  | 使用生成 CRUD，或显式 custom 配置。                                              |
 | `relationFields`          | 逗号分隔 string  | 远程显示/预载入字段。                                                            |
@@ -355,32 +355,30 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 - 文件创建、snapshot、quarantine、删除使用平台原生 `filepath.Join`。
 - 拒绝 `..`、绝对路径、Windows drive prefix（如 `C:\\...`）、空段和无效段，包括 `a//b`、`a..b`。
 - 显式路径段保留下划线：`some_special_dir/orders` 不会拆成多层目录。
-- 业务表命名约定：表名首段是业务分类（也是生成目录），其余段是实体名（蛇形）。**`generateRelativePath` 必须显式设置，标准值就是表名本身**（生成器对省略的兜底默认也是表名，但 spec 不依赖省略——显式写出让各产物路径一目了然）；单段输入在第一个下划线处拆一次，左侧为目录、右侧为实体名（实体名内的下划线保留）：`ops_user_test_xxx` -> 目录 `ops` + 实体 `user_test_xxx`；`ops_banner` -> `ops` + `banner`。
-- 产物落点统一推导（以 `ops_user_test_xxx` 为例）：
-  - 实体（贫血共享记录层）：`internal/model/user_test_xxx.go`，包名恒为 `model`。实体扁平输出，路径段全部忽略、只保留实体名，因此实体名在整个仓库必须唯一；
-  - 仓库：`internal/admin/repository/ops/user_test_xxx.go`，包名 `ops`，类型 `UserTestXxxRepository`、构造 `NewUserTestXxxRepository`，基于 `internal/pkg/persistence` 的 `BaseModel`；
-  - 请求 DTO：`internal/admin/dto/ops/user_test_xxx.go`，包名恒为 `dto`；
-  - handler 与 `<name>_route.go`：`internal/admin/handler/ops/user_test_xxx.go`、`user_test_xxx_route.go`，包名 `ops`；共享 provider 脚手架落在仓库与 handler 各自的目录（`internal/admin/repository/ops/provider.go`、`internal/admin/handler/ops/provider.go`）；
-  - views 目录 `ops/userTestXxx`（实体名 lcfirst 驼峰化）；路由名 `ops.UserTestXxx`（目录段小写原样、实体段 PascalCase，对齐 PHP 实际 URL 形态如 `/admin/country.LanguageContent/index`）；菜单/权限 name `ops/userTestXxx`（与 views 目录同形、斜杠连接，与框架既有菜单一致）；Go 类型名 PascalCase（`UserTestXxxHandler`、`UserTestXxxRepository`）。
-- 只有需要比"分类/实体"两级更深的业务子目录时，才使用 `/` 或 `.` 分隔符（两者等价）：`ops/user/test_xxx` -> 仓库/DTO/handler `internal/admin/{repository,dto,handler}/ops/user/test_xxx.go`、views `ops/user/testXxx`、路由 `ops.user.TestXxx`、菜单 `ops/user/testXxx`；实体仍扁平落 `internal/model/test_xxx.go`。显式路径末段原样保留（写蛇形得蛇形文件、写驼峰得驼峰文件），views 叶子始终 lcfirst 驼峰化。
-- 不要把实体名拆成多段（`ops.user.test.xxx` 会变成 `ops/user/test/xxx` 四层结构，菜单和路由同样变深）。分类应为单词；多词分类（如 `order_center`）写显式路径 `order_center/recharge`。一段表（无分类前缀）允许生成、落在根级，但属于反模式。
-- `generateRelativePath` 只填充缺失的路径；每个显式 `modelFile`、`controllerFile`、`webViewsDir` 都覆盖 shorthand。`modelFile` 的合法根是 `internal/model`，它同时推导实体名与仓库/DTO 的落点：实体只取路径末段、扁平落 `internal/model/<末段>.go`，仓库/DTO 按路径段落 `internal/admin/{repository,dto}/`；历史布局前缀（`internal/admin/model`、`internal/common/model` 等）会自动剥离后按新布局解析。Go `handler` 是 PHP controller 等价物。
+- 业务表命名约定：表名首段是业务分类（也是 views 目录的分类段），其余段是实体名（蛇形）。**`generateRelativePath` 必须显式设置，标准值就是表名本身**（生成器对省略的兜底默认也是表名，但 spec 不依赖省略——显式写出让 views/菜单/路由形态一目了然）；单段输入在第一个下划线处拆一次，左侧为目录、右侧为实体名（实体名内的下划线保留）：`ops_user_test_xxx` -> 目录 `ops` + 实体 `user_test_xxx`；`ops_banner` -> `ops` + `banner`。
+- Go 侧产物落点与路径段无关：五类产物全部"文件名=表名"落单包（以表名 `order_item` 为例，实体名 `OrderItem`）：
+  - 实体（贫血共享记录层）：`internal/model/order_item.go`，包名恒为 `model`；
+  - 仓库：`internal/admin/repository/order_item.go`，包名恒为 `repository`，类型 `OrderItemRepository`、构造 `NewOrderItemRepository`，基于 `internal/pkg/persistence` 的 `BaseModel`；
+  - 请求 DTO：`internal/admin/dto/order_item.go`，包名恒为 `dto`；
+  - handler：`internal/admin/handler/order_item.go`，包名恒为 `handler`；
+  - 路由注册器：`internal/admin/router/order_item.go`，包名恒为 `router`，类型 `OrderItemRegistrar`（不再生成 `<name>_route.go`）。
+- 共享 provider 与锚点：仓库、handler 的合并 ProviderSet 落在 `internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`（生成器逐项追加 `NewXxxRepository`/`NewXxxHandler`）；路由注册器经 `internal/admin/router/provider.go` 挂载——合并 ProviderSet 追加 `NewXxxRegistrar`，`ProvideRegistrars` 锚点增加一行 handler 参数与一行返回条目，再经 `AdminRouter` 注入挂载 /admin/*。生成器不再修改 `cmd/server/wire.go`。
+- views 与命名仍由 `generateRelativePath` 推导（以 `ops_user_test_xxx` 为例）：views 目录 `web/src/views/backend/ops/userTestXxx`（实体名 lcfirst 驼峰化）；路由名 `ops.UserTestXxx`（目录段小写原样、实体段 PascalCase，对齐 PHP 实际 URL 形态如 `/admin/country.LanguageContent/index`）；菜单/权限 name `ops/userTestXxx`（与 views 目录同形、斜杠连接，与框架既有菜单一致）。
+- 只有需要比"分类/实体"两级更深的 views 子目录时，才使用 `/` 或 `.` 分隔符（两者等价）：`ops/user/test_xxx` -> views `ops/user/testXxx`、路由 `ops.user.TestXxx`、菜单 `ops/user/testXxx`；Go 产物位置不受影响（仍按表名落单包）。显式路径末段原样保留（写蛇形得蛇形 views 目录、写驼峰得驼峰），views 叶子始终 lcfirst 驼峰化。
+- 不要把实体名拆成多段（`ops.user.test.xxx` 会让 views/菜单/路由变深）。分类应为单词；多词分类（如 `order_center`）写显式路径 `order_center/recharge`。一段表（无分类前缀）允许生成，但属于反模式。
+- `webViewsDir` 显式覆盖 shorthand 的 views 推导；`modelFile`/`controllerFile` 为历史键，只做安全校验与兼容（旧布局前缀自动剥离后仍可解析实体名），不再影响任何 Go 产物落点。Go `handler` 是 PHP controller 等价物。
 
 ```yaml
 generateRelativePath: ops_user_test_xxx
-# 默认推导:
+# Go 产物落点（与 generateRelativePath 无关，文件名=表名）:
 # 实体 -> internal/model/user_test_xxx.go
-# 仓库 -> internal/admin/repository/ops/user_test_xxx.go
-# 请求 DTO -> internal/admin/dto/ops/user_test_xxx.go
-# handler -> internal/admin/handler/ops/user_test_xxx.go（含 user_test_xxx_route.go）
-# webViewsDir -> web/src/views/backend/ops/userTestXxx
+# 仓库 -> internal/admin/repository/user_test_xxx.go
+# 请求 DTO -> internal/admin/dto/user_test_xxx.go
+# handler -> internal/admin/handler/user_test_xxx.go
+# 路由注册器 -> internal/admin/router/user_test_xxx.go
+# webViewsDir（由 generateRelativePath 推导）-> web/src/views/backend/ops/userTestXxx
 modelFile: internal/model/custom/model.go
-# 显式覆盖后（实体名取路径末段）:
-# 实体 -> internal/model/model.go（扁平，中间目录段不产生实体子目录）
-# 仓库 -> internal/admin/repository/custom/model.go
-# 请求 DTO -> internal/admin/dto/custom/model.go
-# handler -> internal/admin/handler/ops/user_test_xxx.go（不受 modelFile 影响）
-# webViewsDir -> web/src/views/backend/ops/userTestXxx
+# 显式 modelFile 仅做安全校验与兼容，上述 Go 产物落点不变
 ```
 
 当前应用只有一条 DI `*gorm.DB`，所以 `databaseConnection` 省略、空值和 `mysql` 都是 `mysql`；`postgres`、`analytics` 等未知值失败，不要暗示支持多 DB。
@@ -391,7 +389,7 @@ modelFile: internal/model/custom/model.go
 
 远程下拉至少应配置 `remoteTable`、`remotePk`、`remoteField`、`relationFields` 和合适的 source type。对单值 `remoteSelect` 和多值 `remoteSelects`，`relationFields` 已用于 List/GetOne 的标签 enrichment：生成器会生成只含 remote PK 和这些字段的 slim DTO、主行上的指针关系字段，以及每个关系每页一次的批量查询；不会 preload 整个 remote model，也不会 JOIN 或应用 relation-side data scope。
 
-`remoteField` 是 select endpoint 返回的 option label key；`relationFields` 是生成 nested DTO 和 relation display column 使用的真实远程表列名，两者可以不同。`relationFields` 必须能在生成时从 `remoteTable` 的 introspected columns 中找到，未知列会使生成失败。字段名本身不会自动推断关系，也不能用概念上的列名替代实际 payload/表列；`remoteController` 必须指向真实 handler 文件，`remoteModel` 必须指向共享实体（`internal/model/<entity>.go`，扁平；历史 `internal/admin/model/...` 前缀自动剥离），不能虚构 `remoteUrl`。
+`remoteField` 是 select endpoint 返回的 option label key；`relationFields` 是生成 nested DTO 和 relation display column 使用的真实远程表列名，两者可以不同。`relationFields` 必须能在生成时从 `remoteTable` 的 introspected columns 中找到，未知列会使生成失败。字段名本身不会自动推断关系，也不能用概念上的列名替代实际 payload/表列；`remoteController` 必须指向真实 handler 文件（`internal/admin/handler/<table>.go`），`remoteModel` 必须指向共享实体（`internal/model/<table>.go`，文件名=表名；历史布局前缀自动剥离），不能虚构 `remoteUrl`。
 
 ### FK 列自动隐藏规则
 
@@ -412,7 +410,7 @@ modelFile: internal/model/custom/model.go
     remoteField: username
     relationFields: username
     remoteSourceConfigType: crud
-    remoteController: internal/admin/handler/auth/admin.go
+    remoteController: internal/admin/handler/admin.go
   table:
     label: 上级代理
     comSearchRender: remoteSelect
@@ -432,7 +430,7 @@ modelFile: internal/model/custom/model.go
     remoteField: nickname
     relationFields: nickname,email
     remoteSourceConfigType: crud
-    remoteController: internal/admin/handler/auth/admin.go
+    remoteController: internal/admin/handler/admin.go
   table:
     comSearchRender: remoteSelect
     show: "false"
@@ -471,13 +469,13 @@ form:
   remoteField: nickname_text
   relationFields: username
   remoteSourceConfigType: crud
-  remoteController: internal/admin/handler/user/user.go
+  remoteController: internal/admin/handler/user.go
   remoteModel: internal/model/user.go
 ```
 
 ### custom 来源
 
-custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`；例如管理员选择接口 `/admin/auth.Admin/index`。不要填写仓库中未注册的路由。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从仓库 route 注册表反查 handler URL，查不到再按路径回退，因此 PHP controller 的动态 URL、插件权限、自定义组件和全部运行时 join 语义不保证一致。
+custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`；例如管理员选择接口 `/admin/auth.Admin/index`。不要填写仓库中未注册的路由。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从 `internal/admin/router/<table>.go` 的注册器反查路由常量（按控制器文件名的 stem 匹配），查不到再按路径回退，因此 PHP controller 的动态 URL、插件权限、自定义组件和全部运行时 join 语义不保证一致。
 
 ## 请求与时间字段 JSON 契约
 
@@ -616,7 +614,7 @@ fields:
       remoteField: username
       relationFields: username
       remoteSourceConfigType: crud
-      remoteController: internal/admin/handler/auth/admin.go
+      remoteController: internal/admin/handler/admin.go
       remoteModel: internal/model/admin.go
   - name: order_no
     type: varchar

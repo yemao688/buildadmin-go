@@ -71,10 +71,17 @@ pnpm build
 ## 目录结构
 
 ```text
-app/                 业务、命令、公共组件与中间件
-cmd/server/             应用入口及 Wire wiring
-router/              Gin 路由注册（/admin 与 /api）
-database/migrations/ 三轨迁移（official/framework/business）、迁移模型与内部迁移基础设施
+cmd/server/          应用入口及 Wire wiring（wire.go/wire_gen.go）
+internal/            全部私有代码（两渠道 + 共享内核）
+  admin/             后台渠道：repository/dto/handler/router 均为单包（文件名=表名）、
+                     middleware（登录/权限/安全审计）、validate
+  api/               门户/公共渠道：service/middleware/dto/repository/handler/router
+  model/             共享贫血实体记录层（含 projection/ 投影子包）
+  common/            跨渠道领域服务（money/siteconfig/area/country/upload）
+  pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper 等）
+  middleware/        真·全局中间件
+  router/            根装配件（组合两渠道 + 全局中间件 + 静态资源）
+  conf/ database/ infra/ utils/ cmd/ i18n/  配置、三轨迁移、连接初始化、工具、命令、本地化
 configs/config.defaults.yaml 运行基座（完整默认配置）
 configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）
@@ -83,13 +90,12 @@ web/                 Vue/Vite 前端源码
 public/              发布到镜像中的前端和运行时静态资源
 crud_specs/          AI CRUD 生成 YAML
 docs/                开发文档
-tests/               测试支持代码
 runtime/             运行时日志和临时文件
 ```
 
 ## AI 驱动 CRUD 模块生成
 
-生成业务模块前，先阅读 [`docs/crud-generation.md`](docs/crud-generation.md)，再将规范写入 `crud_specs/`，使用内置链路，不要手写 model、handler 或 Vue 脚手架：
+生成业务模块前，先阅读 [`docs/crud-generation.md`](docs/crud-generation.md)，再将规范写入 `crud_specs/`，使用内置链路，不要手写实体、仓库、handler、registrar 或 Vue 脚手架：
 
 ```bash
 go run ./cmd/server crud:validate crud_specs/<module>.yaml
@@ -101,7 +107,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 
 ## 迁移、生成文件与测试注意事项
 
-- 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
+- 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`internal/database/migrations/business/README.md`](internal/database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/server/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试由 `configs/config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
@@ -115,13 +121,13 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - 订单类：`order_recharge`、`order_withdraw`
 - 用户类：`user_wallet`、`user_level`
 
-多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，标准值就是表名本身：首段是业务分类（也是生成目录），其余段是实体名；Go 文件保持蛇形原样，视图目录 lcfirst 驼峰化，路由实体段 PascalCase（对齐 PHP 上游 URL 形态），菜单/权限名与视图目录同形。五个产物的完整推导规则、更深子目录用法和 `webViewsDir` 覆盖项见 [`AGENTS.md`](AGENTS.md) 业务最佳实践一节，示例见 `crud_specs/country_language_content.yaml`。
+多段式表名在 CRUD 规范里显式设置 `generateRelativePath`，标准值就是表名本身：首段是业务分类（也是 views 目录的分类段），其余段是实体名。Go 侧五类产物（实体/仓库/DTO/handler/路由注册器）全部按"文件名=表名"落单包（`internal/model`、`internal/admin/{repository,dto,handler,router}`），不再生成 `_route.go`；`generateRelativePath` 只决定 views 目录（lcfirst 驼峰化）与菜单/路由名（实体段 PascalCase，对齐 PHP 上游 URL 形态）。完整推导规则见 [`AGENTS.md`](AGENTS.md) 业务最佳实践一节，示例见 `crud_specs/country_language_content.yaml`。
 
 **CRUD 模块按双 commit 工作流提交**：生成 commit 只含 spec 与全部生成产物（纯生成器输出，message 标注框架版本），业务微调一律独立 commit 并写明动机；重新生成后 `git diff` 对照微调 commit 逐条回补。完整规则与 round-trip 校验见 [`AGENTS.md`](AGENTS.md)。
 
 ### 业务迁移：只加文件，不动框架
 
-业务表结构变更只写进 `database/migrations/business/`，由 `Register`/`init` 注册；完整的台账、回滚和幂等契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `framework/`。
+业务表结构变更只写进 `internal/database/migrations/business/`，由 `Register`/`init` 注册；完整的台账、回滚和幂等契约见 [`internal/database/migrations/business/README.md`](internal/database/migrations/business/README.md)。不要把业务表加进 `official/` 或 `framework/`。
 
 ### 权限体系：直接在 admin 上建模，不要新建认证表
 
