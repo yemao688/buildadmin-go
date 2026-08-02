@@ -1,7 +1,6 @@
 package querybuilder
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v3"
 )
 
 func queryContext(rawQuery string) *gin.Context {
@@ -20,11 +20,11 @@ func queryContext(rawQuery string) *gin.Context {
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
 	ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/conf/localize",
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
-		UnmarshalFunc:    json.Unmarshal,
-		FormatBundleFile: "json",
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
 	}))(ctx)
 	return ctx
 }

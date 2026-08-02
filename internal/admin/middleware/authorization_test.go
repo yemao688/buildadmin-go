@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -77,11 +78,11 @@ func (f *authorizationFixture) request(t *testing.T, path string, uid int32) *ht
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/conf/localize",
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
-		UnmarshalFunc:    json.Unmarshal,
-		FormatBundleFile: "json",
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
 	})))
 	router.Use(func(c *gin.Context) {
 		c.Set("AdminAuth", header.AdminAuth{Id: uid})

@@ -23,6 +23,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -106,11 +107,11 @@ func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *g
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/conf/localize",
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
-		UnmarshalFunc:    json.Unmarshal,
-		FormatBundleFile: "json",
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
 	})))
 	router.Use(record.Handler())
 	router.POST("/admin/Index/login", handler.Login)

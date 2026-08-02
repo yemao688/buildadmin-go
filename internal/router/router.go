@@ -1,11 +1,11 @@
 package router
 
 import (
-	"encoding/json"
 	admin "buildadmin-go/internal/admin/handler"
 	adminRouter "buildadmin-go/internal/admin/router"
 	api "buildadmin-go/internal/api/handler"
 	apiRouter "buildadmin-go/internal/api/router"
+	"buildadmin-go/internal/i18n"
 	"buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/utils"
 	"net/http"
@@ -14,7 +14,6 @@ import (
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/text/language"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -36,13 +35,7 @@ func InitRouter(
 		gin.Logger(),
 		middleware.CustomRecovery(loggerWriter),
 		//开启多语言
-		ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-			RootPath:         utils.RootPath() + "/internal/conf/localize",
-			AcceptLanguage:   []language.Tag{language.Chinese, language.TraditionalChinese, language.English},
-			DefaultLanguage:  language.Chinese,
-			UnmarshalFunc:    json.Unmarshal,
-			FormatBundleFile: "json",
-		}), ginI18n.WithGetLngHandle(
+		ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg(utils.RootPath())), ginI18n.WithGetLngHandle(
 			func(context *gin.Context, defaultLng string) string {
 				lng := context.Request.Header.Get("think-lang")
 				if lng == "" {

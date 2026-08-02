@@ -17,6 +17,7 @@ import (
 	"buildadmin-go/internal/utils"
 	"go.uber.org/zap"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v3"
 )
 
 func TestScheduleProcessExitUsesZeroExitCode(t *testing.T) {
@@ -77,11 +78,11 @@ func commandExecCompleteRequest(t *testing.T, handler *InstallHandler, body stri
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/conf/localize",
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
-		UnmarshalFunc:    json.Unmarshal,
-		FormatBundleFile: "json",
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
 	})))
 	router.POST("/api/install/commandExecComplete", handler.CommandExecComplete)
 	recorder := httptest.NewRecorder()

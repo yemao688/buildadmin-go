@@ -78,7 +78,7 @@ database/migrations/ 三轨迁移（official/framework/business）、迁移模�
 configs/config.defaults.yaml 运行基座（完整默认配置）
 configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）
-conf/                本地化资源（conf/localize/）
+internal/i18n/locales/ 本地化资源（YAML 语言包）
 web/                 Vue/Vite 前端源码
 public/              发布到镜像中的前端和运行时静态资源
 crud_specs/          AI CRUD 生成 YAML

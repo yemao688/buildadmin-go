@@ -1,0 +1,172 @@
+Group Name Arr: 'administrator Grouping '
+Please use another administrator account to disable the current account!: disable the current account, please use another administrator account!
+You have no permission to add an administrator to this group!: You have no permission to add an administrator to this group!
+Super administrator: super administrator
+No permission: no permission
+You cannot modify your own management group!: you cannot modify your own management group!
+Dashboard remark: Open source equals mutual assistance, and needs everyone's support. There are many ways to support it, such as using, recommending, writing tutorials, protecting the ecology, contributing code, answering questions, sharing experiences, donation, sponsorship and so on. Welcome to join us!
+Rule Type: rule type
+Rule Title: rule title
+Rule Name: rule name
+Change-field-name fail not exist: field {{.field}} failed to be renamed because the field does not exist in the data table
+Del-field fail not exist: failed to delete field {{.field}} because the field does not exist in the data table
+Change-field-attr fail not exist: description Failed to modify the properties of field {{.field}} because the field does not exist in the data table
+Add-field fail exist: failed to add field {{.field}} because the field already exists in the data table
+Please input correct username: please enter the correct username
+Please input correct password: please enter the correct password
+Avatar modified successfully!: profile picture modified successfully！
+Attachment Remark: when the same file is uploaded multiple times, only one copy will be saved to the disk and an attachment record will be added; Deleting an attachment record will automatically delete the corresponding file!
+'{num} records and files have been deleted': '{{.num}} records and files have been deleted'
+Basics: basic configuration
+Mail: mail configuration
+Config group: configure grouping
+Site Name: site name
+Config Quick entrance: quick configuration entrance
+Record number: record Number
+Version number: version Number
+time zone: time zone
+No access ip: no access IP
+smtp server: sMTP server
+smtp port: sMTP port
+smtp user: sMTP username
+smtp pass: sMTP password
+smtp verification: sMTP verification mode
+smtp sender mail: sMTP sender mailbox
+Variable name: variable name
+Test mail sent successfully~: test message sent successfully
+This is a test email: this is a test email
+Congratulations, receiving this email means that your email service has been configured correctly: congratulations, when you receive this email, it means that your mail service is configures correctly. This is the email subject, <b>you can use HtmlL!</b> in the main body.
+Controller: controller
+Data Table: corresponding data table
+Primary Key: data table primary key
+No rows were restore: no records have been restored
+Data Fields: sensitive data fields
+No rows were rollback: no records have been roll-back
+User_id: user
+Money: change amount
+Memo: change Notes
+The user can't find it: user does not exist
+Change note cannot be blank: change Notes cannot be empty
+Score: change points
+Failed to switch package manager. Please modify the configuration file manually:{content}: failed to switch package manager, please modify the configuration file manually:{{.content}}
+Failed to modify the terminal configuration. Please modify the configuration file manually:{content}: failed to modify the terminal configuration, please modify the configuration file manually:{{.content}}
+Upload: upload files
+ChangeTerminalConfig: modify terminal configuration
+Data table does not exist: data table does not exist
+No background menu, please contact super administrator!: no background menu, please contact the super administrator!
+You have already logged in. There is no need to log in again~: you have already logged in, no need to log in again.
+Login succeeded!: login successful!
+Incorrect user name or password!: incorrect username or password!
+Login: login
+Logout: logout
+Login expired, please login again.: Login expired, please login again.
+Please login first: Please login first
+You have no permission: You have no permission to operate
+Username: Username
+Password: Password
+Nickname: Nickname
+Email: Email
+Mobile: Mobile Number
+Captcha: Captcha
+CaptchaId: Captcha Id
+Please enter the correct verification code: Please enter the correct Captcha!
+Captcha error: Captcha error!
+Parameter {name} can not be empty: Parameter {{.name}} can not be empty
+Record not found: Record not found
+No rows were added: No rows were added
+No rows were deleted: No rows were deleted
+No rows updated: No rows updated
+Update successful: Update successful!
+Added successfully: Added successfully!
+Deleted successfully: Deleted successfully!
+Parameter error: Parameter error!
+Invalid collation because the weights of the two targets are equal: Invalid sort, because these two target weight is equal.
+File uploaded successfully: File uploaded successfully
+No files were uploaded: No files were uploaded
+The uploaded file format is not allowed: The uploaded file format is no allowance.
+The uploaded image file is not a valid image: The uploaded image file is not a valid image
+The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: The uploaded file is too large ({{.min}}MiB), maximum file size:{{.max}}MiB
+No files have been uploaded or the file size exceeds the upload limit of the server: No files have been uploaded or the file size exceeds the server upload limit.
+Unknown: Unknown
+Account not exist: Account does not exist
+Account disabled: Account is disabled
+Token login failed: Token login failed
+Username is incorrect: Incorrect username
+Please try again after 1 day: The number of login failures exceeds the limit, please try again after 24 hours
+Password is incorrect: Wrong password
+You are not logged in: You are not logged in
+Cache cleaned~: The cache has been cleaned up, please refresh the page.
+username: Username
+nickname: Nickname
+birthday: Birthday
+email: E-mail
+mobile: Mobile Number
+password: Password
+captcha: Captcha
+Old password error: Old password error
+Data updated successfully~: Data updated successfully
+nicknameChsDash: Usernames can only be Chinese characters, letters, numbers, underscores_ and dashes-.
+Password has been changed~: Password has been changed~
+Password has been changed, please login again~: Password has been changed, please login again~
+Failed to modify password, please try again later~: Failed to modify password, please try again later~
+'{account} has been registered': '{{.account}} has been registered, please login directly.'
+email format error: email format error
+user_register: Member registration verification
+user_retrieve_pwd: Retrieve password verification
+user_change_email: Modify mailbox validation
+user_email_verify: Member Email Verification
+'Your verification code is: {content}': 'Your Captcha is: {{.content}}，valid for 10 minutes~'
+Mail sent successfully~: Mail sent successfully
+Account does not exist~: Account does not exist
+Mail sending service unavailable: The mail sending service is not working, please contact the webmaster to configure it.
+Frequent email sending: Frequent email sending
+Email has been registered, please log in directly: Email has been registered, please log in directly~
+The email has been occupied: The email has been occupied
+Email not registered: Email not registered
+Install the controller: Install the controller
+need: Need
+Click to see how to solve it: Click to see how to solve.
+Please check the config directory permissions: Please check the Config directory permissions
+Please check the public directory permissions: Please check the Public directory permissions
+open: Open
+close: Close
+The installation can continue, and some operations need to be completed manually: 'You can continue to install, and some operations need to be completed manually '
+Allow execution: Allow execution
+disabled: Disabled
+Allow operation: Allow operation
+Acquisition failed: Access failed
+Click Install {content}: Click Install {{.content}}
+Writable: Writable
+No write permission: No write permissions
+already installed: Installed
+Not installed: Not installed
+Mysqli extension for PHP is required: Need Mysqli and PDO extensions of PHP.
+File has no write permission:{content}: File has no write permission:{{.content}}
+The system has completed installation. If you need to reinstall, please delete the {content} file first: The system has been installed, if you need to reinstall, please delete the {{.content}} file first.
+Database connection failed:{content}: Database connection failure：{{.content}}
+Failed to install SQL execution:{content}: Installation SQL execution failed：{{.content}}
+unknown: Unknown
+Database does not exist: Database does not exist!
+No built front-end file found, please rebuild manually!: No built front-end file found, please rebuild manually.
+Failed to move the front-end file, please move it manually!: Failed to move the front-end file, please move manually！
+How to solve?: How to solve?
+View reason: View reasons
+Click to view the reason: Click to see the reason
+PDO extensions need to be installed: PDO extensions need to be installed.
+proc_open or proc_close functions in PHP Ini is disabled: proc_open and proc_close functions in PHP.Ini is disabled.
+How to modify: How to modify?
+Click to view how to modify: Click to see how to modify.
+Security assurance?: Security assurance?
+Using the installation service correctly will not cause any potential security problems. Click to view the details: The correct use of the installation service will not cause any potential security issues. Click to view the details.
+Please install NPM first: Please install NPM first.
+Installation error:{content}: Installation error：{{.content}}
+Please upgrade {content} version: Please upgrade the {{.content}} version
+nothing: Nothing
+The gd extension and freeType library need to be installed: The gd2 extension and freeType library need to be installed
+captchaId: Captcha ID
+Registration parameter error: Wrong registration parameter
+Check in failed, please try again or contact the website administrator~: Check in failed，please try again or contact the webmaster.
+Member center disabled: The member centre has been disabled, please contact the webmaster to turn it on.
+Invalid token: Invalid Token!
+Unknown operation: Unknown operation
+No action available, please contact the administrator~: There is no action available, please contact the administrator~

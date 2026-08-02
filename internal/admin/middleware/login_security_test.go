@@ -20,6 +20,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/language"
+	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -45,11 +46,11 @@ func (d loginSecurityTokenDriver) Clear(string, int32) error              { retu
 func newLoginSecurityRouter(handler gin.HandlerFunc) *gin.Engine {
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/conf/localize",
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
-		UnmarshalFunc:    json.Unmarshal,
-		FormatBundleFile: "json",
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
 	})))
 	router.Use(handler)
 	router.GET("/", func(c *gin.Context) { c.Status(http.StatusNoContent) })
