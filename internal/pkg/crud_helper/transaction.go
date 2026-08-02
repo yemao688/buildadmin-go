@@ -64,7 +64,7 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 		}
 	}
 	for _, path := range manifest.Shared {
-		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/router", "cmd/app"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/router", "cmd/server"); err != nil {
 			return FileManifest{}, err
 		}
 	}
@@ -99,7 +99,7 @@ func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field)
 		return FileManifest{}, err
 	}
 	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
-		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal", "internal/router", "cmd/app"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal", "internal/router", "cmd/server"); err != nil {
 			return FileManifest{}, err
 		}
 	}

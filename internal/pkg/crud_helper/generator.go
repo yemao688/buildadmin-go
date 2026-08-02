@@ -639,7 +639,7 @@ func validateSharedManifestPath(path string) error {
 		}
 	}
 	if filepath.Base(path) != "provider.go" {
-		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/app/wire.go, or cmd/app/wire_gen.go")
+		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/server/wire.go, or cmd/server/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
 		"internal/admin/repository", "internal/admin/handler",
@@ -1121,7 +1121,7 @@ var runWire = executeWire
 func executeWire() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	// 与 cmd/app 的 //go:generate 声明一致，经 go run 运行 wire，不要求开发机单独安装 wire 二进制。
+	// 与 cmd/server 的 //go:generate 声明一致，经 go run 运行 wire，不要求开发机单独安装 wire 二进制。
 	cmd := exec.CommandContext(ctx, "go", "run", "-mod=mod", "github.com/google/wire/cmd/wire")
 	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
 	output, err := cmd.CombinedOutput()

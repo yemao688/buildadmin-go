@@ -279,7 +279,7 @@ func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
 	if len(manifest.Generated) != 0 || len(manifest.Shared) != len(paths) {
 		t.Fatalf("shared shape reclassification = %+v", manifest)
 	}
-	relative, err := normalizeDeleteManifest(FileManifest{Generated: []string{"internal/admin/model/legacy/provider.go", "internal/router/registrar_set.go", "cmd/app/wire_gen.go"}})
+	relative, err := normalizeDeleteManifest(FileManifest{Generated: []string{"internal/admin/model/legacy/provider.go", "internal/router/registrar_set.go", "cmd/server/wire_gen.go"}})
 	if err != nil {
 		t.Fatal(err)
 	}

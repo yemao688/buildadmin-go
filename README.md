@@ -14,7 +14,7 @@
 - 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
 - 包管理：`pnpm`，不要使用 npm。
 - 应用端口和时区：只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`，默认分别为 `9900` 和 `Asia/Shanghai`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制，已有环境变量不会被覆盖。
-- 可选工具：Air 用于后端开发热重载。Wire 无需单独安装——`go generate ./cmd/app` 与 `crud:generate` 均通过 `go run` 按模块依赖运行 wire。
+- 可选工具：Air 用于后端开发热重载。Wire 无需单独安装——`go generate ./cmd/server` 与 `crud:generate` 均通过 `go run` 按模块依赖运行 wire。
 
 ```bash
 go install github.com/air-verse/air@latest
@@ -35,10 +35,10 @@ go install github.com/air-verse/air@latest
 
    ```bash
    air
-   # 或：go run ./cmd/app
+   # 或：go run ./cmd/server
    ```
 
-   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/app --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
+   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/server --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
 2. 启动前端（必须在 `web/` 目录执行）：
 
    ```bash
@@ -59,8 +59,8 @@ go install github.com/air-verse/air@latest
 # 项目根目录
 go build ./...
 go test ./path/to/package -run '^TestName$'
-go run ./cmd/app --conf config.yaml migrate
-go generate ./cmd/app                 # Wire 相关变更后
+go run ./cmd/server --conf config.yaml migrate
+go generate ./cmd/server                 # Wire 相关变更后
 
 # web/ 目录
 pnpm lint
@@ -72,7 +72,7 @@ pnpm build
 
 ```text
 app/                 业务、命令、公共组件与中间件
-cmd/app/             应用入口及 Wire wiring
+cmd/server/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 三轨迁移（official/framework/business）、迁移模型与内部迁移基础设施
 config.defaults.yaml 根目录运行基座（完整默认配置）
@@ -92,9 +92,9 @@ runtime/             运行时日志和临时文件
 生成业务模块前，先阅读 [`docs/crud-generation.md`](docs/crud-generation.md)，再将规范写入 `crud_specs/`，使用内置链路，不要手写 model、handler 或 Vue 脚手架：
 
 ```bash
-go run ./cmd/app crud:validate crud_specs/<module>.yaml
-go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
-go run ./cmd/app --conf config.yaml crud:delete <table_name>
+go run ./cmd/server crud:validate crud_specs/<module>.yaml
+go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server --conf config.yaml crud:delete <table_name>
 ```
 
 生成失败时文件会自动恢复，但 MySQL DDL 不可回滚；执行前请检查数据库副作用和备份策略。
@@ -102,7 +102,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ## 迁移、生成文件与测试注意事项
 
 - 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
-- 不要手改 `cmd/app/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
+- 不要手改 `cmd/server/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
 - MySQL 集成测试由 `config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
 ## 业务开发最佳实践

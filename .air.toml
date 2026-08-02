@@ -5,9 +5,9 @@ root = "."
 tmp_dir = "runtime/tmp"
 
 [build]
-  # pre_cmd = ["cd ./cmd/app && wire.exe"]
+  # pre_cmd = ["cd ./cmd/server && wire.exe"]
   # Just plain old shell command. You could use `make` as well.
-  cmd = "go build -o ./runtime/tmp/main ./cmd/app"
+  cmd = "go build -o ./runtime/tmp/main ./cmd/server"
   # 不显式传 --conf：main.go 的 --conf 默认值本即根目录 config.yaml；显式传参会置 Changed 标记，
   # 文件缺失时触发硬 panic，导致全新检出/重装向导模式（无 config.yaml 以基座启动 /install）在 air 下无法进入。
   entrypoint = ["./runtime/tmp/main"]

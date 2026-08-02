@@ -100,12 +100,12 @@ git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 
 ```bash
 air
-# 或：go run ./cmd/app
+# 或：go run ./cmd/server
 ```
 
 启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
 
-也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/app --conf config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/app --conf config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
+也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/server --conf config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/server --conf config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
 
 **AI 协助安装：** 用户让 AI 帮忙安装时，AI 必须先向用户问询并收齐以下信息再开始执行，不要自行假设或先写配置：
 
@@ -121,7 +121,7 @@ air
 **手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。`config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
 ```bash
-go run ./cmd/app --conf config.yaml migrate
+go run ./cmd/server --conf config.yaml migrate
 ```
 
 根目录的 `config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
@@ -141,15 +141,15 @@ pnpm dev
 生成业务模块前必须先阅读 [`crud-generation.md`](crud-generation.md)，在 `crud_specs/` 编写模块 YAML，然后使用生成链：
 
 ```bash
-go run ./cmd/app crud:validate crud_specs/<module>.yaml
-go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server crud:validate crud_specs/<module>.yaml
+go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
 go build ./...
 ```
 
 不要手写生成的实体（`internal/model`）、仓库（`internal/admin/repository`）、handler、provider、router、Wire 或 Vue 脚手架。删除生成模块使用：
 
 ```bash
-go run ./cmd/app --conf config.yaml crud:delete <table_name>
+go run ./cmd/server --conf config.yaml crud:delete <table_name>
 ```
 
 删除命令不会 DROP 数据表；MySQL DDL 不可由文件回滚，生成和删除前都要确认数据库副作用。
@@ -179,7 +179,7 @@ git merge upstream/v2
 合并完成后，使用目标环境根目录的 `config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
 
 ```bash
-go run ./cmd/app --conf config.yaml migrate
+go run ./cmd/server --conf config.yaml migrate
 ```
 
 按改动范围验证，不把 `go test ./...` 作为默认门槛：
@@ -189,8 +189,8 @@ go run ./cmd/app --conf config.yaml migrate
 go test ./path/to/package -run '^TestName$'
 go build ./...
 
-# 只有 provider 或 cmd/app/wire.go 等 Wire 来源变化时
-go generate ./cmd/app
+# 只有 provider 或 cmd/server/wire.go 等 Wire 来源变化时
+go generate ./cmd/server
 go build ./...
 
 # web/ 目录
@@ -217,10 +217,10 @@ git push origin master
 | `VERSION_FRAMEWORK`、`CHANGELOG.md` | 框架拥有的发行版本文件和变更记录；冲突时取框架侧版本。 |
 | `VERSION` | 业务仓库自有的镜像/发布版本文件，框架永不提供；冲突时保留业务侧版本。 |
 | `internal/router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
-| `internal/router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/app`。 |
-| `internal/admin/handler/provider.go`、`internal/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
+| `internal/router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/server`。 |
+| `internal/admin/handler/provider.go`、`internal/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/server`。 |
 | provider 集合 | 合并双方 provider；来源解决后再按需要生成 Wire。 |
-| `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
+| `cmd/server/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/server` 重生成。 |
 | `internal/router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
 | `config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `config.yaml` 覆盖层，不要把凭据合入基座。 |
@@ -237,7 +237,7 @@ git push origin master
 
 路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：每个后台/API 模块由自己的 `<name>_route.go` registrar 承载——`Group()` 声明分组（`admin`/`api`/`root`）、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力；CRUD 生成器自动产出该文件并维护 `provider.go` 与 `internal/router/registrar_set.go` 的共享追加条目，`crud:delete` 反向移除。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./internal/router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `internal/router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
 
-以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`internal/router/router.go` 的既有框架区域、`internal/database/migrations/official/` 和 `internal/database/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
+以下区域尽量少改，以降低升级冲突：`cmd/server` wiring、`internal/router/router.go` 的既有框架区域、`internal/database/migrations/official/` 和 `internal/database/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
 ## AI agent 协议
 
@@ -245,11 +245,11 @@ git push origin master
 2. 开始前检查当前分支、remote 和工作树：`git branch --show-current`、`git remote -v`、`git status`。
 3. CRUD 必须先读 [`crud-generation.md`](crud-generation.md)，写 `crud_specs/*.yaml`，再运行 `crud:generate`；删除使用 `crud:delete`。
 4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
-5. 不手改 `cmd/app/wire_gen.go`、生成的实体/仓库或其它 generated 文件；修改来源后重新生成。
+5. 不手改 `cmd/server/wire_gen.go`、生成的实体/仓库或其它 generated 文件；修改来源后重新生成。
 6. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
 7. 不运行危险的 `go run ./cmd/generate`，除非明确检查其实现、DSN 和覆盖范围并得到专门确认。
 8. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
-9. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/app`，前端在 `web/` 执行 pnpm typecheck/build。
+9. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/server`，前端在 `web/` 执行 pnpm typecheck/build。
 
 ## 危险或错误做法
 

@@ -7,7 +7,7 @@
 //   - 模块 registrar 的 AtomicRoute 能力注册与路由挂载
 //
 // 启动权限诊断（Authorization.ReportUnprotectedRoutes）由组合根
-// cmd/app/main.go 在 debug 环境驱动，依赖本包持有的 Authorization 中间件。
+// cmd/server/main.go 在 debug 环境驱动，依赖本包持有的 Authorization 中间件。
 //
 // Record 中间件属于 admin 渠道实现，但按既有语义挂载在引擎全局链上；
 // 通过 RecordHandler 暴露给根装配件在全局 Use 序列中原位挂载。

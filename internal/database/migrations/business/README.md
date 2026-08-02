@@ -87,10 +87,10 @@ framework 台账名为 `migrations_framework`，同样使用这五列。业务�
 只有业务轨道支持回滚。使用以下命令：
 
 ```bash
-go run ./cmd/app --conf config.yaml migrate rollback [--steps N] [--to-breakpoint]
-go run ./cmd/app --conf config.yaml migrate breakpoint set <version>
-go run ./cmd/app --conf config.yaml migrate breakpoint clear
-go run ./cmd/app --conf config.yaml migrate breakpoint list
+go run ./cmd/server --conf config.yaml migrate rollback [--steps N] [--to-breakpoint]
+go run ./cmd/server --conf config.yaml migrate breakpoint set <version>
+go run ./cmd/server --conf config.yaml migrate breakpoint clear
+go run ./cmd/server --conf config.yaml migrate breakpoint list
 ```
 
 不带参数的 `migrate rollback` 默认回滚 `version` 最大且已完成的单条业务迁移。`--steps N` 最多回滚 N 条已完成迁移；`--to-breakpoint` 回滚所有 `version` 大于断点版本的已完成迁移，未设置断点时直接报错，二者不能同时使用。回滚执行 `Down` 成功后才删除对应台账行；如果被删除行带有断点标记，标记随行删除，不保留独立断点状态。

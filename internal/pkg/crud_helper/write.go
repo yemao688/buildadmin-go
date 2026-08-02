@@ -690,7 +690,7 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 	return canonicalizeGoContent(formatted), nil
 }
 
-// wireProviderSetRef 计算子包在 cmd/app/wire.go 中的 ProviderSet 引用。
+// wireProviderSetRef 计算子包在 cmd/server/wire.go 中的 ProviderSet 引用。
 // 根包（internal/admin/handler、internal/admin/repository、internal/admin/model、
 // internal/common/model 等）已在 wire.Build 静态聚合，无需处理。
 func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, needed bool, err error) {
@@ -731,7 +731,7 @@ func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, neede
 	return "buildadmin-go/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
 }
 
-// AddWireProviderSet 将子包 ProviderSet 聚合并入 cmd/app/wire.go（幂等）。
+// AddWireProviderSet 将子包 ProviderSet 聚合并入 cmd/server/wire.go（幂等）。
 func AddWireProviderSet(rootDir string) error {
 	importPath, alias, anchor, needed, err := wireProviderSetRef(rootDir)
 	if err != nil || !needed {
@@ -767,7 +767,7 @@ func addWireProviderSetEntry(content, importPath, alias, anchor string) (string,
 	return content[:insertAt] + setLine + content[insertAt:], nil
 }
 
-// RemoveWireProviderSet 从 cmd/app/wire.go 移除子包 ProviderSet 聚合（幂等）。
+// RemoveWireProviderSet 从 cmd/server/wire.go 移除子包 ProviderSet 聚合（幂等）。
 func RemoveWireProviderSet(rootDir string) error {
 	importPath, alias, _, needed, err := wireProviderSetRef(rootDir)
 	if err != nil || !needed {

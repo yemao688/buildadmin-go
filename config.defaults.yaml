@@ -91,13 +91,13 @@ terminal:
   commands:
     migrate:
       run:
-        cwd: 'cmd/app'
+        cwd: 'cmd/server'
         command: 'go run . --conf config.yaml migrate run'
       rollback:
-        cwd: 'cmd/app'
+        cwd: 'cmd/server'
         command: 'go run . --conf config.yaml migrate rollback'
       breakpoint:
-        cwd: 'cmd/app'
+        cwd: 'cmd/server'
         command: 'go run . --conf config.yaml migrate breakpoint'
     install:
       yarn:

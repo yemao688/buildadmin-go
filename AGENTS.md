@@ -39,7 +39,7 @@
 
 - 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
-- 真实入口和 wiring 是 `cmd/app/main.go`、`cmd/app/wire.go`、`internal/router/router.go`（组合者，挂载两渠道路由）与 `web/src/main.ts`；Cobra 命令位于 `internal/cmd/`。
+- 真实入口和 wiring 是 `cmd/server/main.go`、`cmd/server/wire.go`、`internal/router/router.go`（组合者，挂载两渠道路由）与 `web/src/main.ts`；Cobra 命令位于 `internal/cmd/`。
 - `config.defaults.yaml` 是根目录受跟踪的完整运行基座，启动时实际加载。根目录 `config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 
@@ -75,11 +75,11 @@
 
 ```bash
 # backend, repository root
-air                                    # builds ./cmd/app; serves on 9900
+air                                    # builds ./cmd/server; serves on 9900
 go build ./...
 go test ./path/to/package -run '^TestName$'
-go run ./cmd/app --conf config.yaml migrate
-go generate ./cmd/app                  # after provider or cmd/app/wire.go changes
+go run ./cmd/server --conf config.yaml migrate
+go generate ./cmd/server                  # after provider or cmd/server/wire.go changes
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
 pnpm install --frozen-lockfile
@@ -102,9 +102,9 @@ YAML 契约、字段/designType 规则、关系和时间字段 JSON 契约见 [`
 需要生成模块时，先阅读该文档、创建 `crud_specs/<module>.yaml`，再运行：
 
 ```bash
-go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
-go run ./cmd/app crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...]
-go run ./cmd/app --conf config.yaml crud:delete <table_name>
+go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...]
+go run ./cmd/server --conf config.yaml crud:delete <table_name>
 ```
 
 退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。
@@ -120,7 +120,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 - 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/database/migrations/business/README.md`。
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
-- 不要手改 `cmd/app/wire_gen.go`；provider 或 `cmd/app/wire.go` 变更后运行 `go generate ./cmd/app`。
+- 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
 - `go run ./cmd/generate` 有风险：它使用硬编码的本地 MySQL DSN，并可能相对于当前目录覆盖生成 model。运行前必须检查其实现。
 - 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；`database/migrations/model/*.gen.go` 已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
