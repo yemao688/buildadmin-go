@@ -2,7 +2,7 @@ package security
 
 import (
 	adminhandler "go-build-admin/internal/admin/handler"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	securitymodel "go-build-admin/internal/admin/repository/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
 
@@ -15,10 +15,10 @@ type SensitiveDataLogHandler struct {
 	adminhandler.Base
 	log               *zap.Logger
 	config            *conf.Configuration
-	sensitiveDataLogM *securitymodel.SensitiveDataLogModel
+	sensitiveDataLogM *securitymodel.SensitiveDataLogRepository
 }
 
-func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataLogM *securitymodel.SensitiveDataLogModel) *SensitiveDataLogHandler {
+func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataLogM *securitymodel.SensitiveDataLogRepository) *SensitiveDataLogHandler {
 	return &SensitiveDataLogHandler{
 		Base:              adminhandler.NewBase(sensitiveDataLogM),
 		log:               log,

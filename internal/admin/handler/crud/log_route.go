@@ -2,6 +2,7 @@
 package crud
 
 import (
+	adminmiddleware "go-build-admin/internal/admin/middleware"
 	"go-build-admin/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -20,7 +21,7 @@ const logRoute = "crud.Log"
 func (r *LogRegistrar) Group() string { return "admin" }
 
 func (r *LogRegistrar) Register(g gin.IRoutes) {
-	middleware.RegisterPermissionExempt("crud/log", "index")
+	adminmiddleware.RegisterPermissionExempt("crud/log", "index")
 	g.GET(logRoute+"/index", r.handler.Index)
 }
 

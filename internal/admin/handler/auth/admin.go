@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strconv"
 
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
@@ -26,11 +26,11 @@ import (
 type AdminHandler struct {
 	Base
 	log    *zap.Logger
-	adminM *adminmodel.AdminModel
-	authM  *adminmodel.AuthModel
+	adminM *adminmodel.AdminRepository
+	authM  *adminmodel.AuthRepository
 }
 
-func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminModel, authM *adminmodel.AuthModel) *AdminHandler {
+func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository) *AdminHandler {
 	return &AdminHandler{
 		Base:   NewBase(adminM),
 		log:    log,
@@ -251,7 +251,7 @@ func (h *AdminHandler) One(ctx *gin.Context) {
 }
 
 // MaybePartialEdit overrides Base.MaybePartialEdit so that switch-unit-cell
-// status updates run through the scoped, atomic AdminModel.SwitchStatus.
+// status updates run through the scoped, atomic AdminRepository.SwitchStatus.
 func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {

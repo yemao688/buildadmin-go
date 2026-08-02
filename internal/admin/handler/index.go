@@ -1,15 +1,15 @@
 package handler
 
 import (
-	adminauth "go-build-admin/internal/admin/model/auth"
-	routinemodel "go-build-admin/internal/admin/model/routine"
+	adminauth "go-build-admin/internal/admin/repository/auth"
+	routinemodel "go-build-admin/internal/admin/repository/routine"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/common/country"
 	"go-build-admin/internal/common/upload"
+	"go-build-admin/internal/conf"
 	"go-build-admin/internal/pkg/clickcaptcha"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
 	"net/http"
 
@@ -20,13 +20,13 @@ import (
 type IndexHandler struct {
 	config       *conf.Configuration
 	log          *zap.Logger
-	authM        *adminauth.AuthModel
-	configM      *routinemodel.ConfigModel
+	authM        *adminauth.AuthRepository
+	configM      *routinemodel.ConfigRepository
 	country      *country.Service
 	clickCaptcha *clickcaptcha.ClickCaptcha
 }
 
-func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *adminauth.AuthModel, configM *routinemodel.ConfigModel, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
+func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *adminauth.AuthRepository, configM *routinemodel.ConfigRepository, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
 	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, country: countryService, clickCaptcha: clickCaptcha}
 }
 

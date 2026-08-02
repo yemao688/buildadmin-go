@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
@@ -193,7 +193,7 @@ func TestSelectErrorIsHandled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := NewAdminHandler(nil, adminmodel.NewAdminModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}), nil)
+	h := NewAdminHandler(nil, adminmodel.NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}), nil)
 	data, matched, err := h.Select(ctx)
 	if !matched || err == nil || data != nil {
 		t.Fatalf("Select error result = (%v, %v, %v), want handled error", data, matched, err)

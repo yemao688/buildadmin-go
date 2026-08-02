@@ -1,7 +1,7 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
 
 	"github.com/gin-gonic/gin"
@@ -11,10 +11,10 @@ import (
 type AdminLogHandler struct {
 	Base
 	log       *zap.Logger
-	adminLogM *adminmodel.AdminLogModel
+	adminLogM *adminmodel.AdminLogRepository
 }
 
-func NewAdminLogHandler(log *zap.Logger, adminLogM *adminmodel.AdminLogModel) *AdminLogHandler {
+func NewAdminLogHandler(log *zap.Logger, adminLogM *adminmodel.AdminLogRepository) *AdminLogHandler {
 	return &AdminLogHandler{
 		Base: NewBase(adminLogM),
 		log:  log, adminLogM: adminLogM}

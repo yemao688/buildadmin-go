@@ -1,7 +1,7 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/tree"
@@ -16,11 +16,11 @@ import (
 type AdminRuleHandler struct {
 	Base
 	log        *zap.Logger
-	adminRuleM *adminmodel.AdminRuleModel
-	authM      *adminmodel.AuthModel
+	adminRuleM *adminmodel.AdminRuleRepository
+	authM      *adminmodel.AuthRepository
 }
 
-func NewAdminRuleHandler(log *zap.Logger, adminRuleM *adminmodel.AdminRuleModel, authM *adminmodel.AuthModel) *AdminRuleHandler {
+func NewAdminRuleHandler(log *zap.Logger, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository) *AdminRuleHandler {
 	return &AdminRuleHandler{
 		Base:       NewBase(adminRuleM),
 		log:        log,

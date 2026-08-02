@@ -1,6 +1,6 @@
 package model
 
-import "go-build-admin/internal/admin/model/simple"
+import "go-build-admin/internal/admin/repository/simple"
 
 // SecurityDataRecycleLog 数据回收记录表
 type SecurityDataRecycleLog struct {

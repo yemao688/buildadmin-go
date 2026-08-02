@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	adminauth "go-build-admin/internal/admin/model/auth"
-	"go-build-admin/internal/middleware"
+	adminmiddleware "go-build-admin/internal/admin/middleware"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/pkg/testutil"
@@ -63,7 +63,7 @@ func hashLoginTestPassword(t *testing.T) string {
 	return hash
 }
 
-func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware.Record) {
+func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *adminmiddleware.Record) {
 	t.Helper()
 	db, config := testutil.OpenMySQL(t)
 	prefix := "login_log_test_" + strconv.FormatInt(time.Now().UnixNano(), 10) + "_"
@@ -97,12 +97,12 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware
 	))
 
 	tokenHelper := token.NewTokenHelper(config, nil, db, nil)
-	authModel := adminauth.NewAuthModel(db, tokenHelper, config)
-	logModel := adminauth.NewAdminLogModel(db, config, authModel)
-	return db, NewIndexHandler(config, nil, authModel, nil, nil, nil), middleware.NewRecord(config, logModel)
+	authModel := adminauth.NewAuthRepository(db, tokenHelper, config)
+	logModel := adminauth.NewAdminLogRepository(db, config, authModel)
+	return db, NewIndexHandler(config, nil, authModel, nil, nil, nil), adminmiddleware.NewRecord(config, logModel)
 }
 
-func newLoginLogRouter(handler *IndexHandler, record *middleware.Record) *gin.Engine {
+func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{

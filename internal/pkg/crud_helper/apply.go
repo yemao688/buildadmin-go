@@ -2,9 +2,9 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/internal/admin/model"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	crudmodel "go-build-admin/internal/admin/model/crud"
+	model "go-build-admin/internal/admin/repository"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
 	"os"
@@ -204,7 +204,7 @@ func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts A
 	if opts.AdminID <= 0 {
 		opts.AdminID = 1
 	}
-	tableM := model.NewTableModel(cfg, db)
+	tableM := model.NewTableRepository(cfg, db)
 	results = make([]ApplyTableResult, 0, len(specPaths))
 	for _, path := range specPaths {
 		result, err := applyOneSpec(db, cfg, tableM, path, opts)
@@ -236,7 +236,7 @@ func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts Ap
 			retErr = releaseErr
 		}
 	}()
-	tableM := model.NewTableModel(cfg, db)
+	tableM := model.NewTableRepository(cfg, db)
 	for _, path := range specPaths {
 		result, err := planOneSpec(db, cfg, tableM, path, opts)
 		if err != nil {
@@ -262,7 +262,7 @@ func planBlockingError(results []ApplyTableResult, allowRebuild bool, approved m
 	return nil
 }
 
-func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
+func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepository, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
 	spec, err := LoadSpec(specPath)
 	if err != nil {
 		return nil, err
@@ -392,7 +392,7 @@ func primaryKeyDrift(actualPKs []string, fields []crudmodel.Field, columns []mod
 	return false, ""
 }
 
-func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
+func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepository, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
 	spec, err := LoadSpec(specPath)
 	if err != nil {
 		return nil, err
@@ -458,7 +458,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableModel
 	}
 	if !opts.SkipMenu {
 		webViewsDir := ParseWebDirNameData(spec.Table.Name, "views", spec.Table.WebViewsDir)
-		menuReport, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
+		menuReport, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), webViewsDir, spec.Table.Comment, spec.Menu)
 		if err != nil {
 			return nil, fmt.Errorf("menu sync: %w", err)
 		}

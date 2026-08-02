@@ -1,8 +1,9 @@
 package country
 
 import (
+	countrydto "go-build-admin/internal/admin/dto/country"
 	adminhandler "go-build-admin/internal/admin/handler"
-	countrymodel "go-build-admin/internal/admin/model/country"
+	countrymodel "go-build-admin/internal/admin/repository/country"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/validator"
@@ -15,10 +16,10 @@ import (
 type CurrencyHandler struct {
 	adminhandler.Base
 	log       *zap.Logger
-	currencyM *countrymodel.CurrencyModel
+	currencyM *countrymodel.CurrencyRepository
 }
 
-func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CurrencyModel) *CurrencyHandler {
+func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CurrencyRepository) *CurrencyHandler {
 	return &CurrencyHandler{Base: adminhandler.NewBase(currencyM), log: log, currencyM: currencyM}
 }
 
@@ -38,17 +39,8 @@ func (h *CurrencyHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type CurrencyParam struct {
-	Code   string               `json:"code"`   // 货币代码
-	Name   string               `json:"name"`   // 货币名称
-	Symbol string               `json:"symbol"` // 货币符号
-	Rate   validate.FlexFloat64 `json:"rate"`   // 汇率
-	Status validate.FlexInt32   `json:"status"` // 状态:0=禁用,1=启用
-	Weigh  validate.FlexInt32   `json:"weigh"`  // 权重
-}
-
 func (h *CurrencyHandler) Add(ctx *gin.Context) {
-	var params CurrencyParam
+	var params countrydto.CurrencyParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))
 		return
@@ -73,7 +65,7 @@ func (h *CurrencyHandler) Edit(ctx *gin.Context) {
 	}
 	var params = struct {
 		CurrencyIDs
-		CurrencyParam
+		countrydto.CurrencyParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))

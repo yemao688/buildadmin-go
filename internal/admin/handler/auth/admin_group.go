@@ -1,7 +1,7 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
@@ -21,12 +21,12 @@ import (
 type AdminGroupHandler struct {
 	Base
 	log         *zap.Logger
-	adminGroupM *adminmodel.AdminGroupModel
-	adminRuleM  *adminmodel.AdminRuleModel
-	authM       *adminmodel.AuthModel
+	adminGroupM *adminmodel.AdminGroupRepository
+	adminRuleM  *adminmodel.AdminRuleRepository
+	authM       *adminmodel.AuthRepository
 }
 
-func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupModel, adminRuleM *adminmodel.AdminRuleModel, authM *adminmodel.AuthModel) *AdminGroupHandler {
+func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository) *AdminGroupHandler {
 	return &AdminGroupHandler{
 		Base:        NewBase(adminGroupM),
 		log:         log,

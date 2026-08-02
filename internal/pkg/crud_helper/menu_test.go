@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	adminauth "go-build-admin/internal/admin/model/auth"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	"testing"
@@ -65,7 +65,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders"})
+	report, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		t.Fatal("custom button was removed or overwritten")
 	}
 
-	second, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders"})
+	second, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		}
 	}
 	weight := int32(11)
-	third, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders", Weigh: &weight})
+	third, err := SyncMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), dir, "Order management", &MenuOptions{Title: "Orders", Weigh: &weight})
 	if err != nil {
 		t.Fatal(err)
 	}

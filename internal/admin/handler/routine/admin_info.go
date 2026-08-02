@@ -2,7 +2,7 @@ package routine
 
 import (
 	adminhandler "go-build-admin/internal/admin/handler"
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/pkg/header"
 	"go-build-admin/internal/utils"
@@ -15,11 +15,11 @@ import (
 type AdminInfoHandler struct {
 	adminhandler.Base
 	log    *zap.Logger
-	adminM *adminmodel.AdminModel
-	authM  *adminmodel.AuthModel
+	adminM *adminmodel.AdminRepository
+	authM  *adminmodel.AuthRepository
 }
 
-func NewAdminInfoHandler(log *zap.Logger, adminM *adminmodel.AdminModel, authM *adminmodel.AuthModel) *AdminInfoHandler {
+func NewAdminInfoHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository) *AdminInfoHandler {
 	return &AdminInfoHandler{
 		Base:   adminhandler.NewBase(adminM),
 		log:    log,

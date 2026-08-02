@@ -1,6 +1,6 @@
 package model
 
-import "go-build-admin/internal/admin/model/simple"
+import "go-build-admin/internal/admin/repository/simple"
 
 // User 会员表
 type User struct {

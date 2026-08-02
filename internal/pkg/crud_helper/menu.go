@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	adminauth "go-build-admin/internal/admin/model/auth"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	model "go-build-admin/internal/model"
 	"strings"
 
@@ -35,25 +35,25 @@ func GetMenuName(webDir WebDir) string {
 	return content
 }
 
-func CreateMenu(adminRuleM *adminauth.AdminRuleModel, webViewsDir WebDir, tableComment string) error {
+func CreateMenu(adminRuleM *adminauth.AdminRuleRepository, webViewsDir WebDir, tableComment string) error {
 	return CreateMenuWithOptions(adminRuleM, webViewsDir, tableComment, nil)
 }
 
-func CreateMenuWithOptions(adminRuleM *adminauth.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) error {
+func CreateMenuWithOptions(adminRuleM *adminauth.AdminRuleRepository, webViewsDir WebDir, tableComment string, options *MenuOptions) error {
 	_, err := CreateMenuWithOptionsAndRecord(adminRuleM, webViewsDir, tableComment, options)
 	return err
 }
 
 // CreateMenuWithOptionsAndRecord preserves the generator rollback contract:
 // only newly created IDs are returned.
-func CreateMenuWithOptionsAndRecord(adminRuleM *adminauth.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) ([]int32, error) {
+func CreateMenuWithOptionsAndRecord(adminRuleM *adminauth.AdminRuleRepository, webViewsDir WebDir, tableComment string, options *MenuOptions) ([]int32, error) {
 	report, err := SyncMenuWithOptionsAndRecord(adminRuleM, webViewsDir, tableComment, options)
 	return report.CreatedIDs, err
 }
 
 // SyncMenuWithOptionsAndRecord updates only fields owned by the generator.
 // Downstream-owned icon/keepalive/extend/remark values are preserved.
-func SyncMenuWithOptionsAndRecord(adminRuleM *adminauth.AdminRuleModel, webViewsDir WebDir, tableComment string, options *MenuOptions) (report MenuSyncReport, retErr error) {
+func SyncMenuWithOptionsAndRecord(adminRuleM *adminauth.AdminRuleRepository, webViewsDir WebDir, tableComment string, options *MenuOptions) (report MenuSyncReport, retErr error) {
 	db := adminRuleM.DB().Table(adminRuleM.TableName)
 	menuName := GetMenuName(webViewsDir)
 	pid := int32(0)

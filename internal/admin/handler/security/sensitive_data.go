@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	adminhandler "go-build-admin/internal/admin/handler"
-	adminmodel "go-build-admin/internal/admin/model"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	adminmodel "go-build-admin/internal/admin/repository"
+	securitymodel "go-build-admin/internal/admin/repository/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
@@ -25,11 +25,11 @@ type SensitiveDataHandler struct {
 	adminhandler.Base
 	log            *zap.Logger
 	config         *conf.Configuration
-	sensitiveDataM *securitymodel.SensitiveDataModel
-	tableM         *adminmodel.TableModel
+	sensitiveDataM *securitymodel.SensitiveDataRepository
+	tableM         *adminmodel.TableRepository
 }
 
-func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SensitiveDataModel, tableM *adminmodel.TableModel) *SensitiveDataHandler {
+func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SensitiveDataRepository, tableM *adminmodel.TableRepository) *SensitiveDataHandler {
 	return &SensitiveDataHandler{
 		Base:           adminhandler.NewBase(sensitiveDataM),
 		log:            log,

@@ -3,9 +3,9 @@ package crud_helper
 import (
 	"context"
 	"fmt"
-	adminmodel "go-build-admin/internal/admin/model"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	crudmodel "go-build-admin/internal/admin/model/crud"
+	adminmodel "go-build-admin/internal/admin/repository"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
@@ -179,7 +179,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, fmt.Errorf("%s: %w", stage, cause)
 	}
 
-	tableM := adminmodel.NewTableModel(cfg, db)
+	tableM := adminmodel.NewTableRepository(cfg, db)
 	getTableName := func(name string, full bool) string { return tableM.Name(name, full) }
 	getColumns := func(name string) ([]adminmodel.Column, error) { return tableM.GetColumns(name) }
 	// 对齐上游:type=create 时若数据表已存在则先删除重建;
@@ -225,7 +225,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return fail("file generation", err)
 	}
 	if !opts.SkipMenu {
-		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(adminauth.NewAdminRuleModel(db, cfg), webViewsDir, tableComment, opts.Menu)
+		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), webViewsDir, tableComment, opts.Menu)
 		if err != nil {
 			return fail("menu generation", err)
 		}
@@ -419,7 +419,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return fail("menu snapshot", err)
 	}
-	if err := adminauth.NewAdminRuleModel(db, cfg).Delete(menuName, true); err != nil {
+	if err := adminauth.NewAdminRuleRepository(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
 	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Handler"); err != nil {

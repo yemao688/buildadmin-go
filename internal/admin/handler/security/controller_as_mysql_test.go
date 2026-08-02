@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	securitymodel "go-build-admin/internal/admin/model/security"
+	securitymodel "go-build-admin/internal/admin/repository/security"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/testutil"
 
@@ -36,7 +36,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	t.Run("data recycle add and edit", func(t *testing.T) {
-		handler := NewDataRecycleHandler(nil, config, securitymodel.NewDataRecycleModel(db, config), nil)
+		handler := NewDataRecycleHandler(nil, config, securitymodel.NewDataRecycleRepository(db, config), nil)
 		router := gin.New()
 		router.POST("/add", handler.Add)
 		router.POST("/edit", handler.Edit)
@@ -57,7 +57,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 	})
 
 	t.Run("sensitive data add and edit", func(t *testing.T) {
-		handler := NewSensitiveDataHandler(nil, config, securitymodel.NewSensitiveDataModel(db, config), nil)
+		handler := NewSensitiveDataHandler(nil, config, securitymodel.NewSensitiveDataRepository(db, config), nil)
 		router := gin.New()
 		router.POST("/add", handler.Add)
 		router.POST("/edit", handler.Edit)

@@ -2,7 +2,7 @@ package crud
 
 import (
 	"bytes"
-	"go-build-admin/internal/admin/model"
+	model "go-build-admin/internal/admin/repository"
 	helper "go-build-admin/internal/pkg/crud_helper"
 	"go-build-admin/internal/pkg/data_scope"
 	"net/http"
@@ -29,7 +29,7 @@ func TestGenerateRejectsNonRootBeforeAnyMutation(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/crud/generate", bytes.NewBufferString(`{"table":{"name":"orders"},"type":"create","fields":[{"name":"id","type":"int"}]}`))
-	(&CrudHandler{tableM: &model.TableModel{}}).Generate(ctx)
+	(&CrudHandler{tableM: &model.TableRepository{}}).Generate(ctx)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
@@ -50,7 +50,7 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(recorder)
 	_ = data_scope.SetActor(ctx, data_scope.Actor{AdminID: 1, Unrestricted: true})
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/crud/generate", bytes.NewBufferString(`{"table":{"name":"orders"},"type":"create","fields":[{"name":"id","type":"int"}]}`))
-	(&CrudHandler{tableM: &model.TableModel{}}).Generate(ctx)
+	(&CrudHandler{tableM: &model.TableRepository{}}).Generate(ctx)
 	if !strings.Contains(recorder.Body.String(), "another generation is in progress") {
 		t.Fatalf("busy response = %s", recorder.Body.String())
 	}

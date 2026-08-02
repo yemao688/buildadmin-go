@@ -22,7 +22,7 @@ fields:
       remoteField: username
       relationFields: username
       remoteController: internal/admin/handler/auth/admin.go
-      remoteModel: internal/admin/model/auth/admin.go
+      remoteModel: internal/admin/repository/auth/admin.go
 `)
 	warnings, err := ValidateSpec(path)
 	if err != nil {

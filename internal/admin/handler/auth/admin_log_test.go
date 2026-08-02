@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	adminhandler "go-build-admin/internal/admin/handler"
-	adminmodel "go-build-admin/internal/admin/model/auth"
+	adminmodel "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
 
@@ -27,7 +27,7 @@ func TestAdminLogDel(t *testing.T) {
 	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
 	require.NoError(t, db.Create(&model.AdminLog{Username: "two"}).Error)
 
-	logModel := adminmodel.NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
+	logModel := adminmodel.NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	h := NewAdminLogHandler(nil, logModel)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -53,7 +53,7 @@ func TestAdminLogDelRejectsForgedLogFields(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
 	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
 
-	h := NewAdminLogHandler(nil, adminmodel.NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil))
+	h := NewAdminLogHandler(nil, adminmodel.NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil))
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodDelete, "/admin/auth.AdminLog/del?ids%5B%5D=1&username=forged", nil)
 	h.Del(ctx)

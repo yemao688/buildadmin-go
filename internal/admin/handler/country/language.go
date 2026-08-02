@@ -1,8 +1,9 @@
 package country
 
 import (
+	countrydto "go-build-admin/internal/admin/dto/country"
 	adminhandler "go-build-admin/internal/admin/handler"
-	countrymodel "go-build-admin/internal/admin/model/country"
+	countrymodel "go-build-admin/internal/admin/repository/country"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/validator"
@@ -15,10 +16,10 @@ import (
 type LanguageHandler struct {
 	adminhandler.Base
 	log       *zap.Logger
-	languageM *countrymodel.LanguageModel
+	languageM *countrymodel.LanguageRepository
 }
 
-func NewLanguageHandler(log *zap.Logger, languageM *countrymodel.LanguageModel) *LanguageHandler {
+func NewLanguageHandler(log *zap.Logger, languageM *countrymodel.LanguageRepository) *LanguageHandler {
 	return &LanguageHandler{Base: adminhandler.NewBase(languageM), log: log, languageM: languageM}
 }
 
@@ -38,16 +39,8 @@ func (h *LanguageHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type LanguageParam struct {
-	Lan    string             `json:"lan"`    // 语言代码
-	Name   string             `json:"name"`   // 语言名称
-	Remark string             `json:"remark"` // 备注
-	Status validate.FlexInt32 `json:"status"` // 状态:0=禁用,1=启用
-	Weigh  validate.FlexInt32 `json:"weigh"`  // 权重
-}
-
 func (h *LanguageHandler) Add(ctx *gin.Context) {
-	var params LanguageParam
+	var params countrydto.LanguageParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))
 		return
@@ -72,7 +65,7 @@ func (h *LanguageHandler) Edit(ctx *gin.Context) {
 	}
 	var params = struct {
 		LanguageIDs
-		LanguageParam
+		countrydto.LanguageParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))

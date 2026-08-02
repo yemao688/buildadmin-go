@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	adminmodel "go-build-admin/internal/admin/model/user"
+	adminmodel "go-build-admin/internal/admin/repository/user"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"math"
@@ -19,10 +19,10 @@ import (
 type MoneyLogHandler struct {
 	Base
 	log           *zap.Logger
-	userMoneyLogM *adminmodel.MoneyLogModel
+	userMoneyLogM *adminmodel.MoneyLogRepository
 }
 
-func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.MoneyLogModel) *MoneyLogHandler {
+func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.MoneyLogRepository) *MoneyLogHandler {
 	return &MoneyLogHandler{
 		Base:          NewBase(userMoneyLogM),
 		log:           log,

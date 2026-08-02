@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	routinedto "go-build-admin/internal/admin/dto/routine"
 	adminhandler "go-build-admin/internal/admin/handler"
-	model "go-build-admin/internal/admin/model/routine"
+	model "go-build-admin/internal/admin/repository/routine"
 	"go-build-admin/internal/admin/validate"
 	siteconfig "go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/conf"
@@ -26,7 +27,7 @@ type ConfigHandler struct {
 	adminhandler.Base
 	log     *zap.Logger
 	config  *conf.Configuration
-	configM *model.ConfigModel
+	configM *model.ConfigRepository
 }
 
 type configJSONItem struct {
@@ -78,7 +79,7 @@ func decodeConfigValue(field, value string, err error) ([]configJSONItem, error)
 	return decodeConfigJSON(field, value)
 }
 
-func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigModel) *ConfigHandler {
+func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository) *ConfigHandler {
 	return &ConfigHandler{
 		Base: adminhandler.NewBase(configM),
 		log:  log, config: config, configM: configM}
@@ -255,22 +256,8 @@ func (h *ConfigHandler) Del(ctx *gin.Context) {
 	adminhandler.Success(ctx, "")
 }
 
-type MailParam struct {
-	SmtpServer       string `json:"smtp_server" binding:"required"`
-	SmtpPort         string `json:"smtp_port" binding:"required"`
-	SmtpUser         string `json:"smtp_user" binding:"required"`
-	SmtpPass         string `json:"smtp_pass" binding:"required"`
-	SmtpVerification string `json:"smtp_verification" binding:"required"`
-	SmtpSenderMail   string `json:"smtp_sender_mail" binding:"required"`
-	TestMail         string `json:"testMail" binding:"required"`
-}
-
-func (v MailParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
-}
-
 func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
-	params := MailParam{}
+	params := routinedto.MailParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validate.GetError(params, err))
 		return

@@ -105,12 +105,12 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 	}
 
 	// 根包自身不参与清理
-	rootProvider := filepath.Join(utils.RootPath(), "internal", "admin", "model", "provider.go")
+	rootProvider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
 	before, err := os.ReadFile(rootProvider)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pruneEmptyProviderScaffold("internal/admin/model", "internal/admin/model")
+	pruneEmptyProviderScaffold("internal/admin/repository", "internal/admin/repository")
 	after, err := os.ReadFile(rootProvider)
 	if err != nil || string(after) != string(before) {
 		t.Fatal("root provider.go must not be touched")

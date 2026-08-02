@@ -1,8 +1,9 @@
 package country
 
 import (
+	countrydto "go-build-admin/internal/admin/dto/country"
 	adminhandler "go-build-admin/internal/admin/handler"
-	countrymodel "go-build-admin/internal/admin/model/country"
+	countrymodel "go-build-admin/internal/admin/repository/country"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/validator"
@@ -15,10 +16,10 @@ import (
 type LanguageContentHandler struct {
 	adminhandler.Base
 	log              *zap.Logger
-	languageContentM *countrymodel.LanguageContentModel
+	languageContentM *countrymodel.LanguageContentRepository
 }
 
-func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.LanguageContentModel) *LanguageContentHandler {
+func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.LanguageContentRepository) *LanguageContentHandler {
 	return &LanguageContentHandler{Base: adminhandler.NewBase(languageContentM), log: log, languageContentM: languageContentM}
 }
 
@@ -38,16 +39,8 @@ func (h *LanguageContentHandler) Index(ctx *gin.Context) {
 	})
 }
 
-type LanguageContentParam struct {
-	Lan   string `json:"lan"`   // 语言代码
-	Group string `json:"group"` // 分组
-	Key   string `json:"key"`   // 键
-	Type  string `json:"type"`  // 类型:0=文本,1=富文本,2=图片
-	Value string `json:"value"` // 值
-}
-
 func (h *LanguageContentHandler) Add(ctx *gin.Context) {
-	var params LanguageContentParam
+	var params countrydto.LanguageContentParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))
 		return
@@ -72,7 +65,7 @@ func (h *LanguageContentHandler) Edit(ctx *gin.Context) {
 	}
 	var params = struct {
 		LanguageContentIDs
-		LanguageContentParam
+		countrydto.LanguageContentParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		adminhandler.FailByErr(ctx, validator.GetError(params, err))

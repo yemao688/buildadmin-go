@@ -3,16 +3,16 @@ package crud
 import (
 	"encoding/json"
 	"fmt"
-	model "go-build-admin/internal/admin/model"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	crudmodel "go-build-admin/internal/admin/model/crud"
+	model "go-build-admin/internal/admin/repository"
+	adminauth "go-build-admin/internal/admin/repository/auth"
 	"go-build-admin/internal/admin/validate"
+	"go-build-admin/internal/conf"
 	"go-build-admin/internal/middleware"
 	helper "go-build-admin/internal/pkg/crud_helper"
 	"go-build-admin/internal/pkg/data_scope"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/filesystem"
-	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
 	"path"
 	"slices"
@@ -24,9 +24,9 @@ import (
 
 type CrudHandler struct {
 	log        *zap.Logger
-	tableM     *model.TableModel
+	tableM     *model.TableRepository
 	crudLogM   *crudmodel.LogModel
-	adminRuleM *adminauth.AdminRuleModel
+	adminRuleM *adminauth.AdminRuleRepository
 	config     *conf.Configuration
 }
 
@@ -53,7 +53,7 @@ func (b *boolValue) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("cancelSync must be a boolean")
 }
 
-func NewCrudHandler(log *zap.Logger, tableM *model.TableModel, crudLogM *crudmodel.LogModel, adminRuleM *adminauth.AdminRuleModel, config *conf.Configuration) *CrudHandler {
+func NewCrudHandler(log *zap.Logger, tableM *model.TableRepository, crudLogM *crudmodel.LogModel, adminRuleM *adminauth.AdminRuleRepository, config *conf.Configuration) *CrudHandler {
 	return &CrudHandler{
 		log:        log,
 		tableM:     tableM,

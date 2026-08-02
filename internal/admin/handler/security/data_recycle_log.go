@@ -3,7 +3,7 @@ package security
 import (
 	"encoding/json"
 	adminhandler "go-build-admin/internal/admin/handler"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	securitymodel "go-build-admin/internal/admin/repository/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
@@ -18,10 +18,10 @@ type DataRecycleLogHandler struct {
 	adminhandler.Base
 	log             *zap.Logger
 	config          *conf.Configuration
-	dataRecycleLogM *securitymodel.DataRecycleLogModel
+	dataRecycleLogM *securitymodel.DataRecycleLogRepository
 }
 
-func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataRecycleLogM *securitymodel.DataRecycleLogModel) *DataRecycleLogHandler {
+func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataRecycleLogM *securitymodel.DataRecycleLogRepository) *DataRecycleLogHandler {
 	return &DataRecycleLogHandler{
 		Base:            adminhandler.NewBase(dataRecycleLogM),
 		log:             log,

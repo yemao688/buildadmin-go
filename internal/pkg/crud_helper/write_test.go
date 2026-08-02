@@ -252,7 +252,7 @@ const wireFixture = `package main
 
 import (
 	adminHandler "go-build-admin/internal/admin/handler"
-	adminModel "go-build-admin/internal/admin/model"
+	adminModel "go-build-admin/internal/admin/repository"
 
 	"github.com/google/wire"
 )
@@ -560,7 +560,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 // 关联既有核心模型(如 ba_admin)时,不得从共享 provider.go 中移除其注册,
 // 否则 wire 将因缺少核心模型 provider 而失败。
 func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
-	provider := filepath.Join(utils.RootPath(), "internal", "admin", "model", "provider.go")
+	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
 	before, err := os.ReadFile(provider)
 	if err != nil {
 		t.Fatal(err)

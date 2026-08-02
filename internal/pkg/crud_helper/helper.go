@@ -2,8 +2,8 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/internal/admin/model"
 	crudmodel "go-build-admin/internal/admin/model/crud"
+	model "go-build-admin/internal/admin/repository"
 	"go-build-admin/internal/pkg/data_scope"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/utils"

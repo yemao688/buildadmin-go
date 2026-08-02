@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	adminhandler "go-build-admin/internal/admin/handler"
-	adminmodel "go-build-admin/internal/admin/model"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	adminmodel "go-build-admin/internal/admin/repository"
+	securitymodel "go-build-admin/internal/admin/repository/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
 	model "go-build-admin/internal/model"
@@ -25,11 +25,11 @@ type DataRecycleHandler struct {
 	adminhandler.Base
 	log          *zap.Logger
 	config       *conf.Configuration
-	dataRecycleM *securitymodel.DataRecycleModel
-	tableM       *adminmodel.TableModel
+	dataRecycleM *securitymodel.DataRecycleRepository
+	tableM       *adminmodel.TableRepository
 }
 
-func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *securitymodel.DataRecycleModel, tableM *adminmodel.TableModel) *DataRecycleHandler {
+func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *securitymodel.DataRecycleRepository, tableM *adminmodel.TableRepository) *DataRecycleHandler {
 	return &DataRecycleHandler{
 		Base:         adminhandler.NewBase(dataRecycleM),
 		log:          log,

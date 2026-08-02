@@ -3,7 +3,7 @@ package user
 import (
 	"bytes"
 	"encoding/json"
-	adminmodel "go-build-admin/internal/admin/model/user"
+	adminmodel "go-build-admin/internal/admin/repository/user"
 	"go-build-admin/internal/admin/validate"
 	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
@@ -21,10 +21,10 @@ import (
 type UserHandler struct {
 	Base
 	log   *zap.Logger
-	userM *adminmodel.UserModel
+	userM *adminmodel.UserRepository
 }
 
-func NewUserHandler(log *zap.Logger, userM *adminmodel.UserModel) *UserHandler {
+func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository) *UserHandler {
 	return &UserHandler{Base: NewBase(userM), log: log, userM: userM}
 }
 

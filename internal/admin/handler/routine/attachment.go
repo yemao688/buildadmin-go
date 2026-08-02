@@ -2,7 +2,7 @@ package routine
 
 import (
 	adminhandler "go-build-admin/internal/admin/handler"
-	routinemodel "go-build-admin/internal/admin/model/routine"
+	routinemodel "go-build-admin/internal/admin/repository/routine"
 	"go-build-admin/internal/admin/validate"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +14,10 @@ import (
 type AttachmentHandler struct {
 	adminhandler.Base
 	log         *zap.Logger
-	attachmentM *routinemodel.AttachmentModel
+	attachmentM *routinemodel.AttachmentRepository
 }
 
-func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentModel) *AttachmentHandler {
+func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentRepository) *AttachmentHandler {
 	return &AttachmentHandler{
 		Base:        adminhandler.NewBase(attachmentM),
 		log:         log,

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	adminhandler "go-build-admin/internal/admin/handler"
-	model "go-build-admin/internal/admin/model/routine"
+	model "go-build-admin/internal/admin/repository/routine"
 	siteconfig "go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/conf"
 
@@ -30,7 +30,7 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 	require.NoError(t, db.AutoMigrate(&siteconfig.Config{}))
 
 	config := &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
-	configModel := model.NewConfigModel(db, config, siteconfig.NewService(db))
+	configModel := model.NewConfigRepository(db, config, siteconfig.NewService(db))
 	initialGroup := `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"config_quick_entrance","value":"Config Quick entrance"},{"key":"upload","value":"Upload"}]`
 	rows := []siteconfig.Config{
 		{ID: 1, Name: "config_group", Type: "array", Value: initialGroup, Weigh: -1},
