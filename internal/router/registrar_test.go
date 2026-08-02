@@ -17,6 +17,8 @@ import (
 	"go-build-admin/internal/middleware"
 	adminMiddleware "go-build-admin/internal/admin/middleware"
 	apiMiddleware "go-build-admin/internal/api/middleware"
+	adminRouter "go-build-admin/internal/admin/router"
+	apiRouter "go-build-admin/internal/api/router"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -125,14 +127,18 @@ func newCompleteRouter() *gin.Engine {
 
 	return InitRouter(
 		&lumberjack.Logger{},
-		&adminMiddleware.Login{},
-		&adminMiddleware.Authorization{},
-		&adminMiddleware.Security{},
-		&apiMiddleware.UserLogin{},
-		&adminMiddleware.Record{},
-		&admin.IndexHandler{},
-		&admin.AjaxHandler{},
-		&api.InstallHandler{},
+		adminRouter.NewAdminRouter(adminRouter.AdminRouterDeps{
+			LoginM:         &adminMiddleware.Login{},
+			AuthorizationM: &adminMiddleware.Authorization{},
+			SecurityM:      &adminMiddleware.Security{},
+			RecordM:        &adminMiddleware.Record{},
+			IndexHandler:   &admin.IndexHandler{},
+			AjaxHandler:    &admin.AjaxHandler{},
+		}),
+		apiRouter.NewApiRouter(apiRouter.ApiRouterDeps{
+			UserLoginM:     &apiMiddleware.UserLogin{},
+			InstallHandler: &api.InstallHandler{},
+		}),
 		completeRegistrars(),
 	)
 }

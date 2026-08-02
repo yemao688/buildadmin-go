@@ -23,18 +23,20 @@ import (
 	adminHandler "go-build-admin/internal/admin/handler"
 	adminMiddleware "go-build-admin/internal/admin/middleware"
 	adminRepo "go-build-admin/internal/admin/repository"
+	adminRouter "go-build-admin/internal/admin/router"
 	apiHandler "go-build-admin/internal/api/handler"
+	apiMiddleware "go-build-admin/internal/api/middleware"
+	apiRouter "go-build-admin/internal/api/router"
+	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/cmd"
 	commandHandler "go-build-admin/internal/cmd/handler"
 	"go-build-admin/internal/common/area"
 	"go-build-admin/internal/common/country"
-	"go-build-admin/internal/api/service/member"
 	siteconfig "go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/common/upload"
 	"go-build-admin/internal/cron"
 	"go-build-admin/internal/infra/db"
 	"go-build-admin/internal/infra/rds"
-	apiMiddleware "go-build-admin/internal/api/middleware"
 	"go-build-admin/internal/pkg/terminal"
 	"go-build-admin/internal/router"
 
@@ -77,6 +79,10 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,
+		adminRouter.NewAdminRouter,
+		wire.Struct(new(adminRouter.AdminRouterDeps), "*"),
+		apiRouter.NewApiRouter,
+		wire.Struct(new(apiRouter.ApiRouterDeps), "*"),
 		router.InitRouter,
 		cron.ProviderSet,
 		newHttpServer,

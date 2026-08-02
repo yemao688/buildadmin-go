@@ -22,8 +22,10 @@ import (
 	"go-build-admin/internal/admin/repository/routine"
 	"go-build-admin/internal/admin/repository/security"
 	"go-build-admin/internal/admin/repository/user"
+	"go-build-admin/internal/admin/router"
 	handler2 "go-build-admin/internal/api/handler"
 	middleware2 "go-build-admin/internal/api/middleware"
+	router2 "go-build-admin/internal/api/router"
 	"go-build-admin/internal/api/service/member"
 	"go-build-admin/internal/cmd"
 	handler3 "go-build-admin/internal/cmd/handler"
@@ -40,7 +42,7 @@ import (
 	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/pkg/terminal"
 	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/router"
+	router3 "go-build-admin/internal/router"
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -57,12 +59,10 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	login := middleware.NewLogin(configuration, tokenHelper, authRepository)
 	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
 	middlewareSecurity := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
-	service := member.NewService(gormDB, tokenHelper, configuration)
-	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, service)
 	adminLogRepository := auth.NewAdminLogRepository(gormDB, configuration, authRepository)
 	record := middleware.NewRecord(configuration, adminLogRepository)
-	siteconfigService := siteconfig.NewService(gormDB)
-	configRepository := routine.NewConfigRepository(gormDB, configuration, siteconfigService)
+	service := siteconfig.NewService(gormDB)
+	configRepository := routine.NewConfigRepository(gormDB, configuration, service)
 	countryService := country.NewService(gormDB, configuration)
 	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authRepository, configRepository, countryService, clickCaptcha)
@@ -72,7 +72,23 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	uploadHelper := upload.NewUploadHelper(gormDB, configuration, aliossStorage)
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authRepository)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableRepository, uploadHelper, terminalTerminal, configuration)
+	adminRouterDeps := router.AdminRouterDeps{
+		LoginM:         login,
+		AuthorizationM: authorization,
+		SecurityM:      middlewareSecurity,
+		RecordM:        record,
+		IndexHandler:   indexHandler,
+		AjaxHandler:    ajaxHandler,
+	}
+	adminRouter := router.NewAdminRouter(adminRouterDeps)
+	memberService := member.NewService(gormDB, tokenHelper, configuration)
+	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
+	apiRouterDeps := router2.ApiRouterDeps{
+		UserLoginM:     userLogin,
+		InstallHandler: installHandler,
+	}
+	apiRouter := router2.NewApiRouter(apiRouterDeps)
 	logModel := crud.NewLogModel(gormDB, configuration, closureEnforcer)
 	logHandler := crud2.NewLogHandler(zapLogger, logModel, authRepository)
 	logRegistrar := crud2.NewLogRegistrar(logHandler)
@@ -119,9 +135,9 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	moneyLogHandler := user2.NewMoneyLogHandler(zapLogger, moneyLogRepository)
 	userLogRegistrar := user2.NewUserLogRegistrar(userHandler, moneyLogHandler)
 	captchaService := captcha.NewCaptchaService(gormDB)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, service, configuration)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
 	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
-	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, service, clickCaptcha)
+	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
 	handlerUserRegistrar := handler2.NewUserRegistrar(handlerUserHandler)
 	currencyRepository := country2.NewCurrencyRepository(gormDB, configuration, closureEnforcer)
 	currencyHandler := country3.NewCurrencyHandler(zapLogger, currencyRepository)
@@ -132,8 +148,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	languageContentRepository := country2.NewLanguageContentRepository(gormDB, configuration, closureEnforcer)
 	languageContentHandler := country3.NewLanguageContentHandler(zapLogger, languageContentRepository)
 	languageContentRegistrar := country3.NewLanguageContentRegistrar(languageContentHandler)
-	v := router.ProvideRegistrars(logRegistrar, moduleRegistrar, adminGroupRegistrar, adminRuleRegistrar, configRegistrar, attachmentRegistrar, adminRegistrar, userRegistrar, dataRecycleRegistrar, dataRecycleLogRegistrar, sensitiveDataRegistrar, sensitiveDataLogRegistrar, adminInfoRegistrar, adminLogRegistrar, crudRegistrar, dashboardRegistrar, userLogRegistrar, commonRegistrar, handlerUserRegistrar, currencyRegistrar, languageRegistrar, languageContentRegistrar)
-	engine := router.InitRouter(lumberjackLogger, login, authorization, middlewareSecurity, userLogin, record, indexHandler, ajaxHandler, installHandler, v)
+	v := router3.ProvideRegistrars(logRegistrar, moduleRegistrar, adminGroupRegistrar, adminRuleRegistrar, configRegistrar, attachmentRegistrar, adminRegistrar, userRegistrar, dataRecycleRegistrar, dataRecycleLogRegistrar, sensitiveDataRegistrar, sensitiveDataLogRegistrar, adminInfoRegistrar, adminLogRegistrar, crudRegistrar, dashboardRegistrar, userLogRegistrar, commonRegistrar, handlerUserRegistrar, currencyRegistrar, languageRegistrar, languageContentRegistrar)
+	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, v)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

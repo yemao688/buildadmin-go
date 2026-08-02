@@ -3,10 +3,10 @@ package router
 import (
 	"encoding/json"
 	admin "go-build-admin/internal/admin/handler"
+	adminRouter "go-build-admin/internal/admin/router"
 	api "go-build-admin/internal/api/handler"
+	apiRouter "go-build-admin/internal/api/router"
 	"go-build-admin/internal/middleware"
-	adminMiddleware "go-build-admin/internal/admin/middleware"
-	apiMiddleware "go-build-admin/internal/api/middleware"
 	"go-build-admin/internal/utils"
 	"net/http"
 	"os"
@@ -18,27 +18,20 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// InitRouter 是根装配件：创建 gin.Engine、挂载全局中间件（Cors/Record/
+// Logger/CustomRecovery/i18n/InstallGuard）与静态资源，然后调用 admin 与
+// api 两个渠道注册器完成挂载，最后把 registrar 按 Group() 分派给对应渠道。
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
-	loginM *adminMiddleware.Login,
-	authorizationM *adminMiddleware.Authorization,
-	securityM *adminMiddleware.Security,
-	userLoginM *apiMiddleware.UserLogin,
-	recordM *adminMiddleware.Record,
-
-	indexHandler *admin.IndexHandler,
-
-	ajaxHandler *admin.AjaxHandler,
-
-	apiInstallHandler *api.InstallHandler,
-
+	adminR *adminRouter.AdminRouter,
+	apiR *apiRouter.ApiRouter,
 	registrars []RouteRegistrar,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
 
-	// 跨域处理
-	router.Use(middleware.Cors(), recordM.Handler())
+	// 跨域处理。Record 是 admin 渠道的中间件，但按既有语义挂在全局链上。
+	router.Use(middleware.Cors(), adminR.RecordHandler())
 	router.Use(
 		gin.Logger(),
 		middleware.CustomRecovery(loggerWriter),
@@ -63,71 +56,34 @@ func InitRouter(
 	rootDir := utils.RootPath()
 	lockPath := filepath.Join(rootDir, "public", api.LockFileName)
 	router.Use(middleware.InstallGuard(lockPath))
-	router.StaticFile("/install", filepath.Join(rootDir, "public/install/index.html"))
-	router.Static("/install", filepath.Join(rootDir, "public/install"))
-	router.POST("/api/install/changePackageManager", apiInstallHandler.ChangePackageManager)
-	router.GET("/api/install/envBaseCheck", apiInstallHandler.EnvBaseCheck)
-	router.POST("/api/install/envNpmCheck", apiInstallHandler.EnvNpmCheck)
-	router.GET("/api/install/terminal", apiInstallHandler.Terminal)
-	router.GET("/api/install/baseConfig", apiInstallHandler.BaseConfig)
-	router.POST("/api/install/baseConfig", apiInstallHandler.BaseConfig)
-	router.POST("/api/install/testDatabase", apiInstallHandler.TestDatabase)
-	router.POST("/api/install/commandExecComplete", apiInstallHandler.CommandExecComplete)
-	router.POST("/api/install/manualInstall", apiInstallHandler.ManualInstall)
-	router.POST("/api/install/mvDist", apiInstallHandler.MvDist)
 
-	router.GET("/admin/Index/login", indexHandler.Login)
-	router.POST("/admin/Index/login", indexHandler.Login)
-	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
-	router.GET("/admin/ajax/terminal", ajaxHandler.Terminal)
-	adminMiddleware.RegisterPermissionExempt("index", "index", "logout")
-	adminMiddleware.RegisterPermissionExempt("ajax", "*")
-	adminMiddleware.RegisterPermissionExempt("alioss", "callback")
-
-	// 引入admin路由
-	adminRouter := router.Group("/admin/").Use(loginM.Handler(), authorizationM.Handler(), securityM.Handler())
-	adminRouter.GET("Index/index", indexHandler.Index)
-	adminRouter.POST("Index/logout", indexHandler.Logout)
-
-	adminRouter.GET("ajax/area", ajaxHandler.Area)
-	adminRouter.POST("ajax/upload", ajaxHandler.Upload)
-	adminRouter.POST("Alioss/callback", ajaxHandler.AliossCallback)
-	adminRouter.GET("ajax/getTablePk", ajaxHandler.GetTablePk)
-	adminRouter.GET("ajax/getTableList", ajaxHandler.GetTableList)
-	adminRouter.GET("ajax/getTableFieldList", ajaxHandler.GetTableFieldList)
-	adminRouter.GET("ajax/getDatabaseConnectionList", ajaxHandler.GetDatabaseConnectionList)
-	adminRouter.POST("ajax/clearCache", ajaxHandler.ClearCache)
-	adminRouter.POST("ajax/changeTerminalConfig", ajaxHandler.ChangeTerminalConfig)
-
-	//-----------------------api 接口部分--------------------//
-	// 引入api接口路由
-	apiRouter := router.Group("/api/").Use(userLoginM.Handler())
-
+	// 静态资源与前台入口（不经渠道注册器）。
 	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
 	router.Static("/static", filepath.Join(rootDir, "public/static"))
 	router.Static("/storage/default", filepath.Join(rootDir, "public/storage/default"))
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
+	// 模块 registrar 按 Group() 分派：admin=后台分组、api=会员分组、
+	// root=引擎根。capabilities 由 admin 渠道在挂载前统一登记。
+	var adminRegistrars []adminRouter.Registrar
+	var apiRegistrars []apiRouter.Registrar
 	for _, registrar := range registrars {
-		for _, capability := range registrar.Capabilities() {
-			middleware.RegisterAtomicRoute(capability)
-		}
-	}
-	for _, registrar := range registrars {
-		var routes gin.IRoutes
 		switch registrar.Group() {
 		case "admin":
-			routes = adminRouter
+			adminRegistrars = append(adminRegistrars, registrar)
 		case "api":
-			routes = newAPIRouteSet(router, apiRouter)
+			apiRegistrars = append(apiRegistrars, registrar)
 		case "root":
-			routes = router
+			registrar.Register(router)
 		default:
 			panic("unknown route registrar group: " + registrar.Group())
 		}
-		registrar.Register(routes)
 	}
+
+	// 渠道注册器：admin 负责 /admin/*，api 负责 /install 与 /api/*。
+	adminR.Register(router, adminRegistrars)
+	apiR.Register(router, apiRegistrars)
 
 	admin.CollectRoutes(router)
 
