@@ -64,12 +64,6 @@ mysql_test:
   password: ''
   charset: 'utf8mb4'
 
-jwt:
-  secret: ''
-  jwt_ttl: 86400
-  jwt_blacklist_grace_period: 10
-  refresh_grace_period: 1800
-
 token:
   default: 'mysql'
   key: ''

@@ -121,19 +121,21 @@ func RunOfficialMigrations(db *gorm.DB, config *conf.Configuration, list []Offic
 			continue
 		}
 		start := time.Now()
+		if !exists {
+			result = db.Exec("INSERT INTO "+QuoteIdentifier(TableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, ?, NULL, ?)", migration.Key.Version, migration.Key.Name, start, false)
+			if result.Error != nil {
+				return count, fmt.Errorf("record official %s pending: %w", migration.Key.Name, result.Error)
+			}
+		}
 		if err := migration.Up(db, config); err != nil {
 			return count, fmt.Errorf("official migration %s failed: %w", migration.Key.Name, err)
 		}
 		end := time.Now()
-		if exists {
-			result = db.Table(TableName(config, "migrations")).Where("version = ? AND migration_name = ? AND end_time IS NULL", migration.Key.Version, migration.Key.Name).Updates(map[string]any{"start_time": start, "end_time": end})
-		} else {
-			result = db.Exec("INSERT INTO "+QuoteIdentifier(TableName(config, "migrations"))+" (version, migration_name, start_time, end_time, breakpoint) VALUES (?, ?, ?, ?, ?)", migration.Key.Version, migration.Key.Name, start, end, false)
-		}
+		result = db.Table(TableName(config, "migrations")).Where("version = ? AND migration_name = ? AND end_time IS NULL", migration.Key.Version, migration.Key.Name).Update("end_time", end)
 		if result.Error != nil {
 			return count, fmt.Errorf("record official %s: %w", migration.Key.Name, result.Error)
 		}
-		if exists && result.RowsAffected != 1 {
+		if result.RowsAffected != 1 {
 			return count, fmt.Errorf("official %s completion affected %d rows", migration.Key.Name, result.RowsAffected)
 		}
 		count++

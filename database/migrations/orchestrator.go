@@ -17,8 +17,20 @@ type Report struct {
 	Seeded    bool
 }
 
+const migrationOrchestratorLockPrefix = "migration-orchestrator-v1:"
+
+func migrationOrchestratorLockName(config *conf.Configuration) string {
+	database, prefix := "", ""
+	if config != nil {
+		database = config.Database.Database
+		prefix = config.Database.Prefix
+	}
+	name := migrationOrchestratorLockPrefix + database + ":" + prefix
+	return name[:min(len(name), 64)]
+}
+
 func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
-	err = WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+	err = WithMigrationLock(db, migrationOrchestratorLockName(config), 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
 		}
@@ -97,7 +109,7 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 }
 
 func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) (report RollbackReport, err error) {
-	err = WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+	err = WithMigrationLock(db, migrationOrchestratorLockName(config), 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
 		}
@@ -121,7 +133,7 @@ func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) 
 }
 
 func SetBreakpoint(db *gorm.DB, config *conf.Configuration, version uint64) error {
-	return WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+	return WithMigrationLock(db, migrationOrchestratorLockName(config), 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
 		}
@@ -136,7 +148,7 @@ func SetBreakpoint(db *gorm.DB, config *conf.Configuration, version uint64) erro
 }
 
 func ClearBreakpoint(db *gorm.DB, config *conf.Configuration) error {
-	return WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+	return WithMigrationLock(db, migrationOrchestratorLockName(config), 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
 		}
@@ -151,7 +163,7 @@ func ClearBreakpoint(db *gorm.DB, config *conf.Configuration) error {
 }
 
 func GetBreakpoint(db *gorm.DB, config *conf.Configuration) (breakpoint *BusinessBreakpoint, err error) {
-	err = WithMigrationLock(db, "migration-orchestrator-v1", 120*time.Second, func(pinned *gorm.DB) error {
+	err = WithMigrationLock(db, migrationOrchestratorLockName(config), 120*time.Second, func(pinned *gorm.DB) error {
 		if err := ValidatePrefix(config); err != nil {
 			return err
 		}

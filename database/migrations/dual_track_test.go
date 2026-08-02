@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"database/sql"
+	"strings"
 	"sync"
 	"testing"
 
@@ -73,6 +74,21 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 		if name != "one" && err == nil {
 			t.Fatalf("%s release accepted", name)
 		}
+	}
+}
+
+func TestMigrationOrchestratorLockNameIsScopedAndBounded(t *testing.T) {
+	config := &conf.Configuration{Database: conf.Database{Database: "buildadmin", Prefix: "ba_"}}
+	if got, want := migrationOrchestratorLockName(config), "migration-orchestrator-v1:buildadmin:ba_"; got != want {
+		t.Fatalf("lock name=%q, want %q", got, want)
+	}
+	other := &conf.Configuration{Database: conf.Database{Database: "other", Prefix: "ba_"}}
+	if migrationOrchestratorLockName(config) == migrationOrchestratorLockName(other) {
+		t.Fatal("different databases share migration lock name")
+	}
+	long := &conf.Configuration{Database: conf.Database{Database: strings.Repeat("d", 80), Prefix: strings.Repeat("p", 80)}}
+	if got := migrationOrchestratorLockName(long); len(got) > 64 {
+		t.Fatalf("lock name length=%d, want <=64", len(got))
 	}
 }
 

@@ -223,7 +223,13 @@ func TestOfficialFailureRetryAndFrameworkPostVerifyOrder(t *testing.T) {
 	})
 	key := OfficialKey{Version: time.Now().UnixNano(), Name: "RetryOfficial"}
 	fail := true
+	upSawPending := false
 	official := []OfficialMigration{{Key: key, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error {
+		var pending int64
+		if err := db.Table(tableName(cfg, "migrations")).Where("version=? AND migration_name=? AND end_time IS NULL", key.Version, key.Name).Count(&pending).Error; err != nil {
+			return err
+		}
+		upSawPending = pending == 1
 		if fail {
 			fail = false
 			return errors.New("official failure")
@@ -242,11 +248,24 @@ func TestOfficialFailureRetryAndFrameworkPostVerifyOrder(t *testing.T) {
 	}
 	var count int64
 	requireNoError(db.Table(tableName(cfg, "migrations")).Where("version=?", key.Version).Count(&count).Error)
-	if count != 0 {
-		t.Fatal("failed official migration was recorded")
+	if count != 1 || !upSawPending {
+		t.Fatalf("failed official migration pending row count=%d sawPending=%v", count, upSawPending)
+	}
+	var pendingEnd sql.NullTime
+	if err := db.Table(tableName(cfg, "migrations")).Where("version=?", key.Version).Pluck("end_time", &pendingEnd).Error; err != nil {
+		t.Fatal(err)
+	}
+	if pendingEnd.Valid {
+		t.Fatal("failed official migration was completed")
 	}
 	_, err = RunOfficialMigrations(db, cfg, official)
 	requireNoError(err)
+	if err := db.Table(tableName(cfg, "migrations")).Where("version=? AND migration_name=? AND end_time IS NOT NULL", key.Version, key.Name).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("retried official migration completion count=%d", count)
+	}
 	_, err = RunFrameworkMigrations(db, cfg, official, framework)
 	requireNoError(err)
 	if !frameworkRan || !schemaVerified || !dataVerified {
