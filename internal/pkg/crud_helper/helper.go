@@ -29,29 +29,34 @@ func GenerateFile(table crudmodel.Table, fields []crudmodel.Field, getTableName 
 
 // prepareGenerationData resolves data-scope policy and initializes the model/handler
 // data structures used by both production generation and compile-only tests.
-func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
+func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, NameInfo, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
 	tableName := getTableName(table.Name, false)
 	fullTableName := getTableName(table.Name, true)
 	//主键
 	tablePk := getPk(fields)
 	//表注释
 	tableComment := getCommnet(table.Comment)
-	// 生成文件信息解析：实体/仓库/DTO 共享同一逻辑路径，实体扁平落在 internal/model。
+	// 生成文件信息解析：拍平布局，实体/仓库/DTO/handler/registrar 文件恒为
+	// <root>/<table>.go。
 	entityFile, err := ParseEntityNameData(tableName, table.ModelFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	repositoryFile, err := ParseRepositoryNameData(tableName, table.ModelFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	dtoFile, err := ParseDTONameData(tableName, table.ModelFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
-	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
+	handlerFile, err := ParseHandlerNameData(tableName, table.ControllerFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+	registrarFile, err := ParseRegistrarNameData(tableName, table.ControllerFile)
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
 	webViewsDir := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
@@ -75,7 +80,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	pkField := searchField(fields, tablePk)
 	modelData.PkGoType, err = primaryKeyGoType(pkField)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
 	modelData.Append = []string{}
@@ -98,7 +103,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	handlerData.PkJSONName = tablePk
 	handlerData.TableComment = tableComment
 
-	// 仓库与 DTO 导入引用：子包沿用 <dir>model / <dir>dto 约定别名。
+	// 仓库与 DTO 导入引用：拍平根包恒为 repository / dto。
 	handlerData.RepoImport = "buildadmin-go/" + filepath.ToSlash(repositoryFile.RootFileName)
 	handlerData.RepoAlias = repositoryImportAlias(repositoryFile)
 	handlerData.RepoQualifier = handlerData.RepoAlias + "."
@@ -119,7 +124,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		ProveIndex:           proveIndex,
 	})
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	modelData.PkGoField = pkGoField(tablePk)
 	modelData.DataScopePolicy = ds.Policy
@@ -127,7 +132,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	if ds.OwnerColumn != "" {
 		ownerType, err := ownerGoType(searchField(fields, ds.OwnerColumn))
 		if err != nil {
-			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 		}
 		modelData.DataScopeOwnerGoType = ownerType
 	}
@@ -163,7 +168,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		}
 	}
 
-	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
+	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
 }
 
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
@@ -177,7 +182,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 		return WebDir{}, "", err
 	}
 	fullTableName := getTableName(table.Name, true)
-	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
+	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -325,7 +330,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	}
 
 	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile); err != nil {
+	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
@@ -539,27 +544,40 @@ func getCommnet(comment string) string {
 	return tableComment
 }
 
-// 解析文件数据
+// ParseNameData 解析历史嵌套布局产物（internal/<module>/<moduleType>/<path>）。
+// 仅用于历史 manifest 删除兼容与旧测试；新生成一律走拍平 Parse*NameData。
 func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
-	return parseNameData(filepath.Join("internal", module, moduleType), tableName, moduleType, file, false, "")
+	return parseNameDataLegacy(filepath.Join("internal", module, moduleType), tableName, moduleType, file, false, "")
 }
 
 // ParseEntityNameData 解析共享贫血实体记录的位置：实体一律扁平输出到
-// internal/model/<entity>.go，与业务路径无关；包名恒为 model。
+// internal/model/<table>.go（文件名恒等于表名），包名恒为 model。
 func ParseEntityNameData(tableName string, file string) (NameInfo, error) {
-	return parseNameData("internal/model", tableName, "model", file, true, "model")
+	return parseFlatNameData("internal/model", tableName, "model", file)
 }
 
-// ParseRepositoryNameData 解析 admin 仓库产物位置（internal/admin/repository/<path>.go，
-// 类型 XxxRepository）。
+// ParseRepositoryNameData 解析 admin 仓库产物位置（internal/admin/repository/<table>.go，
+// 类型 XxxRepository，包名恒为 repository）。
 func ParseRepositoryNameData(tableName string, file string) (NameInfo, error) {
-	return parseNameData("internal/admin/repository", tableName, "repository", file, false, "")
+	return parseFlatNameData("internal/admin/repository", tableName, "repository", file)
 }
 
-// ParseDTONameData 解析 admin 请求 DTO 产物位置（internal/admin/dto/<path>.go，
+// ParseDTONameData 解析 admin 请求 DTO 产物位置（internal/admin/dto/<table>.go，
 // 包名恒为 dto）。
 func ParseDTONameData(tableName string, file string) (NameInfo, error) {
-	return parseNameData("internal/admin/dto", tableName, "dto", file, false, "dto")
+	return parseFlatNameData("internal/admin/dto", tableName, "dto", file)
+}
+
+// ParseHandlerNameData 解析 admin handler 产物位置（internal/admin/handler/<table>.go，
+// 包名恒为 handler）。
+func ParseHandlerNameData(tableName string, file string) (NameInfo, error) {
+	return parseFlatNameData("internal/admin/handler", tableName, "handler", file)
+}
+
+// ParseRegistrarNameData 解析 admin 路由注册器产物位置
+// （internal/admin/router/<table>.go，包名恒为 router）。
+func ParseRegistrarNameData(tableName string, file string) (NameInfo, error) {
+	return parseFlatNameData("internal/admin/router", tableName, "router", file)
 }
 
 // artifactRootPrefixes 是 spec 中 modelFile 可能携带的产物根（含历史布局）。
@@ -570,9 +588,52 @@ var artifactRootPrefixes = []string{
 	"internal/model",
 	"internal/admin/repository",
 	"internal/admin/dto",
+	"internal/admin/handler",
+	"internal/admin/router",
 }
 
-func parseNameData(root string, tableName string, moduleType string, file string, flat bool, namespaceOverride string) (NameInfo, error) {
+// parseFlatNameData 解析拍平布局产物：文件恒为 <root>/<table>.go（显式 file
+// 仅作安全校验与历史名兼容，不再影响文件位置），包名固定 namespace。
+func parseFlatNameData(root string, tableName string, namespace string, file string) (NameInfo, error) {
+	if file != "" {
+		if err := validateRelativePathInput(file); err != nil {
+			return NameInfo{}, err
+		}
+		if _, normalizeErr := normalizeLogicalPath(file); normalizeErr != nil {
+			return NameInfo{}, normalizeErr
+		}
+	}
+	originalLastName := tableName
+	if normalizeErr := validateRelativePathInput(tableName); normalizeErr != nil {
+		return NameInfo{}, normalizeErr
+	}
+	lastName := utils.SnakeToCamel(originalLastName, true)
+
+	// 类名不能为内部关键字
+	reservedName := strings.ToLower(lastName)
+	if slices.Contains(reservedKeywords, reservedName) {
+		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
+	}
+
+	parseFile := filepath.Join(utils.RootPath(), filepath.FromSlash(root), originalLastName+".go")
+	if err := validateAbsolutePathUnderRoots(parseFile, root); err != nil {
+		return NameInfo{}, err
+	}
+
+	info := NameInfo{
+		LastName:         lastName,
+		OriginalLastName: originalLastName,
+		Path:             nil,
+		Namespace:        namespace,
+		ParseFile:        parseFile,
+		RootFileName:     root,
+	}
+	return info, nil
+}
+
+// parseNameDataLegacy 解析按逻辑路径（可含子目录）落位的产物位置，供历史
+// manifest 删除兼容使用。
+func parseNameDataLegacy(root string, tableName string, moduleType string, file string, flat bool, namespaceOverride string) (NameInfo, error) {
 	var pathArr []string
 	if file != "" {
 		if err := validateRelativePathInput(file); err != nil {

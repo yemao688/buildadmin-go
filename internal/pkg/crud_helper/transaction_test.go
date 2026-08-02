@@ -43,16 +43,9 @@ func TestQuarantineRestoresAllFiles(t *testing.T) {
 }
 
 func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "relation_manifest_test")
-	provider := filepath.Join(dir, "provider.go")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(provider, []byte("package relation_manifest_test\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/admin/repository/relation_manifest_test/Owner.go", RelationFields: "name"}}})
+	// 拍平布局：关联仓库的 provider 即扁平根包 provider.go（wire 静态聚合）。
+	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
+	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/model/owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,22 +54,20 @@ func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T
 			return
 		}
 	}
-	t.Fatalf("existing relation provider %q was not snapshotted: %v", provider, manifest.Shared)
+	t.Fatalf("relation provider %q was not snapshotted: %v", provider, manifest.Shared)
 }
 
 func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "relation_manifest_absent_test")
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/admin/repository/relation_manifest_absent_test/Owner.go", RelationFields: "name"}}})
+	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/model/owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider := filepath.Join(dir, "provider.go")
+	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
 	if containsPath(manifest.Generated, provider) || !containsPath(manifest.Shared, provider) {
 		t.Fatalf("relation provider classification = %+v", manifest)
 	}
-	// 实体尚未存在时应进入 Generated（新布局共享记录层，扁平 internal/model）
-	entity := filepath.Join(utils.RootPath(), "internal", "model", "Owner.go")
+	// 实体尚未存在时应进入 Generated（新布局共享记录层，扁平 internal/model/<table>.go）
+	entity := filepath.Join(utils.RootPath(), "internal", "model", "owner.go")
 	if !containsPath(manifest.Generated, entity) {
 		t.Fatalf("relation entity missing from generated manifest: %+v", manifest.Generated)
 	}

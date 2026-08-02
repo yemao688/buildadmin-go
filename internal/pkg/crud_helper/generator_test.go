@@ -149,23 +149,30 @@ func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
 	root := utils.RootPath()
 	manifest, err := BuildFileManifest(crudmodel.Table{
 		Name:           "country_language_content",
-		ModelFile:      "internal/admin/model/country/languageContent.go",
-		ControllerFile: "internal/admin/handler/country/languageContent.go",
+		ModelFile:      "internal/model/country_language_content.go",
+		ControllerFile: "internal/admin/handler/country_language_content.go",
 		WebViewsDir:    "web/src/views/backend/country/languageContent",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	registrar := filepath.Join(root, "internal/admin/handler/country/languageContent_route.go")
+	registrar := filepath.Join(root, "internal/admin/router/country_language_content.go")
 	if !containsPath(manifest.Generated, registrar) {
 		t.Fatalf("registrar file missing from generated manifest: %+v", manifest.Generated)
 	}
-	registrarSet := filepath.Join(root, "internal/router/registrar_set.go")
-	if !containsPath(manifest.Shared, registrarSet) {
-		t.Fatalf("registrar set missing from shared manifest: %+v", manifest.Shared)
+	if containsPath(manifest.Generated, filepath.Join(root, "internal/admin/handler/country_language_content_route.go")) {
+		t.Fatalf("handler _route.go must not be emitted in the flat layout: %+v", manifest.Generated)
 	}
-	if containsPath(manifest.Shared, filepath.Join(root, "router/router.go")) {
-		t.Fatalf("legacy router.go must not be in shared manifest: %+v", manifest.Shared)
+	routerProvider := filepath.Join(root, "internal/admin/router/provider.go")
+	if !containsPath(manifest.Shared, routerProvider) {
+		t.Fatalf("router provider missing from shared manifest: %+v", manifest.Shared)
+	}
+	registrarSet := filepath.Join(root, "internal/router/registrar_set.go")
+	if containsPath(manifest.Shared, registrarSet) {
+		t.Fatalf("api registrar_set.go must not be in the flat shared manifest: %+v", manifest.Shared)
+	}
+	if containsPath(manifest.Shared, filepath.Join(root, "cmd/server/wire.go")) {
+		t.Fatalf("wire.go must not be in the flat shared manifest: %+v", manifest.Shared)
 	}
 }
 

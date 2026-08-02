@@ -32,7 +32,11 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 	if err != nil {
 		return FileManifest{}, err
 	}
-	handlerFile, err := ParseNameData("admin", table.Name, "handler", table.ControllerFile)
+	handlerFile, err := ParseHandlerNameData(table.Name, table.ControllerFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	registrarFile, err := ParseRegistrarNameData(table.Name, table.ControllerFile)
 	if err != nil {
 		return FileManifest{}, err
 	}
@@ -48,23 +52,24 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 			repositoryFile.ParseFile,
 			dtoFile.ParseFile,
 			handlerFile.ParseFile,
-			registrarFilePath(handlerFile),
+			registrarFile.ParseFile,
 		},
 		Shared: []string{
+			// 拍平布局：构造器并入扁平包合并 ProviderSet，wire.go 不再被修改；
+			// wire_gen.go 由生成流程重新生成。
 			filepath.Join(utils.RootPath(), repositoryFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
-			filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"),
-			filepath.Join(utils.RootPath(), "cmd", "server", "wire.go"),
+			filepath.Join(utils.RootPath(), "internal", "admin", "router", "provider.go"),
 			filepath.Join(utils.RootPath(), "cmd", "server", "wire_gen.go"),
 		},
 	}
 	for _, path := range manifest.Generated {
-		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal/admin/router"); err != nil {
 			return FileManifest{}, err
 		}
 	}
 	for _, path := range manifest.Shared {
-		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/router", "cmd/server"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/admin/router", "cmd/server"); err != nil {
 			return FileManifest{}, err
 		}
 	}
@@ -99,7 +104,7 @@ func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field)
 		return FileManifest{}, err
 	}
 	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
-		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal", "internal/router", "cmd/server"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal/admin/router", "internal", "cmd/server"); err != nil {
 			return FileManifest{}, err
 		}
 	}

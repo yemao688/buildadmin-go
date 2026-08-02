@@ -59,7 +59,10 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	if _, err := ParseDTONameData(table.Name, table.ModelFile); err != nil {
 		return err
 	}
-	if _, err := ParseNameData("admin", table.Name, "handler", table.ControllerFile); err != nil {
+	if _, err := ParseHandlerNameData(table.Name, table.ControllerFile); err != nil {
+		return err
+	}
+	if _, err := ParseRegistrarNameData(table.Name, table.ControllerFile); err != nil {
 		return err
 	}
 	for i := range fields {

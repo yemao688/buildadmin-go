@@ -64,10 +64,8 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		return "", err
 	}
 
+	// 扁平仓库包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
 	if err := writeProvider(repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
-		return "", err
-	}
-	if err := AddWireProviderSet(repositoryFile.RootFileName); err != nil {
 		return "", err
 	}
 	return structContent, nil
@@ -201,10 +199,10 @@ func applyBaseHandlerPackageRef(qualifier *string, alias *string, importPath *st
 	*qualifier = *alias + "."
 }
 
-func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string, dtoFile NameInfo) error {
+func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string, dtoFile, registrarFile NameInfo) error {
 	applyBaseHandlerPackageRef(&handlerData.BaseHandlerQualifier, &handlerData.BaseHandlerAlias, &handlerData.BaseHandlerImport, handlerFile)
 
-	// 请求参数结构体落盘到独立 DTO 文件（internal/admin/dto/<path>.go）
+	// 请求参数结构体落盘到独立 DTO 文件（internal/admin/dto/<table>.go）
 	paramStruct := buildParamStruct(structContent, handlerData)
 	dtoContent, err := render(dtoFile.ParseFile, dtoTemp, struct {
 		Namespace     string
@@ -229,20 +227,19 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err := writeCustomSkeleton(handlerFile, "handler"); err != nil {
 		return err
 	}
-	//写入provider
+	// 扁平 handler 包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
 	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
 		return err
 	}
-	if err := writeRegistrarFile(handlerData, handlerFile); err != nil {
+	// 路由注册器落 internal/admin/router/<table>.go，并接入两个锚点：
+	// 该包合并 ProviderSet 与 ProvideRegistrars（新模块一行 + handler 参数）。
+	if err := writeRegistrarFile(handlerData, registrarFile); err != nil {
 		return err
 	}
-	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Registrar"); err != nil {
+	if err := writeRouterProviderEntry(handlerData.ClassName); err != nil {
 		return err
 	}
-	if err := writeRegistrarProviderEntry(handlerData.ClassName, handlerFile.RootFileName); err != nil {
-		return err
-	}
-	if err := AddWireProviderSet(handlerFile.RootFileName); err != nil {
+	if err := writeAdminRouterEntry(handlerData.ClassName); err != nil {
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
@@ -405,24 +402,25 @@ func render(file string, temp string, data any) (string, error) {
 	return string(text), nil
 }
 
-func writeRegistrarFile(handlerData HandlerData, handlerFile NameInfo) error {
-	registrarPath := registrarFilePath(handlerFile)
+// writeRegistrarFile 写入 admin 渠道路由注册器（internal/admin/router/<table>.go）。
+// 注册器是 router 包自身成员：CRUDRoutes/CRUDCapabilities 同包引用，仅 handler
+// 类型需要包限定。
+func writeRegistrarFile(handlerData HandlerData, registrarFile NameInfo) error {
+	registrarPath := registrarFile.ParseFile
 	data := RegistrarData{
-		Namespace: handlerFile.Namespace,
-		ClassName: handlerData.ClassName,
-		RouteName: lowerFirst(handlerData.ClassName),
-		RoutePath: handlerData.RouteName,
+		Namespace:            registrarFile.Namespace,
+		ClassName:            handlerData.ClassName,
+		RouteName:            lowerFirst(handlerData.ClassName),
+		RoutePath:            handlerData.RouteName,
+		BaseHandlerQualifier: "handler.",
+		BaseHandlerAlias:     "handler",
+		BaseHandlerImport:    "buildadmin-go/internal/admin/handler",
 	}
-	applyBaseHandlerPackageRef(&data.BaseHandlerQualifier, &data.BaseHandlerAlias, &data.BaseHandlerImport, handlerFile)
 	content, err := render(registrarPath, registrarTemp, data)
 	if err != nil {
 		return err
 	}
 	return writeGoFile(registrarPath, content)
-}
-
-func registrarFilePath(handlerFile NameInfo) string {
-	return strings.TrimSuffix(handlerFile.ParseFile, filepath.Ext(handlerFile.ParseFile)) + "_route.go"
 }
 
 type customSkeletonTarget struct {
@@ -691,15 +689,14 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 }
 
 // wireProviderSetRef 计算子包在 cmd/server/wire.go 中的 ProviderSet 引用。
-// 根包（internal/admin/handler、internal/admin/repository、internal/admin/model、
-// internal/common/model 等）已在 wire.Build 静态聚合，无需处理。
+// 根包（internal/admin/handler、internal/admin/repository、internal/api/handler）
+// 已在 wire.Build 静态聚合，无需处理；拍平后生成器不再追加/移除任何 ProviderSet，
+// 本函数仅被历史嵌套布局删除兼容路径调用。
 func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, needed bool, err error) {
 	root := filepath.ToSlash(rootDir)
 	wiredRoots := map[string]string{
 		"internal/admin/handler":    "adminHandler",
 		"internal/admin/repository": "adminRepo",
-		"internal/admin/model":      "adminModel",
-		"internal/common/model":     "commonModel",
 		"internal/api/handler":      "apiHandler",
 	}
 	if _, ok := wiredRoots[root]; ok {
@@ -768,10 +765,12 @@ func addWireProviderSetEntry(content, importPath, alias, anchor string) (string,
 }
 
 // RemoveWireProviderSet 从 cmd/server/wire.go 移除子包 ProviderSet 聚合（幂等）。
+// 仅用于历史嵌套布局删除兼容；拍平根包与未知根一律不处理（历史 manifest 的
+// wire.go 清理是尽力而为——当前 wire.go 由 wire 重生成，旧条目自然消失）。
 func RemoveWireProviderSet(rootDir string) error {
 	importPath, alias, _, needed, err := wireProviderSetRef(rootDir)
 	if err != nil || !needed {
-		return err
+		return nil
 	}
 	providerPath := filepath.Join(utils.RootPath(), rootDir, "provider.go")
 	if content, err := os.ReadFile(providerPath); err == nil {
@@ -830,9 +829,200 @@ func countWireProviderSetEntries(content string) (int, error) {
 	return entries, nil
 }
 
+// adminRouterProviderPath 是 admin 渠道路由注册器的中心锚点文件：
+// ProviderSet（NewXxxRegistrar 列表）与 ProvideRegistrars（每模块一行 + handler 参数）。
+func adminRouterProviderPath() string {
+	return filepath.Join(utils.RootPath(), "internal", "admin", "router", "provider.go")
+}
+
+// writeAdminRouterEntry 向 internal/admin/router/provider.go 的 ProvideRegistrars
+// 增加一行 NewXxxRegistrar(xxx) 与对应 handler 参数（幂等）。ProviderSet 列表由
+// writeProvider 另行追加。
+func writeAdminRouterEntry(className string) error {
+	path := adminRouterProviderPath()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := addProvideRegistrarsEntry(string(content), className)
+	if err != nil {
+		return err
+	}
+	return writeGoFile(path, updated)
+}
+
+func addProvideRegistrarsEntry(content, className string) (string, error) {
+	if strings.Contains(content, "New"+className+"Registrar(") {
+		return content, nil
+	}
+	varName := lowerFirst(className)
+	param := "\t" + varName + " *handler." + className + "Handler,\n"
+	entry := "\t\tNew" + className + "Registrar(" + varName + "),\n"
+
+	// handler 参数：插到 ProvideRegistrars 参数列表结束前
+	paramMarker := ") []Registrar {"
+	paramIndex := strings.Index(content, paramMarker)
+	if paramIndex < 0 {
+		return "", fmt.Errorf("ProvideRegistrars signature anchor not found")
+	}
+	content = content[:paramIndex] + param + content[paramIndex:]
+
+	// 返回 slice 条目：插到 return 列表结束前（文件末 ProvideRegistrars 的收尾）
+	entryMarker := "\t}\n}"
+	entryIndex := strings.LastIndex(content, entryMarker)
+	if entryIndex < 0 {
+		return "", fmt.Errorf("ProvideRegistrars return anchor not found")
+	}
+	content = content[:entryIndex] + entry + content[entryIndex:]
+	return content, nil
+}
+
+// removeAdminRouterEntry 从 internal/admin/router/provider.go 精确移除模块：
+// ProvideRegistrars 的 handler 参数与返回条目，以及 ProviderSet 的 NewXxxRegistrar。
+func removeAdminRouterEntry(className string) error {
+	path := adminRouterProviderPath()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := removeProvideRegistrarsEntry(string(content), className)
+	if err != nil {
+		return err
+	}
+	return writeGoFile(path, updated)
+}
+
+// removeProvideRegistrarsEntry 从 ProvideRegistrars 精确移除模块的 handler 参数
+// 与返回 slice 条目；同时移除 ProviderSet 中的 NewXxxRegistrar 条目（幂等）。
+func removeProvideRegistrarsEntry(content, className string) (string, error) {
+	varName := lowerFirst(className)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return "", err
+	}
+	var removals []sourceRemoval
+	// 1. ProvideRegistrars 参数
+	ast.Inspect(file, func(node ast.Node) bool {
+		function, ok := node.(*ast.FuncDecl)
+		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Type.Params == nil {
+			return true
+		}
+		matchField := func(field *ast.Field) bool {
+			return len(field.Names) == 1 && field.Names[0].Name == varName && strings.Contains(formatNodeText(fset, field, content), className+"Handler")
+		}
+		removed := false
+		for _, field := range function.Type.Params.List {
+			if matchField(field) {
+				removed = true
+				break
+			}
+		}
+		if removed {
+			removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
+				field, ok := node.(*ast.Field)
+				return ok && matchField(field)
+			})...)
+		}
+		return true
+	})
+	// 2. ProvideRegistrars 返回 slice 中的 NewXxxRegistrar(xxx) 调用
+	ast.Inspect(file, func(node ast.Node) bool {
+		composite, ok := node.(*ast.CompositeLit)
+		if !ok || len(composite.Elts) == 0 {
+			return true
+		}
+		removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return false
+			}
+			ident, ok := call.Fun.(*ast.Ident)
+			return ok && ident.Name == "New"+className+"Registrar"
+		})...)
+		return true
+	})
+	// 3. ProviderSet 中的 NewXxxRegistrar 条目（wire.NewSet 参数）
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
+			return true
+		}
+		removals = append(removals, removeListElementRanges(content, fset, call.Lparen, call.Rparen, exprsAsNodes(call.Args), func(node ast.Node) bool {
+			ident, ok := node.(*ast.Ident)
+			return ok && ident.Name == "New"+className+"Registrar"
+		})...)
+		return true
+	})
+	if len(removals) == 0 {
+		return content, nil
+	}
+	content = applySourceRemovals(content, removals)
+	formatted, err := formatGoCode(content)
+	if err != nil {
+		return "", err
+	}
+	return canonicalizeGoContent(formatted), nil
+}
+
+// writeRouterProviderEntry 向 internal/admin/router/provider.go 的
+// var ProviderSet = wire.NewSet(...) 追加 NewXxxRegistrar（幂等）。
+// 该文件还包含 ProvideRegistrars 等函数声明，不能使用 writeProvider 的
+// 行尾启发式。
+func writeRouterProviderEntry(className string) error {
+	path := adminRouterProviderPath()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	updated, err := addProviderSetEntry(string(content), className+"Registrar")
+	if err != nil {
+		return err
+	}
+	return writeGoFile(path, updated)
+}
+
+// addProviderSetEntry 向文件内第一个 var ProviderSet = wire.NewSet(...)
+// 追加 New<name> 条目（幂等），支持文件同时包含函数声明的场景。
+func addProviderSetEntry(content, name string) (string, error) {
+	target := "New" + name
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return "", err
+	}
+	var setCall *ast.CallExpr
+	ast.Inspect(file, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if !ok || len(spec.Names) != 1 || spec.Names[0].Name != "ProviderSet" || len(spec.Values) != 1 {
+			return true
+		}
+		call, ok := spec.Values[0].(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		setCall = call
+		return false
+	})
+	if setCall == nil {
+		return "", fmt.Errorf("ProviderSet declaration not found")
+	}
+	for _, arg := range setCall.Args {
+		if ident, ok := arg.(*ast.Ident); ok && ident.Name == target {
+			return content, nil // 幂等
+		}
+	}
+	insertAt := fset.PositionFor(setCall.Rparen, false).Offset
+	return content[:insertAt] + "\t" + target + ",\n" + content[insertAt:], nil
+}
+
 func writeProvider(dir string, name string) error {
 	providerPath := filepath.Join(utils.RootPath(), dir, "provider.go")
-	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
+	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/router", "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
 		return err
 	}
 	content, err := os.ReadFile(providerPath)

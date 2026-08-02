@@ -266,10 +266,18 @@ func wireApp() {
 `
 
 func TestWireProviderSetRefSkipsWiredRoots(t *testing.T) {
-	for _, root := range []string{"internal/admin/handler", "internal/admin/repository", "internal/admin/model", "internal/common/model", "internal/api/handler"} {
+	for _, root := range []string{"internal/admin/handler", "internal/admin/repository", "internal/api/handler"} {
 		if _, _, _, needed, err := wireProviderSetRef(root); err != nil || needed {
 			t.Fatalf("wired root %q should not need aggregation: needed=%v err=%v", root, needed, err)
 		}
+	}
+	// 拍平后 internal/admin/model、internal/common/model 不再是 wired root，
+	// 且生成器不再向 wire.go 追加 ProviderSet（仅历史删除路径会调用并容忍）。
+	if _, _, _, _, err := wireProviderSetRef("internal/admin/model"); err == nil {
+		t.Fatalf("dead wired root internal/admin/model should not resolve")
+	}
+	if _, _, _, _, err := wireProviderSetRef("internal/common/model"); err == nil {
+		t.Fatalf("dead wired root internal/common/model should not resolve")
 	}
 	importPath, alias, anchor, needed, err := wireProviderSetRef("internal/admin/handler/order")
 	if err != nil || !needed {
@@ -545,7 +553,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "assoc_provider_test", "Assoc.go")},
 		Shared:    []string{provider},
 	}
-	if err := removeAssociatedModelProviders(fields, manifest, true); err != nil {
+	if err := removeAssociatedModelProviders(fields, manifest, deleteLayoutLegacy); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := os.ReadFile(provider)
@@ -570,7 +578,7 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "test.go")},
 		Shared:    []string{provider},
 	}
-	if err := removeAssociatedModelProviders(fields, manifest, true); err != nil {
+	if err := removeAssociatedModelProviders(fields, manifest, deleteLayoutLegacy); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(provider)

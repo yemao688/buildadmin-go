@@ -333,7 +333,7 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "order_id"
 	className := modelData.ClassName
@@ -365,7 +365,7 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "id"
 	modelData.StructTemp = compileDemoStruct(modelData.ClassName, "", "", "")
@@ -391,7 +391,7 @@ func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
 	require.NoError(t, err)
 	assert.Equal(t, "int64", modelData.DataScopeOwnerGoType)
 	modelData.Pk = "id"
@@ -442,7 +442,7 @@ func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {
 func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 	table := crudmodel.Table{
 		Name:           "order_item",
-		ModelFile:      "internal/common/model/OrderItem.go", // 历史前缀仍可解析出新布局实体名
+		ModelFile:      "internal/common/model/OrderItem.go", // 历史前缀仍可解析出类名
 		ControllerFile: "internal/admin/handler/OrderItem.go",
 	}
 	fields := []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}}
@@ -453,13 +453,16 @@ func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 		return name
 	}
 
-	_, handlerData, entityFile, repositoryFile, dtoFile, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	_, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
 	require.NoError(t, err)
 	assert.Equal(t, "buildadmin-go/internal/model", handlerData.ModelImportPath)
 	assert.Equal(t, "OrderItem", entityFile.LastName)
-	assert.Equal(t, filepath.Join(utils.RootPath(), "internal", "model", "OrderItem.go"), entityFile.ParseFile)
+	// 拍平布局：文件恒为 <root>/<table>.go
+	assert.Equal(t, filepath.Join(utils.RootPath(), "internal", "model", "order_item.go"), entityFile.ParseFile)
 	assert.Equal(t, "internal/admin/repository", repositoryFile.RootFileName)
 	assert.Equal(t, "internal/admin/dto", dtoFile.RootFileName)
+	assert.Equal(t, "internal/admin/handler", handlerFile.RootFileName)
+	assert.Equal(t, "internal/admin/router", registrarFile.RootFileName)
 }
 
 func TestModelTemplate_DataScopeNone(t *testing.T) {
@@ -620,7 +623,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 				}
 				return name
 			}
-			modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
+			modelData, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
 			require.NoError(t, err)
 			assert.NotNil(t, modelData.EffectiveFormFields)
 			ownerInEffective := slices.Contains(modelData.EffectiveFormFields, tc.owner)
@@ -696,7 +699,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 				return prefix + strings.TrimPrefix(name, prefix)
 			}
 
-			modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
+			modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.ownerCol, modelData.DataScopePolicy.OwnerColumn)

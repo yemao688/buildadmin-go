@@ -252,7 +252,7 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 		return prefix + tableName
 	}
 
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	require.NoError(t, err)
 	require.Equal(t, data_scope.ModeNone, modelData.DataScopePolicy.Mode)
 
@@ -294,7 +294,7 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 		}
 		return tableName
 	}
-	prepared, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	prepared, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	require.NoError(t, err)
 	require.Equal(t, "id", prepared.QuickSearchField)
 }
@@ -793,7 +793,7 @@ func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.
 		}
 		return name
 	}
-	modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	modelData, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	if err != nil {
 		t.Fatal(err)
 	}

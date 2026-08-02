@@ -202,7 +202,7 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	handlerFile, err := helper.ParseNameData("admin", params.TableName, "handler", "")
+	handlerFile, err := helper.ParseHandlerNameData(params.TableName, "")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -215,15 +215,29 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 		modelFileList[v] = v
 	}
 
+	// 拍平布局：排除核心/工具 handler（不可作为 CRUD 控制器目标）。
 	outExcludeHandler := []string{
-		"addon.go",
 		"ajax.go",
 		"dashboard.go",
 		"index.go",
 		"module.go",
-		"terminal.go",
-		"admin_info.go",
-		"config.go",
+		"crud.go",
+		"crud_log.go",
+		"auth_invalidation.go",
+		"routine_admin_info.go",
+		"routine_attachment.go",
+		"routine_config.go",
+		"security_controller_as.go",
+		"security_data_recycle.go",
+		"security_data_recycle_log.go",
+		"security_sensitive_data.go",
+		"security_sensitive_data_log.go",
+		"admin.go",
+		"admin_group.go",
+		"admin_log.go",
+		"admin_rule.go",
+		"user.go",
+		"user_money_log.go",
 	}
 	controllerFiles := map[string]string{}
 	adminControllerFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/admin/handler"), []string{".go"})

@@ -55,7 +55,7 @@ func renderE2EModel(t *testing.T, table crudmodel.Table, fields []crudmodel.Fiel
 		}
 		return name
 	}
-	modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, cfg, getTableName, proveAll)
+	modelData, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, cfg, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "id"
 	modelData.StructTemp = structContent
