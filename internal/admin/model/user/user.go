@@ -1,0 +1,387 @@
+package user
+
+import (
+	"errors"
+	"fmt"
+	"go-build-admin/internal/admin/model/simple"
+	"go-build-admin/internal/pkg/data_scope"
+	cErr "go-build-admin/internal/pkg/error"
+	passwordutil "go-build-admin/internal/pkg/password"
+	"go-build-admin/internal/conf"
+	"go-build-admin/internal/utils"
+
+	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
+	"github.com/jinzhu/copier"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+)
+
+// User 会员表
+type User struct {
+	ID            int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                         // ID
+	AdminID       int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                               // 管理员ID
+	Username      string       `gorm:"column:username;type:varchar(32);not null;uniqueIndex:username;comment:用户名" json:"username"`           // 用户名
+	Nickname      string       `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                  // 昵称
+	Avatar        string       `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
+	Email         string       `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                        // 邮箱
+	Mobile        string       `gorm:"column:mobile;not null;comment:手机" json:"mobile"`                                                      // 手机
+	Password      string       `gorm:"column:password;not null;comment:密码" json:"password"`                                                  // 密码
+	Status        string       `gorm:"column:status;type:varchar(30);not null;default:enable;comment:状态:enable=启用,disable=禁用" json:"status"` // 状态:enable=启用,disable=禁用
+	Money         float64      `gorm:"column:money;not null;comment:余额" json:"money"`                                                        // 余额
+	LastLoginTime int64        `gorm:"column:last_login_time;comment:上次登录时间" json:"last_login_time"`                                         // 上次登录时间
+	LastLoginIP   string       `gorm:"column:last_login_ip;not null;comment:上次登录IP" json:"last_login_ip"`                                    // 上次登录IP
+	LoginFailure  int32        `gorm:"column:login_failure;not null;comment:登录失败次数" json:"login_failure"`                                    // 登录失败次数
+	JoinIP        string       `gorm:"column:join_ip;not null;comment:加入IP" json:"join_ip"`                                                  // 加入IP
+	JoinTime      int64        `gorm:"column:join_time;comment:加入时间" json:"join_time"`                                                       // 加入时间
+	UpdateTime    int64        `gorm:"autoCreateTime;column:update_time;comment:更新时间" json:"update_time"`                                    // 更新时间
+	CreateTime    int64        `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"`                                    // 创建时间
+	Admin         simple.Admin `gorm:"foreignKey:AdminID" json:"admin"`
+}
+
+type OutUser struct {
+	User
+	Money string `json:"money"`
+}
+
+type UserModel struct {
+	BaseModel
+	config   *conf.Configuration
+	enforcer data_scope.Enforcer
+}
+
+func NewUserModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserModel {
+	return &UserModel{
+		BaseModel: NewBaseModel(config.Database.Prefix+"user", "id", "username,nickname", sqlDB),
+		config:    config,
+		enforcer:  enforcer,
+	}
+}
+
+func (s *UserModel) DealData(ctx *gin.Context, data *User) (*OutUser, error) {
+	outUser := OutUser{}
+	if err := copier.Copy(&outUser, data); err != nil {
+		return nil, err
+	}
+	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+	outUser.Money = fmt.Sprintf("%.2f", data.Money)
+	return &outUser, nil
+}
+
+// scoped applies the fail-closed hierarchical data-scope enforcer to
+// user.admin_id. Only an explicit unrestricted actor bypasses scope.
+func (s *UserModel) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if s.enforcer == nil {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: s.TableName, Column: "admin_id"})
+	}
+}
+
+func (s *UserModel) GetOne(ctx *gin.Context, id int32) (User, error) {
+	data := User{}
+	err := s.DBFor(ctx).Model(&User{}).Scopes(s.scoped(ctx)).Preload("Admin").Omit("password").Where("`"+s.TableName+"`.id = ?", id).First(&data).Error
+	return data, err
+}
+
+func (s *UserModel) List(ctx *gin.Context) ([]*OutUser, int64, error) {
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	var total int64 = 0
+	list := []*User{}
+
+	db := s.DBFor(ctx).Model(&User{}).Where(whereS, whereP...)
+	db = db.Preload("Admin")
+	db = db.Scopes(s.scoped(ctx))
+	if err = db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := db.Omit("password").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := []*OutUser{}
+	for _, v := range list {
+		outUser, err := s.DealData(ctx, v)
+		if err != nil {
+			return nil, 0, err
+		}
+		result = append(result, outUser)
+	}
+	return result, total, nil
+}
+
+func (s *UserModel) Add(ctx *gin.Context, user *User) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	actor, err := s.enforcer.Actor(ctx)
+	if err != nil {
+		return err
+	}
+
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if ctx == nil || ctx.Request == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		if err != nil {
+			return err
+		}
+		ownerID := user.AdminID
+		if ownerID == 0 {
+			ownerID = actor.AdminID
+		}
+		if err := s.validateUserOwner(ctx, tx, ownerID); err != nil {
+			return err
+		}
+		user.AdminID = ownerID
+		// Creating a user owned by the actor only makes sense if the closure table
+		// contains the actor's self-row; otherwise the new row would be invisible.
+		if !actor.Unrestricted {
+			closureTable := s.config.Database.Prefix + "admin_closure"
+			var n int64
+			if err := tx.Table(closureTable).Where("ancestor_id = ? AND descendant_id = ?", actor.AdminID, actor.AdminID).Count(&n).Error; err != nil {
+				return err
+			}
+			if n == 0 {
+				return cErr.BadRequest("admin scope self-row missing")
+			}
+		}
+		if err := tx.Where("username=?", user.Username).Take(&User{}).Error; err == nil {
+			return cErr.BadRequest("username already exists")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		result := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(user)
+		if result.Error != nil {
+			if isDuplicateKeyError(result.Error) {
+				return cErr.BadRequest("username already exists")
+			}
+			return result.Error
+		}
+		return nil
+	})
+}
+
+func isDuplicateKeyError(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+func (s *UserModel) UsernameExists(ctx *gin.Context, username string) (bool, error) {
+	err := s.DBFor(ctx).Where("username=?", username).Take(&User{}).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func (s *UserModel) Edit(ctx *gin.Context, user *User, password string) error {
+	updates := map[string]interface{}{
+		"username":  user.Username,
+		"nickname":  user.Nickname,
+		"email":     user.Email,
+		"mobile":    user.Mobile,
+		"avatar":    user.Avatar,
+		"join_ip":   user.JoinIP,
+		"join_time": user.JoinTime,
+		"status":    user.Status,
+	}
+	if password != "" {
+		hash, err := passwordutil.Hash(password)
+		if err != nil {
+			return err
+		}
+		updates["password"] = hash
+	}
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if ctx == nil || ctx.Request == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		if err != nil {
+			return err
+		}
+		if err := tx.Where("id<>? and username=?", user.ID, user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
+			return cErr.BadRequest("Account not exist")
+		}
+		var current User
+		if err := tx.Model(&User{}).Scopes(s.scoped(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
+			return err
+		}
+		if current.AdminID <= 0 || user.AdminID <= 0 {
+			return cErr.BadRequest("invalid administrator owner")
+		}
+		ownerChanged := current.AdminID != user.AdminID
+		if ownerChanged {
+			if err := s.validateUserOwner(ctx, tx, user.AdminID); err != nil {
+				return err
+			}
+			if err := s.validateUserLogOwners(tx, current.ID, current.AdminID); err != nil {
+				return err
+			}
+			updates["admin_id"] = user.AdminID
+		}
+		result := tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		if ownerChanged {
+			if err := s.syncUserLogOwners(tx, current.ID, user.AdminID); err != nil {
+				return err
+			}
+			if err := s.validateUserLogOwners(tx, current.ID, user.AdminID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (s *UserModel) validateUserOwner(ctx *gin.Context, tx *gorm.DB, ownerID int32) error {
+	if err := data_scope.OwnerInScope(ctx, tx, s.enforcer, s.config.Database.Prefix, ownerID); err != nil {
+		return err
+	}
+	var enabled int64
+	if err := tx.Table(s.config.Database.Prefix+"admin").Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND status = ?", ownerID, "enable").Count(&enabled).Error; err != nil {
+		return err
+	}
+	if enabled != 1 {
+		return cErr.BadRequest("administrator owner is disabled")
+	}
+	return nil
+}
+
+func (s *UserModel) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
+		var logs []struct{ AdminID *int32 }
+		if err := tx.Table(table).Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
+			return err
+		}
+		for _, log := range logs {
+			if log.AdminID == nil || *log.AdminID != ownerID {
+				return cErr.BadRequest("user log owner mismatch")
+			}
+		}
+	}
+	return nil
+}
+
+func (s *UserModel) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
+	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
+		if err := tx.Table(table).Where("user_id = ?", userID).Update("admin_id", ownerID).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *UserModel) ResetPassword(ctx *gin.Context, id int32, password string) error {
+	hash, err := passwordutil.Hash(password)
+	if err != nil {
+		return err
+	}
+	var result *gorm.DB
+	err = s.Transaction(ctx, func(tx *gorm.DB) error {
+		result = tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Updates(map[string]interface{}{
+			"password": hash,
+		})
+		return result.Error
+	})
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateStatus updates only the status field for a single user within the
+// current actor's scope. It is used for switch-style partial edits so that
+// the update carries scope and cannot touch out-of-scope rows.
+func (s *UserModel) UpdateStatus(ctx *gin.Context, id int32, status string) error {
+	var result *gorm.DB
+	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		result = tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Update("status", status)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *UserModel) Del(ctx *gin.Context, ids interface{}) error {
+	values, ok := ids.([]int32)
+	if !ok || len(values) == 0 {
+		return fmt.Errorf("invalid user ids")
+	}
+	seen := make(map[int32]struct{}, len(values))
+	normalized := make([]int32, 0, len(values))
+	for _, id := range values {
+		if id <= 0 {
+			return fmt.Errorf("invalid user id %d", id)
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			normalized = append(normalized, id)
+		}
+	}
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		var list []User
+		scoped := tx.Model(&User{}).Scopes(s.scoped(ctx))
+		// User deletion and balance changes use the same user-row lock protocol.
+		if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id IN ?", normalized).Find(&list).Error; err != nil {
+			return err
+		}
+		if len(list) != len(normalized) {
+			return gorm.ErrRecordNotFound
+		}
+		// Reject deletion if any user still has money logs to prevent new orphans.
+		moneyTable := s.config.Database.Prefix + "user_money_log"
+		var moneyLogs []struct{ ID int32 }
+		if err := tx.Table(moneyTable).Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("user_id IN ?", normalized).Find(&moneyLogs).Error; err != nil {
+			return err
+		}
+		if len(moneyLogs) > 0 {
+			return cErr.BadRequest("user has money logs, cannot delete")
+		}
+		del := scoped.Where("`"+s.TableName+"`.id IN ?", normalized).Delete(nil)
+		if del.Error != nil {
+			return del.Error
+		}
+		if del.RowsAffected != int64(len(normalized)) {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+}

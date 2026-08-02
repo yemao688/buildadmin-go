@@ -1,0 +1,153 @@
+package handler
+
+import (
+	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/pkg/captcha"
+	"go-build-admin/internal/pkg/clickcaptcha"
+	cErr "go-build-admin/internal/pkg/error"
+	"go-build-admin/internal/pkg/requesttx"
+	"go-build-admin/internal/pkg/token"
+	"go-build-admin/internal/conf"
+	"go-build-admin/internal/utils"
+	"image/png"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+)
+
+type CommonHandler struct {
+	log          *zap.Logger
+	clickCaptcha *clickcaptcha.ClickCaptcha
+	captcha      *captcha.Captcha
+	tokenHelper  *token.TokenHelper
+	authM        *member.Service
+	config       *conf.Configuration
+}
+
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
+	registerBuiltinRefreshTypes()
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
+}
+
+func FailByErrWithData(c *gin.Context, err error, data interface{}) {
+	v, ok := err.(*cErr.Error)
+	if !ok {
+		FailByErr(c, err)
+		return
+	}
+
+	msg := utils.Lang(c, v.Error(), nil)
+	if requesttx.Stage(c, requesttx.Outcome{
+		HTTPCode:     v.HttpCode(),
+		BusinessCode: v.ErrorCode(),
+		Message:      msg,
+		Data:         data,
+	}) {
+		return
+	}
+	c.JSON(v.HttpCode(), Response{v.ErrorCode(), data, msg, 0})
+}
+
+// 图形验证码
+func (h *CommonHandler) Captcha(ctx *gin.Context) {
+	var params struct {
+		Id string `form:"id" json:"id" binding:"required"`
+	}
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	img, err := h.captcha.Entry(params.Id)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	// 将图像写入 HTTP 响应
+	ctx.Writer.Header().Set("Content-Type", "image/png")
+	err = png.Encode(ctx.Writer, img)
+	if err != nil {
+		ctx.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+}
+
+// 点选验证码
+func (h *CommonHandler) ClickCaptcha(ctx *gin.Context) {
+	var params struct {
+		Id string `form:"id" json:"id" binding:"required"`
+	}
+	if err := ctx.ShouldBindQuery(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	result, err := h.clickCaptcha.Create(ctx, params.Id)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, result)
+}
+
+// 点选验证码检查
+func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
+	var params struct {
+		Id    string `json:"id" binding:"required"`
+		Info  string `json:"info" binding:"required"`
+		Unset bool   `json:"unset"`
+	}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if !h.clickCaptcha.Check(params.Id, params.Info, params.Unset) {
+		FailByErr(ctx, cErr.BadRequest("Captcha error"))
+		return
+	}
+	Success(ctx, "")
+}
+
+func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
+	registerBuiltinRefreshTypes()
+	var params struct {
+		RefreshToken string `json:"refreshToken"`
+	}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	if params.RefreshToken == "" {
+		FailByErr(ctx, cErr.BadRequest("Login expired, please login again."))
+		return
+	}
+	result, err := h.tokenHelper.Get(params.RefreshToken)
+	if err != nil {
+		FailByErr(ctx, cErr.BadRequest("Login expired, please login again."))
+		return
+	}
+
+	desc, ok := lookupRefreshType(result.Type)
+	if !ok {
+		FailByErr(ctx, cErr.BadRequest("Invalid token"))
+		return
+	}
+
+	if ctx.GetHeader(desc.AccessHeader) == "" {
+		FailByErr(ctx, cErr.BadRequest("Invalid token"))
+		return
+	}
+
+	ctx.Set(refreshHandlerContextKey, h)
+	newToken, err := desc.Refresh(ctx, params.RefreshToken, result.UserID)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	Success(ctx, map[string]any{
+		"type":  result.Type,
+		"token": newToken,
+	})
+}

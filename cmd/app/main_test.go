@@ -1,8 +1,8 @@
 package main
 
 import (
-	appVersion "go-build-admin/app/pkg/version"
-	"go-build-admin/conf"
+	appVersion "go-build-admin/internal/pkg/version"
+	"go-build-admin/internal/conf"
 	"testing"
 	"time"
 )
