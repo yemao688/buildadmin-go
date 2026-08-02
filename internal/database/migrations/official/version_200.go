@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/database/migrations/model"
+	"go-build-admin/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -170,7 +171,7 @@ func version202(db *gorm.DB, config *conf.Configuration) error {
 }
 
 func version205(db *gorm.DB, config *conf.Configuration) error {
-	var cfgs []model.Config
+	var cfgs []siteconfig.Config
 	result := db.Table(core.TableName(config, "config")).Where("name = ?", "config_quick_entrance").Find(&cfgs)
 	if result.Error != nil {
 		return result.Error

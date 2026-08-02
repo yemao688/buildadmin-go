@@ -2,8 +2,9 @@ package official
 
 import (
 	"errors"
+	"go-build-admin/internal/common/siteconfig"
+	"go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/systemroot"
-	"go-build-admin/internal/database/migrations/model"
 	"time"
 
 	"gorm.io/gorm"
@@ -953,9 +954,9 @@ func (s Install) Admin() error {
 }
 
 func (s Install) Config() error {
-	err := s.sqlDB.Where("id=?", "1").First(&model.Config{}).Error
+	err := s.sqlDB.Where("id=?", "1").First(&siteconfig.Config{}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		dataList := []*model.Config{
+		dataList := []*siteconfig.Config{
 			{
 				ID:      1,
 				Name:    "config_group",

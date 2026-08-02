@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/database/migrations/model"
+	"go-build-admin/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -112,7 +113,7 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 
 func seedCountryLanguages(db *gorm.DB, config *conf.Configuration) error {
 	table := core.TableName(config, "country_language")
-	rows := []model.CountryLanguage{
+	rows := []model.Language{
 		{Lan: "zh-cn", Name: "简体中文", Remark: "简体中文", Status: 1, Weigh: 2},
 		{Lan: "en", Name: "English", Remark: "English", Status: 1, Weigh: 1},
 	}
@@ -133,7 +134,7 @@ func seedCountryLanguages(db *gorm.DB, config *conf.Configuration) error {
 
 func seedUploadConfig(db *gorm.DB, config *conf.Configuration) error {
 	table := core.TableName(config, "config")
-	var group model.Config
+	var group siteconfig.Config
 	err := db.Table(table).Where("name = ?", "config_group").Take(&group).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
@@ -181,8 +182,8 @@ func appendUploadConfigGroup(value string) (bool, string, error) {
 	return true, string(raw), nil
 }
 
-func aliossConfigRows() []model.Config {
-	return []model.Config{
+func aliossConfigRows() []siteconfig.Config {
+	return []siteconfig.Config{
 		{ID: 14, Name: "upload_mode", Group: "upload", Title: "存储方式", Type: "select", Value: "framework", Content: `{"framework":"本地磁盘存储","alioss":"阿里云对象存储OSS"}`, Rule: "required", Weigh: 99},
 		{ID: 15, Name: "upload_bucket", Group: "upload", Title: "Bucket名称", Tip: "请在阿里云对象存储控制台查询", Type: "string", Value: "", Rule: "", Weigh: 98},
 		{ID: 16, Name: "upload_access_id", Group: "upload", Title: "AccessKey ID", Tip: "请在阿里云个人中心查询", Type: "string", Value: "", Rule: "", Weigh: 97},

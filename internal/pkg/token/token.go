@@ -25,12 +25,12 @@ type Driver interface {
 }
 
 type Token struct {
-	Token      string `gorm:"column:token;primaryKey;comment:Token" json:"token"`  // Token
-	Type       string `gorm:"column:type;not null;comment:类型" json:"type"`         // 类型
-	UserID     int32  `gorm:"column:user_id;not null;comment:用户ID" json:"user_id"` // 用户ID
-	CreateTime int64  `gorm:"column:create_time;comment:创建时间" json:"create_time"`  // 创建时间
-	ExpireTime int64  `gorm:"column:expire_time;comment:过期时间" json:"expire_time"`  // 过期时间
-	ExpiresIn  int64  `gorm:"-" json:"expires_in"`                                 // 返回剩余有效时间
+	Token      string `gorm:"column:token;type:varchar(70) default '';primaryKey;comment:Token" json:"token"`                                           // Token
+	Type       string `gorm:"column:type;type:varchar(15) default '';not null;index:idx_token_type_user,priority:1;comment:类型" json:"type"`             // 类型
+	UserID     int32  `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;index:idx_token_type_user,priority:2;comment:用户ID" json:"user_id"` // 用户ID
+	CreateTime int64  `gorm:"column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                                 // 创建时间
+	ExpireTime int64  `gorm:"column:expire_time;type:bigint(16) unsigned default null;comment:过期时间" json:"expire_time"`                                 // 过期时间
+	ExpiresIn  int64  `gorm:"-" json:"expires_in"`                                                                                                      // 返回剩余有效时间
 }
 
 type TokenHelper struct {

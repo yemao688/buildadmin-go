@@ -23,16 +23,16 @@ func (Log) TableName(namer schema.Namer) string {
 
 // Log CRUD记录表
 type Log struct {
-	ID         int32       `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`
-	AdminID    int32       `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                                 // ID
-	Tablename  string      `gorm:"column:table_name;not null;comment:数据表名" json:"table_name"`                                              // 数据表名
-	Table      JSON_TABLE  `gorm:"column:table;comment:数据表数据" json:"table"`                                                                // 数据表数据
-	Fields     JSON_FIELDS `gorm:"column:fields;comment:字段数据" json:"fields"`                                                               // 字段数据
-	Status     string      `gorm:"column:status;not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
-	Comment    string      `gorm:"column:comment;comment:表注释" json:"comment"`
-	Connection string      `gorm:"column:connection;not null;default:'';comment:数据库连接配置标识" json:"connection"`
-	Sync       int         `gorm:"column:sync;default:0;comment:同步记录" json:"sync"`
-	CreateTime int64       `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
+	ID         int32       `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                                          // ID
+	AdminID    int32       `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:管理员ID" json:"admin_id"`                                            // ID
+	Tablename  string      `gorm:"column:table_name;type:varchar(200) default '';not null;comment:数据表名" json:"table_name"`                                                               // 数据表名
+	Table      JSON_TABLE  `gorm:"column:table;type:text;comment:数据表数据" json:"table"`                                                                                                    // 数据表数据
+	Fields     JSON_FIELDS `gorm:"column:fields;type:text;comment:字段数据" json:"fields"`                                                                                                   // 字段数据
+	Status     string      `gorm:"column:status;type:enum('delete','success','error','start');not null;default:start;comment:状态:delete=已删除,success=成功,error=失败,start=生成中" json:"status"` // 状态:delete=已删除,success=成功,error=失败,start=生成中
+	Comment    string      `gorm:"column:comment;type:varchar(255) default '';not null;comment:表注释" json:"comment"`
+	Connection string      `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
+	Sync       int         `gorm:"column:sync;type:int(11);not null;default:0;comment:同步记录" json:"sync"`
+	CreateTime int64       `gorm:"autoCreateTime;column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
 }
 
 type LogModel struct {

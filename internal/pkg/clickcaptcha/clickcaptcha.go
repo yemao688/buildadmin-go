@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/model"
+	"go-build-admin/internal/pkg/captcha"
 	"go-build-admin/internal/utils"
 	"image"
 	"image/color"
@@ -213,17 +213,17 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 
 	key := utils.Md5(id)
 	var result map[string]interface{}
-	c.sqlDB.Model(&model.Captcha{}).Where(" `key` = ? ", key).Scan(&result)
+	c.sqlDB.Model(&captcha.Captcha{}).Where(" `key` = ? ", key).Scan(&result)
 
 	if _, ok := result["key"]; ok {
-		err = c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Updates(map[string]interface{}{
+		err = c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Updates(map[string]interface{}{
 			"code":        utils.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
 			"create_time": time.Now().Unix(),
 			"expire_time": time.Now().Unix() + 600,
 		}).Error
 	} else {
-		err = c.sqlDB.Model(&model.Captcha{}).Create(map[string]interface{}{
+		err = c.sqlDB.Model(&captcha.Captcha{}).Create(map[string]interface{}{
 			"key":         key,
 			"code":        utils.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
@@ -280,19 +280,19 @@ func loadImage(filePath string) (image.Image, error) {
 func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	key := utils.Md5(id)
 
-	captcha := model.Captcha{}
-	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).First(&captcha).Error
+	record := captcha.Captcha{}
+	err := c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).First(&record).Error
 	if err != nil {
 		return false
 	}
 
-	if captcha.ExpireTime < time.Now().Unix() {
-		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
+	if record.ExpireTime < time.Now().Unix() {
+		c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Delete(nil)
 		return false
 	}
 
 	captchaInfo := CaptchaInfo{}
-	err = json.Unmarshal([]byte(captcha.Captcha), &captchaInfo)
+	err = json.Unmarshal([]byte(record.Captcha), &captchaInfo)
 	if err != nil {
 		return false
 	}
@@ -360,7 +360,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 	}
 
 	if unset {
-		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
+		c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Delete(nil)
 	}
 	return true
 }

@@ -19,8 +19,10 @@ func migrationModels() []any {
 }
 
 func freshMigrationTableNames() []string {
+	// CoreLogicalNames covers the 21 business tables; the three migration
+	// ledgers are created by the ledger bootstrap, not by the snapshot.
 	names := append([]string(nil), core.CoreLogicalNames()...)
-	return append(names, "migrations_framework", "migrations_business")
+	return append(names, "migrations", "migrations_framework", "migrations_business")
 }
 
 func freshMigrationDatabase(t *testing.T, db *gorm.DB, prefix string) (*gorm.DB, *conf.Configuration) {

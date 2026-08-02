@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	crudmodel "go-build-admin/internal/admin/model/crud"
+	"go-build-admin/internal/common/upload"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/database/migrations/model"
+	"go-build-admin/internal/model"
 
 	"gorm.io/gorm"
 )
@@ -40,7 +42,7 @@ func version206(db *gorm.DB, config *conf.Configuration) error {
 		name  string
 		model any
 	}{
-		{"crud_log", &model.CrudLog{}},
+		{"crud_log", &crudmodel.Log{}},
 		{"security_data_recycle", &model.SecurityDataRecycle{}},
 		{"security_data_recycle_log", &model.SecurityDataRecycleLog{}},
 		{"security_sensitive_data", &model.SecuritySensitiveData{}},
@@ -70,7 +72,7 @@ func version222(db *gorm.DB, config *conf.Configuration) error {
 		field string
 	}
 	alterSpecs := []alterSpec{
-		{"attachment", &model.Attachment{}, "Name"},
+		{"attachment", &upload.Attachment{}, "Name"},
 		{"admin", &model.Admin{}, "Password"},
 		{"user", &model.User{}, "Password"},
 	}
@@ -83,7 +85,7 @@ func version222(db *gorm.DB, config *conf.Configuration) error {
 
 	// crud_log 新增 comment 和 sync（独立检查，幂等）
 	crudLogTable := core.TableName(config, "crud_log")
-	crudLogModel := &model.CrudLog{}
+	crudLogModel := &crudmodel.Log{}
 	crudMigrator := db.Table(crudLogTable).Migrator()
 	if !crudMigrator.HasColumn(crudLogModel, "Comment") {
 		if err := crudMigrator.AddColumn(crudLogModel, "Comment"); err != nil {

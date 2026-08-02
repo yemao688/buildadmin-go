@@ -3,7 +3,7 @@ package clickcaptcha
 import (
 	"encoding/json"
 	"fmt"
-	"go-build-admin/internal/database/migrations/model"
+	"go-build-admin/internal/pkg/captcha"
 	"go-build-admin/internal/utils"
 	"math/rand"
 	"os"
@@ -107,7 +107,7 @@ func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Create(&model.Captcha{
+	if err := db.Create(&captcha.Captcha{
 		Key:        utils.Md5("clickcaptcha-test"),
 		Captcha:    string(captchaJSON),
 		ExpireTime: time.Now().Unix() + 600,

@@ -14,6 +14,6 @@ var ProviderSet = wire.NewSet(
 	terminal.NewTerminal,
 	token.NewTokenHelper,
 	clickcaptcha.NewClickCaptcha,
-	captcha.NewCaptcha,
+	captcha.NewCaptchaService,
 	data_scope.ProviderSet,
 )

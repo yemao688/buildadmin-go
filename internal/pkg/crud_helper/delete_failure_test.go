@@ -100,7 +100,28 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 	cfg := &conf.Configuration{}
 	cfg.Database.Prefix = "ba_"
-	if err := db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}); err != nil {
+	// The entity carries MySQL-specific type tags (int unsigned, enum);
+	// sqlite cannot AutoMigrate them, so create the fixture table with
+	// sqlite-native DDL matching the runtime column shape.
+	if err := db.Exec(`CREATE TABLE ba_admin_rule (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		pid INTEGER NOT NULL DEFAULT 0,
+		"type" TEXT NOT NULL DEFAULT 'menu',
+		title TEXT NOT NULL DEFAULT '',
+		name TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		icon TEXT NOT NULL DEFAULT '',
+		menu_type TEXT NOT NULL DEFAULT '',
+		url TEXT NOT NULL DEFAULT '',
+		component TEXT NOT NULL DEFAULT '',
+		keepalive INTEGER NOT NULL DEFAULT 0,
+		extend TEXT NOT NULL DEFAULT 'none',
+		remark TEXT NOT NULL DEFAULT '',
+		weigh INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT '1',
+		update_time INTEGER,
+		create_time INTEGER
+	)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error; err != nil {

@@ -2,9 +2,9 @@ package migrations
 
 import (
 	"fmt"
-	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/database/migrations/internal/core"
+	"go-build-admin/internal/pkg/testutil"
 	"strings"
 	"testing"
 
@@ -52,6 +52,9 @@ func TestInstall(t *testing.T) {
 		}
 	}
 	seedConfig := &conf.Configuration{Database: conf.Database{Prefix: "go_"}}
+	if err := BootstrapOfficialLedger(db, seedConfig); err != nil {
+		t.Fatal(err)
+	}
 	if err := MarkSeedPending(db, seedConfig); err != nil {
 		t.Fatal(err)
 	}

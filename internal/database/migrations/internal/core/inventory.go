@@ -1,8 +1,21 @@
 package core
 
-import "go-build-admin/internal/database/migrations/model"
+import (
+	"go-build-admin/internal/admin/model/crud"
+	"go-build-admin/internal/common/siteconfig"
+	"go-build-admin/internal/common/upload"
+	"go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/captcha"
+	"go-build-admin/internal/pkg/token"
+)
 
 // CoreTable describes one framework table in fresh-snapshot order.
+// Models are collected from their owning packages: the shared entity layer
+// (internal/model) plus the per-table owners (upload.Attachment,
+// siteconfig.Config, token.Token, captcha.Captcha, crud.Log). The three
+// migrations ledgers are created by the ledger bootstrap (BootstrapOfficial/
+// Framework/BusinessLedger) and are intentionally not part of the
+// AutoMigrate snapshot.
 type CoreTable struct {
 	LogicalName string
 	NewModel    func() any
@@ -16,20 +29,19 @@ var coreTables = []CoreTable{
 	{LogicalName: "admin", NewModel: func() any { return &model.Admin{} }},
 	{LogicalName: "admin_closure", NewModel: func() any { return &model.AdminClosure{} }},
 	{LogicalName: "area", NewModel: func() any { return &model.Area{} }},
-	{LogicalName: "attachment", NewModel: func() any { return &model.Attachment{} }},
-	{LogicalName: "captcha", NewModel: func() any { return &model.Captcha{} }},
-	{LogicalName: "config", NewModel: func() any { return &model.Config{} }},
-	{LogicalName: "country_language", NewModel: func() any { return &model.CountryLanguage{} }},
-	{LogicalName: "country_language_content", NewModel: func() any { return &model.CountryLanguageContent{} }},
-	{LogicalName: "country_currency", NewModel: func() any { return &model.CountryCurrency{} }},
-	{LogicalName: "crud_log", NewModel: func() any { return &model.CrudLog{} }},
-	{LogicalName: "migrations", NewModel: func() any { return &model.Migrations{} }},
+	{LogicalName: "attachment", NewModel: func() any { return &upload.Attachment{} }},
+	{LogicalName: "captcha", NewModel: func() any { return &captcha.Captcha{} }},
+	{LogicalName: "config", NewModel: func() any { return &siteconfig.Config{} }},
+	{LogicalName: "country_language", NewModel: func() any { return &model.Language{} }},
+	{LogicalName: "country_language_content", NewModel: func() any { return &model.LanguageContent{} }},
+	{LogicalName: "country_currency", NewModel: func() any { return &model.Currency{} }},
+	{LogicalName: "crud_log", NewModel: func() any { return &crud.Log{} }},
 	{LogicalName: "security_data_recycle_log", NewModel: func() any { return &model.SecurityDataRecycleLog{} }},
 	{LogicalName: "security_data_recycle", NewModel: func() any { return &model.SecurityDataRecycle{} }},
 	{LogicalName: "security_sensitive_data_log", NewModel: func() any { return &model.SecuritySensitiveDataLog{} }},
 	{LogicalName: "security_sensitive_data", NewModel: func() any { return &model.SecuritySensitiveData{} }},
-	{LogicalName: "token", NewModel: func() any { return &model.Token{} }},
-	{LogicalName: "user_money_log", NewModel: func() any { return &model.UserMoneyLog{} }},
+	{LogicalName: "token", NewModel: func() any { return &token.Token{} }},
+	{LogicalName: "user_money_log", NewModel: func() any { return &model.MoneyLog{} }},
 	{LogicalName: "user", NewModel: func() any { return &model.User{} }},
 }
 

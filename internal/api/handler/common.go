@@ -2,12 +2,12 @@ package handler
 
 import (
 	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/conf"
 	"go-build-admin/internal/pkg/captcha"
 	"go-build-admin/internal/pkg/clickcaptcha"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/requesttx"
 	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
 	"image/png"
 	"net/http"
@@ -19,13 +19,13 @@ import (
 type CommonHandler struct {
 	log          *zap.Logger
 	clickCaptcha *clickcaptcha.ClickCaptcha
-	captcha      *captcha.Captcha
+	captcha      *captcha.CaptchaService
 	tokenHelper  *token.TokenHelper
 	authM        *member.Service
 	config       *conf.Configuration
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.Captcha, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.CaptchaService, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
 	registerBuiltinRefreshTypes()
 	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
 }
