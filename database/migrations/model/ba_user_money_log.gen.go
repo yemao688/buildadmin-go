@@ -8,7 +8,7 @@ package model
 type UserMoneyLog struct {
 	ID         int32   `gorm:"column:id;type:int(11) unsigned;not null;primaryKey;autoIncrement:true;comment:ID" json:"id"`               // ID
 	AdminID    int32   `gorm:"column:admin_id;type:int(11) unsigned;not null;default:0;index:idx_admin_id;comment:管理员ID" json:"admin_id"` // 管理员ID
-	UserID     int32   `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;comment:会员ID" json:"user_id"`                       // 会员ID
+	UserID     int32   `gorm:"column:user_id;type:int(11) unsigned;not null;default:0;index:idx_user_id;comment:会员ID" json:"user_id"`     // 会员ID
 	Money      float64 `gorm:"column:money;type:decimal(12,2);not null;default:0.00;comment:变更余额" json:"money"`                           // 变更余额
 	Before     float64 `gorm:"column:before;type:decimal(12,2);not null;default:0.00;comment:变更前余额" json:"before"`                        // 变更前余额
 	After      float64 `gorm:"column:after;type:decimal(12,2);not null;default:0.00;comment:变更后余额" json:"after"`                          // 变更后余额

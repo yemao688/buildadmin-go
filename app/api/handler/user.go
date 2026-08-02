@@ -12,6 +12,8 @@ import (
 	"go.uber.org/zap"
 )
 
+var usernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`)
+
 type UserHandler struct {
 	log          *zap.Logger
 	config       *conf.Configuration
@@ -85,7 +87,7 @@ func (h *UserHandler) Register(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if !regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`).MatchString(params.Username) {
+	if !usernamePattern.MatchString(params.Username) {
 		FailByErr(ctx, cErr.BadRequest("username invalid"))
 		return
 	}
