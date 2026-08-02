@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.7.5
+
+> 纯增量版本：无破坏性变更，主题为"门户友好度"——消除业务门户/多角色对框架文件的硬补丁（下游反馈 A/B/C/D 四组全量落地）。
+
+- **Added (web, token provider):** axios token 机制注册化——新增 `web/src/utils/tokenProvider.ts` 注册表与 `registerTokenProvider({domain, header, store, loginRoute})`；请求注入、刷新队列、刷新失败清理、303 分流、pending key 全部改走 provider 解析（原 13 处 batoken/ba-user-token 硬编码触点）；`main.ts` 注册内建 admin/baAccount/userInfo 三个 provider（规避 axios↔store 循环依赖）；`api/common.ts refreshToken()` 改查注册表并保持 `refreshToken('admin'|'baAccount')` 向后兼容；`axios.ts` 的 `Options` 接口导出。业务第二门户（seller/rider…）注册一个 provider 即可接入，不再对 448 行框架文件做外科手术。
+- **Added (api, refresh registry):** `/api/common/refreshToken` 刷新类型解析注册化——`RefreshTypeDescriptor{AccessType, AccessHeader, Refresh}` + `RegisterRefreshType`（空类型/重复注册报错）；内建 admin/user 于 handler 构造期幂等注册，业务第三角色从自己的 registrar/init 注册即可，无需修改框架 switch。未知类型拒绝、域 header 校验、TTL 与响应契约逐字节保持（既有 4 个契约测试原样通过）。
+- **Added (web, 门户设施):** 回补 v2.7.0 骨架精简时移除的五项通用门户设施——`memberCenter` store、`MemberCenter` 接口、`SiteConfig.headNav/setHeadNav`、`utils/router.ts handleFrontendRoute`、`memberCenterBase` 路由（导出 `frontendBaseRoute`/`frontendBaseRoutePath` 兼容名；历史 `layouts/frontend/user.vue` 已删除，动态路由父级改用 RouterView）。`/api/index/index` 初始化链未恢复（端点当前不存在；设施保留为可选管道，未新造后端端点）。
+- **Added (crud, 资金原语):** `MoneyLogModel.ApplyMoneyDelta(tx, input)` ctx-free 资金变动原语——显式事务句柄 + 输入结构（UserID/Delta/流水字段/操作者 id，0=系统；可选 scope func，nil=系统流）；FOR UPDATE → 属主校验 → before/after → 负余额拒绝 → 原子 `money + ?` + RowsAffected 校验 → 写流水，事务链与 `Add` 逐步一致；`Add` 收缩为薄适配层。门户自服务到账、cron 自动结算等无 admin ctx 路径直接复用框架资金正确性代码（下游此前被迫复制约 900 行同类逻辑）。
+- **Added (migrations, business):** `business.SeedAdminRule`——业务迁移 seed `admin_rule` 权限/菜单行的官方 helper：前缀安全（core.QuoteIdentifier/TableName）、业务键幂等可重入、支持 children 递归菜单树；`database/migrations/business/README.md` 新增契约小节与 Up 调用示例，取代照抄 framework 裸 SQL。
+- **Added (web, 占位与语言):** 占位首页路由文件化——`router/static/homePlaceholder.ts`（static.ts 改为 `import.meta.glob('./static/*.ts', {eager:true})` 目录加载并保持 `/` 置顶），业务删除该单文件即接管 `/`，升级合并零冲突；语言包按需加载 glob 由仅 `./backend/**` 泛化为 `./*/{locale}/**`，业务门户新增语言目录免改框架文件。
+- **Added (docs, crud):** `_custom.go` 定制保护机制正式入档（`xxx.go`↔`xxx_custom.go` 命名约定、保护目录、一次性骨架、manifest 排除、推荐"生成 commit + 定制 commit"双提交工作流）；多属主读范围节桥接 `ReadExtraOwners` 代码标识符便于检索。
+- **Fixed (web, hygiene):** 防 `.js` 产物静默覆盖——Vite 解析 `.js` 优先于 `.ts`，tsc 误发射的陈旧产物会静默运行旧代码且对 git status 隐形：eslint 对 `src/**/*.js` 一律报错、`tsconfig.json` 补 `noEmit: true`、清理 128 个历史存量。
+
+## v2.7.4
+
+> 优化战役：安全/正确性/性能审计修复批，本地验证全量 46 包零 FAIL + dev 活体冒烟（管理员增删、敏感审计、日志归属）通过。
+
+- **perf (schema):** 补 5 处高频查询索引（`user_money_log.user_id`、`token (type,user_id)` 复合、`recycle_log.recycle_id`、`sensitive_log.sensitive_id`、`attachment.user_id`，gen model tag 声明，AutoMigrate 新装生效）；API 路由正则提升为包级编译。
+- **Fixed (models):** admin_log 写入吞错改 `DBFor(ctx)` + zap 记录；5 处同值 UPDATE 的 RowsAffected=0 误报改 count 回退；upload/captcha 两处错误路径吞错修复；`accountExists` 字段白名单收紧。
+- **Fixed (models, 竞态):** username 重复由唯一索引兜底并 1062→友好错误；附件 quote 改原子 `gorm.Expr("quote + 1")` 且删除按 quote 引用感知；config 名称重复拒绝；security 规则同 controller_as 重复启用拒绝。
+- **Fixed (migrations):** official 迁移改 pending-before-Up 记账（失败可重试）；编排器锁名按库/表前缀隔离（64 字符上限内）；删除 JWT 死配置。
+- **Fixed (hierarchy, 死锁环):** 层级互斥从"GET_LOCK 命名锁 + 锚定行锁"混合改为纯事务内锚定行锁（`admin` 表最小 id 行 FOR UPDATE）——混合方案中中间件早释命名锁却仍持锚定行、handler 重入形成跨请求死锁环；现由 InnoDB 死锁检测兜底，事务提交自动释放。
+- **perf (middleware):** information_schema 列探测改 300s 进程缓存（crud 生成/删除成功后主动失效，CLI 侧由 TTL 兜底）；登录中间件同查询取回 status+username 供审计上下文；AdminLog 规则标题走权限缓存；security 日志列表 Join 化。
+
+## v2.7.3
+
+- **Fixed (crud):** `crud:validate` 强制自增主键显式声明 `unsigned: true`；主键注释漂移（如"主键"↔"ID"）改判 `DiffSafeAuto`，重生成不再无谓报警。
+- **Changed (docs):** README/AGENTS 精简收敛，新增面向 AI 协作者的安装信息清单（MySQL 连接、管理员账号等 setup 前置收集项）。
+
 ## v2.7.2
 
 > 延续破坏性直改原则：只保证全新安装优雅，不提供旧库升级迁移。
