@@ -1,3 +1,10 @@
+/**
+ * Token Provider 注册表
+ *
+ * 域解析契约：业务封装 axios 时通过 Options.tokenDomain 指定域，
+ * 注入/刷新/303 跳转全部按此解析。
+ * loginRoute 为空时 303 回退后台登录页（adminBaseRoute.path + '/login'）。
+ */
 export type TokenType = 'auth' | 'refresh'
 
 export interface TokenStore {

@@ -278,11 +278,22 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
 
                         // 需要登录，清理 token，转到登录页
                         if (response.data.data.type == 'need login') {
-                            const loginProvider = getTokenProvider(isAdminApp() ? 'admin' : 'baAccount')
+                            const loginProvider = getRequestProvider(response.config.url)
                             loginProvider.store().removeToken()
-                            routerPath += '/login'
+                            const loginRoute = loginProvider.loginRoute
+                            if (typeof loginRoute == 'function') {
+                                loginRoute()
+                            } else if (loginRoute) {
+                                if (router.currentRoute.value.name != loginRoute) {
+                                    router.push({ name: loginRoute })
+                                }
+                            } else {
+                                routerPath += '/login'
+                                router.push({ path: routerPath })
+                            }
+                        } else {
+                            router.push({ path: routerPath })
                         }
-                        router.push({ path: routerPath })
                     }
                     // code不等于1, 页面then内的具体逻辑就不执行了
                     return Promise.reject(response.data)
