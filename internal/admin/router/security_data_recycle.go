@@ -1,0 +1,34 @@
+// 由 RouteRegistrar 模式维护（手写模块）
+package router
+
+import (
+	handler "buildadmin-go/internal/admin/handler"
+	"buildadmin-go/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+type DataRecycleRegistrar struct {
+	handler *handler.DataRecycleHandler
+}
+
+func NewDataRecycleRegistrar(handler *handler.DataRecycleHandler) *DataRecycleRegistrar {
+	return &DataRecycleRegistrar{handler: handler}
+}
+
+const dataRecycleRoute = "security.DataRecycle"
+
+func (r *DataRecycleRegistrar) Group() string { return "admin" }
+
+func (r *DataRecycleRegistrar) Register(g gin.IRoutes) {
+	g.GET(dataRecycleRoute+"/index", r.handler.Index)
+	g.GET(dataRecycleRoute+"/add", r.handler.Add)
+	g.POST(dataRecycleRoute+"/add", r.handler.Add)
+	g.GET(dataRecycleRoute+"/edit", r.handler.One)
+	g.POST(dataRecycleRoute+"/edit", r.handler.Edit)
+	g.DELETE(dataRecycleRoute+"/del", r.handler.Del)
+}
+
+func (r *DataRecycleRegistrar) Capabilities() []middleware.AtomicRoute {
+	return CRUDCapabilities(dataRecycleRoute)
+}

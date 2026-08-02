@@ -1,8 +1,8 @@
 package handler
 
 import (
-	adminauth "buildadmin-go/internal/admin/repository/auth"
-	routinemodel "buildadmin-go/internal/admin/repository/routine"
+	adminauth "buildadmin-go/internal/admin/repository"
+	routinemodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/validate"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/upload"

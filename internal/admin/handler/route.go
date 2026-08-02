@@ -1,11 +1,6 @@
 package handler
 
 import (
-	"net/http"
-	"strings"
-
-	"buildadmin-go/internal/middleware"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,12 +21,6 @@ type CRUDHandler interface {
 	Sortable(*gin.Context)
 }
 
-const (
-	actionAdd  = "add"
-	actionEdit = "edit"
-	actionDel  = "del"
-)
-
 func CRUDRoutes(r gin.IRoutes, name string, h CRUDHandler) {
 	r.GET(name+"/index", h.Index)
 	r.POST(name+"/add", h.Add)
@@ -41,19 +30,9 @@ func CRUDRoutes(r gin.IRoutes, name string, h CRUDHandler) {
 	r.POST(name+"/sortable", h.Sortable)
 }
 
-func CRUDCapabilities(name string) []middleware.AtomicRoute {
-	route := capabilityRoute(name)
-	return []middleware.AtomicRoute{
-		{Route: route, Action: actionAdd, Method: http.MethodPost},
-		{Route: route, Action: actionEdit, Method: http.MethodPost},
-		{Route: route, Action: actionDel, Method: http.MethodDelete},
-	}
-}
-
-func capabilityRoute(name string) string {
-	return strings.ToLower(strings.ReplaceAll(name, ".", "/"))
-}
-
+// AtomicRoute capability declaration lives in internal/admin/router
+// (CRUDCapabilities); route collection below stays here for the admin_rule
+// coverage diagnostics driven from the composer root.
 func CollectRoutes(router *gin.Engine) {
 	routesInfo := router.Routes()
 	routes := make([]Route, 0, len(routesInfo))

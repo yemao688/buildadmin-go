@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"testing"

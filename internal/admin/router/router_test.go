@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	admin "buildadmin-go/internal/admin/handler"
-	authhandler "buildadmin-go/internal/admin/handler/auth"
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/middleware"
 
@@ -26,9 +25,10 @@ func TestAdminLogDeleteRoute(t *testing.T) {
 		RecordM:        &adminMiddleware.Record{},
 		IndexHandler:   &admin.IndexHandler{},
 		AjaxHandler:    &admin.AjaxHandler{},
-	}).Register(engine, []Registrar{
-		authhandler.NewAdminLogRegistrar(&authhandler.AdminLogHandler{}),
-	})
+		Registrars: []Registrar{
+			NewAdminLogRegistrar(&admin.AdminLogHandler{}),
+		},
+	}).Register(engine)
 
 	found := false
 	for _, route := range engine.Routes() {
@@ -50,7 +50,7 @@ func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 		RecordM:        &adminMiddleware.Record{},
 		IndexHandler:   &admin.IndexHandler{},
 		AjaxHandler:    &admin.AjaxHandler{},
-	}).Register(engine, nil)
+	}).Register(engine)
 
 	for _, exemption := range []struct {
 		controller string
@@ -82,7 +82,7 @@ func TestAdminRouterProtectedRouteRequiresLogin(t *testing.T) {
 		RecordM:        &adminMiddleware.Record{},
 		IndexHandler:   &admin.IndexHandler{},
 		AjaxHandler:    &admin.AjaxHandler{},
-	}).Register(engine, nil)
+	}).Register(engine)
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/admin/Index/index", nil)
@@ -120,11 +120,12 @@ func TestAdminRouterRegistersRegistrarCapabilities(t *testing.T) {
 		RecordM:        &adminMiddleware.Record{},
 		IndexHandler:   &admin.IndexHandler{},
 		AjaxHandler:    &admin.AjaxHandler{},
-	}).Register(engine, []Registrar{
-		fakeRegistrar{register: func(r gin.IRoutes) {
-			r.POST("fake/add", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-		}},
-	})
+		Registrars: []Registrar{
+			fakeRegistrar{register: func(r gin.IRoutes) {
+				r.POST("fake/add", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			}},
+		},
+	}).Register(engine)
 
 	var capability middleware.AtomicRoute
 	var ok bool

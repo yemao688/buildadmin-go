@@ -7,18 +7,12 @@ import (
 	"testing"
 
 	admin "buildadmin-go/internal/admin/handler"
-	authhandler "buildadmin-go/internal/admin/handler/auth"
-	country "buildadmin-go/internal/admin/handler/country"
-	crudhandler "buildadmin-go/internal/admin/handler/crud"
-	routinehandler "buildadmin-go/internal/admin/handler/routine"
-	securityhandler "buildadmin-go/internal/admin/handler/security"
-	userhandler "buildadmin-go/internal/admin/handler/user"
-	api "buildadmin-go/internal/api/handler"
-	"buildadmin-go/internal/middleware"
-	adminMiddleware "buildadmin-go/internal/admin/middleware"
-	apiMiddleware "buildadmin-go/internal/api/middleware"
 	adminRouter "buildadmin-go/internal/admin/router"
+	adminMiddleware "buildadmin-go/internal/admin/middleware"
+	api "buildadmin-go/internal/api/handler"
+	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -67,7 +61,7 @@ func TestRegistrarCapabilitiesMatchRegisteredRoutes(t *testing.T) {
 
 	want := make(map[middleware.AtomicRoute]struct{})
 	capabilityCount := 0
-	for _, registrar := range completeRegistrars() {
+	for _, registrar := range adminRegistrars() {
 		for _, capability := range registrar.Capabilities() {
 			capabilityCount++
 			if _, exists := want[capability]; exists {
@@ -134,6 +128,7 @@ func newCompleteRouter() *gin.Engine {
 			RecordM:        &adminMiddleware.Record{},
 			IndexHandler:   &admin.IndexHandler{},
 			AjaxHandler:    &admin.AjaxHandler{},
+			Registrars:     adminRegistrars(),
 		}),
 		apiRouter.NewApiRouter(apiRouter.ApiRouterDeps{
 			UserLoginM:     &apiMiddleware.UserLogin{},
@@ -143,30 +138,37 @@ func newCompleteRouter() *gin.Engine {
 	)
 }
 
+// adminRegistrars 用桩 handler 构造 admin 渠道模块注册器集合，与
+// AdminRouter 实际注入的 ProvideRegistrars 保持同一顺序。
+func adminRegistrars() []adminRouter.Registrar {
+	return adminRouter.ProvideRegistrars(
+		&admin.LogHandler{},
+		&admin.ModuleHandler{},
+		&admin.AdminGroupHandler{},
+		&admin.AdminRuleHandler{},
+		&admin.ConfigHandler{},
+		&admin.AttachmentHandler{},
+		&admin.AdminHandler{},
+		&admin.UserHandler{},
+		&admin.DataRecycleHandler{},
+		&admin.DataRecycleLogHandler{},
+		&admin.SensitiveDataHandler{},
+		&admin.SensitiveDataLogHandler{},
+		&admin.AdminInfoHandler{},
+		&admin.AdminLogHandler{},
+		&admin.CrudHandler{},
+		&admin.DashboardHandler{},
+		&admin.MoneyLogHandler{},
+		&admin.CurrencyHandler{},
+		&admin.LanguageHandler{},
+		&admin.LanguageContentHandler{},
+	)
+}
+
 func completeRegistrars() []RouteRegistrar {
 	return ProvideRegistrars(
-		crudhandler.NewLogRegistrar(&crudhandler.LogHandler{}),
-		admin.NewModuleRegistrar(&admin.ModuleHandler{}),
-		authhandler.NewAdminGroupRegistrar(&authhandler.AdminGroupHandler{}),
-		authhandler.NewAdminRuleRegistrar(&authhandler.AdminRuleHandler{}),
-		routinehandler.NewConfigRegistrar(&routinehandler.ConfigHandler{}),
-		routinehandler.NewAttachmentRegistrar(&routinehandler.AttachmentHandler{}),
-		authhandler.NewAdminRegistrar(&authhandler.AdminHandler{}),
-		userhandler.NewUserRegistrar(&userhandler.UserHandler{}),
-		securityhandler.NewDataRecycleRegistrar(&securityhandler.DataRecycleHandler{}),
-		securityhandler.NewDataRecycleLogRegistrar(&securityhandler.DataRecycleLogHandler{}),
-		securityhandler.NewSensitiveDataRegistrar(&securityhandler.SensitiveDataHandler{}),
-		securityhandler.NewSensitiveDataLogRegistrar(&securityhandler.SensitiveDataLogHandler{}),
-		routinehandler.NewAdminInfoRegistrar(&routinehandler.AdminInfoHandler{}),
-		authhandler.NewAdminLogRegistrar(&authhandler.AdminLogHandler{}),
-		crudhandler.NewCrudRegistrar(&crudhandler.CrudHandler{}),
-		admin.NewDashboardRegistrar(&admin.DashboardHandler{}),
-		userhandler.NewUserLogRegistrar(&userhandler.UserHandler{}, &userhandler.MoneyLogHandler{}),
 		api.NewCommonRegistrar(&api.CommonHandler{}),
 		api.NewUserRegistrar(&api.UserHandler{}),
-		country.NewCurrencyRegistrar(&country.CurrencyHandler{}),
-		country.NewLanguageRegistrar(&country.LanguageHandler{}),
-		country.NewLanguageContentRegistrar(&country.LanguageContentHandler{}),
 	)
 }
 

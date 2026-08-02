@@ -10,7 +10,7 @@ import (
 	"time"
 
 	adminmiddleware "buildadmin-go/internal/admin/middleware"
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"

@@ -4,9 +4,9 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
+	querybuilder "buildadmin-go/internal/pkg/querybuilder"
 	persistence "buildadmin-go/internal/pkg/persistence"
 	"strconv"
 	"strings"
@@ -324,7 +324,7 @@ func (s *LogModel) GetOne(ctx *gin.Context, id int32) (crudLog Log, err error) {
 }
 
 func (s *LogModel) List(ctx *gin.Context) (list []Log, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := adminmodel.QueryBuilder(ctx, s.TableInfo(), nil)
+	whereS, whereP, orderS, limit, offset, err := querybuilder.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}

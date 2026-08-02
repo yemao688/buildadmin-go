@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	adminModel "buildadmin-go/internal/admin/repository/auth"
+	adminModel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/header"

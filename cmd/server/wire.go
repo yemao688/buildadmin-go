@@ -6,20 +6,6 @@
 package main
 
 import (
-	authHandler "buildadmin-go/internal/admin/handler/auth"
-	countryHandler "buildadmin-go/internal/admin/handler/country"
-	crudHandler "buildadmin-go/internal/admin/handler/crud"
-	routineHandler "buildadmin-go/internal/admin/handler/routine"
-	securityHandler "buildadmin-go/internal/admin/handler/security"
-	userHandler "buildadmin-go/internal/admin/handler/user"
-	crudModel "buildadmin-go/internal/model"
-	authRepo "buildadmin-go/internal/admin/repository/auth"
-	countryRepo "buildadmin-go/internal/admin/repository/country"
-	routineRepo "buildadmin-go/internal/admin/repository/routine"
-	securityRepo "buildadmin-go/internal/admin/repository/security"
-	userRepo "buildadmin-go/internal/admin/repository/user"
-	"buildadmin-go/internal/conf"
-
 	adminHandler "buildadmin-go/internal/admin/handler"
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	adminRepo "buildadmin-go/internal/admin/repository"
@@ -35,9 +21,11 @@ import (
 	"buildadmin-go/internal/common/money"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
+	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/terminal"
 	"buildadmin-go/internal/router"
 
@@ -64,24 +52,13 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		siteconfig.ProviderSet,
 		member.ProviderSet,
 		adminHandler.ProviderSet,
-		countryHandler.ProviderSet,
-		authHandler.ProviderSet,
-		routineHandler.ProviderSet,
-		securityHandler.ProviderSet,
-		userHandler.ProviderSet,
-		crudHandler.ProviderSet,
 		adminRepo.ProviderSet,
-		countryRepo.ProviderSet,
-		authRepo.ProviderSet,
-		routineRepo.ProviderSet,
-		securityRepo.ProviderSet,
-		userRepo.ProviderSet,
-		crudModel.ProviderSet,
-		wire.Bind(new(terminal.AuthModel), new(*authRepo.AuthRepository)),
+		model.ProviderSet,
+		wire.Bind(new(terminal.AuthModel), new(*adminRepo.AuthRepository)),
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,
-		adminRouter.NewAdminRouter,
+		adminRouter.ProviderSet,
 		wire.Struct(new(adminRouter.AdminRouterDeps), "*"),
 		apiRouter.NewApiRouter,
 		wire.Struct(new(apiRouter.ApiRouterDeps), "*"),

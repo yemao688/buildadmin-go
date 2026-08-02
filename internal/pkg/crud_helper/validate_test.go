@@ -21,8 +21,8 @@ fields:
       remotePk: id
       remoteField: username
       relationFields: username
-      remoteController: internal/admin/handler/auth/admin.go
-      remoteModel: internal/admin/repository/auth/admin.go
+      remoteController: internal/admin/handler/admin.go
+      remoteModel: internal/admin/repository/admin.go
 `)
 	warnings, err := ValidateSpec(path)
 	if err != nil {

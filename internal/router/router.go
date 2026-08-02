@@ -19,7 +19,9 @@ import (
 
 // InitRouter 是根装配件：创建 gin.Engine、挂载全局中间件（Cors/Record/
 // Logger/CustomRecovery/i18n/InstallGuard）与静态资源，然后调用 admin 与
-// api 两个渠道注册器完成挂载，最后把 registrar 按 Group() 分派给对应渠道。
+// api 两个渠道注册器完成挂载。admin 渠道的模块 registrar 已由
+// internal/admin/router 自行聚合注入，这里只按 Group() 分派剩余（api/root）
+// registrar。
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	adminR *adminRouter.AdminRouter,
@@ -57,14 +59,12 @@ func InitRouter(
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
-	// 模块 registrar 按 Group() 分派：admin=后台分组、api=会员分组、
-	// root=引擎根。capabilities 由 admin 渠道在挂载前统一登记。
-	var adminRegistrars []adminRouter.Registrar
+	// 模块 registrar 按 Group() 分派：api=会员分组、root=引擎根。admin 侧
+	// registrar 已由 admin 渠道注册器（AdminRouter.Register）直接聚合挂载，
+	// 不再经过本装配件。
 	var apiRegistrars []apiRouter.Registrar
 	for _, registrar := range registrars {
 		switch registrar.Group() {
-		case "admin":
-			adminRegistrars = append(adminRegistrars, registrar)
 		case "api":
 			apiRegistrars = append(apiRegistrars, registrar)
 		case "root":
@@ -75,7 +75,7 @@ func InitRouter(
 	}
 
 	// 渠道注册器：admin 负责 /admin/*，api 负责 /install 与 /api/*。
-	adminR.Register(router, adminRegistrars)
+	adminR.Register(router)
 	apiR.Register(router, apiRegistrars)
 
 	admin.CollectRoutes(router)

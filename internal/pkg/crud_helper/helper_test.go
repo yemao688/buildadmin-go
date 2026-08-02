@@ -192,7 +192,7 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 	}{
 		{"user controller resolves registered route", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/user.go", RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
 		{"nested-style controller resolves registered route", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/admin_group.go", RemoteSourceConfigType: "crud"}}, "/admin/auth.Group/index"},
-		{"registrar controller resolves route constant", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/country/language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
+		{"registrar controller resolves route constant", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/country_language.go", RemoteSourceConfigType: "crud"}}, "/admin/country.Language/index"},
 		{"backslash path", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: `app\admin\handler\user.go`, RemoteSourceConfigType: "crud"}}, "/admin/user.User/index"},
 		{"manual url wins for custom source", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/user.go", RemoteUrl: "/admin/custom/index", RemoteSourceConfigType: "custom"}}, "/admin/custom/index"},
 		{"unknown controller falls back to path derivation", crudmodel.Field{Form: crudmodel.FormAttr{RemoteController: "internal/admin/handler/no_such_handler.go", RemoteSourceConfigType: "crud"}}, "/admin/no.SuchHandler/index"},

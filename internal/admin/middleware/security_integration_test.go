@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"buildadmin-go/internal/admin/repository"
-	securitymodel "buildadmin-go/internal/admin/repository/security"
+	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/requesttx"

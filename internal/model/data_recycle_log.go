@@ -1,6 +1,6 @@
 package model
 
-import "buildadmin-go/internal/admin/repository/simple"
+import "buildadmin-go/internal/model/projection"
 
 // SecurityDataRecycleLog 数据回收记录表
 type SecurityDataRecycleLog struct {
@@ -15,6 +15,6 @@ type SecurityDataRecycleLog struct {
 	Useragent  string              `gorm:"column:useragent;type:varchar(255) default '';not null;comment:User-Agent" json:"useragent"`                       // User-Agent
 	Connection string              `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
 	CreateTime int64               `gorm:"autoCreateTime;column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
-	Admin      simple.Admin        `gorm:"foreignKey:AdminID" json:"admin"`
+	Admin      projection.Admin    `gorm:"foreignKey:AdminID" json:"admin"`
 	Recycle    SecurityDataRecycle `gorm:"foreignKey:RecycleID" json:"recycle"`
 }

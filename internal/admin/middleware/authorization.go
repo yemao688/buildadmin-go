@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 	middlewarecore "buildadmin-go/internal/middleware"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"

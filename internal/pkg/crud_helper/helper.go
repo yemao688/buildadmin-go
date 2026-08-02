@@ -1055,8 +1055,10 @@ func GetRemoteSelectUrl(field crudmodel.Field) string {
 	return field.Form.RemoteUrl
 }
 
-// routeIndexURLForController 由控制器文件推导同目录 registrar 文件并读取
-// route 常量；尚未迁移的 handler 则回退到 router.go 中的旧注册。
+// routeIndexURLForController 由控制器文件推导路由注册器文件并读取 route
+// 常量。注册器集中在 internal/admin/router（文件名为表名全拼），控制器
+// 文件位于 internal/admin/handler（扁平）；优先按同名注册器反查，未命中
+// 时按路径回退推导。
 func routeIndexURLForController(controller string) string {
 	normalized, err := normalizeLogicalPath(controller)
 	if err != nil {
@@ -1066,38 +1068,24 @@ func routeIndexURLForController(controller string) string {
 	if stem == "" {
 		return ""
 	}
-	registrarPath := filepath.Join(utils.RootPath(), strings.TrimSuffix(normalized, filepath.Ext(normalized))+"_route.go")
-	if data, err := os.ReadFile(registrarPath); err == nil {
-		re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
-		if m := re.FindSubmatch(data); m != nil {
-			return "/admin/" + string(m[1]) + "/index"
+	routerRoot := filepath.Join(utils.RootPath(), "internal/admin/router")
+	if url := routeURLFromRegistrarFile(filepath.Join(routerRoot, stem+".go")); url != "" {
+		return url
+	}
+	if registrarPath := findRouteRegistrarPath(routerRoot, stem); registrarPath != "" {
+		if url := routeURLFromRegistrarFile(registrarPath); url != "" {
+			return url
 		}
 	}
-	// Prefer the exact directory layout before recursive basename search. A
-	// flat controller such as user.go maps to user/user_route.go; otherwise a
-	// same-named business registrar can win based on directory traversal order.
-	handlerRoot := filepath.Join(utils.RootPath(), "internal/admin/handler")
-	dirLayoutPath := filepath.Join(handlerRoot, stem, stem+"_route.go")
-	if data, err := os.ReadFile(dirLayoutPath); err == nil {
-		re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
-		if m := re.FindSubmatch(data); m != nil {
-			return "/admin/" + string(m[1]) + "/index"
-		}
-	}
-	if registrarPath = findRouteRegistrarPath(handlerRoot, stem); registrarPath != "" {
-		if data, err := os.ReadFile(registrarPath); err == nil {
-			re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
-			if m := re.FindSubmatch(data); m != nil {
-				return "/admin/" + string(m[1]) + "/index"
-			}
-		}
-	}
-	handlerVar := utils.SnakeToCamel(stem, false) + "Handler"
-	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "internal", "router", "router.go"))
+	return ""
+}
+
+func routeURLFromRegistrarFile(path string) string {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return ""
 	}
-	re := regexp.MustCompile(`adminRouter\.GET\("([^"]+)/index",\s*` + regexp.QuoteMeta(handlerVar) + `\.Index\)`)
+	re := regexp.MustCompile(`const\s+\w+Route\s*=\s*"([^"]+)"`)
 	if m := re.FindSubmatch(data); m != nil {
 		return "/admin/" + string(m[1]) + "/index"
 	}
@@ -1117,7 +1105,7 @@ func findRouteRegistrarPath(root, stem string) string {
 			}
 			continue
 		}
-		if strings.HasSuffix(entry.Name(), "_route.go") && strings.TrimSuffix(entry.Name(), "_route.go") == stem {
+		if strings.HasSuffix(entry.Name(), ".go") && !strings.HasSuffix(entry.Name(), "_test.go") && strings.TrimSuffix(entry.Name(), ".go") == stem {
 			return path
 		}
 	}

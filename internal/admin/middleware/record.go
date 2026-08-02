@@ -3,7 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"io"
 	"mime"

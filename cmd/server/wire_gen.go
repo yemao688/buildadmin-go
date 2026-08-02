@@ -8,19 +8,8 @@ package main
 
 import (
 	"buildadmin-go/internal/admin/handler"
-	auth2 "buildadmin-go/internal/admin/handler/auth"
-	country3 "buildadmin-go/internal/admin/handler/country"
-	crud2 "buildadmin-go/internal/admin/handler/crud"
-	routine2 "buildadmin-go/internal/admin/handler/routine"
-	security2 "buildadmin-go/internal/admin/handler/security"
-	user2 "buildadmin-go/internal/admin/handler/user"
 	"buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/repository/auth"
-	country2 "buildadmin-go/internal/admin/repository/country"
-	"buildadmin-go/internal/admin/repository/routine"
-	"buildadmin-go/internal/admin/repository/security"
-	"buildadmin-go/internal/admin/repository/user"
 	"buildadmin-go/internal/admin/router"
 	handler2 "buildadmin-go/internal/api/handler"
 	middleware2 "buildadmin-go/internal/api/middleware"
@@ -55,15 +44,15 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	gormDB := db.NewDB(configuration, zapLogger)
 	client := rds.NewRedis(configuration, zapLogger)
 	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
-	authRepository := auth.NewAuthRepository(gormDB, tokenHelper, configuration)
+	authRepository := repository.NewAuthRepository(gormDB, tokenHelper, configuration)
 	authorization := middleware.NewAuthorization(authRepository, zapLogger)
 	login := middleware.NewLogin(configuration, tokenHelper, authRepository)
 	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
-	middlewareSecurity := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
-	adminLogRepository := auth.NewAdminLogRepository(gormDB, configuration, authRepository)
+	security := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
+	adminLogRepository := repository.NewAdminLogRepository(gormDB, configuration, authRepository)
 	record := middleware.NewRecord(configuration, adminLogRepository)
 	service := siteconfig.NewService(gormDB)
-	configRepository := routine.NewConfigRepository(gormDB, configuration, service)
+	configRepository := repository.NewConfigRepository(gormDB, configuration, service)
 	countryService := country.NewService(gormDB, configuration)
 	clickCaptcha := clickcaptcha.NewClickCaptcha(configuration, gormDB)
 	indexHandler := handler.NewIndexHandler(configuration, zapLogger, authRepository, configRepository, countryService, clickCaptcha)
@@ -73,13 +62,50 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	uploadHelper := upload.NewUploadHelper(gormDB, configuration, aliossStorage)
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authRepository)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableRepository, uploadHelper, terminalTerminal, configuration)
+	logModel := model.NewLogModel(gormDB, configuration, closureEnforcer)
+	logHandler := handler.NewLogHandler(zapLogger, logModel, authRepository)
+	moduleHandler := handler.NewModuleHandler(zapLogger)
+	adminGroupRepository := repository.NewAdminGroupRepository(gormDB, configuration)
+	adminRuleRepository := repository.NewAdminRuleRepository(gormDB, configuration)
+	adminGroupHandler := handler.NewAdminGroupHandler(zapLogger, adminGroupRepository, adminRuleRepository, authRepository)
+	adminRuleHandler := handler.NewAdminRuleHandler(zapLogger, adminRuleRepository, authRepository)
+	configHandler := handler.NewConfigHandler(zapLogger, configuration, configRepository)
+	attachmentRepository := repository.NewAttachmentRepository(gormDB, configuration, closureEnforcer)
+	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentRepository)
+	adminRepository := repository.NewAdminRepository(gormDB, configuration)
+	adminHandler := handler.NewAdminHandler(zapLogger, adminRepository, authRepository)
+	userRepository := repository.NewUserRepository(gormDB, configuration, closureEnforcer)
+	userHandler := handler.NewUserHandler(zapLogger, userRepository)
+	dataRecycleRepository := repository.NewDataRecycleRepository(gormDB, configuration)
+	dataRecycleHandler := handler.NewDataRecycleHandler(zapLogger, configuration, dataRecycleRepository, tableRepository)
+	dataRecycleLogRepository := repository.NewDataRecycleLogRepository(gormDB, configuration)
+	dataRecycleLogHandler := handler.NewDataRecycleLogHandler(zapLogger, configuration, dataRecycleLogRepository)
+	sensitiveDataRepository := repository.NewSensitiveDataRepository(gormDB, configuration)
+	sensitiveDataHandler := handler.NewSensitiveDataHandler(zapLogger, configuration, sensitiveDataRepository, tableRepository)
+	sensitiveDataLogRepository := repository.NewSensitiveDataLogRepository(gormDB, configuration)
+	sensitiveDataLogHandler := handler.NewSensitiveDataLogHandler(zapLogger, configuration, sensitiveDataLogRepository)
+	adminInfoHandler := handler.NewAdminInfoHandler(zapLogger, adminRepository, authRepository)
+	adminLogHandler := handler.NewAdminLogHandler(zapLogger, adminLogRepository)
+	crudHandler := handler.NewCrudHandler(zapLogger, tableRepository, logModel, adminRuleRepository, configuration)
+	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleRepository)
+	balanceService := money.NewBalanceService()
+	moneyLogRepository := repository.NewMoneyLogRepository(gormDB, configuration, closureEnforcer, balanceService)
+	moneyLogHandler := handler.NewMoneyLogHandler(zapLogger, moneyLogRepository)
+	currencyRepository := repository.NewCurrencyRepository(gormDB, configuration, closureEnforcer)
+	currencyHandler := handler.NewCurrencyHandler(zapLogger, currencyRepository)
+	languageRepository := repository.NewLanguageRepository(gormDB, configuration, closureEnforcer)
+	languageHandler := handler.NewLanguageHandler(zapLogger, languageRepository)
+	languageContentRepository := repository.NewLanguageContentRepository(gormDB, configuration, closureEnforcer)
+	languageContentHandler := handler.NewLanguageContentHandler(zapLogger, languageContentRepository)
+	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, currencyHandler, languageHandler, languageContentHandler)
 	adminRouterDeps := router.AdminRouterDeps{
 		LoginM:         login,
 		AuthorizationM: authorization,
-		SecurityM:      middlewareSecurity,
+		SecurityM:      security,
 		RecordM:        record,
 		IndexHandler:   indexHandler,
 		AjaxHandler:    ajaxHandler,
+		Registrars:     v,
 	}
 	adminRouter := router.NewAdminRouter(adminRouterDeps)
 	memberService := member.NewService(gormDB, tokenHelper, configuration)
@@ -90,68 +116,13 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 		InstallHandler: installHandler,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	logModel := model.NewLogModel(gormDB, configuration, closureEnforcer)
-	logHandler := crud2.NewLogHandler(zapLogger, logModel, authRepository)
-	logRegistrar := crud2.NewLogRegistrar(logHandler)
-	moduleHandler := handler.NewModuleHandler(zapLogger)
-	moduleRegistrar := handler.NewModuleRegistrar(moduleHandler)
-	adminGroupRepository := auth.NewAdminGroupRepository(gormDB, configuration)
-	adminRuleRepository := auth.NewAdminRuleRepository(gormDB, configuration)
-	adminGroupHandler := auth2.NewAdminGroupHandler(zapLogger, adminGroupRepository, adminRuleRepository, authRepository)
-	adminGroupRegistrar := auth2.NewAdminGroupRegistrar(adminGroupHandler)
-	adminRuleHandler := auth2.NewAdminRuleHandler(zapLogger, adminRuleRepository, authRepository)
-	adminRuleRegistrar := auth2.NewAdminRuleRegistrar(adminRuleHandler)
-	configHandler := routine2.NewConfigHandler(zapLogger, configuration, configRepository)
-	configRegistrar := routine2.NewConfigRegistrar(configHandler)
-	attachmentRepository := routine.NewAttachmentRepository(gormDB, configuration, closureEnforcer)
-	attachmentHandler := routine2.NewAttachmentHandler(zapLogger, attachmentRepository)
-	attachmentRegistrar := routine2.NewAttachmentRegistrar(attachmentHandler)
-	adminRepository := auth.NewAdminRepository(gormDB, configuration)
-	adminHandler := auth2.NewAdminHandler(zapLogger, adminRepository, authRepository)
-	adminRegistrar := auth2.NewAdminRegistrar(adminHandler)
-	userRepository := user.NewUserRepository(gormDB, configuration, closureEnforcer)
-	userHandler := user2.NewUserHandler(zapLogger, userRepository)
-	userRegistrar := user2.NewUserRegistrar(userHandler)
-	dataRecycleRepository := security.NewDataRecycleRepository(gormDB, configuration)
-	dataRecycleHandler := security2.NewDataRecycleHandler(zapLogger, configuration, dataRecycleRepository, tableRepository)
-	dataRecycleRegistrar := security2.NewDataRecycleRegistrar(dataRecycleHandler)
-	dataRecycleLogRepository := security.NewDataRecycleLogRepository(gormDB, configuration)
-	dataRecycleLogHandler := security2.NewDataRecycleLogHandler(zapLogger, configuration, dataRecycleLogRepository)
-	dataRecycleLogRegistrar := security2.NewDataRecycleLogRegistrar(dataRecycleLogHandler)
-	sensitiveDataRepository := security.NewSensitiveDataRepository(gormDB, configuration)
-	sensitiveDataHandler := security2.NewSensitiveDataHandler(zapLogger, configuration, sensitiveDataRepository, tableRepository)
-	sensitiveDataRegistrar := security2.NewSensitiveDataRegistrar(sensitiveDataHandler)
-	sensitiveDataLogRepository := security.NewSensitiveDataLogRepository(gormDB, configuration)
-	sensitiveDataLogHandler := security2.NewSensitiveDataLogHandler(zapLogger, configuration, sensitiveDataLogRepository)
-	sensitiveDataLogRegistrar := security2.NewSensitiveDataLogRegistrar(sensitiveDataLogHandler)
-	adminInfoHandler := routine2.NewAdminInfoHandler(zapLogger, adminRepository, authRepository)
-	adminInfoRegistrar := routine2.NewAdminInfoRegistrar(adminInfoHandler)
-	adminLogHandler := auth2.NewAdminLogHandler(zapLogger, adminLogRepository)
-	adminLogRegistrar := auth2.NewAdminLogRegistrar(adminLogHandler)
-	crudHandler := crud2.NewCrudHandler(zapLogger, tableRepository, logModel, adminRuleRepository, configuration)
-	crudRegistrar := crud2.NewCrudRegistrar(crudHandler)
-	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleRepository)
-	dashboardRegistrar := handler.NewDashboardRegistrar(dashboardHandler)
-	balanceService := money.NewBalanceService()
-	moneyLogRepository := user.NewMoneyLogRepository(gormDB, configuration, closureEnforcer, balanceService)
-	moneyLogHandler := user2.NewMoneyLogHandler(zapLogger, moneyLogRepository)
-	userLogRegistrar := user2.NewUserLogRegistrar(userHandler, moneyLogHandler)
 	captchaService := captcha.NewCaptchaService(gormDB)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
 	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
-	handlerUserRegistrar := handler2.NewUserRegistrar(handlerUserHandler)
-	currencyRepository := country2.NewCurrencyRepository(gormDB, configuration, closureEnforcer)
-	currencyHandler := country3.NewCurrencyHandler(zapLogger, currencyRepository)
-	currencyRegistrar := country3.NewCurrencyRegistrar(currencyHandler)
-	languageRepository := country2.NewLanguageRepository(gormDB, configuration, closureEnforcer)
-	languageHandler := country3.NewLanguageHandler(zapLogger, languageRepository)
-	languageRegistrar := country3.NewLanguageRegistrar(languageHandler)
-	languageContentRepository := country2.NewLanguageContentRepository(gormDB, configuration, closureEnforcer)
-	languageContentHandler := country3.NewLanguageContentHandler(zapLogger, languageContentRepository)
-	languageContentRegistrar := country3.NewLanguageContentRegistrar(languageContentHandler)
-	v := router3.ProvideRegistrars(logRegistrar, moduleRegistrar, adminGroupRegistrar, adminRuleRegistrar, configRegistrar, attachmentRegistrar, adminRegistrar, userRegistrar, dataRecycleRegistrar, dataRecycleLogRegistrar, sensitiveDataRegistrar, sensitiveDataLogRegistrar, adminInfoRegistrar, adminLogRegistrar, crudRegistrar, dashboardRegistrar, userLogRegistrar, commonRegistrar, handlerUserRegistrar, currencyRegistrar, languageRegistrar, languageContentRegistrar)
-	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, v)
+	userRegistrar := handler2.NewUserRegistrar(handlerUserHandler)
+	v2 := router3.ProvideRegistrars(commonRegistrar, userRegistrar)
+	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, v2)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

@@ -298,7 +298,9 @@ type RegistrarData struct {
 	RouteName string
 	RoutePath string
 
-	// 子包 registrar 对根包 CRUDRoutes/CRUDCapabilities 的限定引用；根包生成时为空。
+	// 子包 registrar 对根包 CRUDRoutes/Base 等的限定引用；根包生成时为空。
+	// CRUDCapabilities 已随路由中心化收进 internal/admin/router，注册器
+	// 自身包内引用（生成器后续把注册器输出重定向到该包时成立）。
 	BaseHandlerQualifier string
 	BaseHandlerAlias     string
 	BaseHandlerImport    string
@@ -315,10 +317,10 @@ import (
 )
 
 type {{.ClassName}}Registrar struct {
-	handler *{{.ClassName}}Handler
+	handler *{{.BaseHandlerQualifier}}{{.ClassName}}Handler
 }
 
-func New{{.ClassName}}Registrar(handler *{{.ClassName}}Handler) *{{.ClassName}}Registrar {
+func New{{.ClassName}}Registrar(handler *{{.BaseHandlerQualifier}}{{.ClassName}}Handler) *{{.ClassName}}Registrar {
 	return &{{.ClassName}}Registrar{handler: handler}
 }
 
@@ -331,7 +333,7 @@ func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
 }
 
 func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
-	return {{.BaseHandlerQualifier}}CRUDCapabilities({{.RouteName}}Route)
+	return CRUDCapabilities({{.RouteName}}Route)
 }
 `
 

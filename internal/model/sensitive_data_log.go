@@ -1,6 +1,6 @@
 package model
 
-import "buildadmin-go/internal/admin/repository/simple"
+import "buildadmin-go/internal/model/projection"
 
 // SecuritySensitiveDataLog 敏感数据修改记录
 type SecuritySensitiveDataLog struct {
@@ -19,6 +19,6 @@ type SecuritySensitiveDataLog struct {
 	IsRollback    int32                 `gorm:"column:is_rollback;type:tinyint(4) unsigned;not null;default:0;comment:是否已回滚:0=否,1=是" json:"is_rollback"`                  // 是否已回滚:0=否,1=是
 	Connection    string                `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
 	CreateTime    int64                 `gorm:"autoCreateTime;column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
-	Admin         simple.Admin          `gorm:"foreignKey:AdminID" json:"admin"`
+	Admin         projection.Admin      `gorm:"foreignKey:AdminID" json:"admin"`
 	SensitiveData SecuritySensitiveData `gorm:"foreignKey:SensitiveID" json:"sensitive"`
 }

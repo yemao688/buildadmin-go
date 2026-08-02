@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	adminModel "buildadmin-go/internal/admin/repository/auth"
+	adminModel "buildadmin-go/internal/admin/repository"
 	middlewarecore "buildadmin-go/internal/api/middleware"
 	"buildadmin-go/internal/api/service/member"
 	"buildadmin-go/internal/conf"

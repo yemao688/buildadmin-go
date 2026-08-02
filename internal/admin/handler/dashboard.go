@@ -1,7 +1,7 @@
 package handler
 
 import (
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

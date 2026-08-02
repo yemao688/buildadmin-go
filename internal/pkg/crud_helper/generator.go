@@ -5,7 +5,7 @@ import (
 	"fmt"
 	crudmodel "buildadmin-go/internal/model"
 	adminmodel "buildadmin-go/internal/admin/repository"
-	adminauth "buildadmin-go/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/utils"

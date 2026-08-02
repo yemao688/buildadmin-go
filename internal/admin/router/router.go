@@ -1,10 +1,14 @@
 // Package router 装配 admin 渠道（/admin/*）路由。它接收 admin 渠道中间件
-// （Login/Authorization/Security/Record）与后台 handler/registrars，负责：
+// （Login/Authorization/Security/Record）与后台 handler，负责：
 //
 //   - PermissionExempt 豁免登记（index index/logout、ajax *、alioss callback）
 //   - 未受保护的后台入口（登录页、ajax 终端等，只经过全局中间件）
 //   - 受保护的后台分组（Login → Authorization → Security 链）
 //   - 模块 registrar 的 AtomicRoute 能力注册与路由挂载
+//
+// 模块路由注册器（registrar）按模块一个文件（internal/admin/router/<table>.go）
+// 声明，聚合列表在 ProvideRegistrars——这是 CRUD 生成器的追加锚点：
+// 新模块只在该函数里增加一个参数与返回 slice 中的一行。
 //
 // 启动权限诊断（Authorization.ReportUnprotectedRoutes）由组合根
 // cmd/server/main.go 在 debug 环境驱动，依赖本包持有的 Authorization 中间件。
@@ -21,8 +25,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AdminRouterDeps 是 admin 渠道注册器的构造参数。Registrars 由根装配件
-// 按 Group() 分派后通过 Register 传入，不参与 wire 注入。
+// AdminRouterDeps 是 admin 渠道注册器的构造参数。Registrars 由
+// ProvideRegistrars 聚合（wire 注入），不再经过根装配件分派。
 type AdminRouterDeps struct {
 	LoginM         *adminMiddleware.Login
 	AuthorizationM *adminMiddleware.Authorization
@@ -30,6 +34,7 @@ type AdminRouterDeps struct {
 	RecordM        *adminMiddleware.Record
 	IndexHandler   *adminhandler.IndexHandler
 	AjaxHandler    *adminhandler.AjaxHandler
+	Registrars     []Registrar
 }
 
 // AdminRouter 完成 /admin/* 路由与能力的注册。
@@ -47,9 +52,9 @@ func (r *AdminRouter) RecordHandler() gin.HandlerFunc {
 	return r.deps.RecordM.Handler()
 }
 
-// Register 挂载全部后台路由与原子写能力。registrars 是 Group()=="admin"
-// 的模块注册器，由根装配件分派后传入。
-func (r *AdminRouter) Register(engine *gin.Engine, registrars []Registrar) {
+// Register 挂载全部后台路由与原子写能力。模块注册器由 deps.Registrars
+// 提供（ProvideRegistrars 聚合，wire 注入）。
+func (r *AdminRouter) Register(engine *gin.Engine) {
 	// 豁免清单：登录、ajax 与 alioss 回调不要求后台登录/权限。
 	adminMiddleware.RegisterPermissionExempt("index", "index", "logout")
 	adminMiddleware.RegisterPermissionExempt("ajax", "*")
@@ -81,12 +86,12 @@ func (r *AdminRouter) Register(engine *gin.Engine, registrars []Registrar) {
 	adminRouter.POST("ajax/changeTerminalConfig", r.deps.AjaxHandler.ChangeTerminalConfig)
 
 	// AtomicRoute 能力注册先于路由挂载，与拆分前的组装顺序保持一致。
-	for _, registrar := range registrars {
+	for _, registrar := range r.deps.Registrars {
 		for _, capability := range registrar.Capabilities() {
 			middleware.RegisterAtomicRoute(capability)
 		}
 	}
-	for _, registrar := range registrars {
+	for _, registrar := range r.deps.Registrars {
 		registrar.Register(adminRouter)
 	}
 }
