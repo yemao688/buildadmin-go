@@ -38,7 +38,7 @@ var (
 )
 
 func init() {
-	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "config.yaml"), "config path, eg: --conf config.yaml")
+	pflag.StringVarP(&configPath, "conf", "", filepath.Join(rootPath, "configs", "config.yaml"), "config path, eg: --conf configs/config.yaml")
 
 	cobra.OnInitialize(func() {
 		initConfig()
@@ -123,9 +123,9 @@ func versionRequested(args []string) bool {
 
 func missingConfigMessage(setupRequested bool) string {
 	if setupRequested {
-		return "config.yaml 不存在，setup 将以只读基座引导 CLI 安装"
+		return "configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装"
 	}
-	return "config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）"
+	return "configs/config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 configs/config.yaml）"
 }
 
 func initConfig() {
@@ -144,7 +144,7 @@ func initConfig() {
 				break
 			}
 		}
-		// 首次启动不自动复制 config.yaml：安装向导（/install）负责创建它。
+		// 首次启动不自动复制 configs/config.yaml：安装向导（/install）负责创建它。
 		// serve 默认命令以只读基座启动进入安装向导；其它命令必须已有真实配置。
 		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed && !setupRequested {
 			panic(fmt.Errorf("config file not found: %s", configPath))
@@ -161,7 +161,7 @@ func initConfig() {
 					// crud:validate 是纯 spec 校验，不依赖运行配置，与其 spec 参数一起豁免缺配置检查
 					break
 				}
-				panic(fmt.Errorf("config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
+				panic(fmt.Errorf("configs/config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
 			}
 		}
 		fmt.Println(missingConfigMessage(setupRequested))

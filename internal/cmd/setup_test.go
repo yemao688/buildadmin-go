@@ -86,8 +86,8 @@ func TestResolveSetupConfigPathUsesConfigYamlWhenConfWasNotExplicitlySet(t *test
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, conf.DefaultsFileName)
 
-	if got := resolveSetupConfigPath(root, false, defaultsPath); got != filepath.Join(root, "config.yaml") {
-		t.Fatalf("resolveSetupConfigPath() = %q, want %q", got, filepath.Join(root, "config.yaml"))
+	if got := resolveSetupConfigPath(root, false, defaultsPath); got != filepath.Join(root, "configs", "config.yaml") {
+		t.Fatalf("resolveSetupConfigPath() = %q, want %q", got, filepath.Join(root, "configs", "config.yaml"))
 	}
 }
 
@@ -103,7 +103,7 @@ func TestSetupConfigPathReadsExplicitConfFromRootPFlag(t *testing.T) {
 	customPath := filepath.Join(root, "custom", "config.yaml")
 	previous := pflag.CommandLine
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	flags.String("conf", filepath.Join(root, "config.yaml"), "config path")
+	flags.String("conf", filepath.Join(root, "configs", "config.yaml"), "config path")
 	if err := flags.Set("conf", customPath); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestSetupRunnerRejectsCompletedInstallation(t *testing.T) {
 	want := "系统已安装"
 	runner := setupRunner{
 		rootPath:   t.TempDir(),
-		configPath: filepath.Join(t.TempDir(), "config.yaml"),
+		configPath: filepath.Join(t.TempDir(), "configs", "config.yaml"),
 		in:         strings.NewReader(""),
 		out:        &bytes.Buffer{},
 		deps: setupDependencies{
@@ -202,8 +202,11 @@ func TestSetupRunnerRejectsCompletedInstallation(t *testing.T) {
 
 func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	root := t.TempDir()
-	configPath := filepath.Join(root, "config.yaml")
-	if err := os.WriteFile(filepath.Join(root, conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o644); err != nil {
+	configPath := filepath.Join(root, "configs", "config.yaml")
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(configPath, []byte("mysql:\n  host: 127.0.0.1\n  port: 3306\n  database: existing\n  username: root\n  password: secret\n  prefix: ba_\n"), 0o600); err != nil {

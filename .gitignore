@@ -56,7 +56,7 @@ todo.txt
 
 # Runtime configuration generated or edited during installation
 .env
-/config.yaml
+/configs/config.yaml
 
 # Slim: upstream source clones for comparison
 /.slim/

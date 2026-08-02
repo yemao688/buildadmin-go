@@ -28,7 +28,7 @@
 
 ```bash
 go run ./cmd/server crud:validate crud_specs/<module>.yaml
-go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml
 go build ./...
 ```
 
@@ -520,8 +520,8 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 `crud:generate` 是开发工具（代码 + 开发库 DDL + 菜单）；`crud:apply` 是部署工具：把仓库里提交的 spec 幂等同步到任意目标库，**不写代码、不产生迁移文件**。spec 是业务表结构的唯一事实源。
 
 ```bash
-go run ./cmd/server --conf config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
-go run ./cmd/server --conf config.yaml crud:apply crud_specs/<module>.yaml
+go run ./cmd/server --conf configs/config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
+go run ./cmd/server --conf configs/config.yaml crud:apply crud_specs/<module>.yaml
 # flags: --plan / --approve=<类别> / --allow-rebuild（主键漂移时破坏性重建，仅限可丢弃环境） / --skip-menu / --admin-id
 # example: crud:apply --approve=defaults,type-widening
 ```
@@ -533,7 +533,7 @@ go run ./cmd/server --conf config.yaml crud:apply crud_specs/<module>.yaml
 `migrate` 尾部启用后执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
 
 ```bash
-git pull && go run ./cmd/server --conf config.yaml migrate        # 框架三轨道 + 业务表 apply
+git pull && go run ./cmd/server --conf configs/config.yaml migrate        # 框架三轨道 + 业务表 apply
 ```
 
 每个 spec 的应用语义：

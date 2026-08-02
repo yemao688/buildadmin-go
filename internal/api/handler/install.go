@@ -33,7 +33,7 @@ const WARN = "warn"
 const LockFileName = installer.LockFileName
 
 // 配置文件
-const ConfigFileName = "config.yaml"
+const ConfigFileName = "configs/config.yaml"
 
 // 自动构建的前端文件的 outDir 相对于根目录
 const DistDir = "web/dist"
@@ -103,7 +103,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 	port, manager, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
-			"content": "根目录/config.yaml",
+			"content": "根目录/configs/config.yaml",
 		})))
 		return
 	}
@@ -400,9 +400,9 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	// config.yaml is a sparse override layer. Only values collected by this
-	// installation and the generated token key are written; all other settings
-	// continue to come from config.defaults.yaml.
+	// configs/config.yaml is a sparse override layer. Only values collected by
+	// this installation and the generated token key are written; all other
+	// settings continue to come from configs/config.defaults.yaml.
 	newTokenKey := installer.GenerateTokenKey()
 	if err := installer.WriteBaseConfig(configPath, databaseParam, newTokenKey); err != nil {
 		FailByErr(ctx, err)

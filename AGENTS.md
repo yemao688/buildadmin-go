@@ -40,7 +40,7 @@
 - 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
 - 真实入口和 wiring 是 `cmd/server/main.go`、`cmd/server/wire.go`、`internal/router/router.go`（组合者，挂载两渠道路由）与 `web/src/main.ts`；Cobra 命令位于 `internal/cmd/`。
-- `config.defaults.yaml` 是根目录受跟踪的完整运行基座，启动时实际加载。根目录 `config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
+- `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 
 ## 分层与边界（v3.0.0 架构）
@@ -64,7 +64,7 @@
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
-- 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
+- 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`configs/config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的 model、handler、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
@@ -78,7 +78,7 @@
 air                                    # builds ./cmd/server; serves on 9900
 go build ./...
 go test ./path/to/package -run '^TestName$'
-go run ./cmd/server --conf config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate
 go generate ./cmd/server                  # after provider or cmd/server/wire.go changes
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
@@ -102,9 +102,9 @@ YAML 契约、字段/designType 规则、关系和时间字段 JSON 契约见 [`
 需要生成模块时，先阅读该文档、创建 `crud_specs/<module>.yaml`，再运行：
 
 ```bash
-go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
 go run ./cmd/server crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...]
-go run ./cmd/server --conf config.yaml crud:delete <table_name>
+go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ```
 
 退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。
@@ -140,5 +140,5 @@ go run ./cmd/server --conf config.yaml crud:delete <table_name>
 ## 安装与测试风险
 
 - 安装、配置、迁移、升级和端口的完整流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)；不要在本速查文档重复维护安装器行为。
-- MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `config.defaults.yaml`，开发者只在 `config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`internal/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
+- MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `configs/config.defaults.yaml`，开发者只在 `configs/config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`internal/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
 - Air 忽略 `web/`、测试和生成的 Go 文件，并在 10 秒后重新构建。Vite 需单独运行；如果 CRUD 生成与 Air 发生竞态，可临时增大 `.air.toml` 的 `build.delay`。

@@ -10,11 +10,15 @@ import (
 func writeMySQLTestConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	defaultsPath := filepath.Join(dir, "config.defaults.yaml")
+	configDir := filepath.Join(dir, "configs")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	defaultsPath := filepath.Join(configDir, "config.defaults.yaml")
 	if err := os.WriteFile(defaultsPath, []byte("app:\n  env: debug\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	configPath := filepath.Join(dir, "config.yaml")
+	configPath := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +27,7 @@ func writeMySQLTestConfig(t *testing.T, content string) string {
 
 func TestLoadMySQLTestConfig(t *testing.T) {
 	t.Run("config.yaml missing", func(t *testing.T) {
-		configPath := filepath.Join(t.TempDir(), "config.yaml")
+		configPath := filepath.Join(t.TempDir(), "configs", "config.yaml")
 		_, err := loadMySQLTestConfig(configPath)
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("loadMySQLTestConfig() error = %v, want os.ErrNotExist", err)

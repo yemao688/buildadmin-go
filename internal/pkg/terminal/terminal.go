@@ -367,7 +367,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) (string, string, bool)
 		return newPort, newPackageManager, true
 	}
 
-	configPath := filepath.Join(utils.RootPath(), "config.yaml")
+	configPath := filepath.Join(utils.RootPath(), "configs", "config.yaml")
 	// Package-manager changes are also sparse overrides; do not rewrite the
 	// tracked defaults or use the historical conf/config.yaml path.
 	err := conf.WriteConfigOverrides(configPath, map[string]any{

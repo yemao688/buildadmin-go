@@ -47,7 +47,9 @@ func TestIsComplete(t *testing.T) {
 }
 
 func TestWriteBaseConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	configDir := filepath.Join(t.TempDir(), "configs")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	configPath := filepath.Join(configDir, "config.yaml")
 	cfg := Database{
 		Database: "buildadmin",
 		Hostname: "127.0.0.1",
@@ -75,7 +77,9 @@ func TestWriteBaseConfig(t *testing.T) {
 }
 
 func TestWriteBaseConfigRejectsInvalidPort(t *testing.T) {
-	err := WriteBaseConfig(filepath.Join(t.TempDir(), "config.yaml"), Database{Hostport: "not-a-port"}, "token")
+	configDir := filepath.Join(t.TempDir(), "configs")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	err := WriteBaseConfig(filepath.Join(configDir, "config.yaml"), Database{Hostport: "not-a-port"}, "token")
 	require.Error(t, err)
 }
 

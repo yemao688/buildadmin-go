@@ -44,7 +44,7 @@ func loadMySQLTestConfig(configPath string) (*conf.Configuration, error) {
 
 func skipMySQL(t *testing.T, reason string) {
 	t.Helper()
-	message := fmt.Sprintf("[testutil] skip: %s (config.yaml mysql_test)", reason)
+	message := fmt.Sprintf("[testutil] skip: %s (configs/config.yaml mysql_test)", reason)
 	t.Logf("%s", message)
 	fmt.Println(message)
 	t.Skip(message)
@@ -52,12 +52,12 @@ func skipMySQL(t *testing.T, reason string) {
 
 func mysqlTestConfigOrSkip(t *testing.T) *conf.Configuration {
 	t.Helper()
-	configPath := filepath.Join(utils.RootPath(), "config.yaml")
+	configPath := filepath.Join(utils.RootPath(), "configs", "config.yaml")
 	configuration, err := loadMySQLTestConfig(configPath)
 	if err != nil {
 		switch {
 		case errors.Is(err, os.ErrNotExist):
-			skipMySQL(t, "config.yaml 不存在")
+			skipMySQL(t, "configs/config.yaml 不存在")
 		case errors.Is(err, errMysqlTestNotConfigured):
 			skipMySQL(t, "mysql_test 未配置")
 		default:
@@ -132,7 +132,7 @@ func closeMySQL(db *gorm.DB) {
 
 // OpenMySQL 解析分层配置的 mysql_test 配置并打开测试库连接。
 // 以下情况统一 t.Skip 并输出醒目原因（t.Logf + fmt.Println 双通道）：
-//   - config.yaml 不存在（安装向导模式下同样跳过）
+//   - configs/config.yaml 不存在（安装向导模式下同样跳过）
 //   - mysql_test 未配置或 enabled: false
 //   - 测试库连接失败（配置错误或数据库不可达）
 //

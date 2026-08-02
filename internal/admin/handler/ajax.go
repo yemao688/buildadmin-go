@@ -135,7 +135,7 @@ func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 	_, _, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
 		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]string{
-			"content": "/config.yaml",
+			"content": "/configs/config.yaml",
 		})))
 		return
 	}

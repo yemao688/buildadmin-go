@@ -38,7 +38,7 @@ go install github.com/air-verse/air@latest
    # 或：go run ./cmd/server
    ```
 
-   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/server --conf config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
+   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/server --conf configs/config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`configs/config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
 2. 启动前端（必须在 `web/` 目录执行）：
 
    ```bash
@@ -51,7 +51,7 @@ go install github.com/air-verse/air@latest
 
 ## Docker Compose 部署
 
-发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（包含 `APP_PORT`/`APP_TIME_ZONE` 和发布变量）、根目录 `config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（包含 `APP_PORT`/`APP_TIME_ZONE` 和发布变量）、`configs/config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 
@@ -59,7 +59,7 @@ go install github.com/air-verse/air@latest
 # 项目根目录
 go build ./...
 go test ./path/to/package -run '^TestName$'
-go run ./cmd/server --conf config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate
 go generate ./cmd/server                 # Wire 相关变更后
 
 # web/ 目录
@@ -75,8 +75,8 @@ app/                 业务、命令、公共组件与中间件
 cmd/server/             应用入口及 Wire wiring
 router/              Gin 路由注册（/admin 与 /api）
 database/migrations/ 三轨迁移（official/framework/business）、迁移模型与内部迁移基础设施
-config.defaults.yaml 根目录运行基座（完整默认配置）
-config.yaml          根目录配置覆盖层（忽略，不提交）
+configs/config.defaults.yaml 运行基座（完整默认配置）
+configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）
 conf/                本地化资源（conf/localize/）
 web/                 Vue/Vite 前端源码
@@ -93,8 +93,8 @@ runtime/             运行时日志和临时文件
 
 ```bash
 go run ./cmd/server crud:validate crud_specs/<module>.yaml
-go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
-go run ./cmd/server --conf config.yaml crud:delete <table_name>
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ```
 
 生成失败时文件会自动恢复，但 MySQL DDL 不可回滚；执行前请检查数据库副作用和备份策略。
@@ -103,7 +103,7 @@ go run ./cmd/server --conf config.yaml crud:delete <table_name>
 
 - 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`database/migrations/business/README.md`](database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
 - 不要手改 `cmd/server/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
-- MySQL 集成测试由 `config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
+- MySQL 集成测试由 `configs/config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
 ## 业务开发最佳实践
 

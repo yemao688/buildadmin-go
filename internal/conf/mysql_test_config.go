@@ -1,6 +1,6 @@
 package conf
 
-// MysqlTest 是 MySQL 集成测试的专用连接配置（config.yaml 的 mysql_test 段）。
+// MysqlTest 是 MySQL 集成测试的专用连接配置（configs/config.yaml 的 mysql_test 段）。
 // 开发机需自建一次性测试库并对账号授权；未配置或 enabled=false 时相关测试跳过。
 type MysqlTest struct {
 	Enabled  bool   `mapstructure:"enabled" json:"enabled" yaml:"enabled"`

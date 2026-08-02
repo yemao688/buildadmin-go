@@ -23,18 +23,18 @@ make push
 
 * `docker-compose.yaml`
 * `.env`（镜像地址、`APP_PORT`、`APP_TIME_ZONE` 等发布与运行变量）
-* `config.yaml`（根目录应用覆盖层和凭据，不能提交到 Git）
+* `configs/config.yaml`（根目录应用覆盖层和凭据，不能提交到 Git）
 * `runtime/`（日志和运行时文件）
 * `public/storage/`（上传文件）
 
-镜像内包含完整的 `config.defaults.yaml` 基座。将本地安装器生成的稀疏 `config.yaml` 经安全渠道放到生产机，然后编辑生产连接信息；不要把完整基座复制成覆盖层：
+镜像内包含完整的 `configs/config.defaults.yaml` 基座。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机，然后编辑生产连接信息；不要把完整基座复制成覆盖层：
 
 ```bash
-cp /path/to/installed/config.yaml /path/to/release/config.yaml
+cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
 # 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/runtime/logs
 ```
 
-应用端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，镜像内不再有应用 YAML 的端口/时区概念。Compose 通过 `environment:` 将两变量传入容器，并在端口映射和健康检查中使用 `${APP_PORT:-9900}` 插值；容器监听端口与宿主机映射端口相同。Compose 会将 `./config.yaml` 以只读 bind mount 挂载为 `/app/config.yaml`，宿主机缺少该文件时明确报错，不会静默创建目录；`./runtime/` 挂载为 `/app/runtime`。应用 YAML 负责其它配置，`.env` 负责运行环境和 Compose 变量。
+应用端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，镜像内不再有应用 YAML 的端口/时区概念。Compose 通过 `environment:` 将两变量传入容器，并在端口映射和健康检查中使用 `${APP_PORT:-9900}` 插值；容器监听端口与宿主机映射端口相同。Compose 会将 `./configs/config.yaml` 以只读 bind mount 挂载为 `/app/configs/config.yaml`，宿主机缺少该文件时明确报错，不会静默创建目录；`./runtime/` 挂载为 `/app/runtime`。应用 YAML 负责其它配置，`.env` 负责运行环境和 Compose 变量。
 
 对应的 Compose 关键配置为：
 
@@ -78,14 +78,14 @@ docker compose pull
 docker compose up -d
 ```
 
-升级前直接备份 `config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `DEPLOY_IMAGE_TAG` 为已知的 `FULL_TAG`，再执行 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。
+升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `DEPLOY_IMAGE_TAG` 为已知的 `FULL_TAG`，再执行 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。
 
 ## 存储、Redis、健康检查和 HTTP
 
 上传文件位于生产机的 `public/storage/`，日志位于 `runtime/logs`。备份示例：
 
 ```bash
-tar czf config-and-runtime.tgz config.yaml runtime/ public/storage/
+tar czf config-and-runtime.tgz configs/config.yaml runtime/ public/storage/
 ```
 
 单副本方案适合单节点上传；不要直接扩展副本，除非另行设计共享文件存储、会话和一致性策略。

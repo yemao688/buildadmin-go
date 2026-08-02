@@ -103,9 +103,9 @@ air
 # 或：go run ./cmd/server
 ```
 
-启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
+启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `configs/config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
 
-也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/server --conf config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/server --conf config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
+也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/server --conf configs/config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/server --conf configs/config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
 
 **AI 协助安装：** 用户让 AI 帮忙安装时，AI 必须先向用户问询并收齐以下信息再开始执行，不要自行假设或先写配置：
 
@@ -116,15 +116,15 @@ air
 5. 前端是否立即构建（默认为是；CI/容器可用 `--skip-frontend`）；
 6. 后端端口与时区不属 setup 收集范围，由 `.env` 的 `APP_PORT`/`APP_TIME_ZONE` 提供（默认 `9900`、`Asia/Shanghai`）。
 
-`config.yaml` 应由安装器自动生成——它只写 MySQL 连接和随机生成的 `token.key` 的稀疏覆盖层；不要手写 YAML（容易漏 `token.key`、格式出错或误提交凭据），也不要把生成的 `config.yaml` 提交进仓库。setup 不会覆盖已存在的 `config.yaml`；重装需先删除 `public/install.lock`。
+`configs/config.yaml` 应由安装器自动生成——它只写 MySQL 连接和随机生成的 `token.key` 的稀疏覆盖层；不要手写 YAML（容易漏 `token.key`、格式出错或误提交凭据），也不要把生成的 `configs/config.yaml` 提交进仓库。setup 不会覆盖已存在的 `configs/config.yaml`；重装需先删除 `public/install.lock`。
 
-**手动配置和迁移：** 创建只含目标环境覆盖值的 `config.yaml`，填写数据库、密钥等值，再执行迁移。`config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
+**手动配置和迁移：** 创建只含目标环境覆盖值的 `configs/config.yaml`，填写数据库、密钥等值，再执行迁移。`configs/config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`configs/config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
 
 ```bash
-go run ./cmd/server --conf config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate
 ```
 
-根目录的 `config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
+根目录的 `configs/config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
 
 前端日常开发必须在 `web/` 执行：
 
@@ -142,14 +142,14 @@ pnpm dev
 
 ```bash
 go run ./cmd/server crud:validate crud_specs/<module>.yaml
-go run ./cmd/server --conf config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml [--skip-menu]
 go build ./...
 ```
 
 不要手写生成的实体（`internal/model`）、仓库（`internal/admin/repository`）、handler、provider、router、Wire 或 Vue 脚手架。删除生成模块使用：
 
 ```bash
-go run ./cmd/server --conf config.yaml crud:delete <table_name>
+go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ```
 
 删除命令不会 DROP 数据表；MySQL DDL 不可由文件回滚，生成和删除前都要确认数据库副作用。
@@ -176,10 +176,10 @@ git merge upstream/v2
 
 将 `YYYYMMDD` 替换为实际日期。`git merge` 产生冲突时，按下表处理；解决后检查 `git status`，逐个 `git add`，再执行 `git commit`。
 
-合并完成后，使用目标环境根目录的 `config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
+合并完成后，使用目标环境根目录的 `configs/config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
 
 ```bash
-go run ./cmd/server --conf config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate
 ```
 
 按改动范围验证，不把 `go test ./...` 作为默认门槛：
@@ -223,7 +223,7 @@ git push origin master
 | `cmd/server/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/server` 重生成。 |
 | `internal/router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
-| `config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `config.yaml` 覆盖层，不要把凭据合入基座。 |
+| `configs/config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `configs/config.yaml` 覆盖层，不要把凭据合入基座。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
 | 迁移历史 | 绝不能改名、改 ID 或重写已有迁移。新增迁移解决兼容问题，并检查 official/framework 注册表冲突。 |
 

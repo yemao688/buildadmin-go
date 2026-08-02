@@ -175,7 +175,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 
 	if !configExists {
 		if err := r.deps.writeBaseConfig(r.configPath, input.database, r.deps.generateTokenKey()); err != nil {
-			return fmt.Errorf("写入 config.yaml 失败: %w", err)
+			return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
 		}
 	}
 
@@ -261,7 +261,7 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 
 func resolveSetupConfigPath(rootPath string, flagChanged bool, flagValue string) string {
 	if !flagChanged || flagValue == "" {
-		return filepath.Join(rootPath, "config.yaml")
+		return filepath.Join(rootPath, "configs", "config.yaml")
 	}
 	if filepath.IsAbs(flagValue) {
 		return flagValue
@@ -270,7 +270,7 @@ func resolveSetupConfigPath(rootPath string, flagChanged bool, flagValue string)
 }
 
 func setupConfigPath(rootPath string) (string, error) {
-	configPath := filepath.Join(rootPath, "config.yaml")
+	configPath := filepath.Join(rootPath, "configs", "config.yaml")
 	if flag := pflag.Lookup("conf"); flag != nil {
 		value, err := pflag.CommandLine.GetString("conf")
 		if err != nil {
@@ -481,7 +481,7 @@ func readSetupConfig(rootPath, configPath string) (*conf.Configuration, bool, er
 		}
 		return nil, false, err
 	}
-	v, _, err := conf.LoadLayeredConfig(filepath.Join(rootPath, conf.DefaultsFileName), configPath)
+	v, _, err := conf.LoadLayeredConfig(filepath.Join(rootPath, "configs", conf.DefaultsFileName), configPath)
 	if err != nil {
 		return nil, true, fmt.Errorf("读取现有配置失败: %w", err)
 	}
@@ -493,7 +493,7 @@ func readSetupConfig(rootPath, configPath string) (*conf.Configuration, bool, er
 }
 
 func loadSetupConfiguration(rootPath, configPath string) (*conf.Configuration, error) {
-	v, _, err := conf.LoadLayeredConfig(filepath.Join(rootPath, conf.DefaultsFileName), configPath)
+	v, _, err := conf.LoadLayeredConfig(filepath.Join(rootPath, "configs", conf.DefaultsFileName), configPath)
 	if err != nil {
 		return nil, fmt.Errorf("加载迁移配置失败: %w", err)
 	}

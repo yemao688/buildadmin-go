@@ -14,7 +14,7 @@ func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
 }
 
 func TestVersionRequested(t *testing.T) {
-	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "config.yaml", "--version"}} {
+	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "configs/config.yaml", "--version"}} {
 		if !versionRequested(args) {
 			t.Fatalf("versionRequested(%v) = false", args)
 		}
@@ -25,10 +25,10 @@ func TestVersionRequested(t *testing.T) {
 }
 
 func TestMissingConfigMessage(t *testing.T) {
-	if got := missingConfigMessage(true); got != "config.yaml 不存在，setup 将以只读基座引导 CLI 安装" {
+	if got := missingConfigMessage(true); got != "configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装" {
 		t.Fatalf("setup missing config message = %q", got)
 	}
-	if got := missingConfigMessage(false); got != "config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 config.yaml）" {
+	if got := missingConfigMessage(false); got != "configs/config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 configs/config.yaml）" {
 		t.Fatalf("default missing config message = %q", got)
 	}
 }
