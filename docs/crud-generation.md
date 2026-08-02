@@ -40,6 +40,16 @@ go build ./...
 
 已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
 
+### `_custom.go` 定制保护与双提交工作流
+
+`crud:generate` 会为每个模块的 model 和 handler 各生成一个一次性定制骨架。定制文件由对应生成文件的路径去掉扩展名后追加 `_custom.go` 得到：`xxx.go` 对应 `xxx_custom.go`。因此，model 应定制在生成 model 的同包兄弟文件中，handler 应定制在生成 handler 的同包兄弟文件中；视图目录、`_route.go` 和共享 provider 没有对应的 `_custom.go` 骨架。生成器识别的定制文件目录包括 `app/admin/model`、`app/common/model` 和 `app/admin/handler` 及其子目录。
+
+首次生成时，目标 `_custom.go` 不存在才会写入骨架；目标文件一旦存在，后续 `crud:generate` 不会覆盖它。对应的 `xxx.go` 仍会按生成结果重写，生成器的 manifest 校验也会把受保护的 `_custom.go` 排除在文件冲突和路径集合比较之外。因此，业务方法和扩展逻辑应优先放入对应的 `_custom.go`，不要直接修改生成的 model/handler 文件。`_custom.go` 不是视图或路由的通用定制机制。
+
+`crud:delete` 对当前模块的 model/handler 定制骨架执行内容判断：仍与生成器内置骨架逐字节相同的文件会随生成文件删除；内容已经改变的文件会保留，并输出 `WARNING`。这表示删除时不会无提示地丢弃业务定制，但未修改的生成骨架仍属于可清理的生成产物。
+
+CRUD 模块采用“生成 commit + 定制 commit”的双提交工作流：生成 commit 只提交 spec 和全部生成产物（包括初次生成的 `_custom.go` 骨架），提交信息标注框架/生成器版本；业务定制另提交，并在提交信息或模块清单中写明定制动机。重新生成后，`xxx_custom.go` 中的定制会保留；对生成文件中的其它手工改动，应使用 `git diff` 对照定制 commit，逐项回补，而不是把手工改动混入生成 commit。这样可以区分机器生成结果与业务定制，也便于后续重新生成和审查。
+
 ## 最小示例
 
 一个可直接生成的最小业务表（演示组件推断、字典注释、自动时间字段；未写的键全部走默认值）：
