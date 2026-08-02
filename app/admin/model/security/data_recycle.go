@@ -3,6 +3,7 @@ package security
 import (
 	"fmt"
 	adminmodel "go-build-admin/app/admin/model"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,21 @@ func NewDataRecycleModel(sqlDB *gorm.DB, config *conf.Configuration) *DataRecycl
 	}
 }
 
+func rejectDuplicateEnabledControllerAs(tx *gorm.DB, table, controllerAs string, excludeID int32) error {
+	query := tx.Table(table).Where("status = ? AND controller_as = ?", "1", controllerAs)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return cErr.BadRequest("controller_as already has an enabled security rule")
+	}
+	return nil
+}
+
 func (s *DataRecycleModel) GetOne(ctx *gin.Context, id int32) (data SecurityDataRecycle, err error) {
 	err = s.DBFor(ctx).Model(&SecurityDataRecycle{}).Where("id=?", id).First(&data).Error
 	return
@@ -65,6 +81,11 @@ func (s *DataRecycleModel) Add(ctx *gin.Context, data SecurityDataRecycle) error
 		if policy.Table.PrimaryKey != data.PrimaryKey {
 			return fmt.Errorf("invalid recycle rule primary key")
 		}
+		if data.Status == "1" {
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", data.ControllerAs, 0); err != nil {
+				return err
+			}
+		}
 		return tx.Create(&data).Error
 	})
 }
@@ -83,6 +104,11 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 		_, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil)
 		if err != nil {
 			return err
+		}
+		if data.Status == "1" {
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", data.ControllerAs, data.ID); err != nil {
+				return err
+			}
 		}
 		result = tx.Model(&SecurityDataRecycle{}).Where("id = ?", data.ID).Updates(updates)
 		if result.Error != nil {
@@ -111,13 +137,35 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 func (s *DataRecycleModel) UpdateStatus(ctx *gin.Context, id int32, status string) error {
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		if status == "1" {
+			var current SecurityDataRecycle
+			if err := tx.Where("id = ?", id).First(&current).Error; err != nil {
+				return err
+			}
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", current.ControllerAs, id); err != nil {
+				return err
+			}
+		}
 		result = tx.Model(&SecurityDataRecycle{}).Where("id = ?", id).Update("status", status)
-		return result.Error
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&SecurityDataRecycle{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}); err != nil {
 		return err
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

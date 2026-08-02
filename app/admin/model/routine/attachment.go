@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type AttachmentModel struct {
@@ -112,34 +113,59 @@ func (s *AttachmentModel) Del(ctx *gin.Context, ids interface{}) error {
 		}
 	}
 	var list []upload.Attachment
+	var physicallyDeleted []upload.Attachment
 	err := s.Transaction(ctx, func(tx *gorm.DB) error {
 		scoped := s.scoped(ctx, tx.Table(s.TableName+" AS attachment"))
-		if err := scoped.Where("attachment.id IN ?", normalized).Find(&list).Error; err != nil {
+		if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("attachment.id IN ?", normalized).Find(&list).Error; err != nil {
 			return err
 		}
 		if len(list) != len(normalized) {
 			return gorm.ErrRecordNotFound
 		}
-		del := scoped.Where("attachment.id IN ?", normalized).Delete(&upload.Attachment{})
-		if del.Error != nil {
-			return del.Error
-		}
-		if del.RowsAffected != int64(len(normalized)) {
-			return gorm.ErrRecordNotFound
+		for _, attachment := range list {
+			row := tx.Table(s.TableName).Where("id = ?", attachment.ID)
+			if attachment.Quote > 1 {
+				result := row.Update("quote", gorm.Expr("quote - 1"))
+				if result.Error != nil {
+					return result.Error
+				}
+				if result.RowsAffected != 1 {
+					return gorm.ErrRecordNotFound
+				}
+				continue
+			}
+			del := row.Delete(&upload.Attachment{})
+			if del.Error != nil {
+				return del.Error
+			}
+			if del.RowsAffected != 1 {
+				return gorm.ErrRecordNotFound
+			}
+			physicallyDeleted = append(physicallyDeleted, attachment)
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	for _, v := range list {
+	for _, v := range physicallyDeleted {
 		if v.Storage == "alioss" {
 			if err := upload.NewAliossStorage(s.DB(), s.config).Delete(v.URL); err != nil {
 				return err
 			}
-		} else if utils.PathExists(utils.RootPath() + v.URL) {
-			if removeErr := os.Remove(utils.RootPath() + v.URL); removeErr != nil {
-				return removeErr
+		} else {
+			paths := []string{
+				filepath.Join(utils.RootPath(), "public", strings.TrimLeft(v.URL, "/")),
+				filepath.Join(utils.RootPath(), strings.TrimLeft(v.URL, "/")),
+			}
+			for _, path := range paths {
+				if !utils.PathExists(path) {
+					continue
+				}
+				if removeErr := os.Remove(path); removeErr != nil {
+					return removeErr
+				}
+				break
 			}
 		}
 	}

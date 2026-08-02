@@ -12,6 +12,7 @@ import (
 	"go-build-admin/conf"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
@@ -226,6 +227,15 @@ func TestAdminAddWithoutRequestTransactionCommitsOwnTransaction(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("expected committed admin row, got %d", count)
 	}
+}
+
+func TestAdminAddDuplicateUsernameReturnsFriendlyError(t *testing.T) {
+	db := prepareAdminModelMySQL(t)
+	m := NewAdminModel(db, hierarchyConfig("ba_"))
+	ctx := adminTestContext(t, true)
+	admin := Admin{Username: "duplicate-username", Nickname: "first", Status: "enable"}
+	require.NoError(t, m.Add(ctx, admin, nil))
+	require.ErrorContains(t, m.Add(ctx, Admin{Username: admin.Username, Nickname: "second", Status: "enable"}, nil), "username already exists")
 }
 
 func TestRestrictedDeleteVisibleLeafAndRejectInvisibleSibling(t *testing.T) {

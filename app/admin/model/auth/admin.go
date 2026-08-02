@@ -11,13 +11,14 @@ import (
 	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
 type Admin struct {
 	ID            int32         `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                             // ID
 	ParentID      *int32        `gorm:"column:parent_id;type:int(11) unsigned;default:null;comment:父级管理员ID;index:idx_parent_id" json:"parent_id"` // 父级管理员ID
-	Username      string        `gorm:"column:username;not null;comment:用户名" json:"username"`                                                     // 用户名
+	Username      string        `gorm:"column:username;type:varchar(20);not null;uniqueIndex:username;comment:用户名" json:"username"`               // 用户名
 	Nickname      string        `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                      // 昵称
 	Avatar        string        `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                          // 头像
 	Email         string        `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                            // 邮箱
@@ -189,10 +190,15 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := tx.Where("username=?", admin.Username).Take(&Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-			return cErr.BadRequest("Account exist")
+		if err := tx.Where("username=?", admin.Username).Take(&Admin{}).Error; err == nil {
+			return cErr.BadRequest("username already exists")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
 		}
 		if result := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(&admin); result.Error != nil {
+			if isDuplicateKeyError(result.Error) {
+				return cErr.BadRequest("username already exists")
+			}
 			return result.Error
 		} else if result.RowsAffected != 1 {
 			return cErr.BadRequest("create failed: rows affected mismatch")
@@ -210,6 +216,14 @@ func (s *AdminModel) Add(ctx *gin.Context, admin Admin, groups []string) error {
 		}
 		return NewAdminHierarchy(s.config).LinkNewNodeWithScope(ctx, tx, admin.ID, admin.ParentID, actor, enforcer)
 	})
+}
+
+func isDuplicateKeyError(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
 // CheckParentInScope verifies that the requested parent administrator exists

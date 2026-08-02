@@ -109,6 +109,11 @@ func (s *SensitiveDataModel) Add(ctx *gin.Context, data SecuritySensitiveData) e
 		if err != nil {
 			return err
 		}
+		if data.Status == "1" {
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", data.ControllerAs, 0); err != nil {
+				return err
+			}
+		}
 		return tx.Create(&data).Error
 	})
 }
@@ -135,6 +140,11 @@ func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SecuritySensitiveData) 
 		_, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "sensitive", data.PrimaryKey, fieldNames)
 		if err != nil {
 			return err
+		}
+		if data.Status == "1" {
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", data.ControllerAs, data.ID); err != nil {
+				return err
+			}
 		}
 		result = tx.Model(&SecuritySensitiveData{}).Where("id = ?", data.ID).Updates(updates)
 		if result.Error != nil {
@@ -163,13 +173,35 @@ func (s *SensitiveDataModel) Edit(ctx *gin.Context, data SecuritySensitiveData) 
 func (s *SensitiveDataModel) UpdateStatus(ctx *gin.Context, id int32, status string) error {
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		if status == "1" {
+			var current SecuritySensitiveData
+			if err := tx.Where("id = ?", id).First(&current).Error; err != nil {
+				return err
+			}
+			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", current.ControllerAs, id); err != nil {
+				return err
+			}
+		}
 		result = tx.Model(&SecuritySensitiveData{}).Where("id = ?", id).Update("status", status)
-		return result.Error
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&SecuritySensitiveData{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}); err != nil {
 		return err
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

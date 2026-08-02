@@ -11,6 +11,7 @@ import (
 	"go-build-admin/utils"
 
 	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/copier"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -20,7 +21,7 @@ import (
 type User struct {
 	ID            int32        `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                                         // ID
 	AdminID       int32        `gorm:"column:admin_id;not null;comment:管理员ID" json:"admin_id"`                                               // 管理员ID
-	Username      string       `gorm:"column:username;not null;comment:用户名" json:"username"`                                                 // 用户名
+	Username      string       `gorm:"column:username;type:varchar(32);not null;uniqueIndex:username;comment:用户名" json:"username"`           // 用户名
 	Nickname      string       `gorm:"column:nickname;not null;comment:昵称" json:"nickname"`                                                  // 昵称
 	Avatar        string       `gorm:"column:avatar;not null;comment:头像" json:"avatar"`                                                      // 头像
 	Email         string       `gorm:"column:email;not null;comment:邮箱" json:"email"`                                                        // 邮箱
@@ -154,11 +155,28 @@ func (s *UserModel) Add(ctx *gin.Context, user *User) error {
 				return cErr.BadRequest("admin scope self-row missing")
 			}
 		}
-		if err := tx.Where("username=?", user.Username).Take(&User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-			return cErr.BadRequest("Account exist")
+		if err := tx.Where("username=?", user.Username).Take(&User{}).Error; err == nil {
+			return cErr.BadRequest("username already exists")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
 		}
-		return tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(user).Error
+		result := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(user)
+		if result.Error != nil {
+			if isDuplicateKeyError(result.Error) {
+				return cErr.BadRequest("username already exists")
+			}
+			return result.Error
+		}
+		return nil
 	})
+}
+
+func isDuplicateKeyError(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
 func (s *UserModel) UsernameExists(ctx *gin.Context, username string) (bool, error) {

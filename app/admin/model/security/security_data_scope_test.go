@@ -110,3 +110,28 @@ func TestSecurityDataScopeRestoreRollbackFailClosedAndAtomic(t *testing.T) {
 	f.db.Table(q("user")).Select("username").Where("id=20").Scan(&value)
 	require.Equal(t, "before", value)
 }
+
+func TestSecurityRuleControllerAsCannotHaveTwoEnabledRules(t *testing.T) {
+	f := newSecurityModelFixture(t)
+	recycle := NewDataRecycleModel(f.db, f.config)
+	sensitive := NewSensitiveDataModel(f.db, f.config)
+	ctx := f.context()
+
+	require.ErrorContains(t, recycle.Add(ctx, SecurityDataRecycle{
+		ID: 10, Name: "duplicate recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "1",
+	}), "controller_as already has an enabled security rule")
+	require.NoError(t, recycle.Add(ctx, SecurityDataRecycle{
+		ID: 11, Name: "disabled recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "0",
+	}))
+	require.ErrorContains(t, recycle.UpdateStatus(ctx, 11, "1"), "controller_as already has an enabled security rule")
+
+	require.ErrorContains(t, sensitive.Add(ctx, SecuritySensitiveData{
+		ID: 10, Name: "duplicate sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1",
+	}), "controller_as already has an enabled security rule")
+	require.NoError(t, sensitive.Add(ctx, SecuritySensitiveData{
+		ID: 11, Name: "disabled sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "0",
+	}))
+	require.ErrorContains(t, sensitive.Edit(ctx, SecuritySensitiveData{
+		ID: 11, Name: "enabled sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1",
+	}), "controller_as already has an enabled security rule")
+}

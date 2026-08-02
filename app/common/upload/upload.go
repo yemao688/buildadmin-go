@@ -95,7 +95,7 @@ func (s *UploadHelper) CompleteOSS(params OSSCallback, adminID, userID int32) (A
 		var old Attachment
 		if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", attachment.Sha1, attachment.Topic, "alioss").Take(&old).Error; err == nil {
 			if s.oss.Exists(old.URL) {
-				if err := s.sqlDB.Model(&old).Updates(map[string]any{"quote": old.Quote + 1, "last_upload_time": time.Now().Unix()}).Error; err != nil {
+				if err := s.sqlDB.Model(&old).Updates(map[string]any{"quote": gorm.Expr("quote + 1"), "last_upload_time": time.Now().Unix()}).Error; err != nil {
 					return Attachment{}, err
 				}
 				old.FullUrl = s.oss.URL(old.URL)
@@ -272,7 +272,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 			}
 		} else {
 			if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
-				"quote":            attach.Quote + 1,
+				"quote":            gorm.Expr("quote + 1"),
 				"last_upload_time": time.Now().Unix(),
 			}).Error; err != nil {
 				return nil, err

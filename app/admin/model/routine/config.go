@@ -1,10 +1,13 @@
 package routine
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
+	mysql "github.com/go-sql-driver/mysql"
 	model "go-build-admin/app/admin/model"
 	siteconfig "go-build-admin/app/common/siteconfig"
+	cErr "go-build-admin/app/pkg/error"
 	"go-build-admin/conf"
 	"gorm.io/gorm"
 )
@@ -31,8 +34,14 @@ func (s *ConfigModel) List(ctx *gin.Context) (list []siteconfig.Config, err erro
 
 func (s *ConfigModel) Add(ctx *gin.Context, data siteconfig.Config) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := s.ensureNameAvailable(tx, data.Name, 0); err != nil {
+			return err
+		}
 		result := tx.Create(&data)
 		if result.Error != nil {
+			if isDuplicateKeyError(result.Error) {
+				return cErr.BadRequest("config name already exists")
+			}
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
@@ -44,8 +53,14 @@ func (s *ConfigModel) Add(ctx *gin.Context, data siteconfig.Config) error {
 
 func (s *ConfigModel) Edit(ctx *gin.Context, data siteconfig.Config) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := s.ensureNameAvailable(tx, data.Name, data.ID); err != nil {
+			return err
+		}
 		result := tx.Save(&data)
 		if result.Error != nil {
+			if isDuplicateKeyError(result.Error) {
+				return cErr.BadRequest("config name already exists")
+			}
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
@@ -53,6 +68,31 @@ func (s *ConfigModel) Edit(ctx *gin.Context, data siteconfig.Config) error {
 		}
 		return nil
 	})
+}
+
+func (s *ConfigModel) ensureNameAvailable(tx *gorm.DB, name string, id int32) error {
+	query := tx.Where("name = ?", name)
+	if id > 0 {
+		query = query.Where("id <> ?", id)
+	}
+	var existing siteconfig.Config
+	err := query.Take(&existing).Error
+	switch {
+	case err == nil:
+		return cErr.BadRequest("config name already exists")
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return nil
+	default:
+		return err
+	}
+}
+
+func isDuplicateKeyError(err error) bool {
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return true
+	}
+	var mysqlErr *mysql.MySQLError
+	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
 func (s *ConfigModel) Del(ctx *gin.Context, ids interface{}) error {

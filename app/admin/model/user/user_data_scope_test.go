@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -203,4 +205,33 @@ func TestUserEditAndAddRollbackWithActiveRequestTransaction(t *testing.T) {
 	require.Error(t, f.root.Edit(ctx, &copy, "rollback-password"))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
 	require.Equal(t, "changed", got.Nickname)
+}
+
+func TestUserConcurrentAddSameUsernameReturnsOneFriendlyDuplicateError(t *testing.T) {
+	f := newScopeFixture(t)
+	const username = "concurrent-username"
+	results := make(chan error, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx := scopeCtx(t, 20, false)
+			candidate := User{AdminID: 20, Username: username, Nickname: username, Password: "p", Status: "enable"}
+			results <- f.root.Add(ctx, &candidate)
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	for err := range results {
+		if err == nil {
+			successes++
+			continue
+		}
+		require.Contains(t, strings.ToLower(err.Error()), "username")
+		require.Contains(t, strings.ToLower(err.Error()), "exist")
+	}
+	require.Equal(t, 1, successes)
 }
