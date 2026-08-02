@@ -16,6 +16,7 @@ import (
 	api "go-build-admin/internal/api/handler"
 	"go-build-admin/internal/middleware"
 	adminMiddleware "go-build-admin/internal/admin/middleware"
+	apiMiddleware "go-build-admin/internal/api/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -127,7 +128,7 @@ func newCompleteRouter() *gin.Engine {
 		&adminMiddleware.Login{},
 		&adminMiddleware.Authorization{},
 		&adminMiddleware.Security{},
-		&middleware.UserLogin{},
+		&apiMiddleware.UserLogin{},
 		&adminMiddleware.Record{},
 		&admin.IndexHandler{},
 		&admin.AjaxHandler{},

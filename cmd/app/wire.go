@@ -28,13 +28,13 @@ import (
 	commandHandler "go-build-admin/internal/cmd/handler"
 	"go-build-admin/internal/common/area"
 	"go-build-admin/internal/common/country"
-	"go-build-admin/internal/common/member"
+	"go-build-admin/internal/api/service/member"
 	siteconfig "go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/common/upload"
 	"go-build-admin/internal/cron"
 	"go-build-admin/internal/infra/db"
 	"go-build-admin/internal/infra/rds"
-	"go-build-admin/internal/middleware"
+	apiMiddleware "go-build-admin/internal/api/middleware"
 	"go-build-admin/internal/pkg/terminal"
 	"go-build-admin/internal/router"
 
@@ -52,7 +52,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		rds.NewRedis,
 
 		pkg.ProviderSet,
-		middleware.ProviderSet,
+		apiMiddleware.ProviderSet,
 		adminMiddleware.ProviderSet,
 		area.ProviderSet,
 		country.ProviderSet,

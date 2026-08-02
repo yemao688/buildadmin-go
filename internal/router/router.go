@@ -6,6 +6,7 @@ import (
 	api "go-build-admin/internal/api/handler"
 	"go-build-admin/internal/middleware"
 	adminMiddleware "go-build-admin/internal/admin/middleware"
+	apiMiddleware "go-build-admin/internal/api/middleware"
 	"go-build-admin/internal/utils"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ func InitRouter(
 	loginM *adminMiddleware.Login,
 	authorizationM *adminMiddleware.Authorization,
 	securityM *adminMiddleware.Security,
-	userLoginM *middleware.UserLogin,
+	userLoginM *apiMiddleware.UserLogin,
 	recordM *adminMiddleware.Record,
 
 	indexHandler *admin.IndexHandler,
