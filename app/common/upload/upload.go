@@ -95,11 +95,15 @@ func (s *UploadHelper) CompleteOSS(params OSSCallback, adminID, userID int32) (A
 		var old Attachment
 		if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", attachment.Sha1, attachment.Topic, "alioss").Take(&old).Error; err == nil {
 			if s.oss.Exists(old.URL) {
-				s.sqlDB.Model(&old).Updates(map[string]any{"quote": old.Quote + 1, "last_upload_time": time.Now().Unix()})
+				if err := s.sqlDB.Model(&old).Updates(map[string]any{"quote": old.Quote + 1, "last_upload_time": time.Now().Unix()}).Error; err != nil {
+					return Attachment{}, err
+				}
 				old.FullUrl = s.oss.URL(old.URL)
 				return old, nil
 			}
-			s.sqlDB.Delete(&old)
+			if err := s.sqlDB.Delete(&old).Error; err != nil {
+				return Attachment{}, err
+			}
 		}
 	}
 	if err := s.sqlDB.Create(&attachment).Error; err != nil {
@@ -263,12 +267,16 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 			missing = !s.oss.Exists(attach.URL)
 		}
 		if missing {
-			s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Delete(nil)
+			if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Delete(nil).Error; err != nil {
+				return nil, err
+			}
 		} else {
-			s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
+			if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
 				"quote":            attach.Quote + 1,
 				"last_upload_time": time.Now().Unix(),
-			})
+			}).Error; err != nil {
+				return nil, err
+			}
 			attach.Suffix = strings.TrimLeft(filepath.Ext(attach.URL), ".")
 			if storage == "alioss" && s.oss != nil {
 				attach.FullUrl = s.oss.URL(attach.URL)

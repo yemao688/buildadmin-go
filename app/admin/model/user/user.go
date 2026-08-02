@@ -301,12 +301,25 @@ func (s *UserModel) UpdateStatus(ctx *gin.Context, id int32, status string) erro
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
 		result = tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Update("status", status)
-		return result.Error
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}); err != nil {
 		return err
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

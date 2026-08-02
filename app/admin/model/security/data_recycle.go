@@ -85,12 +85,25 @@ func (s *DataRecycleModel) Edit(ctx *gin.Context, data SecurityDataRecycle) erro
 			return err
 		}
 		result = tx.Model(&SecurityDataRecycle{}).Where("id = ?", data.ID).Updates(updates)
-		return result.Error
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&SecurityDataRecycle{}).Where("id = ?", data.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}); err != nil {
 		return err
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -99,7 +100,7 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 	username := ""
 	if info.Id != 0 {
 		admin := Admin{}
-		s.DB().Where("id=?", info.Id).First(&admin)
+		s.DBFor(ctx).Where("id=?", info.Id).First(&admin)
 		username = admin.Username
 	} else if value, ok := params["username"].(string); ok && value != "" {
 		username = value
@@ -115,12 +116,12 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 			action = name[slashIndex+1:]
 		}
 		actionRule := AdminRule{}
-		s.DB().Where("name=?", name).First(&actionRule)
+		s.DBFor(ctx).Where("name=?", name).First(&actionRule)
 
 		slashIndex := strings.LastIndex(name, "/")
 		if slashIndex != -1 {
 			parentRule := AdminRule{}
-			s.DB().Where("name=?", name[:slashIndex]).First(&parentRule)
+			s.DBFor(ctx).Where("name=?", name[:slashIndex]).First(&parentRule)
 			if actionRule.ID != 0 && parentRule.ID != 0 {
 				title = parentRule.Title + "-" + actionRule.Title
 			}
@@ -147,7 +148,9 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 		IP:        ctx.ClientIP(),
 		Useragent: truncateAdminLogUTF8(ctx.Request.UserAgent(), 255),
 	}
-	s.DB().Create(&adminLog)
+	if err := s.DBFor(ctx).Create(&adminLog).Error; err != nil {
+		zap.L().Warn("failed to create admin log", zap.Error(err))
+	}
 }
 
 func (s *AdminLogModel) Del(ctx *gin.Context, ids interface{}) error {

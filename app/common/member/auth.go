@@ -27,6 +27,12 @@ type Service struct {
 	config      *conf.Configuration
 }
 
+var (
+	loginPhoneRegex    = regexp.MustCompile(`^1[3-9]\d{9}$`)
+	loginEmailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	loginUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`)
+)
+
 func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *Service {
 	return &Service{sqlDB: sqlDB, tokenHelper: tokenHelper, config: config}
 }
@@ -104,12 +110,11 @@ func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error
 
 func (s *Service) Login(ctx *gin.Context, username string, plainPassword string, keep bool) (interface{}, error) {
 	accountType := ""
-	phoneRegex := regexp.MustCompile(`^1[3-9]\d{9}$`)
-	if phoneRegex.MatchString(username) {
+	if loginPhoneRegex.MatchString(username) {
 		accountType = "mobile"
-	} else if emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`); emailRegex.MatchString(username) {
+	} else if loginEmailRegex.MatchString(username) {
 		accountType = "email"
-	} else if usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`); usernameRegex.MatchString(username) {
+	} else if loginUsernameRegex.MatchString(username) {
 		accountType = "username"
 	}
 	if accountType == "" {
@@ -249,6 +254,12 @@ func (s *Service) Register(ctx *gin.Context, username string, plainPassword stri
 }
 
 func (s *Service) accountExists(field, value string) (bool, error) {
+	switch field {
+	case "username", "email", "mobile":
+	default:
+		return false, cErr.BadRequest("invalid account field")
+	}
+
 	var user model.User
 	result := s.sqlDB.Model(&model.User{}).Where(field+"=?", value).Scan(&user)
 	if result.Error != nil {

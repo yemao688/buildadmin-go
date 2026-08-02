@@ -20,6 +20,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/golang/freetype/truetype"
+	"go.uber.org/zap"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"
 	"golang.org/x/image/math/fixed"
@@ -96,13 +97,17 @@ func (c *Captcha) Check(code, id string, typeLen int) bool {
 	}
 
 	if time.Now().Unix() > seCode.ExpireTime {
-		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
+		if err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil).Error; err != nil {
+			zap.L().Warn("failed to delete expired captcha", zap.Error(err))
+		}
 		return false
 	}
 
 	if c.authCode(strings.ToUpper(code), id, typeLen) == seCode.Code {
 		if c.config.Reset {
-			c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
+			if err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil).Error; err != nil {
+				zap.L().Warn("failed to reset captcha", zap.Error(err))
+			}
 		}
 		return true
 	}
@@ -115,7 +120,9 @@ func (c *Captcha) Create(id string) (string, error) {
 	seCode := model.Captcha{}
 	err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Scan(&seCode).Error
 	if err == nil {
-		c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil)
+		if err := c.sqlDB.Model(&model.Captcha{}).Where("`key`=?", key).Delete(nil).Error; err != nil {
+			zap.L().Warn("failed to replace captcha", zap.Error(err))
+		}
 	}
 
 	captcha := c.generate()

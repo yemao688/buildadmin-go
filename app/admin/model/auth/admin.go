@@ -300,6 +300,16 @@ func (s *AdminModel) SwitchStatus(ctx *gin.Context, id int32, status string) err
 		if result.Error != nil {
 			return result.Error
 		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&Admin{}).Scopes(s.scoped(ctx)).Where("id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return cErr.BadRequest("record not found or no permission")
+		}
 		if result.RowsAffected != 1 {
 			return cErr.BadRequest("record not found or no permission")
 		}
@@ -330,6 +340,16 @@ func (s *AdminModel) ResetPassword(ctx *gin.Context, id int32, password string) 
 	})
 	if result.Error != nil {
 		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := s.DBFor(ctx).Model(&Admin{}).Where("id=?", id).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
+		return cErr.BadRequest("record not found")
 	}
 	if result.RowsAffected != 1 {
 		return cErr.BadRequest("record not found")
