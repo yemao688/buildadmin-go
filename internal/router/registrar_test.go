@@ -125,10 +125,10 @@ func newCompleteRouter() *gin.Engine {
 	return InitRouter(
 		&lumberjack.Logger{},
 		&adminMiddleware.Login{},
-		&middleware.Authorization{},
-		&middleware.Security{},
+		&adminMiddleware.Authorization{},
+		&adminMiddleware.Security{},
 		&middleware.UserLogin{},
-		&middleware.Record{},
+		&adminMiddleware.Record{},
 		&admin.IndexHandler{},
 		&admin.AjaxHandler{},
 		&api.InstallHandler{},
