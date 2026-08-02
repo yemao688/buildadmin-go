@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"go-build-admin/internal/common/money"
 	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
+	"go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/pkg/requesttx"
 	"go-build-admin/internal/pkg/testutil"
@@ -60,7 +61,7 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 		require.NoError(t, db.Table(closure).Create(map[string]any{"ancestor_id": row.a, "descendant_id": row.d, "depth": row.depth}).Error)
 	}
 	f.root = NewUserRepository(db, cfg, data_scope.NewClosureEnforcer(cfg))
-	f.money = NewMoneyLogRepository(db, cfg, data_scope.NewClosureEnforcer(cfg))
+	f.money = NewMoneyLogRepository(db, cfg, data_scope.NewClosureEnforcer(cfg), money.NewBalanceService())
 	return f
 }
 

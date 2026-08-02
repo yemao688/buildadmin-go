@@ -31,6 +31,7 @@ import (
 	handler3 "go-build-admin/internal/cmd/handler"
 	"go-build-admin/internal/common/area"
 	"go-build-admin/internal/common/country"
+	"go-build-admin/internal/common/money"
 	"go-build-admin/internal/common/siteconfig"
 	"go-build-admin/internal/common/upload"
 	"go-build-admin/internal/conf"
@@ -131,7 +132,8 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	crudRegistrar := crud2.NewCrudRegistrar(crudHandler)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleRepository)
 	dashboardRegistrar := handler.NewDashboardRegistrar(dashboardHandler)
-	moneyLogRepository := user.NewMoneyLogRepository(gormDB, configuration, closureEnforcer)
+	balanceService := money.NewBalanceService()
+	moneyLogRepository := user.NewMoneyLogRepository(gormDB, configuration, closureEnforcer, balanceService)
 	moneyLogHandler := user2.NewMoneyLogHandler(zapLogger, moneyLogRepository)
 	userLogRegistrar := user2.NewUserLogRegistrar(userHandler, moneyLogHandler)
 	captchaService := captcha.NewCaptchaService(gormDB)

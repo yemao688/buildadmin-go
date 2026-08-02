@@ -30,7 +30,7 @@
 
 - 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端使用 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
-- 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
+- 账户状态迁移由 `internal/database/migrations/framework/0001_final_seed_and_integrity.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 - 全新安装建立 24 张表，覆盖权限、安全、字典、附件、配置与三轨迁移台账。
 - security 四表与 PHP 语义对齐：规则表全局化，不含 `admin_id`/`owner_column`；日志表的 `admin_id` 只表示操作者。安全种子使用 Go 点形 controller 名（如 `security.DataRecycle`）。
 - 前台 `/` 是自包含占位页，当前只提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`；后台管理功能完整。
@@ -39,9 +39,27 @@
 
 - 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
-- 真实入口和 wiring 是 `cmd/app/main.go`、`cmd/app/wire.go`、`router/router.go` 与 `web/src/main.ts`；Cobra 命令位于 `app/cmd/`。
+- 真实入口和 wiring 是 `cmd/app/main.go`、`cmd/app/wire.go`、`internal/router/router.go`（组合者，挂载两渠道路由）与 `web/src/main.ts`；Cobra 命令位于 `internal/cmd/`。
 - `config.defaults.yaml` 是根目录受跟踪的完整运行基座，启动时实际加载。根目录 `config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
+
+## 分层与边界（v3.0.0 架构）
+
+后端全部私有代码位于 `internal/`，按"两渠道 + 共享内核"分层：
+
+| 层 | 职责 | 允许依赖 | 禁止依赖 |
+|---|---|---|---|
+| `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate | 仅外部库 | 各渠道、Gin、service |
+| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper 等 | 外部库、conf | 渠道层 |
+| `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
+| `internal/admin` | 后台渠道：`repository/`（唯一 GORM 入口，scope 注入）·`dto/`（请求 Param）·`handler/`（薄控制器）·`service/`（按需跨表编排）·`middleware/`（登录/权限/安全审计）·`router/`（/admin/* 自注册） | model、pkg、common | `internal/api` |
+| `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册） | model、pkg、common | `internal/admin` |
+| `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
+| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源 | 全部 | 业务逻辑 |
+| `internal/conf`、`internal/database/migrations`、`internal/infra/{db,rds}`、`internal/utils` | 配置、三轨迁移、连接初始化、工具 | — | — |
+
+边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
+
 
 ## AI 开发协议
 
@@ -73,7 +91,7 @@ pnpm build                             # emits web/dist/
 
 - 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
-- 不要求默认运行 `go test ./...` 或 `go vet`；按影响范围选择测试，因为部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow、任务运行器、Makefile 或已配置的 Go linter。
+- 不要求默认运行 `go test ./...` 或 `go vet`；按影响范围选择测试，因为部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow 或已配置的 Go linter；根目录 `Makefile` 只服务于部署镜像构建，不是开发任务运行器。
 
 ## CRUD 模块生成（AI 驱动）
 
@@ -95,23 +113,23 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 ## 迁移以及生成/部署文件
 
-- 迁移系统有三条轨道：`database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`database/migrations/framework/` 仅保存单条 `framework-final-seed-and-integrity`（仅框架维护者可改）；`database/migrations/business/` 是由 `Register`/`init` 注册的业务仓库扩展轨道。三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；全新安装快照建立 24 张表。契约见 `database/migrations/business/README.md`。
+- 迁移系统有三条轨道：`internal/database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`internal/database/migrations/framework/` 仅保存单条 `framework-final-seed-and-integrity`（仅框架维护者可改）；`internal/database/migrations/business/` 是由 `Register`/`init` 注册的业务仓库扩展轨道。三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；全新安装快照建立 24 张表。契约见 `internal/database/migrations/business/README.md`。
 - 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
 - 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 framework `VerifySchema`/`VerifyUpgradeData` 和 `framework.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）。
 - 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 framework/business 的 `Up` 之前执行。
-- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `database/migrations/business/README.md`。
+- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/database/migrations/business/README.md`。
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - 不要手改 `cmd/app/wire_gen.go`；provider 或 `cmd/app/wire.go` 变更后运行 `go generate ./cmd/app`。
 - `go run ./cmd/generate` 有风险：它使用硬编码的本地 MySQL DSN，并可能相对于当前目录覆盖生成 model。运行前必须检查其实现。
-- `database/migrations/model/*.gen.go` 驱动全新快照的 AutoMigrate；保留其中的 tags 和迁移契约。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
+- 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；`database/migrations/model/*.gen.go` 已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
 ## 业务仓库中的框架使用最佳实践
 
 以下规则适用于将本仓库作为业务项目框架使用的场景，不仅适用于框架自身开发。fork、安装、CRUD 与升级的流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)；这里保留 AI 首读所需的规则速查。
 
 - **表命名：按业务分类加前缀。** 使用 `<category>_<entity>`，让表、菜单和生成代码自然归类：运营类 `ops_banner`/`ops_support`/`ops_help`，订单类 `order_recharge`/`order_withdraw`，用户类 `user_wallet`/`user_level`。命名保持简单并明确归属。
-- **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** 首段是业务分类和目录：`generateRelativePath: ops_user_test_xxx` → handler/model 为 `ops/user_test_xxx.go`，views 为 `ops/userTestXxx/`，路由为 `ops.UserTestXxx`，规则名为 `ops/userTestXxx`。单段输入在第一个下划线处分割；Go 文件保留实体蛇形名，视图目录使用 lcfirst 驼峰，路由名用小写目录加 PascalCase 实体（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`），规则名与视图目录一致。省略时虽会回退到表名，spec 不得依赖该回退；只有真正需要更深业务子目录时才使用 `/` 或 `.`（如 `ops/user/test_xxx`）。`webViewsDir` 仍是较低层级的单路径覆盖项。
+- **业务表路径：必须显式设置 `generateRelativePath`，标准值就是表名本身。** 首段是业务分类和目录：`generateRelativePath: ops_user_test_xxx` → 实体为 `internal/model/user_test_xxx.go`（扁平共享记录层），仓库为 `internal/admin/repository/ops/user_test_xxx.go`，DTO 为 `internal/admin/dto/ops/user_test_xxx.go`，handler/`_route.go` 为 `internal/admin/handler/ops/user_test_xxx.go`，views 为 `ops/userTestXxx/`，路由为 `ops.UserTestXxx`，规则名为 `ops/userTestXxx`。单段输入在第一个下划线处分割；Go 文件保留实体蛇形名，视图目录使用 lcfirst 驼峰，路由名用小写目录加 PascalCase 实体（对齐 PHP 上游 URL，如 `/admin/country.LanguageContent/index`），规则名与视图目录一致。省略时虽会回退到表名，spec 不得依赖该回退；只有真正需要更深业务子目录时才使用 `/` 或 `.`（如 `ops/user/test_xxx`）。`webViewsDir` 仍是较低层级的单路径覆盖项。
 - **CRUD 模块采用双提交工作流。** 生成提交只包含 `crud_specs/<module>.yaml` 和全部生成产物，提交信息标注框架/生成器版本；业务定制每项单独提交并写明动机。重新生成后用 `git diff` 对照定制提交，逐项回补被覆盖的修改；生成提交不含手改时，`crud:delete` + 重新生成必须逐字节一致。生成提交作为机器产物快速浏览，重点审查定制提交；在业务仓库 `AGENT_BUSINESS.md` 维护模块、定制点和提交哈希的清单。
 - **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`framework/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
 - **显式设置 `columnFields` 控制列表展示。** 省略时所有字段都会进入后台列表；密码、密钥/令牌、长备注或大段 `content` 等仅表单字段只放进 `formFields`。带关系增强的 `remoteSelect`/`remoteSelects` 外键保留在 `columnFields`，原始 FK 列会自动隐藏，同时保留搜索和关系展示列。
@@ -122,5 +140,5 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 ## 安装与测试风险
 
 - 安装、配置、迁移、升级和端口的完整流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)；不要在本速查文档重复维护安装器行为。
-- MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `config.defaults.yaml`，开发者只在 `config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`app/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
+- MySQL 集成测试由分层配置中的 `mysql_test` 段门禁；完整默认值在 `config.defaults.yaml`，开发者只在 `config.yaml` 覆盖 `mysql_test.enabled`/连接字段。每位开发者自行准备一次性测试库，并向账号授予该库及 `<database>%` 通配权限（recovery 测试会动态创建 `<database>_fresh_*` fixture 库），再设置 `enabled: true`。缺少或禁用 `mysql_test` 时，相关测试会明确提示并跳过，绝不修改开发库或生产库。`internal/pkg/testutil`（`OpenMySQL`/`OpenFixtureDatabase`）是唯一门禁；旧的测试 DSN 环境变量已移除。部分旧测试/生成器仍假设本地 MySQL 或会执行 DDL。
 - Air 忽略 `web/`、测试和生成的 Go 文件，并在 10 秒后重新构建。Vite 需单独运行；如果 CRUD 生成与 Air 发生竞态，可临时增大 `.air.toml` 的 `build.delay`。

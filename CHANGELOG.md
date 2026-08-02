@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.0.0
+
+> **架构重构版本，无升级路径。** 与 v2.6.0 系列同一原则：只保证全新安装优雅，不支持对旧库执行 migrate 升级；所有环境（含下游业务仓库）必须用安装器全新安装后重新开始业务数据。后端私有代码全部迁入 `internal/` 并按"两渠道 + 共享内核"分层，import 路径与生成器产物落点全面变更；全新安装 schema 与 v2.7.5 逐行一致（information_schema 全属性零 diff 验证），业务数据不兼容仅体现在代码与路径。
+
+- **Changed (breaking, 分层架构):** 后端私有代码由 `app/`、`conf/`、`database/`、`utils/`、`router/`、`service/` 迁入 `internal/`——两渠道（`internal/admin`、`internal/api`）+ 共享内核（`internal/model` 共享贫血实体记录、`internal/pkg` 技术基建、`internal/common` 领域服务）+ 根装配（`internal/router`、全局 `internal/middleware`）。边界由 `internal/boundary_test.go` 机械执法（R1-R5：渠道互不导入、common 不依赖渠道、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动——持久化只能走 repository/领域服务）。
+- **Changed (breaking, admin 渠道):** `admin/model` 拆分为四层——`internal/admin/repository/`（`XxxModel`→`XxxRepository`，唯一 GORM 入口，scope 注入）、`internal/admin/dto/`（`XxxParam` 自 handler 抽出）、`internal/admin/middleware/`（登录/权限/安全审计归位）、`internal/admin/router/`（/admin/* 自注册）；17 个模型类型与构造器更名（`NewXxxModel`→`NewXxxRepository`）。`ConfigHandler.Edit` 的裸事务查询下沉为 `ConfigRepository.SaveAll`。
+- **Changed (breaking, api 渠道):** 会员认证服务 `common/member`→`internal/api/service/member`；user_login 中间件→`internal/api/middleware`；新增 `internal/api/dto`（`OutUser` 投影）与 `internal/api/repository/user`（会员视角查询收拢）；`internal/api/router/`（/api/* 自注册）。
+- **Changed (breaking, 实体与快照):** 全部表实体收敛为 `internal/model` 共享贫血记录（消除 common/admin/迁移 gen 三处 User 漂移）；全新安装快照 AutoMigrate 改由 `internal/model` 与各所有者实体（upload/siteconfig/token/captcha/crud）驱动，`database/migrations/model/*.gen.go` 删除——重构前后全新安装 DDL 逐行零 diff（24 表/218 列/56 索引全属性对比验证）。`internal/pkg/persistence` 为唯一 BaseModel（requesttx 感知），原 admin/common 两份归并删除。
+- **Added (common, BalanceService):** `internal/common/money.BalanceService` 为全框架唯一余额变动事务链（FOR UPDATE→属主校验→before/after→负余额拒绝→原子更新→写流水），admin 侧 `MoneyLogRepository.Add` 为薄适配层（enforcer 派生 scope + 错误映射），门户自服务/cron 可直接复用。同时修复原语三缺陷：删除从不写入的 `OperatorAdminID` 死参数（授权改由显式 Scope 表达）；传输层错误改领域哨兵错误（`ErrInsufficientBalance`/`ErrUserNotFound`/`ErrNoOwner`/`ErrScopeRequired`，渠道适配层负责 HTTP 映射）；`nil scope=无限制` 改 Scope 必传 + `SystemScope()` 显式选择。调用方可用自带 `MoneyLog` 结构体作插入载体（预设字段如显式 ID 保留）。
+- **Changed (crud 生成器):** 产物落点适配新架构——实体 → `internal/model/<entity>.go`（扁平共享记录，包名 model）；仓库 → `internal/admin/repository/<path>.go`（`XxxRepository`/`NewXxxRepository`，基于 `internal/pkg/persistence`）；请求 DTO → `internal/admin/dto/<path>.go`（包名 dto）；handler/`_route.go` 不变；provider 脚手架迁至 repository 目录。`_custom.go` 保护目录更新为 internal/model、internal/admin/repository、internal/admin/handler（实体/仓库/handler 各有独立骨架）；`isCommonModel` 弃用（实体一律共享）；`remoteModel` 引用解析为 `internal/model/<entity>.go`（历史前缀自动剥离）；历史布局 manifest 的 `crud:delete` 兼容保留。
+- **Changed (router):** 渠道路由自注册——`internal/admin/router`（/admin/* + 后台中间件链 + 豁免登记）与 `internal/api/router`（/api/* + user_login），`internal/router` 收窄为组合者（全局中间件 + 静态资源 + registrar 按渠道分派）；中间件挂载顺序与路由表经黄金快照逐字节一致验证。
+- **Changed (test):** SQLite 夹具由 AutoMigrate 改原生 DDL（`internal/pkg/testutil` 六个共享助手）——实体 gorm tag 全面 MySQL 方言化（保金本 DDL）后 SQLite 不再解析 `unsigned`；MySQL 门禁测试不受影响。
+- **Changed (docs):** `AGENTS.md` 新增"分层与边界"章节（五层职责与 import 规则）、`docs/crud-generation.md` 按新产物映射重写、迁移 README 与框架文档路径全面 internal/ 化。
+
 ## v2.7.5
 
 > 纯增量版本：无破坏性变更，主题为"门户友好度"——消除业务门户/多角色对框架文件的硬补丁（下游反馈 A/B/C/D 四组全量落地）。

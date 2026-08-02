@@ -1,10 +1,12 @@
 package user
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	adminmodel "go-build-admin/internal/admin/repository"
+	"go-build-admin/internal/common/money"
 	"go-build-admin/internal/conf"
 	"go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
@@ -13,32 +15,21 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 type MoneyLogRepository struct {
 	persistence.BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
+	balance  *money.BalanceService
 }
 
-// ApplyMoneyDeltaInput contains the transport-neutral inputs for a balance
-// change. Log.AdminID is derived from the target user's owner; it is not the
-// operator identity. OperatorAdminID is zero for system flows and is kept
-// separate so callers do not confuse those two identities.
-type ApplyMoneyDeltaInput struct {
-	UserID          int32
-	Delta           float64
-	Log             *model.MoneyLog
-	OperatorAdminID int32
-	Scope           func(db *gorm.DB) *gorm.DB
-}
-
-func NewMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *MoneyLogRepository {
+func NewMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer, balance *money.BalanceService) *MoneyLogRepository {
 	return &MoneyLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"user_money_log", "id", "user.username,user.nickname", sqlDB),
 		config:    config,
 		enforcer:  enforcer,
+		balance:   balance,
 	}
 }
 
@@ -91,77 +82,34 @@ func (s *MoneyLogRepository) List(ctx *gin.Context) (list []model.MoneyLog, tota
 	return
 }
 
-// ApplyMoneyDelta applies one balance change using the transaction supplied
-// by the caller. A nil Scope is an unrestricted system flow. The caller must
-// provide a transaction when the row lock and balance/log write need to be
-// atomic.
-func (s *MoneyLogRepository) ApplyMoneyDelta(tx *gorm.DB, input ApplyMoneyDeltaInput) error {
-	if tx == nil {
-		return gorm.ErrInvalidDB
-	}
-	if input.Log == nil {
-		return fmt.Errorf("money log is nil")
-	}
-
-	applyScope := func(db *gorm.DB) *gorm.DB {
-		if input.Scope == nil {
-			return db
-		}
-		return input.Scope(db)
-	}
-
-	var user model.User
-	if err := applyScope(tx.Model(&model.User{})).Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", input.UserID).Take(&user).Error; err != nil {
-		return err
-	}
-	if user.AdminID == 0 {
-		return fmt.Errorf("target user has no owner")
-	}
-
-	before := user.Money
-	after := before + input.Delta
-	if after < 0 {
-		return cErr.BadRequest("insufficient balance")
-	}
-
-	res := applyScope(tx.Model(&model.User{})).Where("id = ?", input.UserID).UpdateColumn("money", gorm.Expr("money + ?", input.Delta))
-	if res.Error != nil {
-		return res.Error
-	}
-	if res.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-
-	input.Log.AdminID = user.AdminID
-	input.Log.UserID = user.ID
-	input.Log.Before = before
-	input.Log.Money = input.Delta
-	input.Log.After = after
-	return tx.Create(input.Log).Error
-}
-
-// Add creates a balance change log in a single transaction. The target user is
-// selected with FOR UPDATE under the actor's scope, the new balance is computed
-// and must not become negative, then the user row is
-// updated and the log (owned by user.AdminID) is inserted. Any failure rolls
-// back both changes.
+// Add creates a balance change log in a single transaction via the shared
+// money domain service: the target user is selected with FOR UPDATE under the
+// actor's scope, the new balance is computed and must not become negative,
+// then the user row is updated and the log (owned by user.AdminID) is
+// inserted. Any failure rolls back both changes.
 func (s *MoneyLogRepository) Add(ctx *gin.Context, userMoneyLog *model.MoneyLog) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	actor, err := s.enforcer.Actor(ctx)
-	if err != nil {
+	if _, err := s.enforcer.Actor(ctx); err != nil {
 		return err
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		return s.ApplyMoneyDelta(tx, ApplyMoneyDeltaInput{
-			UserID:          userMoneyLog.UserID,
-			Delta:           userMoneyLog.Money,
-			Log:             userMoneyLog,
-			OperatorAdminID: actor.AdminID,
-			Scope:           s.userScope(ctx),
+		created, err := s.balance.ApplyDelta(tx, money.ApplyInput{
+			UserID: userMoneyLog.UserID,
+			Delta:  userMoneyLog.Money,
+			Log:    userMoneyLog,
+			Scope:  s.userScope(ctx),
 		})
+		if err != nil {
+			if errors.Is(err, money.ErrInsufficientBalance) {
+				return cErr.BadRequest("insufficient balance")
+			}
+			return err
+		}
+		*userMoneyLog = *created
+		return nil
 	})
 }
 

@@ -64,8 +64,13 @@ type ApplyInput struct {
 	UserID int32
 	// Delta is the signed balance change: positive adds, negative subtracts.
 	Delta float64
-	// Memo is recorded on the money log entry.
+	// Memo is recorded on the money log entry. Ignored when Log is provided.
 	Memo string
+	// Log is an optional caller-provided money log used as the insert vehicle:
+	// its preset fields (e.g. an explicit ID) are honored, while AdminID
+	// (target user's owner), UserID, Before, Money and After are always
+	// (re)filled by the service. When nil, a fresh log is built from Memo.
+	Log *model.MoneyLog
 	// Scope is required (ErrScopeRequired when nil).
 	Scope Scope
 }
@@ -124,14 +129,15 @@ func (s *BalanceService) ApplyDelta(tx *gorm.DB, in ApplyInput) (*model.MoneyLog
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	log := &model.MoneyLog{
-		AdminID: user.AdminID,
-		UserID:  user.ID,
-		Money:   in.Delta,
-		Before:  before,
-		After:   after,
-		Memo:    in.Memo,
+	log := in.Log
+	if log == nil {
+		log = &model.MoneyLog{Memo: in.Memo}
 	}
+	log.AdminID = user.AdminID
+	log.UserID = user.ID
+	log.Money = in.Delta
+	log.Before = before
+	log.After = after
 	if err := tx.Create(log).Error; err != nil {
 		return nil, err
 	}
