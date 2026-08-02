@@ -3,6 +3,7 @@ package auth
 import (
 	adminmodel "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/header"
 	"go-build-admin/internal/pkg/tree"
@@ -83,7 +84,7 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	adminGroup := adminmodel.AdminGroup{}
+	adminGroup := model.AdminGroup{}
 	if err := copier.Copy(&adminGroup, params); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -289,7 +290,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取分组
-func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]*adminmodel.AdminGroup, error) {
+func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]*model.AdminGroup, error) {
 	absoluteAuth := ctx.Request.FormValue("absoluteAuth")
 	keyword := ctx.Request.FormValue("quickSearch")
 
@@ -317,7 +318,7 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 			whereP = append(whereP, authGroups)
 		}
 	}
-	list := []*adminmodel.AdminGroup{}
+	list := []*model.AdminGroup{}
 	if err := h.adminGroupM.DB().Table(h.adminGroupM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Find(&list).Error; err != nil {
 		return list, err
 	}
@@ -331,7 +332,7 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 				ruleIds := strings.Split(v.Rules, ",")
 				num := len(ruleIds)
 				if num > 0 {
-					rule := adminmodel.AdminRule{}
+					rule := model.AdminRule{}
 					if err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(" id=? ", ruleIds[0]).First(&rule).Error; err != nil {
 						return nil, err
 					}
@@ -367,7 +368,7 @@ func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
 }
 
 type AdminGroupExpend struct {
-	adminmodel.AdminGroup
+	model.AdminGroup
 	Children []*AdminGroupExpend `json:"children"`
 }
 
@@ -380,7 +381,7 @@ func (l *AdminGroupExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*AdminGroupExpend)
 }
 
-func (h *AdminGroupHandler) AssembleChild(list []*adminmodel.AdminGroup) []*AdminGroupExpend {
+func (h *AdminGroupHandler) AssembleChild(list []*model.AdminGroup) []*AdminGroupExpend {
 	expendList := []*AdminGroupExpend{}
 	for _, v := range list {
 		temp := AdminGroupExpend{}

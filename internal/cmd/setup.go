@@ -4,14 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	siteconfig "go-build-admin/internal/common/siteconfig"
+	"go-build-admin/internal/conf"
+	"go-build-admin/internal/database/migrations"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/installer"
 	passwordutil "go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/pkg/terminal"
 	"go-build-admin/internal/pkg/version"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations"
 	"go-build-admin/internal/utils"
 	"io"
 	"os"
@@ -695,13 +695,13 @@ func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
 	// 种子管理员固定为 id=1；不能按初始用户名 'admin' 匹配——安装后它已被改名，
 	// 删除 install.lock 的重装流程下按用户名匹配会 0 行报错。
 	var adminCount int64
-	if err := db.Model(&adminauth.Admin{}).Where("id = ?", 1).Count(&adminCount).Error; err != nil {
+	if err := db.Model(&model.Admin{}).Where("id = ?", 1).Count(&adminCount).Error; err != nil {
 		return err
 	}
 	if adminCount != 1 {
 		return errors.New("seed admin not found")
 	}
-	result := db.Model(&adminauth.Admin{}).Where("id = ?", 1).Updates(map[string]any{
+	result := db.Model(&model.Admin{}).Where("id = ?", 1).Updates(map[string]any{
 		"username": username,
 		"nickname": username,
 		"password": hash,

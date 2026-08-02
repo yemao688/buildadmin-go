@@ -4,9 +4,10 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
-	model "go-build-admin/internal/admin/model"
-	"go-build-admin/internal/pkg/data_scope"
+	adminmodel "go-build-admin/internal/admin/model"
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/data_scope"
+	persistence "go-build-admin/internal/pkg/persistence"
 	"strconv"
 	"strings"
 
@@ -35,7 +36,7 @@ type Log struct {
 }
 
 type LogModel struct {
-	model.BaseModel
+	persistence.BaseModel
 	enforcer data_scope.Enforcer
 }
 
@@ -279,7 +280,7 @@ type Field struct {
 
 func NewLogModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *LogModel {
 	return &LogModel{
-		BaseModel: model.NewBaseModel(config.Database.Prefix+"crud_log", "id", "table_name", sqlDB),
+		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"crud_log", "id", "table_name", sqlDB),
 		enforcer:  enforcer,
 	}
 }
@@ -323,7 +324,7 @@ func (s *LogModel) GetOne(ctx *gin.Context, id int32) (crudLog Log, err error) {
 }
 
 func (s *LogModel) List(ctx *gin.Context) (list []Log, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := model.QueryBuilder(ctx, s.TableInfo(), nil)
+	whereS, whereP, orderS, limit, offset, err := adminmodel.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
 	}

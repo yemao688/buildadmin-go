@@ -1,14 +1,21 @@
 package user
 
-import model "go-build-admin/internal/admin/model"
+import (
+	adminmodel "go-build-admin/internal/admin/model"
+	model "go-build-admin/internal/model"
+	persistence "go-build-admin/internal/pkg/persistence"
+)
 
-type BaseModel = model.BaseModel
-type AdminHierarchy = model.AdminHierarchy
+type BaseModel = persistence.BaseModel
+type AdminHierarchy = adminmodel.AdminHierarchy
 type AdminClosure = model.AdminClosure
 type AdminGroupAccess = model.AdminGroupAccess
 
+type User = model.User
+type MoneyLog = model.MoneyLog
+
 var (
-	NewBaseModel      = model.NewBaseModel
-	QueryBuilder      = model.QueryBuilder
-	NewAdminHierarchy = model.NewAdminHierarchy
+	NewBaseModel      = persistence.NewBaseModel
+	QueryBuilder      = adminmodel.QueryBuilder
+	NewAdminHierarchy = adminmodel.NewAdminHierarchy
 )

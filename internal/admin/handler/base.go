@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/utils"
 	"io"
@@ -465,7 +465,7 @@ func (h *Base) GetRemark(ctx *gin.Context) string {
 	slashIndex := strings.LastIndex(name, "/")
 
 	nameArr := []string{name[:slashIndex], name[slashIndex+1:]}
-	err := h.currentM.DB().Model(&adminauth.AdminRule{}).Where("name in ?", nameArr).Take(&rule).Error
+	err := h.currentM.DB().Model(&model.AdminRule{}).Where("name in ?", nameArr).Take(&rule).Error
 	if err != nil {
 		return ""
 	}

@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	adminmodel "go-build-admin/internal/admin/model/auth"
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/pkg/password"
-	"go-build-admin/internal/conf"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -119,7 +120,7 @@ func TestIsMovingUnderSelf(t *testing.T) {
 }
 
 func TestBuildAdminTreeOptions(t *testing.T) {
-	admins := []*adminmodel.Admin{
+	admins := []*model.Admin{
 		{ID: 1, Nickname: "Root", Username: "root_user"},
 		{ID: 2, Nickname: "Child", Username: "child_user", ParentID: ptr(1)},
 	}
@@ -154,7 +155,7 @@ func TestBuildAdminTreeOptions(t *testing.T) {
 }
 
 func TestBuildFlatAdminOptions(t *testing.T) {
-	admins := []*adminmodel.Admin{
+	admins := []*model.Admin{
 		{ID: 3, Nickname: "A", Username: "alpha"},
 	}
 	opts := buildFlatAdminOptions(admins)
@@ -173,7 +174,7 @@ func TestBuildFlatAdminOptions(t *testing.T) {
 }
 
 func TestSetAdminPasswordHashesAfterCopy(t *testing.T) {
-	admin := adminmodel.Admin{Password: "plaintext"}
+	admin := model.Admin{Password: "plaintext"}
 	if err := setAdminPassword(&admin, "correct horse battery staple"); err != nil {
 		t.Fatal(err)
 	}

@@ -2,10 +2,11 @@ package routine
 
 import (
 	"fmt"
-	commonModel "go-build-admin/internal/common/model"
+	adminmodel "go-build-admin/internal/admin/model"
 	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/data_scope"
+	persistence "go-build-admin/internal/pkg/persistence"
 	"go-build-admin/internal/utils"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 )
 
 type AttachmentModel struct {
-	commonModel.BaseModel
+	persistence.BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
 	Policy   data_scope.ResourcePolicy
@@ -25,7 +26,7 @@ type AttachmentModel struct {
 
 func NewAttachmentModel(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *AttachmentModel {
 	return &AttachmentModel{
-		BaseModel: commonModel.NewBaseModel(config.Database.Prefix+"attachment", "id", "name", sqlDB),
+		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"attachment", "id", "name", sqlDB),
 		config:    config,
 		enforcer:  enforcer,
 		Policy:    data_scope.ResourcePolicy{Mode: data_scope.ModeRequired, OwnerColumn: "admin_id", AssignOnCreate: true},
@@ -64,7 +65,7 @@ func (s *AttachmentModel) List(ctx *gin.Context) (list []*upload.Attachment, tot
 	// The query uses an explicit alias so the owner predicate remains
 	// unambiguous alongside Admin/User joins.
 	tableInfo.TableName = "attachment"
-	whereS, whereP, orderS, limit, offset, err := commonModel.QueryBuilder(ctx, tableInfo, nil)
+	whereS, whereP, orderS, limit, offset, err := adminmodel.QueryBuilder(ctx, tableInfo, nil)
 	if err != nil {
 		return nil, 0, err
 	}

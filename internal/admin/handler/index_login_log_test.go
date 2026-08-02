@@ -11,6 +11,7 @@ import (
 
 	adminauth "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/middleware"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
@@ -28,7 +29,7 @@ import (
 
 func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	db, handler, record := newAdminLoginLogFixture(t)
-	admin := adminauth.Admin{
+	admin := model.Admin{
 		Username: "login-admin",
 		Nickname: "Login Admin",
 		Password: hashLoginTestPassword(t),
@@ -40,7 +41,7 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	success := performAdminLogin(t, router, admin.Username, "correct horse battery staple")
 	require.Equal(t, http.StatusOK, success.Code)
 
-	var successLog adminauth.AdminLog
+	var successLog model.AdminLog
 	require.NoError(t, db.Order("id DESC").First(&successLog).Error)
 	require.Equal(t, admin.ID, successLog.AdminID)
 	require.Equal(t, admin.Username, successLog.Username)
@@ -48,7 +49,7 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	failure := performAdminLogin(t, router, admin.Username, "wrong password")
 	require.Equal(t, http.StatusOK, failure.Code)
 
-	var failureLog adminauth.AdminLog
+	var failureLog model.AdminLog
 	require.NoError(t, db.Order("id DESC").First(&failureLog).Error)
 	require.Equal(t, int32(0), failureLog.AdminID)
 	require.Equal(t, admin.Username, failureLog.Username)
@@ -89,9 +90,9 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware
 	config.Token.Key = "admin-login-log-test-key"
 
 	require.NoError(t, db.AutoMigrate(
-		&adminauth.Admin{},
-		&adminauth.AdminLog{},
-		&adminauth.AdminRule{},
+		&model.Admin{},
+		&model.AdminLog{},
+		&model.AdminRule{},
 		&token.Token{},
 	))
 

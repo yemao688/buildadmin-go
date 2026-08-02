@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	mysql "github.com/go-sql-driver/mysql"
-	model "go-build-admin/internal/admin/model"
 	siteconfig "go-build-admin/internal/common/siteconfig"
-	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/conf"
+	cErr "go-build-admin/internal/pkg/error"
+	persistence "go-build-admin/internal/pkg/persistence"
 	"gorm.io/gorm"
 )
 
 type ConfigModel struct {
-	model.BaseModel
+	persistence.BaseModel
 	service *siteconfig.Service
 }
 
@@ -22,7 +22,7 @@ func NewConfigModel(sqlDB *gorm.DB, config *conf.Configuration, service *sitecon
 		service = siteconfig.NewService(sqlDB)
 	}
 	return &ConfigModel{
-		BaseModel: model.NewBaseModel(config.Database.Prefix+"config", "id", "name", sqlDB),
+		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"config", "id", "name", sqlDB),
 		service:   service,
 	}
 }

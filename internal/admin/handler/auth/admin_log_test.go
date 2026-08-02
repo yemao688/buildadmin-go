@@ -9,6 +9,7 @@ import (
 	adminhandler "go-build-admin/internal/admin/handler"
 	adminmodel "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -22,9 +23,9 @@ func TestAdminLogDel(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&adminmodel.AdminLog{}))
-	require.NoError(t, db.Create(&adminmodel.AdminLog{Username: "one"}).Error)
-	require.NoError(t, db.Create(&adminmodel.AdminLog{Username: "two"}).Error)
+	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
+	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
+	require.NoError(t, db.Create(&model.AdminLog{Username: "two"}).Error)
 
 	logModel := adminmodel.NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	h := NewAdminLogHandler(nil, logModel)
@@ -40,7 +41,7 @@ func TestAdminLogDel(t *testing.T) {
 	require.Equal(t, 1, response.Code)
 
 	var count int64
-	require.NoError(t, db.Model(&adminmodel.AdminLog{}).Count(&count).Error)
+	require.NoError(t, db.Model(&model.AdminLog{}).Count(&count).Error)
 	require.Equal(t, int64(1), count)
 }
 
@@ -49,14 +50,14 @@ func TestAdminLogDelRejectsForgedLogFields(t *testing.T) {
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&adminmodel.AdminLog{}))
-	require.NoError(t, db.Create(&adminmodel.AdminLog{Username: "one"}).Error)
+	require.NoError(t, db.AutoMigrate(&model.AdminLog{}))
+	require.NoError(t, db.Create(&model.AdminLog{Username: "one"}).Error)
 
 	h := NewAdminLogHandler(nil, adminmodel.NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil))
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodDelete, "/admin/auth.AdminLog/del?ids%5B%5D=1&username=forged", nil)
 	h.Del(ctx)
 	require.Equal(t, http.StatusOK, ctx.Writer.Status())
-	var row adminmodel.AdminLog
+	var row model.AdminLog
 	require.Error(t, db.First(&row, 1).Error)
 }

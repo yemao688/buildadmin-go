@@ -10,6 +10,7 @@ import (
 
 	adminmodel "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/header"
@@ -171,7 +172,7 @@ func isMovingUnderSelf(nodeID int32, parentID *int32) bool {
 	return nodeID > 0 && parentID != nil && *parentID == nodeID
 }
 
-func setAdminPassword(admin *adminmodel.Admin, plaintext string) error {
+func setAdminPassword(admin *model.Admin, plaintext string) error {
 	hash, err := passwordutil.Hash(plaintext)
 	if err != nil {
 		return err
@@ -219,7 +220,7 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 		}
 	}
 
-	var admin adminmodel.Admin
+	var admin model.Admin
 	copier.Copy(&admin, params)
 
 	if err := setAdminPassword(&admin, params.Password); err != nil {
@@ -507,7 +508,7 @@ func (h *AdminHandler) Select(ctx *gin.Context) (interface{}, bool, error) {
 	}, true, nil
 }
 
-func buildAdminTreeOptions(admins []*adminmodel.Admin) []map[string]any {
+func buildAdminTreeOptions(admins []*model.Admin) []map[string]any {
 	leaves := make([]*adminTreeLeaf, 0, len(admins))
 	for _, a := range admins {
 		pid := 0
@@ -540,7 +541,7 @@ func buildAdminTreeOptions(admins []*adminmodel.Admin) []map[string]any {
 	return options
 }
 
-func buildFlatAdminOptions(admins []*adminmodel.Admin) []map[string]any {
+func buildFlatAdminOptions(admins []*model.Admin) []map[string]any {
 	options := make([]map[string]any, 0, len(admins))
 	for _, a := range admins {
 		options = append(options, map[string]any{
@@ -552,7 +553,7 @@ func buildFlatAdminOptions(admins []*adminmodel.Admin) []map[string]any {
 	return options
 }
 
-func findAdminByID(admins []*adminmodel.Admin, id int32) *adminmodel.Admin {
+func findAdminByID(admins []*model.Admin, id int32) *model.Admin {
 	for _, admin := range admins {
 		if admin != nil && admin.ID == id {
 			return admin

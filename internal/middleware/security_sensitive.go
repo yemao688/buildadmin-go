@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"go-build-admin/internal/admin/model"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	adminmodel "go-build-admin/internal/admin/model"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/pkg/requesttx"
 	"gorm.io/gorm"
@@ -18,7 +18,7 @@ import (
 
 type sensitiveAuditor struct {
 	work *securityWork
-	rule securitymodel.SecuritySensitiveData
+	rule model.SecuritySensitiveData
 }
 
 func (a *sensitiveAuditor) run() {
@@ -72,7 +72,7 @@ func (a *sensitiveAuditor) run() {
 	if len(logs) == 0 {
 		return
 	}
-	if err := db.Model(&securitymodel.SecuritySensitiveDataLog{}).Create(&logs).Error; err != nil {
+	if err := db.Model(&model.SecuritySensitiveDataLog{}).Create(&logs).Error; err != nil {
 		a.work.security.log.Warn("[ DataSecurity ] Sensitive data recording failed:" + err.Error())
 		a.work.abort(http.StatusInternalServerError, "security log write failed")
 	}
@@ -117,7 +117,7 @@ func (a *sensitiveAuditor) loadBeforeRow(primaryValue any) (*gorm.DB, string, da
 		return nil, "", data_scope.RulePolicy{}, nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		err := adminmodel.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
 		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
@@ -175,14 +175,14 @@ func (a *sensitiveAuditor) auditIdentity(primaryValue any) (int32, bool) {
 	return int32(idValue), true
 }
 
-func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, idValue int32) []securitymodel.SecuritySensitiveDataLog {
+func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, beforeRow, afterRow map[string]any, idValue int32) []model.SecuritySensitiveDataLog {
 	w := a.work
-	logs := []securitymodel.SecuritySensitiveDataLog{}
+	logs := []model.SecuritySensitiveDataLog{}
 	for field, comment := range dataFields {
 		beforeV, oldOK := beforeRow[field]
 		afterV, newOK := afterRow[field]
 		if oldOK && newOK && normalizeAuditValue(beforeV) != normalizeAuditValue(afterV) {
-			logs = append(logs, securitymodel.SecuritySensitiveDataLog{
+			logs = append(logs, model.SecuritySensitiveDataLog{
 				AdminID:     w.actor.AdminID,
 				SensitiveID: a.rule.ID, DataTable: a.rule.DataTable, PrimaryKey: a.rule.PrimaryKey,
 				DataField: field, DataComment: comment, IDValue: idValue,

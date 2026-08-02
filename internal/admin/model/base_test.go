@@ -1,4 +1,4 @@
-package model
+package model_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"go-build-admin/internal/pkg/persistence"
 	"go-build-admin/internal/pkg/requesttx"
 	"gorm.io/gorm"
 )
@@ -21,7 +22,8 @@ func contextWithRequestTransaction(t *testing.T, db *gorm.DB) *gin.Context {
 func TestBaseModelUsesRequestTransactionFromGinContext(t *testing.T) {
 	requestDB := &gorm.DB{}
 	modelDB := &gorm.DB{}
-	s := &BaseModel{sqlDB: modelDB}
+	s := &persistence.BaseModel{}
+	*s = persistence.NewBaseModel("t", "id", "", modelDB)
 	c := contextWithRequestTransaction(t, requestDB)
 
 	require.Same(t, requestDB, s.DBFor(c))

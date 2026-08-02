@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	adminmodel "go-build-admin/internal/admin/model/user"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
 	passwordutil "go-build-admin/internal/pkg/password"
 	"io"
@@ -105,7 +106,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var user adminmodel.User
+	var user model.User
 	copier.Copy(&user, params)
 	if hasAdminID {
 		user.AdminID = adminID

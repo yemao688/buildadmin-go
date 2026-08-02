@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	adminauth "go-build-admin/internal/admin/model/auth"
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/pkg/requesttx"
 	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/conf"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -21,8 +21,8 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-type Admin = adminauth.Admin
-type AdminGroup = adminauth.AdminGroup
+type Admin = model.Admin
+type AdminGroup = model.AdminGroup
 
 type scopeFixture struct {
 	db     *gorm.DB

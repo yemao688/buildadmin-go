@@ -6,6 +6,7 @@ import (
 	securitymodel "go-build-admin/internal/admin/model/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -54,7 +55,7 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	}
 
 	type Result struct {
-		securitymodel.SecurityDataRecycleLog
+		model.SecurityDataRecycleLog
 		Data map[string]any `json:"data"`
 	}
 

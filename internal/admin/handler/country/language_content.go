@@ -2,8 +2,9 @@ package country
 
 import (
 	adminhandler "go-build-admin/internal/admin/handler"
-	model "go-build-admin/internal/admin/model/country"
+	countrymodel "go-build-admin/internal/admin/model/country"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +15,10 @@ import (
 type LanguageContentHandler struct {
 	adminhandler.Base
 	log              *zap.Logger
-	languageContentM *model.LanguageContentModel
+	languageContentM *countrymodel.LanguageContentModel
 }
 
-func NewLanguageContentHandler(log *zap.Logger, languageContentM *model.LanguageContentModel) *LanguageContentHandler {
+func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.LanguageContentModel) *LanguageContentHandler {
 	return &LanguageContentHandler{Base: adminhandler.NewBase(languageContentM), log: log, languageContentM: languageContentM}
 }
 

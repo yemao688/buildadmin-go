@@ -1,8 +1,9 @@
 package handler
 
 import (
-	adminauth "go-build-admin/internal/admin/model/auth"
 	siteconfig "go-build-admin/internal/common/siteconfig"
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/filesystem"
 	"go-build-admin/internal/pkg/installer"
@@ -10,7 +11,6 @@ import (
 	"go-build-admin/internal/pkg/terminal"
 	"go-build-admin/internal/pkg/validator"
 	"go-build-admin/internal/pkg/version"
-	"go-build-admin/internal/conf"
 	"go-build-admin/internal/utils"
 	"net/http"
 	"os"
@@ -466,7 +466,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 			return
 		}
 		// 管理员配置入库
-		h.db.Model(&adminauth.Admin{}).Where("username=?", "admin").Updates(map[string]any{
+		h.db.Model(&model.Admin{}).Where("username=?", "admin").Updates(map[string]any{
 			"username": params.Adminname,
 			"nickname": params.Adminname,
 			"password": password,

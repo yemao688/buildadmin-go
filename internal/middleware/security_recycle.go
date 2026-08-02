@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sort"
 
-	"go-build-admin/internal/admin/model"
-	securitymodel "go-build-admin/internal/admin/model/security"
+	adminmodel "go-build-admin/internal/admin/model"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/requesttx"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -15,7 +15,7 @@ import (
 
 type recycleAuditor struct {
 	work *securityWork
-	rule securitymodel.SecurityDataRecycle
+	rule model.SecurityDataRecycle
 }
 
 func (a *recycleAuditor) run() {
@@ -34,7 +34,7 @@ func (a *recycleAuditor) run() {
 	if !ok {
 		return
 	}
-	if err := db.Model(&securitymodel.SecurityDataRecycleLog{}).Create(&logs).Error; err != nil {
+	if err := db.Model(&model.SecurityDataRecycleLog{}).Create(&logs).Error; err != nil {
 		a.work.security.log.Warn("[ DataSecurity ] Failed to recycle data:" + err.Error())
 		a.work.abort(http.StatusInternalServerError, "security log write failed")
 		return
@@ -94,7 +94,7 @@ func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, []m
 		return nil, "", nil, false
 	}
 	if requesttx.Active(w.context.Request.Context()) {
-		err := model.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
+		err := adminmodel.NewAdminHierarchy(w.security.config).LockHierarchy(w.context.Request.Context(), db)
 		if err != nil {
 			w.security.log.Warn("[ DataSecurity ] Hierarchy lock failed:" + err.Error())
 			w.abort(http.StatusInternalServerError, "security lock failed")
@@ -135,16 +135,16 @@ func (a *recycleAuditor) loadRows(normalizedIDs []string) (*gorm.DB, string, []m
 	return db, resolvedTable, rows, true
 }
 
-func (a *recycleAuditor) snapshotRows(rows []map[string]any) ([]securitymodel.SecurityDataRecycleLog, bool) {
+func (a *recycleAuditor) snapshotRows(rows []map[string]any) ([]model.SecurityDataRecycleLog, bool) {
 	w := a.work
-	logs := []securitymodel.SecurityDataRecycleLog{}
+	logs := []model.SecurityDataRecycleLog{}
 	for _, row := range rows {
 		data, err := json.Marshal(row)
 		if err != nil {
 			w.abort(http.StatusInternalServerError, "snapshot failed")
 			return nil, false
 		}
-		logs = append(logs, securitymodel.SecurityDataRecycleLog{
+		logs = append(logs, model.SecurityDataRecycleLog{
 			AdminID:    w.actor.AdminID,
 			RecycleID:  a.rule.ID,
 			Data:       string(data),

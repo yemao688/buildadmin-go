@@ -41,10 +41,7 @@ var boundaryRules = []boundaryRule{
 	{code: "R3", ownerPrefix: "common/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api"}},
 }
 
-var importBoundaryWhitelist = []whitelistEntry{
-	// R2 / Permanent exception: the installer owns its own DB connection and runs before Wire assembles shared services; these imports only target GORM structs.
-	{File: "api/handler/install.go", ImportPath: "go-build-admin/internal/admin/model/auth", Rule: "R2", Reason: "installer bootstrap still reuses admin auth models", Stage: 4},
-}
+var importBoundaryWhitelist = []whitelistEntry{}
 
 func TestImportBoundary(t *testing.T) {
 	actual, err := collectImportBoundaryViolations(".")

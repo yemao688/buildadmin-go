@@ -9,6 +9,7 @@ import (
 	"time"
 
 	securitymodel "go-build-admin/internal/admin/model/security"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
@@ -30,8 +31,8 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 		db.Exec("DROP TABLE IF EXISTS `" + sensitiveTable + "`")
 	})
 	require.NoError(t, db.Exec("CREATE TABLE `"+targetTable+"` (id BIGINT UNSIGNED NOT NULL, display_name VARCHAR(100) NOT NULL DEFAULT '', PRIMARY KEY (id))").Error)
-	require.NoError(t, db.Table(recycleTable).AutoMigrate(&securitymodel.SecurityDataRecycle{}))
-	require.NoError(t, db.Table(sensitiveTable).AutoMigrate(&securitymodel.SecuritySensitiveData{}))
+	require.NoError(t, db.Table(recycleTable).AutoMigrate(&model.SecurityDataRecycle{}))
+	require.NoError(t, db.Table(sensitiveTable).AutoMigrate(&model.SecuritySensitiveData{}))
 
 	gin.SetMode(gin.TestMode)
 	t.Run("data recycle add and edit", func(t *testing.T) {
@@ -44,7 +45,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 		router.ServeHTTP(addRecorder, httptest.NewRequest(http.MethodPost, "/add", bytes.NewBufferString(fmt.Sprintf(`{"name":"test recycle","controller":"security.DataRecycle","data_table":"%s","primary_key":"id","status":"1"}`, dataTable))))
 		require.Equal(t, http.StatusOK, addRecorder.Code, addRecorder.Body.String())
 
-		var row securitymodel.SecurityDataRecycle
+		var row model.SecurityDataRecycle
 		require.NoError(t, db.Table(recycleTable).Where("name = ?", "test recycle").First(&row).Error)
 		require.Equal(t, "security/datarecycle", row.ControllerAs)
 
@@ -66,7 +67,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 		router.ServeHTTP(addRecorder, httptest.NewRequest(http.MethodPost, "/add", bytes.NewBufferString(fmt.Sprintf(`{"name":"test sensitive","controller":"security.SensitiveData","data_table":"%s","primary_key":"id","fields":%s,"status":"1"}`, dataTable, fields))))
 		require.Equal(t, http.StatusOK, addRecorder.Code, addRecorder.Body.String())
 
-		var row securitymodel.SecuritySensitiveData
+		var row model.SecuritySensitiveData
 		require.NoError(t, db.Table(sensitiveTable).Where("name = ?", "test sensitive").First(&row).Error)
 		require.Equal(t, "security/sensitivedata", row.ControllerAs)
 

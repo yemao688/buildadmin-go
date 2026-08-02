@@ -2,8 +2,9 @@ package country
 
 import (
 	adminhandler "go-build-admin/internal/admin/handler"
-	model "go-build-admin/internal/admin/model/country"
+	countrymodel "go-build-admin/internal/admin/model/country"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +15,10 @@ import (
 type CurrencyHandler struct {
 	adminhandler.Base
 	log       *zap.Logger
-	currencyM *model.CurrencyModel
+	currencyM *countrymodel.CurrencyModel
 }
 
-func NewCurrencyHandler(log *zap.Logger, currencyM *model.CurrencyModel) *CurrencyHandler {
+func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CurrencyModel) *CurrencyHandler {
 	return &CurrencyHandler{Base: adminhandler.NewBase(currencyM), log: log, currencyM: currencyM}
 }
 

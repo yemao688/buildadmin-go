@@ -9,6 +9,7 @@ import (
 	securitymodel "go-build-admin/internal/admin/model/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"io"
 	"net/http"
 	"slices"
@@ -89,7 +90,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 	}
 
 	params.ControllerAs = normalizeControllerAs(params.Controller)
-	var sensitiveData securitymodel.SecuritySensitiveData
+	var sensitiveData model.SecuritySensitiveData
 	copier.Copy(&sensitiveData, params)
 
 	dateField := map[string]string{}
@@ -115,7 +116,7 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 	}
 
 	type Result struct {
-		securitymodel.SecuritySensitiveData
+		model.SecuritySensitiveData
 		DataFields map[string]string `json:"data_fields"`
 	}
 

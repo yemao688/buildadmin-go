@@ -426,7 +426,7 @@ func TestRelatedModelWithoutAdminIDResolvesModeNone(t *testing.T) {
 }
 
 func TestCommonModelBaseSupportsRequestTransactions(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "common", "model", "base.go"))
+	content, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "pkg", "persistence", "base.go"))
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "func (s *BaseModel) DBFor")
 	assert.Contains(t, string(content), "func (s *BaseModel) Transaction")

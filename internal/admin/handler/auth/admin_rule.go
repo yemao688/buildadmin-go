@@ -3,6 +3,7 @@ package auth
 import (
 	adminmodel "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/tree"
 	"slices"
 	"strings"
@@ -86,7 +87,7 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var adminRule adminmodel.AdminRule
+	var adminRule model.AdminRule
 	if err := copier.Copy(&adminRule, params); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -173,7 +174,7 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 }
 
 // 获取菜单列表
-func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]adminmodel.AdminRule, error) {
+func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.AdminRule, error) {
 	keyword := ctx.Request.FormValue("quickSearch")
 	ids, _ := h.authM.GetRuleIds(0)
 	isSuper := slices.Contains(ids, "*")
@@ -191,13 +192,13 @@ func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []
 		}
 	}
 
-	list := []adminmodel.AdminRule{}
+	list := []model.AdminRule{}
 	err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Order("weigh desc,id asc").Find(&list).Error
 	return list, err
 }
 
 type AdminRuleExpend struct {
-	adminmodel.AdminRule
+	model.AdminRule
 	Children []*AdminRuleExpend `json:"children"`
 }
 
@@ -210,7 +211,7 @@ func (l *AdminRuleExpend) SetChildren(children interface{}) {
 	l.Children = children.([]*AdminRuleExpend)
 }
 
-func (h *AdminRuleHandler) AssembleChild(list []adminmodel.AdminRule) []*AdminRuleExpend {
+func (h *AdminRuleHandler) AssembleChild(list []model.AdminRule) []*AdminRuleExpend {
 	expendList := []*AdminRuleExpend{}
 	for _, v := range list {
 		temp := AdminRuleExpend{}

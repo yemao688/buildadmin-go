@@ -1,13 +1,19 @@
-package model
+package persistence
 
 import (
 	"context"
+	"go-build-admin/internal/pkg/querybuilder"
 	"go-build-admin/internal/pkg/requesttx"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
+// TableInfo is exported for compatibility with QueryBuilder.
+type TableInfo = querybuilder.TableInfo
+
+// BaseModel 提供数据表访问的基础结构，包含 DB 连接、事务支持和表元信息。
+// 所有业务 Model 通过嵌入此结构获得 DB/DBFor/Transaction 等能力。
 type BaseModel struct {
 	TableName        string
 	Key              string
@@ -61,6 +67,7 @@ func (s *BaseModel) PrimaryKeyName() string {
 	return s.Key
 }
 
+// TableInfo 返回表元信息，供给 QueryBuilder 等工具使用。
 func (s *BaseModel) TableInfo() TableInfo {
 	return TableInfo{
 		TableName:        s.TableName,

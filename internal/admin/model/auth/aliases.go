@@ -1,20 +1,30 @@
 package auth
 
-import model "go-build-admin/internal/admin/model"
+import (
+	adminmodel "go-build-admin/internal/admin/model"
+	model "go-build-admin/internal/model"
+	persistence "go-build-admin/internal/pkg/persistence"
+)
 
-type BaseModel = model.BaseModel
-type AdminHierarchy = model.AdminHierarchy
+type BaseModel = persistence.BaseModel
+type AdminHierarchy = adminmodel.AdminHierarchy
 type AdminGroupAccess = model.AdminGroupAccess
 type AdminClosure = model.AdminClosure
 
-var (
-	NewBaseModel      = model.NewBaseModel
-	QueryBuilder      = model.QueryBuilder
-	IsSuperAdmin      = model.IsSuperAdmin
-	NewAdminHierarchy = model.NewAdminHierarchy
+type Admin = model.Admin
+type AdminSummary = model.AdminSummary
+type AdminGroup = model.AdminGroup
+type AdminRule = model.AdminRule
+type AdminLog = model.AdminLog
 
-	ErrHierarchyOrphanParent   = model.ErrHierarchyOrphanParent
-	ErrHierarchySelfMove       = model.ErrHierarchySelfMove
-	ErrHierarchyDescendantMove = model.ErrHierarchyDescendantMove
-	ErrHierarchyIntegrity      = model.ErrHierarchyIntegrity
+var (
+	NewBaseModel      = persistence.NewBaseModel
+	QueryBuilder      = adminmodel.QueryBuilder
+	IsSuperAdmin      = adminmodel.IsSuperAdmin
+	NewAdminHierarchy = adminmodel.NewAdminHierarchy
+
+	ErrHierarchyOrphanParent   = adminmodel.ErrHierarchyOrphanParent
+	ErrHierarchySelfMove       = adminmodel.ErrHierarchySelfMove
+	ErrHierarchyDescendantMove = adminmodel.ErrHierarchyDescendantMove
+	ErrHierarchyIntegrity      = adminmodel.ErrHierarchyIntegrity
 )

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	adminmodel "go-build-admin/internal/admin/model/user"
 	"go-build-admin/internal/admin/validate"
+	model "go-build-admin/internal/model"
 	"math"
 	"strconv"
 	"strings"
@@ -122,7 +123,7 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	userMoneyLog := adminmodel.MoneyLog{}
+	userMoneyLog := model.MoneyLog{}
 	amount, err := parseMoneyAmount(params.Money)
 	if err != nil {
 		FailByErr(ctx, err)

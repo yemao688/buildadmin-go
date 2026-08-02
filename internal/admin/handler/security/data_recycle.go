@@ -9,6 +9,7 @@ import (
 	securitymodel "go-build-admin/internal/admin/model/security"
 	"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"io"
 	"net/http"
 	"slices"
@@ -95,7 +96,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 	}
 
 	params.ControllerAs = normalizeControllerAs(params.Controller)
-	var data securitymodel.SecurityDataRecycle
+	var data model.SecurityDataRecycle
 	copier.Copy(&data, params)
 	if err := h.dataRecycleM.Add(ctx, data); err != nil {
 		adminhandler.FailByErr(ctx, err)

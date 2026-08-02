@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	adminauth "go-build-admin/internal/admin/model/auth"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/header"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 	"gorm.io/gorm"
 )
 
-type AdminLog = adminauth.AdminLog
+type AdminLog = model.AdminLog
 
 var IsSuperAdmin = adminauth.IsSuperAdmin
 

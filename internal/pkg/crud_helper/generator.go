@@ -3,11 +3,12 @@ package crud_helper
 import (
 	"context"
 	"fmt"
-	"go-build-admin/internal/admin/model"
+	adminmodel "go-build-admin/internal/admin/model"
 	adminauth "go-build-admin/internal/admin/model/auth"
 	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
+	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/utils"
 	"go/parser"
 	"go/token"
@@ -172,15 +173,15 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 		_ = recordCrudError(db, cfg, logID, message)
 		if len(createdMenuIDs) > 0 {
-			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&adminauth.AdminRule{}).Error
+			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
 		}
 		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
 		return nil, fmt.Errorf("%s: %w", stage, cause)
 	}
 
-	tableM := model.NewTableModel(cfg, db)
+	tableM := adminmodel.NewTableModel(cfg, db)
 	getTableName := func(name string, full bool) string { return tableM.Name(name, full) }
-	getColumns := func(name string) ([]model.Column, error) { return tableM.GetColumns(name) }
+	getColumns := func(name string) ([]adminmodel.Column, error) { return tableM.GetColumns(name) }
 	// 对齐上游:type=create 时若数据表已存在则先删除重建;
 	// 破坏性确认由前端 generateCheck 弹窗完成,服务端不再拒绝
 	if opts.Type == "create" && tableExists(db, cfg, opts.Table.Name) {
@@ -388,7 +389,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
-	var menuSnapshot []adminauth.AdminRule
+	var menuSnapshot []model.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		quarantineRestoreErr := quarantine.Restore()
@@ -602,13 +603,13 @@ func validateSharedManifestPath(path string) error {
 	)
 }
 
-func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]adminauth.AdminRule, error) {
-	var rows []adminauth.AdminRule
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {
+	var rows []model.AdminRule
 	err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
 	return rows, err
 }
 
-func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []adminauth.AdminRule) error {
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRule) error {
 	for _, row := range rows {
 		var count int64
 		if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("id=?", row.ID).Count(&count).Error; err != nil {
@@ -888,7 +889,7 @@ func containsPath(paths []string, target string) bool {
 
 // deriveAlterChanges 派生 alter 差量：缺失列 add-field，属性漂移 change-field-attr，
 // 完全一致的列不产生差量（保证 alter 与 crud:apply 的幂等性）。
-func deriveAlterChanges(columns []model.Column, fields []crudmodel.Field) []crudmodel.ChangeField {
+func deriveAlterChanges(columns []adminmodel.Column, fields []crudmodel.Field) []crudmodel.ChangeField {
 	diffs := deriveAlterDiff(columns, fields)
 	changes := make([]crudmodel.ChangeField, 0, len(diffs))
 	for _, diff := range diffs {

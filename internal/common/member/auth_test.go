@@ -8,10 +8,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/common/model"
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/conf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

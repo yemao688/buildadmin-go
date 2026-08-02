@@ -3,9 +3,9 @@ package crud_helper
 import (
 	"encoding/json"
 	"errors"
-	adminauth "go-build-admin/internal/admin/model/auth"
 	crudmodel "go-build-admin/internal/admin/model/crud"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/utils"
 	"os"
 	"path/filepath"
@@ -34,7 +34,7 @@ func TestDeleteWireFailureRestoresMenuWithSameID(t *testing.T) {
 		t.Fatalf("wire failure stage = %v", err)
 	}
 	assertDeleteFixtureFilesRestored(t, fixture)
-	var rows []adminauth.AdminRule
+	var rows []model.AdminRule
 	if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestDeleteMenuFailureRestoresFilesAndReportsStage(t *testing.T) {
 type deleteFailureFixture struct {
 	tableName string
 	menuName  string
-	menu      adminauth.AdminRule
+	menu      model.AdminRule
 	generated []string
 	shared    map[string][]byte
 }
@@ -100,7 +100,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 	cfg := &conf.Configuration{}
 	cfg.Database.Prefix = "ba_"
-	if err := db.Table("ba_admin_rule").AutoMigrate(&adminauth.AdminRule{}); err != nil {
+	if err := db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error; err != nil {
@@ -155,7 +155,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 	t.Cleanup(func() { _ = os.WriteFile(routerPath, routerBefore, 0644) })
 
-	menu := adminauth.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
+	menu := model.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}

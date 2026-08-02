@@ -3,6 +3,7 @@ package crud_helper
 import (
 	adminauth "go-build-admin/internal/admin/model/auth"
 	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -15,7 +16,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
-	if err := db.Table("ba_admin_rule").AutoMigrate(&adminauth.AdminRule{}); err != nil {
+	if err := db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}); err != nil {
 		t.Fatal(err)
 	}
 	rules := db.Table("ba_admin_rule")
@@ -24,22 +25,22 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		t.Fatalf("web dir = %+v", dir)
 	}
 
-	wrongParent := adminauth.AdminRule{Pid: 99, Type: "menu_dir", Name: "ops", Title: "wrong parent", Path: "ops", Status: "1"}
+	wrongParent := model.AdminRule{Pid: 99, Type: "menu_dir", Name: "ops", Title: "wrong parent", Path: "ops", Status: "1"}
 	if err := rules.Create(&wrongParent).Error; err != nil {
 		t.Fatal(err)
 	}
-	parent := adminauth.AdminRule{Pid: 0, Type: "menu_dir", Name: "ops", Title: "Operations", Path: "ops", Status: "1"}
+	parent := model.AdminRule{Pid: 0, Type: "menu_dir", Name: "ops", Title: "Operations", Path: "ops", Status: "1"}
 	if err := rules.Create(&parent).Error; err != nil {
 		t.Fatal(err)
 	}
-	menu := adminauth.AdminRule{Pid: parent.ID, Type: "menu", Name: "ops/orders", Title: "Old title", Path: "old", MenuType: "link", Component: "old.vue", Icon: "custom-icon", Keepalive: 1, Weigh: 7, Status: "1"}
+	menu := model.AdminRule{Pid: parent.ID, Type: "menu", Name: "ops/orders", Title: "Old title", Path: "old", MenuType: "link", Component: "old.vue", Icon: "custom-icon", Keepalive: 1, Weigh: 7, Status: "1"}
 	if err := rules.Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := rules.Create(&adminauth.AdminRule{Pid: menu.ID, Type: "button", Name: "ops/orders/index", Title: "Old view", Status: "0"}).Error; err != nil {
+	if err := rules.Create(&model.AdminRule{Pid: menu.ID, Type: "button", Name: "ops/orders/index", Title: "Old view", Status: "0"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := rules.Create(&adminauth.AdminRule{Pid: menu.ID, Type: "button", Name: "ops/orders/custom", Title: "Custom", Status: "1"}).Error; err != nil {
+	if err := rules.Create(&model.AdminRule{Pid: menu.ID, Type: "button", Name: "ops/orders/custom", Title: "Custom", Status: "1"}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,7 +51,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 	if len(report.CreatedIDs) != 4 {
 		t.Fatalf("created IDs = %v, want four missing buttons", report.CreatedIDs)
 	}
-	var got adminauth.AdminRule
+	var got model.AdminRule
 	if err := db.Table("ba_admin_rule").Where("pid=? AND name=? AND type=?", wrongParent.ID, "ops/orders", "menu").First(&got).Error; err == nil {
 		t.Fatal("menu was incorrectly matched under the wrong parent")
 	}
@@ -61,7 +62,7 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 		t.Fatalf("menu update = %+v", got)
 	}
 
-	var custom adminauth.AdminRule
+	var custom model.AdminRule
 	if err := db.Table("ba_admin_rule").Where("name=?", "ops/orders/custom").First(&custom).Error; err != nil {
 		t.Fatal(err)
 	}

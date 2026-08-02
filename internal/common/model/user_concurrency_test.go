@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go-build-admin/internal/common/member"
-	commonmodel "go-build-admin/internal/common/model"
+	commonmodel "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/testutil"
 	"go-build-admin/internal/pkg/token"
 

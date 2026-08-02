@@ -3,9 +3,9 @@ package security
 import (
 	"fmt"
 	adminmodel "go-build-admin/internal/admin/model"
-	"go-build-admin/internal/admin/model/simple"
-	"go-build-admin/internal/pkg/data_scope"
 	"go-build-admin/internal/conf"
+	"go-build-admin/internal/pkg/data_scope"
+	persistence "go-build-admin/internal/pkg/persistence"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -13,29 +13,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// SecuritySensitiveDataLog 敏感数据修改记录
-type SecuritySensitiveDataLog struct {
-	ID            int32                 `gorm:"column:id;primaryKey;autoIncrement:true;comment:ID" json:"id"`                         // ID
-	AdminID       int32                 `gorm:"column:admin_id;not null;index:idx_admin_id,priority:1;comment:操作管理员" json:"admin_id"` // 操作管理员
-	SensitiveID   int32                 `gorm:"column:sensitive_id;not null;comment:敏感数据规则ID" json:"sensitive_id"`                    // 敏感数据规则ID
-	DataTable     string                `gorm:"column:data_table;not null;comment:数据表" json:"data_table"`                             // 数据表
-	PrimaryKey    string                `gorm:"column:primary_key;not null;comment:数据表主键" json:"primary_key"`                         // 数据表主键
-	DataField     string                `gorm:"column:data_field;not null;comment:被修改字段" json:"data_field"`                           // 被修改字段
-	DataComment   string                `gorm:"column:data_comment;not null;comment:被修改项" json:"data_comment"`                        // 被修改项
-	IDValue       int32                 `gorm:"column:id_value;not null;comment:被修改项主键值" json:"id_value"`                             // 被修改项主键值
-	Before        string                `gorm:"column:before;comment:修改前" json:"before"`                                              // 修改前
-	After         string                `gorm:"column:after;comment:修改后" json:"after"`                                                // 修改后
-	IP            string                `gorm:"column:ip;not null;comment:操作者IP" json:"ip"`                                           // 操作者IP
-	Useragent     string                `gorm:"column:useragent;not null;comment:User-Agent" json:"useragent"`                        // User-Agent
-	IsRollback    int32                 `gorm:"column:is_rollback;not null;comment:是否已回滚:0=否,1=是" json:"is_rollback"`                 // 是否已回滚:0=否,1=是
-	Connection    string                `gorm:"column:connection;not null;default:'';comment:数据库连接配置标识" json:"connection"`
-	CreateTime    int64                 `gorm:"autoCreateTime;column:create_time;comment:创建时间" json:"create_time"` // 创建时间
-	Admin         simple.Admin          `gorm:"foreignKey:AdminID" json:"admin"`
-	SensitiveData SecuritySensitiveData `gorm:"foreignKey:SensitiveID" json:"sensitive"`
-}
-
 type SensitiveDataLogModel struct {
-	adminmodel.BaseModel
+	persistence.BaseModel
 	config *conf.Configuration
 }
 
@@ -54,7 +33,7 @@ func sensitiveDataLogSelect(prefix string) string {
 
 func NewSensitiveDataLogModel(sqlDB *gorm.DB, config *conf.Configuration) *SensitiveDataLogModel {
 	return &SensitiveDataLogModel{
-		BaseModel: adminmodel.NewBaseModel(config.Database.Prefix+"security_sensitive_data_log", "id", "sensitive.name", sqlDB),
+		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"security_sensitive_data_log", "id", "sensitive.name", sqlDB),
 		config:    config,
 	}
 }

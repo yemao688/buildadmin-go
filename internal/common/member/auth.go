@@ -3,14 +3,14 @@ package member
 import (
 	"errors"
 	"fmt"
-	"go-build-admin/internal/common/model"
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/pkg/header"
 	"go-build-admin/internal/pkg/password"
 	"go-build-admin/internal/pkg/random"
 	"go-build-admin/internal/pkg/systemroot"
 	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/conf"
 	"regexp"
 	"time"
 

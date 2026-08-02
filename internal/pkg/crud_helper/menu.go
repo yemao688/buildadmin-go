@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	adminauth "go-build-admin/internal/admin/model/auth"
+	model "go-build-admin/internal/model"
 	"strings"
 
 	"gorm.io/gorm"
@@ -105,8 +106,8 @@ func SyncMenuWithOptionsAndRecord(adminRuleM *adminauth.AdminRuleModel, webViews
 	return report, nil
 }
 
-func upsertDirectory(db *gorm.DB, pid int32, name string) (adminauth.AdminRule, MenuSyncResult, error) {
-	rule := adminauth.AdminRule{}
+func upsertDirectory(db *gorm.DB, pid int32, name string) (model.AdminRule, MenuSyncResult, error) {
+	rule := model.AdminRule{}
 	result := menuDB(db).Where("pid=? AND name=? AND type=?", pid, name, "menu_dir").First(&rule)
 	if result.Error == nil {
 		return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUnchanged}, nil
@@ -114,18 +115,18 @@ func upsertDirectory(db *gorm.DB, pid int32, name string) (adminauth.AdminRule, 
 	if result.Error != gorm.ErrRecordNotFound {
 		return rule, MenuSyncResult{}, result.Error
 	}
-	rule = adminauth.AdminRule{Pid: pid, Type: "menu_dir", Title: name, Name: name, Path: name, Status: "1"}
+	rule = model.AdminRule{Pid: pid, Type: "menu_dir", Title: name, Name: name, Path: name, Status: "1"}
 	if err := menuDB(db).Create(&rule).Error; err != nil {
 		return rule, MenuSyncResult{}, err
 	}
 	return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuCreated}, nil
 }
 
-func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, options *MenuOptions) (adminauth.AdminRule, MenuSyncResult, error) {
-	rule := adminauth.AdminRule{}
+func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, options *MenuOptions) (model.AdminRule, MenuSyncResult, error) {
+	rule := model.AdminRule{}
 	result := menuDB(db).Where("pid=? AND name=? AND type=?", pid, name, "menu").First(&rule)
 	if result.Error == gorm.ErrRecordNotFound {
-		rule = adminauth.AdminRule{Pid: pid, Type: "menu", Title: title, Name: name, Path: name, MenuType: "tab", Component: component, Status: "1"}
+		rule = model.AdminRule{Pid: pid, Type: "menu", Title: title, Name: name, Path: name, MenuType: "tab", Component: component, Status: "1"}
 		if options != nil && options.Weigh != nil {
 			rule.Weigh = *options.Weigh
 		}
@@ -146,7 +147,7 @@ func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, optio
 		changed = true
 	}
 	if changed {
-		if err := menuDB(db).Model(&adminauth.AdminRule{}).Where("id=?", rule.ID).Updates(updates).Error; err != nil {
+		if err := menuDB(db).Model(&model.AdminRule{}).Where("id=?", rule.ID).Updates(updates).Error; err != nil {
 			return rule, MenuSyncResult{}, err
 		}
 		return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUpdated}, nil
@@ -154,11 +155,11 @@ func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, optio
 	return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUnchanged}, nil
 }
 
-func upsertButton(db *gorm.DB, pid int32, name string, child Menu) (adminauth.AdminRule, MenuSyncResult, error) {
-	rule := adminauth.AdminRule{}
+func upsertButton(db *gorm.DB, pid int32, name string, child Menu) (model.AdminRule, MenuSyncResult, error) {
+	rule := model.AdminRule{}
 	result := menuDB(db).Where("pid=? AND name=? AND type=?", pid, name, child.Type).First(&rule)
 	if result.Error == gorm.ErrRecordNotFound {
-		rule = adminauth.AdminRule{Pid: pid, Type: child.Type, Title: child.Title, Name: name, Status: child.Status}
+		rule = model.AdminRule{Pid: pid, Type: child.Type, Title: child.Title, Name: name, Status: child.Status}
 		if err := menuDB(db).Create(&rule).Error; err != nil {
 			return rule, MenuSyncResult{}, err
 		}
@@ -169,7 +170,7 @@ func upsertButton(db *gorm.DB, pid int32, name string, child Menu) (adminauth.Ad
 	}
 	changed := rule.Pid != pid || rule.Type != child.Type || rule.Title != child.Title || rule.Status != child.Status
 	if changed {
-		if err := menuDB(db).Model(&adminauth.AdminRule{}).Where("id=?", rule.ID).Updates(map[string]any{"pid": pid, "type": child.Type, "title": child.Title, "status": child.Status}).Error; err != nil {
+		if err := menuDB(db).Model(&model.AdminRule{}).Where("id=?", rule.ID).Updates(map[string]any{"pid": pid, "type": child.Type, "title": child.Title, "status": child.Status}).Error; err != nil {
 			return rule, MenuSyncResult{}, err
 		}
 		return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUpdated}, nil
