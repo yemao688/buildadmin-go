@@ -1,16 +1,16 @@
 package handler
 
 import (
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	routinemodel "go-build-admin/internal/admin/repository/routine"
-	"go-build-admin/internal/admin/validate"
-	"go-build-admin/internal/common/country"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/clickcaptcha"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/utils"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	routinemodel "buildadmin-go/internal/admin/repository/routine"
+	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/common/country"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/clickcaptcha"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

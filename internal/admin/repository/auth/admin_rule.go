@@ -3,10 +3,10 @@ package auth
 import (
 	"context"
 	"errors"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/persistence"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/persistence"
 	"slices"
 
 	"github.com/gin-gonic/gin"

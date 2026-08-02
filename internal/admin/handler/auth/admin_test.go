@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	adminmodel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/password"
+	adminmodel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/password"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

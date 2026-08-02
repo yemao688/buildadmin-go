@@ -3,7 +3,7 @@ package wiretest
 import (
 	"testing"
 
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 )
 
 func TestProviderGraphBindsEnforcer(t *testing.T) {

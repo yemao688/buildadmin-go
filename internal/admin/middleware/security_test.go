@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	middlewarecore "go-build-admin/internal/middleware"
-	"go-build-admin/internal/pkg/data_scope"
+	middlewarecore "buildadmin-go/internal/middleware"
+	"buildadmin-go/internal/pkg/data_scope"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

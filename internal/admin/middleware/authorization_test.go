@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	adminModel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/utils"
+	adminModel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/utils"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"

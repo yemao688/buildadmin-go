@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	siteconfig "go-build-admin/internal/common/siteconfig"
+	siteconfig "buildadmin-go/internal/common/siteconfig"
 )
 
 type configJSONItem struct {

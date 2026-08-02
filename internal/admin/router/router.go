@@ -14,9 +14,9 @@
 package router
 
 import (
-	adminhandler "go-build-admin/internal/admin/handler"
-	adminMiddleware "go-build-admin/internal/admin/middleware"
-	"go-build-admin/internal/middleware"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	adminMiddleware "buildadmin-go/internal/admin/middleware"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

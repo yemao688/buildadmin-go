@@ -2,13 +2,13 @@ package auth
 
 import (
 	"errors"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	passwordutil "go-build-admin/internal/pkg/password"
-	"go-build-admin/internal/pkg/permissioncache"
-	"go-build-admin/internal/pkg/random"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	passwordutil "buildadmin-go/internal/pkg/password"
+	"buildadmin-go/internal/pkg/permissioncache"
+	"buildadmin-go/internal/pkg/random"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,8 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/pkg/token"
+	"buildadmin-go/internal/utils"
 )
 
 type AuthGroup struct {

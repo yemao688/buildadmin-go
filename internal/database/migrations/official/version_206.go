@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/model"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
 )

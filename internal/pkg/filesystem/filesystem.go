@@ -4,7 +4,7 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 	"io"
 	"os"
 	"path/filepath"

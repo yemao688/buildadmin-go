@@ -3,7 +3,7 @@ package security
 import (
 	"fmt"
 
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 
 	"gorm.io/gorm"
 )

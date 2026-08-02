@@ -14,7 +14,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 	"go.uber.org/zap"
 	"golang.org/x/text/language"
 )

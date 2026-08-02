@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/model"
+	"buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
 )

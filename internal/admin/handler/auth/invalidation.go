@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/requesttx"
 )
 
 func invalidateAfterMutation(ctx *gin.Context, invalidate func()) {

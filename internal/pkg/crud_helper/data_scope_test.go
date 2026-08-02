@@ -2,8 +2,8 @@ package crud_helper
 
 import (
 	"encoding/json"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +15,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -455,7 +455,7 @@ func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 
 	_, handlerData, entityFile, repositoryFile, dtoFile, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
 	require.NoError(t, err)
-	assert.Equal(t, "go-build-admin/internal/model", handlerData.ModelImportPath)
+	assert.Equal(t, "buildadmin-go/internal/model", handlerData.ModelImportPath)
 	assert.Equal(t, "OrderItem", entityFile.LastName)
 	assert.Equal(t, filepath.Join(utils.RootPath(), "internal", "model", "OrderItem.go"), entityFile.ParseFile)
 	assert.Equal(t, "internal/admin/repository", repositoryFile.RootFileName)
@@ -785,7 +785,7 @@ func compileDemoStruct(className, ownerCol, ownerGo, structOwner string) string 
 	b.WriteString("import (\n")
 	b.WriteString("\t\"github.com/gin-gonic/gin\"\n")
 	b.WriteString("\t\"gorm.io/gorm\"\n")
-	b.WriteString("\t\"go-build-admin/internal/conf\"\n")
+	b.WriteString("\t\"buildadmin-go/internal/conf\"\n")
 	b.WriteString(")\n")
 	b.WriteString("// " + className + " demo table\n")
 	b.WriteString("type " + className + " struct {\n")
@@ -893,7 +893,7 @@ func (b *BaseModel) TableInfo() TableInfo {
 		"internal/admin/repository/query_builder.go": `package repository
 
 import (
-	"go-build-admin/internal/pkg/persistence"
+	"buildadmin-go/internal/pkg/persistence"
 	"github.com/gin-gonic/gin"
 )
 

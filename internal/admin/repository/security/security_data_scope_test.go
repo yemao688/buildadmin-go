@@ -6,11 +6,11 @@ import (
 	"os"
 	"testing"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

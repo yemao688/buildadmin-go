@@ -1,8 +1,8 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/admin/validate"
+	adminmodel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/admin/validate"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

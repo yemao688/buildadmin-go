@@ -2,8 +2,8 @@ package crud_helper
 
 import (
 	"database/sql"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	model "go-build-admin/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	model "buildadmin-go/internal/admin/repository"
 	"testing"
 )
 

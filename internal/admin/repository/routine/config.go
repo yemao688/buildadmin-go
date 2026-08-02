@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	mysql "github.com/go-sql-driver/mysql"
-	siteconfig "go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/conf"
-	cErr "go-build-admin/internal/pkg/error"
-	persistence "go-build-admin/internal/pkg/persistence"
+	siteconfig "buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
+	persistence "buildadmin-go/internal/pkg/persistence"
 	"gorm.io/gorm"
 )
 

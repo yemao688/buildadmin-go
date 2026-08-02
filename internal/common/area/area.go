@@ -1,9 +1,9 @@
 package area
 
 import (
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	persistence "go-build-admin/internal/pkg/persistence"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	persistence "buildadmin-go/internal/pkg/persistence"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

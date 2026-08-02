@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-const modulePath = "go-build-admin"
+const modulePath = "buildadmin-go"
 
 type boundaryRule struct {
 	code           string

@@ -3,10 +3,10 @@ package crud_helper
 import (
 	"encoding/json"
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	model "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/testutil"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/testutil"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -18,7 +18,7 @@ import (
 
 	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 )
 
 func TestGetPk(t *testing.T) {
@@ -465,7 +465,7 @@ func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
 
 func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
 	fields := []crudmodel.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
-	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "go-build-admin/internal/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
+	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "buildadmin-go/internal/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
 	content, err := renderHandler(handler)
 	if err != nil {
 		t.Fatal(err)

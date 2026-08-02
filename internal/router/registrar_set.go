@@ -1,14 +1,14 @@
 package router
 
 import (
-	admin "go-build-admin/internal/admin/handler"
-	auth "go-build-admin/internal/admin/handler/auth"
-	country "go-build-admin/internal/admin/handler/country"
-	crud "go-build-admin/internal/admin/handler/crud"
-	routine "go-build-admin/internal/admin/handler/routine"
-	security "go-build-admin/internal/admin/handler/security"
-	user "go-build-admin/internal/admin/handler/user"
-	api "go-build-admin/internal/api/handler"
+	admin "buildadmin-go/internal/admin/handler"
+	auth "buildadmin-go/internal/admin/handler/auth"
+	country "buildadmin-go/internal/admin/handler/country"
+	crud "buildadmin-go/internal/admin/handler/crud"
+	routine "buildadmin-go/internal/admin/handler/routine"
+	security "buildadmin-go/internal/admin/handler/security"
+	user "buildadmin-go/internal/admin/handler/user"
+	api "buildadmin-go/internal/api/handler"
 )
 
 // ProvideRegistrars 聚合全部模块 registrar。CRUD 生成器只在这里追加参数与条目。

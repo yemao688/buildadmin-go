@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/random"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/random"
 
 	"github.com/gin-gonic/gin"
 )

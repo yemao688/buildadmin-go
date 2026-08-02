@@ -1,6 +1,6 @@
 package dto
 
-import "go-build-admin/internal/admin/validate"
+import "buildadmin-go/internal/admin/validate"
 
 type LanguageParam struct {
 	Lan    string             `json:"lan"`    // 语言代码

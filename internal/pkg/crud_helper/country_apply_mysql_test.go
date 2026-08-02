@@ -1,8 +1,8 @@
 package crud_helper
 
 import (
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/utils"
 	"path/filepath"
 	"testing"
 )

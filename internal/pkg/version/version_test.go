@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 )
 
 func TestFrameworkVersionFileMatchesConstant(t *testing.T) {

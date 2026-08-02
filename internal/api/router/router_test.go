@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	api "go-build-admin/internal/api/handler"
-	apiMiddleware "go-build-admin/internal/api/middleware"
-	"go-build-admin/internal/middleware"
+	api "buildadmin-go/internal/api/handler"
+	apiMiddleware "buildadmin-go/internal/api/middleware"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

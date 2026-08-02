@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	securitymodel "go-build-admin/internal/admin/repository/security"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	securitymodel "buildadmin-go/internal/admin/repository/security"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

@@ -1,10 +1,10 @@
 package security
 
 import (
-	adminhandler "go-build-admin/internal/admin/handler"
-	securitymodel "go-build-admin/internal/admin/repository/security"
-	"go-build-admin/internal/admin/validate"
-	"go-build-admin/internal/conf"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	securitymodel "buildadmin-go/internal/admin/repository/security"
+	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/conf"
 
 	"github.com/gin-gonic/gin"
 	"github.com/unknwon/com"

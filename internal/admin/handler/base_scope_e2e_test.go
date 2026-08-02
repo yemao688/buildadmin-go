@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

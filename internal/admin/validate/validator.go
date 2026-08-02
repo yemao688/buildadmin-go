@@ -1,7 +1,7 @@
 package validate
 
 import (
-	cErr "go-build-admin/internal/pkg/error"
+	cErr "buildadmin-go/internal/pkg/error"
 
 	"github.com/go-playground/validator/v10"
 )

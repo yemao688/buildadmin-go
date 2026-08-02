@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
 	"testing"
 
 	"gorm.io/driver/sqlite"

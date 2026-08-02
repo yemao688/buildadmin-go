@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"go-build-admin/internal/middleware"
+	"buildadmin-go/internal/middleware"
 )
 
 func TestCRUDCapabilitiesNormalizeRouteAndMethods(t *testing.T) {

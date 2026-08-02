@@ -1,8 +1,8 @@
 package crud_helper
 
 import (
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/utils"
 	"go/parser"
 	"go/token"
 	"os"
@@ -39,7 +39,7 @@ func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
 		RoutePath:            "country.Language",
 		BaseHandlerQualifier: "adminhandler.",
 		BaseHandlerAlias:     "adminhandler",
-		BaseHandlerImport:    "go-build-admin/internal/admin/handler",
+		BaseHandlerImport:    "buildadmin-go/internal/admin/handler",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -160,7 +160,7 @@ func TestRemoveRegistrarProviderEntryShapesRemainParseable(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			content := "package router\n\nimport admin \"go-build-admin/internal/admin/handler\"\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(" + tc.params + ") []RouteRegistrar {\n\treturn []RouteRegistrar{" + tc.items + "}\n}\n"
+			content := "package router\n\nimport admin \"buildadmin-go/internal/admin/handler\"\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(" + tc.params + ") []RouteRegistrar {\n\treturn []RouteRegistrar{" + tc.items + "}\n}\n"
 			removed, err := removeRegistrarProviderEntry(content, "Target", "internal/admin/handler")
 			if err != nil {
 				t.Fatal(err)
@@ -177,7 +177,7 @@ func TestRemoveRegistrarProviderEntryShapesRemainParseable(t *testing.T) {
 }
 
 func TestRemoveRegistrarProviderEntrySubpackageKeepsRootSameName(t *testing.T) {
-	content := "package router\n\nimport (\n\tadmin \"go-build-admin/internal/admin/handler\"\n\torder \"go-build-admin/internal/admin/handler/order\"\n)\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(\n\tuser *admin.UserRegistrar,\n\torderUserRegistrar *order.UserRegistrar,\n) []RouteRegistrar {\n\treturn []RouteRegistrar{\n\t\tuser,\n\t\torderUserRegistrar,\n\t}\n}\n"
+	content := "package router\n\nimport (\n\tadmin \"buildadmin-go/internal/admin/handler\"\n\torder \"buildadmin-go/internal/admin/handler/order\"\n)\n\ntype RouteRegistrar interface{}\n\nfunc ProvideRegistrars(\n\tuser *admin.UserRegistrar,\n\torderUserRegistrar *order.UserRegistrar,\n) []RouteRegistrar {\n\treturn []RouteRegistrar{\n\t\tuser,\n\t\torderUserRegistrar,\n\t}\n}\n"
 
 	// 删除子包 User：根包 user 参数与条目必须保留，子包条目与 import 一并移除
 	removed, err := removeRegistrarProviderEntry(content, "User", "internal/admin/handler/order")
@@ -224,7 +224,7 @@ func TestRegistrarProviderEntrySubpackageRoundTrip(t *testing.T) {
 	}
 	assertParseableGo(t, "registrar_set.go", string(added))
 	for _, want := range []string{
-		"registrar_subpkg_test \"go-build-admin/internal/admin/handler/registrar_subpkg_test\"",
+		"registrar_subpkg_test \"buildadmin-go/internal/admin/handler/registrar_subpkg_test\"",
 		"registrar_subpkg_testOrderRegistrar *registrar_subpkg_test.OrderRegistrar,",
 		"\t\tregistrar_subpkg_testOrderRegistrar,",
 	} {
@@ -251,8 +251,8 @@ func TestRegistrarProviderEntrySubpackageRoundTrip(t *testing.T) {
 const wireFixture = `package main
 
 import (
-	adminHandler "go-build-admin/internal/admin/handler"
-	adminModel "go-build-admin/internal/admin/repository"
+	adminHandler "buildadmin-go/internal/admin/handler"
+	adminModel "buildadmin-go/internal/admin/repository"
 
 	"github.com/google/wire"
 )
@@ -275,7 +275,7 @@ func TestWireProviderSetRefSkipsWiredRoots(t *testing.T) {
 	if err != nil || !needed {
 		t.Fatalf("subpackage ref failed: %v", err)
 	}
-	if importPath != "go-build-admin/internal/admin/handler/order" || alias != "orderHandler" || anchor != "\t\tadminHandler.ProviderSet,\n" {
+	if importPath != "buildadmin-go/internal/admin/handler/order" || alias != "orderHandler" || anchor != "\t\tadminHandler.ProviderSet,\n" {
 		t.Fatalf("unexpected handler subpackage ref: %q %q %q", importPath, alias, anchor)
 	}
 	if _, alias, _, _, err := wireProviderSetRef("internal/admin/repository/order"); err != nil || alias != "orderRepo" {
@@ -288,25 +288,25 @@ func TestWireProviderSetEntryAddRemoveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	added, err := addWireProviderSetEntry(wireFixture, "go-build-admin/internal/admin/handler/order", alias, anchor)
+	added, err := addWireProviderSetEntry(wireFixture, "buildadmin-go/internal/admin/handler/order", alias, anchor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertParseableGo(t, "wire.go", added)
-	if !strings.Contains(added, "orderHandler \"go-build-admin/internal/admin/handler/order\"") {
+	if !strings.Contains(added, "orderHandler \"buildadmin-go/internal/admin/handler/order\"") {
 		t.Fatalf("wire.go import missing:\n%s", added)
 	}
 	if !strings.Contains(added, "\t\tadminHandler.ProviderSet,\n\t\torderHandler.ProviderSet,\n") {
 		t.Fatalf("wire.go provider set not anchored after adminHandler:\n%s", added)
 	}
-	again, err := addWireProviderSetEntry(added, "go-build-admin/internal/admin/handler/order", alias, anchor)
+	again, err := addWireProviderSetEntry(added, "buildadmin-go/internal/admin/handler/order", alias, anchor)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if again != added {
 		t.Fatal("wire provider set insertion is not idempotent")
 	}
-	removed := removeWireProviderSetEntry(added, "go-build-admin/internal/admin/handler/order", alias)
+	removed := removeWireProviderSetEntry(added, "buildadmin-go/internal/admin/handler/order", alias)
 	if removed != wireFixture {
 		t.Fatalf("wire provider set round trip mismatch:\n--- got ---\n%s\n--- want ---\n%s", removed, wireFixture)
 	}
@@ -745,7 +745,7 @@ func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 		Namespace:       "admin",
 		ClassName:       "Demo",
 		ModelNamespace:  "model",
-		ModelImportPath: "go-build-admin/internal/model",
+		ModelImportPath: "buildadmin-go/internal/model",
 		ModelName:       "Demo",
 		ModelVar:        "demo",
 		PkGoType:        "int32",

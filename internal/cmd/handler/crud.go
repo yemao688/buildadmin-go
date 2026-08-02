@@ -2,11 +2,11 @@ package handler
 
 import (
 	"fmt"
-	"go-build-admin/internal/middleware"
-	helper "go-build-admin/internal/pkg/crud_helper"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/infra/db"
+	"buildadmin-go/internal/middleware"
+	helper "buildadmin-go/internal/pkg/crud_helper"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/infra/db"
 	"strings"
 
 	"github.com/spf13/cobra"

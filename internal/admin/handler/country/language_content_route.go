@@ -2,8 +2,8 @@
 package country
 
 import (
-	adminhandler "go-build-admin/internal/admin/handler"
-	"go-build-admin/internal/middleware"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

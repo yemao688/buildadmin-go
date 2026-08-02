@@ -1,7 +1,7 @@
 package model
 
 import (
-	"go-build-admin/internal/admin/repository/simple"
+	"buildadmin-go/internal/admin/repository/simple"
 
 	"gorm.io/gorm/schema"
 )

@@ -11,7 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	cErr "go-build-admin/internal/pkg/error"
+	cErr "buildadmin-go/internal/pkg/error"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

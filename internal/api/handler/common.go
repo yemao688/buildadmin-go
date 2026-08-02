@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"go-build-admin/internal/api/service/member"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/captcha"
-	"go-build-admin/internal/pkg/clickcaptcha"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/requesttx"
-	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/pkg/clickcaptcha"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/token"
+	"buildadmin-go/internal/utils"
 	"image/png"
 	"net/http"
 

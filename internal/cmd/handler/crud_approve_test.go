@@ -2,7 +2,7 @@ package handler
 
 import (
 	"bytes"
-	helper "go-build-admin/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 	"strings"
 	"testing"
 

@@ -3,8 +3,8 @@ package clickcaptcha
 import (
 	"encoding/json"
 	"fmt"
-	"go-build-admin/internal/pkg/captcha"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/utils"
 	"math/rand"
 	"os"
 	"strconv"

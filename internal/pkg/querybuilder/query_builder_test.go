@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"testing"
 
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"

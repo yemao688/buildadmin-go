@@ -7,7 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 	"hash"
 	"time"
 

@@ -1,10 +1,10 @@
 package crud
 
 import (
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/pkg/data_scope"
-	cErr "go-build-admin/internal/pkg/error"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/pkg/data_scope"
+	cErr "buildadmin-go/internal/pkg/error"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"

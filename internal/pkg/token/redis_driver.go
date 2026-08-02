@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/conf"
 	"time"
 
 	"github.com/go-redis/redis/v8"

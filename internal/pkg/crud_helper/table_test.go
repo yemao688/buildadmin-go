@@ -2,9 +2,9 @@ package crud_helper
 
 import (
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 	"strings"
 	"testing"
 	"time"

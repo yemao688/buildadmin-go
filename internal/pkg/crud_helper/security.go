@@ -2,9 +2,9 @@ package crud_helper
 
 import (
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/utils"
 	"net/url"
 	"os"
 	"path/filepath"

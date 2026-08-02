@@ -2,8 +2,8 @@ package migrations
 
 import (
 	"fmt"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/official"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/database/migrations/official"
 	"gorm.io/gorm"
 )
 

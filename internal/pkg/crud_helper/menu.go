@@ -1,8 +1,8 @@
 package crud_helper
 
 import (
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	model "go-build-admin/internal/model"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	model "buildadmin-go/internal/model"
 	"strings"
 
 	"gorm.io/gorm"

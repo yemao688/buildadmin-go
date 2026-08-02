@@ -2,22 +2,22 @@ package member
 
 import (
 	"fmt"
-	"go-build-admin/internal/api/repository/user"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/password"
-	"go-build-admin/internal/pkg/random"
-	"go-build-admin/internal/pkg/systemroot"
-	"go-build-admin/internal/pkg/token"
+	"buildadmin-go/internal/api/repository/user"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/password"
+	"buildadmin-go/internal/pkg/random"
+	"buildadmin-go/internal/pkg/systemroot"
+	"buildadmin-go/internal/pkg/token"
 	"regexp"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 )
 
 type Service struct {

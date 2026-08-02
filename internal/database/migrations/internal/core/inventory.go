@@ -1,12 +1,12 @@
 package core
 
 import (
-	"go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/captcha"
-	"go-build-admin/internal/pkg/token"
+	"buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/pkg/token"
 )
 
 // CoreTable describes one framework table in fresh-snapshot order.

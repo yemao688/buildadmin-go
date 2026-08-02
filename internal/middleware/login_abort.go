@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/utils"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

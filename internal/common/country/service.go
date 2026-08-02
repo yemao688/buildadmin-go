@@ -3,7 +3,7 @@ package country
 import (
 	"context"
 
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

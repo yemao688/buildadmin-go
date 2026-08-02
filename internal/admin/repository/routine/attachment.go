@@ -2,12 +2,12 @@ package routine
 
 import (
 	"fmt"
-	adminmodel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/data_scope"
-	persistence "go-build-admin/internal/pkg/persistence"
-	"go-build-admin/internal/utils"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	persistence "buildadmin-go/internal/pkg/persistence"
+	"buildadmin-go/internal/utils"
 	"os"
 	"path/filepath"
 	"strings"

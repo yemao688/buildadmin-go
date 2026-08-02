@@ -2,9 +2,9 @@ package crud
 
 import (
 	"bytes"
-	model "go-build-admin/internal/admin/repository"
-	helper "go-build-admin/internal/pkg/crud_helper"
-	"go-build-admin/internal/pkg/data_scope"
+	model "buildadmin-go/internal/admin/repository"
+	helper "buildadmin-go/internal/pkg/crud_helper"
+	"buildadmin-go/internal/pkg/data_scope"
 	"net/http"
 	"net/http/httptest"
 	"strings"

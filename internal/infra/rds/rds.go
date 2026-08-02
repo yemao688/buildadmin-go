@@ -2,7 +2,7 @@ package rds
 
 import (
 	"context"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 
 	"github.com/go-redis/redis/extra/redisotel"
 	"github.com/go-redis/redis/v8"

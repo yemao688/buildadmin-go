@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	mysql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/requesttx"
 	"gorm.io/gorm"
 )
 

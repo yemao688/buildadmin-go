@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 	"net/http"
 	"strings"
 	"time"

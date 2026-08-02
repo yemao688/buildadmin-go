@@ -2,11 +2,11 @@ package security
 
 import (
 	"encoding/json"
-	adminhandler "go-build-admin/internal/admin/handler"
-	securitymodel "go-build-admin/internal/admin/repository/security"
-	"go-build-admin/internal/admin/validate"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	securitymodel "buildadmin-go/internal/admin/repository/security"
+	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

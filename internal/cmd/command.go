@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"go-build-admin/internal/cmd/handler"
-	helper "go-build-admin/internal/pkg/crud_helper"
+	"buildadmin-go/internal/cmd/handler"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 
 	"github.com/spf13/cobra"
 )

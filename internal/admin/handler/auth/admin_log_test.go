@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	adminhandler "go-build-admin/internal/admin/handler"
-	adminmodel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	adminmodel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

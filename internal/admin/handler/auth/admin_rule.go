@@ -1,10 +1,10 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/admin/validate"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/tree"
+	adminmodel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/admin/validate"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/tree"
 	"slices"
 	"strings"
 

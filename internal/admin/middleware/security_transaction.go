@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/requesttx"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

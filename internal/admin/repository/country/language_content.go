@@ -3,12 +3,12 @@ package country
 import (
 	"fmt"
 
-	adminmodel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	persistence "go-build-admin/internal/pkg/persistence"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	persistence "buildadmin-go/internal/pkg/persistence"
 
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

@@ -4,8 +4,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/token"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/token"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

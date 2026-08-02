@@ -9,7 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/token"
+	"buildadmin-go/internal/pkg/token"
 )
 
 func TestRegisterRefreshTypeRejectsDuplicate(t *testing.T) {

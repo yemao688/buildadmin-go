@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strconv"
 
-	adminmodel "go-build-admin/internal/admin/repository"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/requesttx"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/requesttx"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/database/migrations/internal/core"
 	"gorm.io/gorm"
 )
 

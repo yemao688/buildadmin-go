@@ -1,13 +1,13 @@
 package auth
 
 import (
-	adminmodel "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/admin/validate"
-	model "go-build-admin/internal/model"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/tree"
-	"go-build-admin/internal/utils"
+	adminmodel "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/admin/validate"
+	model "buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/tree"
+	"buildadmin-go/internal/utils"
 	"slices"
 	"strconv"
 	"strings"

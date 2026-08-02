@@ -1,6 +1,6 @@
 package model
 
-import "go-build-admin/internal/admin/repository/simple"
+import "buildadmin-go/internal/admin/repository/simple"
 
 // SecuritySensitiveDataLog 敏感数据修改记录
 type SecuritySensitiveDataLog struct {

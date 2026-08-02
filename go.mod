@@ -1,4 +1,4 @@
-module go-build-admin
+module buildadmin-go
 
 go 1.25.0
 

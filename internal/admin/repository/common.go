@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"go-build-admin/internal/pkg/header"
+	"buildadmin-go/internal/pkg/header"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

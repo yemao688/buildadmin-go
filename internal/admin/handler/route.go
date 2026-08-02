@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"go-build-admin/internal/middleware"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

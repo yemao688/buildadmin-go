@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 )
 
 func TestRollbackRejectsOfficialAndFrameworkTracks(t *testing.T) {

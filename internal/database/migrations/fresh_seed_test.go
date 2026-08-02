@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/database/migrations/internal/core"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

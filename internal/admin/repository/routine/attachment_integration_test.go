@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/testutil"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

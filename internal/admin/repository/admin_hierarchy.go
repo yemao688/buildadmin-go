@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/data_scope"
-	cErr "go-build-admin/internal/pkg/error"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	cErr "buildadmin-go/internal/pkg/error"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

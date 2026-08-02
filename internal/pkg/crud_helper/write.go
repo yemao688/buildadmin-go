@@ -3,8 +3,8 @@ package crud_helper
 import (
 	"bytes"
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/utils"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -83,7 +83,7 @@ func applyBaseRepositoryPackageRef(modelData *ModelData, repositoryFile NameInfo
 	if !strings.HasPrefix(root, "internal/admin/repository/") {
 		return
 	}
-	modelData.BaseModelImport = "go-build-admin/internal/admin/repository"
+	modelData.BaseModelImport = "buildadmin-go/internal/admin/repository"
 	modelData.BaseModelAlias = "adminmodel"
 	modelData.BaseModelQualifier = modelData.BaseModelAlias + "."
 }
@@ -197,7 +197,7 @@ func applyBaseHandlerPackageRef(qualifier *string, alias *string, importPath *st
 		return
 	}
 	*alias = "adminhandler"
-	*importPath = "go-build-admin/internal/admin/handler"
+	*importPath = "buildadmin-go/internal/admin/handler"
 	*qualifier = *alias + "."
 }
 
@@ -503,7 +503,7 @@ func writeRegistrarProviderEntry(name string, handlerRoot string) error {
 // 以及是否为子包（根 handler 包在 registrar_set.go 中固定使用别名 admin）。
 func handlerImportRef(handlerRoot string) (importPath string, alias string, isSub bool) {
 	root := filepath.ToSlash(handlerRoot)
-	importPath = "go-build-admin/" + root
+	importPath = "buildadmin-go/" + root
 	if root == "internal/admin/handler" {
 		return importPath, "admin", false
 	}
@@ -728,7 +728,7 @@ func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, neede
 		suffix = utils.SnakeToCamel(anchorParent, true)
 	}
 	alias = lowerFirst(strings.Join(sub, "")) + suffix
-	return "go-build-admin/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
+	return "buildadmin-go/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
 }
 
 // AddWireProviderSet 将子包 ProviderSet 聚合并入 cmd/app/wire.go（幂等）。

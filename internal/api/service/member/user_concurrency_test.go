@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"go-build-admin/internal/api/service/member"
-	commonmodel "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/pkg/token"
+	"buildadmin-go/internal/api/service/member"
+	commonmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/pkg/token"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

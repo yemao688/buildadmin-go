@@ -3,9 +3,9 @@ package auth
 import (
 	"testing"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"

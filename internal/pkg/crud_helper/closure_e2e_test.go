@@ -1,15 +1,15 @@
 package crud_helper
 
 import (
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/pkg/testutil"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/pkg/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 )
 
 func TestGeneratedCRUDClosureMySQL(t *testing.T) {
@@ -118,7 +118,7 @@ func (b *BaseModel) TableInfo() TableInfo {
 		"internal/admin/repository/query_builder.go": `package repository
 
 import (
-	"go-build-admin/internal/pkg/persistence"
+	"buildadmin-go/internal/pkg/persistence"
 	"github.com/gin-gonic/gin"
 )
 
@@ -143,9 +143,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/data_scope"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/conf"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

@@ -6,9 +6,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	siteconfig "go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/testutil"
+	siteconfig "buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

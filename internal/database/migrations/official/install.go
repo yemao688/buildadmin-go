@@ -2,9 +2,9 @@ package official
 
 import (
 	"errors"
-	"go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/systemroot"
+	"buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/systemroot"
 	"time"
 
 	"gorm.io/gorm"

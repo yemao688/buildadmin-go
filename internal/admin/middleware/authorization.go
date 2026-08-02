@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	middlewarecore "go-build-admin/internal/middleware"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/utils"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	middlewarecore "buildadmin-go/internal/middleware"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/utils"
 	"slices"
 
 	"github.com/gin-gonic/gin"

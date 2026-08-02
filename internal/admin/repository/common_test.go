@@ -3,10 +3,10 @@ package repository_test
 import (
 	"testing"
 
-	adminmodel "go-build-admin/internal/admin/repository"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/testutil"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

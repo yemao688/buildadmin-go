@@ -3,7 +3,7 @@
 package repository
 
 import (
-	"go-build-admin/internal/pkg/querybuilder"
+	"buildadmin-go/internal/pkg/querybuilder"
 
 	"github.com/gin-gonic/gin"
 )

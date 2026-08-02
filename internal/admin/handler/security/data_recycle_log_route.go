@@ -4,7 +4,7 @@ package security
 import (
 	"net/http"
 
-	"go-build-admin/internal/middleware"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

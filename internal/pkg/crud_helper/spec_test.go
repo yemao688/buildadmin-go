@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 	"os"
 	"path/filepath"
 	"strings"

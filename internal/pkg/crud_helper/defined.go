@@ -1,8 +1,8 @@
 package crud_helper
 
 import (
-	model "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/pkg/data_scope"
+	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/pkg/data_scope"
 	"path/filepath"
 )
 
@@ -258,7 +258,7 @@ type HandlerData struct {
 	Namespace           string //包名
 	ClassName           string //类名
 	ModelNamespace      string //实体包名（恒为 model）
-	ModelImportPath     string //实体完整导入路径（恒为 go-build-admin/internal/model）
+	ModelImportPath     string //实体完整导入路径（恒为 buildadmin-go/internal/model）
 	ModelName           string //实体类名
 	ModelVar            string //实体变量名
 	PkGoType            string //主键Go类型
@@ -309,7 +309,7 @@ package {{.Namespace}}
 
 import (
 	{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
-	{{end}}"go-build-admin/internal/middleware"
+	{{end}}"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -343,8 +343,8 @@ import (
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
 	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
 	{{end}}{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
-	{{end}}"go-build-admin/internal/admin/validate"
-	"go-build-admin/internal/pkg/validator"
+	{{end}}"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -526,10 +526,10 @@ import (
 	{{end}}
 	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
 	{{end}}
-	"go-build-admin/internal/conf"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/data_scope"
-	persistence "go-build-admin/internal/pkg/persistence"
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
+	persistence "buildadmin-go/internal/pkg/persistence"
 )
 
 type {{.ClassName}}Repository struct {

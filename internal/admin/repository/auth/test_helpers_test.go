@@ -3,9 +3,9 @@ package auth
 import (
 	"testing"
 
-	adminmodel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
 )

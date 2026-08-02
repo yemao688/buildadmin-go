@@ -3,7 +3,7 @@ package middleware
 import (
 	"sort"
 
-	middlewarecore "go-build-admin/internal/middleware"
+	middlewarecore "buildadmin-go/internal/middleware"
 	"strings"
 
 	"github.com/gin-gonic/gin"

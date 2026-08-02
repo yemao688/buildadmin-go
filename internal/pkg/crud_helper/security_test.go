@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	crudmodel "go-build-admin/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
 	"strconv"
 	"strings"
 	"testing"

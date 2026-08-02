@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 )
 

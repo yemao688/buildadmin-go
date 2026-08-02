@@ -6,9 +6,9 @@ package wiretest
 //go:generate go run -mod=mod github.com/google/wire/cmd/wire
 
 import (
-	"go-build-admin/internal/pkg"
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/pkg"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/conf"
 
 	"github.com/google/wire"
 )

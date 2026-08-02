@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	api "go-build-admin/internal/api/handler"
+	api "buildadmin-go/internal/api/handler"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

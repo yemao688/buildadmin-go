@@ -3,8 +3,8 @@ package crud_helper
 import (
 	"errors"
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	"buildadmin-go/internal/utils"
 	"os"
 	"path/filepath"
 	"strings"

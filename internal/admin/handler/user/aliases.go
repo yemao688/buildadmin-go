@@ -1,6 +1,6 @@
 package user
 
-import adminhandler "go-build-admin/internal/admin/handler"
+import adminhandler "buildadmin-go/internal/admin/handler"
 
 type Base = adminhandler.Base
 type IDS = adminhandler.IDS

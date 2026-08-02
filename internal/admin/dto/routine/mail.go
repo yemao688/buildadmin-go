@@ -1,6 +1,6 @@
 package dto
 
-import "go-build-admin/internal/admin/validate"
+import "buildadmin-go/internal/admin/validate"
 
 type MailParam struct {
 	SmtpServer       string `json:"smtp_server" binding:"required"`

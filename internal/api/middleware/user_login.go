@@ -3,13 +3,13 @@ package middleware
 import (
 	"net/http"
 
-	"go-build-admin/internal/api/service/member"
-	"go-build-admin/internal/conf"
-	core "go-build-admin/internal/middleware"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/token"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/conf"
+	core "buildadmin-go/internal/middleware"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/token"
+	"buildadmin-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )

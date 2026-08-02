@@ -2,7 +2,7 @@ package user
 
 import (
 	"errors"
-	"go-build-admin/internal/model"
+	"buildadmin-go/internal/model"
 	"sync"
 	"testing"
 

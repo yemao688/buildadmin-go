@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/utils"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"

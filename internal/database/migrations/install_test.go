@@ -2,9 +2,9 @@ package migrations
 
 import (
 	"fmt"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/database/migrations/internal/core"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/pkg/testutil"
 	"strings"
 	"testing"
 

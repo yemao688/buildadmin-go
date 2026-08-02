@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	model "go-build-admin/internal/model"
+	model "buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

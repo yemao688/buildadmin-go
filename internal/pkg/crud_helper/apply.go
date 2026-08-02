@@ -2,11 +2,11 @@ package crud_helper
 
 import (
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	model "go-build-admin/internal/admin/repository"
-	adminauth "go-build-admin/internal/admin/repository/auth"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	model "buildadmin-go/internal/admin/repository"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/utils"
 	"os"
 	"path/filepath"
 	"sort"

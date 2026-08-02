@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	adminauth "go-build-admin/internal/admin/repository/auth"
+	adminauth "buildadmin-go/internal/admin/repository/auth"
 	"testing"
 
 	"github.com/gin-gonic/gin"

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"

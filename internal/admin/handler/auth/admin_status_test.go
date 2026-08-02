@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	cErr "go-build-admin/internal/pkg/error"
+	cErr "buildadmin-go/internal/pkg/error"
 )
 
 func TestValidateAccountStatusValue(t *testing.T) {

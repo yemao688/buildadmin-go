@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	adminhandler "go-build-admin/internal/admin/handler"
-	model "go-build-admin/internal/admin/repository/routine"
-	siteconfig "go-build-admin/internal/common/siteconfig"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/testutil"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	model "buildadmin-go/internal/admin/repository/routine"
+	siteconfig "buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"

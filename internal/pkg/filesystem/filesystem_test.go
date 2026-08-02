@@ -2,7 +2,7 @@ package filesystem
 
 import (
 	"fmt"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 	"path/filepath"
 	"testing"
 )

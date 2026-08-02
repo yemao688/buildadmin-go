@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/requesttx"
 	"gorm.io/gorm"
 )
 

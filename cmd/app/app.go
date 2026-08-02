@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"go-build-admin/internal/cron"
-	adminMiddleware "go-build-admin/internal/admin/middleware"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/cron"
+	adminMiddleware "buildadmin-go/internal/admin/middleware"
+	"buildadmin-go/internal/conf"
 	"net"
 	"net/http"
 	"time"

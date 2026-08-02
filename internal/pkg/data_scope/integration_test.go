@@ -8,8 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/conf"
 )
 
 type runtimeScopeItem struct {

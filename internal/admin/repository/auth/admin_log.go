@@ -2,11 +2,11 @@ package auth
 
 import (
 	"encoding/json"
-	adminmodel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/persistence"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/persistence"
 	"regexp"
 	"strings"
 

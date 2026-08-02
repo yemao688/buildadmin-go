@@ -2,11 +2,11 @@ package crud_helper
 
 import (
 	"fmt"
-	crudmodel "go-build-admin/internal/admin/model/crud"
-	model "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/pkg/data_scope"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/utils"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
+	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/pkg/data_scope"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/utils"
 	"os"
 	"path"
 	"path/filepath"
@@ -89,7 +89,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	handlerData := HandlerData{}
 	handlerData.Namespace = handlerFile.Namespace
 	handlerData.ModelNamespace = "model"
-	handlerData.ModelImportPath = "go-build-admin/internal/model"
+	handlerData.ModelImportPath = "buildadmin-go/internal/model"
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
 	handlerData.ModelVar = strings.ToLower(string(entityFile.LastName[0])) + entityFile.LastName[1:]
@@ -99,10 +99,10 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	handlerData.TableComment = tableComment
 
 	// 仓库与 DTO 导入引用：子包沿用 <dir>model / <dir>dto 约定别名。
-	handlerData.RepoImport = "go-build-admin/" + filepath.ToSlash(repositoryFile.RootFileName)
+	handlerData.RepoImport = "buildadmin-go/" + filepath.ToSlash(repositoryFile.RootFileName)
 	handlerData.RepoAlias = repositoryImportAlias(repositoryFile)
 	handlerData.RepoQualifier = handlerData.RepoAlias + "."
-	handlerData.DTOImport = "go-build-admin/" + filepath.ToSlash(dtoFile.RootFileName)
+	handlerData.DTOImport = "buildadmin-go/" + filepath.ToSlash(dtoFile.RootFileName)
 	handlerData.DTOAlias = dtoImportAlias(dtoFile)
 	handlerData.DTOQualifier = handlerData.DTOAlias + "."
 

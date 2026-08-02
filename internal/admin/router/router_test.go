@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	admin "go-build-admin/internal/admin/handler"
-	authhandler "go-build-admin/internal/admin/handler/auth"
-	adminMiddleware "go-build-admin/internal/admin/middleware"
-	"go-build-admin/internal/middleware"
+	admin "buildadmin-go/internal/admin/handler"
+	authhandler "buildadmin-go/internal/admin/handler/auth"
+	adminMiddleware "buildadmin-go/internal/admin/middleware"
+	"buildadmin-go/internal/middleware"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"

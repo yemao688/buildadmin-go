@@ -3,10 +3,10 @@ package security
 import (
 	"encoding/json"
 	"fmt"
-	adminmodel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/model"
-	persistence "go-build-admin/internal/pkg/persistence"
+	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/model"
+	persistence "buildadmin-go/internal/pkg/persistence"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

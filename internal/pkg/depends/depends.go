@@ -2,7 +2,7 @@ package depends
 
 import (
 	"encoding/json"
-	cErr "go-build-admin/internal/pkg/error"
+	cErr "buildadmin-go/internal/pkg/error"
 	"os"
 )
 

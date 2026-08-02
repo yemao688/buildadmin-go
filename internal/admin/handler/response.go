@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/requesttx"
-	"go-build-admin/internal/utils"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

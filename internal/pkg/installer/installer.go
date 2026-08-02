@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"go-build-admin/internal/pkg/random"
-	"go-build-admin/internal/pkg/validator"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/pkg/random"
+	"buildadmin-go/internal/pkg/validator"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/utils"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/mysql"

@@ -1,9 +1,9 @@
 package routine
 
 import (
-	adminhandler "go-build-admin/internal/admin/handler"
-	routinemodel "go-build-admin/internal/admin/repository/routine"
-	"go-build-admin/internal/admin/validate"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	routinemodel "buildadmin-go/internal/admin/repository/routine"
+	"buildadmin-go/internal/admin/validate"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

@@ -1,7 +1,7 @@
 package version
 
 import (
-	"go-build-admin/internal/pkg/terminal"
+	"buildadmin-go/internal/pkg/terminal"
 	"regexp"
 	"slices"
 	"strconv"

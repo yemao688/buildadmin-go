@@ -4,9 +4,9 @@
 package router
 
 import (
-	api "go-build-admin/internal/api/handler"
-	apiMiddleware "go-build-admin/internal/api/middleware"
-	"go-build-admin/internal/utils"
+	api "buildadmin-go/internal/api/handler"
+	apiMiddleware "buildadmin-go/internal/api/middleware"
+	"buildadmin-go/internal/utils"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"

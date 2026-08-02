@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"go-build-admin/internal/model"
+	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

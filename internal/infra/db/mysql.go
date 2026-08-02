@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"time"
 
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/utils"
 
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"

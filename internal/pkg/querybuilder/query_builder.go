@@ -4,9 +4,9 @@ package querybuilder
 
 import (
 	"fmt"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/validator"
-	"go-build-admin/internal/utils"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/validator"
+	"buildadmin-go/internal/utils"
 	"reflect"
 	"regexp"
 	"strconv"

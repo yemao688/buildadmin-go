@@ -2,8 +2,8 @@
 package crud
 
 import (
-	adminmiddleware "go-build-admin/internal/admin/middleware"
-	"go-build-admin/internal/middleware"
+	adminmiddleware "buildadmin-go/internal/admin/middleware"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )

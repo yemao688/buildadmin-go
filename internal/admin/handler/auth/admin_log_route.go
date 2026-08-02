@@ -2,7 +2,7 @@
 package auth
 
 import (
-	"go-build-admin/internal/middleware"
+	"buildadmin-go/internal/middleware"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

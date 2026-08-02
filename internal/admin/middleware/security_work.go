@@ -3,11 +3,11 @@ package middleware
 import (
 	"fmt"
 
-	middlewarecore "go-build-admin/internal/middleware"
+	middlewarecore "buildadmin-go/internal/middleware"
 	"net/http"
 
-	"go-build-admin/internal/pkg/data_scope"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/requesttx"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

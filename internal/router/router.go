@@ -2,12 +2,12 @@ package router
 
 import (
 	"encoding/json"
-	admin "go-build-admin/internal/admin/handler"
-	adminRouter "go-build-admin/internal/admin/router"
-	api "go-build-admin/internal/api/handler"
-	apiRouter "go-build-admin/internal/api/router"
-	"go-build-admin/internal/middleware"
-	"go-build-admin/internal/utils"
+	admin "buildadmin-go/internal/admin/handler"
+	adminRouter "buildadmin-go/internal/admin/router"
+	api "buildadmin-go/internal/api/handler"
+	apiRouter "buildadmin-go/internal/api/router"
+	"buildadmin-go/internal/middleware"
+	"buildadmin-go/internal/utils"
 	"net/http"
 	"os"
 	"path/filepath"

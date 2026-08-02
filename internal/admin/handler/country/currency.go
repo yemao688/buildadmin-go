@@ -1,12 +1,12 @@
 package country
 
 import (
-	countrydto "go-build-admin/internal/admin/dto/country"
-	adminhandler "go-build-admin/internal/admin/handler"
-	countrymodel "go-build-admin/internal/admin/repository/country"
-	"go-build-admin/internal/admin/validate"
-	model "go-build-admin/internal/model"
-	"go-build-admin/internal/pkg/validator"
+	countrydto "buildadmin-go/internal/admin/dto/country"
+	adminhandler "buildadmin-go/internal/admin/handler"
+	countrymodel "buildadmin-go/internal/admin/repository/country"
+	"buildadmin-go/internal/admin/validate"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

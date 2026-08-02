@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/pkg/testutil"
+	"buildadmin-go/internal/pkg/testutil"
 )
 
 func TestBusinessIdentifierCacheMySQLHitExpiryAndInvalidation(t *testing.T) {

@@ -3,7 +3,7 @@ package business
 import (
 	"testing"
 
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 )
 

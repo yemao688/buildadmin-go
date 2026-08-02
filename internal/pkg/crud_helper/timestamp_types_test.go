@@ -1,11 +1,11 @@
 package crud_helper
 
 import (
-	crudmodel "go-build-admin/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/admin/model/crud"
 	"strings"
 	"testing"
 
-	"go-build-admin/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/data_scope"
 )
 
 func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 )
 
 func TestPostPolicyFixedTime(t *testing.T) {

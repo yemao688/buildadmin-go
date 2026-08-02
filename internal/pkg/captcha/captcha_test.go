@@ -2,7 +2,7 @@ package captcha
 
 import (
 	"fmt"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/utils"
 	"image"
 	"image/color"
 	"image/draw"

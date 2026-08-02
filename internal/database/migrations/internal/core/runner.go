@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"go-build-admin/internal/pkg/advisorylock"
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/pkg/advisorylock"
+	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 )
 

@@ -2,8 +2,8 @@ package persistence
 
 import (
 	"context"
-	"go-build-admin/internal/pkg/querybuilder"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/querybuilder"
+	"buildadmin-go/internal/pkg/requesttx"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

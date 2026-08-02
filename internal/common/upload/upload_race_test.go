@@ -13,9 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go-build-admin/internal/conf"
-	"go-build-admin/internal/pkg/testutil"
-	"go-build-admin/internal/utils"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/utils"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

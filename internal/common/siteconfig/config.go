@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"go-build-admin/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/requesttx"
 	"gorm.io/gorm"
 	"slices"
 	"strings"

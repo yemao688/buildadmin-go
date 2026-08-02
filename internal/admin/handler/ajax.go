@@ -1,14 +1,14 @@
 package handler
 
 import (
-	adminModel "go-build-admin/internal/admin/repository"
-	"go-build-admin/internal/common/area"
-	"go-build-admin/internal/common/upload"
-	"go-build-admin/internal/conf"
-	cErr "go-build-admin/internal/pkg/error"
-	"go-build-admin/internal/pkg/header"
-	"go-build-admin/internal/pkg/terminal"
-	"go-build-admin/internal/utils"
+	adminModel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/common/area"
+	"buildadmin-go/internal/common/upload"
+	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/terminal"
+	"buildadmin-go/internal/utils"
 	"net/http"
 	"strconv"
 

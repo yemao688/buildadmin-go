@@ -3,7 +3,7 @@ package official
 import (
 	"testing"
 
-	"go-build-admin/internal/conf"
+	"buildadmin-go/internal/conf"
 )
 
 func TestVersion202DashboardRuleCount(t *testing.T) {
