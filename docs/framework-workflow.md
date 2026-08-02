@@ -146,7 +146,7 @@ go run ./cmd/app --conf config.yaml crud:generate crud_specs/<module>.yaml [--sk
 go build ./...
 ```
 
-不要手写生成的 model、handler、provider、router、Wire 或 Vue 脚手架。删除生成模块使用：
+不要手写生成的实体（`internal/model`）、仓库（`internal/admin/repository`）、handler、provider、router、Wire 或 Vue 脚手架。删除生成模块使用：
 
 ```bash
 go run ./cmd/app --conf config.yaml crud:delete <table_name>
@@ -158,7 +158,7 @@ go run ./cmd/app --conf config.yaml crud:delete <table_name>
 
 CRUD 生成器自动建规则无需处理；手写路由按同一规则二选一：声明 `middleware.RegisterPermissionExempt` 豁免，或通过 business 迁移补充 `admin_rule`，参考 [`framework-maintenance.md`](framework-maintenance.md) 的条款。
 
-业务表迁移使用三轨台账中的 business 轨道；台账字段、断点列和 `migrate rollback` 语义以 [`database/migrations/business/README.md`](../database/migrations/business/README.md) 为准。
+业务表迁移使用三轨台账中的 business 轨道；台账字段、断点列和 `migrate rollback` 语义以 [`internal/database/migrations/business/README.md`](../internal/database/migrations/business/README.md) 为准。
 
 ## 标准框架升级流程
 
@@ -216,12 +216,12 @@ git push origin master
 |---|---|
 | `VERSION_FRAMEWORK`、`CHANGELOG.md` | 框架拥有的发行版本文件和变更记录；冲突时取框架侧版本。 |
 | `VERSION` | 业务仓库自有的镜像/发布版本文件，框架永不提供；冲突时保留业务侧版本。 |
-| `router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
-| `router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/app`。 |
-| `app/admin/handler/provider.go`、`app/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
+| `internal/router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
+| `internal/router/registrar_set.go` | 双方都会追加 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/app`。 |
+| `internal/admin/handler/provider.go`、`internal/api/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 handler/registrar 构造器；保留两边新增条目，来源解决后运行 `go generate ./cmd/app`。 |
 | provider 集合 | 合并双方 provider；来源解决后再按需要生成 Wire。 |
 | `cmd/app/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、provider、registrar_set 等来源，再运行 `go generate ./cmd/app` 重生成。 |
-| `router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
+| `internal/router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
 | `go.mod`、`go.sum` | 保留双方确需依赖，完成冲突处理后运行 `go mod tidy`，再构建和测试验证。 |
 | `config.defaults.yaml` | 完整运行基座；框架新增字段在启动时自动可用。业务运行值放在根目录被忽略的稀疏 `config.yaml` 覆盖层，不要把凭据合入基座。 |
 | 前端语言和生成文件 | 修改其来源文件或生成配置后重建，不直接保留冲突后的生成物；前端命令在 `web/` 用 pnpm。 |
@@ -235,9 +235,9 @@ git push origin master
 
 业务优先放在这些位置：新增 `crud_specs/`、生成并定制业务后端模块、`web/src/views/` 和 `web/src/lang/` 的业务前端、以及自己制定编号/命名策略的新迁移。下游迁移不必错误地占用框架预留编号；应使用独立且稳定的编号或命名空间，合并时检查 registry 冲突，并保证幂等、前缀安全。
 
-路由注册走 RouteRegistrar 体系，业务路由不进 `router/router.go`：每个后台/API 模块由自己的 `<name>_route.go` registrar 承载——`Group()` 声明分组（`admin`/`api`/`root`）、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力；CRUD 生成器自动产出该文件并维护 `provider.go` 与 `router/registrar_set.go` 的共享追加条目，`crud:delete` 反向移除。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
+路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：每个后台/API 模块由自己的 `<name>_route.go` registrar 承载——`Group()` 声明分组（`admin`/`api`/`root`）、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力；CRUD 生成器自动产出该文件并维护 `provider.go` 与 `internal/router/registrar_set.go` 的共享追加条目，`crud:delete` 反向移除。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./internal/router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `internal/router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
 
-以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`router/router.go` 的既有框架区域、`database/migrations/official/` 和 `database/migrations/framework/` 的历史、`database/migrations/model/` 生成模型，以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
+以下区域尽量少改，以降低升级冲突：`cmd/app` wiring、`internal/router/router.go` 的既有框架区域、`internal/database/migrations/official/` 和 `internal/database/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
 ## AI agent 协议
 
@@ -245,7 +245,7 @@ git push origin master
 2. 开始前检查当前分支、remote 和工作树：`git branch --show-current`、`git remote -v`、`git status`。
 3. CRUD 必须先读 [`crud-generation.md`](crud-generation.md)，写 `crud_specs/*.yaml`，再运行 `crud:generate`；删除使用 `crud:delete`。
 4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
-5. 不手改 `cmd/app/wire_gen.go`、生成的 migration model 或其它 generated 文件；修改来源后重新生成。
+5. 不手改 `cmd/app/wire_gen.go`、生成的实体/仓库或其它 generated 文件；修改来源后重新生成。
 6. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
 7. 不运行危险的 `go run ./cmd/generate`，除非明确检查其实现、DSN 和覆盖范围并得到专门确认。
 8. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。

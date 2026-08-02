@@ -16,7 +16,7 @@
 
 ## 框架发布流程
 
-1. 更新根目录 `VERSION_FRAMEWORK`、`app/pkg/version` 中的 `version.Framework` 与 `version.Upstream`（仅在同步 PHP 上游时更新），并补充 `CHANGELOG.md`。
+1. 更新根目录 `VERSION_FRAMEWORK`、`internal/pkg/version` 中的 `version.Framework` 与 `version.Upstream`（仅在同步 PHP 上游时更新），并补充 `CHANGELOG.md`。
 2. 提交发布变更后创建带 `v` 前缀的 annotated tag，例如 `v2.0.0`。
 3. PHP 上游基线版本的事实源是 `web/package.json` 与 `composer.json`；同步 PHP 上游时，同时更新 `version.Upstream`。
 
@@ -25,7 +25,7 @@
 - 本框架把 PHP 上游的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP。
 - 需要理解行为时先查 PHP 上游语义，再结合本仓库实现；不要盲抄 PHP。Go 代码以强类型、Gin/GORM、显式错误处理和仓库既有模式为准。
 - 任何兼容性差异都必须配套测试、迁移或文档说明。
-- `database/migrations/official/` 跟随 PHP 上游更新；官方迁移身份（ID、名称、内容）一经发布**永不重写**，兼容问题只能用新增迁移解决。
+- `internal/database/migrations/official/` 跟随 PHP 上游更新；官方迁移身份（ID、名称、内容）一经发布**永不重写**，兼容问题只能用新增迁移解决。
 
 ### PHP 上游参考实现路径
 
@@ -38,7 +38,7 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 
 ## 迁移维护契约
 
-三轨职责（完整契约见根目录 `AGENTS.md` 和 [`../database/migrations/business/README.md`](../database/migrations/business/README.md)）：
+三轨职责（完整契约见根目录 `AGENTS.md` 和 [`../internal/database/migrations/business/README.md`](../internal/database/migrations/business/README.md)）：
 
 - `official/`：PHP 上游迁移与官方安装 seed，只跟随 PHP 上游同步，不做框架私有改动。
 - `framework/`：框架自身唯一的 `framework-final-seed-and-integrity` 迁移，只由框架维护者修改；业务仓库禁止向此目录添加迁移。
@@ -68,6 +68,6 @@ prefix validation → migration lock → upstream-compatible preflight
 ## 账本与当前基线
 
 - 官方迁移身份（ID、名称、内容）一经发布永不重写；兼容问题只能用新增迁移解决。
-- 账户状态迁移由 `database/migrations/framework/0001.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
+- 账户状态迁移由 `internal/database/migrations/framework/0001_final_seed_and_integrity.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
 - 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用事务内 `admin` 锚定行 `FOR UPDATE`，由 InnoDB 负责死锁检测并由 `innodb_lock_wait_timeout` 兜底超时。
 - 业务仓库首次安装按当前快照建立三张带前缀的迁移台账；业务回滚只作用于 business 轨道，默认回滚最近一条已完成迁移，也支持 `--to-breakpoint`。
