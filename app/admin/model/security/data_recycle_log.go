@@ -7,6 +7,7 @@ import (
 	"go-build-admin/app/admin/model/simple"
 	"go-build-admin/app/pkg/data_scope"
 	"go-build-admin/conf"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -35,6 +36,18 @@ type DataRecycleLogModel struct {
 	config *conf.Configuration
 }
 
+func dataRecycleLogSelect(prefix string) string {
+	return strings.Join([]string{
+		prefix + "security_data_recycle_log.*",
+		"Admin.id AS Admin__id", "Admin.username AS Admin__username", "Admin.nickname AS Admin__nickname",
+		"Recycle.id AS Recycle__id", "Recycle.name AS Recycle__name", "Recycle.controller AS Recycle__controller",
+		"Recycle.controller_as AS Recycle__controller_as", "Recycle.data_table AS Recycle__data_table",
+		"Recycle.primary_key AS Recycle__primary_key", "Recycle.status AS Recycle__status",
+		"Recycle.connection AS Recycle__connection", "Recycle.update_time AS Recycle__update_time",
+		"Recycle.create_time AS Recycle__create_time",
+	}, ", ")
+}
+
 func NewDataRecycleLogModel(sqlDB *gorm.DB, config *conf.Configuration) *DataRecycleLogModel {
 	return &DataRecycleLogModel{
 		BaseModel: adminmodel.NewBaseModel(config.Database.Prefix+"security_data_recycle_log", "id", "recycle.name", sqlDB),
@@ -45,10 +58,10 @@ func NewDataRecycleLogModel(sqlDB *gorm.DB, config *conf.Configuration) *DataRec
 func (s *DataRecycleLogModel) GetOne(ctx *gin.Context, id int32) (dataRecycle SecurityDataRecycleLog, err error) {
 	prefix := s.config.Database.Prefix
 	err = s.DBFor(ctx).Model(&SecurityDataRecycleLog{}).
-		Preload("Admin").
-		Preload("Recycle").
-		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_data_recycle_log.admin_id").
-		Joins("left join "+prefix+"security_data_recycle recycle on recycle.id = "+prefix+"security_data_recycle_log.recycle_id").Where(""+prefix+"security_data_recycle_log.id=?", id).First(&dataRecycle).Error
+		Joins("Admin").
+		Joins("Recycle").
+		Select(dataRecycleLogSelect(prefix)).
+		Where(""+prefix+"security_data_recycle_log.id=?", id).First(&dataRecycle).Error
 	return
 }
 
@@ -57,12 +70,10 @@ func (s *DataRecycleLogModel) List(ctx *gin.Context) (list []SecurityDataRecycle
 	if err != nil {
 		return nil, 0, err
 	}
-	prefix := s.config.Database.Prefix
 	db := s.DBFor(ctx).Model(&SecurityDataRecycleLog{}).
-		Preload("Admin").
-		Preload("Recycle").
-		Joins("left join "+prefix+"admin admin on admin.id = "+prefix+"security_data_recycle_log.admin_id").
-		Joins("left join "+prefix+"security_data_recycle recycle on recycle.id = "+prefix+"security_data_recycle_log.recycle_id").
+		Joins("Admin").
+		Joins("Recycle").
+		Select(dataRecycleLogSelect(s.config.Database.Prefix)).
 		Where(whereS, whereP...)
 
 	if err = db.Count(&total).Error; err != nil {
@@ -102,7 +113,7 @@ func (s *DataRecycleLogModel) Restore(ctx *gin.Context, ids interface{}) error {
 
 		for _, v := range list {
 			targetTable, err := data_scope.ResolveBusinessTable(tx, s.config.Database.Prefix, v.DataTable)
-			if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, v.PrimaryKey) != nil {
+			if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, v.PrimaryKey, s.config.Database.Prefix) != nil {
 				return fmt.Errorf("invalid recycle target identifier")
 			}
 			data := map[string]any{}

@@ -65,12 +65,47 @@ type AdminLog struct {
 
 type AdminLogModel struct {
 	BaseModel
+	authM *AuthModel
 }
 
-func NewAdminLogModel(sqlDB *gorm.DB, config *conf.Configuration) *AdminLogModel {
+func NewAdminLogModel(sqlDB *gorm.DB, config *conf.Configuration, authM *AuthModel) *AdminLogModel {
 	return &AdminLogModel{
 		BaseModel: NewBaseModel(config.Database.Prefix+"admin_log", "id", "title", sqlDB),
+		authM:     authM,
 	}
+}
+
+// GetEnabledAdmin returns the username from the same status check used by the
+// admin authentication middleware.
+func (s *AuthModel) GetEnabledAdmin(id int32) (string, bool) {
+	if s == nil || s.sqlDB == nil {
+		return "", false
+	}
+	var admin struct {
+		Status   string
+		Username string
+	}
+	err := s.sqlDB.Model(&Admin{}).Select("status, username").Where("id=?", id).First(&admin).Error
+	return admin.Username, err == nil && admin.Status == "enable"
+}
+
+// CachedRuleTitle returns a title from the administrator's permission cache.
+// It intentionally does not load the cache; authorization owns cache loading.
+func (s *AuthModel) CachedRuleTitle(uid int32, name string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	rules, ok := s.cache.Rules(uid)
+	if !ok {
+		return "", false
+	}
+	name = strings.ToLower(name)
+	for _, rule := range rules {
+		if strings.ToLower(rule.Name) == name {
+			return rule.Title, true
+		}
+	}
+	return "", false
 }
 
 func (s *AdminLogModel) List(ctx *gin.Context) (list []AdminLog, total int64, err error) {
@@ -98,7 +133,9 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 
 	info := header.GetAdminAuth(ctx)
 	username := ""
-	if info.Id != 0 {
+	if info.Username != "" {
+		username = info.Username
+	} else if info.Id != 0 {
 		admin := Admin{}
 		s.DBFor(ctx).Where("id=?", info.Id).First(&admin)
 		username = admin.Username
@@ -115,15 +152,23 @@ func (s *AdminLogModel) Add(ctx *gin.Context, params map[string]interface{}) {
 		if slashIndex := strings.LastIndex(name, "/"); slashIndex != -1 {
 			action = name[slashIndex+1:]
 		}
-		actionRule := AdminRule{}
-		s.DBFor(ctx).Where("name=?", name).First(&actionRule)
+		lookupRuleTitle := func(ruleName string) (string, bool) {
+			if s.authM != nil && info.Id != 0 {
+				if cachedTitle, ok := s.authM.CachedRuleTitle(info.Id, ruleName); ok {
+					return cachedTitle, true
+				}
+			}
+			rule := AdminRule{}
+			s.DBFor(ctx).Where("name=?", ruleName).First(&rule)
+			return rule.Title, rule.ID != 0
+		}
+		actionTitle, actionOK := lookupRuleTitle(name)
 
 		slashIndex := strings.LastIndex(name, "/")
 		if slashIndex != -1 {
-			parentRule := AdminRule{}
-			s.DBFor(ctx).Where("name=?", name[:slashIndex]).First(&parentRule)
-			if actionRule.ID != 0 && parentRule.ID != 0 {
-				title = parentRule.Title + "-" + actionRule.Title
+			parentTitle, parentOK := lookupRuleTitle(name[:slashIndex])
+			if actionOK && parentOK {
+				title = parentTitle + "-" + actionTitle
 			}
 		}
 		if title == "" {

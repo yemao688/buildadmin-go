@@ -58,7 +58,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	middlewareSecurity := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
 	service := member.NewService(gormDB, tokenHelper, configuration)
 	userLogin := middleware.NewUserLogin(configuration, tokenHelper, service)
-	adminLogModel := auth.NewAdminLogModel(gormDB, configuration)
+	adminLogModel := auth.NewAdminLogModel(gormDB, configuration, authModel)
 	record := middleware.NewRecord(configuration, adminLogModel)
 	siteconfigService := siteconfig.NewService(gormDB)
 	configModel := routine.NewConfigModel(gormDB, configuration, siteconfigService)

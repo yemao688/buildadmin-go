@@ -147,10 +147,12 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			return
 		}
 		loginToken, _ := loginResult["token"].(string)
+		username, _ := loginResult["username"].(string)
 		header.SetAdminAuth(ctx, header.AdminAuth{
 			Language: ctx.GetHeader("Accept-Language"),
 			IsLogin:  true,
 			Id:       adminID,
+			Username: username,
 			Token:    loginToken,
 		})
 		Success(ctx, map[string]interface{}{

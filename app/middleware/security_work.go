@@ -87,10 +87,10 @@ func resolveSecurityTarget(db *gorm.DB, prefix, logical, kind, primary string, f
 	if err := data_scope.ValidateBusinessIdentifier(primary); err != nil {
 		return "", data_scope.RulePolicy{}, "", err
 	}
-	if err := data_scope.ResolveBusinessColumn(db, resolvedTable, primary); err != nil {
+	if err := data_scope.ResolveBusinessColumn(db, resolvedTable, primary, prefix); err != nil {
 		return "", data_scope.RulePolicy{}, "", err
 	}
-	actualPrimary, err := data_scope.ResolveBusinessPrimaryKey(db, resolvedTable)
+	actualPrimary, err := data_scope.ResolveBusinessPrimaryKey(db, resolvedTable, prefix)
 	if err != nil {
 		return "", data_scope.RulePolicy{}, "", err
 	}
@@ -98,14 +98,11 @@ func resolveSecurityTarget(db *gorm.DB, prefix, logical, kind, primary string, f
 		return "", data_scope.RulePolicy{}, "", fmt.Errorf("rule primary key %q does not match target table primary key %q", primary, actualPrimary)
 	}
 
-	var ownerCount int64
-	if err := db.Raw(
-		"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name='admin_id'",
-		resolvedTable,
-	).Scan(&ownerCount).Error; err != nil {
+	ownerPresent, err := data_scope.HasBusinessColumn(db, prefix, resolvedTable, "admin_id")
+	if err != nil {
 		return "", data_scope.RulePolicy{}, "", err
 	}
-	if ownerCount == 1 {
+	if ownerPresent {
 		policy, err := data_scope.ResolveRulePolicy(db, prefix, logical, kind, primary, fields)
 		return resolvedTable, policy, "admin_id", err
 	}
@@ -117,7 +114,7 @@ func resolveSecurityTarget(db *gorm.DB, prefix, logical, kind, primary string, f
 		if err := data_scope.ValidateSecurityField(field); err != nil {
 			return "", data_scope.RulePolicy{}, "", err
 		}
-		if err := data_scope.ResolveBusinessColumn(db, resolvedTable, field); err != nil {
+		if err := data_scope.ResolveBusinessColumn(db, resolvedTable, field, prefix); err != nil {
 			return "", data_scope.RulePolicy{}, "", err
 		}
 	}

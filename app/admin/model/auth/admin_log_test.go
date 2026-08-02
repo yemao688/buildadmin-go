@@ -3,10 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"go-build-admin/app/pkg/header"
 	"go-build-admin/conf"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -44,7 +47,7 @@ func TestAdminLogAddFiltersURLSuffixes(t *testing.T) {
 	if err := db.AutoMigrate(&AdminLog{}); err != nil {
 		t.Fatal(err)
 	}
-	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 
 	for _, url := range []string{"/admin/auth.Admin/index", "/admin/Index/LOGOUT"} {
 		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -65,7 +68,7 @@ func TestAdminLogAddFiltersURLSuffixes(t *testing.T) {
 
 func TestAdminLogAddUsesLoginUsernameAndUnknownTitle(t *testing.T) {
 	db := newAdminLogTestDB(t, "admin-log-details")
-	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	params := map[string]interface{}{"username": "login-user"}
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/login", nil)
@@ -91,7 +94,7 @@ func TestAdminLogAddUsesRuleTitles(t *testing.T) {
 	if err := db.Create(&AdminRule{Name: "auth/admin/edit", Title: "编辑管理员"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/edit", nil)
 	m.Add(ctx, map[string]interface{}{})
@@ -105,9 +108,35 @@ func TestAdminLogAddUsesRuleTitles(t *testing.T) {
 	}
 }
 
+func TestAdminLogAddUsesCachedRuleTitles(t *testing.T) {
+	authM, db, initialRule := newAdminAuthCacheModel(t)
+	parent := AdminRule{Pid: 0, Type: "menu", Title: "管理员", Name: "auth/admin", Status: "1", Weigh: 2}
+	action := AdminRule{Pid: 0, Type: "button", Title: "编辑管理员", Name: "auth/admin/edit", Status: "1", Weigh: 3}
+	require.NoError(t, db.Create(&parent).Error)
+	require.NoError(t, db.Create(&action).Error)
+	require.NoError(t, db.Model(&AdminGroup{}).Where("id=?", 1).Update("rules",
+		strconv.Itoa(int(initialRule.ID))+","+strconv.Itoa(int(parent.ID))+","+strconv.Itoa(int(action.ID))).Error)
+	_, err := authM.GetRuleList(nil, 1)
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&AdminLog{}))
+
+	// Remove the source rows after warming the permission cache. A cache miss
+	// would make Add fall back to the database and lose both titles.
+	require.NoError(t, db.Where("id IN ?", []int32{parent.ID, action.ID}).Delete(&AdminRule{}).Error)
+	m := NewAdminLogModel(db, &conf.Configuration{}, authM)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/edit", nil)
+	header.SetAdminAuth(ctx, header.AdminAuth{Id: 1, Username: "cached-admin"})
+	m.Add(ctx, nil)
+
+	var row AdminLog
+	require.NoError(t, db.Last(&row).Error)
+	require.Equal(t, "管理员-编辑管理员", row.Title)
+}
+
 func TestAdminLogAddSanitizesNestedParamsAndTruncates(t *testing.T) {
 	db := newAdminLogTestDB(t, "admin-log-sanitize")
-	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	params := map[string]interface{}{
 		"Password": "top-secret",
 		"profile": map[string]interface{}{
@@ -145,7 +174,7 @@ func TestAdminLogAddSanitizesNestedParamsAndTruncates(t *testing.T) {
 
 func TestAdminLogAddNilParamsSerializesObject(t *testing.T) {
 	db := newAdminLogTestDB(t, "admin-log-nil-params")
-	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	m := NewAdminLogModel(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("POST", "/admin/auth.Admin/add", nil)
 	m.Add(ctx, nil)

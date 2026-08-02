@@ -12,6 +12,7 @@ import (
 	adminModel "go-build-admin/app/admin/model/auth"
 	"go-build-admin/app/common/member"
 	commonModel "go-build-admin/app/common/model"
+	"go-build-admin/app/pkg/header"
 	"go-build-admin/app/pkg/token"
 	"go-build-admin/conf"
 	"go-build-admin/utils"
@@ -25,8 +26,9 @@ type loginSecurityTokenDriver struct {
 }
 
 type loginSecurityAdminRow struct {
-	ID     int32  `gorm:"column:id;primaryKey"`
-	Status string `gorm:"column:status"`
+	ID       int32  `gorm:"column:id;primaryKey"`
+	Username string `gorm:"column:username"`
+	Status   string `gorm:"column:status"`
 }
 
 func (loginSecurityAdminRow) TableName() string { return "admins" }
@@ -64,7 +66,7 @@ func TestLoginRejectsUserToken(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:admin-login-security-domain?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
-	require.NoError(t, db.Create(&loginSecurityAdminRow{ID: 1, Status: "enable"}).Error)
+	require.NoError(t, db.Create(&loginSecurityAdminRow{ID: 1, Username: "enabled-admin", Status: "enable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "user", UserID: 1}}
 	authM := adminModel.NewAuthModel(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(NewLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
@@ -82,7 +84,7 @@ func TestLoginRejectsDisabledAdminToken(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:admin-login-security-status?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
-	require.NoError(t, db.Create(&loginSecurityAdminRow{ID: 1, Status: "disable"}).Error)
+	require.NoError(t, db.Create(&loginSecurityAdminRow{ID: 1, Username: "disabled-admin", Status: "disable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}
 	authM := adminModel.NewAuthModel(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(NewLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
@@ -94,6 +96,27 @@ func TestLoginRejectsDisabledAdminToken(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, http.StatusUnauthorized, loginSecurityResponseCode(t, recorder))
+}
+
+func TestLoginStoresAuthenticatedAdminUsername(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:admin-login-security-username?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
+	require.NoError(t, db.Create(&loginSecurityAdminRow{ID: 1, Username: "enabled-admin", Status: "enable"}).Error)
+	driver := loginSecurityTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}
+	authM := adminModel.NewAuthModel(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
+	router := newLoginSecurityRouter(NewLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
+	router.GET("/check", func(c *gin.Context) {
+		c.String(http.StatusOK, header.GetAdminAuth(c).Username)
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/check", nil)
+	request.Header.Set("batoken", "admin-token")
+	router.ServeHTTP(recorder, request)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "enabled-admin", recorder.Body.String())
 }
 
 func TestUserLoginRejectsAdminToken(t *testing.T) {

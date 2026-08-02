@@ -9,6 +9,7 @@ type AdminAuth struct {
 	Language     string `form:"language"`
 	IsLogin      bool   `form:"is_login"`
 	Id           int32  `form:"id"`
+	Username     string `form:"username"`
 	Token        string `form:"token"`
 	IsSuperAdmin bool   `form:"is_super_admin"`
 }

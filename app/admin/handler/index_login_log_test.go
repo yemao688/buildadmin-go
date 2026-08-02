@@ -97,7 +97,7 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *middleware
 
 	tokenHelper := token.NewTokenHelper(config, nil, db, nil)
 	authModel := adminauth.NewAuthModel(db, tokenHelper, config)
-	logModel := adminauth.NewAdminLogModel(db, config)
+	logModel := adminauth.NewAdminLogModel(db, config, authModel)
 	return db, NewIndexHandler(config, nil, authModel, nil, nil, nil), middleware.NewRecord(config, logModel)
 }
 

@@ -47,7 +47,8 @@ func (m *Login) Handler() gin.HandlerFunc {
 			abortLogin(c, err)
 			return
 		}
-		if !m.authM.IsEnabledAdmin(tokenData.UserID) {
+		username, enabled := m.authM.GetEnabledAdmin(tokenData.UserID)
+		if !enabled {
 			abortLogin(c, cErr.Unauthorized("Please login first"))
 			return
 		}
@@ -57,6 +58,7 @@ func (m *Login) Handler() gin.HandlerFunc {
 			Language:     language,
 			IsLogin:      true,
 			Id:           tokenData.UserID,
+			Username:     username,
 			Token:        tokenStr,
 			IsSuperAdmin: m.authM.IsSuperAdmin(tokenData.UserID),
 		}
