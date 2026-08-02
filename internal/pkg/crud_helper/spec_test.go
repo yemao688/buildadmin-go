@@ -310,7 +310,7 @@ func TestLoadSpecCompletenessOptions(t *testing.T) {
 			if opts.Table.GenerateRelativePath != tc.wantPath || opts.Table.DatabaseConnection != tc.wantDB || len(opts.Table.ColumnFields) != tc.wantColumns {
 				t.Fatalf("table=%+v", opts.Table)
 			}
-			if tc.wantPath != "" && (opts.Table.ModelFile != "internal/admin/model/"+tc.wantPath+".go" || opts.Table.ControllerFile != "internal/admin/handler/"+tc.wantPath+".go" || opts.Table.WebViewsDir != "web/src/views/backend/"+tc.wantPath) {
+			if tc.wantPath != "" && (opts.Table.ModelFile != "internal/model/"+tc.wantPath+".go" || opts.Table.ControllerFile != "internal/admin/handler/"+tc.wantPath+".go" || opts.Table.WebViewsDir != "web/src/views/backend/"+tc.wantPath) {
 				t.Fatalf("derived paths: %+v", opts.Table)
 			}
 		})

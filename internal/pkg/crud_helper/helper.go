@@ -8,6 +8,7 @@ import (
 	cErr "go-build-admin/internal/pkg/error"
 	"go-build-admin/internal/utils"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -28,25 +29,29 @@ func GenerateFile(table crudmodel.Table, fields []crudmodel.Field, getTableName 
 
 // prepareGenerationData resolves data-scope policy and initializes the model/handler
 // data structures used by both production generation and compile-only tests.
-func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
+func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, proveIndex func(string) (bool, error)) (ModelData, HandlerData, NameInfo, NameInfo, NameInfo, NameInfo, WebDir, WebDir, string, string, string, string, string, error) {
 	tableName := getTableName(table.Name, false)
 	fullTableName := getTableName(table.Name, true)
 	//主键
 	tablePk := getPk(fields)
 	//表注释
 	tableComment := getCommnet(table.Comment)
-	// 生成文件信息解析
-	module := "admin"
-	if table.IsCommonModel != 0 {
-		module = "common"
-	}
-	modelFile, err := ParseNameData(module, tableName, "model", table.ModelFile)
+	// 生成文件信息解析：实体/仓库/DTO 共享同一逻辑路径，实体扁平落在 internal/model。
+	entityFile, err := ParseEntityNameData(tableName, table.ModelFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+	repositoryFile, err := ParseRepositoryNameData(tableName, table.ModelFile)
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+	dtoFile, err := ParseDTONameData(tableName, table.ModelFile)
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
 	webViewsDir := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
@@ -60,17 +65,17 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		table.QuickSearchField = append(table.QuickSearchField, tablePk)
 	}
 
-	// 模型数据
+	// 模型数据（实体名派生自实体文件；仓库文件包名取自仓库路径）
 	modelData := ModelData{}
-	modelData.Namespace = modelFile.Namespace
+	modelData.Namespace = repositoryFile.Namespace
 	modelData.Name = tableName
-	modelData.ClassName = modelFile.LastName
-	modelData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	modelData.ClassName = entityFile.LastName
+	modelData.ModelVar = strings.ToLower(string(entityFile.LastName[0])) + entityFile.LastName[1:]
 	modelData.QuickSearchField = strings.Join(table.QuickSearchField, ",")
 	pkField := searchField(fields, tablePk)
 	modelData.PkGoType, err = primaryKeyGoType(pkField)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
 	modelData.Append = []string{}
@@ -83,16 +88,23 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	// 控制器数据
 	handlerData := HandlerData{}
 	handlerData.Namespace = handlerFile.Namespace
-	handlerData.ModelNamespace = modelData.Namespace
-	modelImportSegments := append([]string{"go-build-admin", "internal", module, "model"}, modelFile.Path...)
-	handlerData.ModelImportPath = strings.Join(modelImportSegments, "/")
+	handlerData.ModelNamespace = "model"
+	handlerData.ModelImportPath = "go-build-admin/internal/model"
 	handlerData.ClassName = handlerFile.LastName
 	handlerData.ModelName = modelData.ClassName
-	handlerData.ModelVar = strings.ToLower(string(modelFile.LastName[0])) + modelFile.LastName[1:]
+	handlerData.ModelVar = strings.ToLower(string(entityFile.LastName[0])) + entityFile.LastName[1:]
 	handlerData.RouteName = routeNameFromRelativePath(table.GenerateRelativePath, handlerData.ClassName)
 	handlerData.PkGoType = modelData.PkGoType
 	handlerData.PkJSONName = tablePk
 	handlerData.TableComment = tableComment
+
+	// 仓库与 DTO 导入引用：子包沿用 <dir>model / <dir>dto 约定别名。
+	handlerData.RepoImport = "go-build-admin/" + filepath.ToSlash(repositoryFile.RootFileName)
+	handlerData.RepoAlias = repositoryImportAlias(repositoryFile)
+	handlerData.RepoQualifier = handlerData.RepoAlias + "."
+	handlerData.DTOImport = "go-build-admin/" + filepath.ToSlash(dtoFile.RootFileName)
+	handlerData.DTOAlias = dtoImportAlias(dtoFile)
+	handlerData.DTOQualifier = handlerData.DTOAlias + "."
 
 	handlerData.Import = []string{}
 	handlerData.Attr = map[string]string{}
@@ -107,7 +119,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		ProveIndex:           proveIndex,
 	})
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	modelData.PkGoField = pkGoField(tablePk)
 	modelData.DataScopePolicy = ds.Policy
@@ -115,7 +127,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	if ds.OwnerColumn != "" {
 		ownerType, err := ownerGoType(searchField(fields, ds.OwnerColumn))
 		if err != nil {
-			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 		}
 		modelData.DataScopeOwnerGoType = ownerType
 	}
@@ -151,7 +163,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		}
 	}
 
-	return modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
+	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
 }
 
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
@@ -165,7 +177,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 		return WebDir{}, "", err
 	}
 	fullTableName := getTableName(table.Name, true)
-	modelData, handlerData, modelFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
+	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -306,17 +318,37 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 		return WebDir{}, "", err
 	}
 
-	// 写入模型代码
-	structContent, err := writeModelFile(db, tablePk, fullTableName, tableName, modelData, modelFile)
+	// 写入模型代码（实体 + 仓库 + DTO）
+	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile)
 	if err != nil {
 		return WebDir{}, "", err
 	}
 
 	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile, structContent); err != nil {
+	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile); err != nil {
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
+}
+
+// repositoryImportAlias 为 handler 中选择仓库包的别名：子包沿用迁移后的
+// <dir>model 约定（country → countrymodel），扁平根包直接用包名。
+func repositoryImportAlias(repositoryFile NameInfo) string {
+	root := filepath.ToSlash(repositoryFile.RootFileName)
+	if root == "internal/admin/repository" {
+		return "repository"
+	}
+	return path.Base(root) + "model"
+}
+
+// dtoImportAlias 为 handler 中选择 DTO 包的别名：子包为 <dir>dto（country →
+// countrydto），扁平根包直接用包名 dto。
+func dtoImportAlias(dtoFile NameInfo) string {
+	root := filepath.ToSlash(dtoFile.RootFileName)
+	if root == "internal/admin/dto" {
+		return "dto"
+	}
+	return path.Base(root) + "dto"
 }
 
 // pkGoField returns the Go field name used by generated GORM structs for the
@@ -509,6 +541,38 @@ func getCommnet(comment string) string {
 
 // 解析文件数据
 func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
+	return parseNameData(filepath.Join("internal", module, moduleType), tableName, moduleType, file, false, "")
+}
+
+// ParseEntityNameData 解析共享贫血实体记录的位置：实体一律扁平输出到
+// internal/model/<entity>.go，与业务路径无关；包名恒为 model。
+func ParseEntityNameData(tableName string, file string) (NameInfo, error) {
+	return parseNameData("internal/model", tableName, "model", file, true, "model")
+}
+
+// ParseRepositoryNameData 解析 admin 仓库产物位置（internal/admin/repository/<path>.go，
+// 类型 XxxRepository）。
+func ParseRepositoryNameData(tableName string, file string) (NameInfo, error) {
+	return parseNameData("internal/admin/repository", tableName, "repository", file, false, "")
+}
+
+// ParseDTONameData 解析 admin 请求 DTO 产物位置（internal/admin/dto/<path>.go，
+// 包名恒为 dto）。
+func ParseDTONameData(tableName string, file string) (NameInfo, error) {
+	return parseNameData("internal/admin/dto", tableName, "dto", file, false, "dto")
+}
+
+// artifactRootPrefixes 是 spec 中 modelFile 可能携带的产物根（含历史布局）。
+// 解析前先剥离，使旧布局 modelFile 仍能解析出新布局的实体名。
+var artifactRootPrefixes = []string{
+	"internal/admin/model",
+	"internal/common/model",
+	"internal/model",
+	"internal/admin/repository",
+	"internal/admin/dto",
+}
+
+func parseNameData(root string, tableName string, moduleType string, file string, flat bool, namespaceOverride string) (NameInfo, error) {
 	var pathArr []string
 	if file != "" {
 		if err := validateRelativePathInput(file); err != nil {
@@ -519,8 +583,14 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		if normalizeErr != nil {
 			return NameInfo{}, normalizeErr
 		}
+		for _, prefix := range artifactRootPrefixes {
+			if file == prefix || strings.HasPrefix(file, prefix+"/") {
+				file = strings.TrimPrefix(file, prefix+"/")
+				break
+			}
+		}
 
-		redundantDir := []string{"internal", module, moduleType}
+		redundantDir := strings.Split(root, "/")
 		pathArr = strings.Split(file, "/")
 		_, pathArr = TrimPrefix(redundantDir, pathArr)
 	} else {
@@ -544,15 +614,22 @@ func ParseNameData(module string, tableName string, moduleType string, file stri
 		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
 	}
 
-	namespace := moduleType
-	if len(pathArr) > 0 {
-		namespace = pathArr[len(pathArr)-1]
+	namespace := namespaceOverride
+	if namespace == "" {
+		namespace = moduleType
+		if len(pathArr) > 0 {
+			namespace = pathArr[len(pathArr)-1]
+		}
 	}
-	parseFile := filepath.Join(utils.RootPath(), "internal", module, moduleType, filepath.Join(pathArr...), originalLastName+".go")
-	if err := validateAbsolutePathUnderRoots(parseFile, filepath.Join("internal", module, moduleType)); err != nil {
+	dirs := pathArr
+	if flat {
+		dirs = nil
+	}
+	parseFile := filepath.Join(utils.RootPath(), filepath.FromSlash(root), filepath.Join(dirs...), originalLastName+".go")
+	if err := validateAbsolutePathUnderRoots(parseFile, root); err != nil {
 		return NameInfo{}, err
 	}
-	rootFileName := filepath.Join("internal", module, moduleType, filepath.Join(pathArr...))
+	rootFileName := filepath.ToSlash(filepath.Join(filepath.FromSlash(root), filepath.Join(dirs...)))
 
 	info := NameInfo{
 		LastName:         lastName,
@@ -1383,9 +1460,9 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 	rowField := generatedGoFieldName(relation.FieldName)
 	b.WriteString("func (s *")
 	b.WriteString(modelData.ClassName)
-	b.WriteString("Model) ")
+	b.WriteString("Repository) ")
 	b.WriteString(methodName)
-	b.WriteString("(ctx *gin.Context, rows *[]")
+	b.WriteString("(ctx *gin.Context, rows *[]model.")
 	b.WriteString(modelData.ClassName)
 	b.WriteString(") error {\n")
 	b.WriteString("\tif len(*rows) == 0 { return nil }\n")
@@ -1401,7 +1478,7 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 	b.WriteString(rowField)
 	b.WriteString("); if _, ok := seen[key]; ok { continue }; seen[key] = struct{}{}; keys = append(keys, key) }\n")
 	b.WriteString("\tif len(keys) == 0 { return nil }\n")
-	b.WriteString("\trelated := make([]")
+	b.WriteString("\trelated := make([]model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString(", 0)\n")
 	b.WriteString("\tif err := s.DBFor(ctx).Table(s.config.Database.Prefix + ")
@@ -1418,7 +1495,7 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 	b.WriteString(", keys).Find(&related).Error; err != nil { return err }\n")
 	b.WriteString("\tbyKey := make(map[")
 	b.WriteString(relation.RemotePKType)
-	b.WriteString("]*")
+	b.WriteString("]*model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString(", len(related))\n")
 	b.WriteString("\tfor i := range related { byKey[related[i].")
@@ -1441,9 +1518,9 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	rowField := generatedGoFieldName(relation.FieldName)
 	b.WriteString("func (s *")
 	b.WriteString(modelData.ClassName)
-	b.WriteString("Model) ")
+	b.WriteString("Repository) ")
 	b.WriteString(methodName)
-	b.WriteString("(ctx *gin.Context, rows *[]")
+	b.WriteString("(ctx *gin.Context, rows *[]model.")
 	b.WriteString(modelData.ClassName)
 	b.WriteString(") error {\n")
 	b.WriteString("\ttype relationRef struct { rowIndex int; valueIndex int; key ")
@@ -1478,7 +1555,7 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 		b.WriteString("(value), true\n")
 	}
 	b.WriteString("\t}\n")
-	b.WriteString("\tpayloads := make([]*")
+	b.WriteString("\tpayloads := make([]*model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString(", len(*rows))\n")
 	b.WriteString("\trefs := make([]relationRef, 0)\n")
@@ -1493,7 +1570,7 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString("\t\tif raw := string((*rows)[rowIndex].")
 	b.WriteString(rowField)
 	b.WriteString("); raw != \"\" { tokens = strings.Split(raw, \",\") }\n")
-	b.WriteString("\t\tpayloads[rowIndex] = &")
+	b.WriteString("\t\tpayloads[rowIndex] = &model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString("{\n")
 	for _, field := range relation.PayloadFields {
@@ -1509,7 +1586,7 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString("\tif len(keys) == 0 { for i := range *rows { (*rows)[i].")
 	b.WriteString(relation.RelationGoField)
 	b.WriteString(" = payloads[i] }; return nil }\n")
-	b.WriteString("\trelated := make([]")
+	b.WriteString("\trelated := make([]model.")
 	b.WriteString(relation.RowDTOName)
 	b.WriteString(", 0)\n")
 	b.WriteString("\tif err := s.DBFor(ctx).Table(s.config.Database.Prefix + ")
@@ -1526,7 +1603,7 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString(", keys).Find(&related).Error; err != nil { return err }\n")
 	b.WriteString("\tbyKey := make(map[")
 	b.WriteString(relation.RemotePKType)
-	b.WriteString("]*")
+	b.WriteString("]*model.")
 	b.WriteString(relation.RowDTOName)
 	b.WriteString(", len(related))\n")
 	b.WriteString("\tfor i := range related { byKey[related[i].")
@@ -1562,7 +1639,7 @@ func renderRelationLoaderAggregator(modelData ModelData) string {
 	var b strings.Builder
 	b.WriteString("func (s *")
 	b.WriteString(modelData.ClassName)
-	b.WriteString("Model) loadRelations(ctx *gin.Context, rows *[]")
+	b.WriteString("Repository) loadRelations(ctx *gin.Context, rows *[]model.")
 	b.WriteString(modelData.ClassName)
 	b.WriteString(") error {\n")
 	for _, relation := range modelData.Relations {

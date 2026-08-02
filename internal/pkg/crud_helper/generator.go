@@ -109,10 +109,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
-	modelFile, err := ParseNameData("admin", opts.Table.Name, "model", opts.Table.ModelFile)
-	if opts.Table.IsCommonModel != 0 {
-		modelFile, err = ParseNameData("common", opts.Table.Name, "model", opts.Table.ModelFile)
+	entityFile, err := ParseEntityNameData(opts.Table.Name, opts.Table.ModelFile)
+	if err != nil {
+		return nil, err
 	}
+	repositoryFile, err := ParseRepositoryNameData(opts.Table.Name, opts.Table.ModelFile)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +121,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
-	manifest = appendCustomSkeletonManifest(manifest, modelFile, handlerFile)
+	manifest = appendCustomSkeletonManifest(manifest, customSkeletonTargets(entityFile, repositoryFile, handlerFile))
 	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
 	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
@@ -354,11 +355,11 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	module := "admin"
-	if log.Table.IsCommonModel != 0 {
-		module = "common"
+	entityFile, err := ParseEntityNameData(log.Table.Name, log.Table.ModelFile)
+	if err != nil {
+		return err
 	}
-	modelFile, err := ParseNameData(module, log.Table.Name, "model", log.Table.ModelFile)
+	repositoryFile, err := ParseRepositoryNameData(log.Table.Name, log.Table.ModelFile)
 	if err != nil {
 		return err
 	}
@@ -370,12 +371,28 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	manifest = appendCustomSkeletonManifest(manifest, modelFile, handlerFile)
+	// 历史 manifest（旧布局 internal/admin/model、internal/common/model）按
+	// 旧单模型文件语义处理；新布局按实体/仓库拆分语义处理。
+	legacyModelLayout := isLegacyModelManifest(manifest)
+	var legacyModelFile NameInfo
+	if legacyModelLayout {
+		module := "admin"
+		if log.Table.IsCommonModel != 0 {
+			module = "common"
+		}
+		legacyModelFile, err = ParseNameData(module, log.Table.Name, "model", log.Table.ModelFile)
+		if err != nil {
+			return err
+		}
+		manifest = appendCustomSkeletonManifest(manifest, legacyCustomSkeletonTargets(legacyModelFile, handlerFile))
+	} else {
+		manifest = appendCustomSkeletonManifest(manifest, customSkeletonTargets(entityFile, repositoryFile, handlerFile))
+	}
 	manifest, err = prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
 	}
-	generatedPaths, preservedCustomPaths, err := splitCustomSkeletonManifest(manifest.Generated, modelFile, handlerFile)
+	generatedPaths, preservedCustomPaths, err := splitCustomSkeletonManifest(manifest.Generated)
 	if err != nil {
 		return err
 	}
@@ -428,10 +445,16 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := RemoveProvider(handlerFile.RootFileName, handlerFile.LastName+"Registrar"); err != nil {
 		return fail("remove handler registrar provider", err)
 	}
-	if err := RemoveProvider(modelFile.RootFileName, modelFile.LastName+"Model"); err != nil {
-		return fail("remove model provider", err)
+	if legacyModelLayout {
+		if err := RemoveProvider(legacyModelFile.RootFileName, legacyModelFile.LastName+"Model"); err != nil {
+			return fail("remove model provider", err)
+		}
+	} else {
+		if err := RemoveProvider(repositoryFile.RootFileName, repositoryFile.LastName+"Repository"); err != nil {
+			return fail("remove repository provider", err)
+		}
 	}
-	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest); err != nil {
+	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest, legacyModelLayout); err != nil {
 		return fail("remove associated model providers", err)
 	}
 	if err := RemoveRegistrarProvider(handlerFile.LastName, handlerFile.RootFileName); err != nil {
@@ -440,12 +463,22 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := RemoveWireProviderSet(handlerFile.RootFileName); err != nil {
 		return fail("remove handler wire provider set", err)
 	}
-	if err := RemoveWireProviderSet(modelFile.RootFileName); err != nil {
-		return fail("remove model wire provider set", err)
+	if legacyModelLayout {
+		if err := RemoveWireProviderSet(legacyModelFile.RootFileName); err != nil {
+			return fail("remove model wire provider set", err)
+		}
+	} else {
+		if err := RemoveWireProviderSet(repositoryFile.RootFileName); err != nil {
+			return fail("remove repository wire provider set", err)
+		}
+	}
+	modelProviderPath := filepath.Join(utils.RootPath(), repositoryFile.RootFileName, "provider.go")
+	if legacyModelLayout {
+		modelProviderPath = filepath.Join(utils.RootPath(), legacyModelFile.RootFileName, "provider.go")
 	}
 	if err := parseDeleteGoFiles(
 		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
-		filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
+		modelProviderPath,
 		filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"),
 		filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
 	); err != nil {
@@ -465,7 +498,15 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	}
 	// 删除后清理：子包空 provider 脚手架与为空的目录链（视图、语言、Go 包目录）
 	pruneEmptyProviderScaffold(handlerFile.RootFileName, "internal/admin/handler")
-	pruneEmptyProviderScaffold(modelFile.RootFileName, filepath.Join("internal", module, "model"))
+	if legacyModelLayout {
+		module := "admin"
+		if log.Table.IsCommonModel != 0 {
+			module = "common"
+		}
+		pruneEmptyProviderScaffold(legacyModelFile.RootFileName, filepath.Join("internal", module, "model"))
+	} else {
+		pruneEmptyProviderScaffold(repositoryFile.RootFileName, "internal/admin/repository")
+	}
 	viewsDir := ParseWebDirNameData(log.Table.Name, "views", log.Table.WebViewsDir)
 	langDir := ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)
 	pruneEmptyDirsUpTo(filepath.Join(utils.RootPath(), viewsDir.Views), filepath.Join(utils.RootPath(), "web", "src", "views", "backend"))
@@ -571,6 +612,8 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 	generated, err := normalize(manifest.Generated, func(path string) error {
 		return ValidateGeneratedAbsolutePath(path,
 			"web/src/lang", "web/src/views",
+			"internal/model", "internal/admin/repository", "internal/admin/dto",
+			// 历史布局根保留用于旧 manifest 删除兼容。
 			"internal/admin/model", "internal/common/model", "internal/admin/handler",
 		)
 	})
@@ -599,7 +642,9 @@ func validateSharedManifestPath(path string) error {
 		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/app/wire.go, or cmd/app/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
-		"internal/admin/model", "internal/common/model", "internal/admin/handler",
+		"internal/admin/repository", "internal/admin/handler",
+		// 历史布局根保留用于旧 manifest 删除兼容。
+		"internal/admin/model", "internal/common/model",
 	)
 }
 
@@ -633,28 +678,75 @@ func parseDeleteGoFiles(paths ...string) error {
 	return nil
 }
 
-func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManifest) error {
+// isLegacyModelManifest 判断 manifest 是否属于旧布局（模型文件位于
+// internal/admin/model 或 internal/common/model）。新布局的实体位于
+// internal/model、仓库位于 internal/admin/repository。
+func isLegacyModelManifest(manifest FileManifest) bool {
+	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
+		clean := filepath.Clean(filepath.FromSlash(path))
+		root := filepath.Clean(utils.RootPath())
+		if !filepath.IsAbs(clean) {
+			clean = filepath.Join(root, clean)
+		}
+		for _, parent := range []string{
+			filepath.Join(root, "internal", "admin", "model"),
+			filepath.Join(root, "internal", "common", "model"),
+		} {
+			if clean == parent || strings.HasPrefix(clean, parent+string(filepath.Separator)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManifest, legacyModelLayout bool) error {
 	seen := map[string]bool{}
 	for _, field := range fields {
 		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
 			continue
 		}
-		join, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		if legacyModelLayout {
+			legacyJoin, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+			if err != nil {
+				return err
+			}
+			// 仅当关联模型文件本身是本次 CRUD 生成的产物时才移除其 provider
+			// 条目;指向既有核心模型(如 ba_admin 的 admin.go)的关联只复用
+			// 共享 provider.go,删除会误伤核心模型的 provider 注册。
+			if !containsPath(manifest.Generated, legacyJoin.ParseFile) {
+				continue
+			}
+			provider := filepath.Join(utils.RootPath(), legacyJoin.RootFileName, "provider.go")
+			if !containsPath(manifest.Shared, provider) || seen[provider] {
+				continue
+			}
+			seen[provider] = true
+			if err := RemoveProvider(legacyJoin.RootFileName, legacyJoin.LastName+"Model"); err != nil {
+				return err
+			}
+			continue
+		}
+		join, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
 		if err != nil {
 			return err
 		}
-		// 仅当关联模型文件本身是本次 CRUD 生成的产物时才移除其 provider
+		// 仅当关联实体本身是本次 CRUD 生成的产物时才移除其 provider
 		// 条目;指向既有核心模型(如 ba_admin 的 admin.go)的关联只复用
 		// 共享 provider.go,删除会误伤核心模型的 provider 注册。
 		if !containsPath(manifest.Generated, join.ParseFile) {
 			continue
 		}
-		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
+		joinRepo, err := ParseRepositoryNameData(field.Form.RemoteTable, field.Form.RemoteModel)
+		if err != nil {
+			return err
+		}
+		provider := filepath.Join(utils.RootPath(), joinRepo.RootFileName, "provider.go")
 		if !containsPath(manifest.Shared, provider) || seen[provider] {
 			continue
 		}
 		seen[provider] = true
-		if err := RemoveProvider(join.RootFileName, join.LastName+"Model"); err != nil {
+		if err := RemoveProvider(joinRepo.RootFileName, joinRepo.LastName+"Repository"); err != nil {
 			return err
 		}
 	}
@@ -709,8 +801,8 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 	return true
 }
 
-func appendCustomSkeletonManifest(manifest FileManifest, modelFile, handlerFile NameInfo) FileManifest {
-	for _, target := range customSkeletonTargets(modelFile, handlerFile) {
+func appendCustomSkeletonManifest(manifest FileManifest, targets []customSkeletonTarget) FileManifest {
+	for _, target := range targets {
 		if !containsPath(manifest.Generated, target.path) {
 			manifest.Generated = append(manifest.Generated, target.path)
 		}
@@ -718,11 +810,17 @@ func appendCustomSkeletonManifest(manifest FileManifest, modelFile, handlerFile 
 	return manifest
 }
 
-func splitCustomSkeletonManifest(paths []string, modelFile, handlerFile NameInfo) ([]string, []string, error) {
-	targets := customSkeletonTargets(modelFile, handlerFile)
-	byPath := make(map[string]customSkeletonTarget, len(targets))
-	for _, target := range targets {
-		byPath[target.path] = target
+func splitCustomSkeletonManifest(paths []string) ([]string, []string, error) {
+	byPath := make(map[string]customSkeletonTarget)
+	for _, path := range paths {
+		if !strings.HasSuffix(filepath.Base(path), "_custom.go") {
+			continue
+		}
+		clean := filepath.Clean(path)
+		if _, ok := byPath[clean]; ok {
+			continue
+		}
+		byPath[clean] = customSkeletonTarget{path: clean, content: customSkeletonContentFromPath(clean)}
 	}
 
 	generated := make([]string, 0, len(paths))
@@ -744,6 +842,20 @@ func splitCustomSkeletonManifest(paths []string, modelFile, handlerFile NameInfo
 		}
 	}
 	return generated, preserved, nil
+}
+
+// customSkeletonContentFromPath 由 _custom.go 路径反推其未修改时的期望内容
+// （包名 = 所在目录名，类名 = 文件名，handler 目录使用 h 接收者）。
+func customSkeletonContentFromPath(path string) string {
+	clean := filepath.Clean(path)
+	base := filepath.Base(clean)
+	className := utils.SnakeToCamel(strings.TrimSuffix(base, "_custom.go"), true)
+	dir := filepath.Dir(clean)
+	kind := "model"
+	if strings.Contains(dir, filepath.Join("internal", "admin", "handler")) {
+		kind = "handler"
+	}
+	return customSkeletonContent(filepath.Base(dir), className, kind)
 }
 
 func customSkeletonWarning(paths []string) string {
@@ -837,9 +949,12 @@ func isCustomSkeletonPath(path string) bool {
 		clean = filepath.Join(root, clean)
 	}
 	for _, parent := range []string{
+		filepath.Join(root, "internal", "model"),
+		filepath.Join(root, "internal", "admin", "repository"),
+		filepath.Join(root, "internal", "admin", "handler"),
+		// 历史布局根仅保留用于旧 manifest 删除侧的识别。
 		filepath.Join(root, "internal", "admin", "model"),
 		filepath.Join(root, "internal", "common", "model"),
-		filepath.Join(root, "internal", "admin", "handler"),
 	} {
 		if clean == parent || strings.HasPrefix(clean, parent+string(filepath.Separator)) {
 			return true

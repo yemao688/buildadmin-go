@@ -3,6 +3,7 @@ package crud_helper
 import (
 	"encoding/json"
 	crudmodel "go-build-admin/internal/admin/model/crud"
+	"go-build-admin/internal/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -235,13 +236,13 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 
 	assert.Contains(t, out, "Enforcer data_scope.Enforcer")
 	assert.NotContains(t, out, "func (s *DemoModel) scopedDB")
-	assert.Contains(t, out, "func (s *DemoModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
+	assert.Contains(t, out, "func (s *DemoRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}")
 	assert.Contains(t, out, "demo.AdminID = int32(actor.AdminID)")
 	assert.Contains(t, out, `Where("id = ?", demo.ID)`)
 	assert.Contains(t, out, "RowsAffected")
 	assert.Contains(t, out, "case 0:")
-	assert.Contains(t, out, `tx.Table(s.TableName).Model(&Demo{}).Where("id = ?", demo.ID).Count(&visible).Error`)
+	assert.Contains(t, out, `tx.Table(s.TableName).Model(&model.Demo{}).Where("id = ?", demo.ID).Count(&visible).Error`)
 	assert.Contains(t, out, `return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)`)
 	assert.NotContains(t, out, "LimitAdminIds")
 	assert.NotContains(t, out, ".Save(&demo)")
@@ -266,13 +267,13 @@ func TestModelTemplate_ReadExtraOwners(t *testing.T) {
 	})
 
 	assert.Contains(t, out, `ReadExtraOwners: []string{"seller_id", "hotel_id"}`)
-	assert.Contains(t, out, "func (s *DemoModel) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
+	assert.Contains(t, out, "func (s *DemoRepository) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)")
 	assert.Contains(t, out, "db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
 	assert.Contains(t, out, "countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
 	assert.Contains(t, out, "findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
 
-	editStart := strings.Index(out, "func (s *DemoModel) Edit")
+	editStart := strings.Index(out, "func (s *DemoRepository) Edit")
 	require.GreaterOrEqual(t, editStart, 0)
 	assert.Contains(t, out[editStart:], "tx = s.scopeDB(ctx, tx)")
 }
@@ -290,13 +291,13 @@ func TestModelTemplate_EditNoOpUsesGeneratedPrimaryKeyAndScopedDB(t *testing.T) 
 		EditableColumnsGo: `"name"`,
 	})
 
-	editStart := strings.Index(out, "func (s *OrderItemModel) Edit")
+	editStart := strings.Index(out, "func (s *OrderItemRepository) Edit")
 	if editStart < 0 {
 		t.Fatal("generated Edit method is missing")
 	}
 	edit := out[editStart:]
 	assert.Contains(t, edit, "tx = s.scopeDB(ctx, tx)")
-	assert.Contains(t, edit, `tx.Table(s.TableName).Model(&OrderItem{}).Where("order_id = ?", orderItem.OrderId).Count(&visible).Error`)
+	assert.Contains(t, edit, `tx.Table(s.TableName).Model(&model.OrderItem{}).Where("order_id = ?", orderItem.OrderId).Count(&visible).Error`)
 	assert.NotContains(t, edit, `Where("id = ?", orderItem.ID)`)
 }
 
@@ -313,8 +314,8 @@ func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {
 		EditableColumnsGo: `"name"`,
 	})
 
-	assert.Contains(t, out, `TableName:        config.Database.Prefix + "order_item"`)
-	assert.NotContains(t, out, `config.Database.Prefix + "orderItem"`)
+	assert.Contains(t, out, `config.Database.Prefix+"order_item"`)
+	assert.NotContains(t, out, `"orderItem"`)
 }
 
 func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
@@ -332,7 +333,7 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "order_id"
 	className := modelData.ClassName
@@ -344,12 +345,12 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 	)
 	modelCode, err := renderModel(modelData)
 	require.NoError(t, err)
-	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	handlerCode, err := renderHandler(handlerData)
 	require.NoError(t, err)
 	assert.Contains(t, modelCode, "GetOne(ctx *gin.Context, id int64)")
 	assert.Contains(t, modelCode, `Where("order_id=?", id)`)
 	assert.Contains(t, modelCode, "normalize"+className+"IDs(ids interface{}) ([]int64, error)")
-	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
+	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp))
 }
 
 func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
@@ -364,7 +365,7 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "id"
 	modelData.StructTemp = compileDemoStruct(modelData.ClassName, "", "", "")
@@ -372,9 +373,9 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, modelCode, `Select("name", "update_time")`)
 	assert.NotContains(t, modelCode, ".Select()")
-	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	handlerCode, err := renderHandler(handlerData)
 	require.NoError(t, err)
-	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode))
+	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode, modelData.StructTemp))
 }
 
 func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
@@ -390,7 +391,7 @@ func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
 		}
 		return name
 	}
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, nil, getTableName, proveAll)
 	require.NoError(t, err)
 	assert.Equal(t, "int64", modelData.DataScopeOwnerGoType)
 	modelData.Pk = "id"
@@ -398,9 +399,9 @@ func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
 	modelCode, err := renderModel(modelData)
 	require.NoError(t, err)
 	assert.Contains(t, modelCode, "AdminID = int64(actor.AdminID)")
-	handlerCode, err := renderHandler(handlerData, modelData.StructTemp)
+	handlerCode, err := renderHandler(handlerData)
 	require.NoError(t, err)
-	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode))
+	require.NoError(t, compileDataScopeFixture(t, modelData.ClassName, modelCode, handlerCode, modelData.StructTemp))
 }
 
 func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
@@ -438,11 +439,10 @@ func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "assignOnCreate=true")
 }
 
-func TestPrepareGenerationData_CommonModelImportPath(t *testing.T) {
+func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 	table := crudmodel.Table{
 		Name:           "order_item",
-		IsCommonModel:  1,
-		ModelFile:      "internal/common/model/OrderItem.go",
+		ModelFile:      "internal/common/model/OrderItem.go", // 历史前缀仍可解析出新布局实体名
 		ControllerFile: "internal/admin/handler/OrderItem.go",
 	}
 	fields := []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}}
@@ -453,9 +453,13 @@ func TestPrepareGenerationData_CommonModelImportPath(t *testing.T) {
 		return name
 	}
 
-	_, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
+	_, handlerData, entityFile, repositoryFile, dtoFile, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, &data_scope.Config{Mode: data_scope.ModeNone}, getTableName, proveAll)
 	require.NoError(t, err)
-	assert.Equal(t, "go-build-admin/internal/common/model", handlerData.ModelImportPath)
+	assert.Equal(t, "go-build-admin/internal/model", handlerData.ModelImportPath)
+	assert.Equal(t, "OrderItem", entityFile.LastName)
+	assert.Equal(t, filepath.Join(utils.RootPath(), "internal", "model", "OrderItem.go"), entityFile.ParseFile)
+	assert.Equal(t, "internal/admin/repository", repositoryFile.RootFileName)
+	assert.Equal(t, "internal/admin/dto", dtoFile.RootFileName)
 }
 
 func TestModelTemplate_DataScopeNone(t *testing.T) {
@@ -616,7 +620,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 				}
 				return name
 			}
-			modelData, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
+			modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
 			require.NoError(t, err)
 			assert.NotNil(t, modelData.EffectiveFormFields)
 			ownerInEffective := slices.Contains(modelData.EffectiveFormFields, tc.owner)
@@ -692,7 +696,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 				return prefix + strings.TrimPrefix(name, prefix)
 			}
 
-			modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
+			modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, tc.cfg, getTableName, proveAll)
 			require.NoError(t, err)
 
 			assert.Equal(t, tc.ownerCol, modelData.DataScopePolicy.OwnerColumn)
@@ -717,7 +721,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			handlerCode, err := renderHandler(handlerData, structContent)
+			handlerCode, err := renderHandler(handlerData)
 			require.NoError(t, err)
 
 			assert.NotContains(t, modelCode, "LimitAdminIds")
@@ -731,14 +735,14 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 				assert.NotContains(t, modelData.EditableColumns, tc.ownerCol)
 			}
 			if tc.cfg == nil || tc.cfg.Mode != data_scope.ModeNone {
-				addIndex := strings.Index(modelCode, "func (s *"+className+"Model) Add(")
+				addIndex := strings.Index(modelCode, "func (s *"+className+"Repository) Add(")
 				actorIndex := strings.Index(modelCode[addIndex:], "Enforcer.Actor(ctx)")
 				transactionIndex := strings.Index(modelCode[addIndex:], "s.Transaction(ctx")
 				assert.GreaterOrEqual(t, actorIndex, 0)
 				assert.Greater(t, transactionIndex, actorIndex, "actor must be validated before Transaction")
 			}
 
-			if err := compileDataScopeFixture(t, className, modelCode, handlerCode); err != nil {
+			if err := compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp); err != nil {
 				debug := "/tmp/crud-debug-" + strings.ToLower(className)
 				_ = os.MkdirAll(debug, 0755)
 				_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0644)
@@ -818,7 +822,7 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode string) error {
+func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode, structContent string) error {
 	t.Helper()
 	root := repoRoot(t)
 	tmp := t.TempDir()
@@ -855,13 +859,19 @@ type Database struct {
 	Prefix string
 }
 `,
-		"internal/admin/model/base.go": `package model
+		"internal/pkg/persistence/base.go": `package persistence
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
+
 	"gorm.io/gorm"
 )
+
+type TableInfo struct {
+	TableName        string
+	Key              string
+	QuickSearchField string
+}
 
 type BaseModel struct {
 	TableName        string
@@ -870,13 +880,34 @@ type BaseModel struct {
 	sqlDB            *gorm.DB
 }
 
-func (b *BaseModel) TableInfo() map[string]string { return map[string]string{} }
+func NewBaseModel(tableName, key, quickSearchField string, sqlDB *gorm.DB) BaseModel {
+	return BaseModel{TableName: tableName, Key: key, QuickSearchField: quickSearchField, sqlDB: sqlDB}
+}
+
 func (b *BaseModel) DBFor(context.Context) *gorm.DB { return b.sqlDB }
 func (b *BaseModel) Transaction(_ context.Context, fn func(*gorm.DB) error) error { return b.sqlDB.Transaction(fn) }
+func (b *BaseModel) TableInfo() TableInfo {
+	return TableInfo{TableName: b.TableName, Key: b.Key, QuickSearchField: b.QuickSearchField}
+}
+`,
+		"internal/admin/repository/query_builder.go": `package repository
 
-func QueryBuilder(ctx *gin.Context, tableInfo map[string]string, where map[string]interface{}) (string, []interface{}, string, int, int, error) {
+import (
+	"go-build-admin/internal/pkg/persistence"
+	"github.com/gin-gonic/gin"
+)
+
+type TableInfo = persistence.TableInfo
+
+func QueryBuilder(ctx *gin.Context, table TableInfo, where []TableInfo) (string, []interface{}, string, int, int, error) {
 	return "", nil, "", 0, 0, nil
 }
+`,
+		"internal/admin/repository/provider.go": `package repository
+
+import "github.com/google/wire"
+
+var ProviderSet = wire.NewSet()
 `,
 		"internal/admin/handler/base.go": `package handler
 
@@ -927,12 +958,44 @@ func GetError(v interface{}, err error) error { return err }
 		}
 	}
 
-	modelPath := filepath.Join(tmp, "internal", "admin", "model", strings.ToLower(className)+"_gen.go")
+	entityCode, err := renderEntity(ModelData{
+		Namespace:  "model",
+		ClassName:  className,
+		StructTemp: structContent,
+		ModelVar:   lowerFirst(className),
+		PkGoType:   "int32",
+		PkGoField:  "ID",
+		Pk:         "id",
+	})
+	if err != nil {
+		return err
+	}
+	entityDir := filepath.Join(tmp, "internal", "model")
+	if err := os.MkdirAll(entityDir, 0755); err != nil {
+		return err
+	}
+	entityPath := filepath.Join(entityDir, strings.ToLower(className)+".go")
+	if err := os.WriteFile(entityPath, []byte(entityCode), 0644); err != nil {
+		return err
+	}
+	modelPath := filepath.Join(tmp, "internal", "admin", "repository", strings.ToLower(className)+"_gen.go")
 	if err := os.WriteFile(modelPath, []byte(modelCode), 0644); err != nil {
 		return err
 	}
 	handlerPath := filepath.Join(tmp, "internal", "admin", "handler", strings.ToLower(className)+"_handler.go")
 	if err := os.WriteFile(handlerPath, []byte(handlerCode), 0644); err != nil {
+		return err
+	}
+	dtoDir := filepath.Join(tmp, "internal", "admin", "dto")
+	if err := os.MkdirAll(dtoDir, 0755); err != nil {
+		return err
+	}
+	dtoPath := filepath.Join(dtoDir, strings.ToLower(className)+".go")
+	dtoCode, err := renderDTO("type " + className + "Param struct {\n\tName string `json:\"name\"`\n}\n")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(dtoPath, []byte(dtoCode), 0644); err != nil {
 		return err
 	}
 

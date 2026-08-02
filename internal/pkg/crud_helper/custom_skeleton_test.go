@@ -9,25 +9,37 @@ import (
 
 func TestCustomSkeletonFirstGenerationWritesModelAndHandler(t *testing.T) {
 	root := t.TempDir()
-	modelFile := NameInfo{
-		ParseFile: filepath.Join(root, "model", "banner.go"),
+	entityFile := NameInfo{
+		ParseFile: filepath.Join(root, "internal", "model", "banner.go"),
 		Namespace: "model",
 		LastName:  "Banner",
 	}
+	repositoryFile := NameInfo{
+		ParseFile: filepath.Join(root, "internal", "admin", "repository", "banner.go"),
+		Namespace: "repository",
+		LastName:  "Banner",
+	}
 	handlerFile := NameInfo{
-		ParseFile: filepath.Join(root, "handler", "banner.go"),
+		ParseFile: filepath.Join(root, "internal", "admin", "handler", "banner.go"),
 		Namespace: "handler",
 		LastName:  "Banner",
 	}
 
-	if err := writeCustomSkeleton(modelFile, "model"); err != nil {
+	if err := writeCustomSkeleton(entityFile, "model"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeCustomSkeleton(repositoryFile, "model"); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeCustomSkeleton(handlerFile, "handler"); err != nil {
 		t.Fatal(err)
 	}
 
-	modelContent, err := os.ReadFile(customSkeletonPath(modelFile))
+	modelContent, err := os.ReadFile(customSkeletonPath(entityFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repositoryContent, err := os.ReadFile(customSkeletonPath(repositoryFile))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +49,9 @@ func TestCustomSkeletonFirstGenerationWritesModelAndHandler(t *testing.T) {
 	}
 	if string(modelContent) != customSkeletonContent("model", "Banner", "model") {
 		t.Fatalf("model skeleton differs from template:\n%s", modelContent)
+	}
+	if string(repositoryContent) != customSkeletonContent("repository", "Banner", "model") {
+		t.Fatalf("repository skeleton differs from template:\n%s", repositoryContent)
 	}
 	if string(handlerContent) != customSkeletonContent("handler", "Banner", "handler") {
 		t.Fatalf("handler skeleton differs from template:\n%s", handlerContent)
@@ -75,13 +90,13 @@ func TestCustomSkeletonSecondGenerationPreservesModifiedContent(t *testing.T) {
 
 func TestCustomSkeletonDeleteRemovesUnmodifiedFiles(t *testing.T) {
 	root := t.TempDir()
-	modelFile := NameInfo{ParseFile: filepath.Join(root, "model", "banner.go"), Namespace: "model", LastName: "Banner"}
-	handlerFile := NameInfo{ParseFile: filepath.Join(root, "handler", "banner.go"), Namespace: "handler", LastName: "Banner"}
+	entityFile := NameInfo{ParseFile: filepath.Join(root, "internal", "model", "banner.go"), Namespace: "model", LastName: "Banner"}
+	handlerFile := NameInfo{ParseFile: filepath.Join(root, "internal", "admin", "handler", "banner.go"), Namespace: "handler", LastName: "Banner"}
 	for _, file := range []struct {
 		info NameInfo
 		kind string
 	}{
-		{modelFile, "model"},
+		{entityFile, "model"},
 		{handlerFile, "handler"},
 	} {
 		if err := writeCustomSkeleton(file.info, file.kind); err != nil {
@@ -89,7 +104,7 @@ func TestCustomSkeletonDeleteRemovesUnmodifiedFiles(t *testing.T) {
 		}
 	}
 
-	paths, preserved, err := splitCustomSkeletonManifest([]string{customSkeletonPath(modelFile), customSkeletonPath(handlerFile)}, modelFile, handlerFile)
+	paths, preserved, err := splitCustomSkeletonManifest([]string{customSkeletonPath(entityFile), customSkeletonPath(handlerFile)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +116,7 @@ func TestCustomSkeletonDeleteRemovesUnmodifiedFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, path := range []string{customSkeletonPath(modelFile), customSkeletonPath(handlerFile)} {
+	for _, path := range []string{customSkeletonPath(entityFile), customSkeletonPath(handlerFile)} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {
 			t.Fatalf("unmodified custom skeleton still exists at %s", path)
 		}
@@ -109,7 +124,7 @@ func TestCustomSkeletonDeleteRemovesUnmodifiedFiles(t *testing.T) {
 }
 
 func TestCustomSkeletonDeletePreservesModifiedFilesWithWarning(t *testing.T) {
-	file := NameInfo{ParseFile: filepath.Join(t.TempDir(), "banner.go"), Namespace: "model", LastName: "Banner"}
+	file := NameInfo{ParseFile: filepath.Join(t.TempDir(), "internal", "model", "banner.go"), Namespace: "model", LastName: "Banner"}
 	if err := writeCustomSkeleton(file, "model"); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +133,7 @@ func TestCustomSkeletonDeletePreservesModifiedFilesWithWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	generated, preserved, err := splitCustomSkeletonManifest([]string{path}, file, NameInfo{})
+	generated, preserved, err := splitCustomSkeletonManifest([]string{path})
 	if err != nil {
 		t.Fatal(err)
 	}

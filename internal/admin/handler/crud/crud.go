@@ -196,32 +196,22 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 		FailByErr(ctx, validate.GetError(params, err))
 		return
 	}
-	module := "admin"
-	if params.CommonModel != 0 {
-		module = "common"
-	}
-	modelFile, err := helper.ParseNameData(module, params.TableName, "model", "")
+	// 新语义：实体一律输出到共享记录层 internal/model（CommonModel 参数仅保留兼容）。
+	modelFile, err := helper.ParseEntityNameData(params.TableName, "")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	fmt.Printf("%+v", modelFile)
 	handlerFile, err := helper.ParseNameData("admin", params.TableName, "handler", "")
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	fmt.Printf("%+v", handlerFile)
 	webViewsDir := helper.ParseWebDirNameData(params.TableName, "views", "")
 	modelFileList := map[string]string{}
-	adminModelFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/admin/model"), []string{".go"})
-	for _, v := range adminModelFiles {
-		v = path.Join("internal/admin/model", v)
-		modelFileList[v] = v
-	}
-	commonModelFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/common/model"), []string{".go"})
-	for _, v := range commonModelFiles {
-		v = path.Join("internal/common/model", v)
+	entityFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/model"), []string{".go"})
+	for _, v := range entityFiles {
+		v = path.Join("internal/model", v)
 		modelFileList[v] = v
 	}
 

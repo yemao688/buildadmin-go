@@ -20,13 +20,15 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 	if err := normalizeTableConfiguration(&table); err != nil {
 		return FileManifest{}, err
 	}
-	module := "admin"
-	modelRoot := "internal/admin/model"
-	if table.IsCommonModel != 0 {
-		module = "common"
-		modelRoot = "internal/common/model"
+	entityFile, err := ParseEntityNameData(table.Name, table.ModelFile)
+	if err != nil {
+		return FileManifest{}, err
 	}
-	modelFile, err := ParseNameData(module, table.Name, "model", table.ModelFile)
+	repositoryFile, err := ParseRepositoryNameData(table.Name, table.ModelFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	dtoFile, err := ParseDTONameData(table.Name, table.ModelFile)
 	if err != nil {
 		return FileManifest{}, err
 	}
@@ -42,12 +44,14 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 			filepath.Join(utils.RootPath(), lang.LangFile("zh-cn")),
 			filepath.Join(utils.RootPath(), views.Views, "index.vue"),
 			filepath.Join(utils.RootPath(), views.Views, "popupForm.vue"),
-			modelFile.ParseFile,
+			entityFile.ParseFile,
+			repositoryFile.ParseFile,
+			dtoFile.ParseFile,
 			handlerFile.ParseFile,
 			registrarFilePath(handlerFile),
 		},
 		Shared: []string{
-			filepath.Join(utils.RootPath(), modelFile.RootFileName, "provider.go"),
+			filepath.Join(utils.RootPath(), repositoryFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"),
 			filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
@@ -55,12 +59,12 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 		},
 	}
 	for _, path := range manifest.Generated {
-		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", modelRoot, "internal/admin/handler"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler"); err != nil {
 			return FileManifest{}, err
 		}
 	}
 	for _, path := range manifest.Shared {
-		if err := ValidateGeneratedAbsolutePath(path, "internal", "internal/router", "cmd/app"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/router", "cmd/app"); err != nil {
 			return FileManifest{}, err
 		}
 	}
@@ -76,26 +80,26 @@ func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field)
 		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
 			continue
 		}
-		join, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		join, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
 		if err != nil {
 			return FileManifest{}, err
 		}
 		if !fileExists(join.ParseFile) {
 			manifest.Generated = append(manifest.Generated, join.ParseFile)
 		}
-		provider := filepath.Join(utils.RootPath(), join.RootFileName, "provider.go")
+		joinRepo, err := ParseRepositoryNameData(field.Form.RemoteTable, field.Form.RemoteModel)
+		if err != nil {
+			return FileManifest{}, err
+		}
+		provider := filepath.Join(utils.RootPath(), joinRepo.RootFileName, "provider.go")
 		manifest.Shared = append(manifest.Shared, provider)
 	}
 	manifest, err = normalizeFileManifest(manifest)
 	if err != nil {
 		return FileManifest{}, err
 	}
-	modelRoot := "internal/admin/model"
-	if table.IsCommonModel != 0 {
-		modelRoot = "internal/common/model"
-	}
 	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
-		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", modelRoot, "internal/admin/model", "internal/admin/handler", "internal/common/model", "internal", "internal/router", "cmd/app"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal", "internal/router", "cmd/app"); err != nil {
 			return FileManifest{}, err
 		}
 	}

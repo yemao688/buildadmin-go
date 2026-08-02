@@ -252,7 +252,7 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 		return prefix + tableName
 	}
 
-	modelData, handlerData, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	modelData, handlerData, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	require.NoError(t, err)
 	require.Equal(t, data_scope.ModeNone, modelData.DataScopePolicy.Mode)
 
@@ -263,9 +263,9 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 
 	modelCode, err := renderModel(modelData)
 	require.NoError(t, err)
-	handlerCode, err := renderHandler(handlerData, structContent)
+	handlerCode, err := renderHandler(handlerData)
 	require.NoError(t, err)
-	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode))
+	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp))
 }
 
 func TestModelQuickSearchFieldRendering(t *testing.T) {
@@ -281,8 +281,9 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 
 	content, err := renderRawModel(modelData)
 	require.NoError(t, err)
-	require.Contains(t, content, `QuickSearchField: "group,key"`)
-	require.NotContains(t, content, `QuickSearchField: "name"`)
+	require.Contains(t, content, `"group,key"`)
+	require.NotContains(t, content, `"group,key,name"`)
+	require.NotContains(t, content, `"name"`)
 
 	table := getTestTableData()
 	table.QuickSearchField = nil
@@ -293,7 +294,7 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 		}
 		return tableName
 	}
-	prepared, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	prepared, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	require.NoError(t, err)
 	require.Equal(t, "id", prepared.QuickSearchField)
 }
@@ -465,7 +466,7 @@ func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
 func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
 	fields := []crudmodel.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
 	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "go-build-admin/internal/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
-	content, err := renderHandler(handler, "type Orders struct {\n\tID int `json:\"id\"`\n}\n")
+	content, err := renderHandler(handler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,13 +554,12 @@ func TestRemoteSelectRelationRenderIncludesSlimLoaderAndCalls(t *testing.T) {
 	_, err = format.Source([]byte(content))
 	require.NoError(t, err)
 	for _, want := range []string{
-		"type OrdersUserRelation struct",
-		"User *OrdersUserRelation `gorm:\"-\" json:\"user\"`",
 		"config *conf.Configuration",
-		"func (s *OrdersModel) loadUserRelations",
-		"func (s *OrdersModel) loadRelations",
+		"func (s *OrdersRepository) loadUserRelations",
+		"func (s *OrdersRepository) loadRelations",
 		"s.loadRelations(ctx, &list)",
 		"s.loadRelations(ctx, &rows)",
+		"related := make([]model.OrdersUserRelation, 0)",
 	} {
 		require.Contains(t, content, want)
 	}
@@ -710,21 +710,30 @@ func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {
 	require.NoError(t, err)
 	_, err = format.Source([]byte(content))
 	require.NoError(t, err)
+	entityContent, err := renderEntity(data)
+	require.NoError(t, err)
+	_, err = parser.ParseFile(token.NewFileSet(), "orders.go", entityContent, parser.AllErrors)
+	require.NoError(t, err)
 	for _, want := range []string{
 		"type OrdersReviewerAdminsTableRelationRow struct",
 		"type OrdersReviewerAdminsTableRelation struct",
 		"Nickname []*string `json:\"nickname\"`",
 		"Email",
 		"[]*string `json:\"email\"`",
+		"ReviewerAdminsTable *OrdersReviewerAdminsTableRelation `gorm:\"-\" json:\"reviewerAdminsTable\"`",
+	} {
+		require.Contains(t, entityContent, want)
+	}
+	for _, want := range []string{
 		"strings.Split(raw, \",\")",
 		"valueIndex int",
 		"loadReviewerAdminsTableRelations",
 		"loadRelations(ctx, &list)",
+		"strconv.ParseInt",
+		"if token == \"\"",
 	} {
 		require.Contains(t, content, want)
 	}
-	require.Contains(t, content, "strconv.ParseInt")
-	require.Contains(t, content, "if token == \"\"")
 }
 
 func relationTestColumns() []model.Column {
@@ -763,12 +772,12 @@ func TestCityModelStructIncludesTextAccessor(t *testing.T) {
 	if !strings.Contains(structContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
 		t.Fatalf("city text accessor missing from struct: %s", structContent)
 	}
-	modelContent, err := renderModel(ModelData{Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: "int32", StructTemp: structContent, DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone}})
+	modelContent, err := renderEntity(ModelData{Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: "int32", StructTemp: structContent, DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(modelContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
-		t.Fatalf("city text accessor missing from rendered model: %s", modelContent)
+		t.Fatalf("city text accessor missing from rendered entity: %s", modelContent)
 	}
 }
 
@@ -784,7 +793,7 @@ func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.
 		}
 		return name
 	}
-	modelData, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
+	modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -792,12 +801,12 @@ func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.
 		t.Fatalf("city metadata = %v", modelData.CityTextFields)
 	}
 	modelData.StructTemp = addCityTextFields("type Orders struct {\n\tRegionCity string `json:\"region_city\"`\n}\n", modelData.CityTextFields)
-	modelContent, err := renderModel(modelData)
+	modelContent, err := renderEntity(modelData)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(modelContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
-		t.Fatalf("production model output lacks city accessor: %s", modelContent)
+		t.Fatalf("production entity output lacks city accessor: %s", modelContent)
 	}
 }
 

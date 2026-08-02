@@ -266,7 +266,7 @@ func wireApp() {
 `
 
 func TestWireProviderSetRefSkipsWiredRoots(t *testing.T) {
-	for _, root := range []string{"internal/admin/handler", "internal/admin/model", "internal/common/model", "internal/api/handler"} {
+	for _, root := range []string{"internal/admin/handler", "internal/admin/repository", "internal/admin/model", "internal/common/model", "internal/api/handler"} {
 		if _, _, _, needed, err := wireProviderSetRef(root); err != nil || needed {
 			t.Fatalf("wired root %q should not need aggregation: needed=%v err=%v", root, needed, err)
 		}
@@ -278,8 +278,8 @@ func TestWireProviderSetRefSkipsWiredRoots(t *testing.T) {
 	if importPath != "go-build-admin/internal/admin/handler/order" || alias != "orderHandler" || anchor != "\t\tadminHandler.ProviderSet,\n" {
 		t.Fatalf("unexpected handler subpackage ref: %q %q %q", importPath, alias, anchor)
 	}
-	if _, alias, _, _, err := wireProviderSetRef("internal/admin/model/order"); err != nil || alias != "orderModel" {
-		t.Fatalf("unexpected model subpackage alias %q: %v", alias, err)
+	if _, alias, _, _, err := wireProviderSetRef("internal/admin/repository/order"); err != nil || alias != "orderRepo" {
+		t.Fatalf("unexpected repository subpackage alias %q: %v", alias, err)
 	}
 }
 
@@ -545,7 +545,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "assoc_provider_test", "Assoc.go")},
 		Shared:    []string{provider},
 	}
-	if err := removeAssociatedModelProviders(fields, manifest); err != nil {
+	if err := removeAssociatedModelProviders(fields, manifest, true); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := os.ReadFile(provider)
@@ -570,7 +570,7 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "test.go")},
 		Shared:    []string{provider},
 	}
-	if err := removeAssociatedModelProviders(fields, manifest); err != nil {
+	if err := removeAssociatedModelProviders(fields, manifest, true); err != nil {
 		t.Fatal(err)
 	}
 	after, err := os.ReadFile(provider)
@@ -745,24 +745,35 @@ func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 		Namespace:       "admin",
 		ClassName:       "Demo",
 		ModelNamespace:  "model",
-		ModelImportPath: "go-build-admin/internal/admin/model",
+		ModelImportPath: "go-build-admin/internal/model",
 		ModelName:       "Demo",
 		ModelVar:        "demo",
 		PkGoType:        "int32",
 		PkJSONName:      "id",
+		DTOQualifier:    "dto.",
 		ParamTypeOverrides: map[string]string{
 			"feature_flags": "validate.CommaJoined",
 		},
 	}
-	content, err := renderHandler(handlerData, structContent)
+	// 参数类型改写发生在 DTO 文件（buildParamStruct + renderDTO）
+	paramStruct := buildParamStruct(structContent, handlerData)
+	if !strings.Contains(paramStruct, "FeatureFlags validate.CommaJoined") {
+		t.Fatalf("DTO parameter rewrite missing:\n%s", paramStruct)
+	}
+	dtoContent, err := renderDTO(paramStruct)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(content, "validate.CommaJoined") != 1 || strings.Count(content, "FeatureFlags validate.CommaJoined") != 1 {
-		t.Fatalf("Add/Edit should share one rewritten parameter type:\n%s", content)
+	if strings.Count(dtoContent, "validate.CommaJoined") != 1 || strings.Count(dtoContent, "FeatureFlags validate.CommaJoined") != 1 {
+		t.Fatalf("DTO should contain one rewritten parameter type:\n%s", dtoContent)
 	}
-	if strings.Count(content, "DemoParam") < 3 {
-		t.Fatalf("expected Add and Edit to use the shared parameter struct:\n%s", content)
+	// handler 只引用共享的 DTO 参数结构
+	content, err := renderHandler(handlerData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(content, "dto.DemoParam") != 2 {
+		t.Fatalf("expected Add and Edit to use the shared dto parameter struct:\n%s", content)
 	}
 }
 
@@ -784,8 +795,8 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(code, "func (s *DemoModel) NewRow() any") || !strings.Contains(code, "return &Demo{}") {
-		t.Fatalf("row factory missing from model template:\n%s", code)
+	if !strings.Contains(code, "func (s *DemoRepository) NewRow() any") || !strings.Contains(code, "return &model.Demo{}") {
+		t.Fatalf("row factory missing from repository template:\n%s", code)
 	}
 }
 

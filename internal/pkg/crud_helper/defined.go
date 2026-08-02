@@ -257,18 +257,26 @@ type NameInfo struct {
 type HandlerData struct {
 	Namespace           string //包名
 	ClassName           string //类名
-	ModelNamespace      string //模型包名
-	ModelImportPath     string //模型完整导入路径
-	ModelName           string //模型类名
-	ModelVar            string //模型变量名
+	ModelNamespace      string //实体包名（恒为 model）
+	ModelImportPath     string //实体完整导入路径（恒为 go-build-admin/internal/model）
+	ModelName           string //实体类名
+	ModelVar            string //实体变量名
 	PkGoType            string //主键Go类型
 	PkJSONName          string //主键JSON字段名
 	RouteName           string //后台CRUD路由路径
 	RegisterAtomicRoute func(method, path string)
 	TableComment        string            //表备注
-	ValidateParam       string            //表单参数
+	ValidateParam       string            //表单参数（DTO 文件内容）
 	ParamTypeOverrides  map[string]string // JSON field name to validation parameter type
 	PartialEditFields   string            // quoted switch fields for partial edits
+
+	// 仓库与 DTO 包的导入引用（子包按 <dir>model / <dir>dto 约定别名）。
+	RepoImport    string
+	RepoAlias     string
+	RepoQualifier string
+	DTOImport     string
+	DTOAlias      string
+	DTOQualifier  string
 
 	Import     []string //需要引入的包名
 	FilterRule []string //对前端数据进行过滤方法
@@ -332,7 +340,9 @@ package {{.Namespace}}
 
 import (
 	model "{{.ModelImportPath}}"
-	{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
+	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
+	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
+	{{end}}{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
 	{{end}}"go-build-admin/internal/admin/validate"
 	"go-build-admin/internal/pkg/validator"
 
@@ -343,11 +353,11 @@ import (
 
 type {{.ClassName}}Handler struct {
 	{{.BaseHandlerQualifier}}Base
-	log        *zap.Logger
-	{{.ModelVar}}M *model.{{.ModelName}}Model
+	log     *zap.Logger
+	{{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository
 }
 
-func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *model.{{.ModelName}}Model) *{{.ClassName}}Handler {
+func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
 	{{if .BaseHandlerQualifier}}return &{{.ClassName}}Handler{Base: {{.BaseHandlerQualifier}}NewBase({{.ModelVar}}M), log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{else}}return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{end}}
 }
 
@@ -367,11 +377,9 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	})
 }
 
-{{.ValidateParam}}
-
 
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
-	var params {{.ClassName}}Param
+	var params {{.DTOQualifier}}{{.ClassName}}Param
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
 		return
@@ -396,7 +404,7 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 	}
 	var params = struct {
 		{{.ClassName}}IDs
-		{{.ClassName}}Param
+		{{.DTOQualifier}}{{.ClassName}}Param
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
@@ -518,37 +526,31 @@ import (
 	{{end}}
 	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
 	{{end}}
+	"go-build-admin/internal/conf"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/pkg/data_scope"
+	persistence "go-build-admin/internal/pkg/persistence"
 )
 
-{{.StructTemp}}
-
-{{.RelationStructs}}
-
-type {{.ClassName}}Model struct {
-	{{.BaseModelQualifier}}BaseModel
+type {{.ClassName}}Repository struct {
+	persistence.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
 }
 
-func (s *{{.ClassName}}Model) NewRow() any {
-	return &{{.ClassName}}{}
+func (s *{{.ClassName}}Repository) NewRow() any {
+	return &model.{{.ClassName}}{}
 }
 
-func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Model {
-	return &{{.ClassName}}Model{
-		{{if .BaseModelQualifier}}BaseModel: {{.BaseModelQualifier}}NewBaseModel(
+func New{{.ClassName}}Repository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Repository {
+	return &{{.ClassName}}Repository{
+		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix + "{{.Name}}",
 			"{{.Pk}}",
 			"{{.QuickSearchField}}",
 			sqlDB,
-		),{{else}}BaseModel: BaseModel{
-			TableName:        config.Database.Prefix + "{{.Name}}",
-			Key:              "{{.Pk}}",
-			QuickSearchField: "{{.QuickSearchField}}",
-			sqlDB:            sqlDB,
-		},{{end}}
+		),
 		Policy: data_scope.ResourcePolicy{
 			Mode:            "{{.DataScopePolicy.Mode}}",
 			OwnerColumn:     "{{.DataScopePolicy.OwnerColumn}}",
@@ -560,7 +562,7 @@ func New{{.ClassName}}Model(sqlDB *gorm.DB, config *conf.Configuration, enforcer
 	}
 }
 
-func (s *{{.ClassName}}Model) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *{{.ClassName}}Repository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -573,7 +575,7 @@ func (s *{{.ClassName}}Model) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 // readScopedDB applies the primary and optional extra owner read scope.
-func (s *{{.ClassName}}Model) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *{{.ClassName}}Repository) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -589,19 +591,19 @@ func (s *{{.ClassName}}Model) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.
 	return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)
 }
 
-// ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *{{.ClassName}}Model) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+// ScopeDB exposes the generated repository's data-scope application to generic CRUD handlers.
+func (s *{{.ClassName}}Repository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
 {{.RelationLoaders}}
 
-func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} {{.ClassName}}, err error) {
+func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} model.{{.ClassName}}, err error) {
 	db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
 	{{if .Relations}}if err == nil {
-		rows := []{{.ClassName}}{ {{.ModelVar}} }
+		rows := []model.{{.ClassName}}{ {{.ModelVar}} }
 		err = s.loadRelations(ctx, &rows)
 		if err == nil {
 			{{.ModelVar}} = rows[0]
@@ -610,7 +612,7 @@ func (s *{{.ClassName}}Model) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.Mod
 	{{end}}return
 }
 
-func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, total int64, err error) {
+func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.ClassName}}, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -631,7 +633,7 @@ func (s *{{.ClassName}}Model) List(ctx *gin.Context) (list []{{.ClassName}}, tot
 	{{end}}return
 }
 
-func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
+func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -666,7 +668,7 @@ func (s *{{.ClassName}}Model) Add(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}
 	})
 }
 
-func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}}) error {
+func (s *{{.ClassName}}Repository) Edit(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -690,7 +692,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 		return nil
 	case 0:
 		var visible int64
-		if err := tx.Table(s.TableName).Model(&{{.ClassName}}{}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Count(&visible).Error; err != nil {
+		if err := tx.Table(s.TableName).Model(&model.{{.ClassName}}{}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Count(&visible).Error; err != nil {
 			return err
 		}
 		if visible == 1 {
@@ -703,7 +705,7 @@ func (s *{{.ClassName}}Model) Edit(ctx *gin.Context, {{.ModelVar}} {{.ClassName}
 	})
 }
 
-func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
+func (s *{{.ClassName}}Repository) Del(ctx *gin.Context, ids interface{}) error {
 	normalizedIDs, err := normalize{{.ClassName}}IDs(ids)
 	if err != nil {
 		return err
@@ -716,14 +718,14 @@ func (s *{{.ClassName}}Model) Del(ctx *gin.Context, ids interface{}) error {
 		tx = s.scopeDB(ctx, tx)
 
 	var visible int64
-	if err := tx.Table(s.TableName).Model(&{{.ClassName}}{}).Where("{{.Pk}} IN ?", normalizedIDs).Count(&visible).Error; err != nil {
+	if err := tx.Table(s.TableName).Model(&model.{{.ClassName}}{}).Where("{{.Pk}} IN ?", normalizedIDs).Count(&visible).Error; err != nil {
 		return err
 	}
 	if visible != int64(len(normalizedIDs)) {
 		return gorm.ErrRecordNotFound
 	}
 
-	res := tx.Table(s.TableName).Where("{{.Pk}} IN ?", normalizedIDs).Delete(&{{.ClassName}}{})
+	res := tx.Table(s.TableName).Where("{{.Pk}} IN ?", normalizedIDs).Delete(&model.{{.ClassName}}{})
 	if err := res.Error; err != nil {
 		return err
 	}
@@ -750,6 +752,21 @@ func normalize{{.ClassName}}IDs(ids interface{}) ([]{{.PkGoType}}, error) {
 	}
 	return result, nil
 }
+`
+
+// entityTemp 渲染共享贫血实体文件（internal/model/<entity>.go）。
+// 结构体与其关系 DTO 同包输出，关系展示字段（gorm:"-"）随实体落位。
+const entityTemp = `package model
+
+{{.StructTemp}}
+
+{{.RelationStructs}}
+`
+
+// dtoTemp 渲染 admin 请求 DTO 文件（internal/admin/dto/<path>.go，包名 dto）。
+const dtoTemp = `package {{.Namespace}}
+
+{{.ValidateParam}}
 `
 
 const StructTmpl = `import (

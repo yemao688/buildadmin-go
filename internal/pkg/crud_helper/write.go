@@ -24,7 +24,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, modelFile NameInfo) (string, error) {
+// writeModelFiles 写入共享贫血实体（internal/model）、admin 仓库
+// （internal/admin/repository，XxxRepository）与 _custom.go 骨架；DTO 由
+// writeHandlerFile 另行落盘。返回实体 struct 内容供 DTO/测试复用。
+func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
@@ -35,42 +38,53 @@ func writeModelFile(db *gorm.DB, tablePk string, fullTableName string, tableName
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
-	applyBaseModelPackageRef(&modelData, modelFile)
+	applyBaseRepositoryPackageRef(&modelData, repositoryFile)
 
-	modelContent, err := render(modelFile.ParseFile, modelTemp, modelData)
+	// 实体文件（扁平 internal/model/<entity>.go，包名 model）
+	entityContent, err := render(entityFile.ParseFile, entityTemp, modelData)
 	if err != nil {
 		return "", err
 	}
-	if err := writeGoFile(modelFile.ParseFile, modelContent); err != nil {
+	if err := writeGoFile(entityFile.ParseFile, entityContent); err != nil {
 		return "", err
 	}
-	if err := writeCustomSkeleton(modelFile, "model"); err != nil {
+	if err := writeCustomSkeleton(entityFile, "model"); err != nil {
 		return "", err
 	}
 
-	if err := writeProvider(modelFile.RootFileName, modelData.ClassName+"Model"); err != nil {
+	// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
+	repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
+	if err != nil {
 		return "", err
 	}
-	if err := AddWireProviderSet(modelFile.RootFileName); err != nil {
+	if err := writeGoFile(repositoryFile.ParseFile, repositoryContent); err != nil {
+		return "", err
+	}
+	if err := writeCustomSkeleton(repositoryFile, "model"); err != nil {
+		return "", err
+	}
+
+	if err := writeProvider(repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
+		return "", err
+	}
+	if err := AddWireProviderSet(repositoryFile.RootFileName); err != nil {
 		return "", err
 	}
 	return structContent, nil
 }
 
-// applyBaseModelPackageRef 为子包模型设置根包 BaseModel 的限定引用；
-// 根包（internal/admin/model、internal/common/model）保持空值，生成输出与历史一致。
-func applyBaseModelPackageRef(modelData *ModelData, modelFile NameInfo) {
-	root := filepath.ToSlash(modelFile.RootFileName)
-	segments := strings.Split(root, "/")
-	if len(segments) != 4 || segments[0] != "internal" || segments[3] == "model" {
+// applyBaseRepositoryPackageRef 为子包仓库设置根仓库包（internal/admin/repository，
+// 提供 QueryBuilder）的限定引用；根仓库包保持空值，输出与既有写法一致。
+func applyBaseRepositoryPackageRef(modelData *ModelData, repositoryFile NameInfo) {
+	root := filepath.ToSlash(repositoryFile.RootFileName)
+	if root == "internal/admin/repository" {
 		return
 	}
-	if segments[2] != "model" {
+	if !strings.HasPrefix(root, "internal/admin/repository/") {
 		return
 	}
-	module := segments[1]
-	modelData.BaseModelImport = "go-build-admin/internal/" + module + "/model"
-	modelData.BaseModelAlias = module + "model"
+	modelData.BaseModelImport = "go-build-admin/internal/admin/repository"
+	modelData.BaseModelAlias = "adminmodel"
 	modelData.BaseModelQualifier = modelData.BaseModelAlias + "."
 }
 
@@ -187,19 +201,21 @@ func applyBaseHandlerPackageRef(qualifier *string, alias *string, importPath *st
 	*qualifier = *alias + "."
 }
 
-func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string) error {
-	//请求参数验证结构体
-	index := strings.Index(structContent, "struct {")
-	if index == -1 {
-		return nil
-	}
-	validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
-
-	re := regexp.MustCompile(`gorm:"[^"]*" `)
-	validateContent = re.ReplaceAllString(validateContent, "")
-	validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
-	handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
+func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string, dtoFile NameInfo) error {
 	applyBaseHandlerPackageRef(&handlerData.BaseHandlerQualifier, &handlerData.BaseHandlerAlias, &handlerData.BaseHandlerImport, handlerFile)
+
+	// 请求参数结构体落盘到独立 DTO 文件（internal/admin/dto/<path>.go）
+	paramStruct := buildParamStruct(structContent, handlerData)
+	dtoContent, err := render(dtoFile.ParseFile, dtoTemp, struct {
+		Namespace     string
+		ValidateParam string
+	}{Namespace: dtoFile.Namespace, ValidateParam: paramStruct})
+	if err != nil {
+		return err
+	}
+	if err := writeGoFile(dtoFile.ParseFile, dtoContent); err != nil {
+		return err
+	}
 
 	//渲染文件内容
 	handlerContent, err := render(handlerFile.ParseFile, handlerTemp, handlerData)
@@ -241,6 +257,28 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	return nil
 }
 
+// buildParamStruct 由实体 struct 内容派生请求 DTO 的 struct 声明
+// （"type XxxParam struct {...}"），去掉 gorm tag 并应用参数类型改写与排除字段。
+func buildParamStruct(structContent string, handlerData HandlerData) string {
+	index := strings.Index(structContent, "struct {")
+	if index == -1 {
+		return ""
+	}
+	validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
+	re := regexp.MustCompile(`gorm:"[^"]*" `)
+	validateContent = re.ReplaceAllString(validateContent, "")
+	validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
+	return excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
+}
+
+// renderDTO 渲染 DTO 文件内容（供测试与生产共用）。
+func renderDTO(paramStruct string) (string, error) {
+	return render("", dtoTemp, struct {
+		Namespace     string
+		ValidateParam string
+	}{Namespace: "dto", ValidateParam: paramStruct})
+}
+
 func excludeParamFields(validateContent string, exclude []string) string {
 	return excludeParamFieldsWithPrimaryKey(validateContent, exclude, "id")
 }
@@ -266,7 +304,7 @@ func excludeParamFieldsWithPrimaryKey(validateContent string, exclude []string, 
 	return strings.Join(newLines, "\n")
 }
 
-// renderModel renders the model template to a string for tests.
+// renderModel renders the repository template to a string for tests.
 func renderModel(modelData ModelData) (string, error) {
 	if modelData.PkGoType == "" {
 		modelData.PkGoType = "int32"
@@ -280,6 +318,16 @@ func renderModel(modelData ModelData) (string, error) {
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
 	return render("", modelTemp, modelData)
+}
+
+// renderEntity renders the shared entity file content to a string for tests.
+func renderEntity(modelData ModelData) (string, error) {
+	if len(modelData.Relations) > 0 && modelData.RelationStructs == "" {
+		finalizeRelationMetadata(&modelData)
+	}
+	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
+	prepareModelTimestampData(&modelData)
+	return render("", entityTemp, modelData)
 }
 
 func prepareModelTimestampData(modelData *ModelData) {
@@ -312,19 +360,10 @@ func prepareModelTimestampData(modelData *ModelData) {
 	}
 }
 
-// renderHandler renders the handler template to a string for tests. It mirrors
-// the validate-param derivation in writeHandlerFile without touching the disk.
-func renderHandler(handlerData HandlerData, structContent string) (string, error) {
+// renderHandler renders the handler template to a string for tests.
+func renderHandler(handlerData HandlerData) (string, error) {
 	if handlerData.PkJSONName == "" {
 		handlerData.PkJSONName = "id"
-	}
-	index := strings.Index(structContent, "struct {")
-	if index != -1 {
-		validateContent := "type " + handlerData.ClassName + "Param " + structContent[index:]
-		re := regexp.MustCompile(`gorm:"[^"]*" `)
-		validateContent = re.ReplaceAllString(validateContent, "")
-		validateContent = rewriteFlexNumericParamFields(validateContent, handlerData.ParamTypeOverrides)
-		handlerData.ValidateParam = excludeParamFieldsWithPrimaryKey(validateContent, handlerData.ExcludeParamFields, handlerData.PkJSONName)
 	}
 	return render("", handlerTemp, handlerData)
 }
@@ -395,7 +434,19 @@ func customSkeletonPath(file NameInfo) string {
 	return strings.TrimSuffix(file.ParseFile, filepath.Ext(file.ParseFile)) + "_custom.go"
 }
 
-func customSkeletonTargets(modelFile, handlerFile NameInfo) []customSkeletonTarget {
+// customSkeletonTargets 返回新布局下 _custom.go 骨架目标：实体（internal/model）、
+// 仓库（internal/admin/repository）与 handler（internal/admin/handler）。
+func customSkeletonTargets(entityFile, repositoryFile, handlerFile NameInfo) []customSkeletonTarget {
+	return []customSkeletonTarget{
+		{path: customSkeletonPath(entityFile), content: customSkeletonContent(entityFile.Namespace, entityFile.LastName, "model")},
+		{path: customSkeletonPath(repositoryFile), content: customSkeletonContent(repositoryFile.Namespace, repositoryFile.LastName, "model")},
+		{path: customSkeletonPath(handlerFile), content: customSkeletonContent(handlerFile.Namespace, handlerFile.LastName, "handler")},
+	}
+}
+
+// legacyCustomSkeletonTargets 复刻旧布局的单模型文件骨架目标，供历史 manifest
+// 删除兼容使用。
+func legacyCustomSkeletonTargets(modelFile, handlerFile NameInfo) []customSkeletonTarget {
 	return []customSkeletonTarget{
 		{path: customSkeletonPath(modelFile), content: customSkeletonContent(modelFile.Namespace, modelFile.LastName, "model")},
 		{path: customSkeletonPath(handlerFile), content: customSkeletonContent(handlerFile.Namespace, handlerFile.LastName, "handler")},
@@ -640,14 +691,16 @@ func removeRegistrarProviderEntry(content, name string, handlerRoot string) (str
 }
 
 // wireProviderSetRef 计算子包在 cmd/app/wire.go 中的 ProviderSet 引用。
-// 根包（internal/admin/handler、internal/admin/model 等）已在 wire.Build 静态聚合，无需处理。
+// 根包（internal/admin/handler、internal/admin/repository、internal/admin/model、
+// internal/common/model 等）已在 wire.Build 静态聚合，无需处理。
 func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, needed bool, err error) {
 	root := filepath.ToSlash(rootDir)
 	wiredRoots := map[string]string{
-		"internal/admin/handler": "adminHandler",
-		"internal/admin/model":   "adminModel",
-		"internal/common/model":  "commonModel",
-		"internal/api/handler":   "apiHandler",
+		"internal/admin/handler":    "adminHandler",
+		"internal/admin/repository": "adminRepo",
+		"internal/admin/model":      "adminModel",
+		"internal/common/model":     "commonModel",
+		"internal/api/handler":      "apiHandler",
 	}
 	if _, ok := wiredRoots[root]; ok {
 		return "", "", "", false, nil
@@ -670,7 +723,11 @@ func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, neede
 		sub = append(sub, utils.SnakeToCamel(segment, true))
 	}
 	anchorParent := path.Base(strings.Join(segments[:subStart], "/"))
-	alias = lowerFirst(strings.Join(sub, "")) + utils.SnakeToCamel(anchorParent, true)
+	suffix := map[string]string{"handler": "Handler", "repository": "Repo", "model": "Model"}[anchorParent]
+	if suffix == "" {
+		suffix = utils.SnakeToCamel(anchorParent, true)
+	}
+	alias = lowerFirst(strings.Join(sub, "")) + suffix
 	return "go-build-admin/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
 }
 
@@ -775,7 +832,7 @@ func countWireProviderSetEntries(content string) (int, error) {
 
 func writeProvider(dir string, name string) error {
 	providerPath := filepath.Join(utils.RootPath(), dir, "provider.go")
-	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/model", "internal/common/model", "internal/admin/handler"); err != nil {
+	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
 		return err
 	}
 	content, err := os.ReadFile(providerPath)

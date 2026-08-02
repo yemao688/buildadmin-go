@@ -20,24 +20,24 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	dsn := testutil.MySQLDSN(cfg.MysqlTest, cfg.Database.Database)
 
 	tmp := t.TempDir()
-	autoCode := renderE2EModel(t, crudmodel.Table{
-		Name: "scopeitems", ModelFile: "internal/admin/model/Scopeitems.go", ControllerFile: "internal/admin/handler/Scopeitems.go",
+	autoRepo, autoEntity := renderE2EModel(t, crudmodel.Table{
+		Name: "scopeitems", ModelFile: "internal/model/scopeitems.go", ControllerFile: "internal/admin/handler/scopeitems.go",
 		FormFields: []string{"name", "admin_id"}, DataScope: nil,
 	}, []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "admin_id", Type: "int", DesignType: "number"},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}, nil, compileDemoStruct("Scopeitems", "admin_id", "AdminID", "admin_id"))
-	globalCode := renderE2EModel(t, crudmodel.Table{
-		Name: "banner", ModelFile: "internal/admin/model/Banner.go", ControllerFile: "internal/admin/handler/Banner.go",
+	globalRepo, globalEntity := renderE2EModel(t, crudmodel.Table{
+		Name: "banner", ModelFile: "internal/model/banner.go", ControllerFile: "internal/admin/handler/banner.go",
 		FormFields: []string{"name"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone},
 	}, []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "name", Type: "varchar", DesignType: "string"},
 	}, &data_scope.Config{Mode: data_scope.ModeNone}, compileDemoStruct("Banner", "", "", ""))
 
-	writeE2EFixture(t, tmp, autoCode, globalCode)
-	run := exec.Command("go", "test", "./internal/admin/model", "-run", "TestGeneratedClosureBehavior", "-count=1", "-v")
+	writeE2EFixture(t, tmp, autoRepo, autoEntity, globalRepo, globalEntity)
+	run := exec.Command("go", "test", "./internal/admin/repository", "-run", "TestGeneratedClosureBehavior", "-count=1", "-v")
 	run.Dir = tmp
 	run.Env = append(os.Environ(), "GO_BUILD_ADMIN_TEST_CHILD_DSN="+dsn)
 	out, err := run.CombinedOutput()
@@ -47,7 +47,7 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func renderE2EModel(t *testing.T, table crudmodel.Table, fields []crudmodel.Field, cfg *data_scope.Config, structContent string) string {
+func renderE2EModel(t *testing.T, table crudmodel.Table, fields []crudmodel.Field, cfg *data_scope.Config, structContent string) (string, string) {
 	t.Helper()
 	getTableName := func(name string, full bool) string {
 		if full {
@@ -55,16 +55,18 @@ func renderE2EModel(t *testing.T, table crudmodel.Table, fields []crudmodel.Fiel
 		}
 		return name
 	}
-	modelData, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, cfg, getTableName, proveAll)
+	modelData, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, cfg, getTableName, proveAll)
 	require.NoError(t, err)
 	modelData.Pk = "id"
 	modelData.StructTemp = structContent
-	code, err := renderModel(modelData)
+	repoCode, err := renderModel(modelData)
 	require.NoError(t, err)
-	return code
+	entityCode, err := renderEntity(modelData)
+	require.NoError(t, err)
+	return repoCode, entityCode
 }
 
-func writeE2EFixture(t *testing.T, root, autoCode, globalCode string) {
+func writeE2EFixture(t *testing.T, root, autoRepo, autoEntity, globalRepo, globalEntity string) {
 	t.Helper()
 	goMod, err := os.ReadFile(filepath.Join(repoRoot(t), "go.mod"))
 	require.NoError(t, err)
@@ -80,30 +82,57 @@ func writeE2EFixture(t *testing.T, root, autoCode, globalCode string) {
 type Configuration struct { Database Database }
 type Database struct { Prefix string }
 `,
-		"internal/admin/model/base.go": `package model
+		// 记录层基座（唯一 BaseModel 契约的测试替身，对齐 internal/pkg/persistence）
+		"internal/pkg/persistence/base.go": `package persistence
 
 import (
 	"context"
-	"github.com/gin-gonic/gin"
+
 	"gorm.io/gorm"
-) 
+)
+
+type TableInfo struct {
+	TableName        string
+	Key              string
+	QuickSearchField string
+}
 
 type BaseModel struct {
-	TableName string
-	Key string
+	TableName        string
+	Key              string
 	QuickSearchField string
-	sqlDB *gorm.DB
+	sqlDB            *gorm.DB
 }
-func (b *BaseModel) TableInfo() map[string]string { return map[string]string{} }
+
+func NewBaseModel(tableName, key, quickSearchField string, sqlDB *gorm.DB) BaseModel {
+	return BaseModel{TableName: tableName, Key: key, QuickSearchField: quickSearchField, sqlDB: sqlDB}
+}
+
 func (b *BaseModel) DBFor(context.Context) *gorm.DB { return b.sqlDB }
 func (b *BaseModel) Transaction(_ context.Context, fn func(*gorm.DB) error) error { return b.sqlDB.Transaction(fn) }
-func QueryBuilder(*gin.Context, map[string]string, map[string]interface{}) (string, []interface{}, string, int, int, error) {
+func (b *BaseModel) TableInfo() TableInfo {
+	return TableInfo{TableName: b.TableName, Key: b.Key, QuickSearchField: b.QuickSearchField}
+}
+`,
+		// 根仓库包的 QueryBuilder 契约替身（生成代码同包调用）
+		"internal/admin/repository/query_builder.go": `package repository
+
+import (
+	"go-build-admin/internal/pkg/persistence"
+	"github.com/gin-gonic/gin"
+)
+
+type TableInfo = persistence.TableInfo
+
+func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (string, []interface{}, string, int, int, error) {
 	return "", nil, "id ASC", 100, 0, nil
 }
 `,
-		"internal/admin/model/scope_item_gen.go": autoCode,
-		"internal/admin/model/banner_gen.go":     globalCode,
-		"internal/admin/model/closure_e2e_test.go": `package model
+		"internal/model/scopeitems.go": autoEntity,
+		"internal/model/banner.go":     globalEntity,
+		"internal/admin/repository/scopeitem_gen.go": autoRepo,
+		"internal/admin/repository/banner_gen.go":     globalRepo,
+		"internal/admin/repository/closure_e2e_test.go": `package repository
 
 import (
 	"errors"
@@ -115,6 +144,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go-build-admin/internal/pkg/data_scope"
+	model "go-build-admin/internal/model"
 	"go-build-admin/internal/conf"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -148,55 +178,55 @@ func TestGeneratedClosureBehavior(t *testing.T) {
 	cfg := &conf.Configuration{}
 	cfg.Database.Prefix = prefix
 	enforcer := data_scope.NewClosureEnforcer(cfg)
-	model := NewScopeitemsModel(db, cfg, enforcer)
-	t.Logf("generated table=%q expected=%q", model.TableName, resourceTable)
+	repo := NewScopeitemsRepository(db, cfg, enforcer)
+	t.Logf("generated table=%q expected=%q", repo.TableName, resourceTable)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	require.NoError(t, data_scope.SetActor(ctx, data_scope.Actor{AdminID: 2}))
 
-	list, total, err := model.List(ctx)
+	list, total, err := repo.List(ctx)
 	require.NoError(t, err)
 	require.Equal(t, int64(2), total)
 	require.Len(t, list, 2)
 	var aggregate struct{ Total int64 }
-	require.NoError(t, model.readScopedDB(ctx, model.DBFor(ctx)).Table(model.TableName).Select("COUNT(*) AS total").Scan(&aggregate).Error)
+	require.NoError(t, repo.readScopedDB(ctx, repo.DBFor(ctx)).Table(repo.TableName).Select("COUNT(*) AS total").Scan(&aggregate).Error)
 	require.Equal(t, total, aggregate.Total)
-	_, err = model.GetOne(ctx, 2)
+	_, err = repo.GetOne(ctx, 2)
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 
-	require.NoError(t, model.Add(ctx, Scopeitems{ID: 10, AdminID: 3, Name: "forged"}))
+	require.NoError(t, repo.Add(ctx, model.Scopeitems{ID: 10, AdminID: 3, Name: "forged"}))
 	var owner int32
 	require.NoError(t, db.Raw("SELECT admin_id FROM "+resourceTable+" WHERE id = 10").Scan(&owner).Error)
 	require.Equal(t, int32(2), owner)
 
-	require.NoError(t, model.Edit(ctx, Scopeitems{ID: 1, AdminID: 3, Name: ""}))
-	var edited Scopeitems
+	require.NoError(t, repo.Edit(ctx, model.Scopeitems{ID: 1, AdminID: 3, Name: ""}))
+	var edited model.Scopeitems
 	require.NoError(t, db.Raw("SELECT id, admin_id, name FROM "+resourceTable+" WHERE id = 1").Scan(&edited).Error)
 	require.Equal(t, int32(2), edited.AdminID)
 	require.Equal(t, "", edited.Name)
-	require.NoError(t, model.Edit(ctx, Scopeitems{ID: 1, AdminID: 3, Name: ""}))
-	require.ErrorIs(t, model.Edit(ctx, Scopeitems{ID: 2, AdminID: 2, Name: "blocked"}), gorm.ErrRecordNotFound)
+	require.NoError(t, repo.Edit(ctx, model.Scopeitems{ID: 1, AdminID: 3, Name: ""}))
+	require.ErrorIs(t, repo.Edit(ctx, model.Scopeitems{ID: 2, AdminID: 2, Name: "blocked"}), gorm.ErrRecordNotFound)
 
-	require.NoError(t, model.Del(ctx, []int32{1, 3, 3}))
-	require.ErrorIs(t, model.Del(ctx, []int32{2}), gorm.ErrRecordNotFound)
+	require.NoError(t, repo.Del(ctx, []int32{1, 3, 3}))
+	require.ErrorIs(t, repo.Del(ctx, []int32{2}), gorm.ErrRecordNotFound)
 	require.NoError(t, db.Exec("INSERT INTO "+resourceTable+" (id, admin_id, name) VALUES (20, 2, 'B2'), (21, 3, 'C2')").Error)
-	require.ErrorIs(t, model.Del(ctx, []int32{20, 21}), gorm.ErrRecordNotFound)
+	require.ErrorIs(t, repo.Del(ctx, []int32{20, 21}), gorm.ErrRecordNotFound)
 	var remaining int64
 	require.NoError(t, db.Raw("SELECT COUNT(*) FROM "+resourceTable+" WHERE id IN (?, ?)", 20, 21).Scan(&remaining).Error)
 	require.Equal(t, int64(2), remaining)
 
 	super, _ := gin.CreateTestContext(httptest.NewRecorder())
 	require.NoError(t, data_scope.SetActor(super, data_scope.Actor{AdminID: 1, Unrestricted: true}))
-	_, superTotal, err := model.List(super)
+	_, superTotal, err := repo.List(super)
 	require.NoError(t, err)
 	require.Equal(t, int64(4), superTotal)
 	missing, _ := gin.CreateTestContext(httptest.NewRecorder())
-	_, _, err = model.List(missing)
+	_, _, err = repo.List(missing)
 	require.Error(t, err)
 	require.True(t, errors.Is(err, data_scope.ErrScopedAccessDenied) || errors.Is(err, data_scope.ErrInvalidActor))
 
-	banner := NewBannerModel(db, cfg, nil)
-	require.NoError(t, banner.Add(missing, Banner{ID: 1, Name: "global"}))
-	require.NoError(t, banner.Edit(missing, Banner{ID: 1, Name: ""}))
+	banner := NewBannerRepository(db, cfg, nil)
+	require.NoError(t, banner.Add(missing, model.Banner{ID: 1, Name: "global"}))
+	require.NoError(t, banner.Edit(missing, model.Banner{ID: 1, Name: ""}))
 	require.NoError(t, banner.Del(missing, []int32{1}))
 }
 `,

@@ -50,11 +50,13 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 			}
 		}
 	}
-	module := "admin"
-	if table.IsCommonModel != 0 {
-		module = "common"
+	if _, err := ParseEntityNameData(table.Name, table.ModelFile); err != nil {
+		return err
 	}
-	if _, err := ParseNameData(module, table.Name, "model", table.ModelFile); err != nil {
+	if _, err := ParseRepositoryNameData(table.Name, table.ModelFile); err != nil {
+		return err
+	}
+	if _, err := ParseDTONameData(table.Name, table.ModelFile); err != nil {
 		return err
 	}
 	if _, err := ParseNameData("admin", table.Name, "handler", table.ControllerFile); err != nil {
@@ -138,11 +140,11 @@ func validateRelationField(field crudmodel.Field) error {
 		}
 	}
 	if field.Form.RemoteModel != "" && field.Form.RemoteTable != "" {
-		parsed, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
+		parsed, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
 		if err != nil {
 			return fmt.Errorf("invalid remote model for field %q: %w", field.Name, err)
 		}
-		if err := ValidateGeneratedAbsolutePath(parsed.ParseFile, "internal/admin/model", "internal/common/model"); err != nil {
+		if err := ValidateGeneratedAbsolutePath(parsed.ParseFile, "internal/model"); err != nil {
 			return fmt.Errorf("remote model for field %q escapes model roots: %w", field.Name, err)
 		}
 	}
@@ -391,10 +393,10 @@ func normalizeTableConfiguration(table *crudmodel.Table) error {
 	if table.DatabaseConnection != "mysql" {
 		return fmt.Errorf("unknown database connection %q; only \"mysql\" is available", table.DatabaseConnection)
 	}
-	// isCommonModel 已弃用并暂时禁用：仅拒绝新生成/apply；
-	// crud:delete 不经过本函数，历史 common model 模块仍可按 manifest 清理。
+	// isCommonModel 已弃用：新语义下实体一律输出到共享记录层
+	// internal/model（"全部共享"），历史 common model 模块仍可按 manifest 清理。
 	if table.IsCommonModel != 0 {
-		return fmt.Errorf("isCommonModel 已弃用并暂时禁用：model 一律输出到 internal/admin/model；历史 common model 模块仍可通过 crud:delete 清理")
+		return fmt.Errorf("isCommonModel 已弃用：新语义下实体一律输出到 internal/model（全部共享）；历史 common model 模块仍可通过 crud:delete 清理")
 	}
 	if table.GenerateRelativePath == "" {
 		table.GenerateRelativePath = table.Name
@@ -404,12 +406,8 @@ func normalizeTableConfiguration(table *crudmodel.Table) error {
 		return fmt.Errorf("invalid generateRelativePath: %w", err)
 	}
 	table.GenerateRelativePath = relative
-	modelRoot := "internal/admin/model"
-	if table.IsCommonModel != 0 {
-		modelRoot = "internal/common/model"
-	}
 	if table.ModelFile == "" {
-		table.ModelFile = modelRoot + "/" + relative + ".go"
+		table.ModelFile = "internal/model/" + relative + ".go"
 	}
 	if table.ControllerFile == "" {
 		table.ControllerFile = "internal/admin/handler/" + relative + ".go"
@@ -480,11 +478,8 @@ func resolveExistingPath(path string) (string, error) {
 }
 
 func ValidateModelPath(path string, common bool) error {
-	root := "internal/admin/model"
-	if common {
-		root = "internal/common/model"
-	}
-	return ValidatePathUnderRoots(path, root)
+	// 新语义下实体一律进入共享记录层 internal/model（common 参数保留以兼容调用方）。
+	return ValidatePathUnderRoots(path, "internal/model")
 }
 
 func ValidateHandlerPath(path string) error { return ValidatePathUnderRoots(path, "internal/admin/handler") }
