@@ -37,6 +37,35 @@ func init() {
 
 `Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
+## `admin_rule` seed helper
+
+业务迁移使用 `SeedAdminRule` 写入自己拥有的菜单或权限规则，不要复制 framework 轨的裸 SQL。`AdminRuleSeed` 的字段对应当前 `admin_rule` 模型的 seed 列；`ID`、`update_time` 和 `create_time` 由数据库处理。helper 使用 `name` 作为业务键：该名称已存在时保留原行，不新增或覆盖；因此重复执行 `Up` 不会产生重复规则。表名经过配置前缀和 `internal/core.QuoteIdentifier` 构造，前缀不固定为 `ba_`。
+
+`Children` 是树遍历元数据，不是数据库列。helper 会先确保父规则，再递归确保子规则，并将每个子规则的 `pid` 设置为实际父级 ID。它不会自动创建不存在的非树关联，也不会修改已有规则的父子关系或其它字段。
+
+业务迁移中的调用示例：
+
+```go
+Up: func(db *gorm.DB, config *conf.Configuration) error {
+	return SeedAdminRule(db, config, AdminRuleSeed{
+		Type:  "menu_dir",
+		Title: "运营管理",
+		Name:  "ops",
+		Path:  "ops",
+		Children: []AdminRuleSeed{
+			{
+				Type:      "menu",
+				Title:     "订单管理",
+				Name:      "ops/order",
+				Path:      "ops/order",
+				MenuType:  "tab",
+				Component: "/src/views/backend/ops/order/index.vue",
+			},
+		},
+	})
+},
+```
+
 `VerifyBaseline` 是应用时执行一次的契约：它在 `Up` 成功后运行；应用失败时会随迁移重试；账本记录完成后不再运行。因此，它可以断言该迁移刚建立的精确 schema 基线。`VerifySchema` 和 `VerifyUpgradeData` 是常驻不变量：每次执行 `migrate` 都会运行，判据必须兼容基线之上的合法业务变更。
 
 ## 台账
