@@ -1,7 +1,6 @@
 package core
 
 import (
-	"buildadmin-go/internal/admin/model/crud"
 	"buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/model"
@@ -12,7 +11,7 @@ import (
 // CoreTable describes one framework table in fresh-snapshot order.
 // Models are collected from their owning packages: the shared entity layer
 // (internal/model) plus the per-table owners (upload.Attachment,
-// siteconfig.Config, token.Token, captcha.Captcha, crud.Log). The three
+// siteconfig.Config, token.Token, captcha.Captcha, model.Log). The three
 // migrations ledgers are created by the ledger bootstrap (BootstrapOfficial/
 // Framework/BusinessLedger) and are intentionally not part of the
 // AutoMigrate snapshot.
@@ -35,7 +34,7 @@ var coreTables = []CoreTable{
 	{LogicalName: "country_language", NewModel: func() any { return &model.Language{} }},
 	{LogicalName: "country_language_content", NewModel: func() any { return &model.LanguageContent{} }},
 	{LogicalName: "country_currency", NewModel: func() any { return &model.Currency{} }},
-	{LogicalName: "crud_log", NewModel: func() any { return &crud.Log{} }},
+	{LogicalName: "crud_log", NewModel: func() any { return &model.Log{} }},
 	{LogicalName: "security_data_recycle_log", NewModel: func() any { return &model.SecurityDataRecycleLog{} }},
 	{LogicalName: "security_data_recycle", NewModel: func() any { return &model.SecurityDataRecycle{} }},
 	{LogicalName: "security_sensitive_data_log", NewModel: func() any { return &model.SecuritySensitiveDataLog{} }},

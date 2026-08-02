@@ -3,11 +3,10 @@ package crud_helper
 import (
 	"context"
 	"fmt"
-	crudmodel "buildadmin-go/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/model"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	adminauth "buildadmin-go/internal/admin/repository/auth"
 	"buildadmin-go/internal/conf"
-	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/utils"
 	"go/parser"
@@ -174,7 +173,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		}
 		_ = recordCrudError(db, cfg, logID, message)
 		if len(createdMenuIDs) > 0 {
-			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
+			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&crudmodel.AdminRule{}).Error
 		}
 		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
 		return nil, fmt.Errorf("%s: %w", stage, cause)
@@ -406,7 +405,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
-	var menuSnapshot []model.AdminRule
+	var menuSnapshot []crudmodel.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		quarantineRestoreErr := quarantine.Restore()
@@ -648,13 +647,13 @@ func validateSharedManifestPath(path string) error {
 	)
 }
 
-func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {
-	var rows []model.AdminRule
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]crudmodel.AdminRule, error) {
+	var rows []crudmodel.AdminRule
 	err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
 	return rows, err
 }
 
-func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRule) error {
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []crudmodel.AdminRule) error {
 	for _, row := range rows {
 		var count int64
 		if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("id=?", row.ID).Count(&count).Error; err != nil {

@@ -1,7 +1,7 @@
 package crud
 
 import (
-	crudmodel "buildadmin-go/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/model"
 	adminauth "buildadmin-go/internal/admin/repository/auth"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"

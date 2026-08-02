@@ -3,7 +3,7 @@ package crud_helper
 import (
 	"encoding/json"
 	"fmt"
-	crudmodel "buildadmin-go/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"

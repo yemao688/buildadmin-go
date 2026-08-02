@@ -15,7 +15,6 @@ import (
 	security2 "buildadmin-go/internal/admin/handler/security"
 	user2 "buildadmin-go/internal/admin/handler/user"
 	"buildadmin-go/internal/admin/middleware"
-	"buildadmin-go/internal/admin/model/crud"
 	"buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/repository/auth"
 	country2 "buildadmin-go/internal/admin/repository/country"
@@ -38,6 +37,7 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
+	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -90,7 +90,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 		InstallHandler: installHandler,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	logModel := crud.NewLogModel(gormDB, configuration, closureEnforcer)
+	logModel := model.NewLogModel(gormDB, configuration, closureEnforcer)
 	logHandler := crud2.NewLogHandler(zapLogger, logModel, authRepository)
 	logRegistrar := crud2.NewLogRegistrar(logHandler)
 	moduleHandler := handler.NewModuleHandler(zapLogger)

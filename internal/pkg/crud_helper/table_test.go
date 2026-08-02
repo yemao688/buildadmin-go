@@ -2,8 +2,7 @@ package crud_helper
 
 import (
 	"fmt"
-	crudmodel "buildadmin-go/internal/admin/model/crud"
-	model "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
 	"strings"
 	"testing"
@@ -99,9 +98,9 @@ func TestActualPrimaryKeyMySQL(t *testing.T) {
 func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = "ba_"
-	require.NoError(t, db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}))
+	require.NoError(t, db.Table("ba_admin_rule").AutoMigrate(&crudmodel.AdminRule{}))
 	menuName := fmt.Sprintf("oracle_menu_snapshot_%d", time.Now().UnixNano())
-	rows := []model.AdminRule{
+	rows := []crudmodel.AdminRule{
 		{Name: menuName, Path: menuName, Title: "snapshot", Type: "menu", Status: "1"},
 		{Name: menuName + "/index", Path: menuName + "/index", Title: "view", Type: "button", Status: "1"},
 	}
@@ -109,12 +108,12 @@ func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 		require.NoError(t, db.Table("ba_admin_rule").Create(&rows[i]).Error)
 	}
 	t.Cleanup(func() {
-		_ = db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error
+		_ = db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&crudmodel.AdminRule{}).Error
 	})
 	snapshot, err := snapshotMenuRules(db, cfg, menuName)
 	require.NoError(t, err)
 	require.Len(t, snapshot, 2)
-	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&model.AdminRule{}).Error)
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Delete(&crudmodel.AdminRule{}).Error)
 	require.NoError(t, restoreMenuRules(db, cfg, snapshot))
 	var count int64
 	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", menuName+"%").Count(&count).Error)

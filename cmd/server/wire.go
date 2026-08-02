@@ -12,7 +12,7 @@ import (
 	routineHandler "buildadmin-go/internal/admin/handler/routine"
 	securityHandler "buildadmin-go/internal/admin/handler/security"
 	userHandler "buildadmin-go/internal/admin/handler/user"
-	crudModel "buildadmin-go/internal/admin/model/crud"
+	crudModel "buildadmin-go/internal/model"
 	authRepo "buildadmin-go/internal/admin/repository/auth"
 	countryRepo "buildadmin-go/internal/admin/repository/country"
 	routineRepo "buildadmin-go/internal/admin/repository/routine"

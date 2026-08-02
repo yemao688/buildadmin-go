@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"errors"
-	crudmodel "buildadmin-go/internal/admin/model/crud"
+	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/utils"
 	"os"
