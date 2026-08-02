@@ -1,8 +1,6 @@
-import createAxios from '/@/utils/axios'
+import createAxios, { getUrl, type Options } from '/@/utils/axios'
 import { isAdminApp, checkFileMimetype } from '/@/utils/common'
-import { getUrl } from '/@/utils/axios'
 import { useAdminInfo } from '/@/stores/adminInfo'
-import { useBaAccount } from '/@/stores/baAccount'
 import { ElNotification, type UploadRawFile } from 'element-plus'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { state as uploadExpandState, fileUpload as uploadExpand } from '/@/components/mixins/baUpload'
@@ -11,6 +9,7 @@ import { uuid } from '/@/utils/random'
 import { i18n } from '../lang'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
+import { getTokenProvider } from '/@/utils/tokenProvider'
 
 /*
  * 公共请求函数和Url定义
@@ -272,16 +271,22 @@ export function getTableFieldList(table: string, clean = true, connection = '') 
     })
 }
 
-export function refreshToken(type: 'admin' | 'baAccount' = 'admin') {
-    const adminInfo = useAdminInfo()
-    const baAccount = useBaAccount()
+export function refreshToken(type: string = 'admin') {
+    const provider = getTokenProvider(type)
+    const store = provider.store()
+    const options: Options = {
+        tokenDomain: provider.domain,
+    }
+    if (provider.useAnotherToken) {
+        options.anotherToken = store.getToken('auth')
+    }
     return createAxios({
         url: refreshTokenUrl,
         method: 'POST',
         data: {
-            refreshToken: type == 'admin' ? adminInfo.getToken('refresh') : baAccount.getToken('refresh'),
+            refreshToken: store.getToken('refresh'),
         },
-    }, type == 'baAccount' ? { anotherToken: baAccount.getToken('auth') } : {})
+    }, options)
 }
 
 /**

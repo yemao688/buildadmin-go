@@ -5,12 +5,15 @@ import { refreshToken } from '/@/api/common'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
 import adminBaseRoute from '/@/router/static/adminBase'
-import { useAdminInfo } from '/@/stores/adminInfo'
-import { useBaAccount } from '/@/stores/baAccount'
 import { useConfig } from '/@/stores/config'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
-import { useUserInfo } from '/@/stores/userInfo'
 import { isAdminApp } from '/@/utils/common'
+import {
+    getTokenProvider,
+    getTokenProviderByRefreshType,
+    getTokenProviders,
+    type TokenProvider,
+} from '/@/utils/tokenProvider'
 
 window.requests = []
 window.tokenRefreshing = false
@@ -38,7 +41,7 @@ export const getUrlPort = (): string => {
     return new URL(url).port
 }
 
-function refreshUserToken(lang: string, refreshToken: string, token: string) {
+export function refreshTokenRequest(provider: TokenProvider, lang: string, refreshToken: string | undefined, token: string | undefined) {
     return axios
         .post(
             '/api/common/refreshToken',
@@ -50,7 +53,7 @@ function refreshUserToken(lang: string, refreshToken: string, token: string) {
                 headers: {
                     'think-lang': lang,
                     server: true,
-                    'ba-user-token': token,
+                    [provider.header]: token ?? '',
                 },
                 responseType: 'json',
             }
@@ -70,9 +73,6 @@ function refreshUserToken(lang: string, refreshToken: string, token: string) {
  */
 function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequestConfig, options: Options = {}, loading: LoadingOptions = {}): T {
     const config = useConfig()
-    const adminInfo = useAdminInfo()
-    const baAccount = useBaAccount()
-    const userInfo = useUserInfo()
 
     const Axios = axios.create({
         baseURL: getUrl(),
@@ -104,19 +104,47 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
     )
 
     const isUserRequest = (url?: string) => !isAdminApp() && /^\/api\//.test(url ?? '')
-    const retryUserRequest = (requestConfig: AxiosRequestConfig) => {
+    const getRequestProvider = (url?: string) => {
+        if (options.tokenDomain) return getTokenProvider(options.tokenDomain)
+        if (options.anotherToken) return getTokenProvider('baAccount')
+        return getTokenProvider(isUserRequest(url) ? 'userInfo' : 'admin')
+    }
+    const getRefreshProvider = () => {
+        if (options.tokenDomain) return getTokenProvider(options.tokenDomain)
+        return getTokenProvider(options.anotherToken ? 'baAccount' : 'admin')
+    }
+    const getRefreshFailureProvider = (provider: TokenProvider) => {
+        if (options.tokenDomain || options.anotherToken || isAdminApp()) return provider
+        return getTokenProvider('baAccount')
+    }
+    const setProviderHeader = (headers: anyObj, provider: TokenProvider, token: string) => {
+        headers[provider.header] = token
+    }
+    const retryTokenRequest = (requestConfig: AxiosRequestConfig, provider: TokenProvider) => {
         if (!userTokenRefreshing) {
             userTokenRefreshing = true
-            return refreshUserToken(config.lang.defaultLang, userInfo.getToken('refresh'), userInfo.getToken('auth'))
+            const store = provider.store()
+            const refresh = provider.refresher
+                ? provider.refresher({
+                    provider,
+                    lang: config.lang.defaultLang,
+                    refreshToken: store.getToken('refresh'),
+                    token: store.getToken('auth'),
+                })
+                : refreshToken(provider.domain).then((res) => {
+                    if (!res.data?.token) return Promise.reject(res)
+                    return res.data.token as string
+                })
+            return refresh
                 .then((token) => {
-                    userInfo.setToken(token, 'auth')
+                    store.setToken(token, 'auth')
                     userTokenRefreshing = false
                     userRequests.forEach((callback) => callback(token))
                     userRequests.length = 0
                     return Axios(requestConfig)
                 })
                 .catch((err) => {
-                    userInfo.removeToken()
+                    store.removeToken()
                     userTokenRefreshing = false
                     userRequests.forEach((callback) => callback(''))
                     userRequests.length = 0
@@ -130,7 +158,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         return new Promise((resolve) => {
             userRequests.push((token) => {
                 const headers = (requestConfig.headers ?? {}) as anyObj
-                headers['ba-user-token'] = token
+                headers[provider.header] = token
                 requestConfig.headers = headers
                 resolve(Axios(requestConfig))
             })
@@ -152,13 +180,16 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
 
             // 自动携带token
             if (config.headers) {
-                const token = adminInfo.getToken()
-                if (token) (config.headers as anyObj).batoken = token
+                const adminProvider = getTokenProvider('admin')
+                const token = adminProvider.store().getToken()
+                if (token) (config.headers as anyObj)[adminProvider.header] = token
                 const userToken = options.anotherToken
-                if (userToken) (config.headers as anyObj)['ba-user-token'] = userToken
-                if (!options.anotherToken && isUserRequest(config.url)) {
-                    const frontendUserToken = userInfo.getToken()
-                    if (frontendUserToken) (config.headers as anyObj)['ba-user-token'] = frontendUserToken
+                const requestProvider = getRequestProvider(config.url)
+                if (userToken) {
+                    (config.headers as anyObj)[requestProvider.header] = userToken
+                } else if (requestProvider.domain != adminProvider.domain) {
+                    const requestToken = requestProvider.store().getToken()
+                    if (requestToken) (config.headers as anyObj)[requestProvider.header] = requestToken
                 }
             }
 
@@ -177,58 +208,55 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
 
             if (response.config.responseType == 'json') {
                 if (response.data && response.data.code !== 1) {
-                    if (isUserRequest(response.config.url) && userInfo.getToken() && (response.data.code == 401 || response.data.code == 409)) {
-                        return retryUserRequest(response.config)
+                    const requestProvider = getRequestProvider(response.config.url)
+                    if (isUserRequest(response.config.url) && requestProvider.store().getToken() && (response.data.code == 401 || response.data.code == 409)) {
+                        return retryTokenRequest(response.config, requestProvider)
                     }
                     if (response.data.code == 409) {
                         if (!window.tokenRefreshing) {
                             window.tokenRefreshing = true
-                            return refreshToken(options.anotherToken ? 'baAccount' : 'admin')
+                            const refreshProvider = getRefreshProvider()
+                            return refreshToken(refreshProvider.domain)
                                 .then((res) => {
-                                    if (res.data.type == 'admin-refresh') {
-                                        adminInfo.setToken(res.data.token, 'auth')
-                                        response.headers.batoken = `${res.data.token}`
-                                        window.requests.forEach((cb) => cb(res.data.token, 'admin-refresh'))
-                                    } else if (res.data.type == 'user-refresh') {
-                                        baAccount.setToken(res.data.token, 'auth')
-                                        response.headers['ba-user-token'] = `${res.data.token}`
-                                        window.requests.forEach((cb) => cb(res.data.token, 'user-refresh'))
+                                    const responseProvider = getTokenProviderByRefreshType(res.data.type) ??
+                                        (refreshProvider.refreshType ? undefined : refreshProvider)
+                                    if (responseProvider) {
+                                        responseProvider.store().setToken(res.data.token, 'auth')
+                                        setProviderHeader(response.headers as anyObj, responseProvider, `${res.data.token}`)
+                                        window.requests.forEach((cb) => cb(res.data.token, res.data.type))
                                     }
                                     window.requests = []
                                     return Axios(response.config)
                                 })
                                 .catch((err) => {
-                                    if (!options.anotherToken && isAdminApp()) {
-                                        adminInfo.removeToken()
-                                        if (router.currentRoute.value.name != 'adminLogin') {
-                                            router.push({ name: 'adminLogin' })
-                                            return Promise.reject(err)
-                                        } else {
-                                            response.headers.batoken = ''
-                                            window.requests.forEach((cb) => cb('', 'admin-refresh'))
-                                            window.requests = []
-                                            return Axios(response.config)
-                                        }
-                                    } else {
-                                        baAccount.removeToken()
-                                        response.headers['ba-user-token'] = ''
-                                        window.requests.forEach((cb) => cb('', 'user-refresh'))
-                                        window.requests = []
-                                        return Axios(response.config)
+                                    const failureProvider = getRefreshFailureProvider(refreshProvider)
+                                    failureProvider.store().removeToken()
+                                    const loginRoute = failureProvider.loginRoute
+                                    if (typeof loginRoute == 'function') {
+                                        loginRoute()
+                                        return Promise.reject(err)
                                     }
+                                    if (loginRoute) {
+                                        if (router.currentRoute.value.name != loginRoute) {
+                                            router.push({ name: loginRoute })
+                                            return Promise.reject(err)
+                                        }
+                                    }
+                                    setProviderHeader(response.headers as anyObj, failureProvider, '')
+                                    window.requests.forEach((cb) => cb('', failureProvider.refreshType ?? failureProvider.domain))
+                                    window.requests = []
+                                    return Axios(response.config)
                                 })
                                 .finally(() => {
                                     window.tokenRefreshing = false
                                 })
                         } else {
+                            const refreshProvider = getRefreshProvider()
                             return new Promise((resolve) => {
                                 // 用函数形式将 resolve 存入，等待刷新后再执行
                                 window.requests.push((token: string, type: string) => {
-                                    if (type == 'admin-refresh') {
-                                        response.headers.batoken = `${token}`
-                                    } else {
-                                        response.headers['ba-user-token'] = `${token}`
-                                    }
+                                    const responseProvider = getTokenProviderByRefreshType(type) ?? refreshProvider
+                                    setProviderHeader(response.headers as anyObj, responseProvider, `${token}`)
                                     resolve(Axios(response.config))
                                 })
                             })
@@ -250,11 +278,8 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
 
                         // 需要登录，清理 token，转到登录页
                         if (response.data.data.type == 'need login') {
-                            if (isAdminApp()) {
-                                adminInfo.removeToken()
-                            } else {
-                                baAccount.removeToken()
-                            }
+                            const loginProvider = getTokenProvider(isAdminApp() ? 'admin' : 'baAccount')
+                            loginProvider.store().removeToken()
                             routerPath += '/login'
                         }
                         router.push({ path: routerPath })
@@ -275,8 +300,8 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         (error) => {
             error.config && removePending(error.config)
             options.loading && closeLoading(options) // 关闭loading
-            if (error.config && isUserRequest(error.config.url) && userInfo.getToken() && [401, 409].includes(error.response?.status)) {
-                return retryUserRequest(error.config)
+            if (error.config && isUserRequest(error.config.url) && getRequestProvider(error.config.url).store().getToken() && [401, 409].includes(error.response?.status)) {
+                return retryTokenRequest(error.config, getRequestProvider(error.config.url))
             }
             options.showErrorMessage && httpErrorStatusHandle(error) // 处理错误状态码
             return Promise.reject(error) // 错误继续返回给到具体页面
@@ -396,11 +421,17 @@ function getPendingKey(config: AxiosRequestConfig) {
     let { data } = config
     const { url, method, params, headers } = config
     if (typeof data === 'string') data = JSON.parse(data) // response里面返回的config.data是个字符串对象
+    const tokenValues: string[] = []
+    const tokenHeaders = new Set<string>()
+    getTokenProviders().forEach((provider) => {
+        if (tokenHeaders.has(provider.header)) return
+        tokenHeaders.add(provider.header)
+        tokenValues.push(headers && (headers as anyObj)[provider.header] ? (headers as anyObj)[provider.header] : '')
+    })
     return [
         url,
         method,
-        headers && (headers as anyObj).batoken ? (headers as anyObj).batoken : '',
-        headers && (headers as anyObj)['ba-user-token'] ? (headers as anyObj)['ba-user-token'] : '',
+        ...tokenValues,
         JSON.stringify(params),
         JSON.stringify(data),
     ].join('&')
@@ -440,6 +471,8 @@ export interface Options {
     showSuccessMessage?: boolean
     // 当前请求使用另外的用户token
     anotherToken?: string
+    // 当前请求使用的token provider domain
+    tokenDomain?: string
 }
 
 /*
