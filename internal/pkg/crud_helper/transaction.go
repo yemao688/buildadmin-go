@@ -54,8 +54,8 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 			filepath.Join(utils.RootPath(), repositoryFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
 			filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"),
-			filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
-			filepath.Join(utils.RootPath(), "cmd", "app", "wire_gen.go"),
+			filepath.Join(utils.RootPath(), "cmd", "server", "wire.go"),
+			filepath.Join(utils.RootPath(), "cmd", "server", "wire_gen.go"),
 		},
 	}
 	for _, path := range manifest.Generated {
@@ -274,8 +274,8 @@ func manifestPathIsShared(path string) bool {
 	root := filepath.Clean(utils.RootPath())
 	return filepath.Base(clean) == "provider.go" ||
 		clean == filepath.Join(root, "internal", "router", "registrar_set.go") ||
-		clean == filepath.Join(root, "cmd", "app", "wire.go") ||
-		clean == filepath.Join(root, "cmd", "app", "wire_gen.go")
+		clean == filepath.Join(root, "cmd", "server", "wire.go") ||
+		clean == filepath.Join(root, "cmd", "server", "wire_gen.go")
 }
 
 func atomicRestore(path string, data []byte, mode os.FileMode) error {

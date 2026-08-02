@@ -479,7 +479,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
 		modelProviderPath,
 		filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"),
-		filepath.Join(utils.RootPath(), "cmd", "app", "wire.go"),
+		filepath.Join(utils.RootPath(), "cmd", "server", "wire.go"),
 	); err != nil {
 		return fail("parse guard", err)
 	}
@@ -630,8 +630,8 @@ func validateSharedManifestPath(path string) error {
 	root := utils.RootPath()
 	for _, allowed := range []string{
 		filepath.Join(root, "internal", "router", "registrar_set.go"),
-		filepath.Join(root, "cmd", "app", "wire.go"),
-		filepath.Join(root, "cmd", "app", "wire_gen.go"),
+		filepath.Join(root, "cmd", "server", "wire.go"),
+		filepath.Join(root, "cmd", "server", "wire_gen.go"),
 	} {
 		if path == allowed {
 			return nil
@@ -1122,7 +1122,7 @@ func executeWire() error {
 	defer cancel()
 	// 与 cmd/server 的 //go:generate 声明一致，经 go run 运行 wire，不要求开发机单独安装 wire 二进制。
 	cmd := exec.CommandContext(ctx, "go", "run", "-mod=mod", "github.com/google/wire/cmd/wire")
-	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "app")
+	cmd.Dir = filepath.Join(utils.RootPath(), "cmd", "server")
 	output, err := cmd.CombinedOutput()
 	if ctx.Err() != nil {
 		return fmt.Errorf("wire timed out after 5m")

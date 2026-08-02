@@ -365,7 +365,7 @@ func TestRemoveWireProviderSetKeepsSharedProviderSetWhenEntriesRemain(t *testing
 		t.Fatal(err)
 	}
 
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
 	original, err := os.ReadFile(wirePath)
 	if err != nil {
 		t.Fatal(err)

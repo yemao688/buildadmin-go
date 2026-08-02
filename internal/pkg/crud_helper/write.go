@@ -737,7 +737,7 @@ func AddWireProviderSet(rootDir string) error {
 	if err != nil || !needed {
 		return err
 	}
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
 	content, err := os.ReadFile(wirePath)
 	if err != nil {
 		return err
@@ -786,7 +786,7 @@ func RemoveWireProviderSet(rootDir string) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "app", "wire.go")
+	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
 	content, err := os.ReadFile(wirePath)
 	if err != nil {
 		return err

@@ -268,7 +268,7 @@ func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
 	paths := []string{
 		filepath.Join(root, "internal", "admin", "model", "legacy", "provider.go"),
 		filepath.Join(root, "internal", "router", "registrar_set.go"),
-		filepath.Join(root, "cmd", "app", "wire_gen.go"),
+		filepath.Join(root, "cmd", "server", "wire_gen.go"),
 	}
 	manifest, err := normalizeDeleteManifest(FileManifest{Generated: []string{
 		paths[0], paths[1], paths[2],
