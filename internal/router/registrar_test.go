@@ -15,6 +15,7 @@ import (
 	userhandler "go-build-admin/internal/admin/handler/user"
 	api "go-build-admin/internal/api/handler"
 	"go-build-admin/internal/middleware"
+	adminMiddleware "go-build-admin/internal/admin/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -123,7 +124,7 @@ func newCompleteRouter() *gin.Engine {
 
 	return InitRouter(
 		&lumberjack.Logger{},
-		&middleware.Login{},
+		&adminMiddleware.Login{},
 		&middleware.Authorization{},
 		&middleware.Security{},
 		&middleware.UserLogin{},

@@ -5,6 +5,7 @@ import (
 	admin "go-build-admin/internal/admin/handler"
 	api "go-build-admin/internal/api/handler"
 	"go-build-admin/internal/middleware"
+	adminMiddleware "go-build-admin/internal/admin/middleware"
 	"go-build-admin/internal/utils"
 	"net/http"
 	"os"
@@ -18,11 +19,11 @@ import (
 
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
-	loginM *middleware.Login,
-	authorizationM *middleware.Authorization,
-	securityM *middleware.Security,
+	loginM *adminMiddleware.Login,
+	authorizationM *adminMiddleware.Authorization,
+	securityM *adminMiddleware.Security,
 	userLoginM *middleware.UserLogin,
-	recordM *middleware.Record,
+	recordM *adminMiddleware.Record,
 
 	indexHandler *admin.IndexHandler,
 
@@ -78,9 +79,9 @@ func InitRouter(
 	router.POST("/admin/Index/login", indexHandler.Login)
 	router.GET("/admin/ajax/buildSuffixSvg", ajaxHandler.BuildSuffixSvg)
 	router.GET("/admin/ajax/terminal", ajaxHandler.Terminal)
-	middleware.RegisterPermissionExempt("index", "index", "logout")
-	middleware.RegisterPermissionExempt("ajax", "*")
-	middleware.RegisterPermissionExempt("alioss", "callback")
+	adminMiddleware.RegisterPermissionExempt("index", "index", "logout")
+	adminMiddleware.RegisterPermissionExempt("ajax", "*")
+	adminMiddleware.RegisterPermissionExempt("alioss", "callback")
 
 	// 引入admin路由
 	adminRouter := router.Group("/admin/").Use(loginM.Handler(), authorizationM.Handler(), securityM.Handler())

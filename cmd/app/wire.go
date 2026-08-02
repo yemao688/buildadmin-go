@@ -12,16 +12,17 @@ import (
 	routineHandler "go-build-admin/internal/admin/handler/routine"
 	securityHandler "go-build-admin/internal/admin/handler/security"
 	userHandler "go-build-admin/internal/admin/handler/user"
-	authModel "go-build-admin/internal/admin/model/auth"
-	countryModel "go-build-admin/internal/admin/model/country"
 	crudModel "go-build-admin/internal/admin/model/crud"
-	routineModel "go-build-admin/internal/admin/model/routine"
-	securityModel "go-build-admin/internal/admin/model/security"
-	userModel "go-build-admin/internal/admin/model/user"
+	authRepo "go-build-admin/internal/admin/repository/auth"
+	countryRepo "go-build-admin/internal/admin/repository/country"
+	routineRepo "go-build-admin/internal/admin/repository/routine"
+	securityRepo "go-build-admin/internal/admin/repository/security"
+	userRepo "go-build-admin/internal/admin/repository/user"
 	"go-build-admin/internal/conf"
 
 	adminHandler "go-build-admin/internal/admin/handler"
-	adminModel "go-build-admin/internal/admin/model"
+	adminMiddleware "go-build-admin/internal/admin/middleware"
+	adminRepo "go-build-admin/internal/admin/repository"
 	apiHandler "go-build-admin/internal/api/handler"
 	"go-build-admin/internal/cmd"
 	commandHandler "go-build-admin/internal/cmd/handler"
@@ -52,6 +53,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 
 		pkg.ProviderSet,
 		middleware.ProviderSet,
+		adminMiddleware.ProviderSet,
 		area.ProviderSet,
 		country.ProviderSet,
 		upload.ProviderSet,
@@ -64,14 +66,14 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		securityHandler.ProviderSet,
 		userHandler.ProviderSet,
 		crudHandler.ProviderSet,
-		adminModel.ProviderSet,
-		countryModel.ProviderSet,
-		authModel.ProviderSet,
-		routineModel.ProviderSet,
-		securityModel.ProviderSet,
-		userModel.ProviderSet,
+		adminRepo.ProviderSet,
+		countryRepo.ProviderSet,
+		authRepo.ProviderSet,
+		routineRepo.ProviderSet,
+		securityRepo.ProviderSet,
+		userRepo.ProviderSet,
 		crudModel.ProviderSet,
-		wire.Bind(new(terminal.AuthModel), new(*authModel.AuthModel)),
+		wire.Bind(new(terminal.AuthModel), new(*authRepo.AuthRepository)),
 		apiHandler.ProviderSet,
 
 		router.ProvideRegistrars,

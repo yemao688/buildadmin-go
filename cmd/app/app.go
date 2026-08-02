@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go-build-admin/internal/cron"
-	"go-build-admin/internal/middleware"
+	adminMiddleware "go-build-admin/internal/admin/middleware"
 	"go-build-admin/internal/conf"
 	"net"
 	"net/http"
@@ -20,7 +20,7 @@ var appStartedAt = time.Now()
 type App struct {
 	config  *conf.Configuration
 	logger  *zap.Logger
-	authM   *middleware.Authorization
+	authM   *adminMiddleware.Authorization
 	httpSrv *http.Server
 	cronSrv *cron.Cron
 	cxt     context.Context
@@ -39,7 +39,7 @@ func newHttpServer(
 func newApp(
 	config *conf.Configuration,
 	logger *zap.Logger,
-	authM *middleware.Authorization,
+	authM *adminMiddleware.Authorization,
 	httpSrv *http.Server,
 	cronSrv *cron.Cron,
 ) *App {
