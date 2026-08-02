@@ -1,12 +1,16 @@
 import { ElNotification } from 'element-plus'
-import { compact, reverse } from 'lodash-es'
+import { compact, isEmpty, reverse } from 'lodash-es'
 import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
 import adminBaseRoute from '/@/router/static/adminBase'
+import { frontendBaseRoute } from '/@/router/static/memberCenterBase'
 import { useConfig } from '/@/stores/config'
+import { useMemberCenter } from '/@/stores/memberCenter'
 import { useNavTabs } from '/@/stores/navTabs'
+import { useSiteConfig } from '/@/stores/siteConfig'
+import { isAdminApp } from '/@/utils/common'
 import { closeShade } from '/@/utils/pageShade'
 
 /**
@@ -84,6 +88,33 @@ export const onClickMenu = (menu: RouteRecordRaw) => {
         closeShade(() => {
             config.setLayout('menuCollapse', true)
         })
+    }
+}
+
+/**
+ * 处理前台的路由
+ * @param routes 路由规则
+ * @param menus 会员中心菜单路由规则
+ */
+export const handleFrontendRoute = (routes: any[] = [], menus: any[] = []) => {
+    const siteConfig = useSiteConfig()
+    const memberCenter = useMemberCenter()
+    const viewsComponent = import.meta.glob('/src/views/frontend/**/*.vue')
+
+    if (routes.length) {
+        addRouteAll(viewsComponent, routes, '', true)
+        memberCenter.mergeAuthNode(handleAuthNode(routes, '/'))
+        siteConfig.setHeadNav(handleMenuRule(routes, '/', ['nav']))
+        memberCenter.mergeNavUserMenus(handleMenuRule(routes, '/', ['nav_user_menu']))
+    }
+    if (menus.length && isEmpty(memberCenter.state.viewRoutes)) {
+        addRouteAll(viewsComponent, menus, frontendBaseRoute.name as string)
+        const menuMemberCenterBaseRoute = (frontendBaseRoute.path as string) + '/'
+        memberCenter.mergeAuthNode(handleAuthNode(menus, menuMemberCenterBaseRoute))
+
+        memberCenter.mergeNavUserMenus(handleMenuRule(menus, '/', ['nav_user_menu']))
+        memberCenter.setShowHeadline(menus.length > 1)
+        memberCenter.setViewRoutes(handleMenuRule(menus, menuMemberCenterBaseRoute))
     }
 }
 
@@ -228,7 +259,7 @@ export const addRouteItem = (viewsComponent: Record<string, any>, route: any, pa
     let path = '',
         component
     if (route.menu_type == 'iframe') {
-        path = adminBaseRoute.path + '/iframe/' + encodeURIComponent(route.url)
+        path = (isAdminApp() ? adminBaseRoute.path : frontendBaseRoute.path) + '/iframe/' + encodeURIComponent(route.url)
         component = () => import('/@/layouts/common/router-view/iframe.vue')
     } else {
         path = parentName ? route.path : '/' + route.path
