@@ -131,6 +131,8 @@ formFields: [username, password, nickname, status]
 columnFields: [id, username, nickname, status] # password 只进表单，不进列表
 ```
 
+**时间列约定**：`columnFields` 末尾建议始终带上 `create_time` 与 `update_time`（bigint 时间列，供排序与数据排查；它们是自动维护字段，不进请求 DTO，但列表展示时间戳是常规需求）。省略时列表没有时间列，后台按时间排序只能靠业务字段。
+
 文末"完整示例"演示了同一模式：`note` 只在 `formFields` 中，不进列表。注意带 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键例外：它们应保留在 `columnFields` 里以获得 FK 搜索和 relation display 列，原始 FK 列会被自动隐藏（规则见"关系"）。
 
 ## `dataScope` 与 `menu`
@@ -180,7 +182,15 @@ fields:
       remoteSourceConfigType: crud
       remoteController: internal/admin/handler/admin.go
       remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
 ```
+
+**owner 列三约定（AI 生成 spec 时必须遵守）**：
+
+1. **位置靠前**：owner 列放在字段列表靠前位置（紧跟 `id` 之后），不要埋在业务字段末尾；
+2. **命名统一**：comment 使用业务语义名，本仓库代理类业务的归属/上级列统一为「上级代理」四个字；
+3. **展示列标题**：relation display 列标题默认取远程表字段的 comment（如 admin.username 的 comment「用户名」），必须在 `table.label` 里覆盖为与 comment 一致的「上级代理」，否则列表页列标题会显示「用户名」而不是归属语义。
 
 `formBuildExclude: true` 让操作员不能手工选择 owner，由 `assignOnCreate` 自动写入；这里不要再加 `tableBuildExclude: true`，因为保留表格列才能同时获得自动隐藏的原始 FK 搜索和可见的 relation display 列（规则见"关系"）。owner/admin 归属列通常展示 `username`，reviewer 这类独立审批人语义再单独使用 `nickname` 等字段。
 
@@ -236,6 +246,16 @@ PHP 的无默认值 SQL family 是：`text`、`blob`、`geometry`、`geometrycol
 ### `tinyint(1)` 布尔存储语义
 
 对于 `tinyint(1)` 布尔存储字段（包括 YAML 中 `type: tinyint` 且 `length: 1` 的字段），生成的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式，也兼容 `true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`，以保持与 BuildAdmin 前端开关约定一致；非规范值会被拒绝。`char(1)` 不按布尔存储处理。
+
+### 组件类型选择指引
+
+选型先看语义，不要照搬字段名后缀：
+
+- **单布尔**（是/否、启用/禁用等二值字段）→ `switch`，存储 `tinyint(1)` 或 `char(1)`。**不要写成 `checkbox`**——checkbox 的语义是可多选，单布尔字段用 checkbox 会得到"只能勾一个的多选框"，语义和类型都错。
+- **多选**（可同时勾选多个值）→ `checkbox`，存储 `set` 或 varchar 逗号串，comment 每个键对应一个存储值。
+- **单选枚举** → `radio`（选项少）或 `select`（选项多/需要字典），存储 enum/varchar/tinyint，comment 键值如 `状态:0=待支付,1=已支付`。
+
+示例：`is_invoice`（是否需要发票）是单布尔 → `switch` + `tinyint(1)`，而不是 varchar + checkbox。
 
 ## `designType`、推断规则与默认属性
 
