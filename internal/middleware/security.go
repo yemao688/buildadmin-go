@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"net/http"
 	"strings"
 	"sync"
 
@@ -17,33 +16,13 @@ type AtomicRoute struct {
 	Method string
 }
 
-var atomicRoutes = map[AtomicRoute]struct{}{
-	{Route: "auth/admin", Action: "add", Method: http.MethodPost}:                     {},
-	{Route: "auth/admin", Action: "edit", Method: http.MethodPost}:                    {},
-	{Route: "auth/admin", Action: "del", Method: http.MethodDelete}:                   {},
-	{Route: "auth/group", Action: "add", Method: http.MethodPost}:                     {},
-	{Route: "auth/group", Action: "edit", Method: http.MethodPost}:                    {},
-	{Route: "auth/group", Action: "del", Method: http.MethodDelete}:                   {},
-	{Route: "auth/rule", Action: "add", Method: http.MethodPost}:                      {},
-	{Route: "auth/rule", Action: "edit", Method: http.MethodPost}:                     {},
-	{Route: "auth/rule", Action: "del", Method: http.MethodDelete}:                    {},
-	{Route: "routine/config", Action: "add", Method: http.MethodPost}:                 {},
-	{Route: "routine/config", Action: "edit", Method: http.MethodPost}:                {},
-	{Route: "routine/config", Action: "del", Method: http.MethodDelete}:               {},
-	{Route: "user/user", Action: "add", Method: http.MethodPost}:                      {},
-	{Route: "user/user", Action: "edit", Method: http.MethodPost}:                     {},
-	{Route: "user/user", Action: "del", Method: http.MethodDelete}:                    {},
-	{Route: "security/datarecycle", Action: "add", Method: http.MethodPost}:           {},
-	{Route: "security/datarecycle", Action: "edit", Method: http.MethodPost}:          {},
-	{Route: "security/datarecycle", Action: "del", Method: http.MethodDelete}:         {},
-	{Route: "security/datarecyclelog", Action: "restore", Method: http.MethodPost}:    {},
-	{Route: "security/datarecyclelog", Action: "del", Method: http.MethodDelete}:      {},
-	{Route: "security/sensitivedata", Action: "add", Method: http.MethodPost}:         {},
-	{Route: "security/sensitivedata", Action: "edit", Method: http.MethodPost}:        {},
-	{Route: "security/sensitivedata", Action: "del", Method: http.MethodDelete}:       {},
-	{Route: "security/sensitivedatalog", Action: "rollback", Method: http.MethodPost}: {},
-	{Route: "security/sensitivedatalog", Action: "del", Method: http.MethodDelete}:    {},
-}
+// atomicRoutes holds the atomic-route capabilities. The set is populated
+// exclusively by router construction ("route registration = capability
+// registration": AdminRouter registers every registrar-declared capability at
+// startup) and by the CRUD generator/delete runtime hooks. There is no
+// hardcoded seed table: capabilities always mirror the actually mounted
+// routes, which the route↔capability invariant test enforces.
+var atomicRoutes = map[AtomicRoute]struct{}{}
 
 // atomicRoutesMu guards atomicRoutes: CRUD generation registers capabilities
 // at request time while normal traffic reads them concurrently.
@@ -60,8 +39,7 @@ func normalizeAtomicRoute(route AtomicRoute) AtomicRoute {
 }
 
 // RegisterAtomicRoute lets router construction be the source of truth for
-// capability registration. Seed entries remain for deployments that construct
-// Security in isolation (and for compatibility tests).
+// capability registration.
 func RegisterAtomicRoute(route AtomicRoute) {
 	atomicRoutesMu.Lock()
 	defer atomicRoutesMu.Unlock()

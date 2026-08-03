@@ -14,6 +14,7 @@ import (
 	"buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
+	middlewarecore "buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/testutil"
@@ -74,6 +75,17 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	require.NoError(t, db.Exec("INSERT INTO "+q("user")+" VALUES (10,2,'owned','old',1),(11,4,'child','old-child',2),(12,3,'sibling','old-sibling',3)").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("security_data_recycle")+" (name,controller,controller_as,data_table,primary_key,status) VALUES ('root-items','items','auth/admin','user','id','1'),('child-items','items','auth/admin','user','id','1')").Error)
 	require.NoError(t, db.Exec("INSERT INTO "+q("security_sensitive_data")+" (name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES ('root-items','items','auth/admin','user','id','{\"username\":\"username\"}','1'),('child-items','items','auth/admin','user','id','{\"username\":\"username\"}','1')").Error)
+
+	// The fixture drives the Security middleware over /admin/auth.Admin/edit
+	// and /admin/auth.Admin/del. With the hardcoded seed table gone, the
+	// atomic capabilities must be declared explicitly, exactly as router
+	// construction would register them.
+	middlewarecore.RegisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+	middlewarecore.RegisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "del", Method: http.MethodDelete})
+	t.Cleanup(func() {
+		middlewarecore.UnregisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+		middlewarecore.UnregisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "del", Method: http.MethodDelete})
+	})
 	return f
 }
 

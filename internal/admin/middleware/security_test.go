@@ -52,6 +52,13 @@ func TestTransactionResponseWriterIsolatesHeaders(t *testing.T) {
 
 func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	// The capability map is populated by route registration; an isolated
+	// construction must declare the capability explicitly.
+	middlewarecore.RegisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+	t.Cleanup(func() {
+		middlewarecore.UnregisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+	})
+
 	r := gin.New()
 	r.POST("/admin/auth.Admin/edit", func(c *gin.Context) {})
 	req := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/edit", nil)
