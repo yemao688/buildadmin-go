@@ -302,12 +302,19 @@ Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/se
 
 | 键                   | 类型          | 语义                                                |
 | -------------------- | ------------- | --------------------------------------------------- |
-| `width`              | `int`（px，可选） | 列宽，单位为 px；不填写时按 `designType` 使用默认值（如 `pk` 为 70、`timestamp`/`datetime` 为 160）。 |
+| `width`              | `int`（px，可选） | 列宽，单位为 px；不填写时按 `designType` 使用默认值，**只有 `pk`(70)、`spk`(180)、`timestamp`/`datetime`(160) 有默认值，其余类型默认 0（auto）**。 |
 | `operator`           | `string`      | 搜索操作符，如 `LIKE`、`RANGE`、`eq`、`false`。     |
 | `sortable`           | `string`      | 如 `custom`、`false`。                              |
 | `render`             | `string`      | 如 `none`、`tag`、`tags`、`switch`、`datetime`。    |
 | `timeFormat`         | `string`      | 时间渲染格式。                                      |
 | `label`              | `string`      | 列标题表达式或文本。                                |
+
+**`width` 必须显式设置的场景（AI 生成 spec 时必须遵守）**：除 `pk`/`spk`/时间列外，默认宽度为 0（auto）——字段多时 el-table 会压缩 auto 列，**中文列标题会被截断成省略号**（如 4 字标题"上级代理"被压成"上级…"）。因此：
+
+- **标题 ≥3 个中文字**（或任意语言标题较长）的列，必须显式设置 `table.width`；
+- **render 为 `tag`/`tags`/`switch`/`image`/`images`/`datetime` 的列**同样必须设置（渲染内容比纯文本更宽）。
+
+**估算公式**：`标题宽度 + 内容最大宽度 + 40px 余量`；中文字符按约 **14px/字**、英文/数字按约 **8px/字符** 估算，tag 渲染列再加最长选项文本宽度。参考值：4 字标题（如"上级代理"）→ ≥140px；6 字标题 → ≥160px；普通文本列 140–180px；长内容列（地址/备注/URL）200–260px；时间列用默认 160px；操作列固定 140px 无需配置。
 | `show`               | `string`      | 常见值 `false`。                                    |
 | `comSearchRender`    | `string`      | 公共搜索渲染器。                                    |
 | `comSearchInputAttr` | string 或 map | 公共搜索输入扩展属性。                              |
