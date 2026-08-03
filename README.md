@@ -71,17 +71,20 @@ pnpm build
 ## 目录结构
 
 ```text
-cmd/server/          应用入口及 Wire wiring（wire.go/wire_gen.go）
-internal/            全部私有代码（两渠道 + 共享内核）
+cmd/server/          应用入口（28 行极简 main，仅调用 commands.Execute）+ Wire wiring（wire.go/wire_gen.go）
+internal/            全部私有代码（两业务渠道 + 安装渠道 + 共享内核）
   admin/             后台渠道：repository/dto/handler/router 均为单包（文件名=表名）、
                      middleware（登录/权限/安全审计）、validate
   api/               门户/公共渠道：service/middleware/dto/repository/handler/router
+  install/           安装渠道：handler + 自注册路由（/install 与 /api/install/*）+ provider
   model/             共享贫血实体记录层（含 projection/ 投影子包）
   common/            跨渠道领域服务（money/siteconfig/area/country/upload）
   pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper 等）
   middleware/        真·全局中间件
-  router/            根装配件（组合两渠道 + 全局中间件 + 静态资源）
-  conf/ database/ infra/ utils/ cmd/ i18n/  配置、三轨迁移、连接初始化、工具、命令、本地化
+  router/            纯 bootstrap：引擎/全局中间件/静态资源/三渠道挂载
+  migrations/        三轨迁移（official/framework/business）+ 内部迁移基础设施
+  commands/          Cobra CLI 命令（root/server/crud/migrate/setup 等）
+  conf/ infra/ utils/ i18n/ cron/  配置、连接初始化、工具、本地化、定时任务
 configs/config.defaults.yaml 运行基座（完整默认配置）
 configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）

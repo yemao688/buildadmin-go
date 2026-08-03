@@ -39,13 +39,13 @@
 
 - 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
-- 真实入口和 wiring 是 `cmd/server/main.go`（极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（组合者，挂载两渠道路由）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go`/`server.go`/`crud.go`/`migrate.go`/`setup.go` 等，文件名与命令名一一对应）。
+- 真实入口和 wiring 是 `cmd/server/main.go`（28 行极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/三渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。
 - `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 Web 安装器写入 `/install`；安装器只写 MySQL 连接和生成的 `token.key`。全新检出且没有它时，服务以只读基座进入安装向导，不会复制基座，非 serve 命令在没有真实配置时快速失败。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 
 ## 分层与边界（v3.0.0 架构）
 
-后端全部私有代码位于 `internal/`，按"两渠道 + 共享内核"分层。admin 渠道已拍平：`repository`、`dto`、`handler`、`router` 均为单一 package，生成产物文件名恒等于表名，不再有子目录：
+后端全部私有代码位于 `internal/`，按"两业务渠道 + 安装渠道 + 共享内核"分层。admin 渠道已拍平：`repository`、`dto`、`handler`、`router` 均为单一 package，生成产物文件名恒等于表名，不再有子目录：
 
 | 层 | 职责 | 允许依赖 | 禁止依赖 |
 |---|---|---|---|
@@ -53,12 +53,13 @@
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper 等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*）·`validate/` | model、pkg、common | `internal/api` |
-| `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册，`provider.go` 的 `ProvideRegistrars` 聚合各模块 registrar） | model、pkg、common | `internal/admin` |
+| `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
+| `internal/install` | 安装渠道（自注册）：`handler.go` + `router.go`（/install 与 /api/install/*，只经全局中间件，不进入 UserLogin）+ `provider.go` | model、pkg、common | 各业务渠道 |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
-| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
-| `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n` | 配置、三轨迁移、连接初始化、工具、本地化 | — | — |
+| `internal/router` | 纯 bootstrap：创建 gin.Engine、挂载全局中间件与静态资源、调用 admin/api/install 三渠道注册器完成挂载；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
+| `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n`、`internal/commands` | 配置、三轨迁移、连接初始化、工具、本地化、CLI 命令编排 | — | — |
 
-边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
+边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两业务渠道 handler（admin/api）禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
 
 生成器锚点与产物边界：实体/仓库/DTO/handler/registrar 五类 Go 产物全部"文件名=表名"落单包（`internal/model`、`internal/admin/{repository,dto,handler,router}`）；`internal/admin/repository/provider.go` 与 `internal/admin/handler/provider.go` 各为合并 ProviderSet（生成器逐项追加构造器），`internal/admin/router/provider.go` 同时持有合并 ProviderSet 与 `ProvideRegistrars` 锚点（新模块一行 handler 参数 + 返回条目）；生成器不再修改 `cmd/server/wire.go`。
 
@@ -123,7 +124,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
-- 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；`database/migrations/model/*.gen.go` 已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
+- 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；旧迁移轨道下的 gen 模型文件已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
 ## 业务仓库中的框架使用最佳实践
 

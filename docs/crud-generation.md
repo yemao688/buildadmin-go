@@ -42,9 +42,9 @@ go build ./...
 
 ### 定制方式与双提交工作流
 
-业务定制直接修改对应生成文件（实体 `internal/model/<table>.go`、仓库 `internal/admin/repository/<table>.go`、handler `internal/admin/handler/<table>.go` 等），生成器不再生成 `_custom.go` 定制骨架；重新生成时生成文件会被覆盖，定制内容依靠双提交工作流和 `git diff` 回补。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录，以及历史 `_custom.go` 骨架路径）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
+业务定制直接修改对应生成文件（实体 `internal/model/<table>.go`、仓库 `internal/admin/repository/<table>.go`、handler `internal/admin/handler/<table>.go` 等）；生成器不再生成定制骨架文件（旧"定制保护"机制已移除），重新生成时生成文件会被覆盖，定制内容依靠双提交工作流和 `git diff` 回补。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录，以及历史定制骨架路径）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
 
-`crud:delete` 对历史 manifest 中的 `_custom.go` 骨架按普通生成文件处理：随模块文件一起删除，不再做"保留已定制骨架"的内容判断。
+`crud:delete` 对历史 manifest 中的定制骨架文件按普通生成文件处理：随模块文件一起删除，不再做"保留已定制内容"的判断。
 
 CRUD 模块采用"生成 commit + 定制 commit"的双提交工作流：生成 commit 只提交 spec 和全部生成产物，提交信息标注框架/生成器版本；业务定制另提交，并在提交信息或模块清单中写明定制动机。重新生成后，对生成文件中的手工改动，应使用 `git diff` 对照定制 commit，逐项回补，而不是把手工改动混入生成 commit。这样可以区分机器生成结果与业务定制，也便于后续重新生成和审查。
 
