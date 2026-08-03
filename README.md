@@ -108,7 +108,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ## 迁移、生成文件与测试注意事项
 
 - 迁移采用 official/framework/business 三条轨道；framework 只有 `framework-final-seed-and-integrity`，三张台账为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用五列。业务迁移、回滚和断点契约见 [`internal/database/migrations/business/README.md`](internal/database/migrations/business/README.md)。历史身份不可重写，迁移必须幂等、使用配置前缀，破坏性变更不能依赖 AutoMigrate。
-- 不要手改 `cmd/server/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。`go run ./cmd/generate` 可能使用硬编码本地 MySQL DSN，勿例行执行。
+- 不要手改 `cmd/server/wire_gen.go` 或自动生成的前端语言/类型文件；修改来源后重新生成。
 - MySQL 集成测试由 `configs/config.yaml` 的 `mysql_test` 段驱动：开发机自建一次性测试库、对账号授予该库及 `<库名>%` 通配权限后设 `enabled: true`；未配置时相关测试统一提示并跳过，不会误动开发或生产库。细则见 [`AGENTS.md`](AGENTS.md)。
 
 ## 业务开发最佳实践

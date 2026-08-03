@@ -248,9 +248,8 @@ git push origin master
 4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
 5. 不手改 `cmd/server/wire_gen.go`、生成的实体/仓库或其它 generated 文件；修改来源后重新生成。
 6. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
-7. 不运行危险的 `go run ./cmd/generate`，除非明确检查其实现、DSN 和覆盖范围并得到专门确认。
-8. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
-9. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/server`，前端在 `web/` 执行 pnpm typecheck/build。
+7. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
+8. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/server`，前端在 `web/` 执行 pnpm typecheck/build。
 
 ## 危险或错误做法
 
@@ -263,7 +262,6 @@ git push origin master
 | 在 SQL 或代码中硬编码 `ba_` | 配置前缀可变，导致非默认前缀环境失败。 |
 | 根目录运行 npm | 前端依赖和锁文件属于 `web/`，应使用 pnpm。 |
 | 默认运行 `go test ./...` | 部分测试需要 MySQL 或特定 DI；先按影响范围聚焦验证。 |
-| 例行运行 `go run ./cmd/generate` | 可能使用硬编码本地 MySQL DSN 并覆盖生成文件。 |
 | 在容器内做首次 Web 安装 | 发布镜像不包含安装器流程；首次安装应在本地完成。 |
 
 ## 部署

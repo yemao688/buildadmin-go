@@ -123,7 +123,6 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
-- `go run ./cmd/generate` 有风险：它使用硬编码的本地 MySQL DSN，并可能相对于当前目录覆盖生成 model。运行前必须检查其实现。
 - 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；`database/migrations/model/*.gen.go` 已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
 ## 业务仓库中的框架使用最佳实践
