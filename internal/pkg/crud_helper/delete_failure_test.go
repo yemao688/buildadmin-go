@@ -156,24 +156,10 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 		t.Fatal(err)
 	}
 
-	routerPath := filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go")
-	routerBefore, err := os.ReadFile(routerPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	routerAfter, err := addRegistrarProviderEntry(string(routerBefore), "DeleteFault", "internal/admin/handler")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(routerPath, []byte(routerAfter), 0644); err != nil {
-		t.Fatal(err)
-	}
 	shared := map[string][]byte{
 		modelProvider:   []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultModel,\n)\n"),
 		handlerProvider: []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultHandler,\n\tNewDeleteFaultRegistrar,\n)\n"),
-		routerPath:      []byte(routerAfter),
 	}
-	t.Cleanup(func() { _ = os.WriteFile(routerPath, routerBefore, 0644) })
 
 	menu := crudmodel.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
@@ -187,7 +173,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 		WebViewsDir:    "web/src/views/backend/delete/fault",
 		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: []string{generated},
-			Shared:    []string{modelProvider, handlerProvider, routerPath},
+			Shared:    []string{modelProvider, handlerProvider},
 		},
 	}
 	tableJSON, err := json.Marshal(table)

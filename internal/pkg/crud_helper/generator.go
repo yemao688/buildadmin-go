@@ -474,9 +474,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		if err := RemoveWireProviderSet(nestedRepositoryFile.RootFileName); err != nil {
 			return fail("remove repository wire provider set", err)
 		}
-		guardPaths = append(guardPaths,
-			handlerProvider, repositoryProvider,
-			filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"))
+		guardPaths = append(guardPaths, handlerProvider, repositoryProvider)
 	case deleteLayoutLegacy:
 		handlerProvider := filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go")
 		modelProvider := filepath.Join(utils.RootPath(), legacyModelFile.RootFileName, "provider.go")
@@ -498,9 +496,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		if err := RemoveWireProviderSet(legacyModelFile.RootFileName); err != nil {
 			return fail("remove model wire provider set", err)
 		}
-		guardPaths = append(guardPaths,
-			handlerProvider, modelProvider,
-			filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go"))
+		guardPaths = append(guardPaths, handlerProvider, modelProvider)
 	}
 	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest, layout); err != nil {
 		return fail("remove associated model providers", err)
@@ -568,6 +564,10 @@ func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
 	}
 	for _, path := range manifest.Shared {
 		if !fileExists(path) {
+			if path == filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go") {
+				// 历史锚点已被 api 车道重构移除；旧 manifest 的该条目不再参与删除。
+				continue
+			}
 			return FileManifest{}, fmt.Errorf("required shared manifest file is missing: %s", path)
 		}
 		info, statErr := os.Stat(path)

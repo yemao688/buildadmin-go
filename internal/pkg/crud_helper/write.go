@@ -543,6 +543,11 @@ func RemoveRegistrarProvider(name string, handlerRoot string) error {
 	path := filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go")
 	content, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// 历史锚点 registrar_set.go 已随 api 车道重构移除；旧布局删除
+			// 对其清理是尽力而为，缺失即跳过。
+			return nil
+		}
 		return err
 	}
 	updated, err := removeRegistrarProviderEntry(string(content), name, handlerRoot)

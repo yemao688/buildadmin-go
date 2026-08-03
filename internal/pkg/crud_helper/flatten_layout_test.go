@@ -197,15 +197,6 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 		}
 	})
 
-	// 嵌套时代经 registrar_set.go 注册（api 侧锚点，测试用真实文件并还原）
-	routerPath := filepath.Join(root, "internal", "router", "registrar_set.go")
-	routerBefore, err := os.ReadFile(routerPath)
-	require.NoError(t, err)
-	routerAfter, err := addRegistrarProviderEntry(string(routerBefore), "E2eBanner", "internal/admin/handler/nested_delete_test")
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(routerPath, []byte(routerAfter), 0644))
-	t.Cleanup(func() { require.NoError(t, os.WriteFile(routerPath, routerBefore, 0644)) })
-
 	table := crudmodel.Table{
 		Name:           "ops_e2e_banner",
 		ModelFile:      "internal/model/e2e_banner.go",
@@ -213,7 +204,7 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 		WebViewsDir:    "web/src/views/backend/ops/e2eBanner",
 		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: generated,
-			Shared:    []string{repoProvider, handlerProvider, routerPath, filepath.Join(root, "cmd", "server", "wire.go"), filepath.Join(root, "cmd", "server", "wire_gen.go")},
+			Shared:    []string{repoProvider, handlerProvider, filepath.Join(root, "cmd", "server", "wire.go"), filepath.Join(root, "cmd", "server", "wire_gen.go")},
 		},
 	}
 	tableJSON, err := json.Marshal(table)
@@ -247,7 +238,4 @@ func requireNestedDeleteClean(t *testing.T) {
 		_, err := os.Stat(path)
 		require.True(t, os.IsNotExist(err), "generated file %s still exists", path)
 	}
-	routerContent, err := os.ReadFile(filepath.Join(root, "internal", "router", "registrar_set.go"))
-	require.NoError(t, err)
-	require.NotContains(t, string(routerContent), "E2eBanner")
 }
