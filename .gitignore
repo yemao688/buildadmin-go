@@ -4,6 +4,7 @@
 /public/index.html
 /public/assets
 /public/favicon.ico
+/public/npm-install-test
 install.lock
 
 # 通过 Git 部署项目至线上时可以考虑删除的忽略规则
