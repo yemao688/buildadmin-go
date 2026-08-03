@@ -154,7 +154,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 	r.currentYes = options.yes
 
 	if r.deps.isComplete(r.rootPath) {
-		return errors.New("系统已安装；如需重装，请删除 public/install.lock 或 configs/config.yaml 后重试")
+		return errors.New("系统已安装；如需重装，请删除 public/install.lock（并清除 configs/config.yaml 中的旧连接信息）后重试")
 	}
 
 	existing, configExists, err := readSetupConfig(r.rootPath, r.configPath)

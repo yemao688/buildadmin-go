@@ -40,13 +40,13 @@ func TestIsComplete(t *testing.T) {
 	require.NoError(t, os.WriteFile(lockPath, []byte(InstallationCompletionMark), 0644))
 	require.True(t, IsComplete(root))
 
-	// 配置驱动补全：无锁但存在真实 configs/config.yaml 也视为已安装
-	// （容器重建后锁不可持久，而配置经目录挂载可持久）。
+	// 仅凭 configs/config.yaml 不视为已安装：安装器只认 install.lock
+	// （向导在环境检查步骤即写入配置，配置存在不代表安装完成）。
 	configRoot := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(configRoot, "configs"), 0755))
 	require.False(t, IsComplete(configRoot))
 	require.NoError(t, os.WriteFile(filepath.Join(configRoot, "configs", "config.yaml"), []byte("mysql:\n    host: 127.0.0.1\n"), 0644))
-	require.True(t, IsComplete(configRoot))
+	require.False(t, IsComplete(configRoot))
 
 	require.NoError(t, WriteCompletionLock(root))
 	content, err := os.ReadFile(lockPath)
