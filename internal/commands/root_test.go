@@ -1,8 +1,11 @@
-package main
+package commands
 
 import (
-	appVersion "buildadmin-go/internal/pkg/version"
 	"buildadmin-go/internal/conf"
+	appVersion "buildadmin-go/internal/pkg/version"
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -90,5 +93,44 @@ func TestApplyAppRuntimeEnvironmentFallbacks(t *testing.T) {
 	applyAppRuntimeEnvironment(configuration)
 	if configuration.App.Port != "9900" || configuration.App.TimeZone != "Asia/Shanghai" {
 		t.Fatalf("configuration app fallback values = %#v", configuration.App)
+	}
+}
+
+func TestRootHelpListsAllCommands(t *testing.T) {
+	var output bytes.Buffer
+	root := newRootCommand(nil, nil)
+	root.SetOut(&output)
+	root.SetErr(&output)
+	root.SetArgs([]string{"--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute(--help) error = %v", err)
+	}
+	for _, want := range []string{"server", "example", "migrate", "setup", "crud:generate", "crud:delete", "crud:apply", "crud:validate"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("help output missing %q:\n%s", want, output.String())
+		}
+	}
+}
+
+func TestCrudValidateHelp(t *testing.T) {
+	var output bytes.Buffer
+	root := newRootCommand(nil, nil)
+	root.SetOut(&output)
+	root.SetErr(&output)
+	root.SetArgs([]string{"crud:validate", "--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("Execute(crud:validate --help) error = %v", err)
+	}
+	if !strings.Contains(output.String(), "crud:validate") {
+		t.Fatalf("help output = %q", output.String())
+	}
+}
+
+func TestExecuteVersionShortCircuit(t *testing.T) {
+	original := os.Args
+	t.Cleanup(func() { os.Args = original })
+	os.Args = []string{"app", "--version"}
+	if err := Execute(nil, nil); err != nil {
+		t.Fatalf("Execute(--version) error = %v", err)
 	}
 }

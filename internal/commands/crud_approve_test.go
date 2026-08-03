@@ -1,8 +1,8 @@
-package handler
+package commands
 
 import (
-	"bytes"
 	helper "buildadmin-go/internal/pkg/crud_helper"
+	"bytes"
 	"strings"
 	"testing"
 

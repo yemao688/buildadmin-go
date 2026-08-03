@@ -1,14 +1,14 @@
-package cmd
+package commands
 
 import (
-	"bytes"
-	"fmt"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/database/migrations"
 	"buildadmin-go/internal/pkg/installer"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
+	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,6 +17,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.uber.org/zap"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -388,9 +390,9 @@ func createSetupAdminTestTables(db *gorm.DB) error {
 
 func TestRegisterAddsSetupCommand(t *testing.T) {
 	root := &cobra.Command{Use: "root"}
-	Register(root, func() (*Command, func(), error) {
+	registerCommands(root, func(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*Command, func(), error) {
 		return nil, nil, nil
-	})
+	}, nil)
 	if root.CommandPath() != "root" {
 		t.Fatalf("unexpected root command path %q", root.CommandPath())
 	}

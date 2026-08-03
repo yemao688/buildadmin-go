@@ -1,18 +1,132 @@
-package handler
+package commands
 
 import (
 	"fmt"
 	"strconv"
 
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/database/migrations"
 	"buildadmin-go/internal/infra/db"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+// newMigrateCommand 构造 migrate 命令树：run/rollback/breakpoint 子命令。
+func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
+	migrateCmd := &cobra.Command{
+		Use:           "migrate",
+		Short:         "数据库迁移",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.Run(cmd, args)
+		},
+	}
+	runMigrateCmd := &cobra.Command{
+		Use:           "run",
+		Short:         "执行数据库迁移",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.Run(cmd, args)
+		},
+	}
+	rollbackMigrateCmd := &cobra.Command{
+		Use:           "rollback [business]",
+		Short:         "回滚 business 数据库迁移",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.Rollback(cmd, args)
+		},
+	}
+	rollbackMigrateCmd.Flags().Uint64("steps", 0, "rollback N business migrations; default is the latest applied batch")
+	rollbackMigrateCmd.Flags().Bool("to-breakpoint", false, "rollback business migrations newer than the saved breakpoint")
+	breakpointCmd := &cobra.Command{
+		Use:           "breakpoint",
+		Short:         "管理 business 迁移回滚目标点",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.ListBreakpoints(cmd, args)
+		},
+	}
+	breakpointSetCmd := &cobra.Command{
+		Use:           "set <version>",
+		Short:         "设置 business 迁移回滚目标点",
+		Args:          cobra.ExactArgs(1),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.SetBreakpoint(cmd, args)
+		},
+	}
+	breakpointClearCmd := &cobra.Command{
+		Use:           "clear",
+		Short:         "清除 business 迁移回滚目标点",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.ClearBreakpoint(cmd, args)
+		},
+	}
+	breakpointListCmd := &cobra.Command{
+		Use:           "list",
+		Short:         "查看 business 迁移回滚目标点",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			return command.migrateH.ListBreakpoints(cmd, args)
+		},
+	}
+	breakpointCmd.AddCommand(breakpointSetCmd, breakpointClearCmd, breakpointListCmd)
+	migrateCmd.AddCommand(runMigrateCmd, rollbackMigrateCmd, breakpointCmd)
+	return migrateCmd
+}
 
 type MigrateHandler struct {
 	logger *zap.Logger

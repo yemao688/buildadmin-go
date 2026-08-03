@@ -1,9 +1,7 @@
-package cmd
+package commands
 
 import (
 	"bufio"
-	"errors"
-	"fmt"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/database/migrations"
@@ -13,6 +11,8 @@ import (
 	"buildadmin-go/internal/pkg/terminal"
 	"buildadmin-go/internal/pkg/version"
 	"buildadmin-go/internal/utils"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"

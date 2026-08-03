@@ -1,10 +1,14 @@
-package cmd
+package commands
 
 import (
 	"errors"
 	"testing"
 
+	"buildadmin-go/internal/conf"
+
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
@@ -29,9 +33,9 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			root := &cobra.Command{Use: "root", SilenceErrors: true, SilenceUsage: true}
 			want := errors.New("command construction failed")
-			Register(root, func() (*Command, func(), error) {
+			registerCommands(root, func(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*Command, func(), error) {
 				return nil, nil, want
-			})
+			}, nil)
 			root.SetArgs(test.args)
 
 			if err := root.Execute(); !errors.Is(err, want) {
@@ -44,9 +48,9 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 func TestRegisterCrudApplyAcceptsPlanFlag(t *testing.T) {
 	root := &cobra.Command{Use: "root", SilenceErrors: true, SilenceUsage: true}
 	want := errors.New("command construction failed")
-	Register(root, func() (*Command, func(), error) {
+	registerCommands(root, func(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*Command, func(), error) {
 		return nil, nil, want
-	})
+	}, nil)
 	root.SetArgs([]string{"crud:apply", "--plan"})
 	if err := root.Execute(); !errors.Is(err, want) {
 		t.Fatalf("Execute() error = %v, want %v", err, want)

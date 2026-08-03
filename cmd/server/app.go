@@ -1,11 +1,12 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"buildadmin-go/internal/cron"
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/cron"
+	appVersion "buildadmin-go/internal/pkg/version"
+	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -80,10 +81,26 @@ func (a *App) Run() error {
 	return nil
 }
 
+// ReportUnprotectedRoutes 输出 debug 环境下的后台路由保护告警（启动诊断），
+// 实现 commands.App 接口，由 commands 的 serve 编排在启动前调用。
+func (a *App) ReportUnprotectedRoutes() {
+	if a.config == nil || a.config.App.Env != "debug" || a.httpSrv == nil || a.authM == nil {
+		return
+	}
+	router, ok := a.httpSrv.Handler.(*gin.Engine)
+	if !ok {
+		if a.logger != nil {
+			a.logger.Warn("admin route protection report unavailable: HTTP handler is not a Gin engine")
+		}
+		return
+	}
+	go a.authM.ReportUnprotectedRoutes(router.Routes())
+}
+
 // printBanner 输出 vite dev 风格的入口地址，方便直接点选访问
 func (a *App) printBanner() {
 	port := a.config.App.Port
-	fmt.Printf("\n  %s ready in %d ms\n\n", Version, time.Since(appStartedAt).Milliseconds())
+	fmt.Printf("\n  %s ready in %d ms\n\n", appVersion.Framework, time.Since(appStartedAt).Milliseconds())
 	fmt.Printf("  ➜  Local:   http://localhost:%s/\n", port)
 	if ip := firstLanIPv4(); ip != "" {
 		fmt.Printf("  ➜  Network: http://%s:%s/\n", ip, port)
