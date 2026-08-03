@@ -234,9 +234,9 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
-		name := handlerData.RouteName
+		name := AtomicRouteCapabilityName(handlerData.RouteName)
 		if name == "" {
-			name = strings.ToLower(handlerData.ClassName[:1]) + handlerData.ClassName[1:]
+			name = AtomicRouteCapabilityName(lowerFirst(handlerData.ClassName))
 		}
 		handlerData.RegisterAtomicRoute("POST", name+"/add")
 		handlerData.RegisterAtomicRoute("POST", name+"/edit")

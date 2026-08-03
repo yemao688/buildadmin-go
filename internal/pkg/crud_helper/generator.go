@@ -536,7 +536,9 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(utils.RootPath(), langDir.LangFile("en"))), filepath.Join(utils.RootPath(), "web", "src", "lang", "backend", "en"))
 	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(utils.RootPath(), langDir.LangFile("zh-cn"))), filepath.Join(utils.RootPath(), "web", "src", "lang", "backend", "zh-cn"))
 	if unregister != nil {
-		for _, route := range atomicRoutesForName(handlerFile.LastName) {
+		// 注销键与生成注册键同源：RouteName 由 generateRelativePath 推导
+		routeName := routeNameFromRelativePath(log.Table.GenerateRelativePath, handlerFile.LastName)
+		for _, route := range atomicRoutesForName(routeName) {
 			unregister(route.method, route.path)
 		}
 	}
@@ -979,16 +981,15 @@ func normalizedPathSet(paths []string) map[string]bool {
 	return result
 }
 
+// atomicRoutesForName 由点号路由名（country.Language）推导注册/注销用的
+// atomicRouteRegistration 列表。键统一经 AtomicRouteCapabilityName 归一，
+// 与生成流程 writeHandlerFile 的注册键同形。
 func atomicRoutesForName(name string) []atomicRouteRegistration {
-	if strings.Contains(name, "_") {
-		name = utils.SnakeToCamel(name, false)
-	} else if name != "" {
-		name = strings.ToLower(name[:1]) + name[1:]
-	}
+	key := AtomicRouteCapabilityName(name)
 	return []atomicRouteRegistration{
-		{method: "POST", path: name + "/add"},
-		{method: "POST", path: name + "/edit"},
-		{method: "DELETE", path: name + "/del"},
+		{method: "POST", path: key + "/add"},
+		{method: "POST", path: key + "/edit"},
+		{method: "DELETE", path: key + "/del"},
 	}
 }
 

@@ -365,6 +365,14 @@ func pkGoField(pk string) string {
 	return utils.SnakeToCamel(pk, true)
 }
 
+// AtomicRouteCapabilityName 把点号路由名（country.Language）归一为 AtomicRoute
+// 能力键（country/language，小写斜杠形态）。它是生成/删除流程注册注销键的
+// 单一事实源，与 internal/admin/router CRUDCapabilities 的 capabilityRoute
+// 同形，保证生成后未重启时新模块的写请求能力查询、以及删除时的注销都能命中。
+func AtomicRouteCapabilityName(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, ".", "/"))
+}
+
 func routeNameFromRelativePath(relativePath, fallback string) string {
 	normalized, err := normalizeLogicalPath(relativePath)
 	if err != nil {
