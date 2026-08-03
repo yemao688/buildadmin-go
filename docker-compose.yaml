@@ -13,7 +13,7 @@ services:
         source: ./configs
         target: /app/configs
       - ./runtime:/app/runtime
-      - ./public/storage:/app/public/storage
+      - ./public:/app/public
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
       interval: 30s
