@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -111,6 +112,11 @@ type CaptchaInfo struct {
  * 返回验证码图片的base64编码和验证码文字信息
  */
 func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface{}, error) {
+	if c.sqlDB == nil {
+		// 安装向导模式下应用以只读基座启动、DB 连接为 nil，此时点击验证码
+		// 不可用（验证点要落库）；直接报错而非空指针 panic。
+		return nil, errors.New("database is not connected")
+	}
 	rand.Seed(time.Now().UnixNano())
 	randIndex := rand.Intn(len(bgPaths) - 1)
 	imagePath := bgPaths[randIndex]
@@ -278,6 +284,9 @@ func loadImage(filePath string) (image.Image, error) {
  * unset 验证成功是否删除验证码
  */
 func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
+	if c.sqlDB == nil {
+		return false
+	}
 	key := util.Md5(id)
 
 	record := captcha.Captcha{}

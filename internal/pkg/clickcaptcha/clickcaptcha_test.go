@@ -39,8 +39,7 @@ func TestRandPosition(t *testing.T) {
 	}
 }
 
-func TestGetFontWidthAndHeight(t *testing.T) {
-	fontBytes, err := os.ReadFile(util.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
+func TestGetFontWidthAndHeight(t *testing.T) {	fontBytes, err := os.ReadFile(util.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
 	if err != nil {
 		fmt.Println("加载字体失败")
 	}
@@ -80,8 +79,7 @@ func TestAlpha(t *testing.T) {
 	fmt.Println(x, y)
 }
 
-func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {
-	t.Helper()
+func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open("file:clickcaptcha-"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
@@ -165,5 +163,18 @@ func TestCheckMalformedInputNeverPanics(t *testing.T) {
 			garbage[j] = byte(rng.Intn(256))
 		}
 		checkWithoutPanic(t, clickCaptcha, string(garbage))
+	}
+}
+
+// TestNilDBNeverPanics: 安装向导模式下 DB 连接为 nil（应用以只读基座启动），
+// 点击验证码必须报错/失败而不是空指针 panic。
+func TestNilDBNeverPanics(t *testing.T) {
+	clickCaptcha := &ClickCaptcha{}
+
+	if _, err := clickCaptcha.Create(nil, "some-id"); err == nil {
+		t.Fatal("Create with nil sqlDB should return an error")
+	}
+	if clickCaptcha.Check("some-id", "", false) {
+		t.Fatal("Check with nil sqlDB should fail")
 	}
 }
