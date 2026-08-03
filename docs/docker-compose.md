@@ -14,16 +14,17 @@
 - 一个容器可达的 MySQL。macOS（Docker Desktop / OrbStack）用 `host.docker.internal` 访问宿主机；Linux 用宿主机网桥 IP 或单独起 MySQL 容器并发布端口。
 - 本地 Go 1.25 工具链与 pnpm（仅用于首次安装生成配置与前端产物，不进入镜像）。
 
-### 配置准备（首次安装，在宿主机完成）
+### 配置准备（首次安装）
 
-镜像内预写 `public/install.lock` 为 `install-end`，且 `configs/config.yaml` 以**只读** bind mount 挂载，因此**安装流程在容器外完成**，容器只消费安装结果：
+`./configs` 以**可写目录**挂载为 `/app/configs`，安装完成判定是配置驱动的（`public/install.lock` 或真实 `configs/config.yaml` 存在即视为已安装），因此安装可以在宿主机或容器内完成，三者任选：
 
-1. 首次安装前确保根目录**没有** `configs/config.yaml`（安装器不会覆盖已存在的配置，重装需先移走它）且没有 `public/install.lock`（安装完成后会生成）。
-2. 本地启动应用完成安装，二选一：
-   - Web 向导：`go run ./cmd/server` 后访问 `http://127.0.0.1:9900/install`，按向导填写 MySQL 和管理员信息；
-   - CLI：`go run ./cmd/server setup --yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password ... --admin-password ...`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端）。
-3. 安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（仅 MySQL 连接与随机生成的 `token.key`，其余键来自镜像内 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。
-4. **编辑连接信息指向容器可达地址**：把 `configs/config.yaml` 中 `mysql.host` 的 `127.0.0.1` 改为 `host.docker.internal`（macOS）或宿主机网桥 IP（Linux）。容器内的 `127.0.0.1` 是容器自己，不是宿主机或数据库。
+1. **宿主机 Web 向导**：`go run ./cmd/server` 后访问 `http://127.0.0.1:9900/install`，按向导填写 MySQL 和管理员信息。
+2. **宿主机 CLI**：`go run ./cmd/server setup --yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password --admin-password ...`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端）。
+3. **容器内安装**：`./configs` 目录存在但无 `configs/config.yaml` 时，启动容器即进入安装向导（浏览器访问 `http://127.0.0.1:9900/install`），或直接 `docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go setup --yes --skip-frontend ...`。安装器写出的 `configs/config.yaml` 经目录挂载持久化到宿主机。
+
+安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（仅 MySQL 连接与随机生成的 `token.key`，其余键来自 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。重装 = 删除 `configs/config.yaml`（或 `public/install.lock`）后重走任一安装路径。
+
+无论在哪安装，**编辑连接信息指向容器可达地址**：把 `configs/config.yaml` 中 `mysql.host` 的 `127.0.0.1` 改为 `host.docker.internal`（macOS）或宿主机网桥 IP（Linux）。容器内的 `127.0.0.1` 是容器自己，不是宿主机或数据库。
 
 ### 启动与验证
 
@@ -43,7 +44,7 @@ curl http://127.0.0.1:9900/healthz                                    # {"status
 APP_PORT=9901 make run-docker-dev
 ```
 
-Compose 将 `./configs/config.yaml` 以只读方式挂载为 `/app/configs/config.yaml`，宿主机缺文件时明确报错（`create_host_path: false`，不会静默创建目录）；`./runtime/` 挂载为 `/app/runtime`（日志），`./public/storage/` 挂载为 `/app/public/storage`（上传文件）。
+Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./runtime/` 挂载为 `/app/runtime`（日志），`./public/storage/` 挂载为 `/app/public/storage`（上传文件）。
 
 ### 在容器内执行迁移
 
@@ -92,7 +93,7 @@ docker compose ps
 docker compose logs -f buildadmin-go
 ```
 
-镜像内预写 `public/install.lock` 为 `install-end`：容器内 `/install` 302 到 `/`，`/api/install/*` 返回 403 业务码，安装器不可用——这是已安装环境的预期行为。
+安装完成判定是配置驱动的：`configs/config.yaml` 存在即视为已安装——`/install` 302 到 `/`，`/api/install/*` 返回 403 业务码。未安装（无配置）的容器才会进入安装向导。
 
 ### 升级与精确回滚
 

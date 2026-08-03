@@ -49,8 +49,7 @@ func InitRouter(
 	)
 
 	rootDir := utils.RootPath()
-	lockPath := filepath.Join(rootDir, "public", installRouter.LockFileName)
-	router.Use(middleware.InstallGuard(lockPath))
+	router.Use(middleware.InstallGuard(rootDir))
 
 	// 静态资源与前台入口（不经渠道注册器）。
 	router.Static("/assets", filepath.Join(rootDir, "public/assets"))

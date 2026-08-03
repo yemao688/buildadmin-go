@@ -10,11 +10,8 @@ services:
       - "${APP_PORT:-9900}:${APP_PORT:-9900}"
     volumes:
       - type: bind
-        source: ./configs/config.yaml
-        target: /app/configs/config.yaml
-        read_only: true
-        bind:
-          create_host_path: false
+        source: ./configs
+        target: /app/configs
       - ./runtime:/app/runtime
       - ./public/storage:/app/public/storage
     healthcheck:

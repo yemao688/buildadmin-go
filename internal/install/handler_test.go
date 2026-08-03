@@ -43,6 +43,8 @@ func TestScheduleProcessExitUsesZeroExitCode(t *testing.T) {
 func TestCommandExecCompleteRejectsMissingFrontendArtifact(t *testing.T) {
 	hideInstallPath(t, filepath.Join(utils.RootPath(), "public", "index.html"))
 	hideInstallPath(t, filepath.Join(utils.RootPath(), "public", LockFileName))
+	// 配置驱动补全后，"未安装"场景还需藏起仓库根的真实覆盖层配置
+	hideInstallPath(t, filepath.Join(utils.RootPath(), ConfigFileName))
 
 	handler := NewInstallHandler(zap.NewNop(), nil, nil)
 	recorder := commandExecCompleteRequest(t, handler, `{"type":"web"}`)

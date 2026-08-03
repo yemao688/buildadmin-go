@@ -16,7 +16,6 @@ RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 1000 app \
     && adduser -S -D -H -u 1000 -G app app \
     && mkdir -p /app/configs /app/runtime /app/public/storage \
-    && printf 'install-end' > /app/public/install.lock \
     && chown -R app:app /app
 COPY --from=go-build /out/app /app/app
 COPY configs/config.defaults.yaml /app/configs/config.defaults.yaml

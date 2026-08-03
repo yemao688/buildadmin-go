@@ -188,14 +188,16 @@ func WriteBaseConfig(configPath string, cfg Database, tokenKey string) error {
 	return conf.WriteConfigOverrides(configPath, overrides)
 }
 
-// IsComplete reports whether the completion lock contains the completion mark.
+// IsComplete reports whether installation completed: either the completion
+// lock holds the completion mark, or a real configs/config.yaml exists.
+// Configuration persists across container recreation while the lock may not.
 func IsComplete(rootPath string) bool {
-	path := filepath.Join(rootPath, "public", LockFileName)
-	if _, err := os.Stat(path); err != nil {
-		return false
+	lockPath := filepath.Join(rootPath, "public", LockFileName)
+	if content, err := os.ReadFile(lockPath); err == nil && string(content) == InstallationCompletionMark {
+		return true
 	}
-	content, _ := os.ReadFile(path)
-	return string(content) == InstallationCompletionMark
+	info, err := os.Stat(filepath.Join(rootPath, "configs", "config.yaml"))
+	return err == nil && info.Size() > 0
 }
 
 // WriteCompletionLock marks the installation as complete.

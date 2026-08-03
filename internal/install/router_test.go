@@ -84,16 +84,16 @@ func TestInstallRoutesRespectInstallLock(t *testing.T) {
 			installDir := filepath.Join(rootDir, "public", "install")
 			require.NoError(t, os.MkdirAll(installDir, 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(installDir, "index.html"), []byte(test.installBody), 0o644))
-			lockPath := filepath.Join(rootDir, "public", LockFileName)
 			if test.createLock {
-				require.NoError(t, os.WriteFile(lockPath, []byte("any-content"), 0o644))
+				lockPath := filepath.Join(rootDir, "public", LockFileName)
+				require.NoError(t, os.WriteFile(lockPath, []byte(InstallationCompletionMark), 0o644))
 			}
 
 			// 本测试聚焦 InstallGuard 与安装路径语义，用临时目录下的静态页与
 			// 桩 handler 装配（真实 handler 操作仓库根目录，不在这里执行）；
 			// 路由注册本身由 TestInstallRouterMountsInstallRoutes 覆盖。
 			engine := gin.New()
-			engine.Use(middleware.InstallGuard(lockPath))
+			engine.Use(middleware.InstallGuard(rootDir))
 			engine.StaticFile("/install", filepath.Join(installDir, "index.html"))
 			engine.Static("/install", installDir)
 			engine.GET("/api/install/envBaseCheck", func(c *gin.Context) {
