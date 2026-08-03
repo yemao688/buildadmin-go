@@ -187,3 +187,34 @@ func TestAuthorizationAllowsNonAdminPath(t *testing.T) {
 
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
+
+func TestAuthorizationRejectsUnparseableAdminRoute(t *testing.T) {
+	fixture := newAuthorizationFixture(t)
+
+	for _, path := range []string{"/admin/foo", "/admin/a/b/c"} {
+		recorder := fixture.request(t, path, 1)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, http.StatusForbidden, authorizationBusinessCode(t, recorder), "path %s must fail closed", path)
+	}
+}
+
+func TestAuthorizationFailsClosedWhenAuthUnavailable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
+		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		AcceptLanguage:   []language.Tag{language.English},
+		DefaultLanguage:  language.English,
+		UnmarshalFunc:    yaml.Unmarshal,
+		FormatBundleFile: "yaml",
+	})))
+	router.GET("/admin/country.Currency/index", NewAuthorization(nil, zap.NewNop()).Handler(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/country.Currency/index", nil))
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.NotEqual(t, 1, authorizationBusinessCode(t, recorder))
+}

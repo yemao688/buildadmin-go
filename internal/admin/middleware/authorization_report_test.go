@@ -18,14 +18,21 @@ func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T)
 		{Method: "POST", Path: "/admin/missing.Route/run"},
 		{Method: "GET", Path: "/admin/Index/login"},
 		{Method: "GET", Path: "/admin/ajax/terminal"},
+		{Method: "GET", Path: "/admin/odd/shape/extra"},
 		{Method: "GET", Path: "/api/outside/index"},
 	}
 	rules := map[string]struct{}{"known/route/index": {}}
 
-	got := collectUnprotectedRoutes(routes, rules)
+	missing, unparseable := collectUnprotectedRoutes(routes, rules)
 	want := []string{"POST /admin/missing.Route/run"}
-	if len(got) != len(want) || got[0] != want[0] {
-		t.Fatalf("missing routes = %#v, want %#v", got, want)
+	if len(missing) != len(want) || missing[0] != want[0] {
+		t.Fatalf("missing routes = %#v, want %#v", missing, want)
+	}
+	// Non-three-segment /admin routes are surfaced explicitly instead of
+	// being silently skipped; non-admin paths stay out of scope.
+	wantUnparseable := []string{"GET /admin/odd/shape/extra"}
+	if len(unparseable) != len(wantUnparseable) || unparseable[0] != wantUnparseable[0] {
+		t.Fatalf("unparseable routes = %#v, want %#v", unparseable, wantUnparseable)
 	}
 }
 
@@ -33,9 +40,12 @@ func TestCollectUnprotectedRoutesReportsIndexIndexWhenNotExempt(t *testing.T) {
 	UnregisterPermissionExempt("index", "index")
 
 	routes := gin.RoutesInfo{{Method: "GET", Path: "/admin/Index/index"}}
-	got := collectUnprotectedRoutes(routes, map[string]struct{}{})
-	if len(got) != 1 || got[0] != "GET /admin/Index/index" {
-		t.Fatalf("missing routes = %#v, want index/index", got)
+	missing, unparseable := collectUnprotectedRoutes(routes, map[string]struct{}{})
+	if len(missing) != 1 || missing[0] != "GET /admin/Index/index" {
+		t.Fatalf("missing routes = %#v, want index/index", missing)
+	}
+	if len(unparseable) != 0 {
+		t.Fatalf("unparseable routes = %#v, want none", unparseable)
 	}
 }
 

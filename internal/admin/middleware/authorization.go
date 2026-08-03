@@ -7,6 +7,7 @@ import (
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/utils"
 	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -29,11 +30,21 @@ func NewAuthorization(authM *adminauth.AuthRepository, log *zap.Logger) *Authori
 func (m *Authorization) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if m == nil || m.authM == nil {
+			// Fail closed: without a rule source no permission can be proven.
+			abortAuthorization(c, cErr.ForbiddenRequest("authorization unavailable"))
 			return
 		}
 
 		route, action, ok := middlewarecore.NormalizeRouteAction(c.FullPath())
 		if !ok {
+			// Fail closed for /admin routes that cannot be mapped to a
+			// permission rule: they are denied rather than silently passed.
+			// Non-admin paths (api/install) are out of scope here.
+			if strings.HasPrefix(c.FullPath(), "/admin") {
+				m.logWarn("admin authorization route not parseable", c.FullPath(), "", header.GetAdminAuth(c).Id)
+				abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
+				return
+			}
 			return
 		}
 
