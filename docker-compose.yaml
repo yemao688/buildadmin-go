@@ -16,6 +16,7 @@ services:
         bind:
           create_host_path: false
       - ./runtime:/app/runtime
+      - ./public/storage:/app/public/storage
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
       interval: 30s

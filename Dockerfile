@@ -15,11 +15,13 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 1000 app \
     && adduser -S -D -H -u 1000 -G app app \
-    && mkdir -p /app/conf /app/runtime /app/public \
+    && mkdir -p /app/configs /app/runtime /app/public/storage \
     && printf 'install-end' > /app/public/install.lock \
     && chown -R app:app /app
 COPY --from=go-build /out/app /app/app
 COPY configs/config.defaults.yaml /app/configs/config.defaults.yaml
+COPY internal/i18n/locales /app/internal/i18n/locales
+COPY .env.example /app/.env.example
 COPY public/ /app/public/
 RUN chown -R app:app /app
 USER 1000:1000
