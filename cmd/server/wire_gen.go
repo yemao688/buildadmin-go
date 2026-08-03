@@ -15,8 +15,7 @@ import (
 	middleware2 "buildadmin-go/internal/api/middleware"
 	router2 "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/api/service/member"
-	"buildadmin-go/internal/cmd"
-	handler3 "buildadmin-go/internal/cmd/handler"
+	"buildadmin-go/internal/commands"
 	"buildadmin-go/internal/common/area"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/money"
@@ -41,7 +40,7 @@ import (
 // Injectors from wire.go:
 
 // wireApp init application.
-func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*App, func(), error) {
+func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLogger *zap.Logger) (*App, func(), error) {
 	gormDB := db.NewDB(configuration, zapLogger)
 	client := rds.NewRedis(configuration, zapLogger)
 	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
@@ -125,7 +124,7 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 		InstallHandler: installHandler,
 	}
 	installRouter := install.NewInstallRouter(installRouterDeps)
-	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, installRouter)
+	engine := router3.InitRouter(logger, adminRouter, apiRouter, installRouter)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)
@@ -135,11 +134,11 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 }
 
 // wireCommand init application.
-func wireCommand(configuration *conf.Configuration, lumberjackLogger *lumberjack.Logger, zapLogger *zap.Logger) (*cmd.Command, func(), error) {
-	exampleHandler := handler3.NewExampleHandler(zapLogger)
-	migrateHandler := handler3.NewMigrateHandler(zapLogger, configuration)
-	crudHandler := handler3.NewCrudHandler(zapLogger, configuration)
-	command := cmd.NewCommand(exampleHandler, migrateHandler, crudHandler)
+func wireCommand(configuration *conf.Configuration, logger *lumberjack.Logger, zapLogger *zap.Logger) (*commands.Command, func(), error) {
+	exampleHandler := commands.NewExampleHandler(zapLogger)
+	migrateHandler := commands.NewMigrateHandler(zapLogger, configuration)
+	crudHandler := commands.NewCrudHandler(zapLogger, configuration)
+	command := commands.NewCommand(exampleHandler, migrateHandler, crudHandler)
 	return command, func() {
 	}, nil
 }

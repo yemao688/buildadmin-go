@@ -14,8 +14,7 @@ import (
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/api/service/member"
-	"buildadmin-go/internal/cmd"
-	commandHandler "buildadmin-go/internal/cmd/handler"
+	"buildadmin-go/internal/commands"
 	"buildadmin-go/internal/common/area"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/money"
@@ -72,9 +71,9 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 }
 
 // wireCommand init application.
-func wireCommand(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*cmd.Command, func(), error) {
+func wireCommand(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Command, func(), error) {
 	panic(wire.Build(
-		commandHandler.ProviderSet,
-		cmd.NewCommand,
+		commands.ProviderSet,
+		commands.NewCommand,
 	))
 }
