@@ -1,7 +1,7 @@
 # 当前源码的本地开发覆盖配置。
 services:
   buildadmin-go:
-    image: ${DEPLOY_IMAGE_NAME}:dev
+    image: ${DEPLOY_IMAGE_NAME:-buildadmin-go}:dev
     pull_policy: never
     build:
       context: .

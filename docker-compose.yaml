@@ -1,6 +1,6 @@
 services:
   buildadmin-go:
-    image: ${DEPLOY_REGISTRY}/${DEPLOY_IMAGE_NAME}:${DEPLOY_IMAGE_TAG:-latest}
+    image: ${DEPLOY_REGISTRY:-registry.example.com}/${DEPLOY_IMAGE_NAME:-buildadmin-go}:${DEPLOY_IMAGE_TAG:-latest}
     pull_policy: always
     user: "1000:1000"
     environment:
@@ -13,9 +13,15 @@ services:
       - ./runtime:/app/runtime
       - ./public:/app/public
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
+      test:
+        ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    networks:
+      - 1panel-network
+networks:
+  1panel-network:
+    external: true
