@@ -5,7 +5,6 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/header"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/permissioncache"
 	"buildadmin-go/internal/pkg/random"
@@ -121,11 +120,18 @@ func (s *AuthRepository) IsLogin(ctx *gin.Context) (*token.Token, bool) {
 	if tokenStr == "" {
 		tokenStr = ctx.Query("batoken")
 	}
-	if tokenStr != "" {
-		tokenData, err := s.tokenHelper.GetFor(tokenStr, "admin")
-		if err == nil {
-			return tokenData, true
-		}
+	return s.TokenInfo(tokenStr)
+}
+
+// TokenInfo resolves an admin session token without touching the request.
+// It is the transport-free counterpart of IsLogin for the service layer.
+func (s *AuthRepository) TokenInfo(tokenStr string) (*token.Token, bool) {
+	if tokenStr == "" {
+		return nil, false
+	}
+	tokenData, err := s.tokenHelper.GetFor(tokenStr, "admin")
+	if err == nil {
+		return tokenData, true
 	}
 	return nil, false
 }
@@ -153,7 +159,10 @@ func (s *AuthRepository) IsSuperAdmin(id int32) bool {
 	return false
 }
 
-func (s *AuthRepository) Login(ctx *gin.Context, username string, password string, keep bool) (interface{}, error) {
+// Login verifies the credentials and issues the admin tokens. clientIP is
+// passed explicitly so the flow is callable from the transport-free service
+// layer.
+func (s *AuthRepository) Login(username string, password string, keep bool, clientIP string) (interface{}, error) {
 	admin := model.Admin{}
 	err := s.sqlDB.Model(&model.Admin{}).Where("username=?", username).Scan(&admin).Error
 	if err != nil {
@@ -173,7 +182,7 @@ func (s *AuthRepository) Login(ctx *gin.Context, username string, password strin
 		s.sqlDB.Model(&model.Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
 			"login_failure":   admin.LoginFailure + 1,
 			"last_login_time": time.Now().Unix(),
-			"last_login_ip":   ctx.ClientIP(),
+			"last_login_ip":   clientIP,
 		})
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
@@ -196,7 +205,7 @@ func (s *AuthRepository) Login(ctx *gin.Context, username string, password strin
 	err = s.sqlDB.Model(&model.Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": time.Now().Unix(),
-		"last_login_ip":   ctx.ClientIP(),
+		"last_login_ip":   clientIP,
 	}).Error
 
 	return map[string]interface{}{
@@ -210,15 +219,17 @@ func (s *AuthRepository) Login(ctx *gin.Context, username string, password strin
 	}, err
 }
 
-func (s *AuthRepository) Logout(ctx *gin.Context, refreshToken string) error {
+// Logout invalidates the refresh token and the caller's access token.
+func (s *AuthRepository) Logout(refreshToken string, accessToken string) error {
 	if refreshToken != "" {
 		if err := s.tokenHelper.Delete(refreshToken); err != nil {
 			return err
 		}
 	}
-	adminAuth := header.GetAdminAuth(ctx)
-	if err := s.tokenHelper.Delete(adminAuth.Token); err != nil {
-		return err
+	if accessToken != "" {
+		if err := s.tokenHelper.Delete(accessToken); err != nil {
+			return err
+		}
 	}
 	return nil
 }

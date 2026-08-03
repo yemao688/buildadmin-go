@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"buildadmin-go/internal/conf"
@@ -29,7 +30,7 @@ func NewSensitiveDataRepository(sqlDB *gorm.DB, config *conf.Configuration) *Sen
 	}
 }
 
-func (s *SensitiveDataRepository) DealData(ctx *gin.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
+func (s *SensitiveDataRepository) DealData(ctx context.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
 	outSensitiveData := OutSensitiveData{}
 	if err := copier.Copy(&outSensitiveData, data); err != nil {
 		return nil, err
@@ -46,7 +47,7 @@ func (s *SensitiveDataRepository) DealData(ctx *gin.Context, data *model.Securit
 	return &outSensitiveData, nil
 }
 
-func (s *SensitiveDataRepository) GetOne(ctx *gin.Context, id int32) (sensitiveData model.SecuritySensitiveData, err error) {
+func (s *SensitiveDataRepository) GetOne(ctx context.Context, id int32) (sensitiveData model.SecuritySensitiveData, err error) {
 	err = s.DBFor(ctx).Model(&model.SecuritySensitiveData{}).Where("id=?", id).First(&sensitiveData).Error
 	return
 }
@@ -78,7 +79,7 @@ func (s *SensitiveDataRepository) List(ctx *gin.Context) ([]*OutSensitiveData, i
 	return result, total, err
 }
 
-func (s *SensitiveDataRepository) Add(ctx *gin.Context, data model.SecuritySensitiveData) error {
+func (s *SensitiveDataRepository) Add(ctx context.Context, data model.SecuritySensitiveData) error {
 	if data.PrimaryKey == "" {
 		data.PrimaryKey = "id"
 	}
@@ -104,7 +105,7 @@ func (s *SensitiveDataRepository) Add(ctx *gin.Context, data model.SecuritySensi
 	})
 }
 
-func (s *SensitiveDataRepository) Edit(ctx *gin.Context, data model.SecuritySensitiveData) error {
+func (s *SensitiveDataRepository) Edit(ctx context.Context, data model.SecuritySensitiveData) error {
 	if data.PrimaryKey == "" {
 		data.PrimaryKey = "id"
 	}
@@ -156,7 +157,7 @@ func (s *SensitiveDataRepository) Edit(ctx *gin.Context, data model.SecuritySens
 	return nil
 }
 
-func (s *SensitiveDataRepository) UpdateStatus(ctx *gin.Context, id int32, status string) error {
+func (s *SensitiveDataRepository) UpdateStatus(ctx context.Context, id int32, status string) error {
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
 		if status == "1" {
@@ -192,7 +193,7 @@ func (s *SensitiveDataRepository) UpdateStatus(ctx *gin.Context, id int32, statu
 	return nil
 }
 
-func (s *SensitiveDataRepository) Del(ctx *gin.Context, ids interface{}) error {
+func (s *SensitiveDataRepository) Del(ctx context.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid security sensitive data ids")

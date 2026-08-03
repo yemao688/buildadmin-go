@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
@@ -26,15 +27,17 @@ type SensitiveDataHandler struct {
 	config         *conf.Configuration
 	sensitiveDataM *securitymodel.SensitiveDataRepository
 	tableM         *adminmodel.TableRepository
+	svc            *service.SensitiveDataService
 }
 
-func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SensitiveDataRepository, tableM *adminmodel.TableRepository) *SensitiveDataHandler {
+func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SensitiveDataRepository, tableM *adminmodel.TableRepository, svc *service.SensitiveDataService) *SensitiveDataHandler {
 	return &SensitiveDataHandler{
 		Base:           NewBase(sensitiveDataM),
 		log:            log,
 		config:         config,
 		sensitiveDataM: sensitiveDataM,
 		tableM:         tableM,
+		svc:            svc,
 	}
 }
 
@@ -73,6 +76,21 @@ func (v SensitiveData) GetMessages() validator.ValidatorMessages {
 	return validator.ValidatorMessages{}
 }
 
+func sensitiveDataParams(params SensitiveData) service.SensitiveDataParams {
+	fields := make([]service.Field, 0, len(params.Fields))
+	for _, f := range params.Fields {
+		fields = append(fields, service.Field{Name: f.Name, Value: f.Value})
+	}
+	return service.SensitiveDataParams{
+		Name:       params.Name,
+		Controller: params.Controller,
+		DataTable:  params.DataTable,
+		PrimaryKey: params.PrimaryKey,
+		Fields:     fields,
+		Status:     params.Status,
+	}
+}
+
 func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodGet {
 		Success(ctx, map[string]interface{}{
@@ -88,18 +106,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	params.ControllerAs = normalizeControllerAs(params.Controller)
-	var sensitiveData model.SecuritySensitiveData
-	copier.Copy(&sensitiveData, params)
-
-	dateField := map[string]string{}
-	for _, v := range params.Fields {
-		dateField[v.Name] = v.Value
-	}
-	bytesData, _ := json.Marshal(dateField)
-	sensitiveData.DataFields = string(bytesData)
-
-	if err := h.sensitiveDataM.Add(ctx, sensitiveData); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), sensitiveDataParams(params)); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -108,7 +115,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 
 func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	sensitiveData, err := h.sensitiveDataM.GetOne(ctx, int32(id))
+	sensitiveData, err := h.sensitiveDataM.GetOne(ctx.Request.Context(), int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -121,10 +128,12 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 
 	result := Result{}
 	copier.Copy(&result, sensitiveData)
-	if err := json.Unmarshal([]byte(sensitiveData.DataFields), &result.DataFields); err != nil {
+	fields, err := h.svc.UnmarshalFields(sensitiveData.DataFields)
+	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
+	result.DataFields = fields
 
 	Success(ctx, map[string]interface{}{
 		"row":         result,
@@ -146,7 +155,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 			if statusStr == "" {
 				statusStr = fmt.Sprintf("%v", status)
 			}
-			if err := h.sensitiveDataM.UpdateStatus(ctx, id, statusStr); err != nil {
+			if err := h.sensitiveDataM.UpdateStatus(ctx.Request.Context(), id, statusStr); err != nil {
 				FailByErr(ctx, err)
 				return
 			}
@@ -163,22 +172,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	data, err := h.sensitiveDataM.GetOne(ctx, params.ID)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	params.ControllerAs = normalizeControllerAs(params.Controller)
-	copier.Copy(&data, params)
-	dateField := map[string]string{}
-	for _, v := range params.Fields {
-		dateField[v.Name] = v.Value
-	}
-	bytesData, _ := json.Marshal(dateField)
-	data.DataFields = string(bytesData)
-
-	if err := h.sensitiveDataM.Edit(ctx, data); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), params.ID, sensitiveDataParams(params.SensitiveData)); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

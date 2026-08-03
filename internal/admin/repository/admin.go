@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -29,7 +30,7 @@ func NewAdminRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminReposi
 	}
 }
 
-func (s *AdminRepository) DealData(ctx *gin.Context, data *model.Admin) error {
+func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error {
 	data.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 
 	groups := []struct {
@@ -77,21 +78,39 @@ func (s *AdminRepository) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	}
 }
 
+// scopedWithActor is the transport-free counterpart of scoped for the
+// service layer, which receives the actor as an explicit parameter.
+func (s *AdminRepository) scopedWithActor(ctx context.Context, actor data_scope.Actor) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		enforcer := data_scope.NewClosureEnforcer(s.config)
+		return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: s.TableName, Column: "id"})
+	}
+}
+
 func (s *AdminRepository) GetOne(ctx *gin.Context, id int32) (model.Admin, error) {
+	actor, err := s.actor(ctx)
+	if err != nil {
+		return model.Admin{}, err
+	}
+	return s.GetOneWithActor(ctx, actor, id)
+}
+
+// GetOneWithActor loads one scoped administrator row for an explicit actor.
+func (s *AdminRepository) GetOneWithActor(ctx context.Context, actor data_scope.Actor, id int32) (model.Admin, error) {
 	data := model.Admin{}
-	if err := s.DBFor(ctx).Scopes(s.scoped(ctx)).Omit("password", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
+	if err := s.DBFor(ctx).Scopes(s.scopedWithActor(ctx, actor)).Omit("password", "login_failure").Where("id=?", id).Limit(1).First(&data).Error; err != nil {
 		return data, err
 	}
 	if err := s.DealData(ctx, &data); err != nil {
 		return data, err
 	}
-	if err := s.loadParentSummaries(ctx, s.DBFor(ctx), []*model.Admin{&data}); err != nil {
+	if err := s.loadParentSummaries(ctx, s.DBFor(ctx), s.scopedWithActor(ctx, actor), []*model.Admin{&data}); err != nil {
 		return data, err
 	}
 	return data, nil
 }
 
-func (s *AdminRepository) GetGroupArr(ctx *gin.Context, id int32) (groupIds []int32, err error) {
+func (s *AdminRepository) GetGroupArr(ctx context.Context, id int32) (groupIds []int32, err error) {
 	err = s.DBFor(ctx).Model(&model.AdminGroupAccess{}).Where("uid=?", id).Pluck("group_id", &groupIds).Error
 	return
 }
@@ -116,7 +135,7 @@ func (s *AdminRepository) List(ctx *gin.Context) (list []*model.Admin, total int
 	if err != nil {
 		return
 	}
-	if err = s.loadParentSummaries(ctx, db, list); err != nil {
+	if err = s.loadParentSummaries(ctx, db, s.scoped(ctx), list); err != nil {
 		return
 	}
 	for _, v := range list {
@@ -127,7 +146,7 @@ func (s *AdminRepository) List(ctx *gin.Context) (list []*model.Admin, total int
 	return
 }
 
-func (s *AdminRepository) loadParentSummaries(ctx *gin.Context, db *gorm.DB, admins []*model.Admin) error {
+func (s *AdminRepository) loadParentSummaries(ctx context.Context, db *gorm.DB, scope func(*gorm.DB) *gorm.DB, admins []*model.Admin) error {
 	ids := make([]int32, 0, len(admins))
 	seen := make(map[int32]struct{}, len(admins))
 	for _, admin := range admins {
@@ -143,7 +162,7 @@ func (s *AdminRepository) loadParentSummaries(ctx *gin.Context, db *gorm.DB, adm
 		return nil
 	}
 	var parents []model.AdminSummary
-	if err := db.Session(&gorm.Session{NewDB: true}).Model(&model.Admin{}).Scopes(s.scoped(ctx)).Select("id", "nickname", "username").Where("id IN ?", ids).Find(&parents).Error; err != nil {
+	if err := db.Session(&gorm.Session{NewDB: true}).Model(&model.Admin{}).Scopes(scope).Select("id", "nickname", "username").Where("id IN ?", ids).Find(&parents).Error; err != nil {
 		return err
 	}
 	byID := make(map[int32]*model.AdminSummary, len(parents))
@@ -162,6 +181,16 @@ func (s *AdminRepository) Add(ctx *gin.Context, admin model.Admin, groups []stri
 	actor, err := s.actor(ctx)
 	if err != nil {
 		return err
+	}
+	return s.AddWithActor(ctx, admin, groups, actor)
+}
+
+// AddWithActor is the transport-free counterpart of Add for the service
+// layer: the actor is passed explicitly instead of being read from the
+// request context.
+func (s *AdminRepository) AddWithActor(ctx context.Context, admin model.Admin, groups []string, actor data_scope.Actor) error {
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
@@ -205,8 +234,18 @@ func isDuplicateKeyError(err error) bool {
 // inside the current actor's hierarchical scope. It fails closed: missing or
 // unauthorized parents are treated as not found.
 func (s *AdminRepository) CheckParentInScope(ctx *gin.Context, parentID int32) error {
+	actor, err := s.actor(ctx)
+	if err != nil {
+		return err
+	}
+	return s.CheckParentInScopeWithActor(ctx, actor, parentID)
+}
+
+// CheckParentInScopeWithActor is the transport-free counterpart of
+// CheckParentInScope for the service layer.
+func (s *AdminRepository) CheckParentInScopeWithActor(ctx context.Context, actor data_scope.Actor, parentID int32) error {
 	var parent model.Admin
-	if err := s.DBFor(ctx).Scopes(s.scoped(ctx)).Where("id = ?", parentID).First(&parent).Error; err != nil {
+	if err := s.DBFor(ctx).Scopes(s.scopedWithActor(ctx, actor)).Where("id = ?", parentID).First(&parent).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, data_scope.ErrScopedAccessDenied) {
 			return cErr.BadRequest("Parent administrator not found or not in scope")
 		}
@@ -241,6 +280,16 @@ func (s *AdminRepository) Edit(ctx *gin.Context, admin model.Admin, changeParent
 	actor, err := s.actor(ctx)
 	if err != nil {
 		return err
+	}
+	return s.EditWithActor(ctx, admin, changeParent, newParent, omit, groups, actor)
+}
+
+// EditWithActor is the transport-free counterpart of Edit for the service
+// layer: the actor is passed explicitly instead of being read from the
+// request context.
+func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, changeParent bool, newParent *int32, omit []string, groups []string, actor data_scope.Actor) error {
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
@@ -278,20 +327,30 @@ func (s *AdminRepository) Edit(ctx *gin.Context, admin model.Admin, changeParent
 // administrator. The final UPDATE carries the closure scope predicate and
 // validates RowsAffected.
 func (s *AdminRepository) SwitchStatus(ctx *gin.Context, id int32, status string) error {
+	actor, err := s.actor(ctx)
+	if err != nil {
+		return err
+	}
+	return s.SwitchStatusWithActor(ctx, id, status, actor)
+}
+
+// SwitchStatusWithActor is the transport-free counterpart of SwitchStatus
+// for the service layer.
+func (s *AdminRepository) SwitchStatusWithActor(ctx context.Context, id int32, status string, actor data_scope.Actor) error {
 	if status != "enable" && status != "disable" {
 		return cErr.BadRequest("status must be enable or disable")
 	}
-	if _, err := s.actor(ctx); err != nil {
-		return err
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		result := tx.Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where("id = ?", id).Update("status", status)
+		result := tx.Model(&model.Admin{}).Scopes(s.scopedWithActor(ctx, actor)).Where("id = ?", id).Update("status", status)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
 			var visible int64
-			if err := tx.Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where("id = ?", id).Count(&visible).Error; err != nil {
+			if err := tx.Model(&model.Admin{}).Scopes(s.scopedWithActor(ctx, actor)).Where("id = ?", id).Count(&visible).Error; err != nil {
 				return err
 			}
 			if visible == 1 {

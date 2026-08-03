@@ -5,20 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"slices"
 	"strconv"
 
+	"buildadmin-go/internal/admin/service"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
-	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/tree"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
@@ -28,14 +26,16 @@ type AdminHandler struct {
 	log    *zap.Logger
 	adminM *adminmodel.AdminRepository
 	authM  *adminmodel.AuthRepository
+	svc    *service.AdminService
 }
 
-func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository) *AdminHandler {
+func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository, svc *service.AdminService) *AdminHandler {
 	return &AdminHandler{
 		Base:   NewBase(adminM),
 		log:    log,
 		adminM: adminM,
 		authM:  authM,
+		svc:    svc,
 	}
 }
 
@@ -119,77 +119,10 @@ func actorFromContext(ctx *gin.Context) (data_scope.Actor, error) {
 	return actor, nil
 }
 
-// resolveParentIDForAdd implements the Add semantics: omitted/null/0 means
-// default to the current actor for restricted actors, or root for Unrestricted.
-func resolveParentIDForAdd(p NullableParentID, actor data_scope.Actor) (*int32, error) {
-	if !p.IsSet || p.Value == nil || *p.Value == 0 {
-		if actor.Unrestricted {
-			return nil, nil
-		}
-		return &actor.AdminID, nil
-	}
-	if *p.Value < 0 {
-		return nil, cErr.BadRequest("parent_id must be non-negative")
-	}
-	return p.Value, nil
-}
-
-// resolveParentIDForEdit implements the Edit semantics: omitted/null keeps the
-// current parent; 0 moves to root only for Unrestricted actors; positive values
-// move to that parent. The returned bool indicates whether the parent changed.
-func resolveParentIDForEdit(p NullableParentID, current *int32, actor data_scope.Actor) (*int32, bool, error) {
-	if !p.IsSet || p.Value == nil {
-		return current, false, nil
-	}
-	if *p.Value == 0 {
-		if !actor.Unrestricted {
-			return nil, false, cErr.BadRequest("restricted actor cannot move administrator to root")
-		}
-		return nil, !int32PtrEqual(current, nil), nil
-	}
-	if *p.Value < 0 {
-		return nil, false, cErr.BadRequest("parent_id must be non-negative")
-	}
-	return p.Value, !int32PtrEqual(current, p.Value), nil
-}
-
-// int32PtrEqual reports whether two optional int32 pointers refer to the same
-// value (or both nil).
-func int32PtrEqual(a, b *int32) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return *a == *b
-}
-
-// isMovingUnderSelf reports whether an existing node would be moved under itself.
-// For a new administrator (nodeID == 0) this is always false because the node
-// does not exist yet and the actor may legitimately create a direct subordinate.
-func isMovingUnderSelf(nodeID int32, parentID *int32) bool {
-	return nodeID > 0 && parentID != nil && *parentID == nodeID
-}
-
-func setAdminPassword(admin *model.Admin, plaintext string) error {
-	hash, err := passwordutil.Hash(plaintext)
-	if err != nil {
-		return err
-	}
-	admin.Password = hash
-	return nil
-}
-
 func (h *AdminHandler) Add(ctx *gin.Context) {
 	var params Admin
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
-		return
-	}
-
-	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("Please input correct password"))
 		return
 	}
 
@@ -198,43 +131,28 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-
 	adminAuth := header.GetAdminAuth(ctx)
-	if len(params.GroupArr) > 0 {
-		if err := h.CheckGroupAuth(ctx, params.GroupArr, adminAuth.Id); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	parentID, err := resolveParentIDForAdd(params.ParentID, actor)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	if parentID != nil {
-		if err := h.adminM.CheckParentInScope(ctx, *parentID); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	var admin model.Admin
-	copier.Copy(&admin, params)
-
-	if err := setAdminPassword(&admin, params.Password); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	admin.ParentID = parentID
-
-	if err := h.adminM.Add(ctx, admin, params.GroupArr); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), adminParams(params), actor, adminAuth.Id); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
 	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+}
+
+func adminParams(params Admin) service.AdminParams {
+	return service.AdminParams{
+		Username: params.Username,
+		Nickname: params.Nickname,
+		Avatar:   params.Avatar,
+		Email:    params.Email,
+		Mobile:   params.Mobile,
+		Password: params.Password,
+		Motto:    params.Motto,
+		Status:   params.Status,
+		ParentID: service.ParentSelection{Value: params.ParentID.Value, Set: params.ParentID.IsSet},
+		GroupArr: params.GroupArr,
+	}
 }
 
 func (h *AdminHandler) One(ctx *gin.Context) {
@@ -251,7 +169,7 @@ func (h *AdminHandler) One(ctx *gin.Context) {
 }
 
 // MaybePartialEdit overrides Base.MaybePartialEdit so that switch-unit-cell
-// status updates run through the scoped, atomic AdminRepository.SwitchStatus.
+// status updates run through the scoped, atomic service/repository path.
 func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
@@ -305,11 +223,12 @@ func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[stri
 		FailByErr(ctx, cErr.BadRequest("status must be a string"))
 		return true
 	}
-	if err := validateAccountStatusValue(status); err != nil {
+	actor, err := actorFromContext(ctx)
+	if err != nil {
 		FailByErr(ctx, err)
 		return true
 	}
-	if err := h.adminM.SwitchStatus(ctx, id, status); err != nil {
+	if err := h.svc.SwitchStatus(ctx.Request.Context(), id, status, header.GetAdminAuth(ctx).Id, actor); err != nil {
 		FailByErr(ctx, err)
 		return true
 	}
@@ -318,20 +237,7 @@ func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[stri
 }
 
 func (h *AdminHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}, func(id int32, fieldName string, fieldValue any) error {
-		if fieldName != "status" {
-			return nil
-		}
-		if err := validateAccountStatusValue(fieldValue); err != nil {
-			return err
-		}
-		status := fieldValue.(string)
-		adminAuth := header.GetAdminAuth(ctx)
-		if adminAuth.Id == id && status == "disable" {
-			return cErr.BadRequest("Please use another administrator account to disable the current account!")
-		}
-		return nil
-	}) {
+	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
 		return
 	}
 
@@ -344,91 +250,18 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	admin, err := h.adminM.GetOne(ctx, params.ID)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
 	actor, err := actorFromContext(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-
 	adminAuth := header.GetAdminAuth(ctx)
-	if adminAuth.Id == admin.ID && params.Status == "disable" {
-		FailByErr(ctx, cErr.BadRequest("Please use another administrator account to disable the current account!"))
-		return
-	}
-
-	parentID, changed, err := resolveParentIDForEdit(params.ParentID, admin.ParentID, actor)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	if isMovingUnderSelf(admin.ID, parentID) {
-		FailByErr(ctx, cErr.BadRequest("cannot move an administrator under itself"))
-		return
-	}
-
-	omit := []string{"login_failure", "last_login_time", "parent_id"}
-	if params.Password == "" {
-		omit = append(omit, "password")
-	}
-
-	checkGroups := []string{}
-	groupIds, _ := h.adminM.GetGroupArr(ctx, adminAuth.Id)
-	for _, v := range params.GroupArr {
-		for _, i := range groupIds {
-			if v != strconv.Itoa(int(i)) {
-				checkGroups = append(checkGroups, v)
-			}
-		}
-	}
-	if len(checkGroups) > 0 {
-		if err := h.CheckGroupAuth(ctx, checkGroups, adminAuth.Id); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	if changed && parentID != nil {
-		if err := h.adminM.CheckParentInScope(ctx, *parentID); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	if err := copier.Copy(&admin, params); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	// Hash only after copier.Copy: the DTO password is plaintext and must never
-	// survive into the model passed to the transactional writer.
-	if params.Password != "" {
-		if err := setAdminPassword(&admin, params.Password); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-	admin.ParentID = parentID
-
-	err = h.adminM.Edit(ctx, admin, changed, parentID, omit, params.GroupArr)
-	if err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminParams(params.Admin), actor, adminAuth.Id); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
 	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
-}
-
-func validateAccountStatusValue(value any) error {
-	status, ok := value.(string)
-	if !ok || (status != "enable" && status != "disable") {
-		return cErr.BadRequest("status must be enable or disable")
-	}
-	return nil
 }
 
 func (h *AdminHandler) Del(ctx *gin.Context) {
@@ -445,24 +278,6 @@ func (h *AdminHandler) Del(ctx *gin.Context) {
 	}
 	Success(ctx, "")
 	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
-}
-
-// 检查分组权限
-func (h *AdminHandler) CheckGroupAuth(ctx *gin.Context, groups []string, id int32) error {
-	if ok := h.authM.IsSuperAdmin(id); ok {
-		return nil
-	}
-
-	authGroups, err := h.authM.GetAllAuthGroups("allAuthAndOthers", id)
-	if err != nil {
-		return err
-	}
-	for _, v := range groups {
-		if !slices.Contains(authGroups, v) {
-			return cErr.BadRequest("You have no permission to add an administrator to this group!")
-		}
-	}
-	return nil
 }
 
 type adminTreeLeaf struct {

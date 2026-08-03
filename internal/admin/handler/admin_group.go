@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"buildadmin-go/internal/admin/service"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/tree"
 	"buildadmin-go/internal/utils"
@@ -24,15 +24,17 @@ type AdminGroupHandler struct {
 	adminGroupM *adminmodel.AdminGroupRepository
 	adminRuleM  *adminmodel.AdminRuleRepository
 	authM       *adminmodel.AuthRepository
+	svc         *service.AdminGroupService
 }
 
-func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository) *AdminGroupHandler {
+func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository, svc *service.AdminGroupService) *AdminGroupHandler {
 	return &AdminGroupHandler{
 		Base:        NewBase(adminGroupM),
 		log:         log,
 		adminGroupM: adminGroupM,
 		adminRuleM:  adminRuleM,
 		authM:       authM,
+		svc:         svc,
 	}
 }
 
@@ -89,15 +91,8 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	rules, err := h.HandleRules(ctx, params.Rules)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	adminGroup.Rules = rules
-
-	err = h.adminGroupM.Add(ctx, adminGroup)
-	if err != nil {
+	adminAuth := header.GetAdminAuth(ctx)
+	if err := h.svc.Add(ctx.Request.Context(), adminGroup, params.Rules, adminAuth.Id); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -107,20 +102,20 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 
 func (h *AdminGroupHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	adminGroup, err := h.adminGroupM.GetOne(ctx, int32(id))
+	adminGroup, err := h.adminGroupM.GetOne(ctx.Request.Context(), int32(id))
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
-	if err := h.CheckAuth(ctx, int32(id)); err != nil {
+	if err := h.svc.CheckAuth(header.GetAdminAuth(ctx).Id, header.GetAdminAuth(ctx).IsSuperAdmin, int32(id)); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	// 读取所有pid，全部从节点数组移除，父级选择状态由子级决定
 	ruleIds := strings.Split(adminGroup.Rules, ",")
-	pids, err := h.adminRuleM.GetRulePIds(ruleIds, ctx)
+	pids, err := h.adminRuleM.GetRulePIds(ctx.Request.Context(), ruleIds)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -164,35 +159,13 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	adminGroup, err := h.adminGroupM.GetOne(ctx, params.ID)
-	if err != nil {
+	adminGroup := model.AdminGroup{}
+	if err := copier.Copy(&adminGroup, params.AdminGroup); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	if err := h.CheckAuth(ctx, params.ID); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
 	adminAuth := header.GetAdminAuth(ctx)
-	groupIds := h.authM.GetGroupIds(adminAuth.Id)
-	if slices.Contains(groupIds, params.ID) {
-		FailByErr(ctx, cErr.BadRequest("You cannot modify your own management group!"))
-		return
-	}
-
-	if err := copier.Copy(&adminGroup, params); err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	adminGroup.Rules, err = h.HandleRules(ctx, params.Rules)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	err = h.adminGroupM.Edit(ctx, adminGroup)
-	if err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminGroup, params.Rules, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -207,63 +180,13 @@ func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 		return
 	}
 
-	for _, v := range params.Ids {
-		if err := h.CheckAuth(ctx, v); err != nil {
-			FailByErr(ctx, err)
-			return
-		}
-	}
-
-	err := h.adminGroupM.Del(ctx, params.Ids)
-	if err != nil {
+	adminAuth := header.GetAdminAuth(ctx)
+	if err := h.svc.Del(ctx.Request.Context(), params.Ids, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
 	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
-}
-
-// 权限节点入库前处理
-func (h *AdminGroupHandler) HandleRules(ctx *gin.Context, rules []int32) (string, error) {
-	if len(rules) > 0 {
-		list, err := h.adminRuleM.List(ctx)
-		if err != nil {
-			return "", err
-		}
-		//判断是否超级管理员
-		super := true
-		for _, r := range list {
-			if !slices.Contains(rules, r.ID) {
-				super = false
-				break
-			}
-		}
-		if super {
-			return "*", nil
-		}
-
-		stringRules := []string{}
-		for _, v := range rules {
-			stringRules = append(stringRules, strconv.Itoa(int(v)))
-		}
-		//禁止添加`拥有自己全部权限`的分组
-		adminAuth := header.GetAdminAuth(ctx)
-		hasRules, err := h.authM.GetRuleIds(adminAuth.Id)
-		if err != nil {
-			return "", err
-		}
-		isAll := true
-		for _, v := range hasRules {
-			if !slices.Contains(stringRules, v) {
-				isAll = false
-			}
-		}
-		if isAll {
-			return "", cErr.BadRequest(utils.Lang(ctx, "Role group has all your rights, please contact the upper administrator to add or do not need to add!", nil))
-		}
-		return strings.Join(stringRules, ","), nil
-	}
-	return "", nil
 }
 
 func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
@@ -318,8 +241,8 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 			whereP = append(whereP, authGroups)
 		}
 	}
-	list := []*model.AdminGroup{}
-	if err := h.adminGroupM.DB().Table(h.adminGroupM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Find(&list).Error; err != nil {
+	list, err := h.adminGroupM.ListWhere(ctx.Request.Context(), strings.Join(whereS, " AND "), whereP...)
+	if err != nil {
 		return list, err
 	}
 
@@ -332,8 +255,8 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 				ruleIds := strings.Split(v.Rules, ",")
 				num := len(ruleIds)
 				if num > 0 {
-					rule := model.AdminRule{}
-					if err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(" id=? ", ruleIds[0]).First(&rule).Error; err != nil {
+					rule, err := h.adminRuleM.GetOne(ctx.Request.Context(), mustRuleID(ruleIds[0]))
+					if err != nil {
 						return nil, err
 					}
 					if num == 1 {
@@ -350,21 +273,9 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 	return list, nil
 }
 
-// 检查权限
-func (h *AdminGroupHandler) CheckAuth(ctx *gin.Context, groupId int32) error {
-	adminAuth := header.GetAdminAuth(ctx)
-	authGroups, err := h.authM.GetAllAuthGroups("allAuthAndOthers", adminAuth.Id)
-	if err != nil {
-		return err
-	}
-
-	if !adminAuth.IsSuperAdmin {
-		idStr := strconv.Itoa(int(groupId))
-		if !slices.Contains(authGroups, idStr) {
-			return cErr.BadRequest("You need to have all the permissions of the group and have additional permissions before you can operate the group~")
-		}
-	}
-	return nil
+func mustRuleID(raw string) int32 {
+	id, _ := strconv.Atoi(raw)
+	return int32(id)
 }
 
 type AdminGroupExpend struct {

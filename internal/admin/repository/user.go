@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"buildadmin-go/internal/conf"
@@ -36,7 +37,7 @@ func NewUserRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data
 	}
 }
 
-func (s *UserRepository) DealData(ctx *gin.Context, data *model.User) (*OutUser, error) {
+func (s *UserRepository) DealData(ctx context.Context, data *model.User) (*OutUser, error) {
 	outUser := OutUser{}
 	if err := copier.Copy(&outUser, data); err != nil {
 		return nil, err
@@ -60,9 +61,39 @@ func (s *UserRepository) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 }
 
 func (s *UserRepository) GetOne(ctx *gin.Context, id int32) (model.User, error) {
+	actor, err := s.enforcer.Actor(ctx)
+	if err != nil {
+		return model.User{}, err
+	}
+	return s.GetOneWithActor(ctx, actor, id)
+}
+
+// GetOneWithActor loads one scoped user row for an explicit actor.
+func (s *UserRepository) GetOneWithActor(ctx context.Context, actor data_scope.Actor, id int32) (model.User, error) {
 	data := model.User{}
-	err := s.DBFor(ctx).Model(&model.User{}).Scopes(s.scoped(ctx)).Preload("Admin").Omit("password").Where("`"+s.TableName+"`.id = ?", id).First(&data).Error
+	err := s.DBFor(ctx).Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Preload("Admin").Omit("password").Where("`"+s.TableName+"`.id = ?", id).First(&data).Error
 	return data, err
+}
+
+// scopedWithActor is the transport-free counterpart of scoped for the
+// service layer, which receives the actor as an explicit parameter.
+func (s *UserRepository) scopedWithActor(ctx context.Context, actor data_scope.Actor) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if s.enforcer == nil {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		enforcer, ok := s.enforcer.(interface {
+			ScopeWithActor(context.Context, *gorm.DB, data_scope.Actor, data_scope.OwnerRef) *gorm.DB
+		})
+		if !ok {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: s.TableName, Column: "admin_id"})
+	}
 }
 
 func (s *UserRepository) List(ctx *gin.Context) ([]*OutUser, int64, error) {
@@ -103,12 +134,22 @@ func (s *UserRepository) Add(ctx *gin.Context, user *model.User) error {
 	if err != nil {
 		return err
 	}
+	return s.AddWithActor(ctx, user, actor)
+}
+
+// AddWithActor is the transport-free counterpart of Add for the service
+// layer: the actor is passed explicitly instead of being read from the
+// request context.
+func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, actor data_scope.Actor) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
+	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if ctx == nil || ctx.Request == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -116,7 +157,7 @@ func (s *UserRepository) Add(ctx *gin.Context, user *model.User) error {
 		if ownerID == 0 {
 			ownerID = actor.AdminID
 		}
-		if err := s.validateUserOwner(ctx, tx, ownerID); err != nil {
+		if err := s.validateUserOwner(ctx, tx, ownerID, actor); err != nil {
 			return err
 		}
 		user.AdminID = ownerID
@@ -149,7 +190,7 @@ func (s *UserRepository) Add(ctx *gin.Context, user *model.User) error {
 }
 
 
-func (s *UserRepository) UsernameExists(ctx *gin.Context, username string) (bool, error) {
+func (s *UserRepository) UsernameExists(ctx context.Context, username string) (bool, error) {
 	err := s.DBFor(ctx).Where("username=?", username).Take(&model.User{}).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -158,6 +199,26 @@ func (s *UserRepository) UsernameExists(ctx *gin.Context, username string) (bool
 }
 
 func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password string) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	actor, err := s.enforcer.Actor(ctx)
+	if err != nil {
+		return err
+	}
+	return s.EditWithActor(ctx, user, password, actor)
+}
+
+// EditWithActor is the transport-free counterpart of Edit for the service
+// layer: the actor is passed explicitly instead of being read from the
+// request context.
+func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, password string, actor data_scope.Actor) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
+	}
 	updates := map[string]interface{}{
 		"username":  user.Username,
 		"nickname":  user.Nickname,
@@ -176,10 +237,7 @@ func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password strin
 		updates["password"] = hash
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if ctx == nil || ctx.Request == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		err := NewAdminHierarchy(s.config).LockHierarchy(ctx.Request.Context(), tx)
+		err := NewAdminHierarchy(s.config).LockHierarchy(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -187,7 +245,7 @@ func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password strin
 			return cErr.BadRequest("Account not exist")
 		}
 		var current model.User
-		if err := tx.Model(&model.User{}).Scopes(s.scoped(ctx)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
+		if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
 			return err
 		}
 		if current.AdminID <= 0 || user.AdminID <= 0 {
@@ -195,7 +253,7 @@ func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password strin
 		}
 		ownerChanged := current.AdminID != user.AdminID
 		if ownerChanged {
-			if err := s.validateUserOwner(ctx, tx, user.AdminID); err != nil {
+			if err := s.validateUserOwner(ctx, tx, user.AdminID, actor); err != nil {
 				return err
 			}
 			if err := s.validateUserLogOwners(tx, current.ID, current.AdminID); err != nil {
@@ -203,7 +261,7 @@ func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password strin
 			}
 			updates["admin_id"] = user.AdminID
 		}
-		result := tx.Model(&model.User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
+		result := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
 		if result.Error != nil {
 			return result.Error
 		}
@@ -222,8 +280,8 @@ func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password strin
 	})
 }
 
-func (s *UserRepository) validateUserOwner(ctx *gin.Context, tx *gorm.DB, ownerID int32) error {
-	if err := data_scope.OwnerInScope(ctx, tx, s.enforcer, s.config.Database.Prefix, ownerID); err != nil {
+func (s *UserRepository) validateUserOwner(ctx context.Context, tx *gorm.DB, ownerID int32, actor data_scope.Actor) error {
+	if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.enforcer, s.config.Database.Prefix, ownerID, actor); err != nil {
 		return err
 	}
 	var enabled int64
@@ -285,15 +343,34 @@ func (s *UserRepository) ResetPassword(ctx *gin.Context, id int32, password stri
 // current actor's scope. It is used for switch-style partial edits so that
 // the update carries scope and cannot touch out-of-scope rows.
 func (s *UserRepository) UpdateStatus(ctx *gin.Context, id int32, status string) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	actor, err := s.enforcer.Actor(ctx)
+	if err != nil {
+		return err
+	}
+	return s.UpdateStatusWithActor(ctx, id, status, actor)
+}
+
+// UpdateStatusWithActor is the transport-free counterpart of UpdateStatus
+// for the service layer.
+func (s *UserRepository) UpdateStatusWithActor(ctx context.Context, id int32, status string, actor data_scope.Actor) error {
+	if s.enforcer == nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
+	}
 	var result *gorm.DB
 	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		result = tx.Model(&model.User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Update("status", status)
+		result = tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", id).Update("status", status)
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected == 0 {
 			var visible int64
-			if err := tx.Model(&model.User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Count(&visible).Error; err != nil {
+			if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", id).Count(&visible).Error; err != nil {
 				return err
 			}
 			if visible == 1 {

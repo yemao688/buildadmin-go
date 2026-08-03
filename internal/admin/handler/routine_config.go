@@ -1,32 +1,29 @@
 package handler
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	routinedto "buildadmin-go/internal/admin/dto"
+	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/validator"
-	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/utils"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-mail/mail"
-	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 type ConfigHandler struct {
 	Base
-	log     *zap.Logger
-	config  *conf.Configuration
+	log    *zap.Logger
+	config *conf.Configuration
 	configM *model.ConfigRepository
+	svc    *service.ConfigService
 }
 
 type configJSONItem struct {
@@ -63,10 +60,10 @@ func decodeConfigValue(field, value string, err error) ([]configJSONItem, error)
 	return decodeConfigJSON(field, value)
 }
 
-func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository) *ConfigHandler {
+func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository, svc *service.ConfigService) *ConfigHandler {
 	return &ConfigHandler{
 		Base: NewBase(configM),
-		log:  log, config: config, configM: configM}
+		log:  log, config: config, configM: configM, svc: svc}
 }
 
 func (h *ConfigHandler) Index(ctx *gin.Context) {
@@ -161,31 +158,18 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var config = siteconfig.Config{}
-	copier.Copy(&config, params)
-	if params.Type == "radio" || params.Type == "checkbox" || params.Type == "select" || params.Type == "selects" {
-		contentBytes, _ := json.Marshal(utils.StrAttrToArray(params.Content))
-		config.Content = string(contentBytes)
-	} else {
-		config.Content = ""
-	}
-	config.Rule = strings.Join(params.Rule, ",")
-
-	if params.Extend != "" || params.InputExtend != "" {
-		inputExtend := utils.StrAttrToArray(params.InputExtend)
-		extend := utils.StrAttrToArray(params.Extend)
-		if len(inputExtend) > 0 {
-			extend["baInputExtend"] = inputExtend
-		}
-		if len(extend) > 0 {
-			extendBytes, _ := json.Marshal(extend)
-			config.Extend = string(extendBytes)
-		}
-		config.AllowDel = 1
-	}
-
-	err := h.configM.Add(ctx, config)
-	if err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), service.ConfigParams{
+		Name:        params.Name,
+		Group:       params.Group,
+		Title:       params.Title,
+		Tip:         params.Tip,
+		Type:        params.Type,
+		Content:     params.Content,
+		Rule:        params.Rule,
+		Extend:      params.Extend,
+		InputExtend: params.InputExtend,
+		Weigh:       params.Weigh,
+	}); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -227,26 +211,7 @@ func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 		return
 	}
 
-	message := mail.NewMessage()
-	message.SetHeader("From", params.SmtpSenderMail)
-	message.SetHeader("To", params.TestMail)
-	message.SetHeader("Subject", "This is a test email")
-	message.SetBody("text/plain", "congratulations, receiving this email means that your email service has been configured correctly")
-
-	// 根据提供的加密类型设置 Dialer 的 TLSConfig
-	port, err := strconv.Atoi(params.SmtpPort)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-	dialer := mail.NewDialer(params.SmtpServer, port, params.SmtpUser, params.SmtpPass)
-	if strings.EqualFold(params.SmtpVerification, "SSL") {
-		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true}
-	} else {
-		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: params.SmtpServer}
-	}
-
-	if err := dialer.DialAndSend(message); err != nil {
+	if err := h.svc.SendTestMail(params); err != nil {
 		JsonReturn(ctx, http.StatusOK, 0, "Mail sending service unavailable", err.Error())
 		return
 	}

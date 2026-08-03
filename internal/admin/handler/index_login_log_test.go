@@ -11,6 +11,7 @@ import (
 
 	adminmiddleware "buildadmin-go/internal/admin/middleware"
 	adminauth "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
@@ -100,7 +101,8 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *adminmiddl
 	tokenHelper := token.NewTokenHelper(config, nil, db, nil)
 	authModel := adminauth.NewAuthRepository(db, tokenHelper, config)
 	logModel := adminauth.NewAdminLogRepository(db, config, authModel)
-	return db, NewIndexHandler(config, nil, authModel, nil, nil, nil), adminmiddleware.NewRecord(config, logModel)
+	authService := service.NewAuthService(config, authModel, nil)
+	return db, NewIndexHandler(config, nil, authModel, nil, nil, authService), adminmiddleware.NewRecord(config, logModel)
 }
 
 func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *gin.Engine {

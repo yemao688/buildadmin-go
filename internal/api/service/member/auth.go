@@ -6,7 +6,6 @@ import (
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/systemroot"
@@ -14,7 +13,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"buildadmin-go/internal/utils"
@@ -36,13 +34,15 @@ func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Con
 	return &Service{users: repository.NewRepository(sqlDB), tokenHelper: tokenHelper, config: config}
 }
 
-func (s *Service) IsLogin(ctx *gin.Context) (*token.Token, bool) {
-	tokenStr := ctx.Request.Header.Get("ba-user-token")
-	if tokenStr != "" {
-		tokenData, err := s.tokenHelper.GetFor(tokenStr, "user")
-		if err == nil {
-			return tokenData, true
-		}
+// IsLoginToken resolves a user session token. The header extraction from the
+// request is a transport concern handled by the caller.
+func (s *Service) IsLoginToken(tokenStr string) (*token.Token, bool) {
+	if tokenStr == "" {
+		return nil, false
+	}
+	tokenData, err := s.tokenHelper.GetFor(tokenStr, "user")
+	if err == nil {
+		return tokenData, true
 	}
 	return nil, false
 }
@@ -51,7 +51,7 @@ func (s *Service) IsEnabledUser(id int32) bool {
 	return s.users.IsEnabled(id)
 }
 
-func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) (string, error) {
+func (s *Service) RefreshUserAccessToken(refreshToken string) (string, error) {
 	initial, err := s.tokenHelper.Get(refreshToken)
 	if err != nil {
 		return "", err
@@ -87,7 +87,7 @@ func (s *Service) RefreshUserAccessToken(ctx *gin.Context, refreshToken string) 
 	return newToken, nil
 }
 
-func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error {
+func (s *Service) ValidateUserToken(id int32, ip string) error {
 	user, err := s.users.GetByID(id)
 	if err != nil {
 		return err
@@ -101,7 +101,9 @@ func (s *Service) ValidateUserToken(ctx *gin.Context, id int32, ip string) error
 	return s.users.UpdateLoginMeta(id, 0, time.Now().Unix(), ip)
 }
 
-func (s *Service) Login(ctx *gin.Context, username string, plainPassword string, keep bool) (interface{}, error) {
+// Login verifies the credentials and issues the member tokens. ip is passed
+// explicitly so the flow stays transport-free.
+func (s *Service) Login(ip string, username string, plainPassword string, keep bool) (interface{}, error) {
 	accountType := ""
 	if loginPhoneRegex.MatchString(username) {
 		accountType = "mobile"
@@ -146,7 +148,7 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 	}
 
 	if err := password.Compare(user.Password, plainPassword); err != nil {
-		s.users.UpdateLoginMeta(user.ID, user.LoginFailure+1, time.Now().Unix(), ctx.ClientIP())
+		s.users.UpdateLoginMeta(user.ID, user.LoginFailure+1, time.Now().Unix(), ip)
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
@@ -165,11 +167,10 @@ func (s *Service) Login(ctx *gin.Context, username string, plainPassword string,
 	}
 
 	loginTime := time.Now().Unix()
-	loginIP := ctx.ClientIP()
-	err = s.users.UpdateLoginMeta(user.ID, 0, loginTime, loginIP)
+	err = s.users.UpdateLoginMeta(user.ID, 0, loginTime, ip)
 	user.LoginFailure = 0
 	user.LastLoginTime = loginTime
-	user.LastLoginIP = loginIP
+	user.LastLoginIP = ip
 
 	userInfo := s.FilterData(*user)
 	userInfo["token"] = tokenStr
@@ -192,7 +193,9 @@ func (s *Service) FilterData(user model.User) map[string]any {
 	}
 }
 
-func (s *Service) Register(ctx *gin.Context, username string, plainPassword string) (interface{}, error) {
+// Register creates a member account and issues the access token. ip is passed
+// explicitly so the flow stays transport-free.
+func (s *Service) Register(ip string, username string, plainPassword string) (interface{}, error) {
 	exists, err := s.accountExists("username", username)
 	if err != nil {
 		return nil, err
@@ -222,8 +225,8 @@ func (s *Service) Register(ctx *gin.Context, username string, plainPassword stri
 		Password:      hash,
 		Status:        "enable",
 		LastLoginTime: now,
-		LastLoginIP:   ctx.ClientIP(),
-		JoinIP:        ctx.ClientIP(),
+		LastLoginIP:   ip,
+		JoinIP:        ip,
 		JoinTime:      now,
 	}
 	if err := s.users.Create(&user); err != nil {
@@ -254,12 +257,17 @@ func (s *Service) accountExists(field, value string) (bool, error) {
 	return user != nil, nil
 }
 
-func (s *Service) Logout(ctx *gin.Context, refreshToken string) error {
+// Logout invalidates the refresh token and the caller's access token.
+func (s *Service) Logout(refreshToken string, accessToken string) error {
 	if refreshToken != "" {
 		if err := s.tokenHelper.Delete(refreshToken); err != nil {
 			return err
 		}
 	}
-	userAuth := header.GetUserAuth(ctx)
-	return s.tokenHelper.Delete(userAuth.Token)
+	if accessToken != "" {
+		if err := s.tokenHelper.Delete(accessToken); err != nil {
+			return err
+		}
+	}
+	return nil
 }

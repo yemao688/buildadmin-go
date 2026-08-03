@@ -131,7 +131,7 @@ func TestLoadParentSummariesSelectsUsername(t *testing.T) {
 		_ = db.Callback().Query().Remove(callbackName)
 	})
 
-	if err := m.loadParentSummaries(ctx, db, []*model.Admin{child}); err != nil {
+	if err := m.loadParentSummaries(ctx, db, m.scoped(ctx), []*model.Admin{child}); err != nil {
 		t.Fatalf("loadParentSummaries: %v", err)
 	}
 	if !slices.Contains(captured, "id") || !slices.Contains(captured, "nickname") || !slices.Contains(captured, "username") {

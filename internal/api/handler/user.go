@@ -5,6 +5,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/validator"
 	"regexp"
 
@@ -70,7 +71,7 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("Captcha error"))
 		return
 	}
-	result, err := h.authM.Login(ctx, params.Username, params.Password, params.Keep)
+	result, err := h.authM.Login(ctx.ClientIP(), params.Username, params.Password, params.Keep)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -95,7 +96,7 @@ func (h *UserHandler) Register(ctx *gin.Context) {
 		FailByErr(ctx, cErr.BadRequest("Captcha error"))
 		return
 	}
-	result, err := h.authM.Register(ctx, params.Username, params.Password)
+	result, err := h.authM.Register(ctx.ClientIP(), params.Username, params.Password)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -114,7 +115,7 @@ func (h *UserHandler) Logout(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	if err := h.authM.Logout(ctx, params.RefreshToken); err != nil {
+	if err := h.authM.Logout(params.RefreshToken, header.GetUserAuth(ctx).Token); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

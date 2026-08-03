@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
-	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
-	passwordutil "buildadmin-go/internal/pkg/password"
 	"io"
 	"math"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
@@ -22,12 +20,12 @@ type UserHandler struct {
 	Base
 	log   *zap.Logger
 	userM *adminmodel.UserRepository
+	svc   *service.UserService
 }
 
-func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository) *UserHandler {
-	return &UserHandler{Base: NewBase(userM), log: log, userM: userM}
+func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository, svc *service.UserService) *UserHandler {
+	return &UserHandler{Base: NewBase(userM), log: log, userM: userM, svc: svc}
 }
-
 
 func (h *UserHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
@@ -85,37 +83,35 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	usernameExists, err := h.userM.UsernameExists(ctx, params.Username)
+
+	actor, err := actorFromContext(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	if usernameExists {
-		FailByErr(ctx, cErr.BadRequest("Account exist"))
-		return
-	}
-	if params.Password == "" {
-		FailByErr(ctx, cErr.BadRequest("Please input correct password"))
-		return
-	}
-
-	var user model.User
-	copier.Copy(&user, params)
+	userParams := userParams(params)
 	if hasAdminID {
-		user.AdminID = adminID
+		userParams.AdminID = &adminID
 	}
-	user.Password, err = passwordutil.Hash(params.Password)
-	if err != nil {
-		FailByErr(ctx, err)
-		return
-	}
-
-	err = h.userM.Add(ctx, &user)
-	if err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), userParams, actor); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 	Success(ctx, "")
+}
+
+func userParams(params User) service.UserParams {
+	return service.UserParams{
+		Username: params.Username,
+		Nickname: params.Nickname,
+		Email:    params.Email,
+		Mobile:   params.Mobile,
+		Avatar:   params.Avatar,
+		JoinIP:   params.JoinIP,
+		JoinTime: params.JoinTime,
+		Password: params.Password,
+		Status:   params.Status,
+	}
 }
 
 func (h *UserHandler) One(ctx *gin.Context) {
@@ -170,11 +166,12 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		}
 	}
 	if isSwitch {
-		if err := validateAccountStatusValue(switchReq.Status); err != nil {
+		actor, err := actorFromContext(ctx)
+		if err != nil {
 			FailByErr(ctx, err)
 			return
 		}
-		if err := h.userM.UpdateStatus(ctx, switchReq.ID, switchReq.Status); err != nil {
+		if err := h.svc.UpdateStatus(ctx.Request.Context(), switchReq.ID, switchReq.Status, actor); err != nil {
 			FailByErr(ctx, err)
 			return
 		}
@@ -195,21 +192,16 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	user, err := h.userM.GetOne(ctx, params.ID)
+	actor, err := actorFromContext(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
-	currentAdminID := user.AdminID
-
-	copier.Copy(&user, params)
+	userParams := userParams(params.User)
 	if hasAdminID {
-		user.AdminID = adminID
-	} else {
-		user.AdminID = currentAdminID
+		userParams.AdminID = &adminID
 	}
-	err = h.userM.Edit(ctx, &user, params.Password)
-	if err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), params.ID, userParams, actor); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

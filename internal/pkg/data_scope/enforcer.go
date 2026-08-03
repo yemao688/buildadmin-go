@@ -1,6 +1,7 @@
 package data_scope
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -65,16 +66,27 @@ func (ClosureEnforcer) Actor(ctx *gin.Context) (Actor, error) {
 // original DB. The returned DB is never the original input for scoped
 // (non-bypass) requests, and the original shared DB is never mutated.
 func (e ClosureEnforcer) Scope(ctx *gin.Context, db *gorm.DB, owner OwnerRef) *gorm.DB {
-	return e.scopeOwners(ctx, db, owner, nil)
+	return e.ScopeWithExtraOwners(ctx, db, owner, nil)
 }
 
 // ScopeWithExtraOwners scopes rows owned by the primary owner or any extra
 // owner column. Every owner reference is validated before SQL is constructed.
 func (e ClosureEnforcer) ScopeWithExtraOwners(ctx *gin.Context, db *gorm.DB, primary OwnerRef, extras []OwnerRef) *gorm.DB {
-	return e.scopeOwners(ctx, db, primary, extras)
+	actor, err := e.Actor(ctx)
+	if err != nil {
+		return addScopeError(db, err, ErrScopedAccessDenied)
+	}
+	return e.scopeOwners(db, actor, append([]OwnerRef{primary}, extras...))
 }
 
-func (e ClosureEnforcer) scopeOwners(ctx *gin.Context, db *gorm.DB, primary OwnerRef, extras []OwnerRef) *gorm.DB {
+// ScopeWithActor applies the closure scope for an explicitly supplied actor.
+// It is the transport-free counterpart of Scope for service/domain layers
+// that receive the actor as a parameter instead of a gin request context.
+func (e ClosureEnforcer) ScopeWithActor(ctx context.Context, db *gorm.DB, actor Actor, owner OwnerRef) *gorm.DB {
+	return e.scopeOwners(db, actor, []OwnerRef{owner})
+}
+
+func (e ClosureEnforcer) scopeOwners(db *gorm.DB, actor Actor, refs []OwnerRef) *gorm.DB {
 	if db == nil {
 		// The interface does not allow returning an error. Return nil so the
 		// caller panics deterministically rather than silently running
@@ -82,16 +94,12 @@ func (e ClosureEnforcer) scopeOwners(ctx *gin.Context, db *gorm.DB, primary Owne
 		return nil
 	}
 
-	actor, err := e.Actor(ctx)
-	if err != nil {
+	if err := ValidateActor(actor); err != nil {
 		return addScopeError(db, err, ErrScopedAccessDenied)
 	}
 
-	if err := ValidateOwnerRef(primary); err != nil {
-		return addScopeError(db, err, ErrScopedAccessDenied)
-	}
-	for _, extra := range extras {
-		if err := ValidateOwnerRef(extra); err != nil {
+	for _, ref := range refs {
+		if err := ValidateOwnerRef(ref); err != nil {
 			return addScopeError(db, err, ErrScopedAccessDenied)
 		}
 	}
@@ -104,7 +112,6 @@ func (e ClosureEnforcer) scopeOwners(ctx *gin.Context, db *gorm.DB, primary Owne
 		return addScopeError(db, fmt.Errorf("%w: closure table is not configured", ErrScopedAccessDenied))
 	}
 	closure := quoteIdentifier(e.closureTable)
-	refs := append([]OwnerRef{primary}, extras...)
 	branches := make([]string, 0, len(refs))
 	args := []interface{}{actor.AdminID, actor.AdminID}
 	for _, ref := range refs {

@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"buildadmin-go/internal/admin/service"
 	adminauth "buildadmin-go/internal/admin/repository"
 	routinemodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/utils"
@@ -18,16 +18,16 @@ import (
 )
 
 type IndexHandler struct {
-	config       *conf.Configuration
-	log          *zap.Logger
-	authM        *adminauth.AuthRepository
-	configM      *routinemodel.ConfigRepository
-	country      *country.Service
-	clickCaptcha *clickcaptcha.ClickCaptcha
+	config  *conf.Configuration
+	log     *zap.Logger
+	authM   *adminauth.AuthRepository
+	configM *routinemodel.ConfigRepository
+	country *country.Service
+	authSvc *service.AuthService
 }
 
-func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *adminauth.AuthRepository, configM *routinemodel.ConfigRepository, countryService *country.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *IndexHandler {
-	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, country: countryService, clickCaptcha: clickCaptcha}
+func NewIndexHandler(config *conf.Configuration, log *zap.Logger, authM *adminauth.AuthRepository, configM *routinemodel.ConfigRepository, countryService *country.Service, authSvc *service.AuthService) *IndexHandler {
+	return &IndexHandler{config: config, log: log, authM: authM, configM: configM, country: countryService, authSvc: authSvc}
 }
 
 func (h *IndexHandler) Index(ctx *gin.Context) {
@@ -105,7 +105,11 @@ func (v Login) GetMessages() validator.ValidatorMessages {
 
 func (h *IndexHandler) Login(ctx *gin.Context) {
 	// 检查登录态
-	if _, ok := h.authM.IsLogin(ctx); ok {
+	tokenStr := ctx.Request.Header.Get("batoken")
+	if tokenStr == "" {
+		tokenStr = ctx.Query("batoken")
+	}
+	if h.authSvc.IsLoggedIn(tokenStr) {
 		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode))
 		return
 	}
@@ -118,36 +122,15 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			return
 		}
 
-		if needCaptcha {
-			if params.CaptchaId == "" || params.CaptchaInfo == "" {
-				FailByErr(ctx, cErr.BadRequest("Captcha error"))
-				return
-			}
-
-			if !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
-				FailByErr(ctx, cErr.BadRequest("Captcha error"))
-				return
-			}
-		}
-		ctx.Set("log_title", utils.Lang(ctx, "login", nil))
-
-		result, err := h.authM.Login(ctx, params.Username, params.Password, params.Keep)
+		result, err := h.authSvc.Login(params.Username, params.Password, params.Keep, params.CaptchaId, params.CaptchaInfo, ctx.ClientIP())
 		if err != nil {
 			FailByErr(ctx, err)
 			return
 		}
-		loginResult, ok := result.(map[string]interface{})
-		if !ok {
-			FailByErr(ctx, cErr.InternalServer("Invalid login result"))
-			return
-		}
-		adminID, ok := loginResult["id"].(int32)
-		if !ok || adminID == 0 {
-			FailByErr(ctx, cErr.InternalServer("Invalid login result"))
-			return
-		}
-		loginToken, _ := loginResult["token"].(string)
-		username, _ := loginResult["username"].(string)
+		ctx.Set("log_title", utils.Lang(ctx, "login", nil))
+		adminID, _ := result["id"].(int32)
+		loginToken, _ := result["token"].(string)
+		username, _ := result["username"].(string)
 		header.SetAdminAuth(ctx, header.AdminAuth{
 			Language: ctx.GetHeader("Accept-Language"),
 			IsLogin:  true,
@@ -183,7 +166,7 @@ func (h *IndexHandler) Logout(ctx *gin.Context) {
 		return
 	}
 
-	err := h.authM.Logout(ctx, params.RefreshToken)
+	err := h.authSvc.Logout(params.RefreshToken, header.GetAdminAuth(ctx).Token)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

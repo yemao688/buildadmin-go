@@ -65,17 +65,15 @@ func hashForTest(t *testing.T, plain string) string {
 func TestAuthIsLoginRejectsAdminToken(t *testing.T) {
 	m, _ := newAuthTestModel(t)
 	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}}
-	ctx := authTestContext()
-	ctx.Request.Header.Set("ba-user-token", "admin-token")
 
-	got, ok := m.IsLogin(ctx)
+	got, ok := m.IsLoginToken("admin-token")
 	require.False(t, ok)
 	require.Nil(t, got)
 }
 
 func TestAuthLoginMissingAccountIsNotDisabled(t *testing.T) {
 	m, _ := newAuthTestModel(t)
-	_, err := m.Login(authTestContext(), "user_404", "password", false)
+	_, err := m.Login("203.0.113.9", "user_404", "password", false)
 	require.EqualError(t, err, "Account not exist")
 }
 
@@ -84,7 +82,7 @@ func TestAuthLoginUsesBcryptAndStrictStatuses(t *testing.T) {
 	for _, status := range []string{"enable", "disable"} {
 		user := model.User{Username: "user_" + status, Password: hashForTest(t, "password"), Status: status}
 		require.NoError(t, db.Create(&user).Error)
-		_, err := m.Login(authTestContext(), user.Username, "password", false)
+		_, err := m.Login("203.0.113.9", user.Username, "password", false)
 		if status == "enable" {
 			require.NoError(t, err)
 		} else {
@@ -105,7 +103,7 @@ func TestAuthLoginResetsExpiredFailureCounter(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&user).Error)
 
-	_, err := m.Login(authTestContext(), user.Username, "wrong", false)
+	_, err := m.Login("203.0.113.9", user.Username, "wrong", false)
 	require.EqualError(t, err, "Password is incorrect")
 	var updated model.User
 	require.NoError(t, db.First(&updated, user.ID).Error)
@@ -116,10 +114,8 @@ func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	user := model.User{Username: "response_user", Password: hashForTest(t, "password"), Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
-	ctx := authTestContext()
-	ctx.Request.RemoteAddr = "203.0.113.9:1234"
 
-	result, err := m.Login(ctx, user.Username, "password", false)
+	result, err := m.Login("203.0.113.9", user.Username, "password", false)
 	require.NoError(t, err)
 	data := result.(map[string]any)
 	require.Equal(t, "203.0.113.9", data["last_login_ip"])
@@ -129,7 +125,7 @@ func TestAuthLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 func TestAuthRegisterRejectsExistingUsername(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	require.NoError(t, db.Create(&model.User{Username: "existing"}).Error)
-	_, err := m.Register(authTestContext(), "existing", "password")
+	_, err := m.Register("203.0.113.9", "existing", "password")
 	require.EqualError(t, err, "Username is exist!")
 }
 
@@ -138,7 +134,7 @@ func TestAuthRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	require.NoError(t, sqlDB.Close())
-	_, err = m.Register(authTestContext(), "new-user", "password")
+	_, err = m.Register("203.0.113.9", "new-user", "password")
 	require.Error(t, err)
 	require.NotEqual(t, "Username is exist!", err.Error())
 }

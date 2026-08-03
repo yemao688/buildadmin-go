@@ -76,7 +76,7 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 
 	refreshDone := make(chan error, 1)
 	go func() {
-		_, err := authModel.RefreshUserAccessToken(concurrencyTestContext(), refreshToken)
+		_, err := authModel.RefreshUserAccessToken(refreshToken)
 		refreshDone <- err
 	}()
 	<-tokenHelper.Driver.(*refreshRaceTokenDriver).getStarted

@@ -44,6 +44,12 @@ var boundaryRules = []boundaryRule{
 	// stays allowed for error-code inspection; the gorm driver is not.)
 	{code: "R4", ownerPrefix: "admin/handler/", bannedPrefixes: []string{modulePath + "/internal/infra/db", "gorm.io/driver/mysql"}},
 	{code: "R5", ownerPrefix: "api/handler/", bannedPrefixes: []string{modulePath + "/internal/infra/db", "gorm.io/driver/mysql"}},
+	// Services are transport-free orchestration: no gin, no net/http, and no
+	// direct persistence connections. Anything the flow needs from the request
+	// (actor, client IP, tokens) arrives as plain parameters; DB access stays
+	// behind the repository/domain-service boundary.
+	{code: "R6", ownerPrefix: "admin/service/", bannedPrefixes: []string{"github.com/gin-gonic/gin", "net/http", modulePath + "/internal/infra/db"}},
+	{code: "R7", ownerPrefix: "api/service/", bannedPrefixes: []string{"github.com/gin-gonic/gin", "net/http", modulePath + "/internal/infra/db"}},
 }
 
 var importBoundaryWhitelist = []whitelistEntry{}

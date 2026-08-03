@@ -9,6 +9,7 @@ import (
 	"time"
 
 	securitymodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
 
@@ -57,7 +58,8 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 	})
 
 	t.Run("sensitive data add and edit", func(t *testing.T) {
-		handler := NewSensitiveDataHandler(nil, config, securitymodel.NewSensitiveDataRepository(db, config), nil)
+		sensitiveRepo := securitymodel.NewSensitiveDataRepository(db, config)
+		handler := NewSensitiveDataHandler(nil, config, sensitiveRepo, nil, service.NewSensitiveDataService(sensitiveRepo))
 		router := gin.New()
 		router.POST("/add", handler.Add)
 		router.POST("/edit", handler.Edit)

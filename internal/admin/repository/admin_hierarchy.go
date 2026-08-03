@@ -11,7 +11,6 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -116,7 +115,7 @@ func (h *AdminHierarchy) ensureNodeExists(ctx context.Context, tx *gorm.DB, id i
 // verifyInScope re-validates, under the already-acquired hierarchy lock, that
 // every requested node is visible to the actor. It is the TOCTOU defense for
 // scoped moves and deletes.
-func (h *AdminHierarchy) verifyInScope(ctx *gin.Context, tx *gorm.DB, actor data_scope.Actor, enforcer data_scope.Enforcer, ids ...int32) error {
+func (h *AdminHierarchy) verifyInScope(ctx context.Context, tx *gorm.DB, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer, ids ...int32) error {
 	need := make([]int32, 0, len(ids))
 	seen := make(map[int32]struct{}, len(ids))
 	for _, id := range ids {
@@ -134,13 +133,10 @@ func (h *AdminHierarchy) verifyInScope(ctx *gin.Context, tx *gorm.DB, actor data
 	if actor.Unrestricted {
 		return nil
 	}
-	if ctx == nil || ctx.Request == nil {
-		return data_scope.ErrScopedAccessDenied
-	}
 	if enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	scoped := enforcer.Scope(ctx, tx.Table(h.adminTable()).Select("id"), data_scope.OwnerRef{TableAlias: h.adminTable(), Column: "id"})
+	scoped := enforcer.ScopeWithActor(ctx, tx.Table(h.adminTable()).Select("id"), actor, data_scope.OwnerRef{TableAlias: h.adminTable(), Column: "id"})
 	if scoped.Error != nil {
 		return scoped.Error
 	}
@@ -173,17 +169,16 @@ func (h *AdminHierarchy) LinkNewNode(ctx context.Context, tx *gorm.DB, nodeID in
 // LinkNewNodeWithScope is the scoped variant of LinkNewNode. It re-verifies
 // that the chosen parent is still within the actor's scope after the hierarchy
 // lock is held, eliminating a TOCTOU window.
-func (h *AdminHierarchy) LinkNewNodeWithScope(ctx *gin.Context, tx *gorm.DB, nodeID int32, parentID *int32, actor data_scope.Actor, enforcer data_scope.Enforcer) error {
+func (h *AdminHierarchy) LinkNewNodeWithScope(ctx context.Context, tx *gorm.DB, nodeID int32, parentID *int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) error {
 	if nodeID <= 0 {
 		return fmt.Errorf("%w: nodeID must be positive", ErrHierarchyNodeNotFound)
 	}
-	if ctx == nil || ctx.Request == nil || data_scope.ValidateActor(actor) != nil {
+	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	if !actor.Unrestricted && parentID == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	reqCtx := ctx.Request.Context()
 	err := h.lockHierarchy(tx)
 	if err != nil {
 		return err
@@ -193,7 +188,7 @@ func (h *AdminHierarchy) LinkNewNodeWithScope(ctx *gin.Context, tx *gorm.DB, nod
 			return err
 		}
 	}
-	return h.linkNewNodeLocked(reqCtx, tx, nodeID, parentID)
+	return h.linkNewNodeLocked(ctx, tx, nodeID, parentID)
 }
 
 func (h *AdminHierarchy) linkNewNodeLocked(ctx context.Context, tx *gorm.DB, nodeID int32, parentID *int32) error {
@@ -271,17 +266,16 @@ func (h *AdminHierarchy) MoveSubtree(ctx context.Context, tx *gorm.DB, nodeID in
 // MoveSubtreeWithScope is the scoped variant of MoveSubtree. The target node
 // and the new parent are re-verified inside the hierarchy lock before any
 // mutation occurs.
-func (h *AdminHierarchy) MoveSubtreeWithScope(ctx *gin.Context, tx *gorm.DB, nodeID int32, newParentID *int32, actor data_scope.Actor, enforcer data_scope.Enforcer) error {
+func (h *AdminHierarchy) MoveSubtreeWithScope(ctx context.Context, tx *gorm.DB, nodeID int32, newParentID *int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) error {
 	if nodeID <= 0 {
 		return fmt.Errorf("%w: nodeID must be positive", ErrHierarchyNodeNotFound)
 	}
-	if ctx == nil || ctx.Request == nil || data_scope.ValidateActor(actor) != nil {
+	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	if !actor.Unrestricted && newParentID == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	reqCtx := ctx.Request.Context()
 	err := h.lockHierarchy(tx)
 	if err != nil {
 		return err
@@ -293,21 +287,20 @@ func (h *AdminHierarchy) MoveSubtreeWithScope(ctx *gin.Context, tx *gorm.DB, nod
 	if err := h.verifyInScope(ctx, tx, actor, enforcer, ids...); err != nil {
 		return err
 	}
-	return h.moveSubtreeLocked(reqCtx, tx, nodeID, newParentID)
+	return h.moveSubtreeLocked(ctx, tx, nodeID, newParentID)
 }
 
 // ValidateOrMove keeps omitted/null parent edits from using an external
 // snapshot. It locks the hierarchy, rechecks the target scope and closure
 // integrity, and only performs a move when the caller explicitly changed the
 // parent.
-func (h *AdminHierarchy) ValidateOrMoveWithScope(ctx *gin.Context, tx *gorm.DB, nodeID int32, changeParent bool, newParentID *int32, actor data_scope.Actor, enforcer data_scope.Enforcer) error {
-	if nodeID <= 0 || ctx == nil || ctx.Request == nil || data_scope.ValidateActor(actor) != nil {
+func (h *AdminHierarchy) ValidateOrMoveWithScope(ctx context.Context, tx *gorm.DB, nodeID int32, changeParent bool, newParentID *int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) error {
+	if nodeID <= 0 || data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	if changeParent && !actor.Unrestricted && newParentID == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
-	reqCtx := ctx.Request.Context()
 	err := h.lockHierarchy(tx)
 	if err != nil {
 		return err
@@ -320,10 +313,10 @@ func (h *AdminHierarchy) ValidateOrMoveWithScope(ctx *gin.Context, tx *gorm.DB, 
 		return err
 	}
 	if !changeParent {
-		_, err := h.validateNodeLocked(reqCtx, tx, nodeID)
+		_, err := h.validateNodeLocked(ctx, tx, nodeID)
 		return err
 	}
-	return h.moveSubtreeLocked(reqCtx, tx, nodeID, newParentID)
+	return h.moveSubtreeLocked(ctx, tx, nodeID, newParentID)
 }
 
 func (h *AdminHierarchy) validateNodeLocked(ctx context.Context, tx *gorm.DB, nodeID int32) (*int32, error) {
@@ -442,8 +435,8 @@ func (h *AdminHierarchy) moveSubtreeLocked(ctx context.Context, tx *gorm.DB, nod
 // It verifies scope, rejects deletions that would orphan existing subordinates,
 // removes the corresponding closure rows, and deletes the admin rows with a
 // RowsAffected check so the operation is all-or-nothing.
-func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor, enforcer data_scope.Enforcer) error {
-	if ctx == nil || ctx.Request == nil || data_scope.ValidateActor(actor) != nil {
+func (h *AdminHierarchy) DeleteAdmins(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) error {
+	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	unique := make([]int32, 0, len(ids))
@@ -461,7 +454,6 @@ func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32
 		return nil
 	}
 
-	reqCtx := ctx.Request.Context()
 	err := h.lockHierarchy(tx)
 	if err != nil {
 		return err
@@ -471,7 +463,7 @@ func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32
 	}
 
 	var childCount int64
-	if err := tx.WithContext(reqCtx).Table(h.closureTable()).
+	if err := tx.WithContext(ctx).Table(h.closureTable()).
 		Where("ancestor_id IN ? AND descendant_id != ancestor_id", unique).
 		Count(&childCount).Error; err != nil {
 		return err
@@ -480,14 +472,14 @@ func (h *AdminHierarchy) DeleteAdmins(ctx *gin.Context, tx *gorm.DB, ids []int32
 		return cErr.BadRequest("cannot delete administrator with subordinates")
 	}
 
-	result := tx.WithContext(reqCtx).Table(h.adminTable()).Where("id IN ?", unique).Delete(nil)
+	result := tx.WithContext(ctx).Table(h.adminTable()).Where("id IN ?", unique).Delete(nil)
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected != int64(len(unique)) {
 		return cErr.BadRequest("delete failed: rows affected mismatch")
 	}
-	if err := tx.WithContext(reqCtx).Exec(
+	if err := tx.WithContext(ctx).Exec(
 		"DELETE FROM "+quoteIdentifier(h.closureTable())+" WHERE descendant_id IN ?",
 		unique,
 	).Error; err != nil {

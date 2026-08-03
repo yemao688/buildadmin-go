@@ -10,6 +10,7 @@ import (
 	"time"
 
 	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
@@ -47,7 +48,7 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 		require.NoError(t, db.Table(configModel.TableName).Create(&row).Error)
 	}
 
-	h := NewConfigHandler(nil, config, configModel)
+	h := NewConfigHandler(nil, config, configModel, service.NewConfigService(configModel))
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/admin/config/edit", h.Edit)

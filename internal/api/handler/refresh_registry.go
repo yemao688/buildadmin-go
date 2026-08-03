@@ -68,7 +68,7 @@ func registerBuiltinRefreshTypes() {
 			if h.authM == nil {
 				return "", cErr.InternalServer("token service unavailable")
 			}
-			return h.authM.RefreshUserAccessToken(ctx, refreshToken)
+			return h.authM.RefreshUserAccessToken(refreshToken)
 		},
 	})
 }

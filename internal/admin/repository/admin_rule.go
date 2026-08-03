@@ -9,7 +9,6 @@ import (
 	"buildadmin-go/internal/pkg/persistence"
 	"slices"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -23,17 +22,17 @@ func NewAdminRuleRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminRu
 	}
 }
 
-func (s *AdminRuleRepository) GetOne(ctx *gin.Context, id int32) (adminRule model.AdminRule, err error) {
+func (s *AdminRuleRepository) GetOne(ctx context.Context, id int32) (adminRule model.AdminRule, err error) {
 	err = s.DBFor(ctx).Where("id=?", id).Take(&adminRule).Error
 	return
 }
 
-func (s *AdminRuleRepository) List(ctx *gin.Context) (list []model.AdminRule, err error) {
+func (s *AdminRuleRepository) List(ctx context.Context) (list []model.AdminRule, err error) {
 	err = s.DBFor(ctx).Model(&model.AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
 	return
 }
 
-func (s *AdminRuleRepository) Add(ctx *gin.Context, adminRule model.AdminRule) error {
+func (s *AdminRuleRepository) Add(ctx context.Context, adminRule model.AdminRule) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		result := tx.Create(&adminRule)
 		if result.Error != nil {
@@ -46,7 +45,7 @@ func (s *AdminRuleRepository) Add(ctx *gin.Context, adminRule model.AdminRule) e
 	})
 }
 
-func (s *AdminRuleRepository) Edit(ctx *gin.Context, adminRule model.AdminRule) error {
+func (s *AdminRuleRepository) Edit(ctx context.Context, adminRule model.AdminRule) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		parent := model.AdminRule{}
 		if adminRule.Pid > 0 {
@@ -74,7 +73,7 @@ func (s *AdminRuleRepository) Edit(ctx *gin.Context, adminRule model.AdminRule) 
 	})
 }
 
-func (s *AdminRuleRepository) Del(ctx *gin.Context, ids []int32) error {
+func (s *AdminRuleRepository) Del(ctx context.Context, ids []int32) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var subIds []int32
 		if err := tx.Model(&model.AdminRule{}).Where(" pid in ? ", ids).Pluck("id", &subIds).Error; err != nil {
@@ -101,11 +100,7 @@ func (s *AdminRuleRepository) Del(ctx *gin.Context, ids []int32) error {
 	})
 }
 
-func (s *AdminRuleRepository) GetRulePIds(ids []string, contexts ...*gin.Context) ([]int32, error) {
-	var ctx *gin.Context
-	if len(contexts) > 0 {
-		ctx = contexts[0]
-	}
+func (s *AdminRuleRepository) GetRulePIds(ctx context.Context, ids []string) ([]int32, error) {
 	pids := []int32{}
 	err := s.DBFor(ctx).Model(&model.AdminRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err

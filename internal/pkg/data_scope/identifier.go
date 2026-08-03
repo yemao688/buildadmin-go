@@ -1,6 +1,7 @@
 package data_scope
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -350,6 +351,18 @@ func OwnerInScope(ctx *gin.Context, db *gorm.DB, enforcer Enforcer, prefix strin
 	if err != nil {
 		return err
 	}
+	return OwnerInScopeWithActor(ctx, db, enforcer, prefix, ownerID, actor)
+}
+
+// OwnerInScopeWithActor is the transport-free counterpart of OwnerInScope
+// for service/domain layers that already hold the actor.
+func OwnerInScopeWithActor(ctx context.Context, db *gorm.DB, enforcer Enforcer, prefix string, ownerID int32, actor Actor) error {
+	if ownerID <= 0 || enforcer == nil {
+		return ErrScopedAccessDenied
+	}
+	if err := ValidateActor(actor); err != nil {
+		return err
+	}
 	if err := ValidateTablePrefix(prefix); err != nil {
 		return err
 	}
@@ -371,7 +384,7 @@ func OwnerInScope(ctx *gin.Context, db *gorm.DB, enforcer Enforcer, prefix strin
 		return nil
 	}
 	var count int64
-	err = db.Table(prefix+"admin_closure").Where("ancestor_id = ? AND descendant_id = ?", actor.AdminID, ownerID).Count(&count).Error
+	err := db.Table(prefix+"admin_closure").Where("ancestor_id = ? AND descendant_id = ?", actor.AdminID, ownerID).Count(&count).Error
 	if err != nil {
 		return err
 	}

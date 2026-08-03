@@ -52,14 +52,14 @@
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
-| `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
+| `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`service/`（按需毕业的业务编排，纯 CRUD 不建透传）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
 | `internal/install` | 安装渠道（自注册）：`handler.go` + `router.go`（/install 与 /api/install/*，只经全局中间件，不进入 UserLogin）+ `provider.go` | model、pkg、common | 各业务渠道 |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
 | `internal/router` | 纯 bootstrap：创建 gin.Engine、挂载全局中间件与静态资源、调用 admin/api/install 三渠道注册器完成挂载；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
 | `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n`、`internal/commands` | 配置、三轨迁移、连接初始化、工具、本地化、CLI 命令编排 | — | — |
 
-边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两业务渠道 handler（admin/api）禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
+边界由 `internal/boundary_test.go` 机械执法（R1-R7）：admin↛api、api↛admin、common↛admin/api、两业务渠道 handler（admin/api）禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）、两业务渠道 service（admin/api）禁 import gin/net-http/`internal/infra/db`（传输层需要的东西以参数传入）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
 
 生成器锚点与产物边界：实体/仓库/DTO/handler/registrar 五类 Go 产物全部"文件名=表名"落单包（`internal/model`、`internal/admin/{repository,dto,handler,router}`）；`internal/admin/repository/provider.go` 与 `internal/admin/handler/provider.go` 各为合并 ProviderSet（生成器逐项追加构造器），`internal/admin/router/provider.go` 同时持有合并 ProviderSet 与 `ProvideRegistrars` 锚点（新模块一行 handler 参数 + 返回条目）；生成器不再修改 `cmd/server/wire.go`。
 
@@ -67,6 +67,8 @@
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
+- handler 只做参数绑定与响应返回：密码加密、原始 SQL、业务规则一律下沉——有真实业务时毕业到 `internal/admin/service/`（扁平、文件名=模块名；纯 CRUD 模块保持绑定→repository→响应，严禁透传 service），持久化唯一入口始终是 repository；service 方法签名用普通类型，禁止 import gin/net-http，请求上下文需要的东西（actor、clientIP、token 等）以参数传入。
+- DTO 约定：一表一个 `XxxParam`（Add/Edit 复用），响应直回实体/投影；`Resp` 类型按需个案引入（先例：`internal/model/projection`、api 侧 `OutUser`）。
 - 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`configs/config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的实体、仓库、handler、registrar、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。

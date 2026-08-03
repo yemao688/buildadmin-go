@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -78,7 +79,7 @@ func (s *ConfigRepository) List(ctx *gin.Context) (list []siteconfig.Config, err
 	return
 }
 
-func (s *ConfigRepository) Add(ctx *gin.Context, data siteconfig.Config) error {
+func (s *ConfigRepository) Add(ctx context.Context, data siteconfig.Config) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		if err := s.ensureNameAvailable(tx, data.Name, 0); err != nil {
 			return err
