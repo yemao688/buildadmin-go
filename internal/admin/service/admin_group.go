@@ -25,17 +25,28 @@ func NewAdminGroupService(adminGroupM *adminmodel.AdminGroupRepository, adminRul
 }
 
 // HandleRules 权限节点入库前处理：全部规则视为超级管理员（*），并禁止
-// 添加"拥有自己全部权限"的分组。
+// 添加"拥有自己全部权限"的分组。重复 ID 在序列化前先保序去重，避免
+// 重复项扭曲 repository 侧的 len 比较（"全部权限+额外权限"误判）。
 func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, operatorID int32) (string, error) {
 	if len(rules) > 0 {
 		list, err := s.adminRuleM.List(ctx)
 		if err != nil {
 			return "", err
 		}
+		// 保序去重：重复提交的规则 ID 只保留一次。
+		uniqueRules := make([]int32, 0, len(rules))
+		seen := make(map[int32]struct{}, len(rules))
+		for _, v := range rules {
+			if _, ok := seen[v]; ok {
+				continue
+			}
+			seen[v] = struct{}{}
+			uniqueRules = append(uniqueRules, v)
+		}
 		// 判断是否超级管理员
 		super := true
 		for _, r := range list {
-			if !slices.Contains(rules, r.ID) {
+			if !slices.Contains(uniqueRules, r.ID) {
 				super = false
 				break
 			}
@@ -45,7 +56,7 @@ func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, oper
 		}
 
 		stringRules := []string{}
-		for _, v := range rules {
+		for _, v := range uniqueRules {
 			stringRules = append(stringRules, strconv.Itoa(int(v)))
 		}
 		// 禁止添加`拥有自己全部权限`的分组
@@ -127,6 +138,22 @@ func (s *AdminGroupService) Del(ctx context.Context, ids []int32, operatorID int
 		}
 	}
 	return s.adminGroupM.DelWithOperator(ctx, ids, operatorID)
+}
+
+// SwitchStatus 处理快捷/部分编辑的状态开关：与完整 Edit 走同一授权链
+// （CheckAuth + 禁止修改自己所在分组），杜绝"持粗权限直改任意组"的绕过。
+func (s *AdminGroupService) SwitchStatus(ctx context.Context, id int32, status string, operatorID int32, isSuperAdmin bool) error {
+	if err := s.CheckAuth(operatorID, isSuperAdmin, id); err != nil {
+		return err
+	}
+	groupIds := s.authM.GetGroupIds(operatorID)
+	if slices.Contains(groupIds, id) {
+		return cErr.BadRequest("You cannot modify your own management group!")
+	}
+	if status != "0" && status != "1" {
+		return cErr.BadRequest("status must be 0 or 1")
+	}
+	return s.adminGroupM.SwitchStatus(ctx, id, status)
 }
 
 func copyGroup(dst, src *model.AdminGroup) error {

@@ -63,6 +63,35 @@ func (s *AdminGroupRepository) Edit(ctx context.Context, adminGroup model.AdminG
 	})
 }
 
+// SwitchStatus updates only the status column for a single group. It is used
+// by the quick-edit path after the service authorization chain has run.
+func (s *AdminGroupRepository) SwitchStatus(ctx context.Context, id int32, status string) error {
+	var result *gorm.DB
+	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+		result = tx.Model(&model.AdminGroup{}).Where("id = ?", id).Update("status", status)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&model.AdminGroup{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (s *AdminGroupRepository) Del(ctx *gin.Context, ids []int32) error {
 	adminAuth := header.GetAdminAuth(ctx)
 	return s.DelWithOperator(ctx, ids, adminAuth.Id)

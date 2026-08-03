@@ -47,6 +47,9 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	require.NoError(t, db.Order("id DESC").First(&successLog).Error)
 	require.Equal(t, admin.ID, successLog.AdminID)
 	require.Equal(t, admin.Username, successLog.Username)
+	// The audit title is set on entering the login flow so both outcomes
+	// carry an explicit login event instead of Unknown(login).
+	require.Equal(t, "login", successLog.Title)
 
 	failure := performAdminLogin(t, router, admin.Username, "wrong password")
 	require.Equal(t, http.StatusOK, failure.Code)
@@ -55,6 +58,7 @@ func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	require.NoError(t, db.Order("id DESC").First(&failureLog).Error)
 	require.Equal(t, int32(0), failureLog.AdminID)
 	require.Equal(t, admin.Username, failureLog.Username)
+	require.Equal(t, "login", failureLog.Title)
 
 }
 

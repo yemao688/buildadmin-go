@@ -1,13 +1,18 @@
 package handler
 
 import (
-	"buildadmin-go/internal/admin/service"
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
+	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/tree"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/utils"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -142,6 +147,71 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 			"rules":  childRuleIds,
 		},
 	})
+}
+
+// MaybePartialEdit overrides Base.MaybePartialEdit so that switch-unit-cell
+// status updates run through the service authorization chain (CheckAuth plus
+// the self-group protection) instead of a raw row update by primary key.
+func (h *AdminGroupHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		return false
+	}
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var m map[string]any
+	if err := json.Unmarshal(bodyBytes, &m); err != nil {
+		return false
+	}
+
+	if len(m) != 2 {
+		return false
+	}
+	idVal, hasID := m["id"]
+	if !hasID {
+		return false
+	}
+
+	var fieldName string
+	var fieldValue any
+	for k, v := range m {
+		if k != "id" {
+			fieldName = k
+			fieldValue = v
+			break
+		}
+	}
+
+	if !allowedFields[fieldName] {
+		return false
+	}
+
+	id := int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
+	for _, validator := range validators {
+		if validator == nil {
+			continue
+		}
+		if err := validator(id, fieldName, fieldValue); err != nil {
+			FailByErr(ctx, err)
+			return true
+		}
+	}
+
+	if fieldName != "status" {
+		return false
+	}
+	status, ok := fieldValue.(string)
+	if !ok {
+		FailByErr(ctx, cErr.BadRequest("status must be a string"))
+		return true
+	}
+	adminAuth := header.GetAdminAuth(ctx)
+	if err := h.svc.SwitchStatus(ctx.Request.Context(), id, status, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
+		FailByErr(ctx, err)
+		return true
+	}
+	Success(ctx, "")
+	return true
 }
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {

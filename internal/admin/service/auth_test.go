@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"testing"
+	"time"
 
 	adminauth "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
@@ -88,7 +89,7 @@ func TestAuthServiceLoginWrongPasswordRecordsFailure(t *testing.T) {
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
 	_, err := svc.Login("root", "wrong", false, "", "", "203.0.113.9")
-	require.EqualError(t, err, "Password is incorrect")
+	require.EqualError(t, err, "Incorrect user name or password!")
 
 	var updated adminLoginRow
 	require.NoError(t, db.First(&updated, 1).Error)
@@ -100,13 +101,13 @@ func TestAuthServiceLoginDisabledAccountRejected(t *testing.T) {
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "disable")
 
 	_, err := svc.Login("root", "correct horse battery staple", false, "", "", "203.0.113.9")
-	require.EqualError(t, err, "Username is incorrect")
+	require.EqualError(t, err, "Incorrect user name or password!")
 }
 
 func TestAuthServiceLoginUnknownAccountRejected(t *testing.T) {
 	svc, _ := newAuthServiceFixture(t)
 	_, err := svc.Login("ghost", "whatever", false, "", "", "203.0.113.9")
-	require.EqualError(t, err, "Username is incorrect")
+	require.EqualError(t, err, "Incorrect user name or password!")
 }
 
 func TestAuthServiceLoginCaptchaRequired(t *testing.T) {
@@ -138,16 +139,133 @@ func TestAuthServiceLoginRetryLockout(t *testing.T) {
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
 	_, err := svc.Login("root", "wrong", false, "", "", "1.1.1.1")
-	require.EqualError(t, err, "Password is incorrect")
+	require.EqualError(t, err, "Incorrect user name or password!")
 	_, err = svc.Login("root", "wrong", false, "", "", "1.1.1.1")
-	require.EqualError(t, err, "Password is incorrect")
+	require.EqualError(t, err, "Incorrect user name or password!")
 	// Third attempt within the same day is locked out before password check.
 	_, err = svc.Login("root", "correct horse battery staple", false, "", "", "1.1.1.1")
 	require.EqualError(t, err, "Please try again after 1 day")
+}
+
+func TestAuthServiceLoginExpiredWindowResetsCounter(t *testing.T) {
+	svc, db := newAuthServiceFixture(t)
+	svc.config.App.AdminLoginRetry = 2
+	hash, err := password.Hash("correct horse battery staple")
+	require.NoError(t, err)
+	// Two stale failures whose lockout window expired a minute ago.
+	row := adminLoginRow{
+		Username:      "cooled",
+		Nickname:      "cooled",
+		Password:      hash,
+		Status:        "enable",
+		LoginFailure:  2,
+		LastLoginTime: time.Now().Unix() - 86400 - 60,
+	}
+	require.NoError(t, db.Create(&row).Error)
+
+	// One wrong attempt after the expired window: the stale counter is
+	// cleared first, so the failure count restarts at 1 instead of 3.
+	_, err = svc.Login("cooled", "wrong", false, "", "", "203.0.113.9")
+	require.EqualError(t, err, "Incorrect user name or password!")
+
+	var updated adminLoginRow
+	require.NoError(t, db.First(&updated, row.ID).Error)
+	require.Equal(t, int32(1), updated.LoginFailure)
+
+	// With the counter restarted the account is not locked: the correct
+	// password now succeeds.
+	result, err := svc.Login("cooled", "correct horse battery staple", false, "", "", "203.0.113.9")
+	require.NoError(t, err)
+	require.Equal(t, row.ID, result["id"])
+}
+
+func TestAuthServiceLoginCounterMonotonic(t *testing.T) {
+	svc, db := newAuthServiceFixture(t)
+	// Throttling disabled: every wrong attempt must still be counted and
+	// the counter must never regress.
+	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
+
+	for i := 0; i < 3; i++ {
+		_, err := svc.Login("root", "wrong", false, "", "", "203.0.113.9")
+		require.EqualError(t, err, "Incorrect user name or password!")
+	}
+	var updated adminLoginRow
+	require.NoError(t, db.First(&updated, 1).Error)
+	require.Equal(t, int32(3), updated.LoginFailure)
 }
 
 func TestAuthServiceIsLoggedIn(t *testing.T) {
 	svc, _ := newAuthServiceFixture(t)
 	require.False(t, svc.IsLoggedIn(""))
 	require.False(t, svc.IsLoggedIn("some-token"))
+}
+
+// failingAccessTokenDriver records deletions and fails on the access-token
+// Set, simulating a token store outage after the refresh token was written.
+type failingAccessTokenDriver struct {
+	deleted    []string
+	refreshSet bool
+}
+
+func (d *failingAccessTokenDriver) Set(tokenStr, typ string, userID int32, expire int64) error {
+	if typ == "admin-refresh" {
+		d.refreshSet = true
+		return nil
+	}
+	if typ == "admin" && d.refreshSet {
+		return errors.New("access token store unavailable")
+	}
+	return nil
+}
+func (d *failingAccessTokenDriver) Get(string) (*token.Token, error) {
+	return nil, errors.New("not found")
+}
+func (d *failingAccessTokenDriver) Check(string, string, int32) bool { return false }
+func (d *failingAccessTokenDriver) Delete(tokenStr string) error {
+	d.deleted = append(d.deleted, tokenStr)
+	return nil
+}
+func (d *failingAccessTokenDriver) Clear(string, int32) error { return nil }
+
+func TestAuthServiceLoginCompensatesAccessTokenSetFailure(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:admin-auth-compensate-"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&adminLoginRow{}))
+	driver := &failingAccessTokenDriver{}
+	config := &conf.Configuration{}
+	config.App.AdminTokenKeepTime = 3600
+	authRepo := adminauth.NewAuthRepository(db, &token.TokenHelper{Driver: driver}, config)
+	svc := NewAuthService(config, authRepo, nil)
+	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
+
+	_, err = svc.Login("root", "correct horse battery staple", true, "", "", "203.0.113.9")
+	require.Error(t, err)
+	// The refresh token written before the access-token failure must be
+	// compensated (deleted) so no residual session outlives the error.
+	require.Len(t, driver.deleted, 1)
+	require.NotEmpty(t, driver.deleted[0])
+}
+
+// ssoFailDriver errors on the SSO clear of previous sessions.
+type ssoFailDriver struct{}
+
+func (ssoFailDriver) Set(string, string, int32, int64) error { return nil }
+func (ssoFailDriver) Get(string) (*token.Token, error)       { return nil, errors.New("not found") }
+func (ssoFailDriver) Check(string, string, int32) bool       { return false }
+func (ssoFailDriver) Delete(string) error                    { return nil }
+func (ssoFailDriver) Clear(string, int32) error              { return errors.New("clear unavailable") }
+
+func TestAuthServiceLoginPropagatesSSOClearFailure(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:admin-auth-ssofail-"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&adminLoginRow{}))
+	config := &conf.Configuration{}
+	config.App.AdminTokenKeepTime = 3600
+	config.App.AdminSso = true
+	authRepo := adminauth.NewAuthRepository(db, &token.TokenHelper{Driver: ssoFailDriver{}}, config)
+	svc := NewAuthService(config, authRepo, nil)
+	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
+
+	_, err = svc.Login("root", "correct horse battery staple", false, "", "", "203.0.113.9")
+	require.EqualError(t, err, "clear unavailable")
 }

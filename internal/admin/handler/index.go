@@ -1,15 +1,15 @@
 package handler
 
 import (
-	"buildadmin-go/internal/admin/service"
 	adminauth "buildadmin-go/internal/admin/repository"
 	routinemodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/utils"
 	"net/http"
 
@@ -116,6 +116,10 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 
 	needCaptcha := h.config.App.AdminLoginCaptcha
 	if ctx.Request.Method == http.MethodPost {
+		// 进入登录流即设审计标题：成功与失败都会记录为明确的登录事件，
+		// 失败不再退化为 Unknown(login)。
+		ctx.Set("log_title", utils.Lang(ctx, "login", nil))
+
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
 			FailByErr(ctx, validator.GetError(params, err))
@@ -127,7 +131,6 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			FailByErr(ctx, err)
 			return
 		}
-		ctx.Set("log_title", utils.Lang(ctx, "login", nil))
 		adminID, _ := result["id"].(int32)
 		loginToken, _ := result["token"].(string)
 		username, _ := result["username"].(string)
