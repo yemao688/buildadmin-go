@@ -57,10 +57,9 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		wire.Bind(new(terminal.AuthModel), new(*adminRepo.AuthRepository)),
 		apiHandler.ProviderSet,
 
-		router.ProvideRegistrars,
 		adminRouter.ProviderSet,
 		wire.Struct(new(adminRouter.AdminRouterDeps), "*"),
-		apiRouter.NewApiRouter,
+		apiRouter.ProviderSet,
 		wire.Struct(new(apiRouter.ApiRouterDeps), "*"),
 		router.InitRouter,
 		cron.ProviderSet,

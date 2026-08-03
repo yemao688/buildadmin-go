@@ -111,18 +111,17 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	memberService := member.NewService(gormDB, tokenHelper, configuration)
 	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
 	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
+	captchaService := captcha.NewCaptchaService(gormDB)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
+	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
+	v2 := router2.ProvideRegistrars(commonHandler, handlerUserHandler)
 	apiRouterDeps := router2.ApiRouterDeps{
 		UserLoginM:     userLogin,
 		InstallHandler: installHandler,
+		Registrars:     v2,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	captchaService := captcha.NewCaptchaService(gormDB)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
-	commonRegistrar := handler2.NewCommonRegistrar(commonHandler)
-	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
-	userRegistrar := handler2.NewUserRegistrar(handlerUserHandler)
-	v2 := router3.ProvideRegistrars(commonRegistrar, userRegistrar)
-	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, v2)
+	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

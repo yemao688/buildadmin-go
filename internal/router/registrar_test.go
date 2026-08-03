@@ -133,8 +133,17 @@ func newCompleteRouter() *gin.Engine {
 		apiRouter.NewApiRouter(apiRouter.ApiRouterDeps{
 			UserLoginM:     &apiMiddleware.UserLogin{},
 			InstallHandler: &api.InstallHandler{},
+			Registrars:     apiRegistrars(),
 		}),
-		completeRegistrars(),
+	)
+}
+
+// apiRegistrars 用桩 handler 构造 api 渠道模块注册器集合，与 ApiRouter
+// 实际注入的 ProvideRegistrars 保持同一顺序。
+func apiRegistrars() []apiRouter.Registrar {
+	return apiRouter.ProvideRegistrars(
+		&api.CommonHandler{},
+		&api.UserHandler{},
 	)
 }
 
@@ -162,13 +171,6 @@ func adminRegistrars() []adminRouter.Registrar {
 		&admin.CurrencyHandler{},
 		&admin.LanguageHandler{},
 		&admin.LanguageContentHandler{},
-	)
-}
-
-func completeRegistrars() []RouteRegistrar {
-	return ProvideRegistrars(
-		api.NewCommonRegistrar(&api.CommonHandler{}),
-		api.NewUserRegistrar(&api.UserHandler{}),
 	)
 }
 

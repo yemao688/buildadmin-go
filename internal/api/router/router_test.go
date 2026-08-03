@@ -20,7 +20,7 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	apiRoutes := newAPIRouteSet(router, router.Group("/api/"))
-	api.NewUserRegistrar(&api.UserHandler{}).Register(apiRoutes)
+	NewUserRegistrar(&api.UserHandler{}).Register(apiRoutes)
 
 	want := map[string]bool{
 		"/api/user/login":    false,
@@ -45,10 +45,11 @@ func TestApiRouterMountsInstallAndAPIRoutes(t *testing.T) {
 	NewApiRouter(ApiRouterDeps{
 		UserLoginM:     &apiMiddleware.UserLogin{},
 		InstallHandler: &api.InstallHandler{},
-	}).Register(engine, []Registrar{
-		api.NewUserRegistrar(&api.UserHandler{}),
-		api.NewCommonRegistrar(&api.CommonHandler{}),
-	})
+		Registrars: []Registrar{
+			NewUserRegistrar(&api.UserHandler{}),
+			NewCommonRegistrar(&api.CommonHandler{}),
+		},
+	}).Register(engine)
 
 	registered := make(map[string]bool)
 	for _, route := range engine.Routes() {

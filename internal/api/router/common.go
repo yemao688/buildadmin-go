@@ -1,21 +1,19 @@
 // 由 RouteRegistrar 模式维护（手写模块）
-package handler
+package router
 
 import (
-	"buildadmin-go/internal/middleware"
+	api "buildadmin-go/internal/api/handler"
 
 	"github.com/gin-gonic/gin"
 )
 
 type CommonRegistrar struct {
-	handler *CommonHandler
+	handler *api.CommonHandler
 }
 
-func NewCommonRegistrar(handler *CommonHandler) *CommonRegistrar {
+func NewCommonRegistrar(handler *api.CommonHandler) *CommonRegistrar {
 	return &CommonRegistrar{handler: handler}
 }
-
-func (r *CommonRegistrar) Group() string { return "api" }
 
 func (r *CommonRegistrar) Register(g gin.IRoutes) {
 	g.GET("common/captcha", r.handler.Captcha)
@@ -23,5 +21,3 @@ func (r *CommonRegistrar) Register(g gin.IRoutes) {
 	g.POST("common/checkClickCaptcha", r.handler.CheckClickCaptcha)
 	g.POST("common/refreshToken", r.handler.RefreshToken)
 }
-
-func (r *CommonRegistrar) Capabilities() []middleware.AtomicRoute { return nil }

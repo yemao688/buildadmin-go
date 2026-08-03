@@ -6,8 +6,6 @@ import (
 
 var ProviderSet = wire.NewSet(
 	NewCommonHandler,
-	NewCommonRegistrar,
 	NewInstallHandler,
 	NewUserHandler,
-	NewUserRegistrar,
 )
