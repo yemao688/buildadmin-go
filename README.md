@@ -85,7 +85,7 @@ internal/            全部私有代码（两业务渠道 + 安装渠道 + 共�
   router/            纯 bootstrap：引擎/全局中间件/静态资源/三渠道挂载
   migrations/        三轨迁移（official/framework/business）+ 内部迁移基础设施
   commands/          Cobra CLI 命令（root/server/crud/migrate/setup 等）
-  conf/ infra/ utils/ i18n/ cron/  配置、连接初始化、工具、本地化、定时任务
+  conf/ infra/ i18n/ cron/  配置、连接初始化、本地化、定时任务
 configs/config.defaults.yaml 运行基座（完整默认配置）
 configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）

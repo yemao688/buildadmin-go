@@ -1,6 +1,6 @@
 # Docker Compose 部署
 
-本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像不包含 Node、Go 工具链、源码或安装器；前端产物在发布机/开发机构建后随构建上下文进入镜像。
+本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像不包含 Node/Go 工具链与源码；安装向导页面与 `setup` 命令随镜像提供（可在容器内完成安装），前端产物在发布机/开发机构建后随构建上下文进入镜像。
 
 服务名为 `buildadmin-go`（不是 `app`），所有 `docker compose` 子命令都要用这个名字。
 
@@ -124,7 +124,7 @@ Compose healthcheck 请求容器内 `GET http://127.0.0.1:${APP_PORT:-9900}/heal
 
 - **端口冲突**：9900 被占用时设置 `APP_PORT=9901`（环境变量或 `.env`），端口映射与健康检查自动跟随。
 - **容器连不上 MySQL**：容器内 `127.0.0.1` 不是宿主机。macOS 用 `host.docker.internal`，Linux 用宿主机网桥 IP；确认 MySQL 用户被授权从容器所在网络连接（`root` 容器需 `MYSQL_ROOT_HOST=%` 或等价授权），并检查 `mysql_test` 段不会指向生产库。
-- **容器启动报 `config file not found` / compose 报错**：`configs/config.yaml` 缺失。Compose 用 `create_host_path: false` 只读挂载它，缺文件时明确失败——先完成"配置准备"一节。
+- **容器启动进入安装向导而非提供服务**：`configs/config.yaml` 缺失。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节准备配置，或按"安装"一节在容器内完成安装。
 - **`setup` 报"系统已安装"**：`public/install.lock` 已存在。删除它（或移走已有 `configs/config.yaml`）后重试；安装器不会覆盖已存在的配置。
 - **前端产物缺失**：镜像不构建前端。发布前执行 `make frontend`（或安装流程选择构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机。
 - **i18n 不生效或启动 panic**：镜像内必须包含 `internal/i18n/locales` 与 `.env.example`（Dockerfile 已处理）；自行裁剪镜像层时不要删除这两处。
