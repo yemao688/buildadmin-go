@@ -51,7 +51,7 @@
 |---|---|---|---|
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）等 | 外部库、conf | 渠道层 |
-| `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
+| `internal/common` | 跨渠道领域服务：`money.UserBalanceService`（会员余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`service/`（按需毕业的业务编排，纯 CRUD 不建透传）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/`（单包：`member.go` 会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/`（单包：`user.go` 会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
 | `internal/install` | 安装渠道（自注册）：`handler.go` + `router.go`（/install 与 /api/install/*，只经全局中间件，不进入 UserLogin）+ `provider.go` | model、pkg、common | 各业务渠道 |
@@ -67,7 +67,9 @@
 
 - **包结构规范（防包名爆炸）**：每层单包扁平、文件名=表名/模块名；新增模块=新增文件，永不新增子目录/子包。类型名携带模块前缀（`XxxRepository`/`XxxParam`/`XxxHandler`/`XxxRegistrar`，service 同理如 `MemberService`）保证单包内唯一。例外仅限真正独立的领域（install/commands/migrations）与技术基建内部组织（`pkg/*`）。
 - **依赖方向规范（防循环依赖）**：单向向下 渠道→common→pkg→model（model 仅依赖外部库与 pkg）；渠道间禁互引（R1/R2）、common 禁依赖渠道（R3）、handler 禁持久化直连（R4/R5）、service 禁传输层（R6/R7）。**出现双向需求=类型放错层的信号**：共享类型一律下沉——真实先例：渠道投影下沉 `internal/model/projection`，Flex 适配类型下沉 `internal/pkg/validator`。
-- **角色规范**：handler=绑定+响应（禁业务、禁 SQL、禁加密）；service=按需毕业的业务编排（纯 CRUD 不建透传），方法签名用普通类型；repository=唯一 GORM 入口；dto=一表一个 `XxxParam`（Add/Edit 复用）、响应直回实体/投影、`Resp` 按需个案引入；router=每表一个 registrar 文件 + `ProvideRegistrars` 一行锚点。
+- **角色规范**：handler=绑定+响应（禁业务、禁 SQL、禁加密），actor 从请求上下文提取后以参数传入；service=按需毕业的业务编排（纯 CRUD 不建透传），方法签名用普通类型；repository=唯一 GORM 入口；dto=一表一个 `XxxParam`（Add/Edit 复用）、响应直回实体/投影、`Resp` 按需个案引入；router=每表一个 registrar 文件 + `ProvideRegistrars` 一行锚点。
+- **repo/service 边界**：表 T 的仓库类名必须是 `TRepository`（非表模块例外：`AuthRepository`=auth 域模块仓、`TableRepository`=information_schema 元数据仓、`AdminHierarchy`=admin_closure 闭包表写者、`AdminRuleRepository.Delete`=pkg 层 CRUD 生成器工具入口）。repo 只留 scoped 原子原语（scoped 读、单表原子写、scope/锁构造与 `Transaction` 原语），禁止 gin 上下文 actor 提取、跨步骤事务编排、业务分支与 `cErr.*` 业务映射（RowsAffected 完整性守卫除外）；流程编排（actor 校验、事务链、业务规则、领域错误上抛）一律在 service，HTTP 映射留在 handler。先例与示例见 `docs/business-development.md`。
+- **money 流**：会员余额变动只走 `common/money.UserBalanceService.ApplyDelta`（FOR UPDATE + 归属校验 + 负余额拒绝 + 余额更新 + 日志写入，调用方自持事务）；`ApplyInput.Scope` 由仓库构造（repo 的 `UserScope(ctx, actor)`），`Type` 字段缺省 `system`、`Log` 载体预置优先；领域错误（`ErrInsufficientBalance` 等）上抛到 handler 映射 HTTP。未来卖家余额按同契约毕业 `SellerBalanceService`，不要往 UserBalanceService 里塞新用户域逻辑。
 
 
 ## AI 开发协议
