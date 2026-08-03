@@ -72,32 +72,3 @@ func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallReco
 	}
 	return InstallStrictUpgrade, nil
 }
-
-func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	state, err := DecideInstallRecovery(db, config)
-	return state != InstallStrictUpgrade, err
-}
-
-func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	if err := core.ValidatePrefix(config); err != nil {
-		return false, err
-	}
-	checks := []struct{ table, column, value string }{
-		{"admin_rule", "name", "dashboard"}, {"admin_rule", "name", "auth/rule"}, {"admin_rule", "name", "dashboard/index"},
-		{"admin_group", "id", "1"}, {"admin", "id", "1"}, {"config", "id", "1"},
-	}
-	for _, check := range checks {
-		t := core.TableName(config, check.table)
-		if !core.TableExists(db, t) {
-			return false, nil
-		}
-		var count int64
-		if err := db.Table(t).Where(core.QuoteIdentifier(check.column)+" = ?", check.value).Count(&count).Error; err != nil {
-			return false, err
-		}
-		if count != 1 {
-			return false, nil
-		}
-	}
-	return true, nil
-}

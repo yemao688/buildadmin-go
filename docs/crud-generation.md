@@ -36,19 +36,17 @@ go build ./...
 
 生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器为每个后台模块产出五类 Go 产物（实体/仓库/DTO/handler/路由注册器），全部"文件名=表名"落单包，并维护三处共享 provider（`internal/admin/{repository,handler,router}/provider.go`）——路由经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点挂载（新模块一行 handler 参数 + 返回条目），不再生成 `<name>_route.go`，也不修改 `cmd/server/wire.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
 
-所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 provider（`internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`、`internal/admin/router/provider.go`）与 `internal/router/registrar_set.go`（api 渠道侧）这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
+所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 provider（`internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`、`internal/admin/router/provider.go`）这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
 
 已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
 
-### `_custom.go` 定制保护与双提交工作流
+### 定制方式与双提交工作流
 
-`crud:generate` 会为每个模块的实体、仓库和 handler 各生成一个一次性定制骨架：实体与仓库各有独立的 `_custom.go` 骨架（handler 也有）。定制文件由对应生成文件的路径去掉扩展名后追加 `_custom.go` 得到：`<table>.go` 对应 `<table>_custom.go`。因此，实体应定制在 `internal/model/<table>_custom.go`，仓库应定制在 `internal/admin/repository/<table>_custom.go`，handler 应定制在 `internal/admin/handler/<table>_custom.go`；视图目录、路由注册器和共享 provider 没有对应的 `_custom.go` 骨架。生成器识别的定制文件目录包括 `internal/model`、`internal/admin/repository` 和 `internal/admin/handler`。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
+业务定制直接修改对应生成文件（实体 `internal/model/<table>.go`、仓库 `internal/admin/repository/<table>.go`、handler `internal/admin/handler/<table>.go` 等），生成器不再生成 `_custom.go` 定制骨架；重新生成时生成文件会被覆盖，定制内容依靠双提交工作流和 `git diff` 回补。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录，以及历史 `_custom.go` 骨架路径）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
 
-首次生成时，目标 `_custom.go` 不存在才会写入骨架；目标文件一旦存在，后续 `crud:generate` 不会覆盖它。对应的 `xxx.go` 仍会按生成结果重写，生成器的 manifest 校验也会把受保护的 `_custom.go` 排除在文件冲突和路径集合比较之外。因此，业务方法和扩展逻辑应优先放入对应的 `_custom.go`，不要直接修改生成的实体/仓库/handler 文件。`_custom.go` 不是视图或路由的通用定制机制。
+`crud:delete` 对历史 manifest 中的 `_custom.go` 骨架按普通生成文件处理：随模块文件一起删除，不再做"保留已定制骨架"的内容判断。
 
-`crud:delete` 对当前模块的实体/仓库/handler 定制骨架执行内容判断：仍与生成器内置骨架逐字节相同的文件会随生成文件删除；内容已经改变的文件会保留，并输出 `WARNING`。这表示删除时不会无提示地丢弃业务定制，但未修改的生成骨架仍属于可清理的生成产物。
-
-CRUD 模块采用“生成 commit + 定制 commit”的双提交工作流：生成 commit 只提交 spec 和全部生成产物（包括初次生成的 `_custom.go` 骨架），提交信息标注框架/生成器版本；业务定制另提交，并在提交信息或模块清单中写明定制动机。重新生成后，`xxx_custom.go` 中的定制会保留；对生成文件中的其它手工改动，应使用 `git diff` 对照定制 commit，逐项回补，而不是把手工改动混入生成 commit。这样可以区分机器生成结果与业务定制，也便于后续重新生成和审查。
+CRUD 模块采用"生成 commit + 定制 commit"的双提交工作流：生成 commit 只提交 spec 和全部生成产物，提交信息标注框架/生成器版本；业务定制另提交，并在提交信息或模块清单中写明定制动机。重新生成后，对生成文件中的手工改动，应使用 `git diff` 对照定制 commit，逐项回补，而不是把手工改动混入生成 commit。这样可以区分机器生成结果与业务定制，也便于后续重新生成和审查。
 
 ## 最小示例
 

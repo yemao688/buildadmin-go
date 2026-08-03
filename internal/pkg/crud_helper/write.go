@@ -1,10 +1,10 @@
 package crud_helper
 
 import (
-	"bytes"
-	"fmt"
 	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/utils"
+	"bytes"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -421,19 +421,6 @@ func lowerFirst(value string) string {
 	return strings.ToLower(value[:1]) + value[1:]
 }
 
-func writeRegistrarProviderEntry(name string, handlerRoot string) error {
-	path := filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go")
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	updated, err := addRegistrarProviderEntry(string(content), name, handlerRoot)
-	if err != nil {
-		return err
-	}
-	return writeGoFile(path, updated)
-}
-
 // handlerImportRef 返回 handler 目录在共享文件中使用的 import 路径、首选别名
 // 以及是否为子包（根 handler 包在 registrar_set.go 中固定使用别名 admin）。
 func handlerImportRef(handlerRoot string) (importPath string, alias string, isSub bool) {
@@ -506,37 +493,6 @@ func registrarVarCandidates(name string, handlerRoot string) []string {
 		candidates = append([]string{lowerFirst(alias) + name + "Registrar"}, candidates...)
 	}
 	return candidates
-}
-
-func addRegistrarProviderEntry(content, name string, handlerRoot string) (string, error) {
-	registrarType := name + "Registrar"
-	importPath, preferred, isSub := handlerImportRef(handlerRoot)
-	alias, _ := resolveImportAlias(content, importPath, preferred, "admin"+utils.SnakeToCamel(preferred, true))
-	registrarVar := registrarVarCandidates(name, handlerRoot)[0]
-	param := "\t" + registrarVar + " *" + alias + "." + registrarType + ",\n"
-	entry := "\t\t" + registrarVar + ",\n"
-
-	if isSub {
-		content = ensureImportLine(content, alias, importPath)
-	}
-	if !strings.Contains(content, " *"+alias+"."+registrarType+",\n") {
-		marker := ") []RouteRegistrar {"
-		index := strings.Index(content, marker)
-		if index < 0 {
-			return "", fmt.Errorf("registrar provider signature anchor not found")
-		}
-		content = content[:index] + param + content[index:]
-	}
-	if !strings.Contains(content, entry) {
-		marker := "\n\t}\n}"
-		index := strings.LastIndex(content, marker)
-		if index < 0 {
-			return "", fmt.Errorf("registrar provider return anchor not found")
-		}
-		insertAt := index + 1
-		content = content[:insertAt] + entry + content[insertAt:]
-	}
-	return content, nil
 }
 
 func RemoveRegistrarProvider(name string, handlerRoot string) error {

@@ -10,14 +10,6 @@ import (
 	"gorm.io/gorm"
 )
 
-func verifyFinalTableContract(db *gorm.DB, config *conf.Configuration) error {
-	return verifyFinalTableContractImpl(db, config)
-}
-
-func verifyFinalDataContract(db *gorm.DB, config *conf.Configuration) error {
-	return verifyFinalDataContractImpl(db, config)
-}
-
 // VerifyCurrent validates cross-table invariants after framework and business migrations.
 func VerifyCurrent(db *gorm.DB, config *conf.Configuration) error {
 	if err := validateMigrationOwners(db, core.TableName(config, "user"), core.TableName(config, "admin")); err != nil {

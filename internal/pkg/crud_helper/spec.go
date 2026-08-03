@@ -1,10 +1,10 @@
 package crud_helper
 
 import (
-	"bytes"
-	"fmt"
 	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
+	"bytes"
+	"fmt"
 	"os"
 	"strings"
 
@@ -403,24 +403,6 @@ func isCanonicalTimeField(name string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-func applyTimestampTableDefaults(table *crudmodel.TableAttr) {
-	if table.Render == "" {
-		table.Render = "datetime"
-	}
-	if table.Operator == "" {
-		table.Operator = "RANGE"
-	}
-	if table.ComSearchRender == "" {
-		table.ComSearchRender = "datetime"
-	}
-	if table.Width == 0 {
-		table.Width = 160
-	}
-	if table.TimeFormat == "" {
-		table.TimeFormat = "yyyy-mm-dd hh:MM:ss"
 	}
 }
 

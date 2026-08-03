@@ -1,14 +1,14 @@
 package crud_helper
 
 import (
-	"context"
-	"fmt"
-	crudmodel "buildadmin-go/internal/model"
-	adminmodel "buildadmin-go/internal/admin/repository"
 	adminauth "buildadmin-go/internal/admin/repository"
+	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
+	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/utils"
+	"context"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"os"
@@ -881,12 +881,6 @@ func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManif
 }
 
 func crudLogTable(cfg *conf.Configuration) string { return cfg.Database.Prefix + "crud_log" }
-
-func hasCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (bool, error) {
-	var count int64
-	err := db.Table(crudLogTable(cfg)).Where("table_name=?", table).Count(&count).Error
-	return count > 0, err
-}
 
 func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
 	return db.Migrator().HasTable(cfg.Database.Prefix + table)

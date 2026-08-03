@@ -1,18 +1,16 @@
 package official
 
 import (
-	"errors"
 	"buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/model"
-	"buildadmin-go/internal/pkg/systemroot"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
 )
 
 type Install struct {
-	sqlDB       *gorm.DB
-	rootAdminID int32
+	sqlDB *gorm.DB
 }
 
 func NewInstall(sqlDB *gorm.DB) *Install {
@@ -27,11 +25,6 @@ func (s Install) InsertData() error {
 		if err := seed.Admin(); err != nil {
 			return err
 		}
-		rootID, err := (systemroot.Resolver{DB: tx, AdminTable: tx.Config.NamingStrategy.TableName("admin")}).Resolve()
-		if err != nil {
-			return err
-		}
-		seed.rootAdminID = rootID
 		for _, fn := range []func() error{seed.AdminGroupAccess, seed.AdminGroup, seed.AdminRule, seed.Config, seed.SecurityDataRecycle, seed.SecuritySensitiveData} {
 			if err := fn(); err != nil {
 				return err
@@ -39,13 +32,6 @@ func (s Install) InsertData() error {
 		}
 		return nil
 	})
-}
-
-func (s Install) rootID() (int32, error) {
-	if s.rootAdminID != 0 {
-		return s.rootAdminID, nil
-	}
-	return (systemroot.Resolver{DB: s.sqlDB, AdminTable: s.sqlDB.Config.NamingStrategy.TableName("admin")}).Resolve()
 }
 
 func (s Install) AdminGroupAccess() error {

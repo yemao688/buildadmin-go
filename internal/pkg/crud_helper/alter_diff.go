@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	"database/sql"
-	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/model"
+	"database/sql"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -73,19 +73,6 @@ func normalizeColumnType(value string) string {
 
 func specFieldNullable(field crudmodel.Field) bool {
 	return field.Null || strings.EqualFold(field.DefaultType, "NULL")
-}
-
-// normalizeDefaultValue 保留旧的无类型调用入口，同时避免 float64 精度损失。
-func normalizeDefaultValue(value string) string {
-	normalized := strings.TrimSpace(value)
-	normalized = strings.Trim(normalized, "'")
-	if integer, ok := new(big.Int).SetString(normalized, 10); ok {
-		return integer.String()
-	}
-	if rational, ok := new(big.Rat).SetString(normalized); ok {
-		return rational.RatString()
-	}
-	return normalized
 }
 
 func normalizeDefaultValueForField(field crudmodel.Field, value string) string {

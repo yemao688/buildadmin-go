@@ -219,7 +219,7 @@ git push origin master
 | `internal/router/router.go` | 框架基本独有；业务不应再在此新增业务路由，改用 RouteRegistrar。冲突时优先采用框架版本，再补业务 registrar。 |
 | `internal/admin/repository/provider.go`、`internal/admin/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 `NewXxxRepository`/`NewXxxHandler` 构造器；保留两边新增条目，整理后运行 `go generate ./cmd/server`。 |
 | `internal/admin/router/provider.go` | 持有合并 ProviderSet（`NewXxxRegistrar` 列表）与 `ProvideRegistrars` 锚点（每模块一行 handler 参数 + 返回条目）；冲突时两边条目都保留，来源解决后运行 `go generate ./cmd/server`。 |
-| `internal/api/handler/provider.go`、`internal/router/registrar_set.go` | api 渠道 registrar 参数和 slice 条目；冲突时两边条目都保留，整理后运行 `go generate ./cmd/server`。 |
+| `internal/api/router/provider.go` | api 渠道 registrar 参数和 slice 条目（`ProvideRegistrars` 锚点）；冲突时两边条目都保留，整理后运行 `go generate ./cmd/server`。 |
 | provider 集合 | 合并双方 provider；来源解决后再按需要生成 Wire。 |
 | `cmd/server/wire_gen.go` | 永不手工解冲突。先解决 `wire.go`、各包 provider、`ProvideRegistrars` 等来源，再运行 `go generate ./cmd/server` 重生成。 |
 | `internal/router/testdata/registered_routes.golden` | 路由有意变更后使用快照测试的 `-update` 更新机制重新生成；不要手改黄金文件。 |
@@ -236,7 +236,7 @@ git push origin master
 
 业务优先放在这些位置：新增 `crud_specs/`、生成并定制业务后端模块、`web/src/views/` 和 `web/src/lang/` 的业务前端、以及自己制定编号/命名策略的新迁移。下游迁移不必错误地占用框架预留编号；应使用独立且稳定的编号或命名空间，合并时检查 registry 冲突，并保证幂等、前缀安全。
 
-路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：admin 渠道每个模块由自己的 registrar 承载——文件恒为 `internal/admin/router/<table>.go`（`Group()` 声明分组、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力），经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点聚合（新模块一行 handler 参数 + 返回条目）后由 `AdminRouter` 挂载；api 渠道模块的 registrar 仍走 `internal/router/registrar_set.go` 追加。CRUD 生成器自动产出 registrar 并维护仓库/handler 的合并 ProviderSet 与 `ProvideRegistrars` 锚点，`crud:delete` 反向移除，不修改 `cmd/server/wire.go`。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./internal/router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `internal/router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
+路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：admin 渠道每个模块由自己的 registrar 承载——文件恒为 `internal/admin/router/<table>.go`（`Group()` 声明分组、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力），经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点聚合（新模块一行 handler 参数 + 返回条目）后由 `AdminRouter` 挂载；api 渠道模块的 registrar 走 `internal/api/router/<module>.go`，经 `internal/api/router/provider.go` 的 `ProvideRegistrars` 锚点聚合后由 `ApiRouter` 挂载。CRUD 生成器自动产出 admin 渠道 registrar 并维护仓库/handler 的合并 ProviderSet 与 `ProvideRegistrars` 锚点，`crud:delete` 反向移除，不修改 `cmd/server/wire.go`。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./internal/router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `internal/router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
 
 以下区域尽量少改，以降低升级冲突：`cmd/server` wiring、`internal/router/router.go` 的既有框架区域、`internal/migrations/official/` 和 `internal/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 

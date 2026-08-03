@@ -193,7 +193,7 @@ func aliossConfigRows() []siteconfig.Config {
 	}
 }
 
-func verifyFinalTableContractImpl(db *gorm.DB, config *conf.Configuration) error {
+func verifyFinalTableContract(db *gorm.DB, config *conf.Configuration) error {
 	for _, logical := range core.CoreLogicalNames() {
 		if err := requireTable(db, core.TableName(config, logical)); err != nil {
 			return err
@@ -219,7 +219,7 @@ func verifyFinalTableContractImpl(db *gorm.DB, config *conf.Configuration) error
 	return verifyCountryDictionaryContract(db, config)
 }
 
-func verifyFinalDataContractImpl(db *gorm.DB, config *conf.Configuration) error {
+func verifyFinalDataContract(db *gorm.DB, config *conf.Configuration) error {
 	if err := validateMigrationOwners(db, core.TableName(config, "user"), core.TableName(config, "admin")); err != nil {
 		return err
 	}

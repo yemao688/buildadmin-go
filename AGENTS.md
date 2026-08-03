@@ -53,9 +53,9 @@
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper 等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*）·`validate/` | model、pkg、common | `internal/api` |
-| `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册） | model、pkg、common | `internal/admin` |
+| `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册，`provider.go` 的 `ProvideRegistrars` 聚合各模块 registrar） | model、pkg、common | `internal/admin` |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
-| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源；`registrar_set.go` 只聚合 api 渠道 registrar（admin 侧聚合已收进 `internal/admin/router`） | 全部 | 业务逻辑 |
+| `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
 | `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n` | 配置、三轨迁移、连接初始化、工具、本地化 | — | — |
 
 边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。

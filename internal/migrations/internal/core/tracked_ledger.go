@@ -74,6 +74,23 @@ func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logica
 	return nil
 }
 
+// Framework ledger operations are tracked ledgers with a fixed logical name.
+func BootstrapFrameworkLedger(db *gorm.DB, config *conf.Configuration) error {
+	return BootstrapTrackedLedger(db, config, "migrations_framework")
+}
+
+func ValidateFrameworkLedgerSchema(db *gorm.DB, config *conf.Configuration) error {
+	return ValidateTrackedLedgerSchema(db, config, "migrations_framework")
+}
+
+func InsertPendingFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
+	return InsertPendingTrackedMigration(db, config, "migrations_framework", TrackedMigration{Version: m.Version, MigrationName: m.MigrationName, Up: m.Up})
+}
+
+func CompleteFrameworkMigration(db *gorm.DB, config *conf.Configuration, m FrameworkMigration) error {
+	return CompleteTrackedMigration(db, config, "migrations_framework", TrackedMigration{Version: m.Version, MigrationName: m.MigrationName}, "framework")
+}
+
 func InsertPendingTrackedMigration(db *gorm.DB, config *conf.Configuration, logicalName string, m TrackedMigration) error {
 	if err := ValidatePrefix(config); err != nil {
 		return err

@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"fmt"
+
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/migrations/official"
@@ -12,8 +14,6 @@ const installDataVersion = official.InstallDataVersion
 const installDataName = official.InstallDataName
 
 type InstallRecoveryState = official.InstallRecoveryState
-type migrationRecord = core.MigrationRecord
-type migrationColumn = core.MigrationColumn
 
 const (
 	InstallFresh         = official.InstallFresh
@@ -25,29 +25,8 @@ func ValidatePrefix(config *conf.Configuration) error { return core.ValidatePref
 func tableName(config *conf.Configuration, logicalName string) string {
 	return core.TableName(config, logicalName)
 }
-func quoteIdentifier(value string) string { return core.QuoteIdentifier(value) }
-func legacyTableExists(db *gorm.DB, name string) (bool, error) {
-	return core.LegacyTableExists(db, name)
-}
-func legacyColumnExists(db *gorm.DB, table, column string) (bool, error) {
-	return core.LegacyColumnExists(db, table, column)
-}
+func quoteIdentifier(value string) string       { return core.QuoteIdentifier(value) }
 func tableExists(db *gorm.DB, name string) bool { return core.TableExists(db, name) }
-func columnExists(db *gorm.DB, table, column string) bool {
-	return core.ColumnExists(db, table, column)
-}
-func indexExists(db *gorm.DB, table, index string) bool {
-	return core.IndexExists(db, table, index)
-}
-func indexFirstColumn(db *gorm.DB, table, index string) (string, error) {
-	return core.IndexFirstColumn(db, table, index)
-}
-func migrationColumnInfo(db *gorm.DB, table, column string) (migrationColumn, bool, error) {
-	return core.MigrationColumnInfo(db, table, column)
-}
-func migrationIndexInfo(db *gorm.DB, table, index string) (bool, string, error) {
-	return core.MigrationIndexInfo(db, table, index)
-}
 func MarkSeedPending(db *gorm.DB, config *conf.Configuration) error {
 	return official.MarkSeedPending(db, config)
 }
@@ -60,9 +39,19 @@ func MarkSeedCompleted(db *gorm.DB, config *conf.Configuration) error {
 func DecideInstallRecovery(db *gorm.DB, config *conf.Configuration) (InstallRecoveryState, error) {
 	return official.DecideInstallRecovery(db, config)
 }
-func IsFreshDatabase(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	return official.IsFreshDatabase(db, config)
+
+type Install = official.Install
+
+func NewInstall(sqlDB *gorm.DB) *Install {
+	return official.NewInstall(sqlDB)
 }
-func SeedCurrentData(db *gorm.DB, config *conf.Configuration) (bool, error) {
-	return official.SeedCurrentData(db, config)
+
+func RunOfficialFreshSeed(db *gorm.DB, config *conf.Configuration) error {
+	db = db.Session(&gorm.Session{NewDB: true})
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := NewInstall(tx).InsertData(); err != nil {
+			return fmt.Errorf("official seed baseline: %w", err)
+		}
+		return MarkSeedCompleted(tx, config)
+	})
 }
