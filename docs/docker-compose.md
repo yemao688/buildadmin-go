@@ -80,7 +80,7 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `install/` 向导页 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
-镜像只含 Go 二进制与 `.env.example`（启动时自动复制为 `.env`，godotenv 不覆盖已有环境变量）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
+镜像只含 Go 二进制；`.env` 非必需（`APP_PORT`/`APP_TIME_ZONE` 由 compose `environment:` 注入，代码内置兜底，`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
 
 ```bash
 cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
@@ -128,4 +128,4 @@ Compose healthcheck 请求容器内 `GET http://127.0.0.1:${APP_PORT:-9900}/heal
 - **容器启动进入安装向导而非提供服务**：`configs/config.yaml` 缺失。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节准备配置，或按"安装"一节在容器内完成安装。
 - **`setup` 报"系统已安装"**：`public/install.lock` 已存在（安装完成判定只认锁）。删除它后重试，并建议一并清除 `configs/config.yaml` 中的旧连接信息；安装器不会覆盖已存在的配置。
 - **前端产物缺失**：镜像不构建前端、也不包含 `public/` 内容。发布前执行 `make frontend`（或安装流程选择构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机/生产机，须随部署目录上生产。
-- **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env.example` 随镜像提供（首次启动复制为 `.env`），自行裁剪镜像层时不要删除它。
+- **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env` 非必需（compose 注入 `APP_PORT`/`APP_TIME_ZONE`，代码兜底，`.env.example` 缺失时静默跳过）。

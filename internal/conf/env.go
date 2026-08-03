@@ -30,6 +30,11 @@ func EnsureEnvFile(rootPath string) (bool, error) {
 	examplePath := filepath.Join(rootPath, EnvExampleFileName)
 	content, err := os.ReadFile(examplePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// 没有 .env.example 时跳过：容器内环境变量由 compose environment
+			// 注入（APP_PORT/APP_TIME_ZONE），代码内置兜底，.env 非必需。
+			return false, nil
+		}
 		return false, fmt.Errorf("read env example %q: %w", examplePath, err)
 	}
 	if err := os.WriteFile(envPath, content, 0600); err != nil {
@@ -39,6 +44,10 @@ func EnsureEnvFile(rootPath string) (bool, error) {
 }
 
 func LoadEnvFile(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// .env 不存在（无 .env.example 可复制）时静默跳过，行为同 EnsureEnvFile。
+		return nil
+	}
 	if err := godotenv.Load(path); err != nil {
 		return fmt.Errorf("load env file %q: %w", path, err)
 	}

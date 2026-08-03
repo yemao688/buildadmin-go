@@ -22,7 +22,9 @@ RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /app/configs /app/runtime /app/public/storage \
     && chown -R app:app /app
 COPY --from=go-build --chown=app:app /out/app /app/app
-COPY --chown=app:app .env.example /app/.env.example
+# .env 非必需：APP_PORT/APP_TIME_ZONE 由 compose environment 注入，代码内置
+# 兜底；EnsureEnvFile/LoadEnvFile 在 .env.example 缺失时静默跳过（容器内
+# 不会生成 .env，宿主 dev 环境仍由仓库根的 .env.example 自动复制）。
 USER 1000:1000
 EXPOSE 9900
 ENTRYPOINT ["/app/app"]
