@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	core "buildadmin-go/internal/middleware"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -17,10 +17,10 @@ import (
 type UserLogin struct {
 	config      *conf.Configuration
 	tokenHelper *token.TokenHelper
-	authM       *member.Service
+	authM       *service.MemberService
 }
 
-func NewUserLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM *member.Service) *UserLogin {
+func NewUserLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM *service.MemberService) *UserLogin {
 	return &UserLogin{
 		config:      config,
 		tokenHelper: tokenHelper,

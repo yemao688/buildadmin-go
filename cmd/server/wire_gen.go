@@ -15,7 +15,7 @@ import (
 	handler2 "buildadmin-go/internal/api/handler"
 	middleware2 "buildadmin-go/internal/api/middleware"
 	router2 "buildadmin-go/internal/api/router"
-	"buildadmin-go/internal/api/service/member"
+	service2 "buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/commands"
 	"buildadmin-go/internal/common/area"
 	"buildadmin-go/internal/common/country"
@@ -115,7 +115,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 		Registrars:     v,
 	}
 	adminRouter := router.NewAdminRouter(adminRouterDeps)
-	memberService := member.NewService(gormDB, tokenHelper, configuration)
+	memberService := service2.NewMemberService(gormDB, tokenHelper, configuration)
 	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
 	captchaService := captcha.NewCaptchaService(gormDB)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)

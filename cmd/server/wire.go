@@ -14,7 +14,7 @@ import (
 	apiHandler "buildadmin-go/internal/api/handler"
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
-	"buildadmin-go/internal/api/service/member"
+	apiService "buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/commands"
 	"buildadmin-go/internal/common/area"
 	"buildadmin-go/internal/common/country"
@@ -51,7 +51,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		country.ProviderSet,
 		upload.ProviderSet,
 		siteconfig.ProviderSet,
-		member.ProviderSet,
+		apiService.ProviderSet,
 		adminService.ProviderSet,
 		adminHandler.ProviderSet,
 		adminRepo.ProviderSet,

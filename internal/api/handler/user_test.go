@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/utils"
 
@@ -21,7 +21,7 @@ import (
 )
 
 func newUserHandlerTest(config *conf.Configuration) *UserHandler {
-	return &UserHandler{config: config, authM: member.NewService(nil, nil, config)}
+	return &UserHandler{config: config, authM: service.NewMemberService(nil, nil, config)}
 }
 
 func userTestRouter() *gin.Engine {

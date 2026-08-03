@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -18,11 +18,11 @@ var usernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`)
 type UserHandler struct {
 	log          *zap.Logger
 	config       *conf.Configuration
-	authM        *member.Service
+	authM        *service.MemberService
 	clickCaptcha *clickcaptcha.ClickCaptcha
 }
 
-func NewUserHandler(log *zap.Logger, config *conf.Configuration, authM *member.Service, clickCaptcha *clickcaptcha.ClickCaptcha) *UserHandler {
+func NewUserHandler(log *zap.Logger, config *conf.Configuration, authM *service.MemberService, clickCaptcha *clickcaptcha.ClickCaptcha) *UserHandler {
 	return &UserHandler{log: log, config: config, authM: authM, clickCaptcha: clickCaptcha}
 }
 

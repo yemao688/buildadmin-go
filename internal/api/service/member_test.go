@@ -1,4 +1,4 @@
-package member
+package service
 
 import (
 	"errors"
@@ -35,7 +35,7 @@ func (d authDomainTokenDriver) Check(string, string, int32) bool       { return 
 func (d authDomainTokenDriver) Delete(string) error                    { return nil }
 func (d authDomainTokenDriver) Clear(string, int32) error              { return nil }
 
-func newAuthTestModel(t *testing.T) (*Service, *gorm.DB) {
+func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
@@ -46,7 +46,7 @@ func newAuthTestModel(t *testing.T) (*Service, *gorm.DB) {
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
-	return NewService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
+	return NewMemberService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
 }
 
 func authTestContext() *gin.Context {

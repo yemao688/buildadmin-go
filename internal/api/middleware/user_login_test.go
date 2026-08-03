@@ -8,7 +8,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonModel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
@@ -39,7 +39,7 @@ func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "middleware_user", Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := member.NewService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 	middleware := NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: userLoginTokenDriver{}}, authM)
 
 	router := gin.New()

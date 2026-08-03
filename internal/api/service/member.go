@@ -1,8 +1,8 @@
-package member
+package service
 
 import (
 	"fmt"
-	"buildadmin-go/internal/api/repository/user"
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -18,8 +18,8 @@ import (
 	"buildadmin-go/internal/utils"
 )
 
-type Service struct {
-	users       *repository.Repository
+type MemberService struct {
+	users       *repository.UserRepository
 	tokenHelper *token.TokenHelper
 	config      *conf.Configuration
 }
@@ -30,13 +30,13 @@ var (
 	loginUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`)
 )
 
-func NewService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *Service {
-	return &Service{users: repository.NewRepository(sqlDB), tokenHelper: tokenHelper, config: config}
+func NewMemberService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *MemberService {
+	return &MemberService{users: repository.NewUserRepository(sqlDB), tokenHelper: tokenHelper, config: config}
 }
 
 // IsLoginToken resolves a user session token. The header extraction from the
 // request is a transport concern handled by the caller.
-func (s *Service) IsLoginToken(tokenStr string) (*token.Token, bool) {
+func (s *MemberService) IsLoginToken(tokenStr string) (*token.Token, bool) {
 	if tokenStr == "" {
 		return nil, false
 	}
@@ -47,11 +47,11 @@ func (s *Service) IsLoginToken(tokenStr string) (*token.Token, bool) {
 	return nil, false
 }
 
-func (s *Service) IsEnabledUser(id int32) bool {
+func (s *MemberService) IsEnabledUser(id int32) bool {
 	return s.users.IsEnabled(id)
 }
 
-func (s *Service) RefreshUserAccessToken(refreshToken string) (string, error) {
+func (s *MemberService) RefreshUserAccessToken(refreshToken string) (string, error) {
 	initial, err := s.tokenHelper.Get(refreshToken)
 	if err != nil {
 		return "", err
@@ -87,7 +87,7 @@ func (s *Service) RefreshUserAccessToken(refreshToken string) (string, error) {
 	return newToken, nil
 }
 
-func (s *Service) ValidateUserToken(id int32, ip string) error {
+func (s *MemberService) ValidateUserToken(id int32, ip string) error {
 	user, err := s.users.GetByID(id)
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func (s *Service) ValidateUserToken(id int32, ip string) error {
 
 // Login verifies the credentials and issues the member tokens. ip is passed
 // explicitly so the flow stays transport-free.
-func (s *Service) Login(ip string, username string, plainPassword string, keep bool) (interface{}, error) {
+func (s *MemberService) Login(ip string, username string, plainPassword string, keep bool) (interface{}, error) {
 	accountType := ""
 	if loginPhoneRegex.MatchString(username) {
 		accountType = "mobile"
@@ -178,7 +178,7 @@ func (s *Service) Login(ip string, username string, plainPassword string, keep b
 	return userInfo, err
 }
 
-func (s *Service) FilterData(user model.User) map[string]any {
+func (s *MemberService) FilterData(user model.User) map[string]any {
 	return map[string]any{
 		"id":              user.ID,
 		"username":        user.Username,
@@ -195,7 +195,7 @@ func (s *Service) FilterData(user model.User) map[string]any {
 
 // Register creates a member account and issues the access token. ip is passed
 // explicitly so the flow stays transport-free.
-func (s *Service) Register(ip string, username string, plainPassword string) (interface{}, error) {
+func (s *MemberService) Register(ip string, username string, plainPassword string) (interface{}, error) {
 	exists, err := s.accountExists("username", username)
 	if err != nil {
 		return nil, err
@@ -243,7 +243,7 @@ func (s *Service) Register(ip string, username string, plainPassword string) (in
 	return userInfo, nil
 }
 
-func (s *Service) accountExists(field, value string) (bool, error) {
+func (s *MemberService) accountExists(field, value string) (bool, error) {
 	switch field {
 	case "username", "email", "mobile":
 	default:
@@ -258,7 +258,7 @@ func (s *Service) accountExists(field, value string) (bool, error) {
 }
 
 // Logout invalidates the refresh token and the caller's access token.
-func (s *Service) Logout(refreshToken string, accessToken string) error {
+func (s *MemberService) Logout(refreshToken string, accessToken string) error {
 	if refreshToken != "" {
 		if err := s.tokenHelper.Delete(refreshToken); err != nil {
 			return err

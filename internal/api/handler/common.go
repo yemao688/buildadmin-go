@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
@@ -21,11 +21,11 @@ type CommonHandler struct {
 	clickCaptcha *clickcaptcha.ClickCaptcha
 	captcha      *captcha.CaptchaService
 	tokenHelper  *token.TokenHelper
-	authM        *member.Service
+	authM        *service.MemberService
 	config       *conf.Configuration
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.CaptchaService, tokenHelper *token.TokenHelper, authM *member.Service, config *conf.Configuration) *CommonHandler {
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.CaptchaService, tokenHelper *token.TokenHelper, authM *service.MemberService, config *conf.Configuration) *CommonHandler {
 	registerBuiltinRefreshTypes()
 	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
 }

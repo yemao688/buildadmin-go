@@ -10,7 +10,7 @@ import (
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/api/service/member"
+	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
@@ -91,7 +91,7 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonmodel.User{ID: 1, Status: "enable"}).Error)
 	tokenHelper := &token.TokenHelper{Driver: driver}
-	h := &CommonHandler{tokenHelper: tokenHelper, authM: member.NewService(db, tokenHelper, config), config: config}
+	h := &CommonHandler{tokenHelper: tokenHelper, authM: service.NewMemberService(db, tokenHelper, config), config: config}
 	router := newContractTestRouter()
 	router.POST("/", h.RefreshToken)
 	recorder := httptest.NewRecorder()
