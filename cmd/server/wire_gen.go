@@ -26,7 +26,6 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
-	"buildadmin-go/internal/install"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
@@ -132,12 +131,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 		Registrars: v2,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	installHandler := install.NewInstallHandler(zapLogger, configuration, terminalTerminal)
-	installRouterDeps := install.InstallRouterDeps{
-		InstallHandler: installHandler,
-	}
-	installRouter := install.NewInstallRouter(installRouterDeps)
-	engine := router3.InitRouter(logger, adminRouter, apiRouter, installRouter)
+	engine := router3.InitRouter(logger, adminRouter, apiRouter)
 	server := commands.NewHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

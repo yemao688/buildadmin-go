@@ -38,7 +38,7 @@ go install github.com/air-verse/air@latest
    # 或：go run ./cmd/server
    ```
 
-   后端默认监听 `9900`。首次安装可访问 `http://127.0.0.1:9900/install` 使用 Web 向导，也可使用 CLI `go run ./cmd/server --conf configs/config.yaml setup`；手动迁移和安装边界见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`configs/config.yaml` 交给安装器自动生成，不要手写（详见 `docs/framework-workflow.md` 的首次安装一节）。
+   后端默认监听 `9900`。首次安装使用 CLI `go run ./cmd/server setup`（交互收集 MySQL 与管理员信息并自动构建前端；`--yes` + 全部 flags 可无人值守，详见 [`docs/framework-workflow.md`](docs/framework-workflow.md) 的首次安装一节）。如果让 AI 协助安装，请先向它提供数据库连接和管理员账号等必要信息，`configs/config.yaml` 交给安装器自动生成，不要手写。
 2. 启动前端（必须在 `web/` 目录执行）：
 
    ```bash
@@ -77,7 +77,7 @@ internal/            全部私有代码（两业务渠道 + 安装渠道 + 共�
                      middleware（登录/权限/安全审计）
   api/               门户/公共渠道：repository/service 均为单包（文件名=表/模块名）、
                      middleware（user_login）/dto/handler/router
-  install/           安装渠道：handler + 自注册路由（/install 与 /api/install/*）+ provider
+  commands/           CLI 命令编排（setup 安装 / migrate / crud 生成器等）
   model/             共享贫血实体记录层（含 projection/ 投影子包）
   common/            跨渠道领域服务（money/siteconfig/area/country/upload）
   pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper/validator 等）

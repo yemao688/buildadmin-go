@@ -25,7 +25,6 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
-	install "buildadmin-go/internal/install"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/terminal"
 	"buildadmin-go/internal/router"
@@ -63,8 +62,6 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Se
 		wire.Struct(new(adminRouter.AdminRouterDeps), "*"),
 		apiRouter.ProviderSet,
 		wire.Struct(new(apiRouter.ApiRouterDeps), "*"),
-		install.ProviderSet,
-		wire.Struct(new(install.InstallRouterDeps), "*"),
 		router.InitRouter,
 		cron.ProviderSet,
 		commands.NewHttpServer,

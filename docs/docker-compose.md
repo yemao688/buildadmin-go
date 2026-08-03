@@ -1,6 +1,6 @@
 # Docker Compose 部署
 
-本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像只含 Go 二进制与配置基座——不包含 Node/Go 工具链、源码，也不包含 `public/` 静态内容；向导页面（`public/install`，Git 跟踪）、前端产物与上传文件全部由宿主机 `public/` 目录经 bind mount 直接服务，安装向导与 `setup` 命令在容器内可用（无需宿主机工具链）。
+本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像只含 Go 二进制——不包含 Node/Go 工具链、源码，也不包含 `public/` 静态内容；前端产物与上传文件全部由宿主机 `public/` 目录经 bind mount 直接服务，安装统一由 `setup` CLI 完成（容器内 `docker compose run --rm buildadmin-go setup`，无需宿主机工具链）。
 
 服务名为 `buildadmin-go`（不是 `app`），所有 `docker compose` 子命令都要用这个名字。
 
@@ -16,13 +16,14 @@
 
 ### 配置准备（首次安装）
 
-`./configs` 以**可写目录**挂载为 `/app/configs`，安装完成判定以 `public/install.lock` 为准（`./public` 同样挂载持久化，锁跨容器重建不丢失），因此安装可以在宿主机或容器内完成，三者任选：
+`./configs` 以**可写目录**挂载为 `/app/configs`，安装完成判定以 `public/install.lock` 为准（`./public` 同样挂载持久化，锁跨容器重建不丢失）。安装统一用 `setup` CLI（Web 向导已移除），二选一：
 
-1. **宿主机 Web 向导**：`go run ./cmd/server` 后访问 `http://127.0.0.1:9900/install`，按向导填写 MySQL 和管理员信息。
-2. **宿主机 CLI**：`go run ./cmd/server setup --yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password --admin-password ...`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端）。
-3. **容器内安装**：`./configs` 目录存在但无 `configs/config.yaml` 时，启动容器即进入安装向导（浏览器访问 `http://127.0.0.1:9900/install`），或直接 `docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go setup --yes --skip-frontend ...`。安装器写出的 `configs/config.yaml` 经目录挂载持久化到宿主机。
+1. **宿主机 CLI**：`go run ./cmd/server setup --yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password ... --admin-password ...`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端）。
+2. **容器内安装**：`docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go setup --yes --skip-frontend --db-host ... ...`。安装器写出的 `configs/config.yaml` 经目录挂载持久化到宿主机。
 
-安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（仅 MySQL 连接与随机生成的 `token.key`，其余键来自 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。重装 = 删除 `public/install.lock`（建议一并清除 `configs/config.yaml` 中的旧连接信息，重装向导会覆盖写入）后重走任一安装路径。
+未安装（无锁）时直接 `docker compose up` 启动应用：进程会打印 setup 安装指引并等待 3 秒后退出（`restart: unless-stopped` 下会循环打印），请先执行上面的 setup 再启动。
+
+安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（仅 MySQL 连接与随机生成的 `token.key`，其余键来自 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。重装 = 删除 `public/install.lock`（建议一并清除 `configs/config.yaml` 中的旧连接信息，重装 setup 会覆盖写入）后重走任一安装路径。
 
 无论在哪安装，**编辑连接信息指向容器可达地址**：把 `configs/config.yaml` 中 `mysql.host` 的 `127.0.0.1` 改为 `host.docker.internal`（macOS）或宿主机网桥 IP（Linux）。容器内的 `127.0.0.1` 是容器自己，不是宿主机或数据库。
 
@@ -56,7 +57,7 @@ Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `co
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go migrate
 ```
 
-这只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行 Web 安装、不创建安装锁。迁移前确认配置中的 MySQL 容器可达。三轨台账、business 断点和回滚语义见 [`internal/migrations/business/README.md`](../internal/migrations/business/README.md)。
+这只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行安装、不创建安装锁。迁移前确认配置中的 MySQL 容器可达。三轨台账、business 断点和回滚语义见 [`internal/migrations/business/README.md`](../internal/migrations/business/README.md)。
 
 ## 二、线上发布
 
@@ -79,7 +80,7 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 
 - `docker-compose.yaml`、`.env`（镜像地址、`APP_PORT`、`APP_TIME_ZONE`）
 - `configs/config.defaults.yaml`（配置基座，Git 跟踪，镜像不提供、bind mount 会遮蔽镜像副本）+ `configs/config.yaml`（应用覆盖层和凭据，不能提交到 Git）
-- `public/` 完整目录（`index.html`、`assets/` 前端产物 + `install/` 向导页 + `static/` 字体图片 + `storage/` 上传文件）
+- `public/` 完整目录（`index.html`、`assets/` 前端产物 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
 镜像只含 Go 二进制；`.env` 非必需（`APP_TIME_ZONE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
@@ -98,7 +99,7 @@ docker compose ps
 docker compose logs -f buildadmin-go
 ```
 
-安装完成判定以 `public/install.lock` 为准（`./public` 已挂载持久化，锁跨容器重建不丢失）：已安装（锁存在）时 `/install` 302 到 `/`，`/api/install/*` 返回 403 业务码；未安装（无锁）的容器才会进入安装向导。
+安装完成判定以 `public/install.lock` 为准（`./public` 已挂载持久化，锁跨容器重建不丢失）：已安装（锁存在）时正常提供服务；未安装（无锁）时应用启动即打印 setup 安装指引并退出，先执行 `docker compose run --rm buildadmin-go setup ...` 完成安装。
 
 ### 升级与精确回滚
 
@@ -127,7 +128,7 @@ Compose healthcheck 请求容器内固定 `GET http://127.0.0.1:9900/healthz`（
 
 - **端口冲突**：9900 被占用时设置 `APP_PORT=9901`（环境变量或 `.env`），宿主机映射跟随；容器内仍固定监听 9900。
 - **容器连不上 MySQL**：容器内 `127.0.0.1` 不是宿主机。macOS 用 `host.docker.internal`，Linux 用宿主机网桥 IP；确认 MySQL 用户被授权从容器所在网络连接（`root` 容器需 `MYSQL_ROOT_HOST=%` 或等价授权），并检查 `mysql_test` 段不会指向生产库。
-- **容器启动进入安装向导而非提供服务**：`configs/config.yaml` 缺失。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节准备配置，或按"安装"一节在容器内完成安装。
+- **容器启动即退出并打印安装指引**：`configs/config.yaml` 缺失（未安装）。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节执行 setup 完成安装后再 `docker compose up`。
 - **`setup` 报"系统已安装"**：`public/install.lock` 已存在（安装完成判定只认锁）。删除它后重试，并建议一并清除 `configs/config.yaml` 中的旧连接信息；安装器不会覆盖已存在的配置。
-- **前端产物缺失**：镜像不构建前端、也不包含 `public/` 内容。发布前执行 `make frontend`（或安装流程选择构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机/生产机，须随部署目录上生产。
+- **前端产物缺失**：镜像不构建前端、也不包含 `public/` 内容。发布前执行 `make frontend`（或 setup 自动构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机/生产机，须随部署目录上生产。
 - **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env` 非必需（compose 注入 `APP_TIME_ZONE`，容器内端口固定 9900，代码兜底，`.env.example` 缺失时静默跳过）。

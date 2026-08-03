@@ -91,15 +91,10 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger
 	}); err != nil {
-		path := filepath.Join(util.RootPath(), "public/install.lock")
-		if _, err := os.Stat(path); err == nil {
-			content, _ := os.ReadFile(path)
-			if string(content) == "install-end" {
-				gLog.Error("failed opening connection to err:", zap.Any("err", err))
-				panic("failed to connect database")
-			}
-		}
-		return nil
+		// serve 只在安装完成（configs/config.yaml 存在）后启动，连库失败即
+		// 真实错误，直接 panic——不再有"未安装时静默返回 nil DB"的向导模式。
+		gLog.Error("failed opening connection to err:", zap.Any("err", err))
+		panic("failed to connect database")
 	} else {
 		sqlDB, _ := db.DB()
 		sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)

@@ -11,16 +11,16 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"time"
 )
 
 // initConfig 加载分层配置（默认基座 + 覆盖层）、引导 .env 并安装配置热更新。
 // 行为契约：
-//   - --conf 指向不存在的文件时 panic 快速失败（setup 除外）；
-//   - 非 serve 命令（除 setup/crud:validate）缺少真实配置时 panic 快速失败；
-//   - 裸跑默认命令与显式 server 子命令以只读基座进入安装向导（/install）。
+//   - setup 以只读基座引导 CLI 安装（允许配置缺失）；
+//   - crud:validate 是纯 spec 校验，豁免缺配置检查；
+//   - 其余任何命令（含默认 serve）缺少真实配置时打印安装指引、等待 3 秒后
+//     退出——不再提供 Web 安装向导，安装统一走 setup。
 func initConfig() {
 	if !filepath.IsAbs(configPath) {
 		configPath = filepath.Join(rootPath, configPath)
@@ -29,36 +29,29 @@ func initConfig() {
 	runtimeConfigPath := configPath
 	runtimeConfigExists := util.PathExists(runtimeConfigPath)
 	if !runtimeConfigExists {
-		args := os.Args[1:]
 		setupRequested := false
-		for _, arg := range args {
-			if arg == "setup" {
+		validateRequested := false
+		for _, arg := range os.Args[1:] {
+			switch arg {
+			case "setup":
 				setupRequested = true
-				break
+			case "crud:validate":
+				validateRequested = true
 			}
 		}
-		// 首次启动不自动复制 configs/config.yaml：安装向导（/install）负责创建它。
-		// serve 默认命令以只读基座启动进入安装向导；其它命令必须已有真实配置。
-		if confFlag := pflag.Lookup("conf"); confFlag != nil && confFlag.Changed && !setupRequested {
-			panic(fmt.Errorf("config file not found: %s", configPath))
+
+		switch {
+		case setupRequested:
+			fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
+		case validateRequested:
+			// crud:validate 不依赖运行配置。
+		default:
+			printInstallGuidance(configPath)
+			// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），
+			// 然后退出；安装完成后配置存在，正常启动不再走此分支。
+			time.Sleep(3 * time.Second)
+			os.Exit(0)
 		}
-		if !setupRequested {
-			for i := 0; i < len(args); i++ {
-				if strings.HasPrefix(args[i], "-") {
-					if args[i] == "--conf" || args[i] == "-conf" || args[i] == "-c" {
-						i++ // 跳过 --conf/-conf/-c 的值
-					}
-					continue
-				}
-				if args[i] == "crud:validate" || args[i] == "server" {
-					// crud:validate 是纯 spec 校验，不依赖运行配置，与其 spec 参数一起豁免缺配置检查；
-					// server 与裸跑默认命令同语义，缺失配置时进入安装向导。
-					break
-				}
-				panic(fmt.Errorf("configs/config.yaml 不存在，请先以默认命令启动应用并通过 /install 完成安装"))
-			}
-		}
-		fmt.Println(missingConfigMessage(setupRequested))
 	}
 
 	defaultsPath := filepath.Join(filepath.Dir(runtimeConfigPath), conf.DefaultsFileName)
@@ -179,9 +172,31 @@ func logConfigChangeError(err error) {
 	log.Print(err)
 }
 
+// printInstallGuidance 输出未安装时的安装指引（Web 安装向导已移除，安装
+// 统一走 setup CLI；容器内通过 docker compose run --rm 执行同一命令）。
+func printInstallGuidance(configPath string) {
+	fmt.Printf("config file not found: %s\n", configPath)
+	fmt.Println("系统尚未安装。请先执行安装命令（安装完成会自动生成该配置文件）：")
+	fmt.Println()
+	fmt.Println("  宿主机:")
+	fmt.Println("    go run ./cmd/server setup [--yes] \\")
+	fmt.Println("      --db-host <mysql主机> --db-port 3306 --db-name <库名> \\")
+	fmt.Println("      --db-user <用户> --db-password <密码> [--db-prefix ba_] \\")
+	fmt.Println("      --admin-name admin --admin-password <管理员密码> [--site-name <站点名>]")
+	fmt.Println("    （--skip-frontend 可跳过前端构建，要求 public/index.html 已存在；")
+	fmt.Println("      省略则自动构建前端）")
+	fmt.Println()
+	fmt.Println("  容器内（docker compose）:")
+	fmt.Println("    docker compose run --rm buildadmin-go setup [同上参数]")
+	fmt.Println()
+	fmt.Println("完整安装说明见 docs/framework-workflow.md。3 秒后退出……")
+}
+
+// missingConfigMessage 已随 Web 安装向导移除：缺配置时统一走
+// printInstallGuidance 指引（setup 场景的提示直接内联在 initConfig）。
 func missingConfigMessage(setupRequested bool) string {
 	if setupRequested {
 		return "configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装"
 	}
-	return "configs/config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 configs/config.yaml）"
+	return "configs/config.yaml 不存在，请先执行 setup 完成安装（安装完成后会自动生成该配置文件）"
 }

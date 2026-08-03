@@ -1,6 +1,6 @@
 // Package router 装配 api 渠道路由：/api/* 会员接口。它接收 api 渠道中间件
-// （UserLogin）与 api handler，完成公共路由挂载；InstallGuard 等全局中间件
-// 由根装配件在调用本包之前挂载，安装渠道由 internal/install 独立装配。
+// （UserLogin）与 api handler，完成公共路由挂载；全局中间件由根装配件在
+// 调用本包之前挂载。
 //
 // 模块路由注册器（registrar）按模块一个文件（internal/api/router/<module>.go）
 // 声明，聚合列表在 ProvideRegistrars——与 admin 渠道同构的追加锚点：

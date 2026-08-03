@@ -89,16 +89,6 @@ terminal:
   npm_package_manager: 'pnpm'
   install_service_port: '9900'
   commands:
-    migrate:
-      run:
-        cwd: ''
-        command: '{app} --conf configs/config.yaml migrate run'
-      rollback:
-        cwd: ''
-        command: '{app} --conf configs/config.yaml migrate rollback'
-      breakpoint:
-        cwd: ''
-        command: '{app} --conf configs/config.yaml migrate breakpoint'
     install:
       yarn:
         cwd: ''
@@ -125,22 +115,6 @@ terminal:
       node:
         cwd: ''
         command: 'node -v'
-    test:
-      npm:
-        cwd: 'public/npm-install-test'
-        command: 'npm install'
-      cnpm:
-        cwd: 'public/npm-install-test'
-        command: 'cnpm install'
-      yarn:
-        cwd: 'public/npm-install-test'
-        command: yarn install
-      pnpm:
-        cwd: 'public/npm-install-test'
-        command: pnpm install
-      ni:
-        cwd: 'public/npm-install-test'
-        command: ni install
     web-install:
       npm:
         cwd: 'web'

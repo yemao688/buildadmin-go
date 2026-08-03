@@ -660,11 +660,14 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 	}
 	if len(missing) > 0 {
 		fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
+		for _, tool := range missing {
+			fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
+		}
 		if setupFrontendArtifactExists(rootPath) {
 			fmt.Fprintln(output, "已有 public/index.html，退化为跳过前端构建")
 			return errSetupFrontendSkipped
 		}
-		return errors.New("前端构建依赖缺失，且 public/index.html 不存在")
+		return fmt.Errorf("前端构建依赖缺失，且 public/index.html 不存在（缺失工具: %s）", strings.Join(missing, ", "))
 	}
 
 	for _, key := range []string{"web-install." + packageManager, "web-build." + packageManager} {
@@ -685,6 +688,26 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 		return errors.New("前端构建完成，但移动 web/dist 到 public 失败")
 	}
 	return nil
+}
+
+// setupToolInstallCommand 返回前端构建依赖缺失时的安装命令提示。
+func setupToolInstallCommand(tool string) string {
+	switch tool {
+	case "npm":
+		return "安装 Node.js（自带 npm）: https://nodejs.org/ 或 brew install node"
+	case "node":
+		return "安装 Node.js: https://nodejs.org/ 或 brew install node"
+	case "pnpm":
+		return "npm install -g pnpm"
+	case "yarn":
+		return "npm install -g yarn"
+	case "cnpm":
+		return "npm install -g cnpm --registry=https://registry.npmmirror.com"
+	case "ni":
+		return "npm install -g @antfu/ni"
+	default:
+		return "npm install -g " + tool
+	}
 }
 
 func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {

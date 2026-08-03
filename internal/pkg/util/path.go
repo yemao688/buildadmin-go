@@ -75,21 +75,3 @@ func PathExists(path string) bool {
 	}
 	return false
 }
-
-// EnsureConfigFile creates an empty, valid sparse runtime override layer when
-// a fresh installation has no editable config yet.
-func EnsureConfigFile(rootPath string) error {
-	configDir := filepath.Join(rootPath, "configs")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		return err
-	}
-	configPath := filepath.Join(configDir, "config.yaml")
-	if _, err := os.Stat(configPath); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-
-	data := []byte("# Runtime overrides; unspecified keys come from config.defaults.yaml.\n{}\n")
-	return os.WriteFile(configPath, data, 0600)
-}

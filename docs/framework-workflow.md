@@ -94,18 +94,29 @@ git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 
 ### 首次安装
 
-有两种方式，二选一。
+安装统一使用 CLI `setup`（Web 安装向导已移除）：缺配置时启动任何命令都会打印 setup 指引并退出。
 
-**Web 安装：** 在仓库根目录启动后端：
+**交互式安装**（推荐）：在仓库根目录执行：
 
 ```bash
-air
-# 或：go run ./cmd/server
+go run ./cmd/server setup
 ```
 
-启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；端口和时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供，默认分别为 `9900` 和 `Asia/Shanghai`，godotenv 不覆盖已有环境变量。浏览器访问 `http://127.0.0.1:9900/install`，按安装器填写 MySQL 和管理员信息。未安装时首页会 302 到 `/install`；安装器会在仓库根目录生成被 Git 忽略的稀疏 `configs/config.yaml` 并执行其中的迁移命令。安装成功响应后进程延迟 1 秒退出，air/Docker 会自动拉起；裸 `go run` 需要手动重启。已安装时 `/install` 302 到 `/`，`/api/install/*` 返回 403，只有幂等的 `commandExecComplete` 回调豁免。
+交互收集数据库连接、管理员信息并执行迁移与初始化。
 
-也可以改用 CLI 交互式安装（与 Web 向导二选一）：`go run ./cmd/server --conf configs/config.yaml setup` 交互收集数据库连接并执行迁移与初始化；`go run ./cmd/server --conf configs/config.yaml setup --db-host ... --db-password ... --yes` 配合全部 flags 可无人值守安装，适合 CI 与容器首装。显式 `--conf` 路径会作为本次 setup 的配置文件路径。
+**无人值守安装**（CI/容器首装）：配合全部 flags 一步完成：
+
+```bash
+go run ./cmd/server setup --yes \
+  --db-host 127.0.0.1 --db-port 3306 --db-name buildadmin_go \
+  --db-user root --db-password '密码' --db-prefix ba_ \
+  --admin-name admin --admin-password '管理员密码' --site-name '站点名'
+```
+
+- 数据库不存在时 setup 会询问是否创建（`--yes` 下直接创建）；
+- `--skip-frontend` 跳过前端构建（要求 `public/index.html` 已存在，适合 `make frontend` 已执行的环境）；省略则自动构建前端，Node/npm/包管理器缺失时会打印对应安装命令；
+- 显式 `--conf` 路径会作为本次 setup 的配置文件路径；
+- 容器内执行同一命令：`docker compose run --rm buildadmin-go setup [同上参数]`。
 
 **AI 协助安装：** 用户让 AI 帮忙安装时，AI 必须先向用户问询并收齐以下信息再开始执行，不要自行假设或先写配置：
 
@@ -235,7 +246,7 @@ git push origin master
 
 业务优先放在这些位置：新增 `crud_specs/`、生成并定制业务后端模块、`web/src/views/` 和 `web/src/lang/` 的业务前端、以及自己制定编号/命名策略的新迁移。下游迁移不必错误地占用框架预留编号；应使用独立且稳定的编号或命名空间，合并时检查 registry 冲突，并保证幂等、前缀安全。
 
-路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：admin 渠道每个模块由自己的 registrar 承载——文件恒为 `internal/admin/router/<table>.go`（`Group()` 声明分组、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力），经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点聚合（新模块一行 handler 参数 + 返回条目）后由 `AdminRouter` 挂载；api 渠道模块的 registrar 走 `internal/api/router/<module>.go`，经 `internal/api/router/provider.go` 的 `ProvideRegistrars` 锚点聚合后由 `ApiRouter` 挂载；安装渠道（`internal/install`）自注册 /install 与 /api/install/*，只经全局中间件。CRUD 生成器自动产出 admin 渠道 registrar 并维护仓库/handler 的合并 ProviderSet 与 `ProvideRegistrars` 锚点，`crud:delete` 反向移除，不修改 `cmd/server/wire.go`。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。
+路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：admin 渠道每个模块由自己的 registrar 承载——文件恒为 `internal/admin/router/<table>.go`（`Group()` 声明分组、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力），经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点聚合（新模块一行 handler 参数 + 返回条目）后由 `AdminRouter` 挂载；api 渠道模块的 registrar 走 `internal/api/router/<module>.go`，经 `internal/api/router/provider.go` 的 `ProvideRegistrars` 锚点聚合后由 `ApiRouter` 挂载（安装不走 HTTP 渠道，统一由 CLI `setup` 完成）。CRUD 生成器自动产出 admin 渠道 registrar 并维护仓库/handler 的合并 ProviderSet 与 `ProvideRegistrars` 锚点，`crud:delete` 反向移除，不修改 `cmd/server/wire.go`。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。
 
 以下区域尽量少改，以降低升级冲突：`cmd/server` wiring、`internal/router/router.go` 的既有框架区域、`internal/migrations/official/` 和 `internal/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
@@ -261,7 +272,7 @@ git push origin master
 | 在 SQL 或代码中硬编码 `ba_` | 配置前缀可变，导致非默认前缀环境失败。 |
 | 根目录运行 npm | 前端依赖和锁文件属于 `web/`，应使用 pnpm。 |
 | 默认运行 `go test ./...` | 部分测试需要 MySQL 或特定 DI；先按影响范围聚焦验证。 |
-| 在容器内做首次 Web 安装 | 交互步骤多且安装后需重启加载新配置；建议本地/开发容器完成，生产机不做首次安装。 |
+| 在容器内做首次安装（`docker compose run --rm buildadmin-go setup --yes ...`） | 需完整参数一次到位，不适合交互；建议本地完成安装后携带 `configs/config.yaml` 部署，或容器内用 `--yes` 无人值守安装。 |
 
 ## 部署
 

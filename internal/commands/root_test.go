@@ -31,7 +31,7 @@ func TestMissingConfigMessage(t *testing.T) {
 	if got := missingConfigMessage(true); got != "configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装" {
 		t.Fatalf("setup missing config message = %q", got)
 	}
-	if got := missingConfigMessage(false); got != "configs/config.yaml 不存在，以只读基座启动安装向导，请访问 /install 完成安装（安装完成后会生成 configs/config.yaml）" {
+	if got := missingConfigMessage(false); got != "configs/config.yaml 不存在，请先执行 setup 完成安装（安装完成后会自动生成该配置文件）" {
 		t.Fatalf("default missing config message = %q", got)
 	}
 }

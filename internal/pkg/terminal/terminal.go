@@ -264,9 +264,7 @@ func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, ext
 
 // 执行前埋点
 func (t *Terminal) BeforeExecution(commandKey string) {
-	if commandKey == "test.pnpm" {
-		os.Remove(filepath.Join(util.RootPath(), "public/npm-install-test/pnpm-lock.yaml"))
-	} else if commandKey == "web-install.pnpm" {
+	if commandKey == "web-install.pnpm" {
 		os.Remove(filepath.Join(util.RootPath(), "web/pnpm-lock.yaml"))
 	}
 }
