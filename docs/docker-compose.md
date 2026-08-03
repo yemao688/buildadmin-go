@@ -38,11 +38,13 @@ curl http://127.0.0.1:9900/healthz                                    # {"status
 # 浏览器打开 http://127.0.0.1:9900/ 应看到后台登录页
 ```
 
-端口与时区只由 `APP_PORT`、`APP_TIME_ZONE` 提供（Compose `environment:` 注入容器并参与端口映射与健康检查插值），端口冲突时改 `APP_PORT`：
+容器内端口**固定 9900**（镜像 EXPOSE 与代码默认兜底一致，`.env` 不挂载进容器、`APP_PORT` 不再注入）；`APP_PORT` 只作为**宿主机映射端口**（`host:9900`），端口冲突时改它：
 
 ```bash
 APP_PORT=9901 make run-docker-dev
 ```
+
+`APP_TIME_ZONE` 仍由 Compose `environment:` 注入容器（`.env` 缺失时的运行时配置）。
 
 Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
 
@@ -80,7 +82,7 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `install/` 向导页 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
-镜像只含 Go 二进制；`.env` 非必需（`APP_PORT`/`APP_TIME_ZONE` 由 compose `environment:` 注入，代码内置兜底，`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
+镜像只含 Go 二进制；`.env` 非必需（`APP_TIME_ZONE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
 
 ```bash
 cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
@@ -119,13 +121,13 @@ tar czf config-and-runtime.tgz configs/config.yaml runtime/ public/storage/
 
 默认 token 存储是 MySQL 而非 Redis。只有应用 YAML 中 `token.default: redis` 时，才配置可达的外部 Redis 地址、端口、数据库和密码；Compose 不创建 Redis 服务。
 
-Compose healthcheck 请求容器内 `GET http://127.0.0.1:${APP_PORT:-9900}/healthz`（alpine 自带 busybox wget）。应用直接提供 HTTP，生产环境应在独立反向代理或负载均衡器处终止 TLS、配置域名和证书，再转发到 `APP_PORT` 映射的宿主端口；Compose 不提供 TLS。
+Compose healthcheck 请求容器内固定 `GET http://127.0.0.1:9900/healthz`（alpine 自带 busybox wget）。应用直接提供 HTTP，生产环境应在独立反向代理或负载均衡器处终止 TLS、配置域名和证书，再转发到 `APP_PORT` 映射的宿主端口；Compose 不提供 TLS。
 
 ## 常见问题
 
-- **端口冲突**：9900 被占用时设置 `APP_PORT=9901`（环境变量或 `.env`），端口映射与健康检查自动跟随。
+- **端口冲突**：9900 被占用时设置 `APP_PORT=9901`（环境变量或 `.env`），宿主机映射跟随；容器内仍固定监听 9900。
 - **容器连不上 MySQL**：容器内 `127.0.0.1` 不是宿主机。macOS 用 `host.docker.internal`，Linux 用宿主机网桥 IP；确认 MySQL 用户被授权从容器所在网络连接（`root` 容器需 `MYSQL_ROOT_HOST=%` 或等价授权），并检查 `mysql_test` 段不会指向生产库。
 - **容器启动进入安装向导而非提供服务**：`configs/config.yaml` 缺失。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节准备配置，或按"安装"一节在容器内完成安装。
 - **`setup` 报"系统已安装"**：`public/install.lock` 已存在（安装完成判定只认锁）。删除它后重试，并建议一并清除 `configs/config.yaml` 中的旧连接信息；安装器不会覆盖已存在的配置。
 - **前端产物缺失**：镜像不构建前端、也不包含 `public/` 内容。发布前执行 `make frontend`（或安装流程选择构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机/生产机，须随部署目录上生产。
-- **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env` 非必需（compose 注入 `APP_PORT`/`APP_TIME_ZONE`，代码兜底，`.env.example` 缺失时静默跳过）。
+- **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env` 非必需（compose 注入 `APP_TIME_ZONE`，容器内端口固定 9900，代码兜底，`.env.example` 缺失时静默跳过）。

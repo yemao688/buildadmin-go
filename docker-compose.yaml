@@ -4,17 +4,18 @@ services:
     pull_policy: always
     user: "1000:1000"
     environment:
-      APP_PORT: ${APP_PORT:-9900}
+      # 容器内端口固定 9900（镜像 EXPOSE 与代码兜底一致）；APP_PORT 只作为
+      # 宿主机映射端口（host:9900），不再注入容器。
       APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
     ports:
-      - "${APP_PORT:-9900}:${APP_PORT:-9900}"
+      - "${APP_PORT:-9900}:9900"
     volumes:
       - ./configs:/app/configs
       - ./runtime:/app/runtime
       - ./public:/app/public
     healthcheck:
       test:
-        ["CMD", "wget", "-qO-", "http://127.0.0.1:${APP_PORT:-9900}/healthz"]
+        ["CMD", "wget", "-qO-", "http://127.0.0.1:9900/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5
