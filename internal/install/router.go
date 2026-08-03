@@ -39,6 +39,7 @@ func (r *InstallRouter) Register(engine *gin.Engine) {
 	engine.POST("/api/install/baseConfig", r.deps.InstallHandler.BaseConfig)
 	engine.POST("/api/install/testDatabase", r.deps.InstallHandler.TestDatabase)
 	engine.POST("/api/install/commandExecComplete", r.deps.InstallHandler.CommandExecComplete)
+	engine.GET("/api/install/manualInstall", r.deps.InstallHandler.ManualInstall)
 	engine.POST("/api/install/manualInstall", r.deps.InstallHandler.ManualInstall)
 	engine.POST("/api/install/mvDist", r.deps.InstallHandler.MvDist)
 }

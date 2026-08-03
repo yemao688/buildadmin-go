@@ -39,6 +39,7 @@ func TestInstallRouterMountsInstallRoutes(t *testing.T) {
 		"POST /api/install/baseConfig",
 		"POST /api/install/testDatabase",
 		"POST /api/install/commandExecComplete",
+		"GET /api/install/manualInstall",
 		"POST /api/install/manualInstall",
 		"POST /api/install/mvDist",
 	}
