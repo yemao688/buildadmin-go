@@ -171,8 +171,8 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	require.NoError(t, db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error)
 
 	root := utils.RootPath()
-	repoDir := filepath.Join(root, "internal", "admin", "repository", "nested_delete_test")
-	handlerDir := filepath.Join(root, "internal", "admin", "handler", "nested_delete_test")
+	repoDir := filepath.Join(root, "internal", "admin", "repository", "ops")
+	handlerDir := filepath.Join(root, "internal", "admin", "handler", "ops")
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
 	require.NoError(t, os.MkdirAll(handlerDir, 0755))
 	t.Cleanup(func() { _ = os.RemoveAll(repoDir) })
@@ -180,8 +180,8 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 
 	repoProvider := filepath.Join(repoDir, "provider.go")
 	handlerProvider := filepath.Join(handlerDir, "provider.go")
-	require.NoError(t, os.WriteFile(repoProvider, []byte("package nested_delete_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewKeepRepository,\n\tNewE2eBannerRepository,\n)\n"), 0644))
-	require.NoError(t, os.WriteFile(handlerProvider, []byte("package nested_delete_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewKeepHandler,\n\tNewE2eBannerHandler,\n\tNewE2eBannerRegistrar,\n)\n"), 0644))
+	require.NoError(t, os.WriteFile(repoProvider, []byte("package ops\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewKeepRepository,\n\tNewE2eBannerRepository,\n)\n"), 0644))
+	require.NoError(t, os.WriteFile(handlerProvider, []byte("package ops\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewKeepHandler,\n\tNewE2eBannerHandler,\n\tNewE2eBannerRegistrar,\n)\n"), 0644))
 	generated := []string{
 		filepath.Join(root, "internal", "model", "e2e_banner.go"),
 		filepath.Join(repoDir, "e2e_banner.go"),
@@ -200,7 +200,7 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	table := crudmodel.Table{
 		Name:           "ops_e2e_banner",
 		ModelFile:      "internal/model/e2e_banner.go",
-		ControllerFile: filepath.ToSlash(filepath.Join("internal", "admin", "handler", "nested_delete_test", "e2e_banner.go")),
+		ControllerFile: filepath.ToSlash(filepath.Join("internal", "admin", "handler", "ops", "e2e_banner.go")),
 		WebViewsDir:    "web/src/views/backend/ops/e2eBanner",
 		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: generated,
@@ -218,8 +218,8 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 func requireNestedDeleteClean(t *testing.T) {
 	t.Helper()
 	root := utils.RootPath()
-	repoProvider := filepath.Join(root, "internal", "admin", "repository", "nested_delete_test", "provider.go")
-	handlerProvider := filepath.Join(root, "internal", "admin", "handler", "nested_delete_test", "provider.go")
+	repoProvider := filepath.Join(root, "internal", "admin", "repository", "ops", "provider.go")
+	handlerProvider := filepath.Join(root, "internal", "admin", "handler", "ops", "provider.go")
 	repo, err := os.ReadFile(repoProvider)
 	require.NoError(t, err)
 	require.NotContains(t, string(repo), "NewE2eBannerRepository")
@@ -231,9 +231,9 @@ func requireNestedDeleteClean(t *testing.T) {
 
 	for _, path := range []string{
 		filepath.Join(root, "internal", "model", "e2e_banner.go"),
-		filepath.Join(root, "internal", "admin", "repository", "nested_delete_test", "e2e_banner.go"),
-		filepath.Join(root, "internal", "admin", "handler", "nested_delete_test", "e2e_banner.go"),
-		filepath.Join(root, "internal", "admin", "handler", "nested_delete_test", "e2e_banner_route.go"),
+		filepath.Join(root, "internal", "admin", "repository", "ops", "e2e_banner.go"),
+		filepath.Join(root, "internal", "admin", "handler", "ops", "e2e_banner.go"),
+		filepath.Join(root, "internal", "admin", "handler", "ops", "e2e_banner_route.go"),
 	} {
 		_, err := os.Stat(path)
 		require.True(t, os.IsNotExist(err), "generated file %s still exists", path)

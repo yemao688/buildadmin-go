@@ -8,6 +8,7 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/utils"
 	"context"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -15,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -151,6 +153,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	createdMenuIDs := []int32{}
+	var menuSnapshot []crudmodel.AdminRule
 	fail = func(stage string, cause error) (*GenerateResult, error) {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
@@ -159,6 +162,12 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			cleanupAllowed = true
 		}
 		_ = recordCrudError(db, cfg, logID, message)
+		// F4：生成会 update 既有菜单行，失败时恢复快照原值；新增行单独删除。
+		if len(menuSnapshot) > 0 {
+			if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
+				message += fmt.Sprintf("; menu restore failed: %v", restoreErr)
+			}
+		}
 		if len(createdMenuIDs) > 0 {
 			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&crudmodel.AdminRule{}).Error
 		}
@@ -212,6 +221,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return fail("file generation", err)
 	}
 	if !opts.SkipMenu {
+		// F4：菜单同步会 update 既有行，先快照（含祖先链）供失败回滚。
+		menuSnapshot, err = snapshotMenuRules(db, cfg, GetMenuName(webViewsDir))
+		if err != nil {
+			return fail("menu snapshot", err)
+		}
 		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(adminauth.NewAdminRuleRepository(db, cfg), webViewsDir, tableComment, opts.Menu)
 		if err != nil {
 			return fail("menu generation", err)
@@ -348,6 +362,12 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	//   legacy —— 更早的单模型布局（internal/admin/model、internal/common/model）
 	manifest, err = historicalDeleteManifest(manifest, crudmodel.Table(log.Table))
 	if err != nil {
+		return err
+	}
+	// F2：manifest 路径必须归属本模块（或关联 remoteTable 模块），
+	// 仅通过根校验不够——构造的 manifest 可指向允许根下任意文件。
+	joinTables := remoteJoinTables([]crudmodel.Field(log.Fields))
+	if err := validateManifestOwnership(manifest, crudmodel.Table(log.Table), joinTables); err != nil {
 		return err
 	}
 	// 布局判定必须基于历史 manifest（持久化路径），而非重新推导的拍平路径。
@@ -675,22 +695,257 @@ func validateSharedManifestPath(path string) error {
 	)
 }
 
-func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]crudmodel.AdminRule, error) {
-	var rows []crudmodel.AdminRule
-	err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
-	return rows, err
+// snapshotMenuRules 收集目标菜单及其后代的全部行，并沿 Pid 上溯补齐祖先链。
+// 删除流程会递归删除空 menu_dir 父级，回滚必须能重建完整父链（Pid 才能
+// 重新指向存在的行）；生成流程会 update 既有行，快照同时用于回滚原值。
+// manifestGoRoots 是所有历史布局允许的 Go 产物根（flat/nested/legacy 全含）。
+var manifestGoRoots = []string{
+	"internal/model", "internal/admin/repository", "internal/admin/dto",
+	"internal/admin/handler", "internal/admin/router",
+	"internal/admin/model", "internal/common/model",
 }
 
-func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []crudmodel.AdminRule) error {
-	for _, row := range rows {
-		var count int64
-		if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("id=?", row.ID).Count(&count).Error; err != nil {
-			return err
+// validateManifestOwnership 校验 manifest 每条路径都归属本模块（或关联
+// remoteTable 模块）：仅通过根目录校验不够——构造的 manifest 可以指向允许
+// 根下的任意文件。文件名必须与表名/拆分实体名匹配，目录必须是允许根或
+// 表名/generateRelativePath 推导的历史子目录；Shared 的 provider.go 只校验
+// 目录归属，全局锚点（registrar_set.go/wire.go/wire_gen.go）放行。
+func validateManifestOwnership(manifest FileManifest, table crudmodel.Table, joinTables []string) error {
+	for _, path := range manifest.Generated {
+		if !manifestPathBelongsToModule(path, table, joinTables) {
+			return fmt.Errorf("manifest ownership: generated path %q does not belong to module %q", path, table.Name)
 		}
-		if count == 0 {
-			if err := db.Table(cfg.Database.Prefix + "admin_rule").Create(&row).Error; err != nil {
+	}
+	for _, path := range manifest.Shared {
+		if filepath.Base(path) == "provider.go" && !manifestProviderDirBelongs(path, table, joinTables) {
+			return fmt.Errorf("manifest ownership: shared provider %q does not belong to module %q", path, table.Name)
+		}
+	}
+	return nil
+}
+
+// manifestPathBelongsToModule 判定单条 generated 路径是否属于本模块。
+func manifestPathBelongsToModule(abs string, table crudmodel.Table, joinTables []string) bool {
+	rel, err := filepath.Rel(utils.RootPath(), abs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	// web 产物：路径含表名/实体名（snake 或 camel）即放行（历史视图目录可自定义）。
+	for _, webRoot := range []string{"web/src/lang", "web/src/views"} {
+		if strings.HasPrefix(rel, webRoot+"/") {
+			return webManifestPathBelongs(rel, table.Name)
+		}
+	}
+	var goRoot string
+	found := false
+	for _, root := range manifestGoRoots {
+		if rel == root || strings.HasPrefix(rel, root+"/") {
+			goRoot = root
+			found = true
+			break
+		}
+	}
+	if !found {
+		return false
+	}
+	base := filepath.Base(rel)
+	stem := strings.TrimSuffix(base, filepath.Ext(base))
+	for _, suffix := range []string{"_custom", "_route"} {
+		stem = strings.TrimSuffix(stem, suffix)
+	}
+	names := []string{table.Name}
+	names = append(names, moduleEntityNames(table.Name)...)
+	for _, join := range joinTables {
+		names = append(names, join)
+		names = append(names, moduleEntityNames(join)...)
+	}
+	nameOK := false
+	for _, name := range names {
+		if stem == name || stem == utils.SnakeToCamel(name, true) {
+			nameOK = true
+			break
+		}
+	}
+	if !nameOK {
+		return false
+	}
+	rest := strings.TrimPrefix(rel, goRoot+"/")
+	if rest == base {
+		return true // 文件直接在根下（flat）
+	}
+	dirPart := filepath.ToSlash(filepath.Dir(rest))
+	dirs := append(allowedModuleSubdirs(table), allowedModuleSubdirsForName(table.Name)...)
+	for _, join := range joinTables {
+		dirs = append(dirs, allowedModuleSubdirsForName(join)...)
+	}
+	for _, dir := range dirs {
+		if dirPart == dir || strings.HasPrefix(dirPart, dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// webManifestPathBelongs 视图/语言路径含表名或实体名即放行。
+func webManifestPathBelongs(rel, tableName string) bool {
+	if strings.Contains(rel, tableName) {
+		return true
+	}
+	for _, entity := range moduleEntityNames(tableName) {
+		if strings.Contains(rel, entity) || strings.Contains(rel, utils.SnakeToCamel(entity, false)) {
+			return true
+		}
+	}
+	return false
+}
+
+// moduleEntityNames 返回表名推导的拆分实体名（snake 形态；ops_e2e_banner → e2e_banner）。
+func moduleEntityNames(tableName string) []string {
+	normalized, err := normalizeLogicalPath(tableName)
+	if err != nil {
+		return nil
+	}
+	_, entity := splitLogicalNameParts(strings.Split(normalized, "/"))
+	if entity == "" || entity == tableName {
+		return nil
+	}
+	return []string{entity}
+}
+
+// allowedModuleSubdirsForName 由表名推导历史布局的子目录段（首段分割）。
+func allowedModuleSubdirsForName(tableName string) []string {
+	normalized, err := normalizeLogicalPath(tableName)
+	if err != nil {
+		return nil
+	}
+	parts := strings.Split(normalized, "/")
+	dirs, entity := splitLogicalNameParts(parts)
+	if entity == "" || len(dirs) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(dirs))
+	for i := 1; i <= len(dirs); i++ {
+		result = append(result, strings.Join(dirs[:i], "/"))
+	}
+	return result
+}
+
+// allowedModuleSubdirs 由 generateRelativePath 推导历史子目录段。
+func allowedModuleSubdirs(table crudmodel.Table) []string {
+	normalized, err := normalizeLogicalPath(table.GenerateRelativePath)
+	if err != nil {
+		return nil
+	}
+	parts := strings.Split(normalized, "/")
+	if len(parts) <= 1 {
+		return nil
+	}
+	result := make([]string, 0, len(parts)-1)
+	for i := 1; i < len(parts); i++ {
+		result = append(result, strings.Join(parts[:i], "/"))
+	}
+	return result
+}
+
+// manifestProviderDirBelongs 校验 provider.go 的目录归属：允许根本身（flat
+// 合并 ProviderSet）或"允许根 + 表名/generateRelativePath 推导的历史子目录"。
+func manifestProviderDirBelongs(abs string, table crudmodel.Table, joinTables []string) bool {
+	rel, err := filepath.Rel(utils.RootPath(), abs)
+	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	dir := filepath.ToSlash(filepath.Dir(rel))
+	dirs := append(allowedModuleSubdirs(table), allowedModuleSubdirsForName(table.Name)...)
+	for _, join := range joinTables {
+		dirs = append(dirs, allowedModuleSubdirsForName(join)...)
+	}
+	for _, root := range manifestGoRoots {
+		if dir == root {
+			return true
+		}
+		if !strings.HasPrefix(dir, root+"/") {
+			continue
+		}
+		rest := strings.TrimPrefix(dir, root+"/")
+		for _, d := range dirs {
+			if rest == d {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// remoteJoinTables 收集 fields 中 remoteSelect 关联的表名（Shared 里可能
+// 有这些模块的 provider.go）。
+func remoteJoinTables(fields []crudmodel.Field) []string {
+	var tables []string
+	for _, field := range fields {
+		if field.Form.RemoteTable != "" && !slices.Contains(tables, field.Form.RemoteTable) {
+			tables = append(tables, field.Form.RemoteTable)
+		}
+	}
+	return tables
+}
+
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]crudmodel.AdminRule, error) {
+	table := cfg.Database.Prefix + "admin_rule"
+	var rows []crudmodel.AdminRule
+	err := db.Table(table).Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	// 祖先链：沿 Pid 上溯，直到根或已收集的行。
+	seen := map[int32]bool{}
+	for _, row := range rows {
+		seen[row.ID] = true
+	}
+	for _, row := range rows {
+		pid := row.Pid
+		for pid != 0 && !seen[pid] {
+			var parent crudmodel.AdminRule
+			if err := db.Table(table).Where("id=?", pid).First(&parent).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					break
+				}
+				return nil, err
+			}
+			seen[pid] = true
+			rows = append(rows, parent)
+			pid = parent.Pid
+		}
+	}
+	return rows, nil
+}
+
+// restoreMenuRules 把菜单快照恢复回原状：不存在的行重建（按 ID 升序，父先于子），
+// 存在但被更新过的行恢复快照值。生成与删除两条失败路径共用。
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []crudmodel.AdminRule) error {
+	table := cfg.Database.Prefix + "admin_rule"
+	sorted := slices.Clone(rows)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	for _, row := range sorted {
+		var existing crudmodel.AdminRule
+		err := db.Table(table).Where("id=?", row.ID).First(&existing).Error
+		switch {
+		case err == nil:
+			updates := map[string]any{
+				"pid": row.Pid, "type": row.Type, "title": row.Title, "name": row.Name,
+				"path": row.Path, "icon": row.Icon, "menu_type": row.MenuType, "url": row.URL,
+				"component": row.Component, "keepalive": row.Keepalive, "extend": row.Extend,
+				"remark": row.Remark, "weigh": row.Weigh, "status": row.Status,
+			}
+			if err := db.Table(table).Where("id=?", row.ID).Updates(updates).Error; err != nil {
 				return err
 			}
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := db.Table(table).Create(&row).Error; err != nil {
+				return err
+			}
+		default:
+			return err
 		}
 	}
 	return nil

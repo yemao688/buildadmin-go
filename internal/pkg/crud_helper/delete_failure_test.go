@@ -129,9 +129,9 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 
 	tableName := "delete_fault"
 	menuName := "delete/fault"
-	dirName := "crud-helper-delete-" + strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
-	modelDir := filepath.Join(utils.RootPath(), "internal", "admin", "model", dirName)
-	handlerDir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", dirName)
+	// 目录与文件名用表名推导的历史形态（delete_fault → 目录 delete、实体 fault）
+	modelDir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "delete")
+	handlerDir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "delete")
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -145,11 +145,11 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 
 	modelProvider := filepath.Join(modelDir, "provider.go")
 	handlerProvider := filepath.Join(handlerDir, "provider.go")
-	generated := filepath.Join(modelDir, "deleteFault.go")
-	if err := os.WriteFile(modelProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultModel,\n)\n"), 0644); err != nil {
+	generated := filepath.Join(modelDir, "fault.go")
+	if err := os.WriteFile(modelProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultModel,\n)\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(handlerProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultHandler,\n\tNewDeleteFaultRegistrar,\n)\n"), 0644); err != nil {
+	if err := os.WriteFile(handlerProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(generated, []byte("package fixture\n"), 0644); err != nil {
@@ -157,8 +157,8 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	}
 
 	shared := map[string][]byte{
-		modelProvider:   []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultModel,\n)\n"),
-		handlerProvider: []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewDeleteFaultHandler,\n\tNewDeleteFaultRegistrar,\n)\n"),
+		modelProvider:   []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultModel,\n)\n"),
+		handlerProvider: []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"),
 	}
 
 	menu := crudmodel.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
@@ -168,8 +168,8 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true}}
 	table := crudmodel.Table{
 		Name:           tableName,
-		ModelFile:      filepath.ToSlash(filepath.Join("internal", "admin", "model", dirName, "deleteFault.go")),
-		ControllerFile: filepath.ToSlash(filepath.Join("internal", "admin", "handler", dirName, "deleteFault.go")),
+		ModelFile:      filepath.ToSlash(filepath.Join("internal", "admin", "model", "delete", "fault.go")),
+		ControllerFile: filepath.ToSlash(filepath.Join("internal", "admin", "handler", "delete", "fault.go")),
 		WebViewsDir:    "web/src/views/backend/delete/fault",
 		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: []string{generated},
