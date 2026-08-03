@@ -108,19 +108,6 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
-	entityFile, err := ParseEntityNameData(opts.Table.Name, opts.Table.ModelFile)
-	if err != nil {
-		return nil, err
-	}
-	repositoryFile, err := ParseRepositoryNameData(opts.Table.Name, opts.Table.ModelFile)
-	if err != nil {
-		return nil, err
-	}
-	handlerFile, err := ParseHandlerNameData(opts.Table.Name, opts.Table.ControllerFile)
-	if err != nil {
-		return nil, err
-	}
-	manifest = appendCustomSkeletonManifest(manifest, customSkeletonTargets(entityFile, repositoryFile, handlerFile))
 	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
 	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
@@ -373,19 +360,15 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	entityFile, err := ParseEntityNameData(log.Table.Name, log.Table.ModelFile)
-	if err != nil {
-		return err
-	}
 	// 历史布局的 provider 目录/类名以 manifest 为准（重新解析会得到拍平路径）。
 	var legacyModelFile, nestedHandlerFile, nestedRepositoryFile NameInfo
 	className := handlerFile.LastName
 	switch layout {
 	case deleteLayoutFlat:
-		manifest = appendCustomSkeletonManifest(manifest, customSkeletonTargets(entityFile, repositoryFile, handlerFile))
+		// manifest 已由 BuildFileManifestForFields 覆盖全部生成文件。
 	case deleteLayoutNested:
-		// 拆分布局的 _custom.go 骨架路径已由旧生成器写入持久化 manifest，
-		// 无需再次追加；类名与 provider 目录从 manifest 推导。
+		// 类名与 provider 目录从历史 manifest 推导；_custom.go 等历史骨架
+		// 路径被跳过，不作为模块主文件。
 		className, nestedHandlerFile, nestedRepositoryFile = deriveNestedArtifacts(manifest)
 	case deleteLayoutLegacy:
 		module := "admin"
@@ -402,16 +385,12 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		}
 		className = legacyHandler.LastName
 		handlerFile = legacyHandler
-		manifest = appendCustomSkeletonManifest(manifest, legacyCustomSkeletonTargets(legacyModelFile, handlerFile))
 	}
 	manifest, err = prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
 	}
-	generatedPaths, preservedCustomPaths, err := splitCustomSkeletonManifest(manifest.Generated)
-	if err != nil {
-		return err
-	}
+	generatedPaths := manifest.Generated
 	quarantine, err := NewQuarantine(generatedPaths)
 	if err != nil {
 		return err
@@ -568,9 +547,6 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := updateCrudStatus(db, cfg, log.ID, "delete"); err != nil {
 		_ = recordCrudError(db, cfg, log.ID, "stage=delete log update: "+err.Error())
 		return err
-	}
-	if warning := customSkeletonWarning(preservedCustomPaths); warning != "" {
-		fmt.Println(warning)
 	}
 	return nil
 }
@@ -939,8 +915,8 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
-	current := normalizedPathSetWithoutCustom(append(append([]string{}, manifest.Generated...), manifest.Shared...))
-	previous := normalizedPathSetWithoutCustom(log.Table.GeneratedFiles)
+	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
+	previous := normalizedPathSet(log.Table.GeneratedFiles)
 	if len(current) != len(previous) {
 		return false
 	}
@@ -950,82 +926,6 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 		}
 	}
 	return true
-}
-
-func appendCustomSkeletonManifest(manifest FileManifest, targets []customSkeletonTarget) FileManifest {
-	for _, target := range targets {
-		if !containsPath(manifest.Generated, target.path) {
-			manifest.Generated = append(manifest.Generated, target.path)
-		}
-	}
-	return manifest
-}
-
-func splitCustomSkeletonManifest(paths []string) ([]string, []string, error) {
-	byPath := make(map[string]customSkeletonTarget)
-	for _, path := range paths {
-		if !strings.HasSuffix(filepath.Base(path), "_custom.go") {
-			continue
-		}
-		clean := filepath.Clean(path)
-		if _, ok := byPath[clean]; ok {
-			continue
-		}
-		byPath[clean] = customSkeletonTarget{path: clean, content: customSkeletonContentFromPath(clean)}
-	}
-
-	generated := make([]string, 0, len(paths))
-	preserved := []string{}
-	for _, path := range paths {
-		target, ok := byPath[path]
-		if !ok {
-			generated = append(generated, path)
-			continue
-		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read CRUD custom skeleton %q: %w", path, err)
-		}
-		if string(content) == target.content {
-			generated = append(generated, path)
-		} else {
-			preserved = append(preserved, path)
-		}
-	}
-	return generated, preserved, nil
-}
-
-// customSkeletonContentFromPath 由 _custom.go 路径反推其未修改时的期望内容
-// （包名 = 所在目录名，类名 = 文件名，handler 目录使用 h 接收者）。
-func customSkeletonContentFromPath(path string) string {
-	clean := filepath.Clean(path)
-	base := filepath.Base(clean)
-	className := utils.SnakeToCamel(strings.TrimSuffix(base, "_custom.go"), true)
-	dir := filepath.Dir(clean)
-	kind := "model"
-	if strings.Contains(dir, filepath.Join("internal", "admin", "handler")) {
-		kind = "handler"
-	}
-	return customSkeletonContent(filepath.Base(dir), className, kind)
-}
-
-func customSkeletonWarning(paths []string) string {
-	if len(paths) == 0 {
-		return ""
-	}
-	displayed := make([]string, 0, len(paths))
-	for _, path := range paths {
-		displayed = append(displayed, customSkeletonDisplayPath(path))
-	}
-	return "WARNING: preserved customized CRUD custom skeletons: " + strings.Join(displayed, ", ")
-}
-
-func customSkeletonDisplayPath(path string) string {
-	relative, err := filepath.Rel(utils.RootPath(), path)
-	if err != nil || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || relative == ".." {
-		return filepath.ToSlash(path)
-	}
-	return filepath.ToSlash(relative)
 }
 
 // canonicalManifestLangPath migrates only the legacy backend language layout.
@@ -1070,48 +970,11 @@ func canonicalManifestLangPath(path string) string {
 func manifestConflicts(manifest FileManifest) []string {
 	conflicts := []string{}
 	for _, path := range manifest.Generated {
-		if isCustomSkeletonPath(path) {
-			continue
-		}
 		if fileExists(path) {
 			conflicts = append(conflicts, filepath.Clean(path))
 		}
 	}
 	return conflicts
-}
-
-func normalizedPathSetWithoutCustom(paths []string) map[string]bool {
-	filtered := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if !isCustomSkeletonPath(path) {
-			filtered = append(filtered, path)
-		}
-	}
-	return normalizedPathSet(filtered)
-}
-
-func isCustomSkeletonPath(path string) bool {
-	clean := filepath.Clean(filepath.FromSlash(path))
-	if !strings.HasSuffix(filepath.Base(clean), "_custom.go") {
-		return false
-	}
-	root := filepath.Clean(utils.RootPath())
-	if !filepath.IsAbs(clean) {
-		clean = filepath.Join(root, clean)
-	}
-	for _, parent := range []string{
-		filepath.Join(root, "internal", "model"),
-		filepath.Join(root, "internal", "admin", "repository"),
-		filepath.Join(root, "internal", "admin", "handler"),
-		// 历史布局根仅保留用于旧 manifest 删除侧的识别。
-		filepath.Join(root, "internal", "admin", "model"),
-		filepath.Join(root, "internal", "common", "model"),
-	} {
-		if clean == parent || strings.HasPrefix(clean, parent+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
 }
 
 func normalizedPathSet(paths []string) map[string]bool {

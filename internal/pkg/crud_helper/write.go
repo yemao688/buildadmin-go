@@ -24,9 +24,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// writeModelFiles 写入共享贫血实体（internal/model）、admin 仓库
-// （internal/admin/repository，XxxRepository）与 _custom.go 骨架；DTO 由
-// writeHandlerFile 另行落盘。返回实体 struct 内容供 DTO/测试复用。
+// writeModelFiles 写入共享贫血实体（internal/model）与 admin 仓库
+// （internal/admin/repository，XxxRepository）；DTO 由 writeHandlerFile
+// 另行落盘。返回实体 struct 内容供 DTO/测试复用。
 func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
@@ -48,9 +48,6 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 	if err := writeGoFile(entityFile.ParseFile, entityContent); err != nil {
 		return "", err
 	}
-	if err := writeCustomSkeleton(entityFile, "model"); err != nil {
-		return "", err
-	}
 
 	// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
 	repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
@@ -58,9 +55,6 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		return "", err
 	}
 	if err := writeGoFile(repositoryFile.ParseFile, repositoryContent); err != nil {
-		return "", err
-	}
-	if err := writeCustomSkeleton(repositoryFile, "model"); err != nil {
 		return "", err
 	}
 
@@ -222,9 +216,6 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	}
 	//写入文件
 	if err := writeGoFile(handlerFile.ParseFile, handlerContent); err != nil {
-		return err
-	}
-	if err := writeCustomSkeleton(handlerFile, "handler"); err != nil {
 		return err
 	}
 	// 扁平 handler 包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
@@ -421,60 +412,6 @@ func writeRegistrarFile(handlerData HandlerData, registrarFile NameInfo) error {
 		return err
 	}
 	return writeGoFile(registrarPath, content)
-}
-
-type customSkeletonTarget struct {
-	path    string
-	content string
-}
-
-func customSkeletonPath(file NameInfo) string {
-	return strings.TrimSuffix(file.ParseFile, filepath.Ext(file.ParseFile)) + "_custom.go"
-}
-
-// customSkeletonTargets 返回新布局下 _custom.go 骨架目标：实体（internal/model）、
-// 仓库（internal/admin/repository）与 handler（internal/admin/handler）。
-func customSkeletonTargets(entityFile, repositoryFile, handlerFile NameInfo) []customSkeletonTarget {
-	return []customSkeletonTarget{
-		{path: customSkeletonPath(entityFile), content: customSkeletonContent(entityFile.Namespace, entityFile.LastName, "model")},
-		{path: customSkeletonPath(repositoryFile), content: customSkeletonContent(repositoryFile.Namespace, repositoryFile.LastName, "model")},
-		{path: customSkeletonPath(handlerFile), content: customSkeletonContent(handlerFile.Namespace, handlerFile.LastName, "handler")},
-	}
-}
-
-// legacyCustomSkeletonTargets 复刻旧布局的单模型文件骨架目标，供历史 manifest
-// 删除兼容使用。
-func legacyCustomSkeletonTargets(modelFile, handlerFile NameInfo) []customSkeletonTarget {
-	return []customSkeletonTarget{
-		{path: customSkeletonPath(modelFile), content: customSkeletonContent(modelFile.Namespace, modelFile.LastName, "model")},
-		{path: customSkeletonPath(handlerFile), content: customSkeletonContent(handlerFile.Namespace, handlerFile.LastName, "handler")},
-	}
-}
-
-func customSkeletonContent(namespace, className, kind string) string {
-	receiver := "m"
-	if kind == "handler" {
-		receiver = "h"
-	}
-	return fmt.Sprintf(`package %s
-
-// This file is generated only once for business customization.
-// CRUD regeneration never overwrites this file.
-// Add custom methods and hooks here.
-//
-// Example:
-//
-// func (%s *%s) CustomHook() {
-// }
-`, namespace, receiver, className)
-}
-
-func writeCustomSkeleton(file NameInfo, kind string) error {
-	path := customSkeletonPath(file)
-	if fileExists(path) {
-		return nil
-	}
-	return writeGoFile(path, customSkeletonContent(file.Namespace, file.LastName, kind))
 }
 
 func lowerFirst(value string) string {
