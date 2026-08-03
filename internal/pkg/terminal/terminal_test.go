@@ -89,6 +89,27 @@ func TestGetCommandUnknownKey(t *testing.T) {
 	}
 }
 
+func TestGetCommandAppPlaceholder(t *testing.T) {
+	term := newTestTerminal()
+	term.config.Terminal.Commands["migrate"] = map[string]conf.Command{
+		"run": {Cwd: "", Command: "{app} --conf configs/config.yaml migrate run"},
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd, ok := term.GetCommand("migrate.run", "")
+	if !ok {
+		t.Fatal("migrate.run should resolve")
+	}
+	want := exe + " --conf configs/config.yaml migrate run"
+	if cmd.Command != want {
+		t.Fatalf("got %q, want %q", cmd.Command, want)
+	}
+}
+
 type authStub struct {
 	loggedIn        bool
 	superAdmin      bool

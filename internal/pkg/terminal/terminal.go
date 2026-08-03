@@ -60,6 +60,9 @@ func NewTerminal(config *conf.Configuration, log *zap.Logger, authM AuthModel) *
 // 获取命令 key必须有符号.
 // extend 为命令占位符参数:命令中含 % 时,按上游 BuildAdmin 语义将 extend
 // 以 ~~ 分隔、逐项 shell 转义后 sprintf 进命令(如 npx.prettier 的 %s)。
+// 命令中的 {app} 占位符替换为当前运行的可执行文件路径:开发环境是
+// go run/air 刚编译的 server 二进制,容器内是 /app/app——migrate 等自调用
+// 命令因此不依赖源码检出与 Go 工具链,容器内安装向导可直接执行。
 func (t *Terminal) GetCommand(key string, extend string) (conf.Command, bool) {
 	command := conf.Command{}
 	if key == "" {
@@ -89,8 +92,24 @@ func (t *Terminal) GetCommand(key string, extend string) (conf.Command, bool) {
 		command.Command = fmt.Sprintf(command.Command, quoted...)
 	}
 
+	if strings.Contains(command.Command, "{app}") {
+		command.Command = strings.ReplaceAll(command.Command, "{app}", executablePath())
+	}
+
 	command.Cwd = filepath.Join(util.RootPath(), command.Cwd)
 	return command, true
+}
+
+// executablePath returns the currently running binary path. In dev this is the
+// freshly built server binary (go run/air), in the container /app/app; both
+// support the same subcommands, so self-invoking terminal commands (migrate)
+// work without a source checkout or a Go toolchain.
+func executablePath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return "app"
+	}
+	return exe
 }
 
 // shellQuote 等价于 PHP escapeshellarg 的 POSIX 实现
