@@ -57,8 +57,6 @@ const InstallationCompletionMark = installer.InstallationCompletionMark
 
 const installCompleteMessage = "The system has completed installation. If you need to reinstall, please delete public/install.lock first"
 
-const frontendBuildArtifactMissingMessage = "前端构建产物缺失，请先完成前端构建（web-install 命令与 mvDist 步骤）"
-
 type InstallHandler struct {
 	log      *zap.Logger
 	config   *conf.Configuration
@@ -439,13 +437,6 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		return
 	}
 
-	artifactPath := filepath.Join(util.RootPath(), "public", "index.html")
-	artifact, err := os.Stat(artifactPath)
-	if err != nil || artifact.IsDir() {
-		FailByErr(ctx, cErr.BadRequest(frontendBuildArtifactMissingMessage))
-		return
-	}
-
 	type Params struct {
 		Type          string `json:"type" binding:"required"`
 		Adminname     string `json:"adminname"`
@@ -478,6 +469,9 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 	}
 
+	// 安装完成判定只与后端状态（数据库迁移/管理员配置）相关：前端产物
+	// （public/index.html）由部署形态另行提供（compose 挂载、make frontend），
+	// 缺失不应阻止写锁——迁移成功即视为安装成功。
 	if err := installer.WriteCompletionLock(util.RootPath()); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return

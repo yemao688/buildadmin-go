@@ -40,11 +40,13 @@ func TestScheduleProcessExitUsesZeroExitCode(t *testing.T) {
 	}
 }
 
-func TestCommandExecCompleteRejectsMissingFrontendArtifact(t *testing.T) {
+func TestCommandExecCompleteWritesLockWithoutFrontendArtifact(t *testing.T) {
+	// 安装完成判定只与后端状态相关：前端产物缺失不应阻止写 install.lock。
+	// 放在文件末尾：成功完成会 scheduleProcessExit(1s, os.Exit)，须让本包
+	// 其余测试先跑完。
 	hideInstallPath(t, filepath.Join(util.RootPath(), "public", "index.html"))
-	hideInstallPath(t, filepath.Join(util.RootPath(), "public", LockFileName))
-	// 配置驱动补全后，"未安装"场景还需藏起仓库根的真实覆盖层配置
-	hideInstallPath(t, filepath.Join(util.RootPath(), ConfigFileName))
+	lockPath := filepath.Join(util.RootPath(), "public", LockFileName)
+	hideInstallPath(t, lockPath)
 
 	handler := NewInstallHandler(zap.NewNop(), nil, nil)
 	recorder := commandExecCompleteRequest(t, handler, `{"type":"web"}`)
@@ -52,10 +54,10 @@ func TestCommandExecCompleteRejectsMissingFrontendArtifact(t *testing.T) {
 	var response Response
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, http.StatusBadRequest, response.Code)
-	require.Equal(t, frontendBuildArtifactMissingMessage, response.Msg)
-	_, err := os.Stat(filepath.Join(util.RootPath(), "public", LockFileName))
-	require.ErrorIs(t, err, os.ErrNotExist)
+	require.Equal(t, 1, response.Code)
+	content, err := os.ReadFile(lockPath)
+	require.NoError(t, err)
+	require.Equal(t, []byte(InstallationCompletionMark), content)
 }
 
 func TestCommandExecCompleteIsIdempotentAfterCompletion(t *testing.T) {
