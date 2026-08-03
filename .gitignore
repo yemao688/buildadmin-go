@@ -69,3 +69,4 @@ todo.txt
 
 # tsc/vue-tsc 误发射的编译副产物（web 前端为纯 TS 源码，不受版本控制的 .js）
 /web/**/*.js
+.buildadmin-crud-*
