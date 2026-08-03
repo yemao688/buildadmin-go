@@ -1,6 +1,6 @@
 # 业务迁移
 
-本目录（`internal/database/migrations/business`）中以 Go 文件添加业务迁移，并在 `init` 中注册：
+本目录（`internal/migrations/business`）中以 Go 文件添加业务迁移，并在 `init` 中注册：
 
 ```go
 package business
@@ -35,11 +35,11 @@ func init() {
 }
 ```
 
-`Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/database/migrations/internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
+`Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/migrations/internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
 ## `admin_rule` seed helper
 
-业务迁移使用 `SeedAdminRule` 写入自己拥有的菜单或权限规则，不要复制 framework 轨的裸 SQL。`AdminRuleSeed` 的字段对应当前 `admin_rule` 模型的 seed 列；`ID`、`update_time` 和 `create_time` 由数据库处理。helper 使用 `name` 作为业务键：该名称已存在时保留原行，不新增或覆盖；因此重复执行 `Up` 不会产生重复规则。表名经过配置前缀和 `internal/database/migrations/internal/core.QuoteIdentifier` 构造，前缀不固定为 `ba_`。
+业务迁移使用 `SeedAdminRule` 写入自己拥有的菜单或权限规则，不要复制 framework 轨的裸 SQL。`AdminRuleSeed` 的字段对应当前 `admin_rule` 模型的 seed 列；`ID`、`update_time` 和 `create_time` 由数据库处理。helper 使用 `name` 作为业务键：该名称已存在时保留原行，不新增或覆盖；因此重复执行 `Up` 不会产生重复规则。表名经过配置前缀和 `internal/migrations/internal/core.QuoteIdentifier` 构造，前缀不固定为 `ba_`。
 
 `Children` 是树遍历元数据，不是数据库列。helper 会先确保父规则，再递归确保子规则，并将每个子规则的 `pid` 设置为实际父级 ID。它不会自动创建不存在的非树关联，也不会修改已有规则的父子关系或其它字段。
 

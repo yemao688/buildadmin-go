@@ -3,7 +3,7 @@ package commands
 import (
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations"
+	"buildadmin-go/internal/migrations"
 	"buildadmin-go/internal/pkg/installer"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"

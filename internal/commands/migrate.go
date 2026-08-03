@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations"
+	"buildadmin-go/internal/migrations"
 	"buildadmin-go/internal/infra/db"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/migrations/internal/core"
 	"gorm.io/gorm"
 )
 

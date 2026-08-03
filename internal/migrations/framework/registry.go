@@ -1,6 +1,6 @@
 package framework
 
-import "buildadmin-go/internal/database/migrations/internal/core"
+import "buildadmin-go/internal/migrations/internal/core"
 
 func officialKeysThrough(official []core.OfficialMigration, version int64) []core.OfficialKey {
 	keys := make([]core.OfficialKey, 0, len(official))

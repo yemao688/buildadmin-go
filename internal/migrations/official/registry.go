@@ -1,7 +1,7 @@
 package official
 
 import (
-	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/migrations/internal/core"
 )
 
 var migrations = []core.OfficialMigration{

@@ -8,7 +8,7 @@ import (
 
 	"buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"

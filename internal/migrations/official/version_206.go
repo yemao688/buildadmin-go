@@ -6,7 +6,7 @@ import (
 
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"

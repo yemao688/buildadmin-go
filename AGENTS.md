@@ -30,7 +30,7 @@
 
 - 本框架把 PHP BuildAdmin 的生态、接口兼容性和业务语义迁移到 Go，不是逐行翻译 PHP：后端使用 Go（Gin/GORM/Wire），前端基于 BuildAdmin v2.3.8。与 PHP 上游的同步原则仅框架维护者需要，见 `docs/framework-maintenance.md`。
 - 状态语义按字段区分：`admin.status` 和 `user.status` 的规范值是 `enable/disable`；权限、分组、安全规则和字典等其它状态字段仍按既有协议使用 `0/1`。
-- 账户状态迁移由 `internal/database/migrations/framework/0001_final_seed_and_integrity.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
+- 账户状态迁移由 `internal/migrations/framework/0001_final_seed_and_integrity.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`；API 对账户状态只接受 `enable` 或 `disable`。不要把账户状态规则推广到其它状态字段，也不要把不存在的 `1/2` 转换假设写进新代码。
 - 全新安装建立 24 张表，覆盖权限、安全、字典、附件、配置与三轨迁移台账。
 - security 四表与 PHP 语义对齐：规则表全局化，不含 `admin_id`/`owner_column`；日志表的 `admin_id` 只表示操作者。安全种子使用 Go 点形 controller 名（如 `security.DataRecycle`）。
 - 前台 `/` 是自包含占位页，当前只提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`；后台管理功能完整。
@@ -56,7 +56,7 @@
 | `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（/api/* 自注册） | model、pkg、common | `internal/admin` |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
 | `internal/router` | 根装配件：组合两渠道 router + 全局中间件 + 静态资源；`registrar_set.go` 只聚合 api 渠道 registrar（admin 侧聚合已收进 `internal/admin/router`） | 全部 | 业务逻辑 |
-| `internal/conf`、`internal/database/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n` | 配置、三轨迁移、连接初始化、工具、本地化 | — | — |
+| `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n` | 配置、三轨迁移、连接初始化、工具、本地化 | — | — |
 
 边界由 `internal/boundary_test.go` 机械执法（R1-R5）：admin↛api、api↛admin、common↛admin/api、两渠道 handler 禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
 
@@ -115,11 +115,11 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 
 ## 迁移以及生成/部署文件
 
-- 迁移系统有三条轨道：`internal/database/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`internal/database/migrations/framework/` 仅保存单条 `framework-final-seed-and-integrity`（仅框架维护者可改）；`internal/database/migrations/business/` 是由 `Register`/`init` 注册的业务仓库扩展轨道。三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；全新安装快照建立 24 张表。契约见 `internal/database/migrations/business/README.md`。
+- 迁移系统有三条轨道：`internal/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`internal/migrations/framework/` 仅保存单条 `framework-final-seed-and-integrity`（仅框架维护者可改）；`internal/migrations/business/` 是由 `Register`/`init` 注册的业务仓库扩展轨道。三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；全新安装快照建立 24 张表。契约见 `internal/migrations/business/README.md`。
 - 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
 - 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 framework `VerifySchema`/`VerifyUpgradeData` 和 `framework.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）。
 - 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 framework/business 的 `Up` 之前执行。
-- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/database/migrations/business/README.md`。
+- 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/migrations/business/README.md`。
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。

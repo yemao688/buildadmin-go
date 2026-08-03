@@ -158,7 +158,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 
 CRUD 生成器自动建规则无需处理；手写路由按同一规则二选一：声明 `middleware.RegisterPermissionExempt` 豁免，或通过 business 迁移补充 `admin_rule`，参考 [`framework-maintenance.md`](framework-maintenance.md) 的条款。
 
-业务表迁移使用三轨台账中的 business 轨道；台账字段、断点列和 `migrate rollback` 语义以 [`internal/database/migrations/business/README.md`](../internal/database/migrations/business/README.md) 为准。
+业务表迁移使用三轨台账中的 business 轨道；台账字段、断点列和 `migrate rollback` 语义以 [`internal/migrations/business/README.md`](../internal/migrations/business/README.md) 为准。
 
 ## 标准框架升级流程
 
@@ -238,7 +238,7 @@ git push origin master
 
 路由注册走 RouteRegistrar 体系，业务路由不进 `internal/router/router.go`：admin 渠道每个模块由自己的 registrar 承载——文件恒为 `internal/admin/router/<table>.go`（`Group()` 声明分组、`Register(gin.IRoutes)` 注册路由、`Capabilities()` 声明原子能力），经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点聚合（新模块一行 handler 参数 + 返回条目）后由 `AdminRouter` 挂载；api 渠道模块的 registrar 仍走 `internal/router/registrar_set.go` 追加。CRUD 生成器自动产出 registrar 并维护仓库/handler 的合并 ProviderSet 与 `ProvideRegistrars` 锚点，`crud:delete` 反向移除，不修改 `cmd/server/wire.go`。能力键保持既有协议：路由名由控制器与 action 组成，标准 CRUD action 为 `add`/`edit`/`del`，自定义 action 按原样保留。路由集合由黄金快照测试看守——`go test ./internal/router/... -run '^TestRouteSnapshotMatchesGolden$'` 只比较排序后的 `METHOD + path`；业务仓库保留自己的 `internal/router/testdata/registered_routes.golden`，路由有意变更时先审查差异，再用 `-args -update` 重生成，不要手改黄金文件。
 
-以下区域尽量少改，以降低升级冲突：`cmd/server` wiring、`internal/router/router.go` 的既有框架区域、`internal/database/migrations/official/` 和 `internal/database/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
+以下区域尽量少改，以降低升级冲突：`cmd/server` wiring、`internal/router/router.go` 的既有框架区域、`internal/migrations/official/` 和 `internal/migrations/framework/` 的历史、`internal/model/` 的框架生成实体（驱动全新安装快照），以及 Docker/Makefile 等发布基础设施。业务确需扩展时，优先通过生成链和新增来源文件完成。
 
 ## AI agent 协议
 

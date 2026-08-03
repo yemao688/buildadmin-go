@@ -4,7 +4,7 @@ import (
 	"bufio"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations"
+	"buildadmin-go/internal/migrations"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/installer"
 	passwordutil "buildadmin-go/internal/pkg/password"

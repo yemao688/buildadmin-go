@@ -7,8 +7,8 @@ import (
 
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/database/migrations/business"
-	"buildadmin-go/internal/database/migrations/internal/core"
+	"buildadmin-go/internal/migrations/business"
+	"buildadmin-go/internal/migrations/internal/core"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
