@@ -20,7 +20,6 @@ RUN apk add --no-cache ca-certificates tzdata \
     && chown -R app:app /app
 COPY --from=go-build /out/app /app/app
 COPY configs/config.defaults.yaml /app/configs/config.defaults.yaml
-COPY internal/i18n/locales /app/internal/i18n/locales
 COPY .env.example /app/.env.example
 COPY public/ /app/public/
 RUN chown -R app:app /app

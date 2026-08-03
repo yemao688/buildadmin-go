@@ -37,7 +37,7 @@ func InitRouter(
 		gin.Logger(),
 		middleware.CustomRecovery(loggerWriter),
 		//开启多语言
-		ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg(utils.RootPath())), ginI18n.WithGetLngHandle(
+		ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg()), ginI18n.WithGetLngHandle(
 			func(context *gin.Context, defaultLng string) string {
 				lng := context.Request.Header.Get("think-lang")
 				if lng == "" {
