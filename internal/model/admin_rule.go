@@ -16,7 +16,7 @@ type AdminRule struct {
 	Extend     string `gorm:"column:extend;type:enum('none','add_rules_only','add_menu_only');not null;default:none;comment:扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单" json:"extend"` // 扩展属性:none=无,add_rules_only=只添加为路由,add_menu_only=只添加为菜单
 	Remark     string `gorm:"column:remark;type:varchar(255) default '';not null;comment:备注" json:"remark"`                                                                                        // 备注
 	Weigh      int32  `gorm:"column:weigh;type:int(11) unsigned;not null;default:0;comment:权重" json:"weigh"`                                                                                       // 权重
-	Status     string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                                                              // 状态:0=禁用,1=启用
+	Status     string `gorm:"column:status;type:tinyint unsigned;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                                                              // 状态:0=禁用,1=启用
 	UpdateTime int64  `gorm:"autoUpdateTime;column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"`                                                             // 更新时间
 	CreateTime int64  `gorm:"autoCreateTime;column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"`                                                             // 创建时间
 }

@@ -9,7 +9,7 @@ type SecuritySensitiveData struct {
 	DataTable    string `gorm:"column:data_table;type:varchar(100) default '';not null;comment:对应数据表" json:"data_table"`       // 对应数据表
 	PrimaryKey   string `gorm:"column:primary_key;type:varchar(50) default '';not null;comment:数据表主键" json:"primary_key"`      // 数据表主键
 	DataFields   string `gorm:"column:data_fields;type:text;comment:敏感数据字段" json:"data_fields"`                                // 敏感数据字段
-	Status       string `gorm:"column:status;type:enum('0','1');not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`        // 状态:0=禁用,1=启用
+	Status       string `gorm:"column:status;type:tinyint unsigned;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`        // 状态:0=禁用,1=启用
 	Connection   string `gorm:"column:connection;type:varchar(100) default '';not null;comment:数据库连接配置标识" json:"connection"`
 	UpdateTime   int64  `gorm:"autoUpdateTime;column:update_time;type:bigint(16) unsigned default null;comment:更新时间" json:"update_time"` // 更新时间
 	CreateTime   int64  `gorm:"autoCreateTime;column:create_time;type:bigint(16) unsigned default null;comment:创建时间" json:"create_time"` // 创建时间
