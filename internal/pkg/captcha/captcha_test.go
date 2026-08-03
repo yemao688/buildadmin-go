@@ -21,7 +21,7 @@ func TestDraw(t *testing.T) {
 	}
 	drawImg := image.NewRGBA(bgImg.Bounds())
 	draw.Draw(drawImg, bgImg.Bounds().Add(image.Point{20, 20}), bgImg, image.Point{0, 0}, draw.Src)
-	save(drawImg)
+	save(t, drawImg)
 
 }
 
@@ -60,7 +60,7 @@ func TestDrawIcon(t *testing.T) {
 	}
 
 	draw.Draw(drawImg, iconImg.Bounds().Add(image.Point{20, 20}), newIcon, image.Point{}, draw.Over)
-	save(drawImg)
+	save(t, drawImg)
 }
 
 func TestDrawIcon1(t *testing.T) {
@@ -78,20 +78,21 @@ func TestDrawIcon1(t *testing.T) {
 	}
 
 	draw.DrawMask(drawImg, drawImg.Bounds(), iconImg, image.Point{}, &image.Uniform{color.RGBA{128, 128, 128, 128}}, image.Point{}, draw.Over)
-	save(drawImg)
+	save(t, drawImg)
 }
 
-func save(drawImg *image.RGBA) {
-	// 保存图片
-	file, err := os.Create("./output.png")
+func save(t *testing.T, drawImg *image.RGBA) {
+	// 写入测试临时目录，避免污染包目录（output.png 曾因此进入 git 跟踪）
+	path := filepath.Join(t.TempDir(), "output.png")
+	file, err := os.Create(path)
 	if err != nil {
-		fmt.Print(err)
+		t.Fatalf("create output: %v", err)
 	}
 	defer file.Close()
 
 	err = png.Encode(file, drawImg)
 	if err != nil {
-		fmt.Print(err)
+		t.Fatalf("encode output: %v", err)
 	}
 }
 
@@ -103,7 +104,7 @@ func TestWriteCurve(t *testing.T) {
 
 	textColor := color.RGBA{uint8(255), uint8(0), uint8(0), 255}
 	writeCurve(img, 12, 200, 80, textColor)
-	save(img)
+	save(t, img)
 }
 
 func TestWriteText(t *testing.T) {
@@ -134,7 +135,7 @@ func TestWriteText(t *testing.T) {
 	result, _ := writeText(img, defaultConfig, "", textColor)
 
 	fmt.Println(result)
-	save(img)
+	save(t, img)
 }
 
 func TestWriteNoise(t *testing.T) {
@@ -144,5 +145,5 @@ func TestWriteNoise(t *testing.T) {
 	draw.Draw(img, img.Bounds(), &image.Uniform{backgroundColor}, image.Point{}, draw.Over)
 
 	writeNoise(img)
-	save(img)
+	save(t, img)
 }
