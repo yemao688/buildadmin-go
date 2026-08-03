@@ -114,7 +114,7 @@ const baTable = new baTableClass(new baTableApi(url), {
         },
         {
             label: t('security.sensitiveDataLog.controller'),
-            prop: 'sensitive.controller_as',
+            prop: 'sensitive.controller',
             align: 'center',
             operator: 'LIKE',
             operatorPlaceholder: t('Fuzzy query'),

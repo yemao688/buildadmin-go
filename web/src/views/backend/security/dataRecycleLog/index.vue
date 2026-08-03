@@ -114,7 +114,7 @@ const baTable = new baTableClass(new baTableApi(url), {
         },
         {
             label: t('security.dataRecycleLog.controller'),
-            prop: 'recycle.controller_as',
+            prop: 'recycle.controller',
             align: 'center',
             operator: 'LIKE',
             operatorPlaceholder: t('Fuzzy query'),
