@@ -1,6 +1,5 @@
 export default {
     'User name': '用户名',
-    'User nickname': '用户昵称',
     balance: '余额',
     'User ID': '用户ID',
     'Change balance': '变更余额',

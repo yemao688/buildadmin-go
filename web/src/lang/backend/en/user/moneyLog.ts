@@ -1,6 +1,5 @@
 export default {
     'User name': 'Username',
-    'User nickname': 'User nickname',
     balance: 'Balance',
     'User ID': 'User ID',
     'Change balance': 'Change balance',

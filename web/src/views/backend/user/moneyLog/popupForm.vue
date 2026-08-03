@@ -42,9 +42,6 @@
                     <el-form-item :label="t('user.moneyLog.User name')">
                         <el-input v-model="state.userInfo.username" disabled></el-input>
                     </el-form-item>
-                    <el-form-item :label="t('user.moneyLog.User nickname')">
-                        <el-input v-model="state.userInfo.nickname" disabled></el-input>
-                    </el-form-item>
                     <el-form-item :label="t('user.moneyLog.Current balance')">
                         <el-input v-model="state.userInfo.money" disabled type="number"></el-input>
                     </el-form-item>
