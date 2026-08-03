@@ -56,6 +56,7 @@ const baTable = new baTableClass(
             { label: t('Operate'), align: 'center', width: 140, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false },
         ],
         dblClickNotEditColumn: [undefined],
+        defaultOrder: { order: 'desc', prop: 'weigh' },
     },
     {
         defaultItems: {rate:1,status:1},

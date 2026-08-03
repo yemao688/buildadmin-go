@@ -171,9 +171,9 @@ func adminRegistrars() []adminRouter.Registrar {
 		&admin.CrudHandler{},
 		&admin.DashboardHandler{},
 		&admin.MoneyLogHandler{},
-		&admin.CurrencyHandler{},
-		&admin.LanguageHandler{},
-		&admin.LanguageContentHandler{},
+		&admin.CountryCurrencyHandler{},
+		&admin.CountryLanguageHandler{},
+		&admin.CountryLanguageContentHandler{},
 	)
 }
 

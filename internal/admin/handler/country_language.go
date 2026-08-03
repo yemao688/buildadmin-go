@@ -1,8 +1,8 @@
 package handler
 
 import (
-	countrydto "buildadmin-go/internal/admin/dto"
-	countrymodel "buildadmin-go/internal/admin/repository"
+	dto "buildadmin-go/internal/admin/dto"
+	repository "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -11,21 +11,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type LanguageHandler struct {
+type CountryLanguageHandler struct {
 	Base
-	log       *zap.Logger
-	languageM *countrymodel.CountryLanguageRepository
+	log              *zap.Logger
+	countryLanguageM *repository.CountryLanguageRepository
 }
 
-func NewLanguageHandler(log *zap.Logger, languageM *countrymodel.CountryLanguageRepository) *LanguageHandler {
-	return &LanguageHandler{Base: NewBase(languageM), log: log, languageM: languageM}
+func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.CountryLanguageRepository) *CountryLanguageHandler {
+	return &CountryLanguageHandler{Base: Base{currentM: countryLanguageM}, log: log, countryLanguageM: countryLanguageM}
 }
 
-func (h *LanguageHandler) Index(ctx *gin.Context) {
+func (h *CountryLanguageHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 	}
-	list, total, err := h.languageM.List(ctx)
+	list, total, err := h.countryLanguageM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -37,15 +37,15 @@ func (h *LanguageHandler) Index(ctx *gin.Context) {
 	})
 }
 
-func (h *LanguageHandler) Add(ctx *gin.Context) {
-	var params countrydto.LanguageParam
+func (h *CountryLanguageHandler) Add(ctx *gin.Context) {
+	var params dto.CountryLanguageParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	var data model.Language
+	var data model.CountryLanguage
 	copier.Copy(&data, params)
-	err := h.languageM.Add(ctx, data)
+	err := h.countryLanguageM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -53,31 +53,31 @@ func (h *LanguageHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *LanguageHandler) Edit(ctx *gin.Context) {
+func (h *CountryLanguageHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{}) {
 		return
 	}
 
-	type LanguageIDs struct {
+	type CountryLanguageIDs struct {
 		ID int64 `json:"id" binding:"required"`
 	}
 	var params = struct {
-		LanguageIDs
-		countrydto.LanguageParam
+		CountryLanguageIDs
+		dto.CountryLanguageParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	data, err := h.languageM.GetOne(ctx, params.ID)
+	data, err := h.countryLanguageM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
-	err = h.languageM.Edit(ctx, data)
+	err = h.countryLanguageM.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -85,7 +85,7 @@ func (h *LanguageHandler) Edit(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *LanguageHandler) Del(ctx *gin.Context) {
+func (h *CountryLanguageHandler) Del(ctx *gin.Context) {
 	var param struct {
 		Ids []int64 `form:"ids[]" binding:"required"`
 	}
@@ -93,7 +93,7 @@ func (h *LanguageHandler) Del(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
-	err := h.languageM.Del(ctx, param.Ids)
+	err := h.countryLanguageM.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

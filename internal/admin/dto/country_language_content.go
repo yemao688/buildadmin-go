@@ -1,6 +1,6 @@
 package dto
 
-type LanguageContentParam struct {
+type CountryLanguageContentParam struct {
 	Lan   string `json:"lan"`   // 语言代码
 	Group string `json:"group"` // 分组
 	Key   string `json:"key"`   // 键

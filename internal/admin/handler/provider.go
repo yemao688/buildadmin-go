@@ -16,9 +16,6 @@ var ProviderSet = wire.NewSet(
 	NewAdminGroupHandler,
 	NewAdminRuleHandler,
 	NewAdminLogHandler,
-	NewCurrencyHandler,
-	NewLanguageHandler,
-	NewLanguageContentHandler,
 	NewCrudHandler,
 	NewLogHandler,
 	NewAdminInfoHandler,
@@ -30,4 +27,7 @@ var ProviderSet = wire.NewSet(
 	NewSensitiveDataLogHandler,
 	NewUserHandler,
 	NewMoneyLogHandler,
+	NewCountryCurrencyHandler,
+	NewCountryLanguageHandler,
+	NewCountryLanguageContentHandler,
 )

@@ -105,12 +105,12 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	userMoneyLogService := service.NewUserMoneyLogService(userMoneyLogRepository, userBalanceService)
 	moneyLogHandler := handler.NewMoneyLogHandler(zapLogger, userMoneyLogRepository, userMoneyLogService)
 	countryCurrencyRepository := repository.NewCountryCurrencyRepository(gormDB, configuration, closureEnforcer)
-	currencyHandler := handler.NewCurrencyHandler(zapLogger, countryCurrencyRepository)
+	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository)
 	countryLanguageRepository := repository.NewCountryLanguageRepository(gormDB, configuration, closureEnforcer)
-	languageHandler := handler.NewLanguageHandler(zapLogger, countryLanguageRepository)
+	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
-	languageContentHandler := handler.NewLanguageContentHandler(zapLogger, countryLanguageContentRepository)
-	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, currencyHandler, languageHandler, languageContentHandler)
+	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
+	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
 	adminRouterDeps := router.AdminRouterDeps{
 		LoginM:         login,
 		AuthorizationM: authorization,

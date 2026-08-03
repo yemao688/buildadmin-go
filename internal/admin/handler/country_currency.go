@@ -1,8 +1,8 @@
 package handler
 
 import (
-	countrydto "buildadmin-go/internal/admin/dto"
-	countrymodel "buildadmin-go/internal/admin/repository"
+	dto "buildadmin-go/internal/admin/dto"
+	repository "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -11,21 +11,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type CurrencyHandler struct {
+type CountryCurrencyHandler struct {
 	Base
-	log       *zap.Logger
-	currencyM *countrymodel.CountryCurrencyRepository
+	log              *zap.Logger
+	countryCurrencyM *repository.CountryCurrencyRepository
 }
 
-func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CountryCurrencyRepository) *CurrencyHandler {
-	return &CurrencyHandler{Base: NewBase(currencyM), log: log, currencyM: currencyM}
+func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.CountryCurrencyRepository) *CountryCurrencyHandler {
+	return &CountryCurrencyHandler{Base: Base{currentM: countryCurrencyM}, log: log, countryCurrencyM: countryCurrencyM}
 }
 
-func (h *CurrencyHandler) Index(ctx *gin.Context) {
+func (h *CountryCurrencyHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 	}
-	list, total, err := h.currencyM.List(ctx)
+	list, total, err := h.countryCurrencyM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -37,15 +37,15 @@ func (h *CurrencyHandler) Index(ctx *gin.Context) {
 	})
 }
 
-func (h *CurrencyHandler) Add(ctx *gin.Context) {
-	var params countrydto.CurrencyParam
+func (h *CountryCurrencyHandler) Add(ctx *gin.Context) {
+	var params dto.CountryCurrencyParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	var data model.Currency
+	var data model.CountryCurrency
 	copier.Copy(&data, params)
-	err := h.currencyM.Add(ctx, data)
+	err := h.countryCurrencyM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -53,31 +53,31 @@ func (h *CurrencyHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *CurrencyHandler) Edit(ctx *gin.Context) {
+func (h *CountryCurrencyHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{}) {
 		return
 	}
 
-	type CurrencyIDs struct {
+	type CountryCurrencyIDs struct {
 		ID int64 `json:"id" binding:"required"`
 	}
 	var params = struct {
-		CurrencyIDs
-		countrydto.CurrencyParam
+		CountryCurrencyIDs
+		dto.CountryCurrencyParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	data, err := h.currencyM.GetOne(ctx, params.ID)
+	data, err := h.countryCurrencyM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
-	err = h.currencyM.Edit(ctx, data)
+	err = h.countryCurrencyM.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -85,7 +85,7 @@ func (h *CurrencyHandler) Edit(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *CurrencyHandler) Del(ctx *gin.Context) {
+func (h *CountryCurrencyHandler) Del(ctx *gin.Context) {
 	var param struct {
 		Ids []int64 `form:"ids[]" binding:"required"`
 	}
@@ -93,7 +93,7 @@ func (h *CurrencyHandler) Del(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
-	err := h.currencyM.Del(ctx, param.Ids)
+	err := h.countryCurrencyM.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

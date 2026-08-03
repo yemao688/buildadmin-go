@@ -1,8 +1,8 @@
 package handler
 
 import (
-	countrydto "buildadmin-go/internal/admin/dto"
-	countrymodel "buildadmin-go/internal/admin/repository"
+	dto "buildadmin-go/internal/admin/dto"
+	repository "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -11,21 +11,21 @@ import (
 	"go.uber.org/zap"
 )
 
-type LanguageContentHandler struct {
+type CountryLanguageContentHandler struct {
 	Base
-	log              *zap.Logger
-	languageContentM *countrymodel.CountryLanguageContentRepository
+	log                     *zap.Logger
+	countryLanguageContentM *repository.CountryLanguageContentRepository
 }
 
-func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.CountryLanguageContentRepository) *LanguageContentHandler {
-	return &LanguageContentHandler{Base: NewBase(languageContentM), log: log, languageContentM: languageContentM}
+func NewCountryLanguageContentHandler(log *zap.Logger, countryLanguageContentM *repository.CountryLanguageContentRepository) *CountryLanguageContentHandler {
+	return &CountryLanguageContentHandler{Base: Base{currentM: countryLanguageContentM}, log: log, countryLanguageContentM: countryLanguageContentM}
 }
 
-func (h *LanguageContentHandler) Index(ctx *gin.Context) {
+func (h *CountryLanguageContentHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		Success(ctx, data)
 	}
-	list, total, err := h.languageContentM.List(ctx)
+	list, total, err := h.countryLanguageContentM.List(ctx)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -37,15 +37,15 @@ func (h *LanguageContentHandler) Index(ctx *gin.Context) {
 	})
 }
 
-func (h *LanguageContentHandler) Add(ctx *gin.Context) {
-	var params countrydto.LanguageContentParam
+func (h *CountryLanguageContentHandler) Add(ctx *gin.Context) {
+	var params dto.CountryLanguageContentParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	var data model.LanguageContent
+	var data model.CountryLanguageContent
 	copier.Copy(&data, params)
-	err := h.languageContentM.Add(ctx, data)
+	err := h.countryLanguageContentM.Add(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -53,31 +53,31 @@ func (h *LanguageContentHandler) Add(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *LanguageContentHandler) Edit(ctx *gin.Context) {
+func (h *CountryLanguageContentHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{}) {
 		return
 	}
 
-	type LanguageContentIDs struct {
+	type CountryLanguageContentIDs struct {
 		ID int64 `json:"id" binding:"required"`
 	}
 	var params = struct {
-		LanguageContentIDs
-		countrydto.LanguageContentParam
+		CountryLanguageContentIDs
+		dto.CountryLanguageContentParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	data, err := h.languageContentM.GetOne(ctx, params.ID)
+	data, err := h.countryLanguageContentM.GetOne(ctx, params.ID)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
-	err = h.languageContentM.Edit(ctx, data)
+	err = h.countryLanguageContentM.Edit(ctx, data)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -85,7 +85,7 @@ func (h *LanguageContentHandler) Edit(ctx *gin.Context) {
 	Success(ctx, "")
 }
 
-func (h *LanguageContentHandler) Del(ctx *gin.Context) {
+func (h *CountryLanguageContentHandler) Del(ctx *gin.Context) {
 	var param struct {
 		Ids []int64 `form:"ids[]" binding:"required"`
 	}
@@ -93,7 +93,7 @@ func (h *LanguageContentHandler) Del(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
-	err := h.languageContentM.Del(ctx, param.Ids)
+	err := h.countryLanguageContentM.Del(ctx, param.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

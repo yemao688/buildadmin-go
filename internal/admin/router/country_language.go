@@ -8,22 +8,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type LanguageRegistrar struct {
-	handler *handler.LanguageHandler
+type CountryLanguageRegistrar struct {
+	handler *handler.CountryLanguageHandler
 }
 
-func NewLanguageRegistrar(handler *handler.LanguageHandler) *LanguageRegistrar {
-	return &LanguageRegistrar{handler: handler}
+func NewCountryLanguageRegistrar(handler *handler.CountryLanguageHandler) *CountryLanguageRegistrar {
+	return &CountryLanguageRegistrar{handler: handler}
 }
 
-const languageRoute = "country.Language"
+const countryLanguageRoute = "country.Language"
 
-func (r *LanguageRegistrar) Group() string { return "admin" }
+func (r *CountryLanguageRegistrar) Group() string { return "admin" }
 
-func (r *LanguageRegistrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, languageRoute, r.handler)
+func (r *CountryLanguageRegistrar) Register(g gin.IRoutes) {
+	handler.CRUDRoutes(g, countryLanguageRoute, r.handler)
 }
 
-func (r *LanguageRegistrar) Capabilities() []middleware.AtomicRoute {
-	return CRUDCapabilities(languageRoute)
+func (r *CountryLanguageRegistrar) Capabilities() []middleware.AtomicRoute {
+	return CRUDCapabilities(countryLanguageRoute)
 }

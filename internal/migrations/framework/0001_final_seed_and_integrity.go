@@ -113,7 +113,7 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 
 func seedCountryLanguages(db *gorm.DB, config *conf.Configuration) error {
 	table := core.TableName(config, "country_language")
-	rows := []model.Language{
+	rows := []model.CountryLanguage{
 		{Lan: "zh-cn", Name: "简体中文", Remark: "简体中文", Status: 1, Weigh: 2},
 		{Lan: "en", Name: "English", Remark: "English", Status: 1, Weigh: 1},
 	}

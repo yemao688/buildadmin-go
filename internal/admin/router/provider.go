@@ -28,10 +28,10 @@ var ProviderSet = wire.NewSet(
 	NewCrudRegistrar,
 	NewDashboardRegistrar,
 	NewUserLogRegistrar,
-	NewCurrencyRegistrar,
-	NewLanguageRegistrar,
-	NewLanguageContentRegistrar,
 	ProvideRegistrars,
+	NewCountryCurrencyRegistrar,
+	NewCountryLanguageRegistrar,
+	NewCountryLanguageContentRegistrar,
 )
 
 // ProvideRegistrars 聚合全部 admin 模块 registrar，返回给 AdminRouter
@@ -57,9 +57,9 @@ func ProvideRegistrars(
 	crud *handler.CrudHandler,
 	dashboard *handler.DashboardHandler,
 	moneyLog *handler.MoneyLogHandler,
-	currency *handler.CurrencyHandler,
-	language *handler.LanguageHandler,
-	languageContent *handler.LanguageContentHandler,
+	countryCurrency *handler.CountryCurrencyHandler,
+	countryLanguage *handler.CountryLanguageHandler,
+	countryLanguageContent *handler.CountryLanguageContentHandler,
 ) []Registrar {
 	return []Registrar{
 		NewLogRegistrar(log),
@@ -79,8 +79,8 @@ func ProvideRegistrars(
 		NewCrudRegistrar(crud),
 		NewDashboardRegistrar(dashboard),
 		NewUserLogRegistrar(user, moneyLog),
-		NewCurrencyRegistrar(currency),
-		NewLanguageRegistrar(language),
-		NewLanguageContentRegistrar(languageContent),
+		NewCountryCurrencyRegistrar(countryCurrency),
+		NewCountryLanguageRegistrar(countryLanguage),
+		NewCountryLanguageContentRegistrar(countryLanguageContent),
 	}
 }

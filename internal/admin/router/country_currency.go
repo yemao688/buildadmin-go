@@ -8,22 +8,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type CurrencyRegistrar struct {
-	handler *handler.CurrencyHandler
+type CountryCurrencyRegistrar struct {
+	handler *handler.CountryCurrencyHandler
 }
 
-func NewCurrencyRegistrar(handler *handler.CurrencyHandler) *CurrencyRegistrar {
-	return &CurrencyRegistrar{handler: handler}
+func NewCountryCurrencyRegistrar(handler *handler.CountryCurrencyHandler) *CountryCurrencyRegistrar {
+	return &CountryCurrencyRegistrar{handler: handler}
 }
 
-const currencyRoute = "country.Currency"
+const countryCurrencyRoute = "country.Currency"
 
-func (r *CurrencyRegistrar) Group() string { return "admin" }
+func (r *CountryCurrencyRegistrar) Group() string { return "admin" }
 
-func (r *CurrencyRegistrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, currencyRoute, r.handler)
+func (r *CountryCurrencyRegistrar) Register(g gin.IRoutes) {
+	handler.CRUDRoutes(g, countryCurrencyRoute, r.handler)
 }
 
-func (r *CurrencyRegistrar) Capabilities() []middleware.AtomicRoute {
-	return CRUDCapabilities(currencyRoute)
+func (r *CountryCurrencyRegistrar) Capabilities() []middleware.AtomicRoute {
+	return CRUDCapabilities(countryCurrencyRoute)
 }

@@ -13,9 +13,6 @@ var ProviderSet = wire.NewSet(
 	NewAdminRuleRepository,
 	NewAdminLogRepository,
 	NewAuthRepository,
-	NewCountryCurrencyRepository,
-	NewCountryLanguageRepository,
-	NewCountryLanguageContentRepository,
 	NewConfigRepository,
 	NewAttachmentRepository,
 	NewSecurityDataRecycleRepository,
@@ -24,4 +21,7 @@ var ProviderSet = wire.NewSet(
 	NewSecuritySensitiveDataLogRepository,
 	NewUserRepository,
 	NewUserMoneyLogRepository,
+	NewCountryCurrencyRepository,
+	NewCountryLanguageRepository,
+	NewCountryLanguageContentRepository,
 )

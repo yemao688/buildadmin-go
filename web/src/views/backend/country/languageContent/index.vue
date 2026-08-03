@@ -50,7 +50,7 @@ const baTable = new baTableClass(
             { label: t("country.languageContent.lan"), prop: "lan", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
             { label: t("country.languageContent.group"), prop: "group", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
             { label: t("country.languageContent.key"), prop: "key", align: "center", operatorPlaceholder: t('Fuzzy query'), operator: "LIKE", sortable: false },
-            { label: t("country.languageContent.type"), prop: "type", align: "center", render: "tag", operator: "eq", sortable: false, replaceValue: { "1": t('country.languageContent.type 1'), "2": t('country.languageContent.type 2'), "0": t('country.languageContent.type 0')} },
+            { label: t("country.languageContent.type"), prop: "type", align: "center", render: "tag", operator: "eq", sortable: false, replaceValue: { "0": t('country.languageContent.type 0'), "1": t('country.languageContent.type 1'), "2": t('country.languageContent.type 2')} },
             { label: t("country.languageContent.value"), prop: "value", align: "center", operator: false },
             { label: t('Operate'), align: 'center', width: 100, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false },
         ],

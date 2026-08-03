@@ -1,12 +1,12 @@
 export default {
-    "quick Search Fields": 'code,name',
-    name: 'name',
-    status: 'status',
+    "status 0": 'status 0',
+    "status 1": 'status 1',
     id: 'id',
     code: 'code',
     symbol: 'symbol',
-    rate: 'rate',
-    "status 0": 'status 0',
-    "status 1": 'status 1',
+    status: 'status',
     weigh: 'weigh',
+    "quick Search Fields": 'code,name',
+    name: 'name',
+    rate: 'rate',
 }
