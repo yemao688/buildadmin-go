@@ -660,6 +660,18 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 	}
 	if len(missing) > 0 {
 		fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
+		// Node 本身缺失（容器镜像不携带工具链）：装 node 无意义，指引宿主机
+		// 手动 make frontend 构建，再以 --skip-frontend 重跑 setup。
+		if missingNode(missing) {
+			fmt.Fprintln(output, "当前环境没有 Node 环境。请改为在宿主机手动执行：")
+			fmt.Fprintln(output, "  make frontend   # 在 web/ 构建前端并同步产物到 public/")
+			fmt.Fprintln(output, "完成后重新运行 setup 并加 --skip-frontend 跳过前端构建。")
+			if setupFrontendArtifactExists(rootPath) {
+				fmt.Fprintln(output, "已有 public/index.html，本次退化为跳过前端构建")
+				return errSetupFrontendSkipped
+			}
+			return errors.New("前端构建依赖缺失（无 Node 环境），请先在宿主机执行 make frontend，再以 --skip-frontend 重跑 setup")
+		}
 		for _, tool := range missing {
 			fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
 		}
@@ -688,6 +700,17 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 		return errors.New("前端构建完成，但移动 web/dist 到 public 失败")
 	}
 	return nil
+}
+
+// missingNode 报告缺失工具列表是否包含 Node 运行时本身（node/npm 成对出现，
+// npm 随 Node 分发）。
+func missingNode(missing []string) bool {
+	for _, tool := range missing {
+		if tool == "node" || tool == "npm" {
+			return true
+		}
+	}
+	return false
 }
 
 // setupToolInstallCommand 返回前端构建依赖缺失时的安装命令提示。

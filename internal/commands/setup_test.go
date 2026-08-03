@@ -401,3 +401,43 @@ func TestRegisterAddsSetupCommand(t *testing.T) {
 		t.Fatal("setup command was not registered")
 	}
 }
+
+func TestBuildSetupFrontendGuidesManualBuildWhenNodeMissing(t *testing.T) {
+	root := t.TempDir()
+	// 空 PATH 确定性模拟"无 Node 环境"（容器镜像场景）：node/npm/pnpm 全部
+	// LookPath 失败，且临时目录无 public/index.html。
+	t.Setenv("PATH", root)
+
+	out := &bytes.Buffer{}
+	err := buildSetupFrontend(root, out, &conf.Configuration{})
+	if err == nil {
+		t.Fatal("buildSetupFrontend should fail without node and without an artifact")
+	}
+	output := out.String()
+	if !strings.Contains(output, "没有 Node 环境") || !strings.Contains(output, "make frontend") {
+		t.Fatalf("missing-node guidance not printed: %q", output)
+	}
+	if strings.Contains(output, "npm install -g") {
+		t.Fatalf("install commands must not be suggested for a missing node runtime: %q", output)
+	}
+}
+
+func TestBuildSetupFrontendDegradesToSkipWhenArtifactExists(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", root)
+
+	out := &bytes.Buffer{}
+	err := buildSetupFrontend(root, out, &conf.Configuration{})
+	if err != errSetupFrontendSkipped {
+		t.Fatalf("expected errSetupFrontendSkipped, got %v", err)
+	}
+	if !strings.Contains(out.String(), "退化为跳过前端构建") {
+		t.Fatalf("degrade message not printed: %q", out.String())
+	}
+}
