@@ -3,9 +3,9 @@ package router
 import (
 	admin "buildadmin-go/internal/admin/handler"
 	adminRouter "buildadmin-go/internal/admin/router"
-	api "buildadmin-go/internal/api/handler"
 	apiRouter "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/i18n"
+	installRouter "buildadmin-go/internal/install"
 	"buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/utils"
 	"net/http"
@@ -18,14 +18,15 @@ import (
 )
 
 // InitRouter 是根装配件：创建 gin.Engine、挂载全局中间件（Cors/Record/
-// Logger/CustomRecovery/i18n/InstallGuard）与静态资源，然后调用 admin 与
-// api 两个渠道注册器完成挂载。各渠道的模块 registrar 已由渠道包自行聚合
-// 注入（internal/admin/router.ProvideRegistrars、internal/api/router.ProvideRegistrars），
-// 根装配件不再按 Group() 分派。
+// Logger/CustomRecovery/i18n/InstallGuard）与静态资源，然后调用 admin、api
+// 与 install 三个渠道注册器完成挂载。各渠道的模块 registrar 已由渠道包
+// 自行聚合注入（internal/admin/router.ProvideRegistrars、
+// internal/api/router.ProvideRegistrars），根装配件不再按 Group() 分派。
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	adminR *adminRouter.AdminRouter,
 	apiR *apiRouter.ApiRouter,
+	installR *installRouter.InstallRouter,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
@@ -48,7 +49,7 @@ func InitRouter(
 	)
 
 	rootDir := utils.RootPath()
-	lockPath := filepath.Join(rootDir, "public", api.LockFileName)
+	lockPath := filepath.Join(rootDir, "public", installRouter.LockFileName)
 	router.Use(middleware.InstallGuard(lockPath))
 
 	// 静态资源与前台入口（不经渠道注册器）。
@@ -58,9 +59,11 @@ func InitRouter(
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
-	// 渠道注册器：admin 负责 /admin/*，api 负责 /install 与 /api/*。
+	// 渠道注册器：admin 负责 /admin/*，api 负责 /api/*，install 负责
+	// /install 与 /api/install/*。
 	adminR.Register(router)
 	apiR.Register(router)
+	installR.Register(router)
 
 	admin.CollectRoutes(router)
 
@@ -71,7 +74,7 @@ func registerRootRoute(router *gin.Engine, rootDir string) {
 	indexPath := filepath.Join(rootDir, "public", "index.html")
 	// InstallHandler.isInstallComplete also checks the completion marker, while
 	// this route treats any existing rootDir/public/install.lock as installed.
-	lockPath := filepath.Join(rootDir, "public", api.LockFileName)
+	lockPath := filepath.Join(rootDir, "public", installRouter.LockFileName)
 	serveIndex := func(c *gin.Context) {
 		if _, err := os.Stat(lockPath); err != nil {
 			c.Redirect(http.StatusFound, "/install")

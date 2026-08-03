@@ -26,6 +26,7 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
+	"buildadmin-go/internal/install"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
@@ -110,18 +111,21 @@ func wireApp(configuration *conf.Configuration, lumberjackLogger *lumberjack.Log
 	adminRouter := router.NewAdminRouter(adminRouterDeps)
 	memberService := member.NewService(gormDB, tokenHelper, configuration)
 	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
-	installHandler := handler2.NewInstallHandler(zapLogger, configuration, terminalTerminal)
 	captchaService := captcha.NewCaptchaService(gormDB)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
 	v2 := router2.ProvideRegistrars(commonHandler, handlerUserHandler)
 	apiRouterDeps := router2.ApiRouterDeps{
-		UserLoginM:     userLogin,
-		InstallHandler: installHandler,
-		Registrars:     v2,
+		UserLoginM: userLogin,
+		Registrars: v2,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter)
+	installHandler := install.NewInstallHandler(zapLogger, configuration, terminalTerminal)
+	installRouterDeps := install.InstallRouterDeps{
+		InstallHandler: installHandler,
+	}
+	installRouter := install.NewInstallRouter(installRouterDeps)
+	engine := router3.InitRouter(lumberjackLogger, adminRouter, apiRouter, installRouter)
 	server := newHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)

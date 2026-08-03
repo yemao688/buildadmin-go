@@ -1,4 +1,4 @@
-package handler
+package install
 
 import (
 	siteconfig "buildadmin-go/internal/common/siteconfig"

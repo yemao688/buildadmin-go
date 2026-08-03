@@ -12,6 +12,7 @@ import (
 	api "buildadmin-go/internal/api/handler"
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
+	install "buildadmin-go/internal/install"
 	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -131,9 +132,11 @@ func newCompleteRouter() *gin.Engine {
 			Registrars:     adminRegistrars(),
 		}),
 		apiRouter.NewApiRouter(apiRouter.ApiRouterDeps{
-			UserLoginM:     &apiMiddleware.UserLogin{},
-			InstallHandler: &api.InstallHandler{},
-			Registrars:     apiRegistrars(),
+			UserLoginM: &apiMiddleware.UserLogin{},
+			Registrars: apiRegistrars(),
+		}),
+		install.NewInstallRouter(install.InstallRouterDeps{
+			InstallHandler: &install.InstallHandler{},
 		}),
 	)
 }

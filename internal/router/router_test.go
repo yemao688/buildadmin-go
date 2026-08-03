@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	api "buildadmin-go/internal/api/handler"
+	install "buildadmin-go/internal/install"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -57,7 +57,7 @@ func TestRootRouteChecksInstallLock(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o644))
 			if test.createLock {
 				// Any content marks the installation as complete for this route.
-				require.NoError(t, os.WriteFile(filepath.Join(publicDir, api.LockFileName), []byte("present"), 0o644))
+				require.NoError(t, os.WriteFile(filepath.Join(publicDir, install.LockFileName), []byte("present"), 0o644))
 			}
 
 			engine := gin.New()
