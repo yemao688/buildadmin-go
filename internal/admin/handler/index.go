@@ -3,7 +3,7 @@ package handler
 import (
 	adminauth "buildadmin-go/internal/admin/repository"
 	routinemodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
@@ -95,8 +95,8 @@ type Login struct {
 	CaptchaInfo string `json:"captchaInfo"`
 }
 
-func (v Login) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v Login) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"username.min":      "username min>10",
 		"username.max":      "username max<30",
 		"password.required": "password invalid",
@@ -114,7 +114,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodPost {
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
-			FailByErr(ctx, validate.GetError(params, err))
+			FailByErr(ctx, validator.GetError(params, err))
 			return
 		}
 
@@ -172,14 +172,14 @@ type Logout struct {
 	RefreshToken string `json:"refreshToken"`
 }
 
-func (v Logout) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v Logout) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *IndexHandler) Logout(ctx *gin.Context) {
 	var params Logout
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

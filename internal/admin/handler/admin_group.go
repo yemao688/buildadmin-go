@@ -2,7 +2,7 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
@@ -71,8 +71,8 @@ type AdminGroup struct {
 	Status string  `json:"status"`
 }
 
-func (v AdminGroup) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v AdminGroup) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"name.required": "name required",
 	}
 }
@@ -80,7 +80,7 @@ func (v AdminGroup) GetMessages() validate.ValidatorMessages {
 func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	var params AdminGroup
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		AdminGroup
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -201,9 +201,9 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *AdminGroupHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

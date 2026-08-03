@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -101,8 +101,8 @@ type Admin struct {
 	GroupArr []string         `json:"group_arr" binding:"required"`
 }
 
-func (v Admin) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v Admin) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"username.min":      "username>2 and username<15",
 		"username.max":      "username>2 and username<15",
 		"email.email":       "email error",
@@ -184,7 +184,7 @@ func setAdminPassword(admin *model.Admin, plaintext string) error {
 func (h *AdminHandler) Add(ctx *gin.Context) {
 	var params Admin
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -340,7 +340,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		Admin
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -432,9 +432,9 @@ func validateAccountStatusValue(value any) error {
 }
 
 func (h *AdminHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

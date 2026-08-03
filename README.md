@@ -74,12 +74,12 @@ pnpm build
 cmd/server/          应用入口（28 行极简 main，仅调用 commands.Execute）+ Wire wiring（wire.go/wire_gen.go）
 internal/            全部私有代码（两业务渠道 + 安装渠道 + 共享内核）
   admin/             后台渠道：repository/dto/handler/router 均为单包（文件名=表名）、
-                     middleware（登录/权限/安全审计）、validate
+                     middleware（登录/权限/安全审计）
   api/               门户/公共渠道：service/middleware/dto/repository/handler/router
   install/           安装渠道：handler + 自注册路由（/install 与 /api/install/*）+ provider
   model/             共享贫血实体记录层（含 projection/ 投影子包）
   common/            跨渠道领域服务（money/siteconfig/area/country/upload）
-  pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper 等）
+  pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper/validator 等）
   middleware/        真·全局中间件
   router/            纯 bootstrap：引擎/全局中间件/静态资源/三渠道挂载
   migrations/        三轨迁移（official/framework/business）+ 内部迁移基础设施

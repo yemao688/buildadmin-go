@@ -6,7 +6,7 @@ import (
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"io"
@@ -69,8 +69,8 @@ type SensitiveData struct {
 	Status       string           `json:"status"`
 }
 
-func (v SensitiveData) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v SensitiveData) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
@@ -84,7 +84,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 
 	var params SensitiveData
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		SensitiveData
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	data, err := h.sensitiveDataM.GetOne(ctx, params.ID)
@@ -186,9 +186,9 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.sensitiveDataM.Del(ctx, params.Ids); err != nil {

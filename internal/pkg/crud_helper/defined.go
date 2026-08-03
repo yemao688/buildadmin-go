@@ -345,8 +345,7 @@ import (
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
 	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
 	{{end}}{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
-	{{end}}"buildadmin-go/internal/admin/validate"
-	"buildadmin-go/internal/pkg/validator"
+	{{end}}"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -433,7 +432,7 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, validate.GetError(param, err))
+		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)

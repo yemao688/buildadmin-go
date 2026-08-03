@@ -934,7 +934,7 @@ func Success(ctx *gin.Context, data any)            {}
 func SuccessWithMessage(ctx *gin.Context, message string) {}
 func FailByErr(ctx *gin.Context, err error)         {}
 `,
-		"internal/admin/validate/validate.go": `package validate
+		"internal/pkg/validator/validator.go": `package validator
 
 type FlexInt32 int32
 type FlexInt64 int64
@@ -943,10 +943,6 @@ type FlexFloat64 float64
 type Ids struct {
 	Ids interface{}
 }
-
-func GetError(v interface{}, err error) error { return err }
-`,
-		"internal/pkg/validator/validator.go": `package validator
 
 func GetError(v interface{}, err error) error { return err }
 `,

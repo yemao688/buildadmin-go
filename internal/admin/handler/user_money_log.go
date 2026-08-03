@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	"math"
 	"strconv"
@@ -69,8 +69,8 @@ type Money struct {
 	Memo   string          `json:"memo"  binding:"required"`    // 备注
 }
 
-func (v Money) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v Money) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"user_id.required": "user_id required",
 		"money.required":   "money required",
 		"memo.required":    "memo required",
@@ -119,7 +119,7 @@ func parseMoneyAmount(raw []byte) (float64, error) {
 func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	var params Money
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

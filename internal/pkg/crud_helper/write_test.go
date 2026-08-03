@@ -458,7 +458,7 @@ func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
 
 func TestRewriteFlexNumericParamFields(t *testing.T) {
 	input := "type DemoParam struct {\n\tEnabled bool `json:\"enabled\"`\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
-	want := "type DemoParam struct {\n\tEnabled validate.FlexBool `json:\"enabled\"`\n\tCount validate.FlexInt32 `json:\"count\"`\n\tTotal validate.FlexInt64 `json:\"total\"`\n\tRate validate.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
+	want := "type DemoParam struct {\n\tEnabled validator.FlexBool `json:\"enabled\"`\n\tCount validator.FlexInt32 `json:\"count\"`\n\tTotal validator.FlexInt64 `json:\"total\"`\n\tRate validator.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
 	if got := rewriteFlexNumericParamFields(input, nil); got != want {
 		t.Fatalf("unexpected rewritten fields:\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
@@ -482,34 +482,34 @@ func TestRewriteHandlerParamFieldsUsesDesignTypeOverrides(t *testing.T) {
 		"\tPlain string `json:\"plain_text\"`\n" +
 		"}\n"
 	overrides := map[string]string{
-		"count":             "validate.CustomInt",
-		"feature_flags":     "validate.CommaJoined",
-		"category_values":   "validate.CommaJoined",
-		"reviewer_ids":      "validate.CommaJoined",
-		"region_city":       "validate.CommaJoined",
-		"gallery_images":    "validate.CommaJoined",
-		"attachments_files": "validate.CommaJoined",
-		"extra_data":        "validate.KeyValueArray",
-		"scheduled_at":      "validate.FlexDateTime",
-		"published_on":      "validate.FlexDate",
-		"published_at":      "validate.FlexClock",
-		"created_at":        "validate.FlexUnixTime",
-		"title_string":      "validate.CustomString",
+		"count":             "validator.CustomInt",
+		"feature_flags":     "validator.CommaJoined",
+		"category_values":   "validator.CommaJoined",
+		"reviewer_ids":      "validator.CommaJoined",
+		"region_city":       "validator.CommaJoined",
+		"gallery_images":    "validator.CommaJoined",
+		"attachments_files": "validator.CommaJoined",
+		"extra_data":        "validator.KeyValueArray",
+		"scheduled_at":      "validator.FlexDateTime",
+		"published_on":      "validator.FlexDate",
+		"published_at":      "validator.FlexClock",
+		"created_at":        "validator.FlexUnixTime",
+		"title_string":      "validator.CustomString",
 	}
 	wantTypes := map[string]string{
-		"Count":         "validate.CustomInt",
-		"Checkbox":      "validate.CommaJoined",
-		"Selects":       "validate.CommaJoined",
-		"RemoteSelects": "validate.CommaJoined",
-		"City":          "validate.CommaJoined",
-		"Images":        "validate.CommaJoined",
-		"Files":         "validate.CommaJoined",
-		"Extra":         "validate.KeyValueArray",
-		"Scheduled":     "validate.FlexDateTime",
-		"Published":     "validate.FlexDate",
-		"At":            "validate.FlexClock",
-		"Created":       "validate.FlexUnixTime",
-		"Title":         "validate.CustomString",
+		"Count":         "validator.CustomInt",
+		"Checkbox":      "validator.CommaJoined",
+		"Selects":       "validator.CommaJoined",
+		"RemoteSelects": "validator.CommaJoined",
+		"City":          "validator.CommaJoined",
+		"Images":        "validator.CommaJoined",
+		"Files":         "validator.CommaJoined",
+		"Extra":         "validator.KeyValueArray",
+		"Scheduled":     "validator.FlexDateTime",
+		"Published":     "validator.FlexDate",
+		"At":            "validator.FlexClock",
+		"Created":       "validator.FlexUnixTime",
+		"Title":         "validator.CustomString",
 	}
 	got := rewriteFlexNumericParamFields(input, overrides)
 	for field, typeName := range wantTypes {
@@ -536,23 +536,23 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		defaultVal string
 		want       string
 	}{
-		{name: "switch tinyint length", designType: "switch", typeName: "tinyint", length: 1, want: "validate.FlexBool"},
-		{name: "radio tinyint data type", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: "validate.FlexBool"},
-		{name: "year design type", designType: "year", typeName: "year", dataType: "year", want: "validate.FlexYear"},
+		{name: "switch tinyint length", designType: "switch", typeName: "tinyint", length: 1, want: "validator.FlexBool"},
+		{name: "radio tinyint data type", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: "validator.FlexBool"},
+		{name: "year design type", designType: "year", typeName: "year", dataType: "year", want: "validator.FlexYear"},
 		{name: "tinyint input default remains numeric", designType: "number", typeName: "tinyint", defaultTyp: "INPUT", defaultVal: "1", want: ""},
 		{name: "char one is not bool", designType: "radio", typeName: "char", dataType: "char(1)", length: 1, want: ""},
-		{name: "checkbox", designType: "checkbox", dataType: "set", want: "validate.CommaJoined"},
-		{name: "selects", designType: "selects", dataType: "set", want: "validate.CommaJoined"},
-		{name: "remoteSelects", designType: "remoteSelects", dataType: "varchar", want: "validate.CommaJoined"},
-		{name: "city", designType: "city", dataType: "varchar", want: "validate.CommaJoined"},
-		{name: "images", designType: "images", dataType: "text", want: "validate.CommaJoined"},
-		{name: "files", designType: "files", dataType: "text", want: "validate.CommaJoined"},
-		{name: "array", designType: "array", dataType: "text", want: "validate.KeyValueArray"},
-		{name: "datetime", designType: "datetime", dataType: "datetime", want: "validate.FlexDateTime"},
-		{name: "date", designType: "date", dataType: "date", want: "validate.FlexDate"},
-		{name: "time", designType: "time", dataType: "time", want: "validate.FlexClock"},
+		{name: "checkbox", designType: "checkbox", dataType: "set", want: "validator.CommaJoined"},
+		{name: "selects", designType: "selects", dataType: "set", want: "validator.CommaJoined"},
+		{name: "remoteSelects", designType: "remoteSelects", dataType: "varchar", want: "validator.CommaJoined"},
+		{name: "city", designType: "city", dataType: "varchar", want: "validator.CommaJoined"},
+		{name: "images", designType: "images", dataType: "text", want: "validator.CommaJoined"},
+		{name: "files", designType: "files", dataType: "text", want: "validator.CommaJoined"},
+		{name: "array", designType: "array", dataType: "text", want: "validator.KeyValueArray"},
+		{name: "datetime", designType: "datetime", dataType: "datetime", want: "validator.FlexDateTime"},
+		{name: "date", designType: "date", dataType: "date", want: "validator.FlexDate"},
+		{name: "time", designType: "time", dataType: "time", want: "validator.FlexClock"},
 		{name: "create_time", designType: "timestamp", dataType: "bigint", want: ""},
-		{name: "end_time", designType: "timestamp", dataType: "bigint", want: "validate.FlexFormattedUnixTime"},
+		{name: "end_time", designType: "timestamp", dataType: "bigint", want: "validator.FlexFormattedUnixTime"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -584,18 +584,18 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	}
 	got := buildModelFieldTypeOverrides(fields)
 	want := map[string]string{
-		"enabled":        "validate.FlexBool",
-		"visible":        "validate.FlexBool",
-		"published_year": "validate.FlexYear",
-		"flags":          "validate.CommaJoined",
-		"options":        "validate.KeyValueArray",
-		"created_at":     "validate.FlexDateTime",
-		"published_at":   "validate.FlexDateTime",
-		"day":            "validate.FlexDate",
-		"clock":          "validate.FlexClock",
+		"enabled":        "validator.FlexBool",
+		"visible":        "validator.FlexBool",
+		"published_year": "validator.FlexYear",
+		"flags":          "validator.CommaJoined",
+		"options":        "validator.KeyValueArray",
+		"created_at":     "validator.FlexDateTime",
+		"published_at":   "validator.FlexDateTime",
+		"day":            "validator.FlexDate",
+		"clock":          "validator.FlexClock",
 		"clock_native":   "string",
 
-		"unix_at": "validate.FlexFormattedUnixTime",
+		"unix_at": "validator.FlexFormattedUnixTime",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("overrides = %#v, want %#v", got, want)
@@ -626,19 +626,19 @@ func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 		PkJSONName:      "id",
 		DTOQualifier:    "dto.",
 		ParamTypeOverrides: map[string]string{
-			"feature_flags": "validate.CommaJoined",
+			"feature_flags": "validator.CommaJoined",
 		},
 	}
 	// 参数类型改写发生在 DTO 文件（buildParamStruct + renderDTO）
 	paramStruct := buildParamStruct(structContent, handlerData)
-	if !strings.Contains(paramStruct, "FeatureFlags validate.CommaJoined") {
+	if !strings.Contains(paramStruct, "FeatureFlags validator.CommaJoined") {
 		t.Fatalf("DTO parameter rewrite missing:\n%s", paramStruct)
 	}
 	dtoContent, err := renderDTO(paramStruct)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(dtoContent, "validate.CommaJoined") != 1 || strings.Count(dtoContent, "FeatureFlags validate.CommaJoined") != 1 {
+	if strings.Count(dtoContent, "validator.CommaJoined") != 1 || strings.Count(dtoContent, "FeatureFlags validator.CommaJoined") != 1 {
 		t.Fatalf("DTO should contain one rewritten parameter type:\n%s", dtoContent)
 	}
 	// handler 只引用共享的 DTO 参数结构

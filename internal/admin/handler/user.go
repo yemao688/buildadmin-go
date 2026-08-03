@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
 	passwordutil "buildadmin-go/internal/pkg/password"
@@ -60,8 +60,8 @@ type User struct {
 	Status   string `json:"status" binding:"oneof=enable disable"`
 }
 
-func (v User) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v User) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"username.min":      "username>2 and username<15",
 		"username.max":      "username>2 and username<15",
 		"password.password": "password invalid",
@@ -82,7 +82,7 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 	}
 	var params User
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	usernameExists, err := h.userM.UsernameExists(ctx, params.Username)
@@ -187,7 +187,7 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		User
 	}{}
 	if err = ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	adminID, hasAdminID, err := requestedAdminID(bodyBytes)
@@ -236,9 +236,9 @@ func requestedAdminID(body []byte) (int32, bool, error) {
 }
 
 func (h *UserHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

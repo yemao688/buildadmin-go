@@ -7,7 +7,7 @@ import (
 	"fmt"
 	routinedto "buildadmin-go/internal/admin/dto"
 	model "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/utils"
@@ -150,14 +150,14 @@ type Config struct {
 	Weigh       int32    `json:"weigh"`
 }
 
-func (v Config) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v Config) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *ConfigHandler) Add(ctx *gin.Context) {
 	var params Config
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -207,9 +207,9 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *ConfigHandler) Del(ctx *gin.Context) {
-	var param validate.Ids
+	var param validator.Ids
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validate.GetError(param, err))
+		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.configM.Del(ctx, param.Ids)
@@ -223,7 +223,7 @@ func (h *ConfigHandler) Del(ctx *gin.Context) {
 func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 	params := routinedto.MailParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

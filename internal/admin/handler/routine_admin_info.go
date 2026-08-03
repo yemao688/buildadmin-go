@@ -2,7 +2,7 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/utils"
 
@@ -59,8 +59,8 @@ type SelfAdmin struct {
 	Motto    string  `json:"motto"`
 }
 
-func (v SelfAdmin) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v SelfAdmin) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"email.email":       "email error",
 		"mobile.phone":      "mobile error",
 		"password.password": "password invalid",
@@ -72,7 +72,7 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 		SelfAdmin
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

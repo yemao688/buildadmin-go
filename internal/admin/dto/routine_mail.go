@@ -1,6 +1,6 @@
 package dto
 
-import "buildadmin-go/internal/admin/validate"
+import "buildadmin-go/internal/pkg/validator"
 
 type MailParam struct {
 	SmtpServer       string `json:"smtp_server" binding:"required"`
@@ -12,6 +12,6 @@ type MailParam struct {
 	TestMail         string `json:"testMail" binding:"required"`
 }
 
-func (v MailParam) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v MailParam) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }

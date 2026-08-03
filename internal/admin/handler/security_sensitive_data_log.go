@@ -2,7 +2,7 @@ package handler
 
 import (
 	securitymodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 
 	"github.com/gin-gonic/gin"
@@ -56,9 +56,9 @@ func (h *SensitiveDataLogHandler) Info(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.sensitiveDataLogM.Del(ctx, params.Ids); err != nil {
@@ -69,9 +69,9 @@ func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

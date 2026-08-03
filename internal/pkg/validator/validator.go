@@ -12,22 +12,26 @@ type Validator interface {
 
 type ValidatorMessages map[string]string
 
-// GetError 获取验证错误
-func GetError(request interface{}, err error) *cErr.Error {
-	if _, isValidatorErrors := err.(validator.ValidationErrors); isValidatorErrors {
-		_, isValidator := request.(Validator)
+// GetError 获取验证错误。request 结构体实现 Validator 接口时可按字段+规则
+// 返回自定义错误文案；否则返回首条校验错误原文。
+func GetError(data interface{}, err error) *cErr.Error {
+	validErrs, ok := err.(validator.ValidationErrors)
+	if !ok {
+		return cErr.BadRequest(err.Error())
+	}
 
-		for _, v := range err.(validator.ValidationErrors) {
-			// 若 request 结构体实现 Validator 接口即可实现自定义错误信息
-			if isValidator {
-				if message, exist := request.(Validator).GetMessages()[v.Field()+"."+v.Tag()]; exist {
-					return cErr.BadRequest(message)
-				}
-			}
-			return cErr.BadRequest(v.Error())
-		}
+	if len(validErrs) == 0 {
+		return cErr.BadRequest(err.Error())
+	}
+
+	if _, ok := data.(Validator); !ok {
+		return cErr.BadRequest(validErrs[0].Error())
+	}
+
+	// 若 data 结构体实现 Validator 接口即可实现自定义错误信息
+	if message, exist := data.(Validator).GetMessages()[validErrs[0].Field()+"."+validErrs[0].Tag()]; exist {
+		return cErr.BadRequest(message)
 	}
 
 	return cErr.BadRequest(err.Error())
-	// return cErr.BadRequest("参数错误")
 }

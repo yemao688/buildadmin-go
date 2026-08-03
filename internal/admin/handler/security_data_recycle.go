@@ -6,7 +6,7 @@ import (
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"io"
@@ -75,8 +75,8 @@ type DataRecycle struct {
 	Status       string `json:"status"`
 }
 
-func (v DataRecycle) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v DataRecycle) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *DataRecycleHandler) Add(ctx *gin.Context) {
@@ -90,7 +90,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 
 	var params DataRecycle
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		DataRecycle
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -150,9 +150,9 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

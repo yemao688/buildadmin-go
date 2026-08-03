@@ -2,7 +2,7 @@ package handler
 
 import (
 	routinemodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -53,8 +53,8 @@ type Attachment struct {
 	Sha1     string `gorm:"column:sha1;not null;comment:sha1编码" json:"sha1"`         // sha1编码
 }
 
-func (v Attachment) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{}
+func (v Attachment) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{}
 }
 
 func (h *AttachmentHandler) One(ctx *gin.Context) {
@@ -76,7 +76,7 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 		Attachment
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -96,9 +96,9 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *AttachmentHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

@@ -813,19 +813,19 @@ func buildHandlerParamTypeOverrides(fields []crudmodel.Field) map[string]string 
 		case isCanonicalTimeField(field.Name):
 			// Auto-maintained integer timestamps stay plain int64 in model/handler DTOs.
 		case isBooleanStorageField(field):
-			overrides[field.Name] = "validate.FlexBool"
+			overrides[field.Name] = "validator.FlexBool"
 		case designType == "year" || dbType == "year":
-			overrides[field.Name] = "validate.FlexYear"
+			overrides[field.Name] = "validator.FlexYear"
 		case slices.Contains(dtStringToArray, designType):
-			overrides[field.Name] = "validate.CommaJoined"
+			overrides[field.Name] = "validator.CommaJoined"
 		case designType == "array":
-			overrides[field.Name] = "validate.KeyValueArray"
+			overrides[field.Name] = "validator.KeyValueArray"
 		case designType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
-			overrides[field.Name] = "validate.FlexDateTime"
+			overrides[field.Name] = "validator.FlexDateTime"
 		case designType == "date":
-			overrides[field.Name] = "validate.FlexDate"
+			overrides[field.Name] = "validator.FlexDate"
 		case designType == "time":
-			overrides[field.Name] = "validate.FlexClock"
+			overrides[field.Name] = "validator.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
 			overrides[field.Name] = timestampAdapterType(field.Name)
 		}
@@ -842,25 +842,25 @@ func buildModelFieldTypeOverrides(fields []crudmodel.Field) map[string]string {
 		case isCanonicalTimeField(field.Name):
 			// Auto-maintained integer timestamps stay plain int64 (not FlexUnixTime).
 		case isBooleanStorageField(field):
-			overrides[field.Name] = "validate.FlexBool"
+			overrides[field.Name] = "validator.FlexBool"
 		case field.DesignType == "year" || dbType == "year":
-			overrides[field.Name] = "validate.FlexYear"
+			overrides[field.Name] = "validator.FlexYear"
 		case dbType == "time":
 			if field.DesignType == "time" {
-				overrides[field.Name] = "validate.FlexClock"
+				overrides[field.Name] = "validator.FlexClock"
 			} else {
 				overrides[field.Name] = "string"
 			}
 		case slices.Contains(dtStringToArray, field.DesignType):
-			overrides[field.Name] = "validate.CommaJoined"
+			overrides[field.Name] = "validator.CommaJoined"
 		case field.DesignType == "array":
-			overrides[field.Name] = "validate.KeyValueArray"
+			overrides[field.Name] = "validator.KeyValueArray"
 		case field.DesignType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
-			overrides[field.Name] = "validate.FlexDateTime"
+			overrides[field.Name] = "validator.FlexDateTime"
 		case field.DesignType == "date" && dbType == "date":
-			overrides[field.Name] = "validate.FlexDate"
+			overrides[field.Name] = "validator.FlexDate"
 		case field.DesignType == "time" && dbType == "time":
-			overrides[field.Name] = "validate.FlexClock"
+			overrides[field.Name] = "validator.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
 			overrides[field.Name] = timestampAdapterType(field.Name)
 		}
@@ -871,7 +871,7 @@ func buildModelFieldTypeOverrides(fields []crudmodel.Field) map[string]string {
 func timestampAdapterType(fieldName string) string {
 	// Canonical names are skipped before this helper is called.
 	// Non-canonical integer timestamp design fields keep formatted JSON output.
-	return "validate.FlexFormattedUnixTime"
+	return "validator.FlexFormattedUnixTime"
 }
 
 func isBooleanStorageField(field crudmodel.Field) bool {

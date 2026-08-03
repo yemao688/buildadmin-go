@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/utils"
@@ -177,7 +177,7 @@ func (h *Base) Sortable(ctx *gin.Context) {
 	}
 	params := Sort{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

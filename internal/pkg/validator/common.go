@@ -1,4 +1,4 @@
-package validate
+package validator
 
 type Ids struct {
 	Ids []int32 `form:"ids[]" binding:"required"`

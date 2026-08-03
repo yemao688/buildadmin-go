@@ -31,10 +31,10 @@ func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
 			t.Fatalf("canonical handler override %s should be skipped, got %q", name, paramTypes[name])
 		}
 	}
-	if modelTypes["end_time"] != "validate.FlexFormattedUnixTime" || paramTypes["end_time"] != "validate.FlexFormattedUnixTime" {
+	if modelTypes["end_time"] != "validator.FlexFormattedUnixTime" || paramTypes["end_time"] != "validator.FlexFormattedUnixTime" {
 		t.Fatalf("end_time overrides = model %q handler %q", modelTypes["end_time"], paramTypes["end_time"])
 	}
-	if modelTypes["created_at"] != "validate.FlexDateTime" || paramTypes["created_at"] != "validate.FlexDateTime" {
+	if modelTypes["created_at"] != "validator.FlexDateTime" || paramTypes["created_at"] != "validator.FlexDateTime" {
 		t.Fatalf("created_at overrides = model %q handler %q", modelTypes["created_at"], paramTypes["created_at"])
 	}
 }

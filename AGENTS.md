@@ -50,9 +50,9 @@
 | 层 | 职责 | 允许依赖 | 禁止依赖 |
 |---|---|---|---|
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
-| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper 等 | 外部库、conf | 渠道层 |
+| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.BalanceService`（余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
-| `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*）·`validate/` | model、pkg、common | `internal/api` |
+| `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/member`（会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/user`（会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
 | `internal/install` | 安装渠道（自注册）：`handler.go` + `router.go`（/install 与 /api/install/*，只经全局中间件，不进入 UserLogin）+ `provider.go` | model、pkg、common | 各业务渠道 |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |

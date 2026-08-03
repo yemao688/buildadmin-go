@@ -3,7 +3,6 @@ package handler
 import (
 	countrydto "buildadmin-go/internal/admin/dto"
 	countrymodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -91,7 +90,7 @@ func (h *CurrencyHandler) Del(ctx *gin.Context) {
 		Ids []int64 `form:"ids[]" binding:"required"`
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validate.GetError(param, err))
+		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.currencyM.Del(ctx, param.Ids)

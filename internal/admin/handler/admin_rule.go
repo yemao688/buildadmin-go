@@ -2,7 +2,7 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/tree"
 	"slices"
@@ -74,8 +74,8 @@ type AdminRule struct {
 	Status    string `json:"status"`
 }
 
-func (v AdminRule) GetMessages() validate.ValidatorMessages {
-	return validate.ValidatorMessages{
+func (v AdminRule) GetMessages() validator.ValidatorMessages {
+	return validator.ValidatorMessages{
 		"title.required": "title required",
 	}
 }
@@ -83,7 +83,7 @@ func (v AdminRule) GetMessages() validate.ValidatorMessages {
 func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 	var params AdminRule
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		AdminRule
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	adminRule, err := h.adminRuleM.GetOne(ctx, params.ID)
@@ -135,9 +135,9 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 }
 
 func (h *AdminRuleHandler) Del(ctx *gin.Context) {
-	var params validate.Ids
+	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 

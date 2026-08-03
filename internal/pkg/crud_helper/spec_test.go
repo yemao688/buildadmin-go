@@ -470,7 +470,7 @@ fields:
 	if _, ok := overrides["owner_id"]; ok {
 		t.Fatalf("false select flag created adapter override: %+v", overrides)
 	}
-	if overrides["owner_ids"] != "validate.CommaJoined" || overrides["cover_images"] != "validate.CommaJoined" || overrides["document_files"] != "validate.CommaJoined" {
+	if overrides["owner_ids"] != "validator.CommaJoined" || overrides["cover_images"] != "validator.CommaJoined" || overrides["document_files"] != "validator.CommaJoined" {
 		t.Fatalf("true multi flags missing adapter overrides: %+v", overrides)
 	}
 }

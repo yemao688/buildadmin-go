@@ -6,7 +6,7 @@ import (
 	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
 	adminauth "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/validate"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/middleware"
 	helper "buildadmin-go/internal/pkg/crud_helper"
@@ -72,7 +72,7 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := requireCrudRoot(ctx); err != nil {
@@ -109,7 +109,7 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -137,7 +137,7 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 func (h *CrudHandler) Delete(ctx *gin.Context) {
 	var param IDS
 	if err := ctx.ShouldBindJSON(&param); err != nil {
-		FailByErr(ctx, validate.GetError(param, err))
+		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	if err := requireCrudRoot(ctx); err != nil {
@@ -166,7 +166,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
 	var params crudUploadCompletedParams
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.crudLogM.UpdateSync(ctx, params.SyncIDs, bool(params.CancelSync)); err != nil {
@@ -193,7 +193,7 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	// 新语义：实体一律输出到共享记录层 internal/model（CommonModel 参数仅保留兼容）。
@@ -285,7 +285,7 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 
 	params := map[string]any{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(nil, err))
+		FailByErr(ctx, validator.GetError(nil, err))
 		return
 	}
 
@@ -325,7 +325,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validate.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
