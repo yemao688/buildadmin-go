@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"bytes"
 	model "buildadmin-go/internal/admin/repository"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/data_scope"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -53,5 +53,28 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 	(&CrudHandler{tableM: &model.TableRepository{}}).Generate(ctx)
 	if !strings.Contains(recorder.Body.String(), "another generation is in progress") {
 		t.Fatalf("busy response = %s", recorder.Body.String())
+	}
+}
+
+// F7: 设计器控制器列表不得包含框架支撑文件与测试文件。
+func TestIsExcludedControllerFile(t *testing.T) {
+	excluded := []string{
+		"provider.go", "base.go", "common.go", "response.go", "route.go",
+		"ajax.go", "dashboard.go", "index.go", "module.go",
+		"crud.go", "crud_log.go", "auth_invalidation.go",
+		"routine_admin_info.go", "routine_config.go",
+		"security_data_recycle.go", "user.go", "user_money_log.go",
+		"country_currency_test.go", "helper_test.go",
+	}
+	for _, name := range excluded {
+		if !IsExcludedControllerFile(name) {
+			t.Errorf("%q should be excluded from the designer controller list", name)
+		}
+	}
+	allowed := []string{"country_currency.go", "ops_banner.go", "user_level.go", "order_recharge.go"}
+	for _, name := range allowed {
+		if IsExcludedControllerFile(name) {
+			t.Errorf("%q should be selectable as a CRUD controller", name)
+		}
 	}
 }

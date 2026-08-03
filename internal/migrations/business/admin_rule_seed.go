@@ -62,15 +62,17 @@ func seedAdminRule(db *gorm.DB, table string, seed AdminRuleSeed) error {
 }
 
 func ensureAdminRule(db *gorm.DB, table string, seed AdminRuleSeed) (int32, error) {
+	// F6: 判重键与菜单 upsert 对齐（pid+name+type），同名不同父的规则
+	// 不再相互吞并、串层级。
+	ruleType := seed.Type
+	if ruleType == "" {
+		ruleType = "menu"
+	}
 	var count int64
-	if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE name = ?", seed.Name).Scan(&count).Error; err != nil {
+	if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE pid = ? AND name = ? AND type = ?", seed.Pid, seed.Name, ruleType).Scan(&count).Error; err != nil {
 		return 0, err
 	}
 	if count == 0 {
-		ruleType := seed.Type
-		if ruleType == "" {
-			ruleType = "menu"
-		}
 		extend := seed.Extend
 		if extend == "" {
 			extend = "none"
@@ -88,7 +90,7 @@ func ensureAdminRule(db *gorm.DB, table string, seed AdminRuleSeed) (int32, erro
 	}
 
 	var id int32
-	if err := db.Raw("SELECT id FROM "+table+" WHERE name = ? ORDER BY id LIMIT 1", seed.Name).Scan(&id).Error; err != nil {
+	if err := db.Raw("SELECT id FROM "+table+" WHERE pid = ? AND name = ? AND type = ? ORDER BY id LIMIT 1", seed.Pid, seed.Name, ruleType).Scan(&id).Error; err != nil {
 		return 0, err
 	}
 	if id == 0 {

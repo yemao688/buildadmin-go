@@ -1,19 +1,19 @@
 package handler
 
 import (
-	"encoding/json"
-	"fmt"
-	crudmodel "buildadmin-go/internal/model"
-	model "buildadmin-go/internal/admin/repository"
 	adminauth "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
+	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/middleware"
+	crudmodel "buildadmin-go/internal/model"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/filesystem"
+	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/utils"
+	"encoding/json"
+	"fmt"
 	"path"
 	"slices"
 	"strings"
@@ -215,34 +215,10 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 		modelFileList[v] = v
 	}
 
-	// 拍平布局：排除核心/工具 handler（不可作为 CRUD 控制器目标）。
-	outExcludeHandler := []string{
-		"ajax.go",
-		"dashboard.go",
-		"index.go",
-		"module.go",
-		"crud.go",
-		"crud_log.go",
-		"auth_invalidation.go",
-		"routine_admin_info.go",
-		"routine_attachment.go",
-		"routine_config.go",
-		"security_controller_as.go",
-		"security_data_recycle.go",
-		"security_data_recycle_log.go",
-		"security_sensitive_data.go",
-		"security_sensitive_data_log.go",
-		"admin.go",
-		"admin_group.go",
-		"admin_log.go",
-		"admin_rule.go",
-		"user.go",
-		"user_money_log.go",
-	}
 	controllerFiles := map[string]string{}
 	adminControllerFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/admin/handler"), []string{".go"})
 	for _, v := range adminControllerFiles {
-		if slices.Contains(outExcludeHandler, v) {
+		if IsExcludedControllerFile(v) {
 			continue
 		}
 
@@ -383,4 +359,25 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 	Success(ctx, map[string]interface{}{
 		"dbs": outTables,
 	})
+}
+
+// IsExcludedControllerFile 判定 handler 文件名是否应进入 CRUD 设计器的
+// 控制器选择列表：核心/工具 handler 与包级支撑文件（provider/base 等）
+// 以及测试文件都不是可生成模块。
+func IsExcludedControllerFile(name string) bool {
+	if strings.HasSuffix(name, "_test.go") {
+		return true
+	}
+	switch name {
+	case "provider.go", "base.go", "common.go", "response.go", "route.go",
+		"ajax.go", "dashboard.go", "index.go", "module.go",
+		"crud.go", "crud_log.go", "auth_invalidation.go",
+		"routine_admin_info.go", "routine_attachment.go", "routine_config.go",
+		"security_controller_as.go", "security_data_recycle.go",
+		"security_data_recycle_log.go", "security_sensitive_data.go",
+		"security_sensitive_data_log.go", "admin.go", "admin_group.go",
+		"admin_log.go", "admin_rule.go", "user.go", "user_money_log.go":
+		return true
+	}
+	return false
 }

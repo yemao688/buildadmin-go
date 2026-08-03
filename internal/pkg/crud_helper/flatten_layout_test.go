@@ -239,3 +239,62 @@ func requireNestedDeleteClean(t *testing.T) {
 		require.True(t, os.IsNotExist(err), "generated file %s still exists", path)
 	}
 }
+
+// F5: 锚点 code-mod 必须精确定位 ProvideRegistrars 函数体与真正的
+// wire.NewSet ProviderSet；文件里其它同名结构不得被误操作。
+func TestAnchorEditsOnlyTouchProvideRegistrarsAndWireNewSet(t *testing.T) {
+	content := `package router
+
+import (
+	handler "buildadmin-go/internal/admin/handler"
+	"github.com/google/wire"
+)
+
+var ProviderSet = wire.NewSet(
+	NewAdminRouter,
+)
+
+var ProviderSetDup = wire.NewSet(
+	NewImpostor,
+)
+
+func fakeReturn() []Registrar {
+	return []Registrar{
+		NewImpostorRegistrar(nil),
+	}
+}
+
+func ProvideRegistrars(
+	log *handler.LogHandler,
+) []Registrar {
+	return []Registrar{
+		NewLogRegistrar(log),
+	}
+}
+`
+	// 追加只落在 ProvideRegistrars 的参数与 return
+	added, err := addProvideRegistrarsEntry(content, "E2eBanner")
+	require.NoError(t, err)
+	require.Contains(t, added, "\te2eBanner *handler.E2eBannerHandler,\n")
+	require.Contains(t, added, "\t\tNewE2eBannerRegistrar(e2eBanner),\n")
+	require.NotContains(t, added, "NewImpostorRegistrar,\n")
+	require.NotContains(t, added, "NewE2eBannerRegistrar,\n", "ProviderSet list must not gain the entry via addProvideRegistrarsEntry")
+	// fakeReturn 不受影响
+	require.Contains(t, added, "func fakeReturn() []Registrar {\n\treturn []Registrar{\n\t\tNewImpostorRegistrar(nil),\n\t}\n}")
+
+	// ProviderSet 追加必须验证 callee 是 wire.NewSet；fake 的 ProviderSetDup 不动
+	providerAdded, err := addProviderSetEntry(added, "E2eBannerRegistrar")
+	require.NoError(t, err)
+	require.Contains(t, providerAdded, "\tNewE2eBannerRegistrar,\n")
+	require.Contains(t, providerAdded, "var ProviderSet = wire.NewSet(\n\tNewAdminRouter,\n\tNewE2eBannerRegistrar,\n)")
+	require.NotContains(t, providerAdded, "NewImpostor,\n\tNewE2eBannerRegistrar", "ProviderSetDup must be untouched")
+
+	// 移除：只删 ProvideRegistrars 相关 + 真正 wire.NewSet 里的条目
+	removed, err := removeProvideRegistrarsEntry(providerAdded, "E2eBanner")
+	require.NoError(t, err)
+	require.NotContains(t, removed, "e2eBanner")
+	require.NotContains(t, removed, "NewE2eBannerRegistrar")
+	require.Contains(t, removed, "NewImpostorRegistrar(nil)")
+	require.Contains(t, removed, "NewImpostor,")
+	require.Equal(t, content, removed, "round trip must restore the original content")
+}

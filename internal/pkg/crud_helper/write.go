@@ -749,6 +749,9 @@ func writeAdminRouterEntry(className string) error {
 	return writeGoFile(path, updated)
 }
 
+// addProvideRegistrarsEntry 以 AST 精确定位 ProvideRegistrars FuncDecl：
+// 参数插到其参数列表右括号前，返回条目插到其 return 的 []Registrar 字面量
+// 右花括号前。文件里其它函数（即使签名相似）不受影响。
 func addProvideRegistrarsEntry(content, className string) (string, error) {
 	if strings.Contains(content, "New"+className+"Registrar(") {
 		return content, nil
@@ -757,21 +760,43 @@ func addProvideRegistrarsEntry(content, className string) (string, error) {
 	param := "\t" + varName + " *handler." + className + "Handler,\n"
 	entry := "\t\tNew" + className + "Registrar(" + varName + "),\n"
 
-	// handler 参数：插到 ProvideRegistrars 参数列表结束前
-	paramMarker := ") []Registrar {"
-	paramIndex := strings.Index(content, paramMarker)
-	if paramIndex < 0 {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
+	if err != nil {
+		return "", err
+	}
+	paramInsert, entryInsert := -1, -1
+	ast.Inspect(file, func(node ast.Node) bool {
+		function, ok := node.(*ast.FuncDecl)
+		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Body == nil {
+			return true
+		}
+		if function.Type.Params != nil {
+			paramInsert = fset.PositionFor(function.Type.Params.Closing, false).Offset
+		}
+		ast.Inspect(function.Body, func(n ast.Node) bool {
+			stmt, ok := n.(*ast.ReturnStmt)
+			if !ok || len(stmt.Results) != 1 {
+				return true
+			}
+			lit, ok := stmt.Results[0].(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			entryInsert = fset.PositionFor(lit.Rbrace, false).Offset
+			return false
+		})
+		return false
+	})
+	if paramInsert < 0 {
 		return "", fmt.Errorf("ProvideRegistrars signature anchor not found")
 	}
-	content = content[:paramIndex] + param + content[paramIndex:]
-
-	// 返回 slice 条目：插到 return 列表结束前（文件末 ProvideRegistrars 的收尾）
-	entryMarker := "\t}\n}"
-	entryIndex := strings.LastIndex(content, entryMarker)
-	if entryIndex < 0 {
+	if entryInsert < 0 {
 		return "", fmt.Errorf("ProvideRegistrars return anchor not found")
 	}
-	content = content[:entryIndex] + entry + content[entryIndex:]
+	content = content[:paramInsert] + param + content[paramInsert:]
+	entryInsert += len(param)
+	content = content[:entryInsert] + entry + content[entryInsert:]
 	return content, nil
 }
 
@@ -824,23 +849,35 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 		}
 		return true
 	})
-	// 2. ProvideRegistrars 返回 slice 中的 NewXxxRegistrar(xxx) 调用
+	// 2. 只扫 ProvideRegistrars 函数体 return 的 []Registrar 字面量
 	ast.Inspect(file, func(node ast.Node) bool {
-		composite, ok := node.(*ast.CompositeLit)
-		if !ok || len(composite.Elts) == 0 {
+		function, ok := node.(*ast.FuncDecl)
+		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Body == nil {
 			return true
 		}
-		removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return false
+		ast.Inspect(function.Body, func(n ast.Node) bool {
+			stmt, ok := n.(*ast.ReturnStmt)
+			if !ok || len(stmt.Results) != 1 {
+				return true
 			}
-			ident, ok := call.Fun.(*ast.Ident)
-			return ok && ident.Name == "New"+className+"Registrar"
-		})...)
-		return true
+			composite, ok := stmt.Results[0].(*ast.CompositeLit)
+			if !ok || len(composite.Elts) == 0 {
+				return true
+			}
+			removals = append(removals, removeListElementRanges(content, fset, composite.Lbrace, composite.Rbrace, exprsAsNodes(composite.Elts), func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return false
+				}
+				ident, ok := call.Fun.(*ast.Ident)
+				return ok && ident.Name == "New"+className+"Registrar"
+			})...)
+			return false
+		})
+		return false
 	})
-	// 3. ProviderSet 中的 NewXxxRegistrar 条目（wire.NewSet 参数）
+	// 3. 真正的 wire.NewSet ProviderSet 中的 NewXxxRegistrar 条目
+	// （callee 必须是 wire.NewSet，防止误伤同名调用）。
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok || len(call.Args) == 0 {
@@ -848,6 +885,10 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 		}
 		selector, ok := call.Fun.(*ast.SelectorExpr)
 		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
+			return true
+		}
+		xIdent, ok := selector.X.(*ast.Ident)
+		if !ok || xIdent.Name != "wire" {
 			return true
 		}
 		removals = append(removals, removeListElementRanges(content, fset, call.Lparen, call.Rparen, exprsAsNodes(call.Args), func(node ast.Node) bool {
@@ -901,6 +942,15 @@ func addProviderSetEntry(content, name string) (string, error) {
 		}
 		call, ok := spec.Values[0].(*ast.CallExpr)
 		if !ok {
+			return true
+		}
+		// F5：callee 必须是 wire.NewSet，防止把同名调用误当 ProviderSet。
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
+			return true
+		}
+		xIdent, ok := selector.X.(*ast.Ident)
+		if !ok || xIdent.Name != "wire" {
 			return true
 		}
 		setCall = call

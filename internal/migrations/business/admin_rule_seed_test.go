@@ -107,3 +107,87 @@ func TestSeedAdminRuleRejectsInvalidPrefixAndName(t *testing.T) {
 		t.Fatal("empty rule name was accepted")
 	}
 }
+
+// F6: 判重必须按 pid+name+type——同名不同父的规则不得相互吞并。
+func TestSeedAdminRuleDedupeByPidNameType(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := &conf.Configuration{Database: conf.Database{Prefix: "business_"}}
+	if err := db.Exec(`CREATE TABLE business_admin_rule (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		pid INTEGER NOT NULL DEFAULT 0,
+		type TEXT NOT NULL DEFAULT 'menu',
+		title TEXT NOT NULL DEFAULT '',
+		name TEXT NOT NULL DEFAULT '',
+		path TEXT NOT NULL DEFAULT '',
+		icon TEXT NOT NULL DEFAULT '',
+		menu_type TEXT NOT NULL DEFAULT '',
+		url TEXT NOT NULL DEFAULT '',
+		component TEXT NOT NULL DEFAULT '',
+		keepalive INTEGER NOT NULL DEFAULT 0,
+		extend TEXT NOT NULL DEFAULT 'none',
+		remark TEXT NOT NULL DEFAULT '',
+		weigh INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL DEFAULT '1',
+		update_time INTEGER,
+		create_time INTEGER
+	)`).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// 两个不同父级下同名的 "ops" 目录，以及一个同名 menu 与 menu_dir
+	seed := AdminRuleSeed{Type: "menu_dir", Title: "ops", Name: "ops", Path: "ops", Children: []AdminRuleSeed{
+		{Type: "menu", Title: "item", Name: "ops/item", Path: "ops/item"},
+	}}
+	if err := SeedAdminRule(db, config, seed); err != nil {
+		t.Fatal(err)
+	}
+	second := AdminRuleSeed{Pid: 42, Type: "menu_dir", Title: "ops-2", Name: "ops", Path: "ops-2"}
+	if err := SeedAdminRule(db, config, second); err != nil {
+		t.Fatal(err)
+	}
+	// 同名但不同 type：根下 menu 与 menu_dir 并存
+	menu := AdminRuleSeed{Pid: 0, Type: "menu", Title: "ops menu", Name: "ops", Path: "ops"}
+	if err := SeedAdminRule(db, config, menu); err != nil {
+		t.Fatal(err)
+	}
+	// 幂等：再跑一遍不新增
+	if err := SeedAdminRule(db, config, seed); err != nil {
+		t.Fatal(err)
+	}
+	if err := SeedAdminRule(db, config, second); err != nil {
+		t.Fatal(err)
+	}
+
+	var rows []struct {
+		ID    int32
+		Pid   int32
+		Type  string
+		Name  string
+		Title string
+	}
+	if err := db.Table("business_admin_rule").Order("id").Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 期望：根 ops menu_dir、根 ops menu、pid=42 的 ops menu_dir、根 ops 的 item
+	if len(rows) != 4 {
+		t.Fatalf("rows=%d, want 4: %+v", len(rows), rows)
+	}
+	byPidType := map[[2]any]bool{}
+	for _, row := range rows {
+		key := [2]any{row.Pid, row.Type}
+		if byPidType[key] {
+			t.Fatalf("duplicate pid+type pair %v: %+v", key, rows)
+		}
+		byPidType[key] = true
+	}
+	var under42 int64
+	if err := db.Table("business_admin_rule").Where("pid=42 AND name='ops'").Count(&under42).Error; err != nil {
+		t.Fatal(err)
+	}
+	if under42 != 1 {
+		t.Fatalf("pid=42 ops count=%d, want 1", under42)
+	}
+}
