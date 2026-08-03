@@ -183,7 +183,7 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.configM.SaveAll(ctx, params); err != nil {
+	if err := h.svc.SaveAll(ctx.Request.Context(), params); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

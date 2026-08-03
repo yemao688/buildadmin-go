@@ -18,21 +18,23 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-type securityModelFixture struct {
+// securityLogFixture provides the tables and seed data needed by the log
+// read paths (GetOne/List/Del stay repository-level data access).
+type securityLogFixture struct {
 	db     *gorm.DB
 	prefix string
 	config *conf.Configuration
 }
 
-func newSecurityModelFixture(t *testing.T) *securityModelFixture {
+func newSecurityLogFixture(t *testing.T) *securityLogFixture {
 	t.Helper()
-	prefix := fmt.Sprintf("sm_it_%d_", os.Getpid())
+	prefix := fmt.Sprintf("sl_it_%d_", os.Getpid())
 	db, config := testutil.OpenMySQL(t)
 	config.Database.Prefix = prefix
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: prefix}
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
-	f := &securityModelFixture{db: db, prefix: prefix, config: config}
+	f := &securityLogFixture{db: db, prefix: prefix, config: config}
 	tables := []string{"admin", "admin_closure", "user", "security_data_recycle", "security_data_recycle_log", "security_sensitive_data", "security_sensitive_data_log"}
 	for _, table := range tables {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + table + "`")
@@ -63,100 +65,24 @@ func newSecurityModelFixture(t *testing.T) *securityModelFixture {
 	return f
 }
 
-func (f *securityModelFixture) context() *gin.Context {
-	c, _ := gin.CreateTestContext(nil)
-	_ = data_scope.SetActor(c, data_scope.Actor{AdminID: 2})
-	return c
-}
-
-func TestSecurityDataScopeRestoreRollbackFailClosedAndAtomic(t *testing.T) {
-	f := newSecurityModelFixture(t)
-	recycle := NewDataRecycleLogRepository(f.db, f.config)
-	sensitive := NewSensitiveDataLogRepository(f.db, f.config)
-	q := func(n string) string { return "`" + f.prefix + n + "`" }
-	insertRecycle := func(id int, data string) {
-		stmt := "INSERT INTO " + q("security_data_recycle_log") + " (id,admin_id,recycle_id,data,data_table,primary_key,ip,useragent) VALUES (?,?,?,?,'user','id','127.0.0.1','test')"
-		require.NoError(t, f.db.Exec(stmt, id, 2, 1, data).Error)
-	}
-	insertRecycle(1, `{"id":22,"admin_id":2,"username":"restored"}`)
-	require.NoError(t, recycle.Restore(f.context(), []int32{1}))
-	var restored int64
-	f.db.Table(q("user")).Where("id=22").Count(&restored)
-	require.Equal(t, int64(1), restored)
-	require.Error(t, recycle.Restore(f.context(), []int32{1}))
-
-	insertRecycle(2, `{"id":23,"admin_id":3,"username":"global"}`)
-	require.NoError(t, recycle.Restore(f.context(), []int32{2}))
-	f.db.Table(q("user")).Where("id=23").Count(&restored)
-	require.Equal(t, int64(1), restored)
-
-	insertRecycle(3, `not-json`)
-	insertRecycle(4, `{"id":24,"admin_id":2,"username":"atomic"}`)
-	// A mixed batch cannot restore only its valid member.
-	require.Error(t, recycle.Restore(f.context(), []int32{3, 4}))
-	f.db.Table(q("user")).Where("id=24").Count(&restored)
-	require.Zero(t, restored)
-
-	insertSensitive := func(id int, after string) {
-		stmt := "INSERT INTO " + q("security_sensitive_data_log") + " (id,admin_id,sensitive_id,data_table,primary_key,data_field,data_comment,id_value,`before`,`after`,ip,useragent) VALUES (?,?,?,'user','id','username','username',20,'before',?,'127.0.0.1','test')"
-		require.NoError(t, f.db.Exec(stmt, id, 2, 1, after).Error)
-	}
-	require.NoError(t, f.db.Exec("UPDATE "+q("user")+" SET username='changed' WHERE id=20").Error)
-	insertSensitive(10, "changed")
-	require.NoError(t, sensitive.Rollback(f.context(), []int32{10}))
-	var value string
-	f.db.Table(q("user")).Select("username").Where("id=20").Scan(&value)
-	require.Equal(t, "before", value)
-	require.Error(t, sensitive.Rollback(f.context(), []int32{10}))
-
-	insertSensitive(11, "other")
-	require.Error(t, sensitive.Rollback(f.context(), []int32{11}))
-	f.db.Table(q("user")).Select("username").Where("id=20").Scan(&value)
-	require.Equal(t, "before", value)
-}
-
-func TestSecurityRuleControllerAsCannotHaveTwoEnabledRules(t *testing.T) {
-	f := newSecurityModelFixture(t)
-	recycle := NewDataRecycleRepository(f.db, f.config)
-	sensitive := NewSensitiveDataRepository(f.db, f.config)
-	ctx := f.context()
-
-	require.ErrorContains(t, recycle.Add(ctx, model.SecurityDataRecycle{
-		ID: 10, Name: "duplicate recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "1",
-	}), "controller_as already has an enabled security rule")
-	require.NoError(t, recycle.Add(ctx, model.SecurityDataRecycle{
-		ID: 11, Name: "disabled recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "0",
-	}))
-	require.ErrorContains(t, recycle.UpdateStatus(ctx, 11, "1"), "controller_as already has an enabled security rule")
-
-	require.ErrorContains(t, sensitive.Add(ctx, model.SecuritySensitiveData{
-		ID: 10, Name: "duplicate sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1",
-	}), "controller_as already has an enabled security rule")
-	require.NoError(t, sensitive.Add(ctx, model.SecuritySensitiveData{
-		ID: 11, Name: "disabled sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "0",
-	}))
-	require.ErrorContains(t, sensitive.Edit(ctx, model.SecuritySensitiveData{
-		ID: 11, Name: "enabled sensitive", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", DataFields: `{"username":"username"}`, Status: "1",
-	}), "controller_as already has an enabled security rule")
-}
-
 func TestSecurityLogListsKeepJoinedAdminAndRuleFields(t *testing.T) {
-	f := newSecurityModelFixture(t)
-	ctx := f.context()
+	f := newSecurityLogFixture(t)
+	ctx, _ := gin.CreateTestContext(nil)
+	_ = data_scope.SetActor(ctx, data_scope.Actor{AdminID: 2})
 	ctx.Request = httptest.NewRequest("GET", "/admin/security.DataRecycleLog/index", nil)
 	header.SetAdminAuth(ctx, header.AdminAuth{Id: 1, IsSuperAdmin: true})
 	q := func(n string) string { return "`" + f.prefix + n + "`" }
 	require.NoError(t, f.db.Exec("INSERT INTO "+q("security_data_recycle_log")+" (admin_id,recycle_id,data,data_table,primary_key,ip,useragent) VALUES (2,1,'{}','user','id','127.0.0.1','test')").Error)
 	require.NoError(t, f.db.Exec("INSERT INTO "+q("security_sensitive_data_log")+" (admin_id,sensitive_id,data_table,primary_key,data_field,data_comment,id_value,`before`,`after`,ip,useragent) VALUES (2,1,'user','id','username','username',20,'before','after','127.0.0.1','test')").Error)
 
-	recycleList, recycleTotal, err := NewDataRecycleLogRepository(f.db, f.config).List(ctx)
+	recycleList, recycleTotal, err := NewSecurityDataRecycleLogRepository(f.db, f.config).List(ctx)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), recycleTotal)
 	require.Len(t, recycleList, 1)
 	require.Equal(t, "Child", recycleList[0].Admin.Nickname)
 	require.Equal(t, "user", recycleList[0].Recycle.Name)
 
-	sensitiveList, sensitiveTotal, err := NewSensitiveDataLogRepository(f.db, f.config).List(ctx)
+	sensitiveList, sensitiveTotal, err := NewSecuritySensitiveDataLogRepository(f.db, f.config).List(ctx)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), sensitiveTotal)
 	require.Len(t, sensitiveList, 1)

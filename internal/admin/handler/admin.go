@@ -270,8 +270,13 @@ func (h *AdminHandler) Del(ctx *gin.Context) {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
+	actor, err := actorFromContext(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
 
-	err := h.adminM.Del(ctx, params.Ids)
+	err = h.svc.Del(ctx.Request.Context(), params.Ids, actor)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

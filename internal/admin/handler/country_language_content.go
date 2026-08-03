@@ -14,10 +14,10 @@ import (
 type LanguageContentHandler struct {
 	Base
 	log              *zap.Logger
-	languageContentM *countrymodel.LanguageContentRepository
+	languageContentM *countrymodel.CountryLanguageContentRepository
 }
 
-func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.LanguageContentRepository) *LanguageContentHandler {
+func NewLanguageContentHandler(log *zap.Logger, languageContentM *countrymodel.CountryLanguageContentRepository) *LanguageContentHandler {
 	return &LanguageContentHandler{Base: NewBase(languageContentM), log: log, languageContentM: languageContentM}
 }
 

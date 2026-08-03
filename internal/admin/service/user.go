@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
@@ -10,6 +11,7 @@ import (
 	passwordutil "buildadmin-go/internal/pkg/password"
 
 	"github.com/jinzhu/copier"
+	"gorm.io/gorm"
 )
 
 // UserService 承载会员管理的业务规则：账号唯一性、口令处理与归属
@@ -94,4 +96,50 @@ func (s *UserService) UpdateStatus(ctx context.Context, id int32, status string,
 		return err
 	}
 	return s.userM.UpdateStatusWithActor(ctx, id, status, actor)
+}
+
+// normalizeUserIDs validates and de-duplicates a batch of user ids.
+func normalizeUserIDs(ids []int32) ([]int32, error) {
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("invalid user ids")
+	}
+	seen := make(map[int32]struct{}, len(ids))
+	normalized := make([]int32, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, fmt.Errorf("invalid user id %d", id)
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			normalized = append(normalized, id)
+		}
+	}
+	return normalized, nil
+}
+
+// Del runs the whole scoped user-deletion flow: id normalization, actor
+// validation, the FOR UPDATE lock inside the actor's scope, the money-log
+// orphan guard and the atomic scoped delete — all in one transaction.
+func (s *UserService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
+	normalized, err := normalizeUserIDs(ids)
+	if err != nil {
+		return err
+	}
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	return s.userM.Transaction(ctx, func(tx *gorm.DB) error {
+		if err := s.userM.LockUsersWithActor(ctx, tx, normalized, actor); err != nil {
+			return err
+		}
+		// Reject deletion if any user still has money logs to prevent orphans.
+		n, err := s.userM.CountMoneyLogsByUserIDs(tx, normalized)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return cErr.BadRequest("user has money logs, cannot delete")
+		}
+		return s.userM.DeleteScopedWithActor(ctx, tx, normalized, actor)
+	})
 }

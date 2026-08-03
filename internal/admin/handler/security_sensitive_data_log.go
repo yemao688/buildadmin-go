@@ -2,6 +2,7 @@ package handler
 
 import (
 	securitymodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 
@@ -14,15 +15,17 @@ type SensitiveDataLogHandler struct {
 	Base
 	log               *zap.Logger
 	config            *conf.Configuration
-	sensitiveDataLogM *securitymodel.SensitiveDataLogRepository
+	sensitiveDataLogM *securitymodel.SecuritySensitiveDataLogRepository
+	svc               *service.SecuritySensitiveDataLogService
 }
 
-func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataLogM *securitymodel.SensitiveDataLogRepository) *SensitiveDataLogHandler {
+func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataLogM *securitymodel.SecuritySensitiveDataLogRepository, svc *service.SecuritySensitiveDataLogService) *SensitiveDataLogHandler {
 	return &SensitiveDataLogHandler{
 		Base:              NewBase(sensitiveDataLogM),
 		log:               log,
 		config:            config,
 		sensitiveDataLogM: sensitiveDataLogM,
+		svc:               svc,
 	}
 }
 
@@ -75,7 +78,7 @@ func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.sensitiveDataLogM.Rollback(ctx, params.Ids); err != nil {
+	if err := h.svc.Rollback(ctx.Request.Context(), params.Ids); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
@@ -24,17 +25,19 @@ type DataRecycleHandler struct {
 	Base
 	log          *zap.Logger
 	config       *conf.Configuration
-	dataRecycleM *securitymodel.DataRecycleRepository
+	dataRecycleM *securitymodel.SecurityDataRecycleRepository
 	tableM       *adminmodel.TableRepository
+	svc          *service.SecurityDataRecycleService
 }
 
-func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *securitymodel.DataRecycleRepository, tableM *adminmodel.TableRepository) *DataRecycleHandler {
+func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *securitymodel.SecurityDataRecycleRepository, tableM *adminmodel.TableRepository, svc *service.SecurityDataRecycleService) *DataRecycleHandler {
 	return &DataRecycleHandler{
 		Base:         NewBase(dataRecycleM),
 		log:          log,
 		config:       config,
 		dataRecycleM: dataRecycleM,
 		tableM:       tableM,
+		svc:          svc,
 	}
 }
 
@@ -97,7 +100,7 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 	params.ControllerAs = normalizeControllerAs(params.Controller)
 	var data model.SecurityDataRecycle
 	copier.Copy(&data, params)
-	if err := h.dataRecycleM.Add(ctx, data); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), data); err != nil {
 		FailByErr(ctx, err)
 		return
 	}
@@ -117,7 +120,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 			if statusStr == "" {
 				statusStr = fmt.Sprintf("%v", status)
 			}
-			if err := h.dataRecycleM.UpdateStatus(ctx, id, statusStr); err != nil {
+			if err := h.svc.UpdateStatus(ctx.Request.Context(), id, statusStr); err != nil {
 				FailByErr(ctx, err)
 				return
 			}
@@ -142,7 +145,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 	}
 	params.ControllerAs = normalizeControllerAs(params.Controller)
 	copier.Copy(&data, params)
-	if err := h.dataRecycleM.Edit(ctx, data); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), data); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

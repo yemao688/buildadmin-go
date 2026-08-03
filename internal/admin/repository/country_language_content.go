@@ -13,19 +13,19 @@ import (
 	"gorm.io/gorm"
 )
 
-type LanguageContentRepository struct {
+type CountryLanguageContentRepository struct {
 	persistence.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
 }
 
-func (s *LanguageContentRepository) NewRow() any {
+func (s *CountryLanguageContentRepository) NewRow() any {
 	return &model.LanguageContent{}
 }
 
-func NewLanguageContentRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *LanguageContentRepository {
-	return &LanguageContentRepository{
+func NewCountryLanguageContentRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryLanguageContentRepository {
+	return &CountryLanguageContentRepository{
 		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix+"country_language_content",
 			"id",
@@ -42,11 +42,11 @@ func NewLanguageContentRepository(sqlDB *gorm.DB, config *conf.Configuration, en
 	}
 }
 
-func (s *LanguageContentRepository) scopedDB(ctx *gin.Context) *gorm.DB {
+func (s *CountryLanguageContentRepository) scopedDB(ctx *gin.Context) *gorm.DB {
 	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
-func (s *LanguageContentRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryLanguageContentRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -59,18 +59,18 @@ func (s *LanguageContentRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm
 }
 
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *LanguageContentRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryLanguageContentRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *LanguageContentRepository) GetOne(ctx *gin.Context, id int64) (languageContent model.LanguageContent, err error) {
+func (s *CountryLanguageContentRepository) GetOne(ctx *gin.Context, id int64) (languageContent model.LanguageContent, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("id=?", id).First(&languageContent).Error
 	return
 }
 
-func (s *LanguageContentRepository) List(ctx *gin.Context) (list []model.LanguageContent, total int64, err error) {
+func (s *CountryLanguageContentRepository) List(ctx *gin.Context) (list []model.LanguageContent, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -88,15 +88,7 @@ func (s *LanguageContentRepository) List(ctx *gin.Context) (list []model.Languag
 	return
 }
 
-func (s *LanguageContentRepository) Add(ctx *gin.Context, languageContent model.LanguageContent) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryLanguageContentRepository) Add(ctx *gin.Context, languageContent model.LanguageContent) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 
@@ -107,15 +99,7 @@ func (s *LanguageContentRepository) Add(ctx *gin.Context, languageContent model.
 	})
 }
 
-func (s *LanguageContentRepository) Edit(ctx *gin.Context, languageContent model.LanguageContent) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryLanguageContentRepository) Edit(ctx *gin.Context, languageContent model.LanguageContent) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
@@ -142,7 +126,7 @@ func (s *LanguageContentRepository) Edit(ctx *gin.Context, languageContent model
 	})
 }
 
-func (s *LanguageContentRepository) Del(ctx *gin.Context, ids interface{}) error {
+func (s *CountryLanguageContentRepository) Del(ctx *gin.Context, ids interface{}) error {
 	normalizedIDs, err := normalizeLanguageContentIDs(ids)
 	if err != nil {
 		return err

@@ -13,7 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type SensitiveDataLogRepository struct {
+type SecuritySensitiveDataLogRepository struct {
 	persistence.BaseModel
 	config *conf.Configuration
 }
@@ -31,14 +31,14 @@ func sensitiveDataLogSelect(prefix string) string {
 	}, ", ")
 }
 
-func NewSensitiveDataLogRepository(sqlDB *gorm.DB, config *conf.Configuration) *SensitiveDataLogRepository {
-	return &SensitiveDataLogRepository{
+func NewSecuritySensitiveDataLogRepository(sqlDB *gorm.DB, config *conf.Configuration) *SecuritySensitiveDataLogRepository {
+	return &SecuritySensitiveDataLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"security_sensitive_data_log", "id", "sensitive.name", sqlDB),
 		config:    config,
 	}
 }
 
-func (s *SensitiveDataLogRepository) GetOne(ctx *gin.Context, id int32) (sensitiveData model.SecuritySensitiveDataLog, err error) {
+func (s *SecuritySensitiveDataLogRepository) GetOne(ctx *gin.Context, id int32) (sensitiveData model.SecuritySensitiveDataLog, err error) {
 	prefix := s.config.Database.Prefix
 	err = s.DBFor(ctx).Model(&model.SecuritySensitiveDataLog{}).
 		Joins("Admin").
@@ -48,7 +48,7 @@ func (s *SensitiveDataLogRepository) GetOne(ctx *gin.Context, id int32) (sensiti
 	return
 }
 
-func (s *SensitiveDataLogRepository) List(ctx *gin.Context) (list []model.SecuritySensitiveDataLog, total int64, err error) {
+func (s *SecuritySensitiveDataLogRepository) List(ctx *gin.Context) (list []model.SecuritySensitiveDataLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -65,70 +65,67 @@ func (s *SensitiveDataLogRepository) List(ctx *gin.Context) (list []model.Securi
 	return
 }
 
-func (s *SensitiveDataLogRepository) Rollback(ctx *gin.Context, ids interface{}) error {
-	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
-		return fmt.Errorf("invalid sensitive data log ids")
+// LockPendingLogs loads the non-rolled-back logs FOR UPDATE; a missing or
+// already-processed id fails with gorm.ErrRecordNotFound so the batch is
+// all-or-nothing.
+func (s *SecuritySensitiveDataLogRepository) LockPendingLogs(tx *gorm.DB, ids []int32) ([]model.SecuritySensitiveDataLog, error) {
+	condition := "id IN ? AND is_rollback = 0"
+	var list []model.SecuritySensitiveDataLog
+	query := tx.Model(&model.SecuritySensitiveDataLog{})
+	if err := query.Where(condition, ids).Clauses(clause.Locking{Strength: "UPDATE"}).Find(&list).Error; err != nil {
+		return nil, err
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid sensitive data log id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	if len(list) != len(ids) {
+		return nil, gorm.ErrRecordNotFound
 	}
-
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		condition := "id IN ? AND is_rollback = 0"
-		var list []model.SecuritySensitiveDataLog
-		query := tx.Model(&model.SecuritySensitiveDataLog{})
-		if err := query.Where(condition, normalized).Clauses(clause.Locking{Strength: "UPDATE"}).Find(&list).Error; err != nil {
-			return err
-		}
-		if len(list) != len(normalized) {
-			return gorm.ErrRecordNotFound
-		}
-
-		for _, v := range list {
-			targetTable, err := data_scope.ResolveBusinessTable(tx, s.config.Database.Prefix, v.DataTable)
-			if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, v.PrimaryKey, s.config.Database.Prefix) != nil || data_scope.ResolveBusinessColumn(tx, targetTable, v.DataField, s.config.Database.Prefix) != nil {
-				return fmt.Errorf("invalid sensitive target identifier")
-			}
-			// Fail-closed: refuse to rollback tables that cannot prove row ownership.
-			var rule model.SecuritySensitiveData
-			if err := tx.Table(s.config.Database.Prefix+"security_sensitive_data").Where("id=?", v.SensitiveID).Take(&rule).Error; err != nil {
-				return fmt.Errorf("sensitive rule %d unavailable: %w", v.SensitiveID, err)
-			}
-			if rule.PrimaryKey == "" {
-				rule.PrimaryKey = "id"
-			}
-			if v.PrimaryKey != rule.PrimaryKey {
-				return fmt.Errorf("sensitive log primary key does not match historical rule")
-			}
-			result := tx.Table(targetTable).Where("`"+v.PrimaryKey+"`=? AND `"+v.DataField+"`=?", v.IDValue, v.After).UpdateColumn(v.DataField, v.Before)
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return gorm.ErrRecordNotFound
-			}
-			result = tx.Model(&model.SecuritySensitiveDataLog{}).Where("id = ? AND is_rollback = 0", v.ID).Update("is_rollback", 1)
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return gorm.ErrRecordNotFound
-			}
-		}
-		return nil
-	})
+	return list, nil
 }
 
-func (s *SensitiveDataLogRepository) Del(ctx *gin.Context, ids interface{}) error {
+// ResolveTarget validates the target table and its primary/data columns for
+// a sensitive log entry (fail-closed identifier resolution).
+func (s *SecuritySensitiveDataLogRepository) ResolveTarget(tx *gorm.DB, dataTable, primaryKey, dataField string) (string, error) {
+	targetTable, err := data_scope.ResolveBusinessTable(tx, s.config.Database.Prefix, dataTable)
+	if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, primaryKey, s.config.Database.Prefix) != nil || data_scope.ResolveBusinessColumn(tx, targetTable, dataField, s.config.Database.Prefix) != nil {
+		return "", fmt.Errorf("invalid sensitive target identifier")
+	}
+	return targetTable, nil
+}
+
+// SensitiveRuleByIDTx loads the historical rule that governs a log entry.
+func (s *SecuritySensitiveDataLogRepository) SensitiveRuleByIDTx(tx *gorm.DB, id int32) (model.SecuritySensitiveData, error) {
+	var rule model.SecuritySensitiveData
+	if err := tx.Table(s.config.Database.Prefix + "security_sensitive_data").Where("id=?", id).Take(&rule).Error; err != nil {
+		return rule, err
+	}
+	return rule, nil
+}
+
+// ApplyFieldRestoreTx writes the historical value back inside the caller's
+// transaction, verifying the current value still matches (optimistic guard).
+func (s *SecuritySensitiveDataLogRepository) ApplyFieldRestoreTx(tx *gorm.DB, targetTable, primaryKey string, idValue int32, dataField, before, after string) error {
+	result := tx.Table(targetTable).Where("`"+primaryKey+"`=? AND `"+dataField+"`=?", idValue, after).UpdateColumn(dataField, before)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// MarkRolledBackTx flips the rollback flag inside the caller's transaction.
+func (s *SecuritySensitiveDataLogRepository) MarkRolledBackTx(tx *gorm.DB, id int32) error {
+	result := tx.Model(&model.SecuritySensitiveDataLog{}).Where("id = ? AND is_rollback = 0", id).Update("is_rollback", 1)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (s *SecuritySensitiveDataLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid sensitive data log ids")

@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/common/money"
 	"buildadmin-go/internal/pkg/validator"
+	cErr "buildadmin-go/internal/pkg/error"
 	model "buildadmin-go/internal/model"
 	"math"
 	"strconv"
@@ -19,14 +22,16 @@ import (
 type MoneyLogHandler struct {
 	Base
 	log           *zap.Logger
-	userMoneyLogM *adminmodel.MoneyLogRepository
+	userMoneyLogM *adminmodel.UserMoneyLogRepository
+	svc           *service.UserMoneyLogService
 }
 
-func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.MoneyLogRepository) *MoneyLogHandler {
+func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.UserMoneyLogRepository, svc *service.UserMoneyLogService) *MoneyLogHandler {
 	return &MoneyLogHandler{
 		Base:          NewBase(userMoneyLogM),
 		log:           log,
 		userMoneyLogM: userMoneyLogM,
+		svc:           svc,
 	}
 }
 
@@ -136,9 +141,26 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	}
 	userMoneyLog.Money = amount
 
-	err = h.userMoneyLogM.Add(ctx, &userMoneyLog)
-	// Add takes a pointer so the caller can inspect the generated ID.
+	actor, err := actorFromContext(ctx)
 	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	err = h.svc.Add(ctx.Request.Context(), service.MoneyLogAddInput{
+		UserID: userMoneyLog.UserID,
+		Delta:  amount,
+		Type:   userMoneyLog.Type,
+		Memo:   userMoneyLog.Memo,
+		Log:    &userMoneyLog,
+		Actor:  actor,
+	})
+	// The money chain returns domain errors; the HTTP mapping for the
+	// business-relevant case lives here in the handler.
+	if err != nil {
+		if errors.Is(err, money.ErrInsufficientBalance) {
+			FailByErr(ctx, cErr.BadRequest("insufficient balance"))
+			return
+		}
 		FailByErr(ctx, err)
 		return
 	}

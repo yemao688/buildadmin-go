@@ -14,10 +14,10 @@ import (
 type CurrencyHandler struct {
 	Base
 	log       *zap.Logger
-	currencyM *countrymodel.CurrencyRepository
+	currencyM *countrymodel.CountryCurrencyRepository
 }
 
-func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CurrencyRepository) *CurrencyHandler {
+func NewCurrencyHandler(log *zap.Logger, currencyM *countrymodel.CountryCurrencyRepository) *CurrencyHandler {
 	return &CurrencyHandler{Base: NewBase(currencyM), log: log, currencyM: currencyM}
 }
 

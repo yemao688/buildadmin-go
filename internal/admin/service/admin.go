@@ -5,23 +5,26 @@ import (
 	"strconv"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	passwordutil "buildadmin-go/internal/pkg/password"
 
 	"github.com/jinzhu/copier"
+	"gorm.io/gorm"
 )
 
 // AdminService 承载管理员管理的业务规则：口令处理、分组/规则装配、
-// 父级解析与状态流转。handler 只做参数绑定与响应返回。
+// 父级解析、状态流转与删除编排。handler 只做参数绑定与响应返回。
 type AdminService struct {
 	adminM *adminmodel.AdminRepository
 	authM  *adminmodel.AuthRepository
+	config *conf.Configuration
 }
 
-func NewAdminService(adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository) *AdminService {
-	return &AdminService{adminM: adminM, authM: authM}
+func NewAdminService(adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository, config *conf.Configuration) *AdminService {
+	return &AdminService{adminM: adminM, authM: authM, config: config}
 }
 
 // ParentSelection is the transport-free form of the handler's presence-aware
@@ -241,4 +244,41 @@ func (s *AdminService) SwitchStatus(ctx context.Context, id int32, status string
 		return cErr.BadRequest("Please use another administrator account to disable the current account!")
 	}
 	return s.adminM.SwitchStatusWithActor(ctx, id, status, actor)
+}
+
+// normalizeAdminIDs validates and de-duplicates a batch of administrator ids.
+func normalizeAdminIDs(ids []int32) ([]int32, error) {
+	seen := make(map[int32]struct{}, len(ids))
+	out := make([]int32, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, cErr.BadRequest("ids must be positive")
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+// Del runs the whole scoped administrator-deletion flow: id normalization,
+// actor validation and the hierarchy delete (scope re-verification,
+// subordinate rejection, closure cleanup) in one transaction.
+func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
+	idList, err := normalizeAdminIDs(ids)
+	if err != nil {
+		return err
+	}
+	if len(idList) == 0 {
+		return nil
+	}
+	if data_scope.ValidateActor(actor) != nil {
+		return data_scope.ErrScopedAccessDenied
+	}
+	enforcer := data_scope.NewClosureEnforcer(s.config)
+	return s.adminM.Transaction(ctx, func(tx *gorm.DB) error {
+		return adminmodel.NewAdminHierarchy(s.config).DeleteAdmins(ctx, tx, idList, actor, enforcer)
+	})
 }

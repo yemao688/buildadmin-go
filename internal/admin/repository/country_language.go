@@ -13,19 +13,19 @@ import (
 	"gorm.io/gorm"
 )
 
-type LanguageRepository struct {
+type CountryLanguageRepository struct {
 	persistence.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
 }
 
-func (s *LanguageRepository) NewRow() any {
+func (s *CountryLanguageRepository) NewRow() any {
 	return &model.Language{}
 }
 
-func NewLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *LanguageRepository {
-	return &LanguageRepository{
+func NewCountryLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryLanguageRepository {
+	return &CountryLanguageRepository{
 		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix+"country_language",
 			"id",
@@ -42,11 +42,11 @@ func NewLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer 
 	}
 }
 
-func (s *LanguageRepository) scopedDB(ctx *gin.Context) *gorm.DB {
+func (s *CountryLanguageRepository) scopedDB(ctx *gin.Context) *gorm.DB {
 	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
-func (s *LanguageRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryLanguageRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -59,18 +59,18 @@ func (s *LanguageRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *LanguageRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryLanguageRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *LanguageRepository) GetOne(ctx *gin.Context, id int64) (language model.Language, err error) {
+func (s *CountryLanguageRepository) GetOne(ctx *gin.Context, id int64) (language model.Language, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("id=?", id).First(&language).Error
 	return
 }
 
-func (s *LanguageRepository) List(ctx *gin.Context) (list []model.Language, total int64, err error) {
+func (s *CountryLanguageRepository) List(ctx *gin.Context) (list []model.Language, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -88,15 +88,7 @@ func (s *LanguageRepository) List(ctx *gin.Context) (list []model.Language, tota
 	return
 }
 
-func (s *LanguageRepository) Add(ctx *gin.Context, language model.Language) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryLanguageRepository) Add(ctx *gin.Context, language model.Language) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 
@@ -113,15 +105,7 @@ func (s *LanguageRepository) Add(ctx *gin.Context, language model.Language) erro
 	})
 }
 
-func (s *LanguageRepository) Edit(ctx *gin.Context, language model.Language) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryLanguageRepository) Edit(ctx *gin.Context, language model.Language) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
@@ -148,7 +132,7 @@ func (s *LanguageRepository) Edit(ctx *gin.Context, language model.Language) err
 	})
 }
 
-func (s *LanguageRepository) Del(ctx *gin.Context, ids interface{}) error {
+func (s *CountryLanguageRepository) Del(ctx *gin.Context, ids interface{}) error {
 	normalizedIDs, err := normalizeLanguageIDs(ids)
 	if err != nil {
 		return err

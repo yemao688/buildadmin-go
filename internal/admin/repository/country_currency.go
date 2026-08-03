@@ -13,19 +13,19 @@ import (
 	"gorm.io/gorm"
 )
 
-type CurrencyRepository struct {
+type CountryCurrencyRepository struct {
 	persistence.BaseModel
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
 }
 
-func (s *CurrencyRepository) NewRow() any {
+func (s *CountryCurrencyRepository) NewRow() any {
 	return &model.Currency{}
 }
 
-func NewCurrencyRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CurrencyRepository {
-	return &CurrencyRepository{
+func NewCountryCurrencyRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryCurrencyRepository {
+	return &CountryCurrencyRepository{
 		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix+"country_currency",
 			"id",
@@ -42,11 +42,11 @@ func NewCurrencyRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer 
 	}
 }
 
-func (s *CurrencyRepository) scopedDB(ctx *gin.Context) *gorm.DB {
+func (s *CountryCurrencyRepository) scopedDB(ctx *gin.Context) *gorm.DB {
 	return s.scopeDB(ctx, s.DBFor(ctx))
 }
 
-func (s *CurrencyRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryCurrencyRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.Policy.Mode == data_scope.ModeNone {
 		return db
 	}
@@ -59,18 +59,18 @@ func (s *CurrencyRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 // ScopeDB exposes the generated model's data-scope application to generic CRUD handlers.
-func (s *CurrencyRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+func (s *CountryCurrencyRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	return s.scopeDB(ctx, db)
 }
 
-func (s *CurrencyRepository) GetOne(ctx *gin.Context, id int64) (currency model.Currency, err error) {
+func (s *CountryCurrencyRepository) GetOne(ctx *gin.Context, id int64) (currency model.Currency, err error) {
 	db := s.scopedDB(ctx).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
 	err = db.Where("id=?", id).First(&currency).Error
 	return
 }
 
-func (s *CurrencyRepository) List(ctx *gin.Context) (list []model.Currency, total int64, err error) {
+func (s *CountryCurrencyRepository) List(ctx *gin.Context) (list []model.Currency, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -88,15 +88,7 @@ func (s *CurrencyRepository) List(ctx *gin.Context) (list []model.Currency, tota
 	return
 }
 
-func (s *CurrencyRepository) Add(ctx *gin.Context, currency model.Currency) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryCurrencyRepository) Add(ctx *gin.Context, currency model.Currency) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 
@@ -113,15 +105,7 @@ func (s *CurrencyRepository) Add(ctx *gin.Context, currency model.Currency) erro
 	})
 }
 
-func (s *CurrencyRepository) Edit(ctx *gin.Context, currency model.Currency) error {
-	if s.Policy.Mode != data_scope.ModeNone {
-		if s.Enforcer == nil {
-			return data_scope.ErrScopedAccessDenied
-		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
-			return err
-		}
-	}
+func (s *CountryCurrencyRepository) Edit(ctx *gin.Context, currency model.Currency) error {
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
@@ -148,7 +132,7 @@ func (s *CurrencyRepository) Edit(ctx *gin.Context, currency model.Currency) err
 	})
 }
 
-func (s *CurrencyRepository) Del(ctx *gin.Context, ids interface{}) error {
+func (s *CountryCurrencyRepository) Del(ctx *gin.Context, ids interface{}) error {
 	normalizedIDs, err := normalizeCurrencyIDs(ids)
 	if err != nil {
 		return err

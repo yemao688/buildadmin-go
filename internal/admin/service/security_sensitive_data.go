@@ -7,16 +7,19 @@ import (
 
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+
+	"gorm.io/gorm"
 )
 
-// SensitiveDataService 承载敏感数据规则的业务装配：controller_as 归一化
-// 与 fields↔DataFields JSON 编解码。状态开关的请求识别与 table/route
-// 候选列表仍属于 handler 的请求解析/响应层。
+// SensitiveDataService 承载敏感数据规则的业务编排：controller_as 归一化、
+// fields↔DataFields JSON 编解码、目标表策略校验与 controller_as 唯一性
+// 约束。repo 只保留 scoped 原子原语与策略解析助手。
 type SensitiveDataService struct {
-	sensitiveDataM *securitymodel.SensitiveDataRepository
+	sensitiveDataM *securitymodel.SecuritySensitiveDataRepository
 }
 
-func NewSensitiveDataService(sensitiveDataM *securitymodel.SensitiveDataRepository) *SensitiveDataService {
+func NewSensitiveDataService(sensitiveDataM *securitymodel.SecuritySensitiveDataRepository) *SensitiveDataService {
 	return &SensitiveDataService{sensitiveDataM: sensitiveDataM}
 }
 
@@ -65,7 +68,8 @@ func (s *SensitiveDataService) UnmarshalFields(raw string) (map[string]string, e
 	return result, nil
 }
 
-// Add 编排敏感数据规则新增：controller_as 归一化 + fields 装配 + 落库。
+// Add 编排敏感数据规则新增：controller_as 归一化 + fields 装配 + 事务内
+// 策略校验与唯一性约束。
 func (s *SensitiveDataService) Add(ctx context.Context, p SensitiveDataParams) error {
 	var sensitiveData model.SecuritySensitiveData
 	sensitiveData.Name = p.Name
@@ -81,11 +85,36 @@ func (s *SensitiveDataService) Add(ctx context.Context, p SensitiveDataParams) e
 	}
 	sensitiveData.DataFields = dataFields
 
-	return s.sensitiveDataM.Add(ctx, sensitiveData)
+	return s.add(ctx, sensitiveData)
+}
+
+func (s *SensitiveDataService) add(ctx context.Context, data model.SecuritySensitiveData) error {
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
+	fieldNames, err := s.fieldNames(data.DataFields)
+	if err != nil {
+		return err
+	}
+	return s.sensitiveDataM.Transaction(ctx, func(tx *gorm.DB) error {
+		if _, err := s.sensitiveDataM.ResolvePolicyTx(tx, data.DataTable, "sensitive", data.PrimaryKey, fieldNames); err != nil {
+			return err
+		}
+		if data.Status == "1" {
+			n, err := s.sensitiveDataM.EnabledControllerAsCount(tx, data.ControllerAs, 0)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return cErr.BadRequest("controller_as already has an enabled security rule")
+			}
+		}
+		return s.sensitiveDataM.CreateTx(tx, &data)
+	})
 }
 
 // Edit 编排敏感数据规则更新：重载 + controller_as 归一化 + fields 装配 +
-// 落库。
+// 事务内策略校验与唯一性约束。
 func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDataParams) error {
 	data, err := s.sensitiveDataM.GetOne(ctx, id)
 	if err != nil {
@@ -103,6 +132,65 @@ func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDa
 		return err
 	}
 	data.DataFields = dataFields
+	if data.PrimaryKey == "" {
+		data.PrimaryKey = "id"
+	}
+	fieldNames, err := s.fieldNames(data.DataFields)
+	if err != nil {
+		return err
+	}
+	updates := map[string]any{
+		"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
+		"data_table": data.DataTable, "primary_key": data.PrimaryKey, "data_fields": data.DataFields,
+		"status": data.Status, "connection": data.Connection,
+	}
+	return s.sensitiveDataM.Transaction(ctx, func(tx *gorm.DB) error {
+		if _, err := s.sensitiveDataM.ResolvePolicyTx(tx, data.DataTable, "sensitive", data.PrimaryKey, fieldNames); err != nil {
+			return err
+		}
+		if data.Status == "1" {
+			n, err := s.sensitiveDataM.EnabledControllerAsCount(tx, data.ControllerAs, data.ID)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return cErr.BadRequest("controller_as already has an enabled security rule")
+			}
+		}
+		return s.sensitiveDataM.UpdateTx(tx, data.ID, updates)
+	})
+}
 
-	return s.sensitiveDataM.Edit(ctx, data)
+// UpdateStatus 编排状态开关：启用时先校验 controller_as 唯一性，再原子
+// 更新状态。
+func (s *SensitiveDataService) UpdateStatus(ctx context.Context, id int32, status string) error {
+	return s.sensitiveDataM.Transaction(ctx, func(tx *gorm.DB) error {
+		if status == "1" {
+			current, err := s.sensitiveDataM.GetByIDTx(tx, id)
+			if err != nil {
+				return err
+			}
+			n, err := s.sensitiveDataM.EnabledControllerAsCount(tx, current.ControllerAs, id)
+			if err != nil {
+				return err
+			}
+			if n > 0 {
+				return cErr.BadRequest("controller_as already has an enabled security rule")
+			}
+		}
+		return s.sensitiveDataM.UpdateStatusTx(tx, id, status)
+	})
+}
+
+// fieldNames extracts the sorted field names of a DataFields JSON payload.
+func (s *SensitiveDataService) fieldNames(raw string) ([]string, error) {
+	fields, err := s.UnmarshalFields(raw)
+	if err != nil {
+		return nil, err
+	}
+	fieldNames := make([]string, 0, len(fields))
+	for field := range fields {
+		fieldNames = append(fieldNames, field)
+	}
+	return fieldNames, nil
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	securitymodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
@@ -17,15 +18,17 @@ type DataRecycleLogHandler struct {
 	Base
 	log             *zap.Logger
 	config          *conf.Configuration
-	dataRecycleLogM *securitymodel.DataRecycleLogRepository
+	dataRecycleLogM *securitymodel.SecurityDataRecycleLogRepository
+	svc             *service.SecurityDataRecycleLogService
 }
 
-func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataRecycleLogM *securitymodel.DataRecycleLogRepository) *DataRecycleLogHandler {
+func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataRecycleLogM *securitymodel.SecurityDataRecycleLogRepository, svc *service.SecurityDataRecycleLogService) *DataRecycleLogHandler {
 	return &DataRecycleLogHandler{
 		Base:            NewBase(dataRecycleLogM),
 		log:             log,
 		config:          config,
 		dataRecycleLogM: dataRecycleLogM,
+		svc:             svc,
 	}
 }
 
@@ -90,7 +93,7 @@ func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.dataRecycleLogM.Restore(ctx, params.Ids); err != nil {
+	if err := h.svc.Restore(ctx.Request.Context(), params.Ids); err != nil {
 		FailByErr(ctx, err)
 		return
 	}

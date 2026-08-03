@@ -53,8 +53,9 @@ func newAuthServiceFixture(t *testing.T) (*AuthService, *gorm.DB) {
 	require.NoError(t, db.AutoMigrate(&adminLoginRow{}))
 	config := &conf.Configuration{}
 	config.App.AdminTokenKeepTime = 3600
-	authRepo := adminauth.NewAuthRepository(db, &token.TokenHelper{Driver: authServiceTokenDriver{}}, config)
-	return NewAuthService(config, authRepo, nil), db
+	tokenHelper := &token.TokenHelper{Driver: authServiceTokenDriver{}}
+	authRepo := adminauth.NewAuthRepository(db, tokenHelper, config)
+	return NewAuthService(config, authRepo, nil, tokenHelper), db
 }
 
 func createLoginAdmin(t *testing.T, db *gorm.DB, username, plain, status string) adminLoginRow {
@@ -234,8 +235,9 @@ func TestAuthServiceLoginCompensatesAccessTokenSetFailure(t *testing.T) {
 	driver := &failingAccessTokenDriver{}
 	config := &conf.Configuration{}
 	config.App.AdminTokenKeepTime = 3600
-	authRepo := adminauth.NewAuthRepository(db, &token.TokenHelper{Driver: driver}, config)
-	svc := NewAuthService(config, authRepo, nil)
+	tokenHelper := &token.TokenHelper{Driver: driver}
+	authRepo := adminauth.NewAuthRepository(db, tokenHelper, config)
+	svc := NewAuthService(config, authRepo, nil, tokenHelper)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
 	_, err = svc.Login("root", "correct horse battery staple", true, "", "", "203.0.113.9")
@@ -262,8 +264,9 @@ func TestAuthServiceLoginPropagatesSSOClearFailure(t *testing.T) {
 	config := &conf.Configuration{}
 	config.App.AdminTokenKeepTime = 3600
 	config.App.AdminSso = true
-	authRepo := adminauth.NewAuthRepository(db, &token.TokenHelper{Driver: ssoFailDriver{}}, config)
-	svc := NewAuthService(config, authRepo, nil)
+	tokenHelper := &token.TokenHelper{Driver: ssoFailDriver{}}
+	authRepo := adminauth.NewAuthRepository(db, tokenHelper, config)
+	svc := NewAuthService(config, authRepo, nil, tokenHelper)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
 	_, err = svc.Login("root", "correct horse battery staple", false, "", "", "203.0.113.9")

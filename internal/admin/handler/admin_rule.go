@@ -2,6 +2,7 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/tree"
@@ -18,14 +19,16 @@ type AdminRuleHandler struct {
 	log        *zap.Logger
 	adminRuleM *adminmodel.AdminRuleRepository
 	authM      *adminmodel.AuthRepository
+	svc        *service.AdminRuleService
 }
 
-func NewAdminRuleHandler(log *zap.Logger, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository) *AdminRuleHandler {
+func NewAdminRuleHandler(log *zap.Logger, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository, svc *service.AdminRuleService) *AdminRuleHandler {
 	return &AdminRuleHandler{
 		Base:       NewBase(adminRuleM),
 		log:        log,
 		adminRuleM: adminRuleM,
 		authM:      authM,
+		svc:        svc,
 	}
 }
 
@@ -93,7 +96,7 @@ func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	err := h.adminRuleM.Add(ctx, adminRule)
+	err := h.svc.Add(ctx.Request.Context(), adminRule)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -125,7 +128,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
-	err = h.adminRuleM.Edit(ctx, adminRule)
+	err = h.svc.Edit(ctx.Request.Context(), adminRule)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -141,7 +144,7 @@ func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 		return
 	}
 
-	err := h.adminRuleM.Del(ctx, params.Ids)
+	err := h.svc.Del(ctx.Request.Context(), params.Ids)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

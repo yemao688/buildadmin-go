@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,26 +9,23 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/persistence"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-type MoneyLogRepository struct {
+type UserMoneyLogRepository struct {
 	persistence.BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
-	balance  *money.UserBalanceService
 }
 
-func NewMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer, balance *money.UserBalanceService) *MoneyLogRepository {
-	return &MoneyLogRepository{
+func NewUserMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *UserMoneyLogRepository {
+	return &UserMoneyLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"user_money_log", "id", "user.username,user.nickname", sqlDB),
 		config:    config,
 		enforcer:  enforcer,
-		balance:   balance,
 	}
 }
 
@@ -38,7 +35,7 @@ func quote(s string) string {
 
 // scoped applies the fail-closed hierarchical data-scope enforcer to
 // user_money_log.admin_id. Only an explicit unrestricted actor bypasses scope.
-func (s *MoneyLogRepository) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+func (s *UserMoneyLogRepository) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if s.enforcer == nil {
 			tx := db.Session(&gorm.Session{})
@@ -49,25 +46,42 @@ func (s *MoneyLogRepository) scoped(ctx *gin.Context) func(db *gorm.DB) *gorm.DB
 	}
 }
 
-func (s *MoneyLogRepository) userScope(ctx *gin.Context) func(db *gorm.DB) *gorm.DB {
+// UserScope returns the money.Scope used by balance flows: every balance
+// query is restricted to users whose admin_id is visible to the actor. It is
+// the actor-explicit, transport-free counterpart of the scoped reads and
+// exists so the money chain never runs without authorization.
+func (s *UserMoneyLogRepository) UserScope(ctx context.Context, actor data_scope.Actor) money.Scope {
 	userAlias := s.config.Database.Prefix + "user"
 	return func(db *gorm.DB) *gorm.DB {
-		return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: userAlias, Column: "admin_id"})
+		if s.enforcer == nil {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		enforcer, ok := s.enforcer.(interface {
+			ScopeWithActor(context.Context, *gorm.DB, data_scope.Actor, data_scope.OwnerRef) *gorm.DB
+		})
+		if !ok {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: userAlias, Column: "admin_id"})
 	}
 }
 
-func (s *MoneyLogRepository) userJoin() string {
+func (s *UserMoneyLogRepository) userJoin() string {
 	userTable := s.config.Database.Prefix + "user"
 	return "LEFT JOIN " + quote(userTable) + " AS " + quote("user") + " ON " + quote("user") + ".`id` = " + quote(s.TableName) + ".`user_id`"
 }
 
-func (s *MoneyLogRepository) GetOne(ctx *gin.Context, id int32) (model.MoneyLog, error) {
+func (s *UserMoneyLogRepository) GetOne(ctx *gin.Context, id int32) (model.MoneyLog, error) {
 	data := model.MoneyLog{}
 	err := s.DB().Model(&model.MoneyLog{}).Scopes(s.scoped(ctx)).Preload("User").Preload("Admin").Joins(s.userJoin()).Where(quote(s.TableName)+".id = ?", id).First(&data).Error
 	return data, err
 }
 
-func (s *MoneyLogRepository) List(ctx *gin.Context) (list []model.MoneyLog, total int64, err error) {
+func (s *UserMoneyLogRepository) List(ctx *gin.Context) (list []model.MoneyLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -81,38 +95,10 @@ func (s *MoneyLogRepository) List(ctx *gin.Context) (list []model.MoneyLog, tota
 	return
 }
 
-// Add creates a balance change log in a single transaction via the shared
-// money domain service: the target user is selected with FOR UPDATE under the
-// actor's scope, the new balance is computed and must not become negative,
-// then the user row is updated and the log (owned by user.AdminID) is
-// inserted. Any failure rolls back both changes.
-func (s *MoneyLogRepository) Add(ctx *gin.Context, userMoneyLog *model.MoneyLog) error {
-	if s.enforcer == nil {
-		return data_scope.ErrScopedAccessDenied
-	}
-	if _, err := s.enforcer.Actor(ctx); err != nil {
-		return err
-	}
-
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		created, err := s.balance.ApplyDelta(tx, money.ApplyInput{
-			UserID: userMoneyLog.UserID,
-			Delta:  userMoneyLog.Money,
-			Log:    userMoneyLog,
-			Scope:  s.userScope(ctx),
-		})
-		if err != nil {
-			if errors.Is(err, money.ErrInsufficientBalance) {
-				return cErr.BadRequest("insufficient balance")
-			}
-			return err
-		}
-		*userMoneyLog = *created
-		return nil
-	})
-}
-
-func (s *MoneyLogRepository) Del(ctx *gin.Context, ids interface{}) error {
+// Del deletes the scoped money-log rows for the given ids. The existence
+// count must match exactly, so a batch delete is all-or-nothing. Balance
+// changes are never rolled back by log deletion (logs are append-only).
+func (s *UserMoneyLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid user money log ids")

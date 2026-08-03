@@ -170,21 +170,6 @@ func linkAdmins(t *testing.T, db *gorm.DB, links ...struct {
 	}
 }
 
-func TestNormalizeAdminIDs(t *testing.T) {
-	got, err := normalizeAdminIDs([]int32{4, 4, 2, 4})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 || got[0] != 4 || got[1] != 2 {
-		t.Fatalf("deduped IDs = %v", got)
-	}
-	for _, ids := range [][]int32{{0}, {-1}, {2, 0, 3}} {
-		if _, err := normalizeAdminIDs(ids); err == nil {
-			t.Fatalf("normalizeAdminIDs(%v) should reject non-positive IDs", ids)
-		}
-	}
-}
-
 func TestAdminAddActiveRequestTransactionRollsBackWithOuterFailure(t *testing.T) {
 	db := prepareAdminModelMySQL(t)
 	m := NewAdminRepository(db, hierarchyConfig("ba_"))
@@ -194,7 +179,7 @@ func TestAdminAddActiveRequestTransactionRollsBackWithOuterFailure(t *testing.T)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
 		ctx.Request = ctx.Request.WithContext(requesttx.Bind(ctx.Request.Context(), tx))
-		if err := m.Add(ctx, admin, nil); err == nil {
+		if err := m.AddWithActor(ctx.Request.Context(), admin, nil, actorForContext(t, ctx)); err == nil {
 			t.Fatal("expected hierarchy validation failure")
 		}
 		return errors.New("outer business failure")
@@ -218,7 +203,7 @@ func TestAdminAddWithoutRequestTransactionCommitsOwnTransaction(t *testing.T) {
 	ctx := adminTestContext(t, true)
 	admin := model.Admin{Username: "requesttx-success", Status: "enable"}
 
-	if err := m.Add(ctx, admin, nil); err != nil {
+	if err := m.AddWithActor(ctx.Request.Context(), admin, nil, actorForContext(t, ctx)); err != nil {
 		t.Fatal(err)
 	}
 	var count int64
@@ -235,91 +220,13 @@ func TestAdminAddDuplicateUsernameReturnsFriendlyError(t *testing.T) {
 	m := NewAdminRepository(db, hierarchyConfig("ba_"))
 	ctx := adminTestContext(t, true)
 	admin := model.Admin{Username: "duplicate-username", Nickname: "first", Status: "enable"}
-	require.NoError(t, m.Add(ctx, admin, nil))
-	require.ErrorContains(t, m.Add(ctx, model.Admin{Username: admin.Username, Nickname: "second", Status: "enable"}, nil), "username already exists")
+	require.NoError(t, m.AddWithActor(ctx.Request.Context(), admin, nil, actorForContext(t, ctx)))
+	require.ErrorContains(t, m.AddWithActor(ctx.Request.Context(), model.Admin{Username: admin.Username, Nickname: "second", Status: "enable"}, nil, actorForContext(t, ctx)), "username already exists")
 }
 
-func TestRestrictedDeleteVisibleLeafAndRejectInvisibleSibling(t *testing.T) {
-	db := prepareAdminModelMySQL(t)
-	root := createAdminForHierarchy(t, db, "root")
-	actor := createAdminForHierarchy(t, db, "actor")
-	leaf := createAdminForHierarchy(t, db, "leaf")
-	sibling := createAdminForHierarchy(t, db, "sibling")
-	linkAdmins(t, db,
-		struct {
-			node   model.Admin
-			parent *int32
-		}{root, nil},
-		struct {
-			node   model.Admin
-			parent *int32
-		}{actor, &root.ID},
-		struct {
-			node   model.Admin
-			parent *int32
-		}{leaf, &actor.ID},
-		struct {
-			node   model.Admin
-			parent *int32
-		}{sibling, &root.ID},
-	)
 
-	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
-	ctx := adminTestContextID(t, actor.ID, false)
-	if err := m.Del(ctx, []int32{leaf.ID, leaf.ID}); err != nil {
-		t.Fatalf("restricted leaf delete: %v", err)
-	}
-	var count int64
-	db.Model(&model.Admin{}).Where("id = ?", leaf.ID).Count(&count)
-	if count != 0 {
-		t.Fatal("leaf admin row was not deleted")
-	}
-	db.Model(&model.AdminClosure{}).Where("descendant_id = ?", leaf.ID).Count(&count)
-	if count != 0 {
-		t.Fatal("leaf closure rows were not deleted")
-	}
-	if err := m.Del(ctx, []int32{sibling.ID}); err == nil {
-		t.Fatal("restricted actor deleted an invisible sibling")
-	}
-	db.Model(&model.Admin{}).Where("id = ?", sibling.ID).Count(&count)
-	if count != 1 {
-		t.Fatal("invisible sibling was deleted")
-	}
-}
 
-func TestDeleteClosureFailureRollsBackAdminAndClosure(t *testing.T) {
-	db := prepareAdminModelMySQL(t)
-	actor := createAdminForHierarchy(t, db, "actor")
-	leaf := createAdminForHierarchy(t, db, "leaf")
-	linkAdmins(t, db,
-		struct {
-			node   model.Admin
-			parent *int32
-		}{actor, nil},
-		struct {
-			node   model.Admin
-			parent *int32
-		}{leaf, &actor.ID},
-	)
-	if err := db.Exec("CREATE TRIGGER ba_admin_closure_delete_block BEFORE DELETE ON ba_admin_closure FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'closure delete blocked'").Error; err != nil {
-		t.Fatalf("create trigger: %v", err)
-	}
-	defer db.Exec("DROP TRIGGER IF EXISTS ba_admin_closure_delete_block")
 
-	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
-	if err := m.Del(adminTestContextID(t, actor.ID, false), []int32{leaf.ID}); err == nil {
-		t.Fatal("expected closure deletion failure")
-	}
-	var count int64
-	db.Model(&model.Admin{}).Where("id = ?", leaf.ID).Count(&count)
-	if count != 1 {
-		t.Fatal("admin delete was not rolled back")
-	}
-	db.Model(&model.AdminClosure{}).Where("descendant_id = ?", leaf.ID).Count(&count)
-	if count == 0 {
-		t.Fatal("closure delete was not rolled back")
-	}
-}
 
 func TestRestrictedHierarchyWritersRejectRoot(t *testing.T) {
 	db := prepareAdminModelMySQL(t)
@@ -446,46 +353,15 @@ func TestSwitchStatusScoped(t *testing.T) {
 
 	// Actor 5 is restricted and can only see itself.
 	actor5Ctx := adminTestContextID(t, actor5.ID, false)
-	if err := m.SwitchStatus(actor5Ctx, root.ID, "disable"); err == nil {
+	if err := m.SwitchStatusWithActor(actor5Ctx.Request.Context(), root.ID, "disable", actorForContext(t, actor5Ctx)); err == nil {
 		t.Fatal("restricted actor should not be able to switch root status")
 	}
-	if err := m.SwitchStatus(actor5Ctx, actor5.ID, "disable"); err != nil {
+	if err := m.SwitchStatusWithActor(actor5Ctx.Request.Context(), actor5.ID, "disable", actorForContext(t, actor5Ctx)); err != nil {
 		t.Fatalf("restricted actor should switch its own status: %v", err)
 	}
 }
 
-func TestAdminModelDeleteRejectsSubordinates(t *testing.T) {
-	db := openMySQLAdminTestDB(t, "ba_")
-	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
-	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {
-		t.Fatalf("automigrate: %v", err)
-	}
-	ensureAdminDefaults(t, db)
 
-	ctx := adminTestContext(t, true)
-	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
-
-	root := createAdminForHierarchy(t, db, "root")
-	child := createAdminForHierarchy(t, db, "child")
-	h := newAdminHierarchy("ba_")
-	if err := db.Transaction(func(tx *gorm.DB) error {
-		if err := h.LinkNewNode(ctx.Request.Context(), tx, root.ID, nil); err != nil {
-			return err
-		}
-		return h.LinkNewNode(ctx.Request.Context(), tx, child.ID, &root.ID)
-	}); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	if err := m.Del(ctx, []int32{root.ID}); err == nil {
-		t.Fatal("expected delete to be rejected because root has a subordinate")
-	}
-
-	// Verify closure rows are untouched.
-	if got := countClosureRows(t, db); got != 3 {
-		t.Fatalf("closure rows = %d, want 3", got)
-	}
-}
 
 func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")
@@ -518,7 +394,7 @@ func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
 		ParentID: &missing,
 		Status:   "enable",
 	}
-	if err := m.Edit(ctx, updated, true, &missing, []string{"login_failure", "last_login_time", "last_login_ip"}, nil); err == nil {
+	if err := m.EditWithActor(ctx.Request.Context(), updated, true, &missing, []string{"login_failure", "last_login_time", "last_login_ip"}, nil, actorForContext(t, ctx)); err == nil {
 		t.Fatal("expected edit to fail due to orphan parent")
 	}
 

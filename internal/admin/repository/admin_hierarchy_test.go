@@ -400,7 +400,8 @@ func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
 
 	adminRepo := NewAdminRepository(db, hierarchyConfig("ba_"))
 	child := model.Admin{Username: "child", Status: "enable", ParentID: &parent.ID}
-	if err := adminRepo.Add(hierarchyRequestContext(t), child, []string{"1"}); err != nil {
+	ctx := hierarchyRequestContext(t)
+	if err := adminRepo.AddWithActor(ctx.Request.Context(), child, []string{"1"}, actorForContext(t, ctx)); err != nil {
 		t.Fatalf("add child: %v", err)
 	}
 
@@ -425,7 +426,8 @@ func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 	adminRepo := NewAdminRepository(db, hierarchyConfig("ba_"))
 	missing := int32(9999)
 	child := model.Admin{Username: "rollback", Status: "enable", ParentID: &missing}
-	if err := adminRepo.Add(hierarchyRequestContext(t), child, []string{"1"}); err == nil {
+	ctx := hierarchyRequestContext(t)
+	if err := adminRepo.AddWithActor(ctx.Request.Context(), child, []string{"1"}, actorForContext(t, ctx)); err == nil {
 		t.Fatal("expected add to fail due to orphan parent")
 	}
 

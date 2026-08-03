@@ -25,12 +25,12 @@ type SensitiveDataHandler struct {
 	Base
 	log            *zap.Logger
 	config         *conf.Configuration
-	sensitiveDataM *securitymodel.SensitiveDataRepository
+	sensitiveDataM *securitymodel.SecuritySensitiveDataRepository
 	tableM         *adminmodel.TableRepository
 	svc            *service.SensitiveDataService
 }
 
-func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SensitiveDataRepository, tableM *adminmodel.TableRepository, svc *service.SensitiveDataService) *SensitiveDataHandler {
+func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SecuritySensitiveDataRepository, tableM *adminmodel.TableRepository, svc *service.SensitiveDataService) *SensitiveDataHandler {
 	return &SensitiveDataHandler{
 		Base:           NewBase(sensitiveDataM),
 		log:            log,
@@ -155,7 +155,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 			if statusStr == "" {
 				statusStr = fmt.Sprintf("%v", status)
 			}
-			if err := h.sensitiveDataM.UpdateStatus(ctx.Request.Context(), id, statusStr); err != nil {
+			if err := h.svc.UpdateStatus(ctx.Request.Context(), id, statusStr); err != nil {
 				FailByErr(ctx, err)
 				return
 			}

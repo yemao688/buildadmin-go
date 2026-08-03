@@ -27,51 +27,21 @@ func NewConfigRepository(sqlDB *gorm.DB, config *conf.Configuration, service *si
 	}
 }
 
-// SaveAll persists submitted config values in one transaction: every known
-// config row whose name appears in params is updated (weigh-ordered to match
-// the historical write order); empty upload_secret_key submissions are skipped
-// so the stored secret is never blanked by a form round-trip.
-func (s *ConfigRepository) SaveAll(ctx *gin.Context, params map[string]interface{}) error {
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		all := []siteconfig.Config{}
-		if err := tx.Model(&siteconfig.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
-			return err
-		}
-		for _, v := range all {
-			value, ok := params[v.Name]
-			if !ok {
-				continue
-			}
-			if v.Name == "upload_secret_key" && fmt.Sprintf("%v", value) == "" {
-				continue
-			}
-			newValue := v.SetValueAttr(value, v.Type)
-			if err := updateConfigValue(v.Value, newValue, func() (int64, error) {
-				result := tx.Table(s.TableName).Where("id=?", v.ID).Update("value", newValue)
-				return result.RowsAffected, result.Error
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+// AllTx loads every config row ordered by weigh inside the caller's
+// transaction (the save-all read primitive).
+func (s *ConfigRepository) AllTx(tx *gorm.DB) ([]siteconfig.Config, error) {
+	all := []siteconfig.Config{}
+	if err := tx.Model(&siteconfig.Config{}).Order("`weigh` desc").Find(&all).Error; err != nil {
+		return nil, err
+	}
+	return all, nil
 }
 
-// updateConfigValue applies one config value change, rejecting silent no-ops
-// so a lost row surfaces instead of passing as a successful save.
-func updateConfigValue(currentValue, newValue string, update func() (int64, error)) error {
-	if newValue == currentValue {
-		return nil
-	}
-
-	rowsAffected, err := update()
-	if err != nil {
-		return err
-	}
-	if rowsAffected != 1 {
-		return fmt.Errorf("config update failed: rows affected mismatch")
-	}
-	return nil
+// UpdateValueTx writes one config value inside the caller's transaction and
+// returns the rows affected (atomic write primitive).
+func (s *ConfigRepository) UpdateValueTx(tx *gorm.DB, id int32, value string) (int64, error) {
+	result := tx.Table(s.TableName).Where("id=?", id).Update("value", value)
+	return result.RowsAffected, result.Error
 }
 
 func (s *ConfigRepository) List(ctx *gin.Context) (list []siteconfig.Config, err error) {

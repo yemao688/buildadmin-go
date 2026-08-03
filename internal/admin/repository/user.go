@@ -126,20 +126,17 @@ func (s *UserRepository) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	return result, total, nil
 }
 
-func (s *UserRepository) Add(ctx *gin.Context, user *model.User) error {
-	if s.enforcer == nil {
-		return data_scope.ErrScopedAccessDenied
+func (s *UserRepository) UsernameExists(ctx context.Context, username string) (bool, error) {
+	err := s.DBFor(ctx).Where("username=?", username).Take(&model.User{}).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
 	}
-	actor, err := s.enforcer.Actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.AddWithActor(ctx, user, actor)
+	return err == nil, err
 }
 
-// AddWithActor is the transport-free counterpart of Add for the service
-// layer: the actor is passed explicitly instead of being read from the
-// request context.
+// AddWithActor writes a new user owned by the actor (or an explicit owner
+// inside the actor's scope). It is the scoped write protocol: hierarchy lock,
+// owner validation and the closure self-row check run in one transaction.
 func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, actor data_scope.Actor) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
@@ -187,26 +184,6 @@ func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, act
 		}
 		return nil
 	})
-}
-
-
-func (s *UserRepository) UsernameExists(ctx context.Context, username string) (bool, error) {
-	err := s.DBFor(ctx).Where("username=?", username).Take(&model.User{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-func (s *UserRepository) Edit(ctx *gin.Context, user *model.User, password string) error {
-	if s.enforcer == nil {
-		return data_scope.ErrScopedAccessDenied
-	}
-	actor, err := s.enforcer.Actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.EditWithActor(ctx, user, password, actor)
 }
 
 // EditWithActor is the transport-free counterpart of Edit for the service
@@ -318,43 +295,9 @@ func (s *UserRepository) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) e
 	return nil
 }
 
-func (s *UserRepository) ResetPassword(ctx *gin.Context, id int32, password string) error {
-	hash, err := passwordutil.Hash(password)
-	if err != nil {
-		return err
-	}
-	var result *gorm.DB
-	err = s.Transaction(ctx, func(tx *gorm.DB) error {
-		result = tx.Model(&model.User{}).Scopes(s.scoped(ctx)).Where("`"+s.TableName+"`.id = ?", id).Updates(map[string]interface{}{
-			"password": hash,
-		})
-		return result.Error
-	})
-	if err != nil {
-		return err
-	}
-	if result.RowsAffected != 1 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
-}
-
-// UpdateStatus updates only the status field for a single user within the
-// current actor's scope. It is used for switch-style partial edits so that
+// UpdateStatusWithActor updates only the status field for a single user
+// within the actor's scope. It is used for switch-style partial edits so that
 // the update carries scope and cannot touch out-of-scope rows.
-func (s *UserRepository) UpdateStatus(ctx *gin.Context, id int32, status string) error {
-	if s.enforcer == nil {
-		return data_scope.ErrScopedAccessDenied
-	}
-	actor, err := s.enforcer.Actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.UpdateStatusWithActor(ctx, id, status, actor)
-}
-
-// UpdateStatusWithActor is the transport-free counterpart of UpdateStatus
-// for the service layer.
 func (s *UserRepository) UpdateStatusWithActor(ctx context.Context, id int32, status string, actor data_scope.Actor) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
@@ -388,48 +331,41 @@ func (s *UserRepository) UpdateStatusWithActor(ctx context.Context, id int32, st
 	return nil
 }
 
-func (s *UserRepository) Del(ctx *gin.Context, ids interface{}) error {
-	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
-		return fmt.Errorf("invalid user ids")
+// LockUsersWithActor loads the users FOR UPDATE inside the actor's scope.
+// A missing or out-of-scope id fails with gorm.ErrRecordNotFound, so the
+// batch is all-or-nothing. User deletion and balance changes share the same
+// user-row lock protocol.
+func (s *UserRepository) LockUsersWithActor(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor) error {
+	var list []model.User
+	scoped := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor))
+	if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id IN ?", ids).Find(&list).Error; err != nil {
+		return err
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid user id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	if len(list) != len(ids) {
+		return gorm.ErrRecordNotFound
 	}
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		var list []model.User
-		scoped := tx.Model(&model.User{}).Scopes(s.scoped(ctx))
-		// model.User deletion and balance changes use the same user-row lock protocol.
-		if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id IN ?", normalized).Find(&list).Error; err != nil {
-			return err
-		}
-		if len(list) != len(normalized) {
-			return gorm.ErrRecordNotFound
-		}
-		// Reject deletion if any user still has money logs to prevent new orphans.
-		moneyTable := s.config.Database.Prefix + "user_money_log"
-		var moneyLogs []struct{ ID int32 }
-		if err := tx.Table(moneyTable).Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("user_id IN ?", normalized).Find(&moneyLogs).Error; err != nil {
-			return err
-		}
-		if len(moneyLogs) > 0 {
-			return cErr.BadRequest("user has money logs, cannot delete")
-		}
-		del := scoped.Where("`"+s.TableName+"`.id IN ?", normalized).Delete(nil)
-		if del.Error != nil {
-			return del.Error
-		}
-		if del.RowsAffected != int64(len(normalized)) {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	})
+	return nil
+}
+
+// CountMoneyLogsByUserIDs counts money-log rows referencing any of the
+// given users (the orphan guard data source for the delete flow).
+func (s *UserRepository) CountMoneyLogsByUserIDs(tx *gorm.DB, userIDs []int32) (int64, error) {
+	var n int64
+	if err := tx.Table(s.config.Database.Prefix + "user_money_log").Where("user_id IN ?", userIDs).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// DeleteScopedWithActor deletes the users inside the actor's scope and
+// verifies RowsAffected so the batch is all-or-nothing.
+func (s *UserRepository) DeleteScopedWithActor(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor) error {
+	del := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id IN ?", ids).Delete(nil)
+	if del.Error != nil {
+		return del.Error
+	}
+	if del.RowsAffected != int64(len(ids)) {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

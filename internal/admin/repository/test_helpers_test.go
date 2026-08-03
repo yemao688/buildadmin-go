@@ -5,9 +5,21 @@ import (
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
 
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// actorForContext returns the actor attached to a test context.
+func actorForContext(t *testing.T, ctx *gin.Context) data_scope.Actor {
+	t.Helper()
+	actor, ok := data_scope.ActorFromContext(ctx)
+	if !ok {
+		t.Fatalf("no actor in test context")
+	}
+	return actor
+}
 
 func hierarchyConfig(prefix string) *conf.Configuration {
 	return &conf.Configuration{Database: conf.Database{Prefix: prefix}}

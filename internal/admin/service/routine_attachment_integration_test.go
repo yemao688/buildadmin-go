@@ -1,4 +1,4 @@
-package repository
+package service
 
 import (
 	"net/http/httptest"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -60,7 +61,8 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	require.NoError(t, db.Exec("INSERT INTO "+quote(attachment)+" (id,topic,admin_id,user_id,url,width,height,name,size,mimetype,quote,storage,sha1,create_time,last_upload_time) VALUES (1,'a',1,1,'/a',1,1,'A',1,'x',0,'local','a',1,1),(2,'b',2,2,'/b',1,1,'B',1,'x',0,'local','b',1,1),(3,'c',3,3,'/c',1,1,'C',1,'x',0,'local','c',1,1),(4,'d',4,4,'/d',1,1,'D',1,'x',0,'local','d',1,1)").Error)
 
 	e := data_scope.NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: prefix}})
-	m := NewAttachmentRepository(db, &conf.Configuration{Database: conf.Database{Prefix: prefix}}, e)
+	m := adminmodel.NewAttachmentRepository(db, &conf.Configuration{Database: conf.Database{Prefix: prefix}}, e)
+	svc := NewRoutineAttachmentService(m, &conf.Configuration{Database: conf.Database{Prefix: prefix}})
 	ctx := func(id int32, unrestricted bool) *gin.Context {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest("GET", "/?limit=100&page=1&order=id,asc", nil)
@@ -71,7 +73,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 		rows, total, err := m.List(c)
 		require.NoError(t, err)
 		var count int64
-		scoped := m.scoped(c, db.Table(attachment+" AS attachment"))
+		scoped := e.Scope(c, db.Table(attachment+" AS attachment"), data_scope.OwnerRef{TableAlias: "attachment", Column: "admin_id"})
 		require.NoError(t, scoped.Count(&count).Error)
 		require.Equal(t, total, count)
 		got := make([]string, len(rows))
@@ -100,13 +102,13 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	require.Equal(t, before, raw)
 
 	// A mixed-owner bulk delete must be all-or-nothing.
-	require.Error(t, m.Del(ctx(2, false), []int32{2, 3}))
+	require.Error(t, svc.Del(ctx(2, false).Request.Context(), []int32{2, 3}, actorOf(t, ctx(2, false))))
 	require.Equal(t, int64(4), countRows(t, db, attachment))
-	require.NoError(t, m.Del(ctx(2, false), []int32{2, 4}))
+	require.NoError(t, svc.Del(ctx(2, false).Request.Context(), []int32{2, 4}, actorOf(t, ctx(2, false))))
 	var remaining int64
 	require.NoError(t, db.Table(attachment).Count(&remaining).Error)
 	require.Equal(t, int64(2), remaining)
-	require.Error(t, m.Del(ctx(3, false), []int32{1}))
+	require.Error(t, svc.Del(ctx(3, false).Request.Context(), []int32{1}, actorOf(t, ctx(3, false))))
 	require.Equal(t, int64(2), countRows(t, db, attachment))
 	require.Equal(t, []string{}, labels(ctx(2, false)))
 	require.Equal(t, []string{"A", "C"}, labels(ctx(1, true)))
@@ -115,7 +117,15 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	_, err = m.GetOne(ctx(0, false), 1)
 	require.Error(t, err)
 	require.Error(t, m.Edit(ctx(0, false), upload.Attachment{ID: 1, Name: "x"}))
-	require.Error(t, m.Del(ctx(0, false), []int32{1}))
+	require.Error(t, svc.Del(ctx(0, false).Request.Context(), []int32{1}, actorOf(t, ctx(0, false))))
+}
+
+// actorOf returns the actor attached to a test context.
+func actorOf(t *testing.T, ctx *gin.Context) data_scope.Actor {
+	t.Helper()
+	a, ok := data_scope.ActorFromContext(ctx)
+	require.True(t, ok)
+	return a
 }
 
 func countRows(t *testing.T, db *gorm.DB, table string) int64 {

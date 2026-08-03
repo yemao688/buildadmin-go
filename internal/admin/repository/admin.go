@@ -177,17 +177,9 @@ func (s *AdminRepository) loadParentSummaries(ctx context.Context, db *gorm.DB, 
 	return nil
 }
 
-func (s *AdminRepository) Add(ctx *gin.Context, admin model.Admin, groups []string) error {
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.AddWithActor(ctx, admin, groups, actor)
-}
-
-// AddWithActor is the transport-free counterpart of Add for the service
-// layer: the actor is passed explicitly instead of being read from the
-// request context.
+// AddWithActor writes a new administrator with its group assignments and the
+// closure link. It is the scoped write protocol: uniqueness, group writes and
+// the hierarchy link run in one caller-owned transaction.
 func (s *AdminRepository) AddWithActor(ctx context.Context, admin model.Admin, groups []string, actor data_scope.Actor) error {
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
@@ -230,19 +222,9 @@ func isDuplicateKeyError(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
-// CheckParentInScope verifies that the requested parent administrator exists
-// inside the current actor's hierarchical scope. It fails closed: missing or
+// CheckParentInScopeWithActor verifies that the requested parent administrator
+// exists inside the actor's hierarchical scope. It fails closed: missing or
 // unauthorized parents are treated as not found.
-func (s *AdminRepository) CheckParentInScope(ctx *gin.Context, parentID int32) error {
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.CheckParentInScopeWithActor(ctx, actor, parentID)
-}
-
-// CheckParentInScopeWithActor is the transport-free counterpart of
-// CheckParentInScope for the service layer.
 func (s *AdminRepository) CheckParentInScopeWithActor(ctx context.Context, actor data_scope.Actor, parentID int32) error {
 	var parent model.Admin
 	if err := s.DBFor(ctx).Scopes(s.scopedWithActor(ctx, actor)).Where("id = ?", parentID).First(&parent).Error; err != nil {
@@ -276,17 +258,9 @@ func (s *AdminRepository) SelectTree(ctx *gin.Context, excludeID int32, keyword 
 	return list, nil
 }
 
-func (s *AdminRepository) Edit(ctx *gin.Context, admin model.Admin, changeParent bool, newParent *int32, omit []string, groups []string) error {
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.EditWithActor(ctx, admin, changeParent, newParent, omit, groups, actor)
-}
-
-// EditWithActor is the transport-free counterpart of Edit for the service
-// layer: the actor is passed explicitly instead of being read from the
-// request context.
+// EditWithActor updates an administrator with parent/group changes. It is
+// the scoped write protocol: uniqueness, hierarchy validation/move and group
+// re-assignment run in one caller-owned transaction.
 func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, changeParent bool, newParent *int32, omit []string, groups []string, actor data_scope.Actor) error {
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
@@ -323,19 +297,9 @@ func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, 
 	})
 }
 
-// SwitchStatus performs a scoped, atomic status switch for a single
+// SwitchStatusWithActor performs a scoped, atomic status switch for a single
 // administrator. The final UPDATE carries the closure scope predicate and
 // validates RowsAffected.
-func (s *AdminRepository) SwitchStatus(ctx *gin.Context, id int32, status string) error {
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return err
-	}
-	return s.SwitchStatusWithActor(ctx, id, status, actor)
-}
-
-// SwitchStatusWithActor is the transport-free counterpart of SwitchStatus
-// for the service layer.
 func (s *AdminRepository) SwitchStatusWithActor(ctx context.Context, id int32, status string, actor data_scope.Actor) error {
 	if status != "enable" && status != "disable" {
 		return cErr.BadRequest("status must be enable or disable")
@@ -378,6 +342,8 @@ func (s *AdminRepository) SelfEdit(ctx *gin.Context, admin model.Admin, selectFi
 	})
 }
 
+// ResetPassword hashes and writes a new password for one administrator
+// (single-statement scoped write with an existence fallback).
 func (s *AdminRepository) ResetPassword(ctx *gin.Context, id int32, password string) error {
 	hash, err := passwordutil.Hash(password)
 	if err != nil {
@@ -403,42 +369,4 @@ func (s *AdminRepository) ResetPassword(ctx *gin.Context, id int32, password str
 		return cErr.BadRequest("record not found")
 	}
 	return nil
-}
-
-func normalizeAdminIDs(ids []int32) ([]int32, error) {
-	seen := make(map[int32]struct{}, len(ids))
-	out := make([]int32, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, cErr.BadRequest("ids must be positive")
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out, nil
-}
-
-func (s *AdminRepository) Del(ctx *gin.Context, ids interface{}) error {
-	idList, ok := ids.([]int32)
-	if !ok {
-		return cErr.BadRequest("invalid ids")
-	}
-	idList, err := normalizeAdminIDs(idList)
-	if err != nil {
-		return err
-	}
-	if len(idList) == 0 {
-		return nil
-	}
-	actor, err := s.actor(ctx)
-	if err != nil {
-		return err
-	}
-	enforcer := data_scope.NewClosureEnforcer(s.config)
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		return NewAdminHierarchy(s.config).DeleteAdmins(ctx, tx, idList, actor, enforcer)
-	})
 }

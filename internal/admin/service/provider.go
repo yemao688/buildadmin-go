@@ -10,7 +10,13 @@ var ProviderSet = wire.NewSet(
 	NewAuthService,
 	NewAdminService,
 	NewAdminGroupService,
+	NewAdminRuleService,
 	NewUserService,
+	NewUserMoneyLogService,
 	NewConfigService,
 	NewSensitiveDataService,
+	NewRoutineAttachmentService,
+	NewSecuritySensitiveDataLogService,
+	NewSecurityDataRecycleService,
+	NewSecurityDataRecycleLogService,
 )

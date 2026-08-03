@@ -9,6 +9,8 @@ import (
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
+
+	"gorm.io/gorm"
 )
 
 // AdminGroupService 承载后台分组的业务规则：权限节点装配（HandleRules）、
@@ -130,14 +132,31 @@ func (s *AdminGroupService) Edit(ctx context.Context, id int32, params model.Adm
 	return s.adminGroupM.Edit(ctx, adminGroup)
 }
 
-// Del 编排分组删除：逐个授权 + 落库（含"不能删除自己所在分组"约束）。
+// Del 编排分组删除：逐个授权 + 事务内的"先删子级"约束与"不能删除自己所在
+// 分组"约束。repo 只保留 ChildGroupIDs/OperatorGroupIDs/DeleteGroupsExcluding
+// 原子原语。
 func (s *AdminGroupService) Del(ctx context.Context, ids []int32, operatorID int32, isSuperAdmin bool) error {
 	for _, v := range ids {
 		if err := s.CheckAuth(operatorID, isSuperAdmin, v); err != nil {
 			return err
 		}
 	}
-	return s.adminGroupM.DelWithOperator(ctx, ids, operatorID)
+	return s.adminGroupM.Transaction(ctx, func(tx *gorm.DB) error {
+		subIds, err := s.adminGroupM.ChildGroupIDs(tx, ids)
+		if err != nil {
+			return err
+		}
+		for _, v := range subIds {
+			if !slices.Contains(ids, v) {
+				return cErr.BadRequest("Please delete the child element first, or use batch deletion")
+			}
+		}
+		groupIds, err := s.adminGroupM.OperatorGroupIDs(tx, operatorID)
+		if err != nil {
+			return err
+		}
+		return s.adminGroupM.DeleteGroupsExcluding(tx, ids, groupIds)
+	})
 }
 
 // SwitchStatus 处理快捷/部分编辑的状态开关：与完整 Edit 走同一授权链

@@ -1,13 +1,12 @@
 package repository
 
 import (
-	"fmt"
+	"context"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
 	"buildadmin-go/internal/utils"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -96,78 +95,61 @@ func (s *AttachmentRepository) Edit(ctx *gin.Context, data upload.Attachment) er
 	return nil
 }
 
-func (s *AttachmentRepository) Del(ctx *gin.Context, ids interface{}) error {
-	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
-		return fmt.Errorf("invalid attachment ids")
-	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid attachment id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
-	}
+// LockScopedWithActor loads the attachments FOR UPDATE inside the actor's
+// scope; a missing or out-of-scope id fails with gorm.ErrRecordNotFound so
+// the batch is all-or-nothing.
+func (s *AttachmentRepository) LockScopedWithActor(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor) ([]upload.Attachment, error) {
 	var list []upload.Attachment
-	var physicallyDeleted []upload.Attachment
-	err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		scoped := s.scoped(ctx, tx.Table(s.TableName+" AS attachment"))
-		if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("attachment.id IN ?", normalized).Find(&list).Error; err != nil {
-			return err
-		}
-		if len(list) != len(normalized) {
-			return gorm.ErrRecordNotFound
-		}
-		for _, attachment := range list {
-			row := tx.Table(s.TableName).Where("id = ?", attachment.ID)
-			if attachment.Quote > 1 {
-				result := row.Update("quote", gorm.Expr("quote - 1"))
-				if result.Error != nil {
-					return result.Error
-				}
-				if result.RowsAffected != 1 {
-					return gorm.ErrRecordNotFound
-				}
-				continue
-			}
-			del := row.Delete(&upload.Attachment{})
-			if del.Error != nil {
-				return del.Error
-			}
-			if del.RowsAffected != 1 {
-				return gorm.ErrRecordNotFound
-			}
-			physicallyDeleted = append(physicallyDeleted, attachment)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+	scoped := s.scopedWithActor(ctx, tx.Table(s.TableName+" AS attachment"), actor)
+	if err := scoped.Clauses(clause.Locking{Strength: "UPDATE"}).Where("attachment.id IN ?", ids).Find(&list).Error; err != nil {
+		return nil, err
 	}
-	for _, v := range physicallyDeleted {
-		if v.Storage == "alioss" {
-			if err := upload.NewAliossStorage(s.DB(), s.config).Delete(v.URL); err != nil {
-				return err
-			}
-		} else {
-			paths := []string{
-				filepath.Join(utils.RootPath(), "public", strings.TrimLeft(v.URL, "/")),
-				filepath.Join(utils.RootPath(), strings.TrimLeft(v.URL, "/")),
-			}
-			for _, path := range paths {
-				if !utils.PathExists(path) {
-					continue
-				}
-				if removeErr := os.Remove(path); removeErr != nil {
-					return removeErr
-				}
-				break
-			}
-		}
+	if len(list) != len(ids) {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return list, nil
+}
+
+// scopedWithActor is the actor-explicit counterpart of scoped.
+func (s *AttachmentRepository) scopedWithActor(ctx context.Context, db *gorm.DB, actor data_scope.Actor) *gorm.DB {
+	if s.enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	enforcer, ok := s.enforcer.(interface {
+		ScopeWithActor(context.Context, *gorm.DB, data_scope.Actor, data_scope.OwnerRef) *gorm.DB
+	})
+	if !ok {
+		tx := db.Session(&gorm.Session{})
+		tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: "attachment", Column: "admin_id"})
+}
+
+// DecrementQuoteTx drops the reference count by one inside the caller's
+// transaction (atomic write primitive).
+func (s *AttachmentRepository) DecrementQuoteTx(tx *gorm.DB, id int32) error {
+	result := tx.Table(s.TableName).Where("id = ?", id).Update("quote", gorm.Expr("quote - 1"))
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// DeleteRowTx deletes one attachment row inside the caller's transaction
+// (atomic write primitive).
+func (s *AttachmentRepository) DeleteRowTx(tx *gorm.DB, id int32) error {
+	del := tx.Table(s.TableName).Where("id = ?", id).Delete(&upload.Attachment{})
+	if del.Error != nil {
+		return del.Error
+	}
+	if del.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

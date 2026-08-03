@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/go-mail/mail"
 	"github.com/jinzhu/copier"
+	"gorm.io/gorm"
 )
 
 // ConfigService 承载站点配置的业务规则：新增时的字典/扩展属性装配与
@@ -69,6 +71,50 @@ func (s *ConfigService) Add(ctx context.Context, p ConfigParams) error {
 	}
 
 	return s.configM.Add(ctx, config)
+}
+
+// SaveAll 编排站点配置整体保存：事务内逐行装配类型化值，跳过空白的
+// upload_secret_key（表单回填不能清空已存密钥），并拒绝静默空更新。
+func (s *ConfigService) SaveAll(ctx context.Context, params map[string]any) error {
+	return s.configM.Transaction(ctx, func(tx *gorm.DB) error {
+		all, err := s.configM.AllTx(tx)
+		if err != nil {
+			return err
+		}
+		for _, v := range all {
+			value, ok := params[v.Name]
+			if !ok {
+				continue
+			}
+			if v.Name == "upload_secret_key" && fmt.Sprintf("%v", value) == "" {
+				continue
+			}
+			newValue := v.SetValueAttr(value, v.Type)
+			if err := updateConfigValue(v.Value, newValue, func() (int64, error) {
+				return s.configM.UpdateValueTx(tx, v.ID, newValue)
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// updateConfigValue applies one config value change, rejecting silent no-ops
+// so a lost row surfaces instead of passing as a successful save.
+func updateConfigValue(currentValue, newValue string, update func() (int64, error)) error {
+	if newValue == currentValue {
+		return nil
+	}
+
+	rowsAffected, err := update()
+	if err != nil {
+		return err
+	}
+	if rowsAffected != 1 {
+		return fmt.Errorf("config update failed: rows affected mismatch")
+	}
+	return nil
 }
 
 // SendTestMail 发送测试邮件，按 SMTP 配置构建 dialer 并尝试真实投递。

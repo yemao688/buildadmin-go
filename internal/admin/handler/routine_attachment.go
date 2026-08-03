@@ -2,6 +2,7 @@ package handler
 
 import (
 	routinemodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -14,13 +15,15 @@ type AttachmentHandler struct {
 	Base
 	log         *zap.Logger
 	attachmentM *routinemodel.AttachmentRepository
+	svc         *service.RoutineAttachmentService
 }
 
-func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentRepository) *AttachmentHandler {
+func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentRepository, svc *service.RoutineAttachmentService) *AttachmentHandler {
 	return &AttachmentHandler{
 		Base:        NewBase(attachmentM),
 		log:         log,
 		attachmentM: attachmentM,
+		svc:         svc,
 	}
 }
 
@@ -102,7 +105,13 @@ func (h *AttachmentHandler) Del(ctx *gin.Context) {
 		return
 	}
 
-	err := h.attachmentM.Del(ctx, params.Ids)
+	actor, err := actorFromContext(ctx)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+
+	err = h.svc.Del(ctx.Request.Context(), params.Ids, actor)
 	if err != nil {
 		FailByErr(ctx, err)
 		return

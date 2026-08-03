@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
 
 	"github.com/gin-gonic/gin"
@@ -18,19 +19,19 @@ type OutSensitiveData struct {
 	DataFields []string `json:"data_fields"`
 }
 
-type SensitiveDataRepository struct {
+type SecuritySensitiveDataRepository struct {
 	persistence.BaseModel
 	config *conf.Configuration
 }
 
-func NewSensitiveDataRepository(sqlDB *gorm.DB, config *conf.Configuration) *SensitiveDataRepository {
-	return &SensitiveDataRepository{
+func NewSecuritySensitiveDataRepository(sqlDB *gorm.DB, config *conf.Configuration) *SecuritySensitiveDataRepository {
+	return &SecuritySensitiveDataRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"security_sensitive_data", "id", "controller", sqlDB),
 		config:    config,
 	}
 }
 
-func (s *SensitiveDataRepository) DealData(ctx context.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
+func (s *SecuritySensitiveDataRepository) DealData(ctx context.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
 	outSensitiveData := OutSensitiveData{}
 	if err := copier.Copy(&outSensitiveData, data); err != nil {
 		return nil, err
@@ -47,12 +48,12 @@ func (s *SensitiveDataRepository) DealData(ctx context.Context, data *model.Secu
 	return &outSensitiveData, nil
 }
 
-func (s *SensitiveDataRepository) GetOne(ctx context.Context, id int32) (sensitiveData model.SecuritySensitiveData, err error) {
+func (s *SecuritySensitiveDataRepository) GetOne(ctx context.Context, id int32) (sensitiveData model.SecuritySensitiveData, err error) {
 	err = s.DBFor(ctx).Model(&model.SecuritySensitiveData{}).Where("id=?", id).First(&sensitiveData).Error
 	return
 }
 
-func (s *SensitiveDataRepository) List(ctx *gin.Context) ([]*OutSensitiveData, int64, error) {
+func (s *SecuritySensitiveDataRepository) List(ctx *gin.Context) ([]*OutSensitiveData, int64, error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -79,121 +80,86 @@ func (s *SensitiveDataRepository) List(ctx *gin.Context) ([]*OutSensitiveData, i
 	return result, total, err
 }
 
-func (s *SensitiveDataRepository) Add(ctx context.Context, data model.SecuritySensitiveData) error {
-	if data.PrimaryKey == "" {
-		data.PrimaryKey = "id"
-	}
-	var fields map[string]string
-	if err := json.Unmarshal([]byte(data.DataFields), &fields); err != nil {
-		return err
-	}
-	fieldNames := make([]string, 0, len(fields))
-	for field := range fields {
-		fieldNames = append(fieldNames, field)
-	}
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		_, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "sensitive", data.PrimaryKey, fieldNames)
-		if err != nil {
-			return err
-		}
-		if data.Status == "1" {
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", data.ControllerAs, 0); err != nil {
-				return err
-			}
-		}
-		return tx.Create(&data).Error
-	})
+// GetByIDTx loads one rule inside the caller's transaction.
+func (s *SecuritySensitiveDataRepository) GetByIDTx(tx *gorm.DB, id int32) (model.SecuritySensitiveData, error) {
+	var current model.SecuritySensitiveData
+	err := tx.Where("id = ?", id).First(&current).Error
+	return current, err
 }
 
-func (s *SensitiveDataRepository) Edit(ctx context.Context, data model.SecuritySensitiveData) error {
-	if data.PrimaryKey == "" {
-		data.PrimaryKey = "id"
+// ResolvePolicyTx validates the target table/column policy for a security
+// rule inside the caller's transaction (data-access validation).
+func (s *SecuritySensitiveDataRepository) ResolvePolicyTx(tx *gorm.DB, logical, kind, primary string, fields []string) (data_scope.RulePolicy, error) {
+	return resolveRulePolicy(tx, s.config.Database.Prefix, logical, kind, primary, fields)
+}
+
+// EnabledControllerAsCount counts enabled rules that already use the
+// controller_as (the duplicate-guard data source).
+func (s *SecuritySensitiveDataRepository) EnabledControllerAsCount(tx *gorm.DB, controllerAs string, excludeID int32) (int64, error) {
+	query := tx.Table(s.config.Database.Prefix+"security_sensitive_data").Where("status = ? AND controller_as = ?", "1", controllerAs)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
 	}
-	var fields map[string]string
-	if err := json.Unmarshal([]byte(data.DataFields), &fields); err != nil {
-		return err
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
 	}
-	fieldNames := make([]string, 0, len(fields))
-	for field := range fields {
-		fieldNames = append(fieldNames, field)
+	return count, nil
+}
+
+// CreateTx inserts one rule inside the caller's transaction (atomic write
+// primitive).
+func (s *SecuritySensitiveDataRepository) CreateTx(tx *gorm.DB, data *model.SecuritySensitiveData) error {
+	return tx.Create(data).Error
+}
+
+// UpdateTx applies the rule updates inside the caller's transaction,
+// verifying RowsAffected so a lost row surfaces instead of passing silently.
+func (s *SecuritySensitiveDataRepository) UpdateTx(tx *gorm.DB, id int32, updates map[string]any) error {
+	result := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
 	}
-	updates := map[string]any{
-		"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
-		"data_table": data.DataTable, "primary_key": data.PrimaryKey, "data_fields": data.DataFields,
-		"status": data.Status, "connection": data.Connection,
-	}
-	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		_, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "sensitive", data.PrimaryKey, fieldNames)
-		if err != nil {
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Count(&visible).Error; err != nil {
 			return err
 		}
-		if data.Status == "1" {
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", data.ControllerAs, data.ID); err != nil {
-				return err
-			}
+		if visible == 1 {
+			return nil
 		}
-		result = tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", data.ID).Updates(updates)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			var visible int64
-			if err := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", data.ID).Count(&visible).Error; err != nil {
-				return err
-			}
-			if visible == 1 {
-				return nil
-			}
-			return gorm.ErrRecordNotFound
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	}); err != nil {
-		return err
+		return gorm.ErrRecordNotFound
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (s *SensitiveDataRepository) UpdateStatus(ctx context.Context, id int32, status string) error {
-	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		if status == "1" {
-			var current model.SecuritySensitiveData
-			if err := tx.Where("id = ?", id).First(&current).Error; err != nil {
-				return err
-			}
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_sensitive_data", current.ControllerAs, id); err != nil {
-				return err
-			}
+// UpdateStatusTx applies a status switch inside the caller's transaction,
+// verifying RowsAffected.
+func (s *SecuritySensitiveDataRepository) UpdateStatusTx(tx *gorm.DB, id int32, status string) error {
+	result := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Update("status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+			return err
 		}
-		result = tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Update("status", status)
-		if result.Error != nil {
-			return result.Error
+		if visible == 1 {
+			return nil
 		}
-		if result.RowsAffected == 0 {
-			var visible int64
-			if err := tx.Model(&model.SecuritySensitiveData{}).Where("id = ?", id).Count(&visible).Error; err != nil {
-				return err
-			}
-			if visible == 1 {
-				return nil
-			}
-			return gorm.ErrRecordNotFound
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	}); err != nil {
-		return err
+		return gorm.ErrRecordNotFound
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (s *SensitiveDataRepository) Del(ctx context.Context, ids interface{}) error {
+func (s *SecuritySensitiveDataRepository) Del(ctx context.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid security sensitive data ids")

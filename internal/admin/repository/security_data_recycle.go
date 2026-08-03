@@ -4,46 +4,31 @@ import (
 	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
-	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-type DataRecycleRepository struct {
+type SecurityDataRecycleRepository struct {
 	persistence.BaseModel
 	config *conf.Configuration
 }
 
-func NewDataRecycleRepository(sqlDB *gorm.DB, config *conf.Configuration) *DataRecycleRepository {
-	return &DataRecycleRepository{
+func NewSecurityDataRecycleRepository(sqlDB *gorm.DB, config *conf.Configuration) *SecurityDataRecycleRepository {
+	return &SecurityDataRecycleRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"security_data_recycle", "id", "name", sqlDB),
 		config:    config,
 	}
 }
 
-func rejectDuplicateEnabledControllerAs(tx *gorm.DB, table, controllerAs string, excludeID int32) error {
-	query := tx.Table(table).Where("status = ? AND controller_as = ?", "1", controllerAs)
-	if excludeID > 0 {
-		query = query.Where("id <> ?", excludeID)
-	}
-	var count int64
-	if err := query.Count(&count).Error; err != nil {
-		return err
-	}
-	if count > 0 {
-		return cErr.BadRequest("controller_as already has an enabled security rule")
-	}
-	return nil
-}
-
-func (s *DataRecycleRepository) GetOne(ctx *gin.Context, id int32) (data model.SecurityDataRecycle, err error) {
+func (s *SecurityDataRecycleRepository) GetOne(ctx *gin.Context, id int32) (data model.SecurityDataRecycle, err error) {
 	err = s.DBFor(ctx).Model(&model.SecurityDataRecycle{}).Where("id=?", id).First(&data).Error
 	return
 }
 
-func (s *DataRecycleRepository) List(ctx *gin.Context) (list []model.SecurityDataRecycle, total int64, err error) {
+func (s *SecurityDataRecycleRepository) List(ctx *gin.Context) (list []model.SecurityDataRecycle, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -56,108 +41,86 @@ func (s *DataRecycleRepository) List(ctx *gin.Context) (list []model.SecurityDat
 	return
 }
 
-func (s *DataRecycleRepository) Add(ctx *gin.Context, data model.SecurityDataRecycle) error {
-	if data.PrimaryKey == "" {
-		data.PrimaryKey = "id"
-	}
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		policy, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil)
-		if err != nil {
-			return err
-		}
-		if policy.Table.PrimaryKey != data.PrimaryKey {
-			return fmt.Errorf("invalid recycle rule primary key")
-		}
-		if data.Status == "1" {
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", data.ControllerAs, 0); err != nil {
-				return err
-			}
-		}
-		return tx.Create(&data).Error
-	})
+// GetByIDTx loads one rule inside the caller's transaction.
+func (s *SecurityDataRecycleRepository) GetByIDTx(tx *gorm.DB, id int32) (model.SecurityDataRecycle, error) {
+	var current model.SecurityDataRecycle
+	err := tx.Where("id = ?", id).First(&current).Error
+	return current, err
 }
 
-func (s *DataRecycleRepository) Edit(ctx *gin.Context, data model.SecurityDataRecycle) error {
-	if data.PrimaryKey == "" {
-		data.PrimaryKey = "id"
+// ResolvePolicyTx validates the target table/column policy for a security
+// rule inside the caller's transaction (data-access validation).
+func (s *SecurityDataRecycleRepository) ResolvePolicyTx(tx *gorm.DB, logical, kind, primary string, fields []string) (data_scope.RulePolicy, error) {
+	return resolveRulePolicy(tx, s.config.Database.Prefix, logical, kind, primary, fields)
+}
+
+// EnabledControllerAsCount counts enabled rules that already use the
+// controller_as (the duplicate-guard data source).
+func (s *SecurityDataRecycleRepository) EnabledControllerAsCount(tx *gorm.DB, controllerAs string, excludeID int32) (int64, error) {
+	query := tx.Table(s.config.Database.Prefix+"security_data_recycle").Where("status = ? AND controller_as = ?", "1", controllerAs)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
 	}
-	updates := map[string]any{
-		"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
-		"data_table": data.DataTable, "primary_key": data.PrimaryKey, "status": data.Status,
-		"connection": data.Connection,
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
 	}
-	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		_, err := resolveRulePolicy(tx, s.config.Database.Prefix, data.DataTable, "recycle", data.PrimaryKey, nil)
-		if err != nil {
+	return count, nil
+}
+
+// CreateTx inserts one rule inside the caller's transaction (atomic write
+// primitive).
+func (s *SecurityDataRecycleRepository) CreateTx(tx *gorm.DB, data *model.SecurityDataRecycle) error {
+	return tx.Create(data).Error
+}
+
+// UpdateTx applies the rule updates inside the caller's transaction,
+// verifying RowsAffected so a lost row surfaces instead of passing silently.
+func (s *SecurityDataRecycleRepository) UpdateTx(tx *gorm.DB, id int32, updates map[string]any) error {
+	result := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Count(&visible).Error; err != nil {
 			return err
 		}
-		if data.Status == "1" {
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", data.ControllerAs, data.ID); err != nil {
-				return err
-			}
+		if visible == 1 {
+			return nil
 		}
-		result = tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", data.ID).Updates(updates)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			var visible int64
-			if err := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", data.ID).Count(&visible).Error; err != nil {
-				return err
-			}
-			if visible == 1 {
-				return nil
-			}
-			return gorm.ErrRecordNotFound
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	}); err != nil {
-		return err
+		return gorm.ErrRecordNotFound
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (s *DataRecycleRepository) UpdateStatus(ctx *gin.Context, id int32, status string) error {
-	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
-		if status == "1" {
-			var current model.SecurityDataRecycle
-			if err := tx.Where("id = ?", id).First(&current).Error; err != nil {
-				return err
-			}
-			if err := rejectDuplicateEnabledControllerAs(tx, s.config.Database.Prefix+"security_data_recycle", current.ControllerAs, id); err != nil {
-				return err
-			}
+// UpdateStatusTx applies a status switch inside the caller's transaction,
+// verifying RowsAffected.
+func (s *SecurityDataRecycleRepository) UpdateStatusTx(tx *gorm.DB, id int32, status string) error {
+	result := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Update("status", status)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+			return err
 		}
-		result = tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Update("status", status)
-		if result.Error != nil {
-			return result.Error
+		if visible == 1 {
+			return nil
 		}
-		if result.RowsAffected == 0 {
-			var visible int64
-			if err := tx.Model(&model.SecurityDataRecycle{}).Where("id = ?", id).Count(&visible).Error; err != nil {
-				return err
-			}
-			if visible == 1 {
-				return nil
-			}
-			return gorm.ErrRecordNotFound
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		return nil
-	}); err != nil {
-		return err
+		return gorm.ErrRecordNotFound
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (s *DataRecycleRepository) Del(ctx *gin.Context, ids interface{}) error {
+func (s *SecurityDataRecycleRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid security data recycle ids")

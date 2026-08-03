@@ -4,21 +4,16 @@ import (
 	"errors"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
-	cErr "buildadmin-go/internal/pkg/error"
-	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/permissioncache"
-	"buildadmin-go/internal/pkg/random"
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
 )
 
 type AuthGroup struct {
@@ -160,106 +155,41 @@ func (s *AuthRepository) IsSuperAdmin(id int32) bool {
 	return false
 }
 
-// adminLoginCredentialError is the single generic message for every failed
-// credential check (unknown account, disabled account, wrong password) so
-// the login endpoint cannot be used to enumerate accounts.
-const adminLoginCredentialError = "Incorrect user name or password!"
-
-// Login verifies the credentials and issues the admin tokens. clientIP is
-// passed explicitly so the flow is callable from the transport-free service
-// layer.
-func (s *AuthRepository) Login(username string, password string, keep bool, clientIP string) (interface{}, error) {
-	admin := model.Admin{}
+// GetByUsername scans the admin row by username. Scan semantics: ID == 0
+// means the account does not exist (no RecordNotFound error).
+func (s *AuthRepository) GetByUsername(username string) (model.Admin, error) {
+	var admin model.Admin
 	err := s.sqlDB.Model(&model.Admin{}).Where("username=?", username).Scan(&admin).Error
-	if err != nil {
-		return nil, cErr.BadRequest(adminLoginCredentialError)
-	}
-	if admin.ID == 0 || !utils.AccountStatusEnabled(admin.Status) {
-		// Unknown and disabled accounts share the generic credential error.
-		return nil, cErr.BadRequest(adminLoginCredentialError)
-	}
+	return admin, err
+}
 
-	now := time.Now().Unix()
-	locked, err := s.lockoutStatus(admin.ID, now, s.config.App.AdminLoginRetry)
-	if err != nil {
-		return nil, err
-	}
-	if locked {
-		return nil, cErr.BadRequest("Please try again after 1 day")
-	}
+// IncrementLoginFailure atomically bumps the failure counter and stamps the
+// attempt time/ip. Concurrent failures cannot overwrite each other and the
+// counter stays monotonic.
+func (s *AuthRepository) IncrementLoginFailure(adminID int32, now int64, clientIP string) error {
+	return s.sqlDB.Model(&model.Admin{}).Where("id=?", adminID).Updates(map[string]interface{}{
+		"login_failure":   gorm.Expr("login_failure + 1"),
+		"last_login_time": now,
+		"last_login_ip":   clientIP,
+	}).Error
+}
 
-	if err := passwordutil.Compare(admin.Password, password); err != nil {
-		// Atomic increment: concurrent failures cannot overwrite each other
-		// and the counter stays monotonic. The error propagates instead of
-		// being swallowed.
-		if updErr := s.sqlDB.Model(&model.Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
-			"login_failure":   gorm.Expr("login_failure + 1"),
-			"last_login_time": now,
-			"last_login_ip":   clientIP,
-		}).Error; updErr != nil {
-			return nil, updErr
-		}
-		return nil, cErr.BadRequest(adminLoginCredentialError)
-	}
-
-	// SSO: previous sessions are cleared before a new one is issued; a failed
-	// clear aborts the login instead of leaving stale sessions behind.
-	if s.config.App.AdminSso {
-		if err := s.tokenHelper.Clear("admin", admin.ID); err != nil {
-			return nil, err
-		}
-		if err := s.tokenHelper.Clear("admin-refresh", admin.ID); err != nil {
-			return nil, err
-		}
-	}
-
-	refreshToken := ""
-	if keep {
-		refreshToken = random.Uuid()
-		if err := s.tokenHelper.Set(refreshToken, "admin-refresh", admin.ID, 2592000); err != nil { //30天
-			return nil, err
-		}
-	}
-	token := random.Uuid()
-	if err := s.tokenHelper.Set(token, "admin", admin.ID, s.config.App.AdminTokenKeepTime); err != nil {
-		// Compensate: the refresh token was already written and must not
-		// outlive the failed login.
-		if refreshToken != "" {
-			_ = s.tokenHelper.Delete(refreshToken)
-		}
-		return nil, err
-	}
-
-	// The login metadata update must succeed; on failure every issued token
-	// is revoked so an error response never leaves a usable session behind.
-	if err := s.sqlDB.Model(&model.Admin{}).Where("id=?", admin.ID).Updates(map[string]interface{}{
+// ResetLoginMeta clears the failure counter and stamps a successful login.
+func (s *AuthRepository) ResetLoginMeta(adminID int32, now int64, clientIP string) error {
+	return s.sqlDB.Model(&model.Admin{}).Where("id=?", adminID).Updates(map[string]interface{}{
 		"login_failure":   0,
 		"last_login_time": now,
 		"last_login_ip":   clientIP,
-	}).Error; err != nil {
-		_ = s.tokenHelper.Delete(token)
-		if refreshToken != "" {
-			_ = s.tokenHelper.Delete(refreshToken)
-		}
-		return nil, err
-	}
-
-	return map[string]interface{}{
-		"id":              admin.ID,
-		"username":        admin.Username,
-		"nickname":        admin.Nickname,
-		"avatar":          admin.Avatar,
-		"last_login_time": now,
-		"token":           token,
-		"refresh_token":   refreshToken,
-	}, nil
+	}).Error
 }
 
-// lockoutStatus applies the login-throttle policy under a row lock. An
-// expired lockout window clears the failure counter before counting again
+// LockLoginState applies the login-throttle lock protocol under a row lock.
+// An expired lockout window clears the failure counter before counting again
 // (mirrors the member flow), and concurrent attempts serialize on the same
-// row so the counter cannot be raced past the threshold.
-func (s *AuthRepository) lockoutStatus(adminID int32, now int64, retry int) (bool, error) {
+// row so the counter cannot be raced past the threshold. It is a
+// self-contained atomic lock primitive: the service owns the throttle
+// decision and the token issuance around it.
+func (s *AuthRepository) LockLoginState(adminID int32, now int64, retry int) (bool, error) {
 	if retry <= 0 {
 		return false, nil
 	}

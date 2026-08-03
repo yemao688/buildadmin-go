@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"encoding/json"
 	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
@@ -14,7 +13,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-type DataRecycleLogRepository struct {
+type SecurityDataRecycleLogRepository struct {
 	persistence.BaseModel
 	config *conf.Configuration
 }
@@ -31,14 +30,14 @@ func dataRecycleLogSelect(prefix string) string {
 	}, ", ")
 }
 
-func NewDataRecycleLogRepository(sqlDB *gorm.DB, config *conf.Configuration) *DataRecycleLogRepository {
-	return &DataRecycleLogRepository{
+func NewSecurityDataRecycleLogRepository(sqlDB *gorm.DB, config *conf.Configuration) *SecurityDataRecycleLogRepository {
+	return &SecurityDataRecycleLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"security_data_recycle_log", "id", "recycle.name", sqlDB),
 		config:    config,
 	}
 }
 
-func (s *DataRecycleLogRepository) GetOne(ctx *gin.Context, id int32) (dataRecycle model.SecurityDataRecycleLog, err error) {
+func (s *SecurityDataRecycleLogRepository) GetOne(ctx *gin.Context, id int32) (dataRecycle model.SecurityDataRecycleLog, err error) {
 	prefix := s.config.Database.Prefix
 	err = s.DBFor(ctx).Model(&model.SecurityDataRecycleLog{}).
 		Joins("Admin").
@@ -48,7 +47,7 @@ func (s *DataRecycleLogRepository) GetOne(ctx *gin.Context, id int32) (dataRecyc
 	return
 }
 
-func (s *DataRecycleLogRepository) List(ctx *gin.Context) (list []model.SecurityDataRecycleLog, total int64, err error) {
+func (s *SecurityDataRecycleLogRepository) List(ctx *gin.Context) (list []model.SecurityDataRecycleLog, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
 		return nil, 0, err
@@ -66,71 +65,59 @@ func (s *DataRecycleLogRepository) List(ctx *gin.Context) (list []model.Security
 	return
 }
 
-func (s *DataRecycleLogRepository) Restore(ctx *gin.Context, ids interface{}) error {
-	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
-		return fmt.Errorf("invalid recycle log ids")
+// LockPendingLogs loads the non-restored logs FOR UPDATE; a missing or
+// already-processed id fails with gorm.ErrRecordNotFound so the batch is
+// all-or-nothing.
+func (s *SecurityDataRecycleLogRepository) LockPendingLogs(tx *gorm.DB, ids []int32) ([]model.SecurityDataRecycleLog, error) {
+	condition := "id IN ? AND is_restore = 0"
+	var list []model.SecurityDataRecycleLog
+	query := tx.Model(&model.SecurityDataRecycleLog{})
+	if err := query.Where(condition, ids).Clauses(clause.Locking{Strength: "UPDATE"}).Find(&list).Error; err != nil {
+		return nil, err
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid recycle log id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	if len(list) != len(ids) {
+		return nil, gorm.ErrRecordNotFound
 	}
-
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		condition := "id IN ? AND is_restore = 0"
-		var list []model.SecurityDataRecycleLog
-		query := tx.Model(&model.SecurityDataRecycleLog{})
-		if err := query.Where(condition, normalized).Clauses(clause.Locking{Strength: "UPDATE"}).Find(&list).Error; err != nil {
-			return err
-		}
-		if len(list) != len(normalized) {
-			return gorm.ErrRecordNotFound
-		}
-
-		for _, v := range list {
-			targetTable, err := data_scope.ResolveBusinessTable(tx, s.config.Database.Prefix, v.DataTable)
-			if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, v.PrimaryKey, s.config.Database.Prefix) != nil {
-				return fmt.Errorf("invalid recycle target identifier")
-			}
-			data := map[string]any{}
-			if err := json.Unmarshal([]byte(v.Data), &data); err != nil {
-				return err
-			}
-
-			// Fail-closed: refuse to restore into tables that cannot carry ownership.
-			var rule model.SecurityDataRecycle
-			if err := tx.Table(s.config.Database.Prefix+"security_data_recycle").Where("id=?", v.RecycleID).Take(&rule).Error; err != nil {
-				return fmt.Errorf("recycle rule %d unavailable: %w", v.RecycleID, err)
-			}
-			if rule.PrimaryKey == "" {
-				rule.PrimaryKey = "id"
-			}
-			if v.PrimaryKey != rule.PrimaryKey {
-				return fmt.Errorf("recycle log primary key does not match historical rule")
-			}
-			if err := tx.Table(targetTable).Create(data).Error; err != nil {
-				return err
-			}
-			result := tx.Model(&model.SecurityDataRecycleLog{}).Where("id = ? AND is_restore = 0", v.ID).Update("is_restore", 1)
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return gorm.ErrRecordNotFound
-			}
-		}
-		return nil
-	})
+	return list, nil
 }
 
-func (s *DataRecycleLogRepository) Del(ctx *gin.Context, ids interface{}) error {
+// ResolveTarget validates the target table and its primary column for a
+// recycle log entry (fail-closed identifier resolution).
+func (s *SecurityDataRecycleLogRepository) ResolveTarget(tx *gorm.DB, dataTable, primaryKey string) (string, error) {
+	targetTable, err := data_scope.ResolveBusinessTable(tx, s.config.Database.Prefix, dataTable)
+	if err != nil || data_scope.ResolveBusinessColumn(tx, targetTable, primaryKey, s.config.Database.Prefix) != nil {
+		return "", fmt.Errorf("invalid recycle target identifier")
+	}
+	return targetTable, nil
+}
+
+// RecycleRuleByIDTx loads the historical rule that governs a log entry.
+func (s *SecurityDataRecycleLogRepository) RecycleRuleByIDTx(tx *gorm.DB, id int32) (model.SecurityDataRecycle, error) {
+	var rule model.SecurityDataRecycle
+	if err := tx.Table(s.config.Database.Prefix + "security_data_recycle").Where("id=?", id).Take(&rule).Error; err != nil {
+		return rule, err
+	}
+	return rule, nil
+}
+
+// CreateRowTx inserts the restored row inside the caller's transaction.
+func (s *SecurityDataRecycleLogRepository) CreateRowTx(tx *gorm.DB, targetTable string, data map[string]any) error {
+	return tx.Table(targetTable).Create(data).Error
+}
+
+// MarkRestoredTx flips the restore flag inside the caller's transaction.
+func (s *SecurityDataRecycleLogRepository) MarkRestoredTx(tx *gorm.DB, id int32) error {
+	result := tx.Model(&model.SecurityDataRecycleLog{}).Where("id = ? AND is_restore = 0", id).Update("is_restore", 1)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func (s *SecurityDataRecycleLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
 	if !ok || len(values) == 0 {
 		return fmt.Errorf("invalid recycle log ids")

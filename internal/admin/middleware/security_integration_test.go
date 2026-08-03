@@ -13,6 +13,7 @@ import (
 
 	"buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/conf"
 	middlewarecore "buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -92,6 +93,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 func (f *securityFixture) table(name string) string { return "`" + f.prefix + name + "`" }
 func (f *securityFixture) actorContext(actor int32, unrestricted bool) *gin.Context {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("POST", "/admin/auth.Admin/restore", nil)
 	_ = data_scope.SetActor(c, data_scope.Actor{AdminID: actor, Unrestricted: unrestricted})
 	return c
 }
@@ -239,8 +241,9 @@ func TestSecurityMySQLDeleteCommitRollbackAndRestore(t *testing.T) {
 	var rowCount int64
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Zero(t, rowCount)
-	recycleModel := securitymodel.NewDataRecycleLogRepository(f.db, f.config)
-	require.NoError(t, recycleModel.Restore(f.actorContext(2, false), []int32{logID}))
+	recycleModel := securitymodel.NewSecurityDataRecycleLogRepository(f.db, f.config)
+	recycleSvc := service.NewSecurityDataRecycleLogService(recycleModel)
+	require.NoError(t, recycleSvc.Restore(f.actorContext(2, false).Request.Context(), []int32{logID}))
 	f.db.Table(q).Where("id=10").Count(&rowCount)
 	require.Equal(t, int64(1), rowCount)
 
