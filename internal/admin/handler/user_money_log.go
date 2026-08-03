@@ -54,6 +54,7 @@ func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 			"id":          v.ID,
 			"user_id":     v.UserID,
 			"money":       fmt.Sprintf("%.2f", v.Money),
+			"type":        v.Type,
 			"before":      fmt.Sprintf("%.2f", v.Before),
 			"after":       fmt.Sprintf("%.2f", v.After),
 			"memo":        v.Memo,

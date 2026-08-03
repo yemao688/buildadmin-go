@@ -5,9 +5,7 @@
         <!-- 表格顶部菜单 -->
         <TableHeader
             :buttons="['refresh', 'add', 'comSearch', 'quickSearch', 'columnDisplay']"
-            :quick-search-placeholder="
-                t('Quick search placeholder', { fields: t('user.moneyLog.User name') + '/' + t('user.moneyLog.User nickname') })
-            "
+            :quick-search-placeholder="t('Quick search placeholder', { fields: t('user.moneyLog.User name') })"
         >
             <el-button v-if="!isEmpty(state.userInfo)" v-blur class="table-header-operate">
                 <span class="table-header-operate-text">
@@ -44,6 +42,12 @@ defineOptions({
 const { t } = useI18n()
 const route = useRoute()
 const defalutUser = (route.query.user_id ?? '') as string
+const typeLabelMap: Record<string, string> = {
+    system: 'type system',
+    recharge: 'type recharge',
+    withdraw: 'type withdraw',
+    extend: 'type extend',
+}
 const state = reactive({
     userInfo: {} as anyObj,
 })
@@ -57,14 +61,14 @@ const baTable = new baTableClass(
             { label: t('user.moneyLog.Superior agent'), prop: 'admin_id', align: 'center', operator: '=', operatorPlaceholder: t('user.moneyLog.Superior agent'), comSearchRender: 'remoteSelect', remote: { pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true } }, formatter: (row: anyObj, _column: any, cellValue: any, _index: number) => row.admin?.username || cellValue || '-', width: 130 },
             { label: t('user.moneyLog.User ID'), prop: 'user_id', align: 'center', width: 70 },
             { label: t('user.moneyLog.User name'), prop: 'user.username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            {
-                label: t('user.moneyLog.User nickname'),
-                prop: 'user.nickname',
-                align: 'center',
-                operator: 'LIKE',
-                operatorPlaceholder: t('Fuzzy query'),
-            },
             { label: t('user.moneyLog.Change balance'), prop: 'money', align: 'center', operator: 'RANGE', sortable: 'custom' },
+            {
+                label: t('user.moneyLog.Change type'),
+                prop: 'type',
+                align: 'center',
+                width: 100,
+                formatter: (row: anyObj, _column: any, cellValue: string, _index: number) => (cellValue && typeLabelMap[cellValue] ? t(`user.moneyLog.${typeLabelMap[cellValue]}`) : cellValue || '-'),
+            },
             { label: t('user.moneyLog.Before change'), prop: 'before', align: 'center', operator: 'RANGE', sortable: 'custom' },
             { label: t('user.moneyLog.After change'), prop: 'after', align: 'center', operator: 'RANGE', sortable: 'custom' },
             {
