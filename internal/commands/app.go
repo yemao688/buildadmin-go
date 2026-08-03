@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
@@ -18,7 +18,10 @@ import (
 // appStartedAt approximates process start for the "ready in" banner line.
 var appStartedAt = time.Now()
 
-type App struct {
+// ServerApp 是 serve 语义下的组合根应用实现（App 接口的具体实现，接口名被
+// commands.App 占用，故以 ServerApp 命名）；由 cmd/server 的 wireApp 经
+// NewHttpServer/NewServerApp 两个 provider 注入构造。
+type ServerApp struct {
 	config  *conf.Configuration
 	logger  *zap.Logger
 	authM   *adminMiddleware.Authorization
@@ -27,7 +30,8 @@ type App struct {
 	cxt     context.Context
 }
 
-func newHttpServer(
+// NewHttpServer 构造 http.Server（wire provider，供 cmd/server 的 wireApp 使用）。
+func NewHttpServer(
 	config *conf.Configuration,
 	router *gin.Engine,
 ) *http.Server {
@@ -37,14 +41,15 @@ func newHttpServer(
 	}
 }
 
-func newApp(
+// NewServerApp 构造组合根应用（wire provider，供 cmd/server 的 wireApp 使用）。
+func NewServerApp(
 	config *conf.Configuration,
 	logger *zap.Logger,
 	authM *adminMiddleware.Authorization,
 	httpSrv *http.Server,
 	cronSrv *cron.Cron,
-) *App {
-	return &App{
+) *ServerApp {
+	return &ServerApp{
 		config:  config,
 		logger:  logger,
 		authM:   authM,
@@ -54,7 +59,8 @@ func newApp(
 	}
 }
 
-func (a *App) Run() error {
+// Run 实现 App 接口：同步绑定监听端口并启动 http/cron server，随后输出启动横幅。
+func (a *ServerApp) Run() error {
 	// 同步绑定监听端口，端口占用等错误在输出启动横幅前暴露
 	ln, err := net.Listen("tcp", a.httpSrv.Addr)
 	if err != nil {
@@ -81,9 +87,9 @@ func (a *App) Run() error {
 	return nil
 }
 
-// ReportUnprotectedRoutes 输出 debug 环境下的后台路由保护告警（启动诊断），
-// 实现 commands.App 接口，由 commands 的 serve 编排在启动前调用。
-func (a *App) ReportUnprotectedRoutes() {
+// ReportUnprotectedRoutes 实现 App 接口：输出 debug 环境下的后台路由保护告警
+// （启动诊断），由 runServer 编排在启动前调用。
+func (a *ServerApp) ReportUnprotectedRoutes() {
 	if a.config == nil || a.config.App.Env != "debug" || a.httpSrv == nil || a.authM == nil {
 		return
 	}
@@ -98,7 +104,7 @@ func (a *App) ReportUnprotectedRoutes() {
 }
 
 // printBanner 输出 vite dev 风格的入口地址，方便直接点选访问
-func (a *App) printBanner() {
+func (a *ServerApp) printBanner() {
 	port := a.config.App.Port
 	fmt.Printf("\n  %s ready in %d ms\n\n", appVersion.Framework, time.Since(appStartedAt).Milliseconds())
 	fmt.Printf("  ➜  Local:   http://localhost:%s/\n", port)
@@ -126,7 +132,8 @@ func firstLanIPv4() string {
 	return ""
 }
 
-func (a *App) Stop(ctx context.Context) error {
+// Stop 实现 App 接口：优雅关闭 http server 与 cron server。
+func (a *ServerApp) Stop(ctx context.Context) error {
 	// 关闭 http server
 	a.logger.Info("http server has been stop")
 	if err := a.httpSrv.Shutdown(ctx); err != nil {

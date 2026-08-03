@@ -41,7 +41,7 @@ import (
 // Injectors from wire.go:
 
 // wireApp init application.
-func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLogger *zap.Logger) (*App, func(), error) {
+func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLogger *zap.Logger) (*commands.ServerApp, func(), error) {
 	gormDB := db.NewDB(configuration, zapLogger)
 	client := rds.NewRedis(configuration, zapLogger)
 	tokenHelper := token.NewTokenHelper(configuration, zapLogger, gormDB, client)
@@ -132,11 +132,11 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	}
 	installRouter := install.NewInstallRouter(installRouterDeps)
 	engine := router3.InitRouter(logger, adminRouter, apiRouter, installRouter)
-	server := newHttpServer(configuration, engine)
+	server := commands.NewHttpServer(configuration, engine)
 	exampleJob := cron.NewExampleJob(zapLogger)
 	cronCron := cron.NewCron(gormDB, zapLogger, exampleJob)
-	app := newApp(configuration, zapLogger, authorization, server, cronCron)
-	return app, func() {
+	serverApp := commands.NewServerApp(configuration, zapLogger, authorization, server, cronCron)
+	return serverApp, func() {
 	}, nil
 }
 

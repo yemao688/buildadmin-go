@@ -38,7 +38,7 @@ import (
 )
 
 // wireApp init application.
-func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func(), error) {
+func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.ServerApp, func(), error) {
 	panic(wire.Build(
 		db.NewDB,
 		rds.NewRedis,
@@ -67,8 +67,8 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*App, func()
 		wire.Struct(new(install.InstallRouterDeps), "*"),
 		router.InitRouter,
 		cron.ProviderSet,
-		newHttpServer,
-		newApp,
+		commands.NewHttpServer,
+		commands.NewServerApp,
 	))
 }
 
