@@ -203,10 +203,10 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 	cases := []struct {
 		name, input, want string
 	}{
-		{"legacy nested", filepath.Join(root, "web/src/lang/backend/country/en/language.ts"), filepath.Join(root, "web/src/lang/backend/en/country/language.ts")},
-		{"new nested", filepath.Join(root, "web/src/lang/backend/en/country/language.ts"), filepath.Join(root, "web/src/lang/backend/en/country/language.ts")},
+		{"locale first", filepath.Join(root, "web/src/lang/backend/en/country/language.ts"), filepath.Join(root, "web/src/lang/backend/en/country/language.ts")},
 		{"module named en", filepath.Join(root, "web/src/lang/backend/en/en/language.ts"), filepath.Join(root, "web/src/lang/backend/en/en/language.ts")},
 		{"non language", filepath.Join(root, "web/src/views/backend/country/en/language.ts"), filepath.Join(root, "web/src/views/backend/country/en/language.ts")},
+		{"legacy locale second passthrough", filepath.Join(root, "web/src/lang/backend/country/en/language.ts"), filepath.Join(root, "web/src/lang/backend/country/en/language.ts")},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -214,137 +214,6 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 				t.Fatalf("canonicalManifestLangPath(%q) = %q, want %q", tc.input, got, tc.want)
 			}
 		})
-	}
-}
-
-func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
-	root := util.RootPath()
-	newPath := filepath.Join(root, "web/src/lang/backend/en/country/language.ts")
-	oldPath := filepath.Join(root, "web/src/lang/backend/country/en/language.ts")
-	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
-	if !manifestAllows(FileManifest{Generated: []string{newPath}}, log) {
-		t.Fatal("legacy language manifest should match locale-first path")
-	}
-	nonLangOld := filepath.Join(root, "web/src/views/backend/old/country/language.ts")
-	nonLangNew := filepath.Join(root, "web/src/views/backend/new/country/language.ts")
-	if manifestAllows(FileManifest{Generated: []string{nonLangNew}}, &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{nonLangOld}}}) {
-		t.Fatal("non-language path migration should remain rejected")
-	}
-}
-
-func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
-	root := util.RootPath()
-	newPath := filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete/country.ts")
-	oldPath := filepath.Join(root, "web/src/lang/backend/.crud-helper-delete/en/country.ts")
-	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(newPath, []byte("export default {}\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete"))
-
-	manifest, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{oldPath}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	prepared, err := prepareDeleteManifest(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(prepared.Generated) != 1 || prepared.Generated[0] != newPath {
-		t.Fatalf("historical delete did not resolve new language path: %+v", prepared)
-	}
-}
-
-func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
-	provider := filepath.Join(util.RootPath(), "internal", "admin", "model", "relation", "provider.go")
-	current := FileManifest{Shared: []string{provider}}
-	historical := crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{provider}}}
-	manifest, err := historicalDeleteManifest(current, historical)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(manifest.Generated) != 0 || len(manifest.Shared) != 1 || manifest.Shared[0] != provider {
-		t.Fatalf("historical classification changed: %+v", manifest)
-	}
-}
-
-func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
-	root := util.RootPath()
-	paths := []string{
-		filepath.Join(root, "internal", "admin", "model", "legacy", "provider.go"),
-		filepath.Join(root, "internal", "router", "registrar_set.go"),
-		filepath.Join(root, "cmd", "server", "wire_gen.go"),
-	}
-	manifest, err := normalizeDeleteManifest(FileManifest{Generated: []string{
-		paths[0], paths[1], paths[2],
-	}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(manifest.Generated) != 0 || len(manifest.Shared) != len(paths) {
-		t.Fatalf("shared shape reclassification = %+v", manifest)
-	}
-	relative, err := normalizeDeleteManifest(FileManifest{Generated: []string{"internal/admin/model/legacy/provider.go", "internal/router/registrar_set.go", "cmd/server/wire_gen.go"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(relative.Generated) != 0 || len(relative.Shared) != len(paths) {
-		t.Fatalf("relative shared shape reclassification = %+v", relative)
-	}
-}
-
-func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.T) {
-	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", ".crud-helper-test")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	generated := filepath.Join(dir, "missing.go")
-	shared := filepath.Join(dir, "provider.go")
-	if err := os.WriteFile(shared, []byte("package model"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	manifest, err := prepareDeleteManifest(FileManifest{Generated: []string{generated}, Shared: []string{shared}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(manifest.Generated) != 0 || len(manifest.Shared) != 1 {
-		t.Fatalf("unexpected prepared manifest: %+v", manifest)
-	}
-	if _, err := prepareDeleteManifest(FileManifest{Shared: []string{generated}}); err == nil {
-		t.Fatal("missing shared file should fail deletion")
-	}
-}
-
-func TestHistoricalManifestRejectsPathOutsideAllowedRoots(t *testing.T) {
-	for _, path := range []string{"../../etc/passwd", "/tmp/evil.go"} {
-		if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{path}}}); err == nil {
-			t.Errorf("historical path %q was accepted", path)
-		}
-	}
-}
-
-func TestHistoricalManifestEnforcesGeneratedAndSharedPathClasses(t *testing.T) {
-	root := util.RootPath()
-	validGenerated := filepath.Join(root, "internal", "admin", "model", "orders.go")
-	validShared := filepath.Join(root, "internal", "admin", "model", "provider.go")
-	if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{
-		Generated: []string{validGenerated},
-		Shared:    []string{validShared},
-	}}); err != nil {
-		t.Fatalf("valid historical manifest was rejected: %v", err)
-	}
-
-	for _, manifest := range []*crudmodel.CRUDFileManifest{
-		{Generated: []string{filepath.Join(root, "internal", "middleware", "security.go")}},
-		{Shared: []string{filepath.Join(root, "internal", "admin", "model", "admin.go")}},
-		{Shared: []string{filepath.Join(root, "router", "unexpected.go")}},
-	} {
-		if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: manifest}); err == nil {
-			t.Errorf("historical manifest path class was accepted: %+v", manifest)
-		}
 	}
 }
 

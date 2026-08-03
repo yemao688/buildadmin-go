@@ -225,15 +225,6 @@ var dtStringToArray = []string{"checkbox", "selects", "remoteSelects", "city", "
 type GetTableName func(string, bool) string
 type GetColumns func(string) ([]model.Column, error)
 
-// 预设控制器和模型文件位置
-var parseNamePresets = map[string][]string{
-	"handler/user":        {"user"},
-	"handler/admin":       {"admin"},
-	"handler/admin_group": {"admin_group"},
-	"handler/attachment":  {"attachment"},
-	"handler/admin_rule":  {"admin_rule"},
-}
-
 type NameInfo struct {
 	LastName         string
 	OriginalLastName string
@@ -285,11 +276,6 @@ type HandlerData struct {
 	Methods []string
 
 	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
-
-	// 子包 handler 对根包 Base/Success 等的限定引用；根包生成时为空，输出保持不变。
-	BaseHandlerQualifier string
-	BaseHandlerAlias     string
-	BaseHandlerImport    string
 }
 
 type RegistrarData struct {
@@ -297,30 +283,23 @@ type RegistrarData struct {
 	ClassName string
 	RouteName string
 	RoutePath string
-
-	// 子包 registrar 对根包 CRUDRoutes/Base 等的限定引用；根包生成时为空。
-	// CRUDCapabilities 已随路由中心化收进 internal/admin/router，注册器
-	// 自身包内引用（生成器后续把注册器输出重定向到该包时成立）。
-	BaseHandlerQualifier string
-	BaseHandlerAlias     string
-	BaseHandlerImport    string
 }
 
 const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
 package {{.Namespace}}
 
 import (
-	{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
-	{{end}}"buildadmin-go/internal/middleware"
+	handler "buildadmin-go/internal/admin/handler"
+	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
 )
 
 type {{.ClassName}}Registrar struct {
-	handler *{{.BaseHandlerQualifier}}{{.ClassName}}Handler
+	handler *handler.{{.ClassName}}Handler
 }
 
-func New{{.ClassName}}Registrar(handler *{{.BaseHandlerQualifier}}{{.ClassName}}Handler) *{{.ClassName}}Registrar {
+func New{{.ClassName}}Registrar(handler *handler.{{.ClassName}}Handler) *{{.ClassName}}Registrar {
 	return &{{.ClassName}}Registrar{handler: handler}
 }
 
@@ -329,7 +308,7 @@ const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName
 func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
 
 func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
-	{{.BaseHandlerQualifier}}CRUDRoutes(g, {{.RouteName}}Route, r.handler)
+	handler.CRUDRoutes(g, {{.RouteName}}Route, r.handler)
 }
 
 func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
@@ -344,7 +323,6 @@ import (
 	model "{{.ModelImportPath}}"
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
 	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
-	{{end}}{{if .BaseHandlerImport}}{{.BaseHandlerAlias}} "{{.BaseHandlerImport}}"
 	{{end}}"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -353,25 +331,25 @@ import (
 )
 
 type {{.ClassName}}Handler struct {
-	{{.BaseHandlerQualifier}}Base
+	Base
 	log     *zap.Logger
 	{{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository
 }
 
 func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
-	{{if .BaseHandlerQualifier}}return &{{.ClassName}}Handler{Base: {{.BaseHandlerQualifier}}NewBase({{.ModelVar}}M), log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{else}}return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}{{end}}
+	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}
 }
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		{{.BaseHandlerQualifier}}Success(ctx, data)
+		Success(ctx, data)
 	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
+		FailByErr(ctx, err)
 		return
 	}
-	{{.BaseHandlerQualifier}}Success(ctx, map[string]any{
+	Success(ctx, map[string]any{
 		"list":   list,
 		"total":  total,
 		"remark": "",
@@ -382,17 +360,17 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	var params {{.DTOQualifier}}{{.ClassName}}Param
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	var data model.{{.ClassName}}
 	copier.Copy(&data, params)
 	err := h.{{.ModelVar}}M.Add(ctx, data)
 	if err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
+		FailByErr(ctx, err)
 		return
 	}
-	{{.BaseHandlerQualifier}}Success(ctx, "")
+	Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
@@ -408,23 +386,23 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 		{{.DTOQualifier}}{{.ClassName}}Param
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(params, err))
+		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
 	if err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
+		FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
 	err = h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
+		FailByErr(ctx, err)
 		return
 	}
-	{{.BaseHandlerQualifier}}Success(ctx, "")
+	Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
@@ -432,15 +410,15 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, validator.GetError(param, err))
+		FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
 	if err != nil {
-		{{.BaseHandlerQualifier}}FailByErr(ctx, err)
+		FailByErr(ctx, err)
 		return
 	}
-	{{.BaseHandlerQualifier}}SuccessWithMessage(ctx, "Deleted successfully")
+	SuccessWithMessage(ctx, "Deleted successfully")
 }
 `
 

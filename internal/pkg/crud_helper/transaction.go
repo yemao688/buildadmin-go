@@ -278,7 +278,6 @@ func manifestPathIsShared(path string) bool {
 	clean, _ = filepath.Abs(clean)
 	root := filepath.Clean(util.RootPath())
 	return filepath.Base(clean) == "provider.go" ||
-		clean == filepath.Join(root, "internal", "router", "registrar_set.go") ||
 		clean == filepath.Join(root, "cmd", "server", "wire.go") ||
 		clean == filepath.Join(root, "cmd", "server", "wire_gen.go")
 }

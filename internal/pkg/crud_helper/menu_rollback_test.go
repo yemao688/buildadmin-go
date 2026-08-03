@@ -19,17 +19,17 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// F2: 历史 manifest 只校验根不校验模块归属——构造 manifest 可指向允许根下
-// 任意文件。删除必须拒绝"根内但非本模块"的路径。
+// F2: manifest 路径必须归属本模块（或关联 remoteTable 模块）——仅通过根
+// 校验不够，构造的 manifest 可指向允许根下任意文件。删除流程只信任生成器
+// 推导的 manifest，且归属校验必须拒绝"根内但非本模块"的路径。
 func TestDeleteRejectsManifestPathOutsideModuleOwnership(t *testing.T) {
-	db, cfg, _ := newOwnershipFixtureOpt(t, true)
-	err := DeleteFromSpec(db, cfg, "delete_fault")
+	table := crudmodel.Table{Name: "delete_fault", GenerateRelativePath: "delete_fault"}
+	own := filepath.Join(util.RootPath(), "internal", "model", "delete_fault.go")
+	require.NoError(t, validateManifestOwnership(FileManifest{Generated: []string{own}}, table, nil))
+	unowned := filepath.Join(util.RootPath(), "internal", "model", "other_table.go")
+	err := validateManifestOwnership(FileManifest{Generated: []string{unowned}}, table, nil)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ownership")
-	// 非本模块文件必须原样保留
-	unowned := filepath.Join(util.RootPath(), "internal", "model", "other_table.go")
-	_, statErr := os.Stat(unowned)
-	require.NoError(t, statErr, "unowned file must not be touched")
 }
 
 // F3: 删除失败回滚必须恢复被递归删除的 menu_dir 父链（Pid 指向的父级
@@ -83,7 +83,8 @@ func TestMenuSnapshotRestoresUpdatedExistingRows(t *testing.T) {
 }
 
 // ownershipFixture：三层 menu_dir（delete → delete/sub → menu）+ crud_log
-// manifest 记录"本模块文件 + 一个允许根下非本模块文件"。
+// 记录"拍平布局"的生成配置。删除流程的 manifest 由生成器重新推导，因此
+// 只落盘 handler 载体文件，其余生成文件缺失会被 prepareDeleteManifest 跳过。
 type ownershipFixture struct {
 	tableName string
 	menuName  string
@@ -91,10 +92,6 @@ type ownershipFixture struct {
 }
 
 func newOwnershipFixture(t *testing.T) (*gorm.DB, *conf.Configuration, ownershipFixture) {
-	return newOwnershipFixtureOpt(t, false)
-}
-
-func newOwnershipFixtureOpt(t *testing.T, includeUnowned bool) (*gorm.DB, *conf.Configuration, ownershipFixture) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{NamingStrategy: schema.NamingStrategy{TablePrefix: "ba_", SingularTable: true}})
 	require.NoError(t, err)
@@ -121,51 +118,31 @@ func newOwnershipFixtureOpt(t *testing.T, includeUnowned bool) (*gorm.DB, *conf.
 	)`).Error)
 	require.NoError(t, db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error)
 
-	// 三层菜单：delete → delete/sub → delete/sub/fault
+	// 三层菜单：delete → delete/sub → delete/sub/fault（与 views 目录一致，
+	// F3 依赖删除真实命中该父链并回滚重建）。
 	dir := crudmodel.AdminRule{Pid: 0, Type: "menu_dir", Title: "delete", Name: "delete", Path: "delete", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&dir).Error)
 	sub := crudmodel.AdminRule{Pid: dir.ID, Type: "menu_dir", Title: "sub", Name: "delete/sub", Path: "delete/sub", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&sub).Error)
 	menuName := "delete/sub/fault"
-	menu := crudmodel.AdminRule{Pid: sub.ID, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Component: "/src/views/backend/delete/fault/index.vue", Status: "1"}
+	menu := crudmodel.AdminRule{Pid: sub.ID, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Component: "/src/views/backend/delete/sub/fault/index.vue", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&menu).Error)
 	button := crudmodel.AdminRule{Pid: menu.ID, Type: "button", Title: "查看", Name: menuName + "/index", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&button).Error)
 
-	// 本模块文件 + 非本模块文件（允许根 internal/model 下但基名不是本表）。
-	// 目录与文件名用表名推导的历史形态（delete_fault → 目录 delete、实体 fault），
-	// legacy 布局：模型文件在 internal/admin/model 下。
-	modelDir := filepath.Join(util.RootPath(), "internal", "admin", "model", "delete")
-	handlerDir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete")
-	require.NoError(t, os.MkdirAll(modelDir, 0755))
-	require.NoError(t, os.MkdirAll(handlerDir, 0755))
-	t.Cleanup(func() { _ = os.RemoveAll(modelDir) })
-	t.Cleanup(func() { _ = os.RemoveAll(handlerDir) })
-	modelProvider := filepath.Join(modelDir, "provider.go")
-	handlerProvider := filepath.Join(handlerDir, "provider.go")
-	require.NoError(t, os.WriteFile(modelProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultModel,\n)\n"), 0644))
-	require.NoError(t, os.WriteFile(handlerProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"), 0644))
-	ownFile := filepath.Join(modelDir, "fault.go")
-	require.NoError(t, os.WriteFile(ownFile, []byte("package fixture\n"), 0644))
-	generated := []string{ownFile}
-	if includeUnowned {
-		unowned := filepath.Join(util.RootPath(), "internal", "model", "other_table.go")
-		require.NoError(t, os.WriteFile(unowned, []byte("package model\n"), 0644))
-		t.Cleanup(func() { _ = os.Remove(unowned) })
-		generated = append(generated, unowned)
-	}
+	// 拍平载体：handler 文件落 internal/admin/handler/<table>.go（删除流程
+	// 的 manifest 由 crud_log 的生成配置推导，其余生成文件缺失会被跳过）。
+	ownFile := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete_fault.go")
+	require.NoError(t, os.WriteFile(ownFile, []byte("package handler\n"), 0644))
+	t.Cleanup(func() { _ = os.Remove(ownFile) })
 
 	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true}}
 	table := crudmodel.Table{
 		Name:                 "delete_fault",
 		GenerateRelativePath: "delete_fault",
-		ModelFile:            filepath.ToSlash(filepath.Join("internal", "admin", "model", "delete", "fault.go")),
-		ControllerFile:       filepath.ToSlash(filepath.Join("internal", "admin", "handler", "delete", "fault.go")),
-		WebViewsDir:          "web/src/views/backend/delete/fault",
-		Manifest: &crudmodel.CRUDFileManifest{
-			Generated: generated,
-			Shared:    []string{modelProvider, handlerProvider, filepath.Join(util.RootPath(), "cmd", "server", "wire.go"), filepath.Join(util.RootPath(), "cmd", "server", "wire_gen.go")},
-		},
+		ModelFile:            "internal/model/delete_fault.go",
+		ControllerFile:       "internal/admin/handler/delete_fault.go",
+		WebViewsDir:          "web/src/views/backend/delete/sub/fault",
 	}
 	tableJSON, err := json.Marshal(table)
 	require.NoError(t, err)

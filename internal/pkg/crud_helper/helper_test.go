@@ -16,7 +16,6 @@ import (
 	"strings"
 	"testing"
 
-	"buildadmin-go/internal/pkg/util"
 	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,21 +32,6 @@ func TestGetCommnet(t *testing.T) {
 	comment := getCommnet(table.Comment)
 
 	assert.Equal(t, comment, "测试管理", "备注:"+comment)
-}
-
-func TestParseNameData(t *testing.T) {
-	module := "admin"
-	tableName := "test1"
-	table := getTestTableData()
-	modelFile, err := ParseNameData(module, tableName, "model", table.ModelFile)
-	content, _ := json.MarshalIndent(modelFile, "", " ")
-	fmt.Println(string(content))
-	fmt.Println(err)
-
-	handlerFile, err := ParseNameData("admin", tableName, "handler", table.ControllerFile)
-	content, _ = json.MarshalIndent(handlerFile, "", " ")
-	fmt.Println(string(content))
-	fmt.Println(err)
 }
 
 func TestParseWebDirNameData(t *testing.T) {
@@ -843,162 +827,5 @@ func TestParseWebDirNameDataSeparatorsAndInvalidZeroValue(t *testing.T) {
 	}
 	if got := ParseWebDirNameData("orders", "views", "../escape"); got.Views != "" || got.LastName != "" {
 		t.Fatalf("invalid path did not return zero value: %+v", got)
-	}
-}
-
-func TestParseNameDataPreservesExplicitCamelCaseTail(t *testing.T) {
-	for _, input := range []string{"internal/admin/model/country/languageContent.go", "internal/admin/model/country/language_content.go"} {
-		info, err := ParseNameData("admin", "ignored", "model", input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if filepath.Base(info.ParseFile) != filepath.Base(input) {
-			t.Fatalf("ParseFile=%q for %q", info.ParseFile, input)
-		}
-	}
-	camel, err := ParseNameData("admin", "ignored", "model", "internal/admin/model/country/languageContent.go")
-	if err != nil || camel.LastName != "LanguageContent" {
-		t.Fatalf("camel explicit info=%+v err=%v", camel, err)
-	}
-}
-
-func TestParseNameAndWebDirDerivationRules(t *testing.T) {
-	tests := []struct {
-		name         string
-		tableName    string
-		modelFile    string
-		viewsFile    string
-		relativePath string
-		wantModel    string
-		wantViews    string
-		wantRoute    string
-		wantMenu     string
-		wantClass    string
-		wantViewName string
-	}{
-		{
-			name:         "default ops_user_test_xxx",
-			tableName:    "ops_user_test_xxx",
-			modelFile:    "",
-			viewsFile:    "",
-			relativePath: "ops_user_test_xxx",
-			wantModel:    "internal/admin/model/ops/user_test_xxx.go",
-			wantViews:    "web/src/views/backend/ops/userTestXxx",
-			wantRoute:    "ops.UserTestXxx",
-			wantMenu:     "ops/userTestXxx",
-			wantClass:    "UserTestXxx",
-			wantViewName: "userTestXxx",
-		},
-		{
-			name:         "default ops_user_order",
-			tableName:    "ops_user_order",
-			modelFile:    "",
-			viewsFile:    "",
-			relativePath: "ops_user_order",
-			wantModel:    "internal/admin/model/ops/user_order.go",
-			wantViews:    "web/src/views/backend/ops/userOrder",
-			wantRoute:    "ops.UserOrder",
-			wantMenu:     "ops/userOrder",
-			wantClass:    "UserOrder",
-			wantViewName: "userOrder",
-		},
-		{
-			name:         "default ops_banner",
-			tableName:    "ops_banner",
-			modelFile:    "",
-			viewsFile:    "",
-			relativePath: "ops_banner",
-			wantModel:    "internal/admin/model/ops/banner.go",
-			wantViews:    "web/src/views/backend/ops/banner",
-			wantRoute:    "ops.Banner",
-			wantMenu:     "ops/banner",
-			wantClass:    "Banner",
-			wantViewName: "banner",
-		},
-		{
-			name:         "default foo",
-			tableName:    "foo",
-			modelFile:    "",
-			viewsFile:    "",
-			relativePath: "foo",
-			wantModel:    "internal/admin/model/foo.go",
-			wantViews:    "web/src/views/backend/foo",
-			wantRoute:    "Foo",
-			wantMenu:     "foo",
-			wantClass:    "Foo",
-			wantViewName: "foo",
-		},
-		{
-			name:         "explicit slash path",
-			tableName:    "ignored",
-			modelFile:    "internal/admin/model/ops/user/test_xxx.go",
-			viewsFile:    "web/src/views/backend/ops/user/test_xxx",
-			relativePath: "ops/user/test_xxx",
-			wantModel:    "internal/admin/model/ops/user/test_xxx.go",
-			wantViews:    "web/src/views/backend/ops/user/testXxx",
-			wantRoute:    "ops.user.TestXxx",
-			wantMenu:     "ops/user/testXxx",
-			wantClass:    "TestXxx",
-			wantViewName: "testXxx",
-		},
-		{
-			name:         "explicit dotted path",
-			tableName:    "ignored",
-			modelFile:    "internal/admin/model/ops.user.test_xxx.go",
-			viewsFile:    "web/src/views/backend/ops.user.test_xxx",
-			relativePath: "ops.user.test_xxx",
-			wantModel:    "internal/admin/model/ops/user/test_xxx.go",
-			wantViews:    "web/src/views/backend/ops/user/testXxx",
-			wantRoute:    "ops.user.TestXxx",
-			wantMenu:     "ops/user/testXxx",
-			wantClass:    "TestXxx",
-			wantViewName: "testXxx",
-		},
-		{
-			name:         "explicit country.languageContent",
-			tableName:    "ignored",
-			modelFile:    "internal/admin/model/country.languageContent.go",
-			viewsFile:    "web/src/views/backend/country.languageContent",
-			relativePath: "country.languageContent",
-			wantModel:    "internal/admin/model/country/languageContent.go",
-			wantViews:    "web/src/views/backend/country/languageContent",
-			wantRoute:    "country.LanguageContent",
-			wantMenu:     "country/languageContent",
-			wantClass:    "LanguageContent",
-			wantViewName: "languageContent",
-		},
-		{
-			name:         "preset user",
-			tableName:    "user",
-			modelFile:    "internal/admin/model/user/user.go",
-			viewsFile:    "web/src/views/backend/user/user",
-			relativePath: "user",
-			wantModel:    "internal/admin/model/user/user.go",
-			wantViews:    "web/src/views/backend/user/user",
-			wantRoute:    "User",
-			wantMenu:     "user/user",
-			wantClass:    "User",
-			wantViewName: "user",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			modelInfo, err := ParseNameData("admin", tc.tableName, "model", tc.modelFile)
-			require.NoError(t, err)
-			handlerFile := strings.Replace(tc.modelFile, "/model/", "/handler/", 1)
-			handlerInfo, err := ParseNameData("admin", tc.tableName, "handler", handlerFile)
-			require.NoError(t, err)
-			webDir := ParseWebDirNameData(tc.tableName, "views", tc.viewsFile)
-
-			require.Equal(t, tc.wantClass, modelInfo.LastName)
-			require.Equal(t, tc.wantClass, handlerInfo.LastName)
-			require.Equal(t, tc.wantViewName, webDir.LastName)
-			require.Equal(t, filepath.ToSlash(filepath.Join(util.RootPath(), tc.wantModel)), filepath.ToSlash(modelInfo.ParseFile))
-			require.Equal(t, filepath.ToSlash(filepath.Join(util.RootPath(), strings.Replace(tc.wantModel, "/model/", "/handler/", 1))), filepath.ToSlash(handlerInfo.ParseFile))
-			require.Equal(t, tc.wantViews, filepath.ToSlash(webDir.Views))
-			require.Equal(t, tc.wantMenu, GetMenuName(webDir))
-			require.Equal(t, tc.wantRoute, routeNameFromRelativePath(tc.relativePath, modelInfo.LastName))
-		})
 	}
 }

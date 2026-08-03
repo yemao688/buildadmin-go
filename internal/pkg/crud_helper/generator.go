@@ -355,23 +355,12 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	// 历史 manifest 按布局分支处理：
-	//   flat   —— 新拍平布局（repository/handler/dto/router 单包 + ProvideRegistrars 锚点）
-	//   nested —— 5eb9332 时代拆分布局（repository/<dir>、handler/<dir> + _route.go、
-	//             registrar_set.go 注册）
-	//   legacy —— 更早的单模型布局（internal/admin/model、internal/common/model）
-	manifest, err = historicalDeleteManifest(manifest, crudmodel.Table(log.Table))
-	if err != nil {
-		return err
-	}
 	// F2：manifest 路径必须归属本模块（或关联 remoteTable 模块），
 	// 仅通过根校验不够——构造的 manifest 可指向允许根下任意文件。
 	joinTables := remoteJoinTables([]crudmodel.Field(log.Fields))
 	if err := validateManifestOwnership(manifest, crudmodel.Table(log.Table), joinTables); err != nil {
 		return err
 	}
-	// 布局判定必须基于历史 manifest（持久化路径），而非重新推导的拍平路径。
-	layout := classifyDeleteLayout(manifest)
 	handlerFile, err := ParseHandlerNameData(log.Table.Name, log.Table.ControllerFile)
 	if err != nil {
 		return err
@@ -380,32 +369,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	// 历史布局的 provider 目录/类名以 manifest 为准（重新解析会得到拍平路径）。
-	var legacyModelFile, nestedHandlerFile, nestedRepositoryFile NameInfo
 	className := handlerFile.LastName
-	switch layout {
-	case deleteLayoutFlat:
-		// manifest 已由 BuildFileManifestForFields 覆盖全部生成文件。
-	case deleteLayoutNested:
-		// 类名与 provider 目录从历史 manifest 推导；_custom.go 等历史骨架
-		// 路径被跳过，不作为模块主文件。
-		className, nestedHandlerFile, nestedRepositoryFile = deriveNestedArtifacts(manifest)
-	case deleteLayoutLegacy:
-		module := "admin"
-		if log.Table.IsCommonModel != 0 {
-			module = "common"
-		}
-		legacyModelFile, err = ParseNameData(module, log.Table.Name, "model", log.Table.ModelFile)
-		if err != nil {
-			return err
-		}
-		legacyHandler, err := ParseNameData("admin", log.Table.Name, "handler", log.Table.ControllerFile)
-		if err != nil {
-			return err
-		}
-		className = legacyHandler.LastName
-		handlerFile = legacyHandler
-	}
 	manifest, err = prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
@@ -454,71 +418,21 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := adminauth.NewAdminRuleRepository(db, cfg).Delete(menuName, true); err != nil {
 		return fail("delete menu", err)
 	}
-	// 按布局移除 provider 条目与路由注册锚点。
-	guardPaths := []string{
-		filepath.Join(util.RootPath(), "cmd", "server", "wire.go"),
+	// 移除 provider 条目与路由注册锚点（拍平布局）。
+	handlerProvider := filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go")
+	repositoryProvider := filepath.Join(util.RootPath(), repositoryFile.RootFileName, "provider.go")
+	routerProvider := filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go")
+	guardPaths := []string{handlerProvider, repositoryProvider, routerProvider}
+	if err := RemoveProvider(handlerFile.RootFileName, className+"Handler"); err != nil {
+		return fail("remove handler provider", err)
 	}
-	switch layout {
-	case deleteLayoutFlat:
-		handlerProvider := filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go")
-		repositoryProvider := filepath.Join(util.RootPath(), repositoryFile.RootFileName, "provider.go")
-		routerProvider := filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go")
-		if err := RemoveProvider(handlerFile.RootFileName, className+"Handler"); err != nil {
-			return fail("remove handler provider", err)
-		}
-		if err := RemoveProvider(repositoryFile.RootFileName, className+"Repository"); err != nil {
-			return fail("remove repository provider", err)
-		}
-		if err := removeAdminRouterEntry(className); err != nil {
-			return fail("remove router registrar entry", err)
-		}
-		guardPaths = append(guardPaths, handlerProvider, repositoryProvider, routerProvider)
-	case deleteLayoutNested:
-		handlerProvider := filepath.Join(util.RootPath(), nestedHandlerFile.RootFileName, "provider.go")
-		repositoryProvider := filepath.Join(util.RootPath(), nestedRepositoryFile.RootFileName, "provider.go")
-		if err := RemoveProvider(nestedHandlerFile.RootFileName, className+"Handler"); err != nil {
-			return fail("remove handler provider", err)
-		}
-		if err := RemoveProvider(nestedHandlerFile.RootFileName, className+"Registrar"); err != nil {
-			return fail("remove handler registrar provider", err)
-		}
-		if err := RemoveProvider(nestedRepositoryFile.RootFileName, className+"Repository"); err != nil {
-			return fail("remove repository provider", err)
-		}
-		if err := RemoveRegistrarProvider(className, nestedHandlerFile.RootFileName); err != nil {
-			return fail("remove registrar provider", err)
-		}
-		if err := RemoveWireProviderSet(nestedHandlerFile.RootFileName); err != nil {
-			return fail("remove handler wire provider set", err)
-		}
-		if err := RemoveWireProviderSet(nestedRepositoryFile.RootFileName); err != nil {
-			return fail("remove repository wire provider set", err)
-		}
-		guardPaths = append(guardPaths, handlerProvider, repositoryProvider)
-	case deleteLayoutLegacy:
-		handlerProvider := filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go")
-		modelProvider := filepath.Join(util.RootPath(), legacyModelFile.RootFileName, "provider.go")
-		if err := RemoveProvider(handlerFile.RootFileName, className+"Handler"); err != nil {
-			return fail("remove handler provider", err)
-		}
-		if err := RemoveProvider(handlerFile.RootFileName, className+"Registrar"); err != nil {
-			return fail("remove handler registrar provider", err)
-		}
-		if err := RemoveProvider(legacyModelFile.RootFileName, className+"Model"); err != nil {
-			return fail("remove model provider", err)
-		}
-		if err := RemoveRegistrarProvider(className, handlerFile.RootFileName); err != nil {
-			return fail("remove registrar provider", err)
-		}
-		if err := RemoveWireProviderSet(handlerFile.RootFileName); err != nil {
-			return fail("remove handler wire provider set", err)
-		}
-		if err := RemoveWireProviderSet(legacyModelFile.RootFileName); err != nil {
-			return fail("remove model wire provider set", err)
-		}
-		guardPaths = append(guardPaths, handlerProvider, modelProvider)
+	if err := RemoveProvider(repositoryFile.RootFileName, className+"Repository"); err != nil {
+		return fail("remove repository provider", err)
 	}
-	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest, layout); err != nil {
+	if err := removeAdminRouterEntry(className); err != nil {
+		return fail("remove router registrar entry", err)
+	}
+	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest); err != nil {
 		return fail("remove associated model providers", err)
 	}
 	if err := parseDeleteGoFiles(guardPaths...); err != nil {
@@ -536,20 +450,8 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := quarantine.Commit(); err != nil {
 		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", quarantine.dir, err)
 	}
-	// 删除后清理：子包空 provider 脚手架与为空的目录链（视图、语言、Go 包目录）。
-	// 拍平根包 provider.go 是 wire 静态聚合根，永不修剪。
-	switch layout {
-	case deleteLayoutNested:
-		pruneEmptyProviderScaffold(nestedHandlerFile.RootFileName, "internal/admin/handler")
-		pruneEmptyProviderScaffold(nestedRepositoryFile.RootFileName, "internal/admin/repository")
-	case deleteLayoutLegacy:
-		module := "admin"
-		if log.Table.IsCommonModel != 0 {
-			module = "common"
-		}
-		pruneEmptyProviderScaffold(handlerFile.RootFileName, "internal/admin/handler")
-		pruneEmptyProviderScaffold(legacyModelFile.RootFileName, filepath.Join("internal", module, "model"))
-	}
+	// 删除后清理为空的目录链（视图、语言）；拍平根包 provider.go 是 wire
+	// 静态聚合根，永不修剪。
 	viewsDir := ParseWebDirNameData(log.Table.Name, "views", log.Table.WebViewsDir)
 	langDir := ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)
 	pruneEmptyDirsUpTo(filepath.Join(util.RootPath(), viewsDir.Views), filepath.Join(util.RootPath(), "web", "src", "views", "backend"))
@@ -586,10 +488,6 @@ func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
 	}
 	for _, path := range manifest.Shared {
 		if !fileExists(path) {
-			if path == filepath.Join(util.RootPath(), "internal", "router", "registrar_set.go") {
-				// 历史锚点已被 api 车道重构移除；旧 manifest 的该条目不再参与删除。
-				continue
-			}
 			return FileManifest{}, fmt.Errorf("required shared manifest file is missing: %s", path)
 		}
 		info, statErr := os.Stat(path)
@@ -598,28 +496,6 @@ func prepareDeleteManifest(manifest FileManifest) (FileManifest, error) {
 		}
 	}
 	return FileManifest{Generated: generated, Shared: manifest.Shared}, nil
-}
-
-func historicalDeleteManifest(current FileManifest, table crudmodel.Table) (FileManifest, error) {
-	var result FileManifest
-	if table.Manifest != nil {
-		result = FileManifest{Generated: append([]string{}, table.Manifest.Generated...), Shared: append([]string{}, table.Manifest.Shared...)}
-		return normalizeDeleteManifest(result)
-	}
-	if len(table.GeneratedFiles) == 0 {
-		return normalizeDeleteManifest(current)
-	}
-	shared := make(map[string]bool, len(current.Shared))
-	for _, path := range current.Shared {
-		shared[path] = true
-	}
-	result = FileManifest{Shared: append([]string{}, current.Shared...)}
-	for _, path := range table.GeneratedFiles {
-		if !shared[path] {
-			result.Generated = append(result.Generated, path)
-		}
-	}
-	return normalizeDeleteManifest(result)
 }
 
 // normalizeDeleteManifest is deliberately applied to both current and legacy
@@ -660,8 +536,6 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 			"web/src/lang", "web/src/views",
 			"internal/model", "internal/admin/repository", "internal/admin/dto",
 			"internal/admin/router", "internal/admin/handler",
-			// 历史布局根保留用于旧 manifest 删除兼容。
-			"internal/admin/model", "internal/common/model",
 		)
 	})
 	if err != nil {
@@ -676,40 +550,31 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 
 func validateSharedManifestPath(path string) error {
 	root := util.RootPath()
-	for _, allowed := range []string{
-		filepath.Join(root, "internal", "router", "registrar_set.go"),
-		filepath.Join(root, "cmd", "server", "wire.go"),
-		filepath.Join(root, "cmd", "server", "wire_gen.go"),
-	} {
-		if path == allowed {
-			return nil
-		}
+	if path == filepath.Join(root, "cmd", "server", "wire_gen.go") {
+		return nil
 	}
 	if filepath.Base(path) != "provider.go" {
-		return fmt.Errorf("shared manifest target must be provider.go, router/registrar_set.go, cmd/server/wire.go, or cmd/server/wire_gen.go")
+		return fmt.Errorf("shared manifest target must be provider.go or cmd/server/wire_gen.go")
 	}
 	return ValidateGeneratedAbsolutePath(path,
 		"internal/admin/router", "internal/admin/repository", "internal/admin/handler",
-		// 历史布局根保留用于旧 manifest 删除兼容。
-		"internal/admin/model", "internal/common/model",
 	)
 }
 
 // snapshotMenuRules 收集目标菜单及其后代的全部行，并沿 Pid 上溯补齐祖先链。
 // 删除流程会递归删除空 menu_dir 父级，回滚必须能重建完整父链（Pid 才能
 // 重新指向存在的行）；生成流程会 update 既有行，快照同时用于回滚原值。
-// manifestGoRoots 是所有历史布局允许的 Go 产物根（flat/nested/legacy 全含）。
+// manifestGoRoots 是删除流程允许的 Go 产物根（拍平布局）。
 var manifestGoRoots = []string{
 	"internal/model", "internal/admin/repository", "internal/admin/dto",
 	"internal/admin/handler", "internal/admin/router",
-	"internal/admin/model", "internal/common/model",
 }
 
 // validateManifestOwnership 校验 manifest 每条路径都归属本模块（或关联
 // remoteTable 模块）：仅通过根目录校验不够——构造的 manifest 可以指向允许
-// 根下的任意文件。文件名必须与表名/拆分实体名匹配，目录必须是允许根或
-// 表名/generateRelativePath 推导的历史子目录；Shared 的 provider.go 只校验
-// 目录归属，全局锚点（registrar_set.go/wire.go/wire_gen.go）放行。
+// 根下的任意文件。拍平布局下生成文件必须直接位于允许根下且文件名与表名
+// （或其 camel 形态）匹配；Shared 的 provider.go 只校验目录归属，全局锚点
+// （cmd/server/wire_gen.go）放行。
 func validateManifestOwnership(manifest FileManifest, table crudmodel.Table, joinTables []string) error {
 	for _, path := range manifest.Generated {
 		if !manifestPathBelongsToModule(path, table, joinTables) {
@@ -717,7 +582,7 @@ func validateManifestOwnership(manifest FileManifest, table crudmodel.Table, joi
 		}
 	}
 	for _, path := range manifest.Shared {
-		if filepath.Base(path) == "provider.go" && !manifestProviderDirBelongs(path, table, joinTables) {
+		if filepath.Base(path) == "provider.go" && !manifestProviderDirBelongs(path) {
 			return fmt.Errorf("manifest ownership: shared provider %q does not belong to module %q", path, table.Name)
 		}
 	}
@@ -731,7 +596,7 @@ func manifestPathBelongsToModule(abs string, table crudmodel.Table, joinTables [
 		return false
 	}
 	rel = filepath.ToSlash(rel)
-	// web 产物：路径含表名/实体名（snake 或 camel）即放行（历史视图目录可自定义）。
+	// web 产物：路径含表名/实体名（snake 或 camel）即放行（视图目录可自定义）。
 	for _, webRoot := range []string{"web/src/lang", "web/src/views"} {
 		if strings.HasPrefix(rel, webRoot+"/") {
 			return webManifestPathBelongs(rel, table.Name)
@@ -751,14 +616,9 @@ func manifestPathBelongsToModule(abs string, table crudmodel.Table, joinTables [
 	}
 	base := filepath.Base(rel)
 	stem := strings.TrimSuffix(base, filepath.Ext(base))
-	for _, suffix := range []string{"_custom", "_route"} {
-		stem = strings.TrimSuffix(stem, suffix)
-	}
 	names := []string{table.Name}
-	names = append(names, moduleEntityNames(table.Name)...)
 	for _, join := range joinTables {
 		names = append(names, join)
-		names = append(names, moduleEntityNames(join)...)
 	}
 	nameOK := false
 	for _, name := range names {
@@ -770,21 +630,8 @@ func manifestPathBelongsToModule(abs string, table crudmodel.Table, joinTables [
 	if !nameOK {
 		return false
 	}
-	rest := strings.TrimPrefix(rel, goRoot+"/")
-	if rest == base {
-		return true // 文件直接在根下（flat）
-	}
-	dirPart := filepath.ToSlash(filepath.Dir(rest))
-	dirs := append(allowedModuleSubdirs(table), allowedModuleSubdirsForName(table.Name)...)
-	for _, join := range joinTables {
-		dirs = append(dirs, allowedModuleSubdirsForName(join)...)
-	}
-	for _, dir := range dirs {
-		if dirPart == dir || strings.HasPrefix(dirPart, dir+"/") {
-			return true
-		}
-	}
-	return false
+	// 拍平布局：文件必须直接位于允许根下（<root>/<table>.go）。
+	return strings.TrimPrefix(rel, goRoot+"/") == base
 }
 
 // webManifestPathBelongs 视图/语言路径含表名或实体名即放行。
@@ -813,66 +660,18 @@ func moduleEntityNames(tableName string) []string {
 	return []string{entity}
 }
 
-// allowedModuleSubdirsForName 由表名推导历史布局的子目录段（首段分割）。
-func allowedModuleSubdirsForName(tableName string) []string {
-	normalized, err := normalizeLogicalPath(tableName)
-	if err != nil {
-		return nil
-	}
-	parts := strings.Split(normalized, "/")
-	dirs, entity := splitLogicalNameParts(parts)
-	if entity == "" || len(dirs) == 0 {
-		return nil
-	}
-	result := make([]string, 0, len(dirs))
-	for i := 1; i <= len(dirs); i++ {
-		result = append(result, strings.Join(dirs[:i], "/"))
-	}
-	return result
-}
-
-// allowedModuleSubdirs 由 generateRelativePath 推导历史子目录段。
-func allowedModuleSubdirs(table crudmodel.Table) []string {
-	normalized, err := normalizeLogicalPath(table.GenerateRelativePath)
-	if err != nil {
-		return nil
-	}
-	parts := strings.Split(normalized, "/")
-	if len(parts) <= 1 {
-		return nil
-	}
-	result := make([]string, 0, len(parts)-1)
-	for i := 1; i < len(parts); i++ {
-		result = append(result, strings.Join(parts[:i], "/"))
-	}
-	return result
-}
-
-// manifestProviderDirBelongs 校验 provider.go 的目录归属：允许根本身（flat
-// 合并 ProviderSet）或"允许根 + 表名/generateRelativePath 推导的历史子目录"。
-func manifestProviderDirBelongs(abs string, table crudmodel.Table, joinTables []string) bool {
+// manifestProviderDirBelongs 校验 provider.go 的目录归属：拍平布局下
+// provider.go 必须直接位于允许根（合并 ProviderSet 根包）。
+func manifestProviderDirBelongs(abs string) bool {
 	rel, err := filepath.Rel(util.RootPath(), abs)
 	if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
 	rel = filepath.ToSlash(rel)
 	dir := filepath.ToSlash(filepath.Dir(rel))
-	dirs := append(allowedModuleSubdirs(table), allowedModuleSubdirsForName(table.Name)...)
-	for _, join := range joinTables {
-		dirs = append(dirs, allowedModuleSubdirsForName(join)...)
-	}
 	for _, root := range manifestGoRoots {
 		if dir == root {
 			return true
-		}
-		if !strings.HasPrefix(dir, root+"/") {
-			continue
-		}
-		rest := strings.TrimPrefix(dir, root+"/")
-		for _, d := range dirs {
-			if rest == d {
-				return true
-			}
 		}
 	}
 	return false
@@ -960,155 +759,12 @@ func parseDeleteGoFiles(paths ...string) error {
 	return nil
 }
 
-// isLegacyModelManifest 判断 manifest 是否属于旧单模型布局（模型文件位于
-// internal/admin/model 或 internal/common/model）。
-func isLegacyModelManifest(manifest FileManifest) bool {
-	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
-		clean := filepath.Clean(filepath.FromSlash(path))
-		root := filepath.Clean(util.RootPath())
-		if !filepath.IsAbs(clean) {
-			clean = filepath.Join(root, clean)
-		}
-		for _, parent := range []string{
-			filepath.Join(root, "internal", "admin", "model"),
-			filepath.Join(root, "internal", "common", "model"),
-		} {
-			if clean == parent || strings.HasPrefix(clean, parent+string(filepath.Separator)) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// deleteLayout 标识 crud:delete 面对的历史生成布局。
-type deleteLayout int
-
-const (
-	// deleteLayoutFlat 是当前拍平布局：repository/handler/dto/router 单包，
-	// 注册器在 internal/admin/router 且经 ProvideRegistrars 锚点聚合。
-	deleteLayoutFlat deleteLayout = iota
-	// deleteLayoutNested 是拆分时代布局：repository/<dir>、handler/<dir> +
-	// _route.go，注册器经 internal/router/registrar_set.go 聚合。
-	deleteLayoutNested
-	// deleteLayoutLegacy 是最早的单模型布局：internal/admin/model、
-	// internal/common/model。
-	deleteLayoutLegacy
-)
-
-// classifyDeleteLayout 判定 manifest 记录的生成布局。
-func classifyDeleteLayout(manifest FileManifest) deleteLayout {
-	if isLegacyModelManifest(manifest) {
-		return deleteLayoutLegacy
-	}
-	for _, path := range manifest.Generated {
-		rel, err := filepath.Rel(util.RootPath(), path)
-		if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			continue
-		}
-		rel = filepath.ToSlash(rel)
-		if strings.HasSuffix(rel, "_route.go") {
-			return deleteLayoutNested
-		}
-		for _, root := range []string{"internal/admin/repository", "internal/admin/handler", "internal/admin/dto"} {
-			if strings.HasPrefix(rel, root+"/") {
-				rest := strings.TrimPrefix(rel, root+"/")
-				if strings.Contains(rest, "/") {
-					return deleteLayoutNested
-				}
-			}
-		}
-	}
-	return deleteLayoutFlat
-}
-
-// deriveNestedArtifacts 从拆分时代（nested）布局的 manifest 推导模块类名与
-// handler/repository 的 provider 目录。类名取生成文件基名
-// （如 e2e_banner → E2eBanner），目录取文件所在子目录。
-func deriveNestedArtifacts(manifest FileManifest) (className string, handlerFile, repositoryFile NameInfo) {
-	for _, path := range manifest.Generated {
-		rel, err := filepath.Rel(util.RootPath(), path)
-		if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			continue
-		}
-		rel = filepath.ToSlash(rel)
-		base := filepath.Base(rel)
-		if strings.HasSuffix(base, "_custom.go") || strings.HasSuffix(base, "_route.go") || base == "provider.go" {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(rel, "internal/admin/repository/") && strings.Contains(strings.TrimPrefix(rel, "internal/admin/repository/"), "/"):
-			dir := filepath.ToSlash(filepath.Dir(rel))
-			repositoryFile = NameInfo{RootFileName: dir, Namespace: filepath.Base(dir), LastName: classNameFromGeneratedBase(base)}
-			if className == "" {
-				className = repositoryFile.LastName
-			}
-		case strings.HasPrefix(rel, "internal/admin/handler/") && strings.Contains(strings.TrimPrefix(rel, "internal/admin/handler/"), "/"):
-			dir := filepath.ToSlash(filepath.Dir(rel))
-			handlerFile = NameInfo{RootFileName: dir, Namespace: "handler", LastName: classNameFromGeneratedBase(base)}
-			if className == "" {
-				className = handlerFile.LastName
-			}
-		}
-	}
-	return className, handlerFile, repositoryFile
-}
-
-// classNameFromGeneratedBase 由生成文件基名推导类名（e2e_banner.go → E2eBanner）。
-func classNameFromGeneratedBase(base string) string {
-	base = strings.TrimSuffix(base, filepath.Ext(base))
-	return util.SnakeToCamel(base, true)
-}
-
-func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManifest, layout deleteLayout) error {
+// removeAssociatedModelProviders 移除本次生成关联实体（remoteSelect 的
+// RemoteTable 模块）在共享 provider.go 中的 provider 条目。
+func removeAssociatedModelProviders(fields []crudmodel.Field, manifest FileManifest) error {
 	seen := map[string]bool{}
 	for _, field := range fields {
 		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
-			continue
-		}
-		switch layout {
-		case deleteLayoutLegacy:
-			legacyJoin, err := ParseNameData("admin", field.Form.RemoteTable, "model", field.Form.RemoteModel)
-			if err != nil {
-				return err
-			}
-			// 仅当关联模型文件本身是本次 CRUD 生成的产物时才移除其 provider
-			// 条目;指向既有核心模型(如 ba_admin 的 admin.go)的关联只复用
-			// 共享 provider.go,删除会误伤核心模型的 provider 注册。
-			if !containsPath(manifest.Generated, legacyJoin.ParseFile) {
-				continue
-			}
-			provider := filepath.Join(util.RootPath(), legacyJoin.RootFileName, "provider.go")
-			if !containsPath(manifest.Shared, provider) || seen[provider] {
-				continue
-			}
-			seen[provider] = true
-			if err := RemoveProvider(legacyJoin.RootFileName, legacyJoin.LastName+"Model"); err != nil {
-				return err
-			}
-			continue
-		case deleteLayoutNested:
-			// 拆分时代实体扁平落在 internal/model（按拆分名），仓库在
-			// repository/<dir>：用历史解析对齐 manifest。
-			join, err := parseNameDataLegacy("internal/model", field.Form.RemoteTable, "model", field.Form.RemoteModel, true, "model")
-			if err != nil {
-				return err
-			}
-			if !containsPath(manifest.Generated, join.ParseFile) {
-				continue
-			}
-			joinRepo, err := ParseNameData("admin", field.Form.RemoteTable, "repository", field.Form.RemoteModel)
-			if err != nil {
-				return err
-			}
-			provider := filepath.Join(util.RootPath(), joinRepo.RootFileName, "provider.go")
-			if !containsPath(manifest.Shared, provider) || seen[provider] {
-				continue
-			}
-			seen[provider] = true
-			if err := RemoveProvider(joinRepo.RootFileName, joinRepo.LastName+"Repository"); err != nil {
-				return err
-			}
 			continue
 		}
 		join, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
@@ -1179,43 +835,11 @@ func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
 	return true
 }
 
-// canonicalManifestLangPath migrates only the legacy backend language layout.
-// Other generated paths, and locale-first paths, are returned unchanged.
+// canonicalManifestLangPath normalizes manifest path separators for
+// comparison and deduplication. Every compared manifest is current-layout,
+// so no legacy language-layout migration is applied.
 func canonicalManifestLangPath(path string) string {
-	clean := filepath.Clean(filepath.FromSlash(path))
-	root := filepath.Clean(util.RootPath())
-	isAbs := filepath.IsAbs(clean)
-	rel := clean
-	if isAbs {
-		var err error
-		rel, err = filepath.Rel(root, clean)
-		if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
-			return clean
-		}
-	}
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	const backendPrefix = "web/src/lang/backend"
-	prefix := strings.Split(backendPrefix, "/")
-	if len(parts) < len(prefix)+3 || !slices.Equal(parts[:len(prefix)], prefix) {
-		return clean
-	}
-	rest := parts[len(prefix):]
-	if rest[0] == "en" || rest[0] == "zh-cn" {
-		return clean
-	}
-	localeIndex := len(rest) - 2
-	if rest[localeIndex] != "en" && rest[localeIndex] != "zh-cn" {
-		return clean
-	}
-	canonical := append([]string{}, prefix...)
-	canonical = append(canonical, rest[localeIndex])
-	canonical = append(canonical, rest[:localeIndex]...)
-	canonical = append(canonical, rest[localeIndex+1:]...)
-	result := filepath.Join(canonical...)
-	if isAbs {
-		return filepath.Join(root, result)
-	}
-	return result
+	return filepath.Clean(filepath.FromSlash(path))
 }
 
 func manifestConflicts(manifest FileManifest) []string {

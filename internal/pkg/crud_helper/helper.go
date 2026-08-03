@@ -8,7 +8,6 @@ import (
 	"buildadmin-go/internal/pkg/util"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -336,24 +335,14 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	return webViewsDir, tableComment, err
 }
 
-// repositoryImportAlias 为 handler 中选择仓库包的别名：子包沿用迁移后的
-// <dir>model 约定（country → countrymodel），扁平根包直接用包名。
+// repositoryImportAlias 为 handler 中选择仓库包的别名：拍平后恒为根包 repository。
 func repositoryImportAlias(repositoryFile NameInfo) string {
-	root := filepath.ToSlash(repositoryFile.RootFileName)
-	if root == "internal/admin/repository" {
-		return "repository"
-	}
-	return path.Base(root) + "model"
+	return "repository"
 }
 
-// dtoImportAlias 为 handler 中选择 DTO 包的别名：子包为 <dir>dto（country →
-// countrydto），扁平根包直接用包名 dto。
+// dtoImportAlias 为 handler 中选择 DTO 包的别名：拍平后恒为根包 dto。
 func dtoImportAlias(dtoFile NameInfo) string {
-	root := filepath.ToSlash(dtoFile.RootFileName)
-	if root == "internal/admin/dto" {
-		return "dto"
-	}
-	return path.Base(root) + "dto"
+	return "dto"
 }
 
 // pkGoField returns the Go field name used by generated GORM structs for the
@@ -552,12 +541,6 @@ func getCommnet(comment string) string {
 	return tableComment
 }
 
-// ParseNameData 解析历史嵌套布局产物（internal/<module>/<moduleType>/<path>）。
-// 仅用于历史 manifest 删除兼容与旧测试；新生成一律走拍平 Parse*NameData。
-func ParseNameData(module string, tableName string, moduleType string, file string) (NameInfo, error) {
-	return parseNameDataLegacy(filepath.Join("internal", module, moduleType), tableName, moduleType, file, false, "")
-}
-
 // ParseEntityNameData 解析共享贫血实体记录的位置：实体一律扁平输出到
 // internal/model/<table>.go（文件名恒等于表名），包名恒为 model。
 func ParseEntityNameData(tableName string, file string) (NameInfo, error) {
@@ -586,18 +569,6 @@ func ParseHandlerNameData(tableName string, file string) (NameInfo, error) {
 // （internal/admin/router/<table>.go，包名恒为 router）。
 func ParseRegistrarNameData(tableName string, file string) (NameInfo, error) {
 	return parseFlatNameData("internal/admin/router", tableName, "router", file)
-}
-
-// artifactRootPrefixes 是 spec 中 modelFile 可能携带的产物根（含历史布局）。
-// 解析前先剥离，使旧布局 modelFile 仍能解析出新布局的实体名。
-var artifactRootPrefixes = []string{
-	"internal/admin/model",
-	"internal/common/model",
-	"internal/model",
-	"internal/admin/repository",
-	"internal/admin/dto",
-	"internal/admin/handler",
-	"internal/admin/router",
 }
 
 // parseFlatNameData 解析拍平布局产物：文件恒为 <root>/<table>.go（显式 file
@@ -635,78 +606,6 @@ func parseFlatNameData(root string, tableName string, namespace string, file str
 		Namespace:        namespace,
 		ParseFile:        parseFile,
 		RootFileName:     root,
-	}
-	return info, nil
-}
-
-// parseNameDataLegacy 解析按逻辑路径（可含子目录）落位的产物位置，供历史
-// manifest 删除兼容使用。
-func parseNameDataLegacy(root string, tableName string, moduleType string, file string, flat bool, namespaceOverride string) (NameInfo, error) {
-	var pathArr []string
-	if file != "" {
-		if err := validateRelativePathInput(file); err != nil {
-			return NameInfo{}, err
-		}
-		var normalizeErr error
-		file, normalizeErr = normalizeLogicalPath(file)
-		if normalizeErr != nil {
-			return NameInfo{}, normalizeErr
-		}
-		for _, prefix := range artifactRootPrefixes {
-			if file == prefix || strings.HasPrefix(file, prefix+"/") {
-				file = strings.TrimPrefix(file, prefix+"/")
-				break
-			}
-		}
-
-		redundantDir := strings.Split(root, "/")
-		pathArr = strings.Split(file, "/")
-		_, pathArr = TrimPrefix(redundantDir, pathArr)
-	} else {
-		if _, ok := parseNamePresets[moduleType+"/"+tableName]; ok {
-			pathArr = parseNamePresets[moduleType+"/"+tableName]
-		} else {
-			normalized, normalizeErr := normalizeLogicalPath(tableName)
-			if normalizeErr != nil {
-				return NameInfo{}, normalizeErr
-			}
-			pathArr = strings.Split(normalized, "/")
-		}
-	}
-
-	pathArr, originalLastName := splitLogicalNameParts(pathArr)
-	lastName := util.SnakeToCamel(originalLastName, true)
-
-	// 类名不能为内部关键字
-	reservedName := strings.ToLower(lastName)
-	if slices.Contains(reservedKeywords, reservedName) {
-		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
-	}
-
-	namespace := namespaceOverride
-	if namespace == "" {
-		namespace = moduleType
-		if len(pathArr) > 0 {
-			namespace = pathArr[len(pathArr)-1]
-		}
-	}
-	dirs := pathArr
-	if flat {
-		dirs = nil
-	}
-	parseFile := filepath.Join(util.RootPath(), filepath.FromSlash(root), filepath.Join(dirs...), originalLastName+".go")
-	if err := validateAbsolutePathUnderRoots(parseFile, root); err != nil {
-		return NameInfo{}, err
-	}
-	rootFileName := filepath.ToSlash(filepath.Join(filepath.FromSlash(root), filepath.Join(dirs...)))
-
-	info := NameInfo{
-		LastName:         lastName,
-		OriginalLastName: originalLastName,
-		Path:             pathArr,
-		Namespace:        namespace,
-		ParseFile:        parseFile,
-		RootFileName:     rootFileName,
 	}
 	return info, nil
 }
