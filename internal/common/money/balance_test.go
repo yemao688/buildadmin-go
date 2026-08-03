@@ -19,7 +19,7 @@ import (
 type fixture struct {
 	t   *testing.T
 	db  *gorm.DB
-	svc *BalanceService
+	svc *UserBalanceService
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -32,7 +32,7 @@ func newFixture(t *testing.T) *fixture {
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user_money_log`")
 		db.Exec("DROP TABLE IF EXISTS `" + prefix + "user`")
 	})
-	return &fixture{t: t, db: db, svc: NewBalanceService()}
+	return &fixture{t: t, db: db, svc: NewUserBalanceService()}
 }
 
 // addUser inserts a user and returns it.
@@ -176,6 +176,28 @@ func TestApplyDeltaNegativeAndPositiveDeltas(t *testing.T) {
 	require.Equal(t, float64(10), logs[0].After)
 	require.Equal(t, float64(10), logs[1].Before)
 	require.Equal(t, float64(6), logs[1].After)
+}
+
+func TestApplyDeltaTypeResolution(t *testing.T) {
+	f := newFixture(t)
+	u := f.addUser(t, 20, "money-type")
+
+	// Empty Type with no Log preset defaults to "system".
+	log, err := f.apply(ApplyInput{UserID: u.ID, Delta: 1, Scope: SystemScope()})
+	require.NoError(t, err)
+	require.Equal(t, "system", log.Type)
+
+	// ApplyInput.Type wins when the Log carrier does not preset it.
+	log, err = f.apply(ApplyInput{UserID: u.ID, Delta: 1, Type: "recharge", Scope: SystemScope()})
+	require.NoError(t, err)
+	require.Equal(t, "recharge", log.Type)
+
+	// A Type preset on the Log carrier wins over ApplyInput.Type.
+	carrier := &model.MoneyLog{Type: "withdraw"}
+	log, err = f.apply(ApplyInput{UserID: u.ID, Delta: 1, Type: "recharge", Log: carrier, Scope: SystemScope()})
+	require.NoError(t, err)
+	require.Equal(t, "withdraw", log.Type)
+	require.Same(t, carrier, log)
 }
 
 func TestApplyDeltaConcurrentForUpdateConsistency(t *testing.T) {

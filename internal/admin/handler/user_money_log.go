@@ -66,6 +66,7 @@ func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 type Money struct {
 	UserID int32           `json:"user_id"  binding:"required"` // 会员ID
 	Money  json.RawMessage `json:"money"  binding:"required"`   // yuan, up to two decimals
+	Type   string          `json:"type"`                        // 类型:system=系统,recharge=充值,withdraw=提现,extend=拓展（缺省 system）
 	Memo   string          `json:"memo"  binding:"required"`    // 备注
 }
 

@@ -1,14 +1,19 @@
 // Package money provides channel-neutral balance-change primitives shared by
 // the admin and user-facing lanes (v3.0.0 stage D1).
 //
-// BalanceService owns the balance-changing transaction chain: FOR UPDATE row
-// lock (under an explicit Scope), target-user ownership check, negative-balance
-// rejection, atomic money update and the money-log write. It is transport
-// neutral: it returns domain errors only and never HTTP-shaped errors; channel
-// adapters (handlers/routers) are responsible for mapping ErrInsufficientBalance,
-// ErrUserNotFound, ErrNoOwner and ErrScopeRequired to their lane's HTTP
-// semantics. It never opens, commits or rolls back transactions: callers pass
-// their own tx so the balance change is atomic with their business writes.
+// UserBalanceService owns the user-balance-changing transaction chain: FOR
+// UPDATE row lock (under an explicit Scope), target-user ownership check,
+// negative-balance rejection, atomic money update and the money-log write. It
+// is transport neutral: it returns domain errors only and never HTTP-shaped
+// errors; channel adapters (handlers/routers) are responsible for mapping
+// ErrInsufficientBalance, ErrUserNotFound, ErrNoOwner and ErrScopeRequired to
+// their lane's HTTP semantics. It never opens, commits or rolls back
+// transactions: callers pass their own tx so the balance change is atomic with
+// their business writes.
+//
+// The type is per-user-domain (a future SellerBalanceService would follow the
+// same contract for seller wallets); it is stateless and exists for uniform DI
+// wiring.
 //
 // Table names are resolved through the session NamingStrategy exactly like the
 // rest of the application (SingularTable + TablePrefix), so the service needs
@@ -64,24 +69,28 @@ type ApplyInput struct {
 	UserID int32
 	// Delta is the signed balance change: positive adds, negative subtracts.
 	Delta float64
+	// Type is the money-log category: system=系统, recharge=充值,
+	// withdraw=提现, extend=拓展. Empty defaults to "system"; a Type preset on
+	// the Log carrier wins over this field.
+	Type string
 	// Memo is recorded on the money log entry. Ignored when Log is provided.
 	Memo string
 	// Log is an optional caller-provided money log used as the insert vehicle:
-	// its preset fields (e.g. an explicit ID) are honored, while AdminID
-	// (target user's owner), UserID, Before, Money and After are always
+	// its preset fields (e.g. an explicit ID or Type) are honored, while
+	// AdminID (target user's owner), UserID, Before, Money and After are always
 	// (re)filled by the service. When nil, a fresh log is built from Memo.
 	Log *model.MoneyLog
 	// Scope is required (ErrScopeRequired when nil).
 	Scope Scope
 }
 
-// BalanceService applies balance changes atomically. It is stateless; the
+// UserBalanceService applies balance changes atomically. It is stateless; the
 // constructor exists for uniform DI wiring.
-type BalanceService struct{}
+type UserBalanceService struct{}
 
-// NewBalanceService returns a stateless balance service.
-func NewBalanceService() *BalanceService {
-	return &BalanceService{}
+// NewUserBalanceService returns a stateless user-balance service.
+func NewUserBalanceService() *UserBalanceService {
+	return &UserBalanceService{}
 }
 
 // ApplyDelta applies one balance change inside the caller's transaction. The
@@ -91,7 +100,7 @@ func NewBalanceService() *BalanceService {
 // The created money log is returned so adapters can surface the new entry
 // (e.g. its ID) without re-reading; its owner (AdminID) is the target user's
 // owner, never an operator identity.
-func (s *BalanceService) ApplyDelta(tx *gorm.DB, in ApplyInput) (*model.MoneyLog, error) {
+func (s *UserBalanceService) ApplyDelta(tx *gorm.DB, in ApplyInput) (*model.MoneyLog, error) {
 	if tx == nil {
 		return nil, gorm.ErrInvalidDB
 	}
@@ -132,6 +141,12 @@ func (s *BalanceService) ApplyDelta(tx *gorm.DB, in ApplyInput) (*model.MoneyLog
 	log := in.Log
 	if log == nil {
 		log = &model.MoneyLog{Memo: in.Memo}
+	}
+	if log.Type == "" {
+		log.Type = in.Type
+	}
+	if log.Type == "" {
+		log.Type = "system"
 	}
 	log.AdminID = user.AdminID
 	log.UserID = user.ID

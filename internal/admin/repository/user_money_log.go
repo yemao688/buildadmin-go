@@ -20,10 +20,10 @@ type MoneyLogRepository struct {
 	persistence.BaseModel
 	config   *conf.Configuration
 	enforcer data_scope.Enforcer
-	balance  *money.BalanceService
+	balance  *money.UserBalanceService
 }
 
-func NewMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer, balance *money.BalanceService) *MoneyLogRepository {
+func NewMoneyLogRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer, balance *money.UserBalanceService) *MoneyLogRepository {
 	return &MoneyLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"user_money_log", "id", "user.username,user.nickname", sqlDB),
 		config:    config,
