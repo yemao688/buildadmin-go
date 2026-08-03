@@ -1,10 +1,10 @@
 package crud_helper
 
 import (
-	"errors"
-	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/utils"
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -130,7 +130,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			expectedBase := filepath.Join(utils.RootPath(), "web/src/lang/backend")
+			expectedBase := filepath.Join(util.RootPath(), "web/src/lang/backend")
 			expected := []string{
 				filepath.Join(expectedBase, "en", tc.enLanguage),
 				filepath.Join(expectedBase, "zh-cn", tc.zhCNLanguage),
@@ -146,7 +146,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 }
 
 func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	manifest, err := BuildFileManifest(crudmodel.Table{
 		Name:           "country_language_content",
 		ModelFile:      "internal/model/country_language_content.go",
@@ -199,7 +199,7 @@ func TestBuildFileManifestNormalizesPathSeparators(t *testing.T) {
 }
 
 func TestCanonicalManifestLangPath(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	cases := []struct {
 		name, input, want string
 	}{
@@ -218,7 +218,7 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 }
 
 func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	newPath := filepath.Join(root, "web/src/lang/backend/en/country/language.ts")
 	oldPath := filepath.Join(root, "web/src/lang/backend/country/en/language.ts")
 	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{oldPath}}}
@@ -233,7 +233,7 @@ func TestManifestAllowsCanonicalizesLegacyLanguagePath(t *testing.T) {
 }
 
 func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	newPath := filepath.Join(root, "web/src/lang/backend/en/.crud-helper-delete/country.ts")
 	oldPath := filepath.Join(root, "web/src/lang/backend/.crud-helper-delete/en/country.ts")
 	if err := os.MkdirAll(filepath.Dir(newPath), 0755); err != nil {
@@ -258,7 +258,7 @@ func TestHistoricalDeleteManifestCanonicalizesLegacyLanguagePath(t *testing.T) {
 }
 
 func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T) {
-	provider := filepath.Join(utils.RootPath(), "internal", "admin", "model", "relation", "provider.go")
+	provider := filepath.Join(util.RootPath(), "internal", "admin", "model", "relation", "provider.go")
 	current := FileManifest{Shared: []string{provider}}
 	historical := crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{Generated: []string{provider}}}
 	manifest, err := historicalDeleteManifest(current, historical)
@@ -271,7 +271,7 @@ func TestHistoricalManifestPreservesGeneratedProviderClassification(t *testing.T
 }
 
 func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	paths := []string{
 		filepath.Join(root, "internal", "admin", "model", "legacy", "provider.go"),
 		filepath.Join(root, "internal", "router", "registrar_set.go"),
@@ -296,7 +296,7 @@ func TestNormalizeDeleteManifestReclassifiesSharedShapes(t *testing.T) {
 }
 
 func TestPrepareDeleteManifestSkipsMissingGeneratedButRequiresShared(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "model", ".crud-helper-test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", ".crud-helper-test")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -327,7 +327,7 @@ func TestHistoricalManifestRejectsPathOutsideAllowedRoots(t *testing.T) {
 }
 
 func TestHistoricalManifestEnforcesGeneratedAndSharedPathClasses(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	validGenerated := filepath.Join(root, "internal", "admin", "model", "orders.go")
 	validShared := filepath.Join(root, "internal", "admin", "model", "provider.go")
 	if _, err := historicalDeleteManifest(FileManifest{}, crudmodel.Table{Manifest: &crudmodel.CRUDFileManifest{

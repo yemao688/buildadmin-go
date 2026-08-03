@@ -1,11 +1,11 @@
 package crud_helper
 
 import (
+	"buildadmin-go/internal/conf"
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
 	"encoding/json"
 	"errors"
-	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -130,8 +130,8 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	tableName := "delete_fault"
 	menuName := "delete/fault"
 	// 目录与文件名用表名推导的历史形态（delete_fault → 目录 delete、实体 fault）
-	modelDir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "delete")
-	handlerDir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "delete")
+	modelDir := filepath.Join(util.RootPath(), "internal", "admin", "model", "delete")
+	handlerDir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete")
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatal(err)
 	}

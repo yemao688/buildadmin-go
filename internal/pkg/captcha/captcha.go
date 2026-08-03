@@ -1,10 +1,10 @@
 package captcha
 
 import (
+	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"crypto/md5"
 	"fmt"
-	"buildadmin-go/internal/utils"
 	"image"
 	"image/color"
 	"image/draw"
@@ -168,7 +168,7 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 
 	if c.config.UseImgBg {
 		bgPath := background()
-		bgImg, err := loadImage(filepath.Join(utils.RootPath(), bgPath))
+		bgImg, err := loadImage(filepath.Join(util.RootPath(), bgPath))
 		if err != nil {
 			return nil, err
 		}
@@ -234,10 +234,10 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 	if fontTtf == "" {
 		if config.UseZh {
 			name := strconv.Itoa(r.Intn(2) + 1)
-			fontTtf = filepath.Join(utils.RootPath(), "/public/static/fonts/zhttfs", name+".ttf")
+			fontTtf = filepath.Join(util.RootPath(), "/public/static/fonts/zhttfs", name+".ttf")
 		} else {
 			name := strconv.Itoa(r.Intn(6) + 1)
-			fontTtf = filepath.Join(utils.RootPath(), "/public/static/fonts/ttfs", name+".ttf")
+			fontTtf = filepath.Join(util.RootPath(), "/public/static/fonts/ttfs", name+".ttf")
 		}
 	}
 

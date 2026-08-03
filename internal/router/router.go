@@ -7,7 +7,7 @@ import (
 	"buildadmin-go/internal/i18n"
 	installRouter "buildadmin-go/internal/install"
 	"buildadmin-go/internal/middleware"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -48,7 +48,7 @@ func InitRouter(
 		)),
 	)
 
-	rootDir := utils.RootPath()
+	rootDir := util.RootPath()
 	router.Use(middleware.InstallGuard(rootDir))
 
 	// 静态资源与前台入口（不经渠道注册器）。

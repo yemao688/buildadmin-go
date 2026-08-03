@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -22,7 +22,7 @@ func initLogger() {
 		logFileDir = filepath.Join(rootPath, logFileDir)
 	}
 
-	if !utils.PathExists(logFileDir) {
+	if !util.PathExists(logFileDir) {
 		_ = os.Mkdir(config.Log.RootDir, os.ModePerm)
 	}
 

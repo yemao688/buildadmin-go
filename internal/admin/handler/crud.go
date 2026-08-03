@@ -10,8 +10,8 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/filesystem"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"buildadmin-go/internal/utils"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -209,14 +209,14 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 	}
 	webViewsDir := helper.ParseWebDirNameData(params.TableName, "views", "")
 	modelFileList := map[string]string{}
-	entityFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/model"), []string{".go"})
+	entityFiles := filesystem.GetDirFiles(path.Join(util.RootPath(), "internal/model"), []string{".go"})
 	for _, v := range entityFiles {
 		v = path.Join("internal/model", v)
 		modelFileList[v] = v
 	}
 
 	controllerFiles := map[string]string{}
-	adminControllerFiles := filesystem.GetDirFiles(path.Join(utils.RootPath(), "internal/admin/handler"), []string{".go"})
+	adminControllerFiles := filesystem.GetDirFiles(path.Join(util.RootPath(), "internal/admin/handler"), []string{".go"})
 	for _, v := range adminControllerFiles {
 		if IsExcludedControllerFile(v) {
 			continue
@@ -309,7 +309,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	if controllerFile == "" {
 		controllerFile = ""
 	}
-	controllerExist := utils.PathExists(controllerFile)
+	controllerExist := util.PathExists(controllerFile)
 
 	tableExist := false
 	tableList := h.tableM.GetTableList()

@@ -2,7 +2,7 @@ package middleware
 
 import (
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -16,7 +16,7 @@ func ServerError(c *gin.Context, err interface{}) {
 			msg = err.(error).Error()
 		}
 	}
-	msg = utils.Lang(c, msg, nil)
+	msg = util.Lang(c, msg, nil)
 	c.JSON(http.StatusInternalServerError, map[string]interface{}{
 		"code": cErr.ServerError,
 		"data": nil,

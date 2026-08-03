@@ -2,12 +2,12 @@ package terminal
 
 import (
 	"bufio"
-	"encoding/json"
-	"fmt"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/filesystem"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -89,7 +89,7 @@ func (t *Terminal) GetCommand(key string, extend string) (conf.Command, bool) {
 		command.Command = fmt.Sprintf(command.Command, quoted...)
 	}
 
-	command.Cwd = filepath.Join(utils.RootPath(), command.Cwd)
+	command.Cwd = filepath.Join(util.RootPath(), command.Cwd)
 	return command, true
 }
 
@@ -246,9 +246,9 @@ func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, ext
 // 执行前埋点
 func (t *Terminal) BeforeExecution(commandKey string) {
 	if commandKey == "test.pnpm" {
-		os.Remove(filepath.Join(utils.RootPath(), "public/npm-install-test/pnpm-lock.yaml"))
+		os.Remove(filepath.Join(util.RootPath(), "public/npm-install-test/pnpm-lock.yaml"))
 	} else if commandKey == "web-install.pnpm" {
-		os.Remove(filepath.Join(utils.RootPath(), "web/pnpm-lock.yaml"))
+		os.Remove(filepath.Join(util.RootPath(), "web/pnpm-lock.yaml"))
 	}
 }
 
@@ -298,7 +298,7 @@ func (t *Terminal) GetCommandOutput(commandKey string) (string, bool) {
 }
 
 func (t *Terminal) MvDist() bool {
-	distPath := filepath.Join(utils.RootPath(), DistDir)
+	distPath := filepath.Join(util.RootPath(), DistDir)
 	indexHtmlPath := filepath.Join(distPath, "index.html")
 	assetsPath := filepath.Join(distPath, "assets")
 	if _, err := os.Stat(indexHtmlPath); err != nil {
@@ -311,8 +311,8 @@ func (t *Terminal) MvDist() bool {
 		return false
 	}
 
-	toIndexHtmlPath := filepath.Join(utils.RootPath(), "public", "index.html")
-	toAssetsPath := filepath.Join(utils.RootPath(), "public", "assets")
+	toIndexHtmlPath := filepath.Join(util.RootPath(), "public", "index.html")
+	toAssetsPath := filepath.Join(util.RootPath(), "public", "assets")
 	if err := os.Remove(toIndexHtmlPath); err != nil {
 		t.log.Info(err.Error())
 	}
@@ -367,7 +367,7 @@ func (t *Terminal) ChangeTerminalConfig(ctx *gin.Context) (string, string, bool)
 		return newPort, newPackageManager, true
 	}
 
-	configPath := filepath.Join(utils.RootPath(), "configs", "config.yaml")
+	configPath := filepath.Join(util.RootPath(), "configs", "config.yaml")
 	// Package-manager changes are also sparse overrides; do not rewrite the
 	// tracked defaults or use the historical conf/config.yaml path.
 	err := conf.WriteConfigOverrides(configPath, map[string]any{

@@ -9,7 +9,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,7 +32,7 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.Request.Header.Get("ba-user-token")
 		if tokenStr == "" {
-			msg := utils.Lang(c, "missing Authorization header", nil)
+			msg := util.Lang(c, "missing Authorization header", nil)
 			c.JSON(http.StatusOK, map[string]interface{}{
 				"code": http.StatusUnauthorized,
 				"data": nil,

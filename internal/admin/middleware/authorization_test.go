@@ -13,7 +13,7 @@ import (
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -78,7 +78,7 @@ func (f *authorizationFixture) request(t *testing.T, path string, uid int32) *ht
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,
@@ -202,7 +202,7 @@ func TestAuthorizationFailsClosedWhenAuthUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,

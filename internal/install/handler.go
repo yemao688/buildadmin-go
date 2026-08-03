@@ -9,9 +9,9 @@ import (
 	"buildadmin-go/internal/pkg/installer"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/terminal"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/pkg/version"
-	"buildadmin-go/internal/utils"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -102,7 +102,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 
 	port, manager, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
+		FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "Failed to switch package manager. Please modify the configuration file manually:{content}", map[string]string{
 			"content": "根目录/configs/config.yaml",
 		})))
 		return
@@ -117,7 +117,7 @@ func (h *InstallHandler) ChangePackageManager(ctx *gin.Context) {
 // 环境基础检查
 func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
+		FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
 			"lock": "public/" + LockFileName,
 		})))
 		return
@@ -130,12 +130,12 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 	// if !goVersionCompare {
 	// 	goVersionLink = []map[string]any{
 	// 		{
-	// 			"name": utils.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["go"],
+	// 			"name": util.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["go"],
 	// 			"type": "text",
 	// 		},
 	// 		{
-	// 			"name":  utils.Lang(ctx, "How to solve?", nil),
-	// 			"title": utils.Lang(ctx, "Click to see how to solve it", nil),
+	// 			"name":  util.Lang(ctx, "How to solve?", nil),
+	// 			"title": util.Lang(ctx, "Click to see how to solve it", nil),
 	// 			"type":  "faq",
 	// 			"url":   "",
 	// 		},
@@ -149,16 +149,16 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 		return
 	}
 	configIsWritableLink := []map[string]any{}
-	configPath := filepath.Join(utils.RootPath(), ConfigFileName)
-	configDescribe := utils.Lang(ctx, "Writable", nil)
+	configPath := filepath.Join(util.RootPath(), ConfigFileName)
+	configDescribe := util.Lang(ctx, "Writable", nil)
 	configState := OK
 	if !filesystem.PathIsWritable(configPath) {
-		configDescribe = utils.Lang(ctx, "No write permission", nil)
+		configDescribe = util.Lang(ctx, "No write permission", nil)
 		configState = FAIL
 		configIsWritableLink = []map[string]any{
 			{
-				"name":  utils.Lang(ctx, "View reason", nil),
-				"title": utils.Lang(ctx, "Click to view the reason", nil),
+				"name":  util.Lang(ctx, "View reason", nil),
+				"title": util.Lang(ctx, "Click to view the reason", nil),
 				"type":  "faq",
 				"url":   "",
 			},
@@ -168,16 +168,16 @@ func (h *InstallHandler) EnvBaseCheck(ctx *gin.Context) {
 
 	// storage-start
 	storageIsWritableLink := []map[string]any{}
-	storagePath := filepath.Join(utils.RootPath(), "public", "storage")
-	storageDescribe := utils.Lang(ctx, "Writable", nil)
+	storagePath := filepath.Join(util.RootPath(), "public", "storage")
+	storageDescribe := util.Lang(ctx, "Writable", nil)
 	storageState := OK
 	if !filesystem.PathIsWritable(storagePath) {
-		storageDescribe = utils.Lang(ctx, "No write permission", nil)
+		storageDescribe = util.Lang(ctx, "No write permission", nil)
 		storageState = FAIL
 		storageIsWritableLink = []map[string]any{
 			{
-				"name":  utils.Lang(ctx, "View reason", nil),
-				"title": utils.Lang(ctx, "Click to view the reason", nil),
+				"name":  util.Lang(ctx, "View reason", nil),
+				"title": util.Lang(ctx, "Click to view the reason", nil),
 				"type":  "faq",
 				"url":   "",
 			},
@@ -224,12 +224,12 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 	if !npmVersionCompare || npmVersion == "" {
 		npmVersionLink = []map[string]string{
 			{
-				"name": utils.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["npm"],
+				"name": util.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["npm"],
 				"type": "text",
 			},
 			{
-				"name":  utils.Lang(ctx, "How to solve?", nil),
-				"title": utils.Lang(ctx, "Click to see how to solve it", nil),
+				"name":  util.Lang(ctx, "How to solve?", nil),
+				"title": util.Lang(ctx, "Click to see how to solve it", nil),
 				"type":  "faq",
 				"url":   "",
 			},
@@ -246,12 +246,12 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 		if pmVersion == "" {
 			// 安装
 			pmVersionLink = append(pmVersionLink, map[string]string{
-				"name": utils.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion[packageManager],
+				"name": util.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion[packageManager],
 				"type": "text",
 			})
 			if pmVersionCompare {
 				pmVersionLink = append(pmVersionLink, map[string]string{
-					"name": utils.Lang(ctx, "Click Install {name} ", map[string]string{
+					"name": util.Lang(ctx, "Click Install {name} ", map[string]string{
 						"name": packageManager,
 					}),
 					"title": "",
@@ -259,18 +259,18 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 				})
 			} else {
 				pmVersionLink = append(pmVersionLink, map[string]string{
-					"name": utils.Lang(ctx, "Please install NPM first", nil),
+					"name": util.Lang(ctx, "Please install NPM first", nil),
 					"type": "text",
 				})
 			}
 		} else if !pmVersionCompare {
 			// 版本不足
 			pmVersionLink = append(pmVersionLink, map[string]string{
-				"name": utils.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion[packageManager],
+				"name": util.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion[packageManager],
 				"type": "text",
 			})
 			pmVersionLink = append(pmVersionLink, map[string]string{
-				"name": utils.Lang(ctx, "Please upgrade {name} version", map[string]string{
+				"name": util.Lang(ctx, "Please upgrade {name} version", map[string]string{
 					"name": packageManager,
 				}),
 				"type": "text",
@@ -278,10 +278,10 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 		}
 
 	} else if packageManager == "ni" {
-		pmVersion = utils.Lang(ctx, "nothing", nil)
+		pmVersion = util.Lang(ctx, "nothing", nil)
 		pmVersionCompare = false
 	} else {
-		pmVersion = utils.Lang(ctx, "nothing", nil)
+		pmVersion = util.Lang(ctx, "nothing", nil)
 		pmVersionCompare = false
 	}
 
@@ -291,13 +291,13 @@ func (h *InstallHandler) EnvNpmCheck(ctx *gin.Context) {
 	nodejsVersionCompare := version.Compare(NeedDependentVersion["node"], nodejsVersion)
 	if !nodejsVersionCompare || nodejsVersion == "" {
 		nodejsVersionLink = append(nodejsVersionLink, map[string]string{
-			"name": utils.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["node"],
+			"name": util.Lang(ctx, "need", nil) + " >= " + NeedDependentVersion["node"],
 			"type": "text",
 		})
 
 		nodejsVersionLink = append(nodejsVersionLink, map[string]string{
-			"name":  utils.Lang(ctx, "How to solve?", nil),
-			"title": utils.Lang(ctx, "Click to see how to solve it", nil),
+			"name":  util.Lang(ctx, "How to solve?", nil),
+			"title": util.Lang(ctx, "Click to see how to solve it", nil),
 			"type":  "faq",
 			"url":   "",
 		})
@@ -362,7 +362,7 @@ func (h *InstallHandler) TestDatabase(ctx *gin.Context) {
  */
 func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	if h.isInstallComplete() {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
+		FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "The system has completed installation. If you need to reinstall, please delete the {lock} file first", map[string]string{
 			"lock": "public/" + LockFileName,
 		})))
 		return
@@ -371,7 +371,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	envOk := h.commandExecutionCheck()
 	if ctx.Request.Method == http.MethodGet {
 		Success(ctx, map[string]any{
-			"rootPath":            utils.RootPath(),
+			"rootPath":            util.RootPath(),
 			"executionWebCommand": envOk,
 		})
 		return
@@ -389,7 +389,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 		return
 	}
 
-	configPath := filepath.Join(utils.RootPath(), ConfigFileName)
+	configPath := filepath.Join(util.RootPath(), ConfigFileName)
 	if err := ensureConfigFile(); err != nil {
 		FailByErr(ctx, err)
 		return
@@ -417,7 +417,7 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 	h.db = db
 
 	Success(ctx, map[string]any{
-		"rootPath":            utils.RootPath(),
+		"rootPath":            util.RootPath(),
 		"executionWebCommand": envOk,
 	})
 }
@@ -425,11 +425,11 @@ func (h *InstallHandler) BaseConfig(ctx *gin.Context) {
 // ensureConfigFile creates the editable sparse override layer when an
 // installation starts on a fresh checkout.
 func ensureConfigFile() error {
-	return utils.EnsureConfigFile(utils.RootPath())
+	return util.EnsureConfigFile(util.RootPath())
 }
 
 func (h *InstallHandler) isInstallComplete() bool {
-	return installer.IsComplete(utils.RootPath())
+	return installer.IsComplete(util.RootPath())
 }
 
 // 标记命令执行完毕
@@ -439,7 +439,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		return
 	}
 
-	artifactPath := filepath.Join(utils.RootPath(), "public", "index.html")
+	artifactPath := filepath.Join(util.RootPath(), "public", "index.html")
 	artifact, err := os.Stat(artifactPath)
 	if err != nil || artifact.IsDir() {
 		FailByErr(ctx, cErr.BadRequest(frontendBuildArtifactMissingMessage))
@@ -478,7 +478,7 @@ func (h *InstallHandler) CommandExecComplete(ctx *gin.Context) {
 		})
 	}
 
-	if err := installer.WriteCompletionLock(utils.RootPath()); err != nil {
+	if err := installer.WriteCompletionLock(util.RootPath()); err != nil {
 		FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
@@ -503,12 +503,12 @@ func (h *InstallHandler) commandExecutionCheck() bool {
 // 安装指引
 func (h *InstallHandler) ManualInstall(ctx *gin.Context) {
 	Success(ctx, map[string]string{
-		"webPath": filepath.Join(utils.RootPath(), "web"),
+		"webPath": filepath.Join(util.RootPath(), "web"),
 	})
 }
 
 func (h *InstallHandler) MvDist(ctx *gin.Context) {
-	_, err := os.Stat(filepath.Join(utils.RootPath(), DistDir, "index.html"))
+	_, err := os.Stat(filepath.Join(util.RootPath(), DistDir, "index.html"))
 	if err != nil {
 		FailByErr(ctx, cErr.BadRequest("No built front-end file found, please rebuild manually!"))
 		return

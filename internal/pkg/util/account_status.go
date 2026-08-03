@@ -1,4 +1,4 @@
-package utils
+package util
 
 // AccountStatusEnabled reports whether an admin/user status is allowed to
 // authenticate.

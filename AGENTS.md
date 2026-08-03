@@ -50,14 +50,14 @@
 | 层 | 职责 | 允许依赖 | 禁止依赖 |
 |---|---|---|---|
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
-| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）等 | 外部库、conf | 渠道层 |
+| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）、util（跨层工具：路径/时间/转换/数组/加密等，即原 internal/utils）等 | 外部库、conf | 渠道层 |
 | `internal/common` | 跨渠道领域服务：`money.UserBalanceService`（会员余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`service/`（按需毕业的业务编排，纯 CRUD 不建透传）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/`（单包：`member.go` 会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/`（单包：`user.go` 会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
 | `internal/install` | 安装渠道（自注册）：`handler.go` + `router.go`（/install 与 /api/install/*，只经全局中间件，不进入 UserLogin）+ `provider.go` | model、pkg、common | 各业务渠道 |
 | `internal/middleware` | 真·全局中间件（Cors/InstallGuard/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
 | `internal/router` | 纯 bootstrap：创建 gin.Engine、挂载全局中间件与静态资源、调用 admin/api/install 三渠道注册器完成挂载；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
-| `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/utils`、`internal/i18n`、`internal/commands` | 配置、三轨迁移、连接初始化、工具、本地化、CLI 命令编排 | — | — |
+| `internal/conf`、`internal/migrations`、`internal/infra/{db,rds}`、`internal/pkg/util`、`internal/i18n`、`internal/commands` | 配置、三轨迁移、连接初始化、工具、本地化、CLI 命令编排 | — | — |
 
 边界由 `internal/boundary_test.go` 机械执法（R1-R7）：admin↛api、api↛admin、common↛admin/api、两业务渠道 handler（admin/api）禁连 `internal/infra/db` 与 GORM MySQL 驱动（持久化只能走 repository/领域服务；`github.com/go-sql-driver/mysql` 仅允许错误码检测）、两业务渠道 service（admin/api）禁 import gin/net-http/`internal/infra/db`（传输层需要的东西以参数传入）。角色纪律：handler 只绑定 DTO 并调用 repository/service，不写裸查询；实体不带行为；共享写原语（资金等）只在 `internal/common`；`gorm.io/gorm` 的类型级引用（Transaction 回调、错误哨兵）不受 R4/R5 限制。
 

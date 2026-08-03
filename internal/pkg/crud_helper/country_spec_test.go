@@ -1,7 +1,7 @@
 package crud_helper
 
 import (
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"path/filepath"
 	"testing"
 )
@@ -26,7 +26,7 @@ func TestCountrySpecsMatchDictionaryContract(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.file+"/"+test.field, func(t *testing.T) {
-			spec, err := LoadSpec(filepath.Join(utils.RootPath(), "crud_specs", test.file))
+			spec, err := LoadSpec(filepath.Join(util.RootPath(), "crud_specs", test.file))
 			if err != nil {
 				t.Fatal(err)
 			}

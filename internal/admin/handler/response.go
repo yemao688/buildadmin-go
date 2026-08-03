@@ -1,12 +1,12 @@
 package handler
 
 import (
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/util"
 	"context"
 	"database/sql/driver"
 	"errors"
-	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/requesttx"
-	"buildadmin-go/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -51,7 +51,7 @@ func writeResponse(c *gin.Context, outcome requesttx.Outcome) {
 	}
 	if outcome.Message != "" {
 		if _, exists := c.Get("i18n"); exists {
-			outcome.Message = utils.Lang(c, outcome.Message, nil)
+			outcome.Message = util.Lang(c, outcome.Message, nil)
 		}
 	}
 	c.JSON(outcome.HTTPCode, Response{

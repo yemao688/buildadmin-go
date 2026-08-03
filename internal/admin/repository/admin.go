@@ -11,7 +11,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/persistence"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	mysql "github.com/go-sql-driver/mysql"
@@ -31,7 +31,7 @@ func NewAdminRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminReposi
 }
 
 func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error {
-	data.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+	data.Avatar = util.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 
 	groups := []struct {
 		Id   int32

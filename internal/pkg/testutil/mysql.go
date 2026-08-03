@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -52,7 +52,7 @@ func skipMySQL(t *testing.T, reason string) {
 
 func mysqlTestConfigOrSkip(t *testing.T) *conf.Configuration {
 	t.Helper()
-	configPath := filepath.Join(utils.RootPath(), "configs", "config.yaml")
+	configPath := filepath.Join(util.RootPath(), "configs", "config.yaml")
 	configuration, err := loadMySQLTestConfig(configPath)
 	if err != nil {
 		switch {

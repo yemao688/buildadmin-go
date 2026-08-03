@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"path/filepath"
 	"testing"
 )
@@ -38,7 +38,7 @@ func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
 		}
 	}
 
-	specDir := filepath.Join(utils.RootPath(), "crud_specs")
+	specDir := filepath.Join(util.RootPath(), "crud_specs")
 	paths := []string{
 		filepath.Join(specDir, "country_currency.yaml"),
 		filepath.Join(specDir, "country_language.yaml"),

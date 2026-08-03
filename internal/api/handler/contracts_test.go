@@ -7,15 +7,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	ginI18n "github.com/gin-contrib/i18n"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	ginI18n "github.com/gin-contrib/i18n"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 	"gorm.io/driver/sqlite"
@@ -52,7 +52,7 @@ func decodeHandlerResponse(t *testing.T, recorder *httptest.ResponseRecorder) Re
 func newContractTestRouter() *gin.Engine {
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.Chinese, language.TraditionalChinese, language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,

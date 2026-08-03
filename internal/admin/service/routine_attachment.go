@@ -11,7 +11,7 @@ import (
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/gorm"
 )
@@ -68,11 +68,11 @@ func (s *RoutineAttachmentService) Del(ctx context.Context, ids []int32, actor d
 			}
 		} else {
 			paths := []string{
-				filepath.Join(utils.RootPath(), "public", strings.TrimLeft(v.URL, "/")),
-				filepath.Join(utils.RootPath(), strings.TrimLeft(v.URL, "/")),
+				filepath.Join(util.RootPath(), "public", strings.TrimLeft(v.URL, "/")),
+				filepath.Join(util.RootPath(), strings.TrimLeft(v.URL, "/")),
 			}
 			for _, path := range paths {
-				if !utils.PathExists(path) {
+				if !util.PathExists(path) {
 					continue
 				}
 				if removeErr := os.Remove(path); removeErr != nil {

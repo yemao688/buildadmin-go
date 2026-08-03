@@ -1,7 +1,6 @@
 package service
 
 import (
-	"fmt"
 	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
@@ -10,12 +9,13 @@ import (
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/systemroot"
 	"buildadmin-go/internal/pkg/token"
+	"fmt"
 	"regexp"
 	"time"
 
 	"gorm.io/gorm"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 )
 
 type MemberService struct {
@@ -66,7 +66,7 @@ func (s *MemberService) RefreshUserAccessToken(refreshToken string) (string, err
 		if err != nil {
 			return err
 		}
-		if !utils.AccountStatusEnabled(user.Status) {
+		if !util.AccountStatusEnabled(user.Status) {
 			return cErr.BadRequest("Account disabled")
 		}
 
@@ -123,7 +123,7 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 	if user == nil {
 		return nil, cErr.BadRequest("Account not exist")
 	}
-	if !utils.AccountStatusEnabled(user.Status) {
+	if !util.AccountStatusEnabled(user.Status) {
 		return nil, cErr.BadRequest("Account disabled")
 	}
 
@@ -220,7 +220,7 @@ func (s *MemberService) Register(ip string, username string, plainPassword strin
 	user := model.User{
 		AdminID:       rootID,
 		Username:      username,
-		Nickname:      utils.MaskPhone(username),
+		Nickname:      util.MaskPhone(username),
 		Avatar:        "",
 		Password:      hash,
 		Status:        "enable",

@@ -8,7 +8,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"image/png"
 	"net/http"
 
@@ -37,7 +37,7 @@ func FailByErrWithData(c *gin.Context, err error, data interface{}) {
 		return
 	}
 
-	msg := utils.Lang(c, v.Error(), nil)
+	msg := util.Lang(c, v.Error(), nil)
 	if requesttx.Stage(c, requesttx.Outcome{
 		HTTPCode:     v.HttpCode(),
 		BusinessCode: v.ErrorCode(),

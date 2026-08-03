@@ -7,8 +7,8 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/tree"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"buildadmin-go/internal/utils"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -126,7 +126,7 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 		return
 	}
 
-	rulesId32s, err := utils.AtoiArr(ruleIds)
+	rulesId32s, err := util.AtoiArr(ruleIds)
 	if err != nil {
 		FailByErr(ctx, err)
 		return
@@ -305,7 +305,7 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 			}
 			return nil, err
 		}
-		authGroups = utils.RemoveStrDuplicates(authGroups)
+		authGroups = util.RemoveStrDuplicates(authGroups)
 		if absoluteAuth == "true" {
 			whereS = append(whereS, " id in ? ")
 			whereP = append(whereP, authGroups)
@@ -320,7 +320,7 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 	for _, v := range list {
 		if v.Rules != "" {
 			if strings.Contains(v.Rules, "*") {
-				v.Rules = utils.Lang(ctx, "Super administrator", nil)
+				v.Rules = util.Lang(ctx, "Super administrator", nil)
 			} else {
 				ruleIds := strings.Split(v.Rules, ",")
 				num := len(ruleIds)
@@ -337,7 +337,7 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 				}
 			}
 		} else {
-			v.Rules = utils.Lang(ctx, "no permission", nil)
+			v.Rules = util.Lang(ctx, "no permission", nil)
 		}
 	}
 	return list, nil

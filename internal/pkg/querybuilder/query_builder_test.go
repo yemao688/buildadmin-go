@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -20,7 +20,7 @@ func queryContext(rawQuery string) *gin.Context {
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
 	ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,

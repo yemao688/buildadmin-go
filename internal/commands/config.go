@@ -2,7 +2,7 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"fmt"
 	"log"
 	"os"
@@ -27,7 +27,7 @@ func initConfig() {
 	}
 
 	runtimeConfigPath := configPath
-	runtimeConfigExists := utils.PathExists(runtimeConfigPath)
+	runtimeConfigExists := util.PathExists(runtimeConfigPath)
 	if !runtimeConfigExists {
 		args := os.Args[1:]
 		setupRequested := false

@@ -1,10 +1,10 @@
 package clickcaptcha
 
 import (
+	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/pkg/util"
 	"encoding/json"
 	"fmt"
-	"buildadmin-go/internal/pkg/captcha"
-	"buildadmin-go/internal/utils"
 	"math/rand"
 	"os"
 	"strconv"
@@ -40,7 +40,7 @@ func TestRandPosition(t *testing.T) {
 }
 
 func TestGetFontWidthAndHeight(t *testing.T) {
-	fontBytes, err := os.ReadFile(utils.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
+	fontBytes, err := os.ReadFile(util.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
 	if err != nil {
 		fmt.Println("加载字体失败")
 	}
@@ -108,7 +108,7 @@ func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {
 		t.Fatal(err)
 	}
 	if err := db.Create(&captcha.Captcha{
-		Key:        utils.Md5("clickcaptcha-test"),
+		Key:        util.Md5("clickcaptcha-test"),
 		Captcha:    string(captchaJSON),
 		ExpireTime: time.Now().Unix() + 600,
 	}).Error; err != nil {

@@ -2,8 +2,8 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/util"
 	appVersion "buildadmin-go/internal/pkg/version"
-	"buildadmin-go/internal/utils"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,7 +18,7 @@ import (
 var Version = appVersion.Framework
 
 var (
-	rootPath     = utils.RootPath()
+	rootPath     = util.RootPath()
 	configPath   string
 	config       *conf.Configuration
 	loggerWriter *lumberjack.Logger

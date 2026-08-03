@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	"fmt"
 	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -44,10 +44,10 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 	lang := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
 	manifest := FileManifest{
 		Generated: []string{
-			filepath.Join(utils.RootPath(), lang.LangFile("en")),
-			filepath.Join(utils.RootPath(), lang.LangFile("zh-cn")),
-			filepath.Join(utils.RootPath(), views.Views, "index.vue"),
-			filepath.Join(utils.RootPath(), views.Views, "popupForm.vue"),
+			filepath.Join(util.RootPath(), lang.LangFile("en")),
+			filepath.Join(util.RootPath(), lang.LangFile("zh-cn")),
+			filepath.Join(util.RootPath(), views.Views, "index.vue"),
+			filepath.Join(util.RootPath(), views.Views, "popupForm.vue"),
 			entityFile.ParseFile,
 			repositoryFile.ParseFile,
 			dtoFile.ParseFile,
@@ -57,10 +57,10 @@ func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
 		Shared: []string{
 			// 拍平布局：构造器并入扁平包合并 ProviderSet，wire.go 不再被修改；
 			// wire_gen.go 由生成流程重新生成。
-			filepath.Join(utils.RootPath(), repositoryFile.RootFileName, "provider.go"),
-			filepath.Join(utils.RootPath(), handlerFile.RootFileName, "provider.go"),
-			filepath.Join(utils.RootPath(), "internal", "admin", "router", "provider.go"),
-			filepath.Join(utils.RootPath(), "cmd", "server", "wire_gen.go"),
+			filepath.Join(util.RootPath(), repositoryFile.RootFileName, "provider.go"),
+			filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go"),
+			filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go"),
+			filepath.Join(util.RootPath(), "cmd", "server", "wire_gen.go"),
 		},
 	}
 	for _, path := range manifest.Generated {
@@ -96,7 +96,7 @@ func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field)
 		if err != nil {
 			return FileManifest{}, err
 		}
-		provider := filepath.Join(utils.RootPath(), joinRepo.RootFileName, "provider.go")
+		provider := filepath.Join(util.RootPath(), joinRepo.RootFileName, "provider.go")
 		manifest.Shared = append(manifest.Shared, provider)
 	}
 	manifest, err = normalizeFileManifest(manifest)
@@ -124,7 +124,7 @@ type snapshotEntry struct {
 }
 
 func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
-	dir, err := os.MkdirTemp(utils.RootPath(), ".buildadmin-crud-backup-")
+	dir, err := os.MkdirTemp(util.RootPath(), ".buildadmin-crud-backup-")
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ type Quarantine struct {
 type quarantineEntry struct{ original, quarantined string }
 
 func NewQuarantine(paths []string) (*Quarantine, error) {
-	dir, err := os.MkdirTemp(utils.RootPath(), ".buildadmin-crud-quarantine-")
+	dir, err := os.MkdirTemp(util.RootPath(), ".buildadmin-crud-quarantine-")
 	if err != nil {
 		return nil, err
 	}
@@ -273,10 +273,10 @@ func normalizeFileManifest(manifest FileManifest) (FileManifest, error) {
 func manifestPathIsShared(path string) bool {
 	clean := filepath.Clean(filepath.FromSlash(path))
 	if !filepath.IsAbs(clean) {
-		clean = filepath.Join(utils.RootPath(), clean)
+		clean = filepath.Join(util.RootPath(), clean)
 	}
 	clean, _ = filepath.Abs(clean)
-	root := filepath.Clean(utils.RootPath())
+	root := filepath.Clean(util.RootPath())
 	return filepath.Base(clean) == "provider.go" ||
 		clean == filepath.Join(root, "internal", "router", "registrar_set.go") ||
 		clean == filepath.Join(root, "cmd", "server", "wire.go") ||

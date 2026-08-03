@@ -1,15 +1,15 @@
 package handler
 
 import (
+	routinedto "buildadmin-go/internal/admin/dto"
+	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/util"
+	"buildadmin-go/internal/pkg/validator"
 	"encoding/json"
 	"errors"
 	"fmt"
-	routinedto "buildadmin-go/internal/admin/dto"
-	"buildadmin-go/internal/admin/service"
-	model "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
 	"net/http"
 	"strings"
 
@@ -20,10 +20,10 @@ import (
 
 type ConfigHandler struct {
 	Base
-	log    *zap.Logger
-	config *conf.Configuration
+	log     *zap.Logger
+	config  *conf.Configuration
 	configM *model.ConfigRepository
-	svc    *service.ConfigService
+	svc     *service.ConfigService
 }
 
 type configJSONItem struct {
@@ -82,7 +82,7 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 	list := map[string]*Group{}
 	newConfigGroup := map[string]any{}
 	for _, v := range configGroupItems {
-		title := utils.Lang(ctx, v.Value, nil)
+		title := util.Lang(ctx, v.Value, nil)
 		newConfigGroup[v.Key] = title
 		list[v.Key] = &Group{
 			Name:  v.Key,
@@ -98,7 +98,7 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 	}
 	for _, v := range all {
 		if _, ok := list[v.Group]; ok {
-			title := utils.Lang(ctx, v.Title, nil)
+			title := util.Lang(ctx, v.Title, nil)
 			value := v.GetValueAttr()
 			if v.Name == "upload_secret_key" {
 				value = ""

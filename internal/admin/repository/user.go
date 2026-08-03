@@ -1,16 +1,16 @@
 package repository
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/persistence"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"context"
+	"errors"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -42,7 +42,7 @@ func (s *UserRepository) DealData(ctx context.Context, data *model.User) (*OutUs
 	if err := copier.Copy(&outUser, data); err != nil {
 		return nil, err
 	}
-	outUser.Avatar = utils.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+	outUser.Avatar = util.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
 	outUser.Money = fmt.Sprintf("%.2f", data.Money)
 	return &outUser, nil
 }
@@ -351,7 +351,7 @@ func (s *UserRepository) LockUsersWithActor(ctx context.Context, tx *gorm.DB, id
 // given users (the orphan guard data source for the delete flow).
 func (s *UserRepository) CountMoneyLogsByUserIDs(tx *gorm.DB, userIDs []int32) (int64, error) {
 	var n int64
-	if err := tx.Table(s.config.Database.Prefix + "user_money_log").Where("user_id IN ?", userIDs).Count(&n).Error; err != nil {
+	if err := tx.Table(s.config.Database.Prefix+"user_money_log").Where("user_id IN ?", userIDs).Count(&n).Error; err != nil {
 		return 0, err
 	}
 	return n, nil

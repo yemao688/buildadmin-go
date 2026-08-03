@@ -3,10 +3,10 @@
 package querybuilder
 
 import (
-	"fmt"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"buildadmin-go/internal/utils"
+	"fmt"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -124,7 +124,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	if queryParameter.Order != "" {
 		orderArr := strings.Split(queryParameter.Order, ",")
 		if len(orderArr) != 2 || (orderArr[1] != "asc" && orderArr[1] != "desc") {
-			err = cErr.BadRequest(utils.Lang(ctx, "Order express error:{name}", map[string]string{
+			err = cErr.BadRequest(util.Lang(ctx, "Order express error:{name}", map[string]string{
 				"name": queryParameter.Order,
 			}))
 			return
@@ -132,7 +132,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 
 		field := GetFullField(orderArr[0], table)
 		if !IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]string{
+			err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
 				"name": orderArr[0],
 			}))
 			return
@@ -152,7 +152,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 
 		//验证字段合法性
 		if !IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest(utils.Lang(ctx, "Not found field:{name}", map[string]string{
+			err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
 				"name": search[i].Field,
 			}))
 			return
@@ -171,12 +171,12 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 				} else {
 					whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
 					if len(datetimeArr[0]) == 10 {
-						startUnix, _ := utils.ParseTimeShort(datetimeArr[0])
-						endUnix, _ := utils.ParseTimeShort(datetimeArr[1])
+						startUnix, _ := util.ParseTimeShort(datetimeArr[0])
+						endUnix, _ := util.ParseTimeShort(datetimeArr[1])
 						whereP = append(whereP, startUnix.Unix(), endUnix.Unix())
 					} else {
-						startUnix, _ := utils.ParseTime(datetimeArr[0])
-						endUnix, _ := utils.ParseTime(datetimeArr[1])
+						startUnix, _ := util.ParseTime(datetimeArr[0])
+						endUnix, _ := util.ParseTime(datetimeArr[1])
 						whereP = append(whereP, startUnix.Unix(), endUnix.Unix())
 					}
 				}
@@ -266,7 +266,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		case "NOT NULL":
 			whereS += " AND " + Backquote(field) + " IS " + operater
 		default:
-			err = cErr.BadRequest(utils.Lang(ctx, "Where express error:{name}", map[string]string{
+			err = cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
 				"name": operater,
 			}))
 			return

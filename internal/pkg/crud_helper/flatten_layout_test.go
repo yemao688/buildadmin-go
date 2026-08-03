@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -21,29 +21,29 @@ import (
 func TestParseFlatNameDataLocations(t *testing.T) {
 	entity, err := ParseEntityNameData("country_language_content", "internal/admin/model/country/languageContent.go")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/model/country_language_content.go"), entity.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/model/country_language_content.go"), entity.ParseFile)
 	require.Equal(t, "CountryLanguageContent", entity.LastName)
 	require.Equal(t, "model", entity.Namespace)
 
 	repo, err := ParseRepositoryNameData("country_language_content", "")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/admin/repository/country_language_content.go"), repo.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/admin/repository/country_language_content.go"), repo.ParseFile)
 	require.Equal(t, "repository", repo.Namespace)
 	require.Equal(t, "internal/admin/repository", repo.RootFileName)
 
 	dto, err := ParseDTONameData("country_language_content", "")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/admin/dto/country_language_content.go"), dto.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/admin/dto/country_language_content.go"), dto.ParseFile)
 	require.Equal(t, "dto", dto.Namespace)
 
 	handler, err := ParseHandlerNameData("country_language_content", "")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/admin/handler/country_language_content.go"), handler.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/admin/handler/country_language_content.go"), handler.ParseFile)
 	require.Equal(t, "handler", handler.Namespace)
 
 	registrar, err := ParseRegistrarNameData("country_language_content", "")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/admin/router/country_language_content.go"), registrar.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/admin/router/country_language_content.go"), registrar.ParseFile)
 	require.Equal(t, "router", registrar.Namespace)
 }
 
@@ -51,12 +51,12 @@ func TestParseFlatNameDataLocations(t *testing.T) {
 func TestParseFlatNameDataIgnoresMultiSegmentRelativePath(t *testing.T) {
 	entity, err := ParseEntityNameData("ops_user_test_xxx", "internal/model/ops/user/test_xxx.go")
 	require.NoError(t, err)
-	require.Equal(t, filepath.Join(utils.RootPath(), "internal/model/ops_user_test_xxx.go"), entity.ParseFile)
+	require.Equal(t, filepath.Join(util.RootPath(), "internal/model/ops_user_test_xxx.go"), entity.ParseFile)
 	require.Equal(t, "OpsUserTestXxx", entity.LastName)
 }
 
 func TestClassifyDeleteLayout(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	flat := FileManifest{Generated: []string{
 		filepath.Join(root, "internal/model/ops_e2e_banner.go"),
 		filepath.Join(root, "internal/admin/repository/ops_e2e_banner.go"),
@@ -82,7 +82,7 @@ func TestClassifyDeleteLayout(t *testing.T) {
 }
 
 func TestDeriveNestedArtifacts(t *testing.T) {
-	root := utils.RootPath()
+	root := util.RootPath()
 	manifest := FileManifest{Generated: []string{
 		filepath.Join(root, "internal/model/e2e_banner.go"),
 		filepath.Join(root, "internal/admin/repository/ops/e2e_banner.go"),
@@ -170,7 +170,7 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	)`).Error)
 	require.NoError(t, db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error)
 
-	root := utils.RootPath()
+	root := util.RootPath()
 	repoDir := filepath.Join(root, "internal", "admin", "repository", "ops")
 	handlerDir := filepath.Join(root, "internal", "admin", "handler", "ops")
 	require.NoError(t, os.MkdirAll(repoDir, 0755))
@@ -217,7 +217,7 @@ func newNestedDeleteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
 
 func requireNestedDeleteClean(t *testing.T) {
 	t.Helper()
-	root := utils.RootPath()
+	root := util.RootPath()
 	repoProvider := filepath.Join(root, "internal", "admin", "repository", "ops", "provider.go")
 	handlerProvider := filepath.Join(root, "internal", "admin", "handler", "ops", "provider.go")
 	repo, err := os.ReadFile(repoProvider)

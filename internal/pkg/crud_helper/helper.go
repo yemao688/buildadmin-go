@@ -1,12 +1,12 @@
 package crud_helper
 
 import (
-	"fmt"
-	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -362,7 +362,7 @@ func pkGoField(pk string) string {
 	if strings.EqualFold(pk, "id") {
 		return "ID"
 	}
-	return utils.SnakeToCamel(pk, true)
+	return util.SnakeToCamel(pk, true)
 }
 
 // AtomicRouteCapabilityName 把点号路由名（country.Language）归一为 AtomicRoute
@@ -382,7 +382,7 @@ func routeNameFromRelativePath(relativePath, fallback string) string {
 	if entity == "" {
 		return lowerFirst(fallback)
 	}
-	return strings.Join(append(dirs, utils.SnakeToCamel(entity, true)), ".")
+	return strings.Join(append(dirs, util.SnakeToCamel(entity, true)), ".")
 }
 
 func splitLogicalNameParts(parts []string) ([]string, string) {
@@ -615,7 +615,7 @@ func parseFlatNameData(root string, tableName string, namespace string, file str
 	if normalizeErr := validateRelativePathInput(tableName); normalizeErr != nil {
 		return NameInfo{}, normalizeErr
 	}
-	lastName := utils.SnakeToCamel(originalLastName, true)
+	lastName := util.SnakeToCamel(originalLastName, true)
 
 	// 类名不能为内部关键字
 	reservedName := strings.ToLower(lastName)
@@ -623,7 +623,7 @@ func parseFlatNameData(root string, tableName string, namespace string, file str
 		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
 	}
 
-	parseFile := filepath.Join(utils.RootPath(), filepath.FromSlash(root), originalLastName+".go")
+	parseFile := filepath.Join(util.RootPath(), filepath.FromSlash(root), originalLastName+".go")
 	if err := validateAbsolutePathUnderRoots(parseFile, root); err != nil {
 		return NameInfo{}, err
 	}
@@ -675,7 +675,7 @@ func parseNameDataLegacy(root string, tableName string, moduleType string, file 
 	}
 
 	pathArr, originalLastName := splitLogicalNameParts(pathArr)
-	lastName := utils.SnakeToCamel(originalLastName, true)
+	lastName := util.SnakeToCamel(originalLastName, true)
 
 	// 类名不能为内部关键字
 	reservedName := strings.ToLower(lastName)
@@ -694,7 +694,7 @@ func parseNameDataLegacy(root string, tableName string, moduleType string, file 
 	if flat {
 		dirs = nil
 	}
-	parseFile := filepath.Join(utils.RootPath(), filepath.FromSlash(root), filepath.Join(dirs...), originalLastName+".go")
+	parseFile := filepath.Join(util.RootPath(), filepath.FromSlash(root), filepath.Join(dirs...), originalLastName+".go")
 	if err := validateAbsolutePathUnderRoots(parseFile, root); err != nil {
 		return NameInfo{}, err
 	}
@@ -757,7 +757,7 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 	}
 
 	pathArr, originalLastName := splitLogicalNameParts(pathArr)
-	lastName := utils.SnakeToCamel(originalLastName, false)
+	lastName := util.SnakeToCamel(originalLastName, false)
 
 	webDir := WebDir{
 		Path:             pathArr,
@@ -767,14 +767,14 @@ func ParseWebDirNameData(tableName string, moduleType string, file string) WebDi
 
 	if moduleType == "views" {
 		webDir.Views = filepath.Join("web/src/views/backend", strings.Join(pathArr, "/"), lastName)
-		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.Views), "web/src/views") != nil {
+		if validateAbsolutePathUnderRoots(filepath.Join(util.RootPath(), webDir.Views), "web/src/views") != nil {
 			return WebDir{}
 		}
 	} else if moduleType == "lang" {
 		webDir.Lang = append(webDir.Lang, pathArr...)
 		webDir.Lang = append(webDir.Lang, lastName)
-		if validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangFile("en")), "web/src/lang") != nil ||
-			validateAbsolutePathUnderRoots(filepath.Join(utils.RootPath(), webDir.LangFile("zh-cn")), "web/src/lang") != nil {
+		if validateAbsolutePathUnderRoots(filepath.Join(util.RootPath(), webDir.LangFile("en")), "web/src/lang") != nil ||
+			validateAbsolutePathUnderRoots(filepath.Join(util.RootPath(), webDir.LangFile("zh-cn")), "web/src/lang") != nil {
 			return WebDir{}
 		}
 	}
@@ -1137,7 +1137,7 @@ func routeIndexURLForController(controller string) string {
 	if stem == "" {
 		return ""
 	}
-	routerRoot := filepath.Join(utils.RootPath(), "internal/admin/router")
+	routerRoot := filepath.Join(util.RootPath(), "internal/admin/router")
 	if url := routeURLFromRegistrarFile(filepath.Join(routerRoot, stem+".go")); url != "" {
 		return url
 	}
@@ -1316,13 +1316,13 @@ func buildRelationMetadata(joinFields []crudmodel.Field, field crudmodel.Field, 
 	metadata := RelationMetadata{
 		FieldName:       field.Name,
 		RelationName:    relationName,
-		RelationGoField: utils.SnakeToCamel(relationName, true),
-		DTOName:         className + utils.SnakeToCamel(relationName, true) + "Relation",
+		RelationGoField: util.SnakeToCamel(relationName, true),
+		DTOName:         className + util.SnakeToCamel(relationName, true) + "Relation",
 		RemoteTable:     remoteTable,
 		RemotePK:        remotePK,
 		RemotePKGoField: generatedGoFieldName(remotePK),
 		RemotePKType:    relationColumnGoTypeFromField(pkColumn),
-		RowDTOName:      className + utils.SnakeToCamel(relationName, true) + "RelationRow",
+		RowDTOName:      className + util.SnakeToCamel(relationName, true) + "RelationRow",
 		Multi:           multi,
 	}
 	if !slices.Contains([]string{"int32", "int64", "string"}, metadata.RemotePKType) {
@@ -1422,7 +1422,7 @@ func relationColumnGoTypeFromField(field crudmodel.Field) string {
 }
 
 func generatedGoFieldName(name string) string {
-	goName := utils.SnakeToCamel(name, true)
+	goName := util.SnakeToCamel(name, true)
 	if strings.HasSuffix(goName, "Ids") {
 		return strings.TrimSuffix(goName, "Ids") + "IDs"
 	}
@@ -1717,7 +1717,7 @@ func relationNameForField(fieldName string) string {
 	} else {
 		relationName += "_table"
 	}
-	return utils.SnakeToCamel(relationName, false)
+	return util.SnakeToCamel(relationName, false)
 }
 
 // 解析模型方法（设置器、获取器等）
@@ -1736,7 +1736,7 @@ func parseModelMethods(field crudmodel.Field, modelData *ModelData) {
 	}
 
 	// methods
-	fieldName := utils.SnakeToCamel(field.Name, true)
+	fieldName := util.SnakeToCamel(field.Name, true)
 	if slices.Contains(dtStringToArray, field.DesignType) {
 		modelData.Methods = append(modelData.Methods, assembleStub("mixins/model/getters/stringToArray", map[string]string{
 			"field": fieldName,
@@ -1840,7 +1840,7 @@ func buildDefaultOrder(field string, sortType string) string {
 
 // 获取基础模板文件路径
 func getStubFilePath(name string) string {
-	return filepath.Join(utils.RootPath(), "internal", "pkg", "crud_helper", "stubs", name+".stub")
+	return filepath.Join(util.RootPath(), "internal", "pkg", "crud_helper", "stubs", name+".stub")
 }
 
 // 组装模板

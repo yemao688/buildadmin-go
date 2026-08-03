@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"go.uber.org/zap"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -35,7 +35,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 	if dbConfig.EnableFileLogWriter {
 		logFileDir := logConfig.RootDir
 		if !filepath.IsAbs(logFileDir) {
-			logFileDir = filepath.Join(utils.RootPath(), logFileDir)
+			logFileDir = filepath.Join(util.RootPath(), logFileDir)
 		}
 		// 自定义 Writer
 		writer = &lumberjack.Logger{
@@ -91,7 +91,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true,      // 禁用自动创建外键约束
 		Logger:                                   newLogger, // 使用自定义 Logger
 	}); err != nil {
-		path := filepath.Join(utils.RootPath(), "public/install.lock")
+		path := filepath.Join(util.RootPath(), "public/install.lock")
 		if _, err := os.Stat(path); err == nil {
 			content, _ := os.ReadFile(path)
 			if string(content) == "install-end" {

@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -90,7 +90,7 @@ func addCityTextFields(structContent string, cityFields []string) string {
 	}
 	var fields strings.Builder
 	for _, field := range cityFields {
-		goName := utils.SnakeToCamel(field+"_text", true)
+		goName := util.SnakeToCamel(field+"_text", true)
 		fields.WriteString("\t" + goName + " string `json:\"" + field + "_text\" gorm:\"-\"`\n")
 	}
 	return structContent[:index] + fields.String() + structContent[index:]
@@ -118,9 +118,9 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, structName string, fie
 		// if you want generate field with unsigned integer type, set FieldSignable true
 		/* FieldSignable: true,*/
 		//if you want to generate index tags from database, set FieldWithIndexTag true
-		/* FieldWithIndexTag: true,*/
+		FieldWithIndexTag: true,
 		//if you want to generate type tags from database, set FieldWithTypeTag true
-		/* FieldWithTypeTag: true,*/
+		FieldWithTypeTag: true,
 		//if you need unit tests for query code, set WithUnitTest true
 		// WithUnitTest: true,
 	})
@@ -496,7 +496,7 @@ func registrarVarCandidates(name string, handlerRoot string) []string {
 }
 
 func RemoveRegistrarProvider(name string, handlerRoot string) error {
-	path := filepath.Join(utils.RootPath(), "internal", "router", "registrar_set.go")
+	path := filepath.Join(util.RootPath(), "internal", "router", "registrar_set.go")
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -615,12 +615,12 @@ func wireProviderSetRef(rootDir string) (importPath, alias, anchor string, neede
 	}
 	sub := make([]string, 0, len(segments)-subStart)
 	for _, segment := range segments[subStart:] {
-		sub = append(sub, utils.SnakeToCamel(segment, true))
+		sub = append(sub, util.SnakeToCamel(segment, true))
 	}
 	anchorParent := path.Base(strings.Join(segments[:subStart], "/"))
 	suffix := map[string]string{"handler": "Handler", "repository": "Repo", "model": "Model"}[anchorParent]
 	if suffix == "" {
-		suffix = utils.SnakeToCamel(anchorParent, true)
+		suffix = util.SnakeToCamel(anchorParent, true)
 	}
 	alias = lowerFirst(strings.Join(sub, "")) + suffix
 	return "buildadmin-go/" + root, alias, "\t\t" + anchorAlias + ".ProviderSet,\n", true, nil
@@ -632,7 +632,7 @@ func AddWireProviderSet(rootDir string) error {
 	if err != nil || !needed {
 		return err
 	}
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
+	wirePath := filepath.Join(util.RootPath(), "cmd", "server", "wire.go")
 	content, err := os.ReadFile(wirePath)
 	if err != nil {
 		return err
@@ -670,7 +670,7 @@ func RemoveWireProviderSet(rootDir string) error {
 	if err != nil || !needed {
 		return nil
 	}
-	providerPath := filepath.Join(utils.RootPath(), rootDir, "provider.go")
+	providerPath := filepath.Join(util.RootPath(), rootDir, "provider.go")
 	if content, err := os.ReadFile(providerPath); err == nil {
 		remaining, err := countWireProviderSetEntries(string(content))
 		if err != nil {
@@ -683,7 +683,7 @@ func RemoveWireProviderSet(rootDir string) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
+	wirePath := filepath.Join(util.RootPath(), "cmd", "server", "wire.go")
 	content, err := os.ReadFile(wirePath)
 	if err != nil {
 		return err
@@ -730,7 +730,7 @@ func countWireProviderSetEntries(content string) (int, error) {
 // adminRouterProviderPath 是 admin 渠道路由注册器的中心锚点文件：
 // ProviderSet（NewXxxRegistrar 列表）与 ProvideRegistrars（每模块一行 + handler 参数）。
 func adminRouterProviderPath() string {
-	return filepath.Join(utils.RootPath(), "internal", "admin", "router", "provider.go")
+	return filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go")
 }
 
 // writeAdminRouterEntry 向 internal/admin/router/provider.go 的 ProvideRegistrars
@@ -969,7 +969,7 @@ func addProviderSetEntry(content, name string) (string, error) {
 }
 
 func writeProvider(dir string, name string) error {
-	providerPath := filepath.Join(utils.RootPath(), dir, "provider.go")
+	providerPath := filepath.Join(util.RootPath(), dir, "provider.go")
 	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/router", "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
 		return err
 	}
@@ -1002,7 +1002,7 @@ func writeProvider(dir string, name string) error {
 
 // 移除生成的相应代码
 func RemoveProvider(dir string, name string) error {
-	content, err := os.ReadFile(filepath.Join(utils.RootPath(), dir, "provider.go"))
+	content, err := os.ReadFile(filepath.Join(util.RootPath(), dir, "provider.go"))
 	if err != nil {
 		return err
 	}
@@ -1010,7 +1010,7 @@ func RemoveProvider(dir string, name string) error {
 	if err != nil {
 		return err
 	}
-	return writeGoFile(filepath.Join(utils.RootPath(), dir, "provider.go"), newContent)
+	return writeGoFile(filepath.Join(util.RootPath(), dir, "provider.go"), newContent)
 }
 
 // removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行）。
@@ -1225,7 +1225,7 @@ func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebD
 		langTsContent += Tab(1) + keyStr + ": " + quote + v + quote + ",\n"
 	}
 	langTsContent = "export default {\n" + langTsContent + "}\n"
-	path := filepath.Join(utils.RootPath(), webLangDir.LangFile(lang))
+	path := filepath.Join(util.RootPath(), webLangDir.LangFile(lang))
 	return writeFile(path, langTsContent)
 }
 
@@ -1241,7 +1241,7 @@ func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile N
 	data["optButtons"] = buildSimpleArray(indexVueData.OptButtons)
 	apiRoute := indexVueData.RouteName
 	if apiRoute == "" {
-		apiRoute = utils.SnakeToCamel(handlerFile.LastName, false)
+		apiRoute = util.SnakeToCamel(handlerFile.LastName, false)
 	}
 	data["apiUrl"] = "'/admin/" + apiRoute + "/'"
 	data["tablePk"] = indexVueData.TablePk
@@ -1256,7 +1256,7 @@ func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile N
 	data["enableDragSort"] = indexVueData.EnableDragSort
 
 	indexVueContent := assembleStub("html/index", data, false)
-	return writeFile(filepath.Join(utils.RootPath(), webViewsDir.Views, "index.vue"), indexVueContent)
+	return writeFile(filepath.Join(util.RootPath(), webViewsDir.Views, "index.vue"), indexVueContent)
 }
 
 func buildSimpleArray(data []string) string {
@@ -1290,7 +1290,7 @@ func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmod
 	if err != nil {
 		return err
 	}
-	return writeFile(filepath.Join(utils.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
+	return writeFile(filepath.Join(util.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
 }
 
 func renderFormFile(formVueData FormVueData, fields []crudmodel.Field, webTranslate string) (string, error) {

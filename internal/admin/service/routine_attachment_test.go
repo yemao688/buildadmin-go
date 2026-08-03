@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -36,7 +36,7 @@ func TestAttachmentDeleteHonorsQuoteAndRemovesLocalFileAfterLastReference(t *tes
 	require.NoError(t, testutil.CreateSQLiteAttachmentTables(db, "ba_attachment", "ba_admin", "ba_user"))
 
 	url := "/storage/quote-tests/" + strings.ReplaceAll(t.Name(), "/", "_") + ".txt"
-	path := filepath.Join(utils.RootPath(), "public", strings.TrimLeft(url, "/"))
+	path := filepath.Join(util.RootPath(), "public", strings.TrimLeft(url, "/"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
 	require.NoError(t, os.WriteFile(path, []byte("shared"), 0600))
 	t.Cleanup(func() { _ = os.Remove(path) })

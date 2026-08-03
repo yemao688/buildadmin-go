@@ -5,7 +5,7 @@ import (
 	middlewarecore "buildadmin-go/internal/middleware"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"slices"
 	"strings"
 
@@ -82,7 +82,7 @@ func abortAuthorization(c *gin.Context, err *cErr.Error) {
 	c.JSON(err.HttpCode(), map[string]interface{}{
 		"code": err.ErrorCode(),
 		"data": nil,
-		"msg":  utils.Lang(c, err.Error(), nil),
+		"msg":  util.Lang(c, err.Error(), nil),
 		"time": 0,
 	})
 	c.Abort()

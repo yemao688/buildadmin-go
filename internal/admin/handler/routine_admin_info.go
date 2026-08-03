@@ -2,9 +2,9 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/pkg/header"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -43,7 +43,7 @@ func (h *AdminInfoHandler) Index(ctx *gin.Context) {
 			"email":           admin.Email,
 			"mobile":          admin.Mobile,
 			"motto":           admin.Motto,
-			"last_login_time": utils.FormatFromUnixTime(admin.LastLoginTime),
+			"last_login_time": util.FormatFromUnixTime(admin.LastLoginTime),
 			"token":           adminAuth.Token,
 			"refresh_token":   "",
 		},

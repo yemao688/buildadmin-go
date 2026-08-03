@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"go/parser"
 	"go/token"
 	"os"
@@ -13,7 +13,7 @@ import (
 )
 
 func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
-	path := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "demo_route.go")
+	path := filepath.Join(util.RootPath(), "internal", "admin", "handler", "demo_route.go")
 	content, err := render(path, registrarTemp, RegistrarData{
 		Namespace: "handler",
 		ClassName: "Demo",
@@ -31,11 +31,11 @@ func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
 }
 
 func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
-	path := filepath.Join(utils.RootPath(), "internal", "admin", "router", "country_language.go")
+	path := filepath.Join(util.RootPath(), "internal", "admin", "router", "country_language.go")
 	content, err := render(path, registrarTemp, RegistrarData{
 		Namespace:            "router",
-		ClassName:            "Language",
-		RouteName:            "language",
+		ClassName:            "CountryLanguage",
+		RouteName:            "countryLanguage",
 		RoutePath:            "country.Language",
 		BaseHandlerQualifier: "handler.",
 		BaseHandlerAlias:     "handler",
@@ -112,7 +112,6 @@ func TestRemoveRegistrarProviderEntrySubpackageKeepsRootSameName(t *testing.T) {
 		t.Fatalf("root user registrar not removed:\n%s", removedRoot)
 	}
 }
-
 
 const wireFixture = `package main
 
@@ -230,7 +229,7 @@ func TestCountWireProviderSetEntries(t *testing.T) {
 
 func TestRemoveWireProviderSetKeepsSharedProviderSetWhenEntriesRemain(t *testing.T) {
 	rootDir := "internal/admin/handler/remove_wire_provider_set_test"
-	dir := filepath.Join(utils.RootPath(), rootDir)
+	dir := filepath.Join(util.RootPath(), rootDir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +238,7 @@ func TestRemoveWireProviderSetKeepsSharedProviderSetWhenEntriesRemain(t *testing
 		t.Fatal(err)
 	}
 
-	wirePath := filepath.Join(utils.RootPath(), "cmd", "server", "wire.go")
+	wirePath := filepath.Join(util.RootPath(), "cmd", "server", "wire.go")
 	original, err := os.ReadFile(wirePath)
 	if err != nil {
 		t.Fatal(err)
@@ -287,7 +286,7 @@ func assertParseableGo(t *testing.T, filename, content string) {
 }
 
 func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "provider_scaffold_test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "provider_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	if err := writeProvider("internal/admin/model/provider_scaffold_test", "OwnerModel"); err != nil {
 		t.Fatal(err)
@@ -302,7 +301,7 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 }
 
 func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "provider_fresh_seq_test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "provider_fresh_seq_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	// 首个条目写入后 gofmt 会把单参数 NewSet 折叠成单行，第二个条目必须仍能合法追加
 	if err := writeProvider("internal/admin/handler/provider_fresh_seq_test", "UserHandler"); err != nil {
@@ -323,7 +322,7 @@ func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
 }
 
 func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "provider_eof_test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "provider_eof_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	provider := filepath.Join(dir, "provider.go")
 	base := "package provider_eof_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingModel,\n)"
@@ -378,7 +377,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 }
 
 func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "registrar_provider_test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "registrar_provider_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	provider := filepath.Join(dir, "provider.go")
 	original := "package registrar_provider_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingHandler,\n)\n"
@@ -404,7 +403,7 @@ func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
 }
 
 func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
-	dir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "assoc_provider_test")
+	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "assoc_provider_test")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +415,7 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 	}
 	fields := []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "assoc", RemoteModel: "internal/admin/model/assoc_provider_test/Assoc.go", RelationFields: "name"}}}
 	manifest := FileManifest{
-		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "assoc_provider_test", "Assoc.go")},
+		Generated: []string{filepath.Join(util.RootPath(), "internal", "admin", "model", "assoc_provider_test", "Assoc.go")},
 		Shared:    []string{provider},
 	}
 	if err := removeAssociatedModelProviders(fields, manifest, deleteLayoutLegacy); err != nil {
@@ -434,14 +433,14 @@ func TestRemoveAssociatedModelProviderEntries(t *testing.T) {
 // 关联既有核心模型(如 ba_admin)时,不得从共享 provider.go 中移除其注册,
 // 否则 wire 将因缺少核心模型 provider 而失败。
 func TestRemoveAssociatedModelProvidersKeepsCoreModel(t *testing.T) {
-	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
+	provider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
 	before, err := os.ReadFile(provider)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fields := []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "ba_admin", RemoteModel: "internal/admin/model/admin.go", RelationFields: "username"}}}
 	manifest := FileManifest{
-		Generated: []string{filepath.Join(utils.RootPath(), "internal", "admin", "model", "test.go")},
+		Generated: []string{filepath.Join(util.RootPath(), "internal", "admin", "model", "test.go")},
 		Shared:    []string{provider},
 	}
 	if err := removeAssociatedModelProviders(fields, manifest, deleteLayoutLegacy); err != nil {

@@ -8,7 +8,7 @@ import (
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"time"
 )
 
@@ -60,7 +60,7 @@ func (s *AuthService) Login(username, password string, keep bool, captchaID, cap
 	if err != nil {
 		return nil, err
 	}
-	if admin.ID == 0 || !utils.AccountStatusEnabled(admin.Status) {
+	if admin.ID == 0 || !util.AccountStatusEnabled(admin.Status) {
 		// Unknown and disabled accounts share the generic credential error.
 		return nil, cErr.BadRequest(adminLoginCredentialError)
 	}

@@ -1,22 +1,9 @@
-package utils
+package util
 
 import (
 	"fmt"
 	"strconv"
 )
-
-func RemoveDuplicates(arr []int32) []int32 {
-	seen := make(map[int32]bool)
-	result := []int32{}
-
-	for _, value := range arr {
-		if _, ok := seen[value]; !ok {
-			seen[value] = true
-			result = append(result, value)
-		}
-	}
-	return result
-}
 
 func RemoveStrDuplicates(arr []string) []string {
 	seen := make(map[string]bool)

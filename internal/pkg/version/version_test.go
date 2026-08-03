@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 )
 
 func TestFrameworkVersionFileMatchesConstant(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(utils.RootPath(), "VERSION_FRAMEWORK"))
+	data, err := os.ReadFile(filepath.Join(util.RootPath(), "VERSION_FRAMEWORK"))
 	if err != nil {
 		t.Fatalf("read VERSION_FRAMEWORK: %v", err)
 	}

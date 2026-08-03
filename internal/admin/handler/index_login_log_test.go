@@ -16,7 +16,7 @@ import (
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -113,7 +113,7 @@ func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *g
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,
@@ -127,7 +127,7 @@ func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *g
 
 func registerPasswordValidation() {
 	if engine, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		_ = engine.RegisterValidation("password", utils.ValidatePassword)
+		_ = engine.RegisterValidation("password", util.ValidatePassword)
 	}
 }
 

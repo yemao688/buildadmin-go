@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +24,7 @@ func AbortLogin(c *gin.Context, err error) {
 		"data": map[string]any{
 			"type": "need login",
 		},
-		"msg":  utils.Lang(c, message, nil),
+		"msg":  util.Lang(c, message, nil),
 		"time": 0,
 	})
 	c.Abort()

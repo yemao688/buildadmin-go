@@ -1,12 +1,12 @@
 package crud_helper
 
 import (
-	"fmt"
-	crudmodel "buildadmin-go/internal/model"
-	model "buildadmin-go/internal/admin/repository"
 	adminauth "buildadmin-go/internal/admin/repository"
+	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -564,7 +564,7 @@ func adoptCrudLog(db *gorm.DB, cfg *conf.Configuration, spec *GenerateOptions, a
 
 // DefaultSpecDir 返回仓库内约定的 spec 目录（不存在时返回空串，供调用方静默跳过）。
 func DefaultSpecDir() string {
-	dir := filepath.Join(utils.RootPath(), "crud_specs")
+	dir := filepath.Join(util.RootPath(), "crud_specs")
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		return ""
 	}

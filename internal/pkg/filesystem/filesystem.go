@@ -2,9 +2,9 @@ package filesystem
 
 import (
 	"archive/zip"
+	"buildadmin-go/internal/pkg/util"
 	"errors"
 	"fmt"
-	"buildadmin-go/internal/utils"
 	"io"
 	"os"
 	"path/filepath"
@@ -144,7 +144,7 @@ func Unzip(src string, dest string) error {
 
 // 创建ZIP
 func Zip(files []string, zipfileName string, erasePre string) error {
-	zipFile, err := os.Create(filepath.Join(utils.RootPath(), zipfileName))
+	zipFile, err := os.Create(filepath.Join(util.RootPath(), zipfileName))
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func Zip(files []string, zipfileName string, erasePre string) error {
 	zipWriter := zip.NewWriter(zipFile)
 	defer zipWriter.Close()
 
-	rootPath := utils.RootPath()
+	rootPath := util.RootPath()
 	for _, filePath := range files {
 		// 处理路径
 		fullFilePath := filepath.Join(rootPath, filePath)

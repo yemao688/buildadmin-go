@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -26,7 +26,7 @@ func TestEmbeddedBundleResolvesKnownKeys(t *testing.T) {
 		},
 	)))
 	r.GET("/msg", func(c *gin.Context) {
-		c.String(http.StatusOK, utils.Lang(c, "Super administrator", nil))
+		c.String(http.StatusOK, util.Lang(c, "Super administrator", nil))
 	})
 
 	w := httptest.NewRecorder()

@@ -1,15 +1,15 @@
 package handler
 
 import (
+	model "buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/util"
+	"buildadmin-go/internal/pkg/validator"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"buildadmin-go/internal/pkg/validator"
-	model "buildadmin-go/internal/model"
-	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/utils"
 	"io"
 	"math"
 	"math/big"
@@ -357,7 +357,7 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 			orderDirection = strings.ToLower(strings.TrimSpace(orderParts[1]))
 		}
 		if orderField != "weigh" {
-			return cErr.BadRequest(utils.Lang(ctx, "Please use the weigh field to sort before operating", nil))
+			return cErr.BadRequest(util.Lang(ctx, "Please use the weigh field to sort before operating", nil))
 		}
 		if orderDirection != "desc" {
 			orderDirection = "asc"
@@ -469,5 +469,5 @@ func (h *Base) GetRemark(ctx *gin.Context) string {
 	if err != nil {
 		return ""
 	}
-	return utils.Lang(ctx, rule.Remark, nil)
+	return util.Lang(ctx, rule.Remark, nil)
 }

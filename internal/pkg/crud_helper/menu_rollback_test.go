@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -27,7 +27,7 @@ func TestDeleteRejectsManifestPathOutsideModuleOwnership(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ownership")
 	// 非本模块文件必须原样保留
-	unowned := filepath.Join(utils.RootPath(), "internal", "model", "other_table.go")
+	unowned := filepath.Join(util.RootPath(), "internal", "model", "other_table.go")
 	_, statErr := os.Stat(unowned)
 	require.NoError(t, statErr, "unowned file must not be touched")
 }
@@ -135,8 +135,8 @@ func newOwnershipFixtureOpt(t *testing.T, includeUnowned bool) (*gorm.DB, *conf.
 	// 本模块文件 + 非本模块文件（允许根 internal/model 下但基名不是本表）。
 	// 目录与文件名用表名推导的历史形态（delete_fault → 目录 delete、实体 fault），
 	// legacy 布局：模型文件在 internal/admin/model 下。
-	modelDir := filepath.Join(utils.RootPath(), "internal", "admin", "model", "delete")
-	handlerDir := filepath.Join(utils.RootPath(), "internal", "admin", "handler", "delete")
+	modelDir := filepath.Join(util.RootPath(), "internal", "admin", "model", "delete")
+	handlerDir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete")
 	require.NoError(t, os.MkdirAll(modelDir, 0755))
 	require.NoError(t, os.MkdirAll(handlerDir, 0755))
 	t.Cleanup(func() { _ = os.RemoveAll(modelDir) })
@@ -149,7 +149,7 @@ func newOwnershipFixtureOpt(t *testing.T, includeUnowned bool) (*gorm.DB, *conf.
 	require.NoError(t, os.WriteFile(ownFile, []byte("package fixture\n"), 0644))
 	generated := []string{ownFile}
 	if includeUnowned {
-		unowned := filepath.Join(utils.RootPath(), "internal", "model", "other_table.go")
+		unowned := filepath.Join(util.RootPath(), "internal", "model", "other_table.go")
 		require.NoError(t, os.WriteFile(unowned, []byte("package model\n"), 0644))
 		t.Cleanup(func() { _ = os.Remove(unowned) })
 		generated = append(generated, unowned)
@@ -157,14 +157,14 @@ func newOwnershipFixtureOpt(t *testing.T, includeUnowned bool) (*gorm.DB, *conf.
 
 	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true}}
 	table := crudmodel.Table{
-		Name:                "delete_fault",
+		Name:                 "delete_fault",
 		GenerateRelativePath: "delete_fault",
-		ModelFile:           filepath.ToSlash(filepath.Join("internal", "admin", "model", "delete", "fault.go")),
-		ControllerFile:      filepath.ToSlash(filepath.Join("internal", "admin", "handler", "delete", "fault.go")),
-		WebViewsDir:         "web/src/views/backend/delete/fault",
+		ModelFile:            filepath.ToSlash(filepath.Join("internal", "admin", "model", "delete", "fault.go")),
+		ControllerFile:       filepath.ToSlash(filepath.Join("internal", "admin", "handler", "delete", "fault.go")),
+		WebViewsDir:          "web/src/views/backend/delete/fault",
 		Manifest: &crudmodel.CRUDFileManifest{
 			Generated: generated,
-			Shared:    []string{modelProvider, handlerProvider, filepath.Join(utils.RootPath(), "cmd", "server", "wire.go"), filepath.Join(utils.RootPath(), "cmd", "server", "wire_gen.go")},
+			Shared:    []string{modelProvider, handlerProvider, filepath.Join(util.RootPath(), "cmd", "server", "wire.go"), filepath.Join(util.RootPath(), "cmd", "server", "wire_gen.go")},
 		},
 	}
 	tableJSON, err := json.Marshal(table)

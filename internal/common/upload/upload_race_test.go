@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -76,7 +76,7 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 			cleanup()
 		}
 		for _, topic := range topics {
-			_ = os.RemoveAll(filepath.Join(utils.RootPath(), "public", "storage", topic))
+			_ = os.RemoveAll(filepath.Join(util.RootPath(), "public", "storage", topic))
 		}
 	}()
 
@@ -119,7 +119,7 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 		att := seen[i]
 		require.Equal(t, topics[i], att.Topic, "worker %d topic crossed with another request", i)
 		require.Equal(t, fmt.Sprintf("%x", sha1.Sum(contents[i])), att.Sha1, "worker %d sha1 belongs to another file", i)
-		disk, err := os.ReadFile(utils.RootPath() + "/public" + att.URL)
+		disk, err := os.ReadFile(util.RootPath() + "/public" + att.URL)
 		require.NoError(t, err)
 		require.Equal(t, contents[i], disk, "worker %d on-disk content mismatched", i)
 	}

@@ -1,10 +1,10 @@
 package crud_helper
 
 import (
+	crudmodel "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/util"
 	"errors"
 	"fmt"
-	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,7 +108,7 @@ func validateRemoteFile(kind, fieldName, value string) (bool, error) {
 	if strings.HasSuffix(strings.ReplaceAll(value, "\\", "/"), ".go") {
 		logicalPath += ".go"
 	}
-	candidate := filepath.Join(utils.RootPath(), filepath.FromSlash(logicalPath))
+	candidate := filepath.Join(util.RootPath(), filepath.FromSlash(logicalPath))
 	info, err := os.Stat(candidate)
 	if err != nil {
 		if os.IsNotExist(err) {

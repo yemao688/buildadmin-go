@@ -1,13 +1,13 @@
 package upload
 
 import (
+	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/random"
+	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"crypto/sha1"
 	"fmt"
-	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/random"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
 	"html"
 	"image"
 	_ "image/gif"
@@ -157,7 +157,7 @@ func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 // 检查文件大小是否允许上传
 func (s *UploadHelper) checkSize(ctx *gin.Context, file *multipart.FileHeader) error {
 	if file.Size > int64(s.config.Upload.Maxsize) {
-		msg := utils.Lang(ctx, "The uploaded file is too large (%sMiB), Maximum file size:%sMiB", map[string]string{
+		msg := util.Lang(ctx, "The uploaded file is too large (%sMiB), Maximum file size:%sMiB", map[string]string{
 			"min": fmt.Sprintf("%d", file.Size),
 			"max": fmt.Sprintf("%d", s.config.Upload.Maxsize),
 		})
@@ -262,7 +262,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 	}
 	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, params.topic(), storage).Take(&attach).Error; err == nil {
 		//判断文件是否存在
-		missing := attach.Storage == "local" && !utils.PathExists(utils.RootPath()+attach.URL)
+		missing := attach.Storage == "local" && !util.PathExists(util.RootPath()+attach.URL)
 		if attach.Storage == "alioss" && s.oss != nil {
 			missing = !s.oss.Exists(attach.URL)
 		}
@@ -281,7 +281,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 			if storage == "alioss" && s.oss != nil {
 				attach.FullUrl = s.oss.URL(attach.URL)
 			} else {
-				attach.FullUrl = utils.FullUrl(attach.URL, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
+				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
 			}
 			return attach, nil
 		}
@@ -314,16 +314,16 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 		attachment.FullUrl = s.oss.URL(savePath)
 		return attachment, nil
 	}
-	attachment.FullUrl = utils.FullUrl(savePath, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
+	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
 
-	dirPath := filepath.Dir(utils.RootPath() + "/public" + savePath)
+	dirPath := filepath.Dir(util.RootPath() + "/public" + savePath)
 	// 尝试创建路径中所有不存在的目录
 	err = os.MkdirAll(dirPath, 0755)
 	if err != nil {
 		return nil, err
 	}
 	// 创建目标文件
-	out, err := os.Create(utils.RootPath() + "/public" + savePath)
+	out, err := os.Create(util.RootPath() + "/public" + savePath)
 	if err != nil {
 		return nil, err
 	}

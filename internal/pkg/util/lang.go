@@ -1,4 +1,4 @@
-package utils
+package util
 
 import (
 	ginI18n "github.com/gin-contrib/i18n"

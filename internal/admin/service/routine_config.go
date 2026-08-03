@@ -11,7 +11,7 @@ import (
 	"buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/go-mail/mail"
 	"github.com/jinzhu/copier"
@@ -50,7 +50,7 @@ func (s *ConfigService) Add(ctx context.Context, p ConfigParams) error {
 		return err
 	}
 	if p.Type == "radio" || p.Type == "checkbox" || p.Type == "select" || p.Type == "selects" {
-		contentBytes, _ := json.Marshal(utils.StrAttrToArray(p.Content))
+		contentBytes, _ := json.Marshal(util.StrAttrToArray(p.Content))
 		config.Content = string(contentBytes)
 	} else {
 		config.Content = ""
@@ -58,8 +58,8 @@ func (s *ConfigService) Add(ctx context.Context, p ConfigParams) error {
 	config.Rule = strings.Join(p.Rule, ",")
 
 	if p.Extend != "" || p.InputExtend != "" {
-		inputExtend := utils.StrAttrToArray(p.InputExtend)
-		extend := utils.StrAttrToArray(p.Extend)
+		inputExtend := util.StrAttrToArray(p.InputExtend)
+		extend := util.StrAttrToArray(p.Extend)
 		if len(inputExtend) > 0 {
 			extend["baInputExtend"] = inputExtend
 		}

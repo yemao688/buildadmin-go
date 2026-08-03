@@ -1,12 +1,12 @@
 package crud_helper
 
 import (
-	"encoding/json"
-	"fmt"
-	crudmodel "buildadmin-go/internal/model"
 	model "buildadmin-go/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"
+	"encoding/json"
+	"fmt"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -16,9 +16,9 @@ import (
 	"strings"
 	"testing"
 
+	"buildadmin-go/internal/pkg/util"
 	"github.com/magiconair/properties/assert"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/utils"
 )
 
 func TestGetPk(t *testing.T) {
@@ -994,8 +994,8 @@ func TestParseNameAndWebDirDerivationRules(t *testing.T) {
 			require.Equal(t, tc.wantClass, modelInfo.LastName)
 			require.Equal(t, tc.wantClass, handlerInfo.LastName)
 			require.Equal(t, tc.wantViewName, webDir.LastName)
-			require.Equal(t, filepath.ToSlash(filepath.Join(utils.RootPath(), tc.wantModel)), filepath.ToSlash(modelInfo.ParseFile))
-			require.Equal(t, filepath.ToSlash(filepath.Join(utils.RootPath(), strings.Replace(tc.wantModel, "/model/", "/handler/", 1))), filepath.ToSlash(handlerInfo.ParseFile))
+			require.Equal(t, filepath.ToSlash(filepath.Join(util.RootPath(), tc.wantModel)), filepath.ToSlash(modelInfo.ParseFile))
+			require.Equal(t, filepath.ToSlash(filepath.Join(util.RootPath(), strings.Replace(tc.wantModel, "/model/", "/handler/", 1))), filepath.ToSlash(handlerInfo.ParseFile))
 			require.Equal(t, tc.wantViews, filepath.ToSlash(webDir.Views))
 			require.Equal(t, tc.wantMenu, GetMenuName(webDir))
 			require.Equal(t, tc.wantRoute, routeNameFromRelativePath(tc.relativePath, modelInfo.LastName))

@@ -1,10 +1,10 @@
 package crud_helper
 
 import (
-	"fmt"
 	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -347,7 +347,7 @@ func ValidatePathUnderRoots(candidate string, roots ...string) error {
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("path escapes its root")
 	}
-	absCandidate := filepath.Join(utils.RootPath(), clean)
+	absCandidate := filepath.Join(util.RootPath(), clean)
 	return validateAbsolutePathUnderRoots(absCandidate, roots...)
 }
 
@@ -427,7 +427,7 @@ func validateAbsolutePathUnderRoots(candidate string, roots ...string) error {
 		return err
 	}
 	for _, root := range roots {
-		absRoot, err := filepath.Abs(filepath.Join(utils.RootPath(), root))
+		absRoot, err := filepath.Abs(filepath.Join(util.RootPath(), root))
 		if err != nil {
 			return err
 		}
@@ -485,7 +485,9 @@ func ValidateModelPath(path string, common bool) error {
 	return ValidatePathUnderRoots(path, "internal/model")
 }
 
-func ValidateHandlerPath(path string) error { return ValidatePathUnderRoots(path, "internal/admin/handler") }
+func ValidateHandlerPath(path string) error {
+	return ValidatePathUnderRoots(path, "internal/admin/handler")
+}
 
 func ValidateWebPath(path string, lang bool) error {
 	root := "web/src/views"

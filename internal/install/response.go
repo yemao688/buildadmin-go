@@ -3,7 +3,7 @@ package install
 import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/requesttx"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -43,7 +43,7 @@ func SuccessWithMessage(c *gin.Context, message string) {
 
 // 失败返回
 func Fail(c *gin.Context, httpCode int, code int, msg string) {
-	msg = utils.Lang(c, msg, nil)
+	msg = util.Lang(c, msg, nil)
 	if requesttx.Stage(c, requesttx.Outcome{HTTPCode: httpCode, BusinessCode: code, Message: msg}) {
 		return
 	}

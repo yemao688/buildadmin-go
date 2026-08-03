@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	"encoding/json"
 	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,9 +13,9 @@ import (
 	"testing"
 	"text/template"
 
+	"buildadmin-go/internal/pkg/data_scope"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/pkg/data_scope"
 )
 
 func ptr[T any](v T) *T { return &v }
@@ -458,7 +458,7 @@ func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 	assert.Equal(t, "buildadmin-go/internal/model", handlerData.ModelImportPath)
 	assert.Equal(t, "OrderItem", entityFile.LastName)
 	// 拍平布局：文件恒为 <root>/<table>.go
-	assert.Equal(t, filepath.Join(utils.RootPath(), "internal", "model", "order_item.go"), entityFile.ParseFile)
+	assert.Equal(t, filepath.Join(util.RootPath(), "internal", "model", "order_item.go"), entityFile.ParseFile)
 	assert.Equal(t, "internal/admin/repository", repositoryFile.RootFileName)
 	assert.Equal(t, "internal/admin/dto", dtoFile.RootFileName)
 	assert.Equal(t, "internal/admin/handler", handlerFile.RootFileName)

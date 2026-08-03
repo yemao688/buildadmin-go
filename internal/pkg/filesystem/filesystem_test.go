@@ -1,30 +1,30 @@
 package filesystem
 
 import (
+	"buildadmin-go/internal/pkg/util"
 	"fmt"
-	"buildadmin-go/internal/utils"
 	"path/filepath"
 	"testing"
 )
 
 func TestDirIsEmpty(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/test")
+	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
 	fmt.Println(DirIsEmpty(dirPath))
 }
 
 func TestDelDir(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/test")
+	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
 	fmt.Println(DelDir(dirPath))
 }
 
 func TestDelEmptyDir(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/test")
+	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
 	fmt.Println(DelEmptyDir(dirPath))
 }
 
 func TestUnzip(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/Desktop.zip")
-	dest := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/test")
+	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/Desktop.zip")
+	dest := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
 	fmt.Println(Unzip(dirPath, dest))
 }
 
@@ -36,12 +36,12 @@ func TestZip(t *testing.T) {
 }
 
 func TestMkdir(t *testing.T) {
-	dirPath := filepath.Join(utils.RootPath(), "internal/pkg/filesystem/test/aa/bb")
+	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test/aa/bb")
 	Mkdir(dirPath)
 }
 
 func TestGetDirFiles(t *testing.T) {
-	dirPath := utils.RootPath()
+	dirPath := util.RootPath()
 	suffixArr := []string{".sum"}
 	result := GetDirFiles(dirPath, suffixArr)
 	fmt.Println(result)

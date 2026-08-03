@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/pkg/util"
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/utils"
 	"go.uber.org/zap"
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
@@ -41,10 +41,10 @@ func TestScheduleProcessExitUsesZeroExitCode(t *testing.T) {
 }
 
 func TestCommandExecCompleteRejectsMissingFrontendArtifact(t *testing.T) {
-	hideInstallPath(t, filepath.Join(utils.RootPath(), "public", "index.html"))
-	hideInstallPath(t, filepath.Join(utils.RootPath(), "public", LockFileName))
+	hideInstallPath(t, filepath.Join(util.RootPath(), "public", "index.html"))
+	hideInstallPath(t, filepath.Join(util.RootPath(), "public", LockFileName))
 	// 配置驱动补全后，"未安装"场景还需藏起仓库根的真实覆盖层配置
-	hideInstallPath(t, filepath.Join(utils.RootPath(), ConfigFileName))
+	hideInstallPath(t, filepath.Join(util.RootPath(), ConfigFileName))
 
 	handler := NewInstallHandler(zap.NewNop(), nil, nil)
 	recorder := commandExecCompleteRequest(t, handler, `{"type":"web"}`)
@@ -54,12 +54,12 @@ func TestCommandExecCompleteRejectsMissingFrontendArtifact(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, http.StatusBadRequest, response.Code)
 	require.Equal(t, frontendBuildArtifactMissingMessage, response.Msg)
-	_, err := os.Stat(filepath.Join(utils.RootPath(), "public", LockFileName))
+	_, err := os.Stat(filepath.Join(util.RootPath(), "public", LockFileName))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestCommandExecCompleteIsIdempotentAfterCompletion(t *testing.T) {
-	lockPath := filepath.Join(utils.RootPath(), "public", LockFileName)
+	lockPath := filepath.Join(util.RootPath(), "public", LockFileName)
 	replaceInstallLock(t, lockPath, InstallationCompletionMark)
 
 	handler := NewInstallHandler(zap.NewNop(), nil, nil)
@@ -80,7 +80,7 @@ func commandExecCompleteRequest(t *testing.T, handler *InstallHandler, body stri
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,

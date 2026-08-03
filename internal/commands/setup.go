@@ -9,8 +9,8 @@ import (
 	"buildadmin-go/internal/pkg/installer"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/terminal"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/version"
-	"buildadmin-go/internal/utils"
 	"errors"
 	"fmt"
 	"io"
@@ -109,7 +109,7 @@ func newSetupCommand() *cobra.Command {
 			for _, name := range setupFlagNames {
 				opts.provided[name] = cmd.Flags().Changed(name)
 			}
-			rootPath := utils.RootPath()
+			rootPath := util.RootPath()
 			configPath, err := setupConfigPath(rootPath)
 			if err != nil {
 				return err

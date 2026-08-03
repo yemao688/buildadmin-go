@@ -8,7 +8,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/terminal"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"net/http"
 	"strconv"
 
@@ -80,7 +80,7 @@ func (h *AjaxHandler) BuildSuffixSvg(ctx *gin.Context) {
 	}
 	background := ctx.Request.FormValue("background")
 
-	svgBytes := []byte(utils.BuildSuffixSvg(suffix, background))
+	svgBytes := []byte(util.BuildSuffixSvg(suffix, background))
 	ctx.Header("Content-Length", strconv.Itoa(len(svgBytes)))
 	ctx.Header("Content-Type", "image/svg+xml")
 	ctx.Data(http.StatusOK, "image/jpeg", svgBytes)
@@ -134,7 +134,7 @@ func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 
 	_, _, ok := h.terminal.ChangeTerminalConfig(ctx)
 	if !ok {
-		FailByErr(ctx, cErr.BadRequest(utils.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]string{
+		FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "Failed to modify the terminal configuration. Please modify the configuration file manually:{content}", map[string]string{
 			"content": "/configs/config.yaml",
 		})))
 		return

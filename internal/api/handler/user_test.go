@@ -9,7 +9,7 @@ import (
 
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
@@ -27,11 +27,11 @@ func newUserHandlerTest(config *conf.Configuration) *UserHandler {
 func userTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		_ = v.RegisterValidation("password", utils.ValidatePassword)
+		_ = v.RegisterValidation("password", util.ValidatePassword)
 	}
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		RootPath:         utils.RootPath() + "/internal/i18n/locales",
+		RootPath:         util.RootPath() + "/internal/i18n/locales",
 		AcceptLanguage:   []language.Tag{language.Chinese, language.TraditionalChinese, language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,

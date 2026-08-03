@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
@@ -14,8 +14,8 @@ import (
 func initValidator() {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		// 注册自定义验证器
-		_ = v.RegisterValidation("phone", utils.ValidatePhone)
-		_ = v.RegisterValidation("password", utils.ValidatePassword)
+		_ = v.RegisterValidation("phone", util.ValidatePhone)
+		_ = v.RegisterValidation("password", util.ValidatePassword)
 
 		// 注册自定义 json tag 函数
 		v.RegisterTagNameFunc(func(fld reflect.StructField) string {

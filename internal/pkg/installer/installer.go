@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"time"
 
-	"buildadmin-go/internal/pkg/random"
-	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/random"
+	"buildadmin-go/internal/pkg/util"
+	"buildadmin-go/internal/pkg/validator"
 
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gorm.io/driver/mysql"
@@ -48,7 +48,7 @@ func (v Database) GetMessages() validator.ValidatorMessages {
 
 // NewDB opens the configured application database connection.
 func NewDB(cfg Database) (*gorm.DB, error) {
-	logFileDir := filepath.Join(utils.RootPath(), "runtime/logs")
+	logFileDir := filepath.Join(util.RootPath(), "runtime/logs")
 	if filepath.IsAbs(logFileDir) {
 		logFileDir = filepath.Clean(logFileDir)
 	}

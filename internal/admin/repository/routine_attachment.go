@@ -1,12 +1,12 @@
 package repository
 
 import (
-	"context"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -53,7 +53,7 @@ func (s *AttachmentRepository) DealData(ctx *gin.Context, data *upload.Attachmen
 	if data.Storage == "alioss" {
 		data.FullUrl = upload.NewAliossStorage(s.DB(), s.config).URL(data.URL)
 	} else {
-		data.FullUrl = utils.FullUrl(data.URL, s.config.App.CdnUrl, utils.GetBaseURL(ctx), "")
+		data.FullUrl = util.FullUrl(data.URL, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
 	}
 	return data, nil
 }

@@ -1,19 +1,10 @@
-package utils
+package util
 
 import (
 	"regexp"
 	"strconv"
 	"strings"
 )
-
-func CamelToSnake(input string) string {
-	// 使用正则表达式匹配大写字母
-	re := regexp.MustCompile(`([A-Z])`)
-	// 替换所有匹配的大写字母，在它们之前加上下划线，并将它们转换为小写
-	return re.ReplaceAllStringFunc(input, func(s string) string {
-		return "_" + strings.ToLower(s)
-	})
-}
 
 func SnakeToCamel(input string, ucfirst bool) string {
 	// 使用正则表达式匹配下划线后面跟的小写字母

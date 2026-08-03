@@ -5,7 +5,7 @@
 package install
 
 import (
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"path/filepath"
 
 	"github.com/gin-gonic/gin"
@@ -27,7 +27,7 @@ func NewInstallRouter(deps InstallRouterDeps) *InstallRouter {
 
 // Register 挂载安装向导页面与安装 API（只经过全局中间件，不进入 UserLogin）。
 func (r *InstallRouter) Register(engine *gin.Engine) {
-	rootDir := utils.RootPath()
+	rootDir := util.RootPath()
 
 	engine.StaticFile("/install", filepath.Join(rootDir, "public/install/index.html"))
 	engine.Static("/install", filepath.Join(rootDir, "public/install"))

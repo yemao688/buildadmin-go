@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,7 +44,7 @@ func TestQuarantineRestoresAllFiles(t *testing.T) {
 
 func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T) {
 	// 拍平布局：关联仓库的 provider 即扁平根包 provider.go（wire 静态聚合）。
-	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
+	provider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
 	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/model/owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -62,12 +62,12 @@ func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
+	provider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
 	if containsPath(manifest.Generated, provider) || !containsPath(manifest.Shared, provider) {
 		t.Fatalf("relation provider classification = %+v", manifest)
 	}
 	// 实体尚未存在时应进入 Generated（新布局共享记录层，扁平 internal/model/<table>.go）
-	entity := filepath.Join(utils.RootPath(), "internal", "model", "owner.go")
+	entity := filepath.Join(util.RootPath(), "internal", "model", "owner.go")
 	if !containsPath(manifest.Generated, entity) {
 		t.Fatalf("relation entity missing from generated manifest: %+v", manifest.Generated)
 	}
@@ -100,7 +100,7 @@ func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
 
 func assertQuarantineRestore(t *testing.T) {
 	t.Helper()
-	dir, err := os.MkdirTemp(utils.RootPath(), ".crud-test-")
+	dir, err := os.MkdirTemp(util.RootPath(), ".crud-test-")
 	if err != nil {
 		t.Fatal(err)
 	}

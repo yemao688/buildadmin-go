@@ -1,13 +1,13 @@
 package clickcaptcha
 
 import (
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/pkg/captcha"
-	"buildadmin-go/internal/utils"
 	"image"
 	"image/color"
 	"image/draw"
@@ -114,7 +114,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	rand.Seed(time.Now().UnixNano())
 	randIndex := rand.Intn(len(bgPaths) - 1)
 	imagePath := bgPaths[randIndex]
-	bgImg, err := loadImage(filepath.Join(utils.RootPath(), imagePath))
+	bgImg, err := loadImage(filepath.Join(util.RootPath(), imagePath))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 
 	// 加载字体文件
 	fontPath := fontPaths[0]
-	fontBytes, err := os.ReadFile(filepath.Join(utils.RootPath(), fontPath))
+	fontBytes, err := os.ReadFile(filepath.Join(util.RootPath(), fontPath))
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 				point.Text = "<" + iconDict[v] + ">"
 			}
 
-			iconImg, err := loadImage(filepath.Join(utils.RootPath(), "public/static/images/captcha/click/icons", v+".png"))
+			iconImg, err := loadImage(filepath.Join(util.RootPath(), "public/static/images/captcha/click/icons", v+".png"))
 			if err != nil {
 				return nil, err
 			}
@@ -211,13 +211,13 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	}
 	captchaStr, _ := json.Marshal(captchaInfo)
 
-	key := utils.Md5(id)
+	key := util.Md5(id)
 	var result map[string]interface{}
 	c.sqlDB.Model(&captcha.Captcha{}).Where(" `key` = ? ", key).Scan(&result)
 
 	if _, ok := result["key"]; ok {
 		err = c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Updates(map[string]interface{}{
-			"code":        utils.Md5(strings.Join(texts, ",")),
+			"code":        util.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
 			"create_time": time.Now().Unix(),
 			"expire_time": time.Now().Unix() + 600,
@@ -225,7 +225,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	} else {
 		err = c.sqlDB.Model(&captcha.Captcha{}).Create(map[string]interface{}{
 			"key":         key,
-			"code":        utils.Md5(strings.Join(texts, ",")),
+			"code":        util.Md5(strings.Join(texts, ",")),
 			"captcha":     captchaStr,
 			"create_time": time.Now().Unix(),
 			"expire_time": time.Now().Unix() + 600,
@@ -278,7 +278,7 @@ func loadImage(filePath string) (image.Image, error) {
  * unset 验证成功是否删除验证码
  */
 func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
-	key := utils.Md5(id)
+	key := util.Md5(id)
 
 	record := captcha.Captcha{}
 	err := c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).First(&record).Error

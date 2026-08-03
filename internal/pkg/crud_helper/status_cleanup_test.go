@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/utils"
+	"buildadmin-go/internal/pkg/util"
 	"os"
 	"path/filepath"
 	"strings"
@@ -73,7 +73,7 @@ func TestReconcileStaleGeneratingLogs(t *testing.T) {
 
 func TestPruneEmptyProviderScaffold(t *testing.T) {
 	stop := "internal/admin/handler"
-	pkgDir := filepath.Join(utils.RootPath(), stop, "prune_scaffold_test")
+	pkgDir := filepath.Join(util.RootPath(), stop, "prune_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(pkgDir) })
 	if err := os.MkdirAll(pkgDir, 0755); err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 	}
 
 	// 根包自身不参与清理
-	rootProvider := filepath.Join(utils.RootPath(), "internal", "admin", "repository", "provider.go")
+	rootProvider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
 	before, err := os.ReadFile(rootProvider)
 	if err != nil {
 		t.Fatal(err)

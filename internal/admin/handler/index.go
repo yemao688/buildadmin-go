@@ -9,8 +9,8 @@ import (
 	"buildadmin-go/internal/conf"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"buildadmin-go/internal/utils"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -65,8 +65,8 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"id":              adminInfo.ID,
 			"username":        adminInfo.Username,
 			"nickname":        adminInfo.Nickname,
-			"avatar":          utils.DefaultUrl(adminInfo.Avatar, h.config.App.DefaultAvatar),
-			"last_login_time": utils.FormatFromUnixTime(adminInfo.LastLoginTime),
+			"avatar":          util.DefaultUrl(adminInfo.Avatar, h.config.App.DefaultAvatar),
+			"last_login_time": util.FormatFromUnixTime(adminInfo.LastLoginTime),
 			"super":           h.authM.IsSuperAdmin(info.Id),
 		},
 		"menus":        menus,
@@ -74,7 +74,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		"siteConfig": map[string]any{
 			"siteName":         basicConfig["site_name"],
 			"version":          basicConfig["version"],
-			"cdnUrl":           utils.FullUrl("", h.config.App.CdnUrl, utils.GetBaseURL(ctx), ""),
+			"cdnUrl":           util.FullUrl("", h.config.App.CdnUrl, util.GetBaseURL(ctx), ""),
 			"apiUrl":           h.config.App.ApiUrl,
 			"upload":           uploadConfig,
 			"cdnUrlParams":     h.config.App.CdnUrlParams,
@@ -118,7 +118,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodPost {
 		// 进入登录流即设审计标题：成功与失败都会记录为明确的登录事件，
 		// 失败不再退化为 Unknown(login)。
-		ctx.Set("log_title", utils.Lang(ctx, "login", nil))
+		ctx.Set("log_title", util.Lang(ctx, "login", nil))
 
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
