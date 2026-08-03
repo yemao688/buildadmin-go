@@ -115,8 +115,19 @@ go run ./cmd/server setup --yes \
 
 - 数据库不存在时 setup 会询问是否创建（`--yes` 下直接创建）；
 - `--skip-frontend` 跳过前端构建（要求 `public/index.html` 已存在，适合 `make frontend` 已执行的环境）；省略则自动构建前端，Node/npm/包管理器缺失时会打印对应安装命令；
-- 显式 `--conf` 路径会作为本次 setup 的配置文件路径；
-- 容器内执行同一命令：`docker compose run --rm buildadmin-go setup [同上参数]`。
+- 显式 `--conf` 路径会作为本次 setup 的配置文件路径。
+
+**安装命令速查**（宿主机 / 容器内，参数见上）：
+
+| 场景 | 命令 |
+|---|---|
+| 宿主机·交互式 | `make setup`（等价 `go run ./cmd/server setup`） |
+| 宿主机·无人值守 | `make setup ARGS="--yes --db-host ... --db-name ... --db-user ... --db-password ... --admin-password ..."` |
+| 宿主机·前端已构建 | 上面的 ARGS 追加 `--skip-frontend`（跳过构建，适合先跑过 `make frontend`） |
+| 宿主机·先构建前端 | `make frontend` 后执行上一条 |
+| 容器内·无人值守 | `make setup-docker ARGS="--yes --db-host mysql --db-name buildadmin_go --db-user ... --db-password ... --admin-password ... --skip-frontend"`（本地开发镜像，`--build` 自动以当前源码构建） |
+| 容器内·生产镜像 | `docker compose run --rm buildadmin-go setup --yes --skip-frontend ...`（compose 启动前）或裸 `docker run --rm --network <mysql所在网络> -v ./configs:/app/configs -v ./runtime:/app/runtime -v ./public:/app/public <镜像> setup --yes ...` |
+| 容器内·前端 | 镜像无 Node 工具链：先在宿主机 `make frontend`（产物进 `public/`），再以 `--skip-frontend` 安装；容器内 `up` 未安装会打印本指引并退出 |
 
 **AI 协助安装：** 用户让 AI 帮忙安装时，AI 必须先向用户问询并收齐以下信息再开始执行，不要自行假设或先写配置：
 

@@ -15,7 +15,7 @@ BUILD_TS ?= $(shell date -u +%Y%m%dT%H%M%SZ)
 FULL_TAG := $(VERSION)-$(GIT_SHA)-$(BUILD_TS)
 IMAGE := $(DEPLOY_REGISTRY)/$(DEPLOY_IMAGE_NAME)
 
-.PHONY: frontend login builder build push version run logs ps stop clean
+.PHONY: frontend login builder build push version run setup setup-docker run-docker run-docker-dev logs ps stop clean
 
 # pnpm-lock.yaml 被 gitignore，发布机本地生成；存在且新于 node_modules 时才重装
 frontend:
@@ -49,8 +49,8 @@ login:
 	@echo "$$DEPLOY_REGISTRY_PASSWORD" | docker login -u "$$DEPLOY_REGISTRY_USER" --password-stdin $(DEPLOY_REGISTRY)
 
 build:
-	docker buildx use multi-builder 2>/dev/null || \
-		docker buildx create --use --name multi-builder --driver docker-container
+	docker buildx use buildadmin-builder 2>/dev/null || \
+		docker buildx create --use --name buildadmin-builder --driver docker-container
 	docker buildx build \
 		--platform $(DEPLOY_PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
@@ -63,8 +63,8 @@ build:
 		.
 
 push: login
-	docker buildx use multi-builder 2>/dev/null || \
-		docker buildx create --use --name multi-builder --driver docker-container
+	docker buildx use buildadmin-builder 2>/dev/null || \
+		docker buildx create --use --name buildadmin-builder --driver docker-container
 	docker buildx build \
 		--platform $(DEPLOY_PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
@@ -87,6 +87,20 @@ push: login
 # 本地前台运行 Go 服务。
 run:
 	go run .
+
+# 宿主机安装（交互式）。Web 安装向导已移除，安装统一走 setup CLI。
+# 无人值守: make setup ARGS="--yes --db-host ... --db-name ... --db-user ... --db-password ... --admin-password ..."
+# 跳过前端构建: 追加 --skip-frontend（要求 public/index.html 已存在；前端构建依赖缺失时会提示手动 make frontend）
+setup:
+	go run ./cmd/server setup $(ARGS)
+
+# 容器内安装（本地开发镜像，--build 保证以当前源码构建）。
+# 用法: make setup-docker ARGS="--yes --db-host mysql --db-port 3306 --db-name buildadmin_go \
+#       --db-user buildadmin_go --db-password '密码' --db-prefix ba_ \
+#       --admin-name admin --admin-password '密码' --site-name '站点名' --skip-frontend"
+# 容器镜像无 Node 工具链，前端请先在宿主机 make frontend 再以 --skip-frontend 安装。
+setup-docker:
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm --build buildadmin-go setup $(ARGS)
 
 # 使用基础 Compose 配置后台启动容器(使用 .env 中的部署镜像配置)。
 run-docker:
@@ -116,4 +130,4 @@ version:
 
 clean:
 	docker rmi -f $(IMAGE):$(FULL_TAG) $(IMAGE):$(VERSION) $(IMAGE):latest 2>/dev/null || true
-	docker buildx rm multi-builder 2>/dev/null || true
+	docker buildx rm buildadmin-builder 2>/dev/null || true

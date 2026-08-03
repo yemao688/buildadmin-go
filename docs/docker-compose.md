@@ -18,8 +18,8 @@
 
 `./configs` 以**可写目录**挂载为 `/app/configs`，安装完成判定以 `public/install.lock` 为准（`./public` 同样挂载持久化，锁跨容器重建不丢失）。安装统一用 `setup` CLI（Web 向导已移除），二选一：
 
-1. **宿主机 CLI**：`go run ./cmd/server setup --yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password ... --admin-password ...`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端）。
-2. **容器内安装**：`docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go setup --yes --skip-frontend --db-host ... ...`。安装器写出的 `configs/config.yaml` 经目录挂载持久化到宿主机。
+1. **宿主机 CLI**：`make setup ARGS="--yes --skip-frontend --db-host ... --db-port ... --db-name ... --db-user ... --db-password ... --admin-password ..."`（`--skip-frontend` 要求 `public/index.html` 已存在；省略则自动构建前端。等价裸命令 `go run ./cmd/server setup ...`）。
+2. **容器内安装**：`make setup-docker ARGS="--yes --skip-frontend --db-host mysql ..."`（本地开发镜像自动构建），或对已推送镜像 `docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go setup --yes --skip-frontend --db-host mysql ...`。安装器写出的 `configs/config.yaml` 经目录挂载持久化到宿主机。
 
 未安装（无锁）时直接 `docker compose up` 启动应用：进程会打印 setup 安装指引并等待 3 秒后退出（`restart: unless-stopped` 下会循环打印），请先执行上面的 setup 再启动。
 
