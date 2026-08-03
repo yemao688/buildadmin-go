@@ -218,7 +218,7 @@ fields:
     form:
       remoteTable: user
       remotePk: id
-      remoteField: nickname_text
+      remoteField: username_text
       relationFields: username
   - name: admin_id
     type: bigint
@@ -273,7 +273,7 @@ fields:
     form:
       remoteTable: user
       remotePk: id
-      remoteField: nickname_text
+      remoteField: username_text
       relationFields: username
 `)
 	opts, err := LoadSpec(path)

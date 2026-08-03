@@ -34,7 +34,7 @@
                         :placeholder="t('Click select')"
                         :input-attr="{
                             pk: 'user.id',
-                            field: 'nickname_text',
+                            field: 'username_text',
                             remoteUrl: '/admin/user.User/index',
                             onChange: getAdd,
                         }"

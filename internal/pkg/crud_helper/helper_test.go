@@ -631,7 +631,7 @@ fields:
     form:
       remoteTable: user
       remotePk: id
-      remoteField: nickname_text
+      remoteField: username_text
       relationFields: username
 `)
 	opts, err := LoadSpec(path)
@@ -739,7 +739,7 @@ func multiRelationTestColumns() []model.Column {
 func relationTestField(designType, relationFields string) crudmodel.Field {
 	return crudmodel.Field{
 		Name: "user_id", Type: "varchar", DataType: "varchar(255)", DesignType: designType,
-		Form: crudmodel.FormAttr{RemoteTable: "user", RemotePk: "id", RemoteField: "nickname_text", RelationFields: relationFields},
+		Form: crudmodel.FormAttr{RemoteTable: "user", RemotePk: "id", RemoteField: "username_text", RelationFields: relationFields},
 	}
 }
 

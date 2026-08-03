@@ -262,7 +262,7 @@ func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	for _, v := range result {
 		list = append(list, map[string]any{
 			"id":            v.ID,
-			"nickname_text": v.Username + "(ID:+" + strconv.Itoa(int(v.ID)) + ")",
+			"username_text": v.Username + "(ID:+" + strconv.Itoa(int(v.ID)) + ")",
 		})
 	}
 
