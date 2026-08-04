@@ -175,10 +175,16 @@ func (h *IndexHandler) Logout(ctx *gin.Context) {
 		return
 	}
 
-	err := h.authSvc.Logout(params.RefreshToken, header.GetAdminAuth(ctx).Token)
+	err := h.authSvc.Logout(params.RefreshToken, ctx.Request.Header.Get("batoken"))
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
 	response.Success(ctx, "")
 }
+
+// NoNeedLoginActions 声明无需登录的 action，对齐 PHP $noNeedLogin。
+func (h *IndexHandler) NoNeedLoginActions() []string      { return []string{"login", "logout"} }
+
+// NoNeedPermissionActions 声明需登录但免权限的 action，对齐 PHP $noNeedPermission。
+func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"index"} }

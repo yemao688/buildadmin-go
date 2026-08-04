@@ -58,3 +58,6 @@ func (h *ModuleHandler) Upload(ctx *gin.Context) {
 
 	response.Success(ctx, "")
 }
+
+// NoNeedPermissionActions 声明需登录但免权限的 action。
+func (h *ModuleHandler) NoNeedPermissionActions() []string { return []string{"state", "dependentinstallcomplete"} }

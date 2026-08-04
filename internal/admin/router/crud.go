@@ -20,7 +20,7 @@ func NewCrudRegistrar(handler *handler.CrudHandler) *CrudRegistrar {
 func (r *CrudRegistrar) Group() string { return "admin" }
 
 func (r *CrudRegistrar) Register(g gin.IRoutes) {
-	adminmiddleware.RegisterPermissionExempt("crud/crud", "logstart", "getfiledata", "parsefielddata", "generatecheck", "uploadcompleted", "checkcrudlog", "databaselist")
+	adminmiddleware.RegisterHandlerExemptions("crud/crud", r.handler)
 	g.GET("crud.Crud/databaseList", r.handler.DatabaseList)
 	g.GET("crud.Crud/checkCrudLog", r.handler.CheckCrudLog)
 	g.POST("crud.Crud/parseFieldData", r.handler.ParseFieldData)

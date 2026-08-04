@@ -22,7 +22,7 @@ const logRoute = "crud.Log"
 func (r *LogRegistrar) Group() string { return "admin" }
 
 func (r *LogRegistrar) Register(g gin.IRoutes) {
-	adminmiddleware.RegisterPermissionExempt("crud/log", "index")
+	adminmiddleware.RegisterHandlerExemptions("crud/log", r.handler)
 	g.GET(logRoute+"/index", r.handler.Index)
 }
 

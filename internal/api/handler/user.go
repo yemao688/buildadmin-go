@@ -5,7 +5,6 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
@@ -117,7 +116,7 @@ func (h *UserHandler) Logout(ctx *gin.Context) {
 		response.FailByErr(ctx, err)
 		return
 	}
-	if err := h.authM.Logout(params.RefreshToken, header.GetUserAuth(ctx).Token); err != nil {
+	if err := h.authM.Logout(params.RefreshToken, ctx.Request.Header.Get("ba-user-token")); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}

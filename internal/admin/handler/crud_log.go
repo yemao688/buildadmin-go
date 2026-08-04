@@ -47,3 +47,6 @@ func (h *LogHandler) Index(ctx *gin.Context) {
 		"remark": "",
 	})
 }
+
+// NoNeedPermissionActions 声明需登录但免权限的 action。
+func (h *LogHandler) NoNeedPermissionActions() []string { return []string{"index"} }

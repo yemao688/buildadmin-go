@@ -55,25 +55,27 @@ func (r *AdminRouter) RecordHandler() gin.HandlerFunc {
 // Register 挂载全部后台路由与原子写能力。模块注册器由 deps.Registrars
 // 提供（ProvideRegistrars 聚合，wire 注入）。
 func (r *AdminRouter) Register(engine *gin.Engine) {
-	// 豁免清单：登录、ajax 与 alioss 回调不要求后台登录/权限。
-	adminMiddleware.RegisterPermissionExempt("index", "index", "logout")
-	adminMiddleware.RegisterPermissionExempt("ajax", "*")
+	// 声明式豁免：从 handler 的 NoNeedLoginer/NoNeedPermissioner 接口收集
+	// （语义对齐 PHP 控制器的 $noNeedLogin/$noNeedPermission 属性）。
+	// alioss/callback 挂在 AjaxHandler 上但豁免面不同，显式登记。
+	adminMiddleware.RegisterHandlerExemptions("index", r.deps.IndexHandler)
+	adminMiddleware.RegisterHandlerExemptions("ajax", r.deps.AjaxHandler)
 	adminMiddleware.RegisterPermissionExempt("alioss", "callback")
 
-	// 未受保护的后台入口（只经过全局中间件，不进入 Login/Authorization/Security）。
-	engine.GET("/admin/Index/login", r.deps.IndexHandler.Login)
-	engine.POST("/admin/Index/login", r.deps.IndexHandler.Login)
-	engine.GET("/admin/ajax/buildSuffixSvg", r.deps.AjaxHandler.BuildSuffixSvg)
-	engine.GET("/admin/ajax/terminal", r.deps.AjaxHandler.Terminal)
-	engine.POST("/admin/Index/logout", r.deps.IndexHandler.Logout)
-
-	// 受保护的后台分组。
+	// 后台全部路由进入保护组（Login → Authorization → Security 链）；
+	// 免登录 action 由中间件按 noNeedLogin 注册表逐 action 放行，不再
+	// 有组外路由。
 	adminRouter := engine.Group("/admin/").Use(
 		r.deps.LoginM.Handler(),
 		r.deps.AuthorizationM.Handler(),
 		r.deps.SecurityM.Handler(),
 	)
 	adminRouter.GET("Index/index", r.deps.IndexHandler.Index)
+	adminRouter.GET("Index/login", r.deps.IndexHandler.Login)
+	adminRouter.POST("Index/login", r.deps.IndexHandler.Login)
+	adminRouter.POST("Index/logout", r.deps.IndexHandler.Logout)
+	adminRouter.GET("ajax/buildSuffixSvg", r.deps.AjaxHandler.BuildSuffixSvg)
+	adminRouter.GET("ajax/terminal", r.deps.AjaxHandler.Terminal)
 
 	adminRouter.GET("ajax/area", r.deps.AjaxHandler.Area)
 	adminRouter.POST("ajax/upload", r.deps.AjaxHandler.Upload)

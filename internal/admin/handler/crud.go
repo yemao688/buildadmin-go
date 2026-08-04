@@ -383,3 +383,8 @@ func IsExcludedControllerFile(name string) bool {
 	}
 	return false
 }
+
+// NoNeedPermissionActions 声明需登录但免权限的 action。
+func (h *CrudHandler) NoNeedPermissionActions() []string {
+	return []string{"logstart", "getfiledata", "parsefielddata", "generatecheck", "uploadcompleted", "checkcrudlog", "databaselist"}
+}

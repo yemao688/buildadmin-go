@@ -154,6 +154,14 @@ func (h *AjaxHandler) Terminal(ctx *gin.Context) {
 	response.Success(ctx, "")
 }
 
+// NoNeedLoginActions 声明无需登录的 action，对齐 PHP $noNeedLogin。
+// buildSuffixSvg 在 Go 必须免登录：附件缩略图经 <img> 标签加载，无法携带
+// batoken 请求头（PHP 用 cookie 所以可以在登录态下访问）。
+func (h *AjaxHandler) NoNeedLoginActions() []string { return []string{"buildSuffixSvg", "terminal"} }
+
+// NoNeedPermissionActions 声明需登录但免权限的 action，对齐 PHP $noNeedPermission。
+func (h *AjaxHandler) NoNeedPermissionActions() []string { return []string{"*"} }
+
 func maskDatabase(db string) string {
 	if len(db) <= 2 {
 		return db

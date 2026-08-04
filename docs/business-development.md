@@ -81,6 +81,57 @@
 - 错误链：repo 领域错误 → service 上抛/`cErr.*` → handler `FailByErr`
   （`cErr.Error` → HTTP 200+业务码；plain error → HTTP 400+DefaultError）。
 
+### 4.1 handler 目录只放控制器（文件名 = 路由前缀）
+
+- `internal/admin/handler` / `internal/api/handler` 下的每个文件对应一个
+  路由前缀（`user.go` ↔ `/admin|api/user/*`）；`XxxHandler` 类型名带模块
+  前缀保证单包内唯一。
+- 非控制器文件一律移出 handler 包：
+  - 响应封装（`Success`/`FailByErr`/`JsonReturn`/`CommitResponse`/
+    `RollbackResponse`/`Fail`/`FailByErrWithData`）→ `internal/pkg/response`
+    （admin/api 共用一份，禁止各自复制）；
+  - DTO（如 `IDS`）→ `internal/admin/dto`；
+  - 路由工具（`CRUDRoutes`/`CollectRoutes`）→ `internal/admin/router` 或
+    `internal/pkg/route`；
+  - 领域注册表/工具（refresh registry、`normalizeControllerAs`、
+    `invalidateAfterMutation`）→ 各自所属的 `internal/pkg/*` 包；
+  - wire `provider.go` 是唯一例外，必须留在包内（Go wire 惯例）。
+
+### 4.2 豁免声明：在 handler 内声明 noNeedLogin / noNeedPermission
+
+对齐 PHP 控制器的 `$noNeedLogin` / `$noNeedPermission` 属性，豁免声明
+跟随 handler 代码，无需集中注册表：
+
+```go
+// 接口定义在 internal/middleware（admin/api 共享契约）
+type NoNeedLoginer interface { NoNeedLoginActions() []string }       // 免登录
+type NoNeedPermissioner interface { NoNeedPermissionActions() []string } // 需登录免权限
+
+// handler 内声明（示例，IndexHandler）
+func (h *IndexHandler) NoNeedLoginActions() []string      { return []string{"login", "logout"} }
+func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"index"} }
+```
+
+- 路由注册器收集：`adminMiddleware.RegisterHandlerExemptions("index", r.deps.IndexHandler)`
+  对 handler 做类型断言，实现哪个接口就登记哪个；controller 名显式传入
+  （`alioss/callback` 挂在 AjaxHandler 上时豁免面不同，用
+  `RegisterPermissionExempt` 显式登记）。
+- 语义（与 PHP 一致）：
+  - `NoNeedLoginActions` 命中 → Login/Authorization/Security 中间件全部
+    跳过（隐式免权限），handler 自行处理无登录态（读请求头 token 而非
+    `header.GetAdminAuth/GetUserAuth`）；
+  - `NoNeedPermissionActions` 命中 → 仍需登录，跳过 admin_rule 校验；
+  - 支持 `"*"` 通配整个 controller。
+- api 渠道无权限模型（`Authorization` 只覆盖 `/admin/*`），只实现
+  `NoNeedLoginer`；api 公共端点也可直接登记在 `apiRouteSet.public` 集合
+  （按 method+path 逐条，本身就是 per-action）。
+- `RegisterPermissionExempt` / `RegisterNoNeedLogin` 是低层原语，保留给
+  跨 handler 或特殊场景（如 alioss 挂在 AjaxHandler 上）；新模块优先用
+  接口声明。
+- 常见误区：Go 用 header token 而 PHP 用 cookie，`buildSuffixSvg` 这类被
+  `<img>` 标签直接引用的端点必须免登录（`NoNeedLoginActions`），否则图片
+  无法携带 token 加载。
+
 ## 5. money 流（会员余额）
 
 - 唯一入口：`common/money.UserBalanceService.ApplyDelta(tx, ApplyInput)`

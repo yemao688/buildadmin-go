@@ -57,13 +57,25 @@ func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 		action     string
 	}{
 		{"index", "index"},
-		{"index", "logout"},
 		{"ajax", "area"},
 		{"ajax", "upload"},
 		{"alioss", "callback"},
 	} {
 		require.True(t, adminMiddleware.IsPermissionExempt(exemption.controller, exemption.action),
 			"%s/%s should be permission exempt", exemption.controller, exemption.action)
+	}
+
+	for _, noLogin := range []struct {
+		controller string
+		action     string
+	}{
+		{"index", "login"},
+		{"index", "logout"},
+		{"ajax", "buildSuffixSvg"},
+		{"ajax", "terminal"},
+	} {
+		require.True(t, adminMiddleware.IsNoNeedLogin(noLogin.controller, noLogin.action),
+			"%s/%s should be login exempt", noLogin.controller, noLogin.action)
 	}
 }
 

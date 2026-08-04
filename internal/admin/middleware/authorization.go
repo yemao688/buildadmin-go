@@ -50,6 +50,10 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 
 		auth := header.GetAdminAuth(c)
 		ruleName := route + "/" + action
+		// 免登录 action 隐式免权限（PHP noNeedLogin 跳过整个鉴权块）。
+		if IsNoNeedLogin(route, action) {
+			return
+		}
 		if PermissionExempt(route, action) {
 			return
 		}

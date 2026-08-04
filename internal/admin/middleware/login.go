@@ -30,6 +30,13 @@ func NewLogin(config *conf.Configuration, tokenHelper *token.TokenHelper, authM 
 
 func (m *Login) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 免登录 action（NoNeedLoginer 声明）：跳过整个登录校验，不注入
+		// auth/actor，由 handler 自行处理无登录态。语义对齐 PHP noNeedLogin。
+		if route, action, ok := middlewarecore.NormalizeRouteAction(c.FullPath()); ok && IsNoNeedLogin(route, action) {
+			c.Next()
+			return
+		}
+
 		tokenStr := c.Request.Header.Get("batoken")
 		if tokenStr == "" {
 			msg := util.Lang(c, "missing Authorization header", nil)

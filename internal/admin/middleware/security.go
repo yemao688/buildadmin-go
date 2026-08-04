@@ -68,6 +68,12 @@ func (m *Security) hasSecurityRule(c *gin.Context, route string) (bool, error) {
 // GORM commits successfully.
 func (m *Security) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// 免登录 action 跳过安全审计（PHP noNeedLogin 跳过整个鉴权块，
+		// 含安全审计；且此类路由无 actor，审计无法执行）。
+		if route, action, ok := middlewarecore.NormalizeRouteAction(c.FullPath()); ok && IsNoNeedLogin(route, action) {
+			c.Next()
+			return
+		}
 		if c.Request.Method != http.MethodPost && c.Request.Method != http.MethodDelete {
 			m.workHandler()(c)
 			return
