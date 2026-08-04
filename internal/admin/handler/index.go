@@ -131,7 +131,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			return
 		}
 
-		result, err := h.authSvc.Login(params.Username, params.Password, params.Keep, params.CaptchaId, params.CaptchaInfo, ctx.ClientIP())
+		result, err := h.authSvc.Login(params.Username, params.Password, params.Keep, params.CaptchaId, params.CaptchaInfo, util.GetClientIP(ctx))
 		if err != nil {
 			FailByErr(ctx, err)
 			return

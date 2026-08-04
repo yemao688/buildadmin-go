@@ -60,7 +60,7 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			Id:       tokenData.UserID,
 			Token:    tokenStr,
 		}
-		if err := m.authM.ValidateUserToken(tokenData.UserID, c.ClientIP()); err != nil {
+		if err := m.authM.ValidateUserToken(tokenData.UserID, util.GetClientIP(c)); err != nil {
 			core.AbortLogin(c, err)
 			return
 		}

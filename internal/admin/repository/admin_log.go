@@ -6,6 +6,7 @@ import (
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/persistence"
+	"buildadmin-go/internal/pkg/util"
 	"regexp"
 	"strings"
 
@@ -180,7 +181,7 @@ func (s *AdminLogRepository) Add(ctx *gin.Context, params map[string]interface{}
 		URL:       truncateAdminLogUTF8(url, 1500),
 		Title:     title,
 		Data:      string(data),
-		IP:        ctx.ClientIP(),
+		IP:        util.GetClientIP(ctx),
 		Useragent: truncateAdminLogUTF8(ctx.Request.UserAgent(), 255),
 	}
 	if err := s.DBFor(ctx).Create(&adminLog).Error; err != nil {

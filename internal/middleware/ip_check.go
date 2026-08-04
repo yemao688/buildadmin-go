@@ -12,7 +12,7 @@ import (
 
 func IpCheck() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		clientIP := c.ClientIP()
+		clientIP := util.GetClientIP(c)
 		store := persistence.NewInMemoryStore(time.Minute)
 
 		var noAccessIp string

@@ -2,16 +2,24 @@ package util
 
 import (
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
+// GetBaseURL 返回请求的协议 + 主机。
+// 协议判断不能只看 Request.TLS：Cloudflare/nginx 等反向代理做 TLS 终止时，
+// 后端收到的可能是纯 http，误判会让生成的资源 URL 变成 http://。
+// 因此按 X-Forwarded-Proto（多级代理逗号分隔取第一跳）→ X-Forwarded-Ssl
+// → TLS 直连 的顺序判定。
 func GetBaseURL(ctx *gin.Context) string {
-	var protocol string
-	if ctx.Request.TLS != nil {
-		protocol = "HTTPS"
-	} else {
-		protocol = "HTTP"
+	protocol := "http"
+	if proto := ctx.GetHeader("X-Forwarded-Proto"); proto != "" {
+		protocol = strings.ToLower(strings.TrimSpace(strings.Split(proto, ",")[0]))
+	} else if ctx.GetHeader("X-Forwarded-Ssl") == "on" {
+		protocol = "https"
+	} else if ctx.Request.TLS != nil {
+		protocol = "https"
 	}
 	host := ctx.Request.Host
 	baseURL := protocol + "://" + host

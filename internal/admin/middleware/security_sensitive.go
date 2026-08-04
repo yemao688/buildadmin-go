@@ -12,6 +12,7 @@ import (
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -188,7 +189,7 @@ func (a *sensitiveAuditor) changedFieldLogs(dataFields map[string]string, before
 				SensitiveID: a.rule.ID, DataTable: a.rule.DataTable, PrimaryKey: a.rule.PrimaryKey,
 				DataField: field, DataComment: comment, IDValue: idValue,
 				Before: normalizeAuditValue(beforeV), After: normalizeAuditValue(afterV),
-				IP: w.context.ClientIP(), Useragent: w.context.Request.Header.Get("User-Agent"),
+				IP: util.GetClientIP(w.context), Useragent: w.context.Request.Header.Get("User-Agent"),
 			})
 		}
 	}

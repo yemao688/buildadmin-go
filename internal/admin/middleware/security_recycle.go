@@ -9,6 +9,7 @@ import (
 	adminmodel "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -151,7 +152,7 @@ func (a *recycleAuditor) snapshotRows(rows []map[string]any) ([]model.SecurityDa
 			Data:       string(data),
 			DataTable:  a.rule.DataTable,
 			PrimaryKey: a.rule.PrimaryKey,
-			IP:         w.context.ClientIP(),
+			IP:         util.GetClientIP(w.context),
 			Useragent:  w.context.Request.Header.Get("User-Agent"),
 		})
 	}
