@@ -24,6 +24,7 @@ func newAPIRouteSet(root gin.IRoutes, authenticated gin.IRoutes) gin.IRoutes {
 		public: map[string]struct{}{
 			http.MethodPost + " user/login":               {},
 			http.MethodPost + " user/register":            {},
+			http.MethodPost + " user/logout":              {},
 			http.MethodGet + " common/captcha":            {},
 			http.MethodGet + " common/clickCaptcha":       {},
 			http.MethodPost + " common/checkClickCaptcha": {},

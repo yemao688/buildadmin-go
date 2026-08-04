@@ -65,6 +65,7 @@ func (r *AdminRouter) Register(engine *gin.Engine) {
 	engine.POST("/admin/Index/login", r.deps.IndexHandler.Login)
 	engine.GET("/admin/ajax/buildSuffixSvg", r.deps.AjaxHandler.BuildSuffixSvg)
 	engine.GET("/admin/ajax/terminal", r.deps.AjaxHandler.Terminal)
+	engine.POST("/admin/Index/logout", r.deps.IndexHandler.Logout)
 
 	// 受保护的后台分组。
 	adminRouter := engine.Group("/admin/").Use(
@@ -73,7 +74,6 @@ func (r *AdminRouter) Register(engine *gin.Engine) {
 		r.deps.SecurityM.Handler(),
 	)
 	adminRouter.GET("Index/index", r.deps.IndexHandler.Index)
-	adminRouter.POST("Index/logout", r.deps.IndexHandler.Logout)
 
 	adminRouter.GET("ajax/area", r.deps.AjaxHandler.Area)
 	adminRouter.POST("ajax/upload", r.deps.AjaxHandler.Upload)

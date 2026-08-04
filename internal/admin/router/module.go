@@ -22,7 +22,7 @@ const moduleRoute = "module"
 func (r *ModuleRegistrar) Group() string { return "admin" }
 
 func (r *ModuleRegistrar) Register(g gin.IRoutes) {
-	adminmiddleware.RegisterPermissionExempt("module", "index", "state", "dependentinstallcomplete")
+	adminmiddleware.RegisterPermissionExempt("module", "state", "dependentinstallcomplete")
 	g.GET(moduleRoute+"/index", r.handler.Index)
 }
 
