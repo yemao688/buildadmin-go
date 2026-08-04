@@ -64,6 +64,9 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 			if err := pinned.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...); err != nil {
 				return fmt.Errorf("database fresh snapshot: %w", err)
 			}
+			if err := core.ApplyTableComments(pinned, config.Database.Prefix); err != nil {
+				return fmt.Errorf("core table comments: %w", err)
+			}
 		}
 		if err := BootstrapOfficialLedger(pinned, config); err != nil {
 			return fmt.Errorf("official ledger bootstrap: %w", err)
