@@ -373,10 +373,9 @@ func IsExcludedControllerFile(name string) bool {
 	switch name {
 	case "provider.go", "base.go", "common.go", "response.go", "route.go",
 		"ajax.go", "dashboard.go", "index.go", "module.go",
-		"crud.go", "crud_log.go", "auth_invalidation.go",
+		"crud.go", "crud_log.go",
 		"routine_admin_info.go", "routine_attachment.go", "routine_config.go",
-		"security_controller_as.go", "security_data_recycle.go",
-		"security_data_recycle_log.go", "security_sensitive_data.go",
+		"security_data_recycle.go", "security_data_recycle_log.go", "security_sensitive_data.go",
 		"security_sensitive_data_log.go", "admin.go", "admin_group.go",
 		"admin_log.go", "admin_rule.go", "user.go", "user_money_log.go":
 		return true

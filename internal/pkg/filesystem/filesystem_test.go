@@ -1,51 +1,6 @@
 package filesystem
 
-import (
-	"buildadmin-go/internal/pkg/util"
-	"fmt"
-	"path/filepath"
-	"testing"
-)
-
-func TestDirIsEmpty(t *testing.T) {
-	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
-	fmt.Println(DirIsEmpty(dirPath))
-}
-
-func TestDelDir(t *testing.T) {
-	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
-	fmt.Println(DelDir(dirPath))
-}
-
-func TestDelEmptyDir(t *testing.T) {
-	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
-	fmt.Println(DelEmptyDir(dirPath))
-}
-
-func TestUnzip(t *testing.T) {
-	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/Desktop.zip")
-	dest := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test")
-	fmt.Println(Unzip(dirPath, dest))
-}
-
-func TestZip(t *testing.T) {
-	files := []string{"internal/pkg/filesystem/test/ff.txt"}
-	zipfile := "internal/pkg/filesystem/test/ff.zip"
-	err := Zip(files, zipfile, "internal/pkg/filesystem/")
-	fmt.Println(err)
-}
-
-func TestMkdir(t *testing.T) {
-	dirPath := filepath.Join(util.RootPath(), "internal/pkg/filesystem/test/aa/bb")
-	Mkdir(dirPath)
-}
-
-func TestGetDirFiles(t *testing.T) {
-	dirPath := util.RootPath()
-	suffixArr := []string{".sum"}
-	result := GetDirFiles(dirPath, suffixArr)
-	fmt.Println(result)
-}
+import "testing"
 
 func TestFileUnitToByte(t *testing.T) {
 	list := []struct {

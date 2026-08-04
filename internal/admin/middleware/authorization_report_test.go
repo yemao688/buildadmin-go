@@ -37,7 +37,13 @@ func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T)
 }
 
 func TestCollectUnprotectedRoutesReportsIndexIndexWhenNotExempt(t *testing.T) {
+	wasExempt := IsPermissionExempt("index", "index")
 	UnregisterPermissionExempt("index", "index")
+	t.Cleanup(func() {
+		if wasExempt {
+			RegisterPermissionExempt("index", "index")
+		}
+	})
 
 	routes := gin.RoutesInfo{{Method: "GET", Path: "/admin/Index/index"}}
 	missing, unparseable := collectUnprotectedRoutes(routes, map[string]struct{}{})

@@ -4,9 +4,6 @@ import (
 	model "buildadmin-go/internal/admin/repository"
 	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
-	"buildadmin-go/internal/pkg/testutil"
-	"encoding/json"
-	"fmt"
 	"go/format"
 	"go/parser"
 	"go/token"
@@ -27,9 +24,9 @@ func TestGetPk(t *testing.T) {
 	assert.Equal(t, tablePk, "id", "主键是:"+tablePk)
 }
 
-func TestGetCommnet(t *testing.T) {
+func TestGetComment(t *testing.T) {
 	table := getTestTableData()
-	comment := getCommnet(table.Comment)
+	comment := getComment(table.Comment)
 
 	assert.Equal(t, comment, "测试管理", "备注:"+comment)
 }
@@ -53,57 +50,6 @@ func TestParseWebDirNameData(t *testing.T) {
 	require.Equal(t, "web/src/views/backend/country/languageContent", filepath.ToSlash(camelViews.Views))
 	require.Equal(t, "web/src/lang/backend/zh-cn/country/languageContent.ts", filepath.ToSlash(camelLang.LangFile("zh-cn")))
 	require.Equal(t, "country/languageContent", GetMenuName(camelViews))
-}
-
-func TestFieldsMap(t *testing.T) {
-	fields := getTestFieldData()
-
-	fieldsMap := map[string]string{}
-	for _, field := range fields {
-		fieldsMap[field.Name] = field.DesignType
-	}
-	content, _ := json.MarshalIndent(fieldsMap, "", "  ")
-	fmt.Println(string(content))
-}
-
-func TestAnalyseField(t *testing.T) {
-	fields := getTestFieldData()
-	for _, field := range fields {
-		field = analyseField(field)
-		content, _ := json.MarshalIndent(field, "", "  ")
-		fmt.Println(string(content))
-	}
-}
-
-func TestGetDictData(t *testing.T) {
-	table := getTestTableData()
-	fields := getTestFieldData()
-	langEnData := map[string]string{}
-	langZhData := map[string]string{}
-
-	quickSearchFieldZhCnTitle := []string{}
-
-	for _, field := range fields {
-		field = analyseField(field)
-
-		getDictData(&langEnData, field, "en", "")
-		getDictData(&langZhData, field, "zh-cn", "")
-
-		if slices.Contains(table.QuickSearchField, field.Name) {
-			if n, ok := langZhData[field.Name]; ok {
-				quickSearchFieldZhCnTitle = append(quickSearchFieldZhCnTitle, n)
-			} else {
-				quickSearchFieldZhCnTitle = append(quickSearchFieldZhCnTitle, field.Name)
-			}
-		}
-
-	}
-
-	en, _ := json.MarshalIndent(langEnData, "", "  ")
-	fmt.Println(string(en))
-	zh, _ := json.MarshalIndent(langZhData, "", "  ")
-	fmt.Println(string(zh))
-	fmt.Println(quickSearchFieldZhCnTitle)
 }
 
 func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
@@ -281,27 +227,6 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 	prepared, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, table.DataScope, getTableName, proveAll)
 	require.NoError(t, err)
 	require.Equal(t, "id", prepared.QuickSearchField)
-}
-
-func TestGetQuote(t *testing.T) {
-	data := "sort"
-	content := getQuote(data)
-	fmt.Println(content)
-}
-
-func TestBuildSimpleArray(t *testing.T) {
-	data := []string{"sort", "id", "book"}
-	content := buildSimpleArray(data)
-	fmt.Println(content)
-}
-
-func TestHandleTableDesign(t *testing.T) {
-	db, _ := testutil.OpenMySQL(t)
-	table := getTestTableData()
-	fields := getTestFieldData()
-	fullTableName := "ba_test1"
-
-	HandleTableDesign(db, fullTableName, table, fields)
 }
 
 func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {

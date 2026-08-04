@@ -34,7 +34,7 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	//主键
 	tablePk := getPk(fields)
 	//表注释
-	tableComment := getCommnet(table.Comment)
+	tableComment := getComment(table.Comment)
 	// 生成文件信息解析：拍平布局，实体/仓库/DTO/handler/registrar 文件恒为
 	// <root>/<table>.go。
 	entityFile, err := ParseEntityNameData(tableName, table.ModelFile)
@@ -533,7 +533,7 @@ func getPk(fields []crudmodel.Field) string {
 }
 
 // 获取表注释
-func getCommnet(comment string) string {
+func getComment(comment string) string {
 	tableComment := comment
 	if strings.HasSuffix(tableComment, "表") {
 		tableComment = strings.TrimRight(tableComment, "表") + "管理"

@@ -12,16 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAlter(t *testing.T) {
-	db, _ := testutil.OpenMySQL(t)
-	comment := "test表"
-	if err := db.Exec("ALTER TABLE `"+"ba_test5"+"` COMMENT = ?", comment).Error; err != nil {
-		fmt.Println(err)
-	} else {
-		fmt.Println("成功")
-	}
-}
-
 func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
 	nullable, err := getDDlFieldData(crudmodel.Field{Name: "nickname", Type: "varchar", Length: 64, Null: true})
 	require.NoError(t, err)

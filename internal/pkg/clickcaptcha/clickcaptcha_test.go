@@ -4,17 +4,12 @@ import (
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/util"
 	"encoding/json"
-	"fmt"
 	"math/rand"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang/freetype/truetype"
 	"github.com/magiconair/properties/assert"
-	"golang.org/x/image/font"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
@@ -37,46 +32,6 @@ func TestRandPosition(t *testing.T) {
 		assert.Equal(t, true, v.X >= 0 && v.X <= 350, "x 位置超出范围")
 		assert.Equal(t, true, v.Y >= 0 && v.Y <= 350, "y 位置超出范围")
 	}
-}
-
-func TestGetFontWidthAndHeight(t *testing.T) {	fontBytes, err := os.ReadFile(util.RootPath() + "/public/static/fonts/zhttfs/2.ttf")
-	if err != nil {
-		fmt.Println("加载字体失败")
-	}
-
-	f, err := truetype.Parse(fontBytes)
-	if err != nil {
-		fmt.Println("解析字体失败")
-	}
-
-	face := truetype.NewFace(f, &truetype.Options{
-		Size:    float64(26),
-		Hinting: font.HintingFull,
-	})
-	text := "字a"
-	bounds, _ := font.BoundString(face, text)
-	textWidth := bounds.Max.X.Ceil() - bounds.Min.X.Floor()
-	textHeight := bounds.Max.Y.Ceil() - bounds.Min.Y.Floor()
-	fmt.Printf("%v,%v \n", textWidth, textHeight)
-}
-
-func TestAlpha(t *testing.T) {
-	fmt.Println(127 - 36*float64(127)/100)
-
-	info := "15,10;350;200"
-	infoArr := strings.Split(info, ";")
-	fmt.Printf("%+v \n", infoArr)
-	xyArr := strings.Split(infoArr[0], "-")
-	fmt.Printf("%+v \n", xyArr)
-	w, _ := strconv.Atoi(infoArr[1])
-	h, _ := strconv.Atoi(infoArr[2])
-	fmt.Printf("x:%+v ,y:%+v \n", w, h)
-
-	fmt.Printf("len:%+v \n", len(xyArr))
-	xy := strings.Split(xyArr[0], ",")
-	x, _ := strconv.Atoi(xy[0])
-	y, _ := strconv.Atoi(xy[1])
-	fmt.Println(x, y)
 }
 
 func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {	t.Helper()
