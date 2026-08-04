@@ -357,7 +357,7 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 
 ### 会员 `user_id` 选择
 
-用户相关业务表不要把 `user_id` 留作普通数字字段。应显式声明为 `remoteSelect`，`remoteField` 必须匹配 source route 实际返回的 option label key（不是凭概念猜测的数据库列名）。本仓库内置会员选择接口 `/admin/user.User/index` 的 `select=true` 返回 `id` 和 `nickname_text`：
+用户相关业务表不要把 `user_id` 留作普通数字字段。应显式声明为 `remoteSelect`，`remoteField` 必须匹配 source route 实际返回的 option label key（不是凭概念猜测的数据库列名）。本仓库内置会员选择接口 `/admin/user.User/index` 的 `select=true` 返回 `id` 和 `username_text`：
 
 ```yaml
 - name: user_id
@@ -367,12 +367,14 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
   form:
     remoteTable: user
     remotePk: id
-    remoteField: nickname_text
+    remoteField: username_text
     relationFields: username
     remoteSourceConfigType: crud
     remoteController: internal/admin/handler/user.go
     remoteModel: internal/model/user.go
 ```
+
+**`xxx_text` 不是通用约定**：它只是该接口 handler 手动构造的展示键（`username + "(ID:+id)"`），并非生成器默认生成的拼接。当前仅 user 表的 select 构造了 `_text` 键，其它表的 select 接口返回真实字段名（如 `name`、`nickname`、`username`）。`remoteField` 必须等于目标接口实际返回的 label key——不确定时查看对应 handler 的 `Select` 方法，或直接请求 `?select=true` 观察响应，不要臆造 `xxx_text` 后缀。
 
 ### custom 来源
 
@@ -679,7 +681,7 @@ git pull && go run ./cmd/server --conf configs/config.yaml migrate
 ### 生成失败排查
 
 1. **恰好一个主键**：`fields` 必须有且只有一个 `primaryKey: true`。
-2. **relation 列真实性**：`relationFields` 每列必须存在于 `remoteTable` 的 introspected columns；`remoteController`/`remoteModel` 指向真实文件。
+2. **relation 列真实性**：`relationFields` 每列必须存在于 `remoteTable` 的 introspected columns；`remoteController`/`remoteModel` 指向真实文件。`remoteField` 必须等于目标 select 接口实际返回的 label key——`xxx_text` 不是默认拼接，只有对应 handler 手动构造了该键才存在（当前仅 user 表）。
 3. **quickSearch 不带点号**：`quickSearchField: [user.username]` 会被拒绝（JOIN 未实现）。
 4. **默认值配对**：`default: ""` 必须配 `defaultType: INPUT` 才表示 `DEFAULT ''`。
 5. **布尔语义**：`tinyint(1)` 的非规范值会被请求层拒绝；`char(1)` 不参与布尔兼容。
