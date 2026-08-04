@@ -59,6 +59,13 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 				errorsFound = append(errorsFound, err)
 			}
 		}
+		if field.Form.RemoteTable != "" && field.Form.RemoteField != "" &&
+			strings.HasSuffix(field.Form.RemoteField, "_text") && field.Form.RemoteTable != "user" {
+			warnings = append(warnings, ValidationWarning{
+				SpecPath: path,
+				Message:  fmt.Sprintf("field %q remoteField %q ends with _text, but only the user select endpoint builds a _text label key; verify the target select response (handler Select method or ?select=true) instead of assuming the suffix exists", field.Name, field.Form.RemoteField),
+			})
+		}
 	}
 
 	if metadata.RelativePathSet && hasNonSnakeEntitySegment(opts.Table.GenerateRelativePath) {

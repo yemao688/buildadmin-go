@@ -232,6 +232,54 @@ fields:
 	}
 }
 
+func TestValidateSpecWarnsOnInventedTextSuffix(t *testing.T) {
+	nonUser := writeSpecTest(t, `name: orders
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: owner_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: username_text
+      remoteController: internal/admin/handler/admin.go
+`)
+	warnings, err := ValidateSpec(nonUser)
+	if err != nil {
+		t.Fatalf("text-suffix spec rejected: %v", err)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "ends with _text") {
+		t.Fatalf("text-suffix warning = %+v", warnings)
+	}
+
+	userTable := writeSpecTest(t, `name: orders
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: user_id
+    type: bigint
+    designType: remoteSelect
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: username_text
+      remoteController: internal/admin/handler/user.go
+`)
+	warnings, err = ValidateSpec(userTable)
+	if err != nil {
+		t.Fatalf("user table text-suffix spec rejected: %v", err)
+	}
+	for _, w := range warnings {
+		if strings.Contains(w.Message, "ends with _text") {
+			t.Fatalf("user table should not warn on _text suffix: %+v", warnings)
+		}
+	}
+}
+
 func TestValidateSpecsAggregatesErrorsAndWarnings(t *testing.T) {
 	validPath := writeSpecTest(t, `name: aggregate_warning
 fields:
