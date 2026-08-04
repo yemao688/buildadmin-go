@@ -1,5 +1,4 @@
 import { defineStore } from 'pinia'
-import type { RouteRecordRaw } from 'vue-router'
 import type { SiteConfig } from '/@/stores/interface'
 
 export const useSiteConfig = defineStore('siteConfig', {
@@ -12,7 +11,6 @@ export const useSiteConfig = defineStore('siteConfig', {
             upload: {
                 mode: 'local',
             },
-            headNav: [],
             cdnUrlParams: '',
             initialize: false,
             userInitialize: false,
@@ -21,9 +19,6 @@ export const useSiteConfig = defineStore('siteConfig', {
     actions: {
         dataFill(state: SiteConfig) {
             this.$state = state
-        },
-        setHeadNav(headNav: RouteRecordRaw[]) {
-            this.headNav = headNav
         },
         setInitialize(initialize: boolean) {
             this.initialize = initialize

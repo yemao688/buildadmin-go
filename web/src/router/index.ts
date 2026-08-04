@@ -28,11 +28,12 @@ router.beforeEach(async (to) => {
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
-    const prefix = './backend/' + lang
+    // 门户语言目录：后台 → backend，其余（前台/业务门户）→ frontend
+    const prefix = (to.path.startsWith(adminBaseRoutePath) ? './backend/' : './frontend/') + lang
 
-    // 去除 path 中的 /admin
-    const adminPath = to.path.slice(to.path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
-    if (adminPath) loadPath.push(prefix + adminPath + '.ts')
+    // 去除 path 中的 /admin；前台/业务门户按自身 path 加载
+    const adminPath = to.path.startsWith(adminBaseRoutePath) ? to.path.slice(adminBaseRoutePath.length) : to.path
+    if (adminPath && adminPath !== '/') loadPath.push(prefix + adminPath + '.ts')
 
     // 根据路由 name 加载的语言包
     if (to.name) {
