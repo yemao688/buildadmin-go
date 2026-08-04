@@ -150,6 +150,12 @@ func apiRegistrars() []apiRouter.Registrar {
 
 // adminRegistrars 用桩 handler 构造 admin 渠道模块注册器集合，与
 // AdminRouter 实际注入的 ProvideRegistrars 保持同一顺序。
+//
+// 本列表只覆盖框架内置模块：CRUD 生成器维护 provider.go 的
+// ProvideRegistrars，但不会（也不需要）同步本列表——测试引擎由本
+// 列表构造，桩列表不更新测试依然通过。业务模块生成后不要往这里加
+// 桩，避免框架测试文件被业务改动污染；crud:generate 后无需运行或
+// 修改本测试。
 func adminRegistrars() []adminRouter.Registrar {
 	return adminRouter.ProvideRegistrars(
 		&admin.LogHandler{},
