@@ -102,7 +102,7 @@ git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 go run ./cmd/server setup
 ```
 
-交互收集数据库连接、管理员信息并执行迁移与初始化。
+交互收集数据库连接、管理员信息并执行迁移与初始化。setup 尾部会同步 `crud_specs/*.yaml` 声明的业务表结构与菜单（与 `migrate` 尾部语义一致，不依赖 `crud.apply_on_migrate` 配置；无 spec 目录时自动跳过），全新安装开箱即含业务表。
 
 **无人值守安装**（CI/容器首装）：配合全部 flags 一步完成：
 

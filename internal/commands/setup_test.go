@@ -4,6 +4,7 @@ import (
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/installer"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
@@ -221,7 +222,7 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var writes, migrationsRun, adminUpdates, locks int
+	var writes, migrationsRun, crudApplies, adminUpdates, locks int
 	var probeDatabase string
 	dbCalls := 0
 	deps := setupDependencies{
@@ -245,6 +246,10 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 				return migrations.Report{}, fmt.Errorf("unexpected database config: %#v", got.Database)
 			}
 			return migrations.Report{Official: 1, Seeded: true}, nil
+		},
+		runCrudApply: func(_ *gorm.DB, _ *conf.Configuration) ([]helper.ApplyTableResult, error) {
+			crudApplies++
+			return []helper.ApplyTableResult{{Action: helper.ApplyCreated, Table: "ops_banner"}}, nil
 		},
 		buildFrontend: func(string, io.Writer, *conf.Configuration) error { return nil },
 		updateAdminConfig: func(_ *gorm.DB, username, password, site string) error {
@@ -281,13 +286,13 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	if err := runner.run(&cobra.Command{}, options); err != nil {
 		t.Fatalf("run() error = %v", err)
 	}
-	if writes != 0 || migrationsRun != 1 || adminUpdates != 1 || locks != 1 {
-		t.Fatalf("calls = writes %d, migrations %d, admin updates %d, locks %d", writes, migrationsRun, adminUpdates, locks)
+	if writes != 0 || migrationsRun != 1 || crudApplies != 1 || adminUpdates != 1 || locks != 1 {
+		t.Fatalf("calls = writes %d, migrations %d, crud applies %d, admin updates %d, locks %d", writes, migrationsRun, crudApplies, adminUpdates, locks)
 	}
 	if dbCalls != 2 || probeDatabase != "" {
 		t.Fatalf("database opens = %d, first database = %q, want 2 opens with empty first database", dbCalls, probeDatabase)
 	}
-	if !strings.Contains(output.String(), "安装完成") {
+	if !strings.Contains(output.String(), "安装完成") || !strings.Contains(output.String(), "CRUD apply created") || !strings.Contains(output.String(), "ops_banner") {
 		t.Fatalf("completion output = %q", output.String())
 	}
 }

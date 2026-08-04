@@ -6,6 +6,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations"
 	model "buildadmin-go/internal/model"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/installer"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/terminal"
@@ -69,6 +70,7 @@ type setupDependencies struct {
 	writeCompletion   func(string) error
 	generateTokenKey  func() string
 	runMigrations     func(*gorm.DB, *conf.Configuration) (migrations.Report, error)
+	runCrudApply      func(*gorm.DB, *conf.Configuration) ([]helper.ApplyTableResult, error)
 	buildFrontend     func(string, io.Writer, *conf.Configuration) error
 	updateAdminConfig func(*gorm.DB, string, string, string) error
 }
@@ -83,9 +85,21 @@ func defaultSetupDependencies() setupDependencies {
 		writeCompletion:   installer.WriteCompletionLock,
 		generateTokenKey:  installer.GenerateTokenKey,
 		runMigrations:     migrations.Run,
+		runCrudApply:      setupCrudApply,
 		buildFrontend:     buildSetupFrontend,
 		updateAdminConfig: updateSetupAdmin,
 	}
+}
+
+// setupCrudApply 在全新安装尾部同步 crud_specs 声明的业务表结构与菜单
+// （与 migrate 尾部的 apply 语义一致，不依赖 crud.apply_on_migrate：
+// 全新库不存在漂移，spec 是本机业务表的唯一来源）。没有 spec 目录时跳过。
+func setupCrudApply(db *gorm.DB, configuration *conf.Configuration) ([]helper.ApplyTableResult, error) {
+	dir := helper.DefaultSpecDir()
+	if dir == "" {
+		return nil, nil
+	}
+	return helper.ApplySpecsFromDir(db, configuration, dir, helper.ApplyOptions{AdminID: 1})
 }
 
 type setupRunner struct {
@@ -206,6 +220,22 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 	}
 	fmt.Fprintln(r.out)
 
+	results, applyErr := r.deps.runCrudApply(db, configuration)
+	if applyErr != nil {
+		fmt.Fprintf(r.out, "CRUD apply 失败: %v\n", applyErr)
+		var blocked *helper.ApplyBlockedError
+		if errors.As(applyErr, &blocked) {
+			fmt.Fprintf(r.out, "hint: %s\n", blocked.Hint())
+		}
+		return applyErr
+	}
+	for _, result := range results {
+		if result.Action == helper.ApplyUnchanged {
+			continue
+		}
+		fmt.Fprintf(r.out, "CRUD apply %-9s %s\n", string(result.Action), result.Table)
+	}
+
 	if err := r.handleFrontend(options, configuration, console); err != nil {
 		return err
 	}
@@ -249,6 +279,9 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 	}
 	if deps.runMigrations == nil {
 		deps.runMigrations = defaults.runMigrations
+	}
+	if deps.runCrudApply == nil {
+		deps.runCrudApply = defaults.runCrudApply
 	}
 	if deps.buildFrontend == nil {
 		deps.buildFrontend = defaults.buildFrontend

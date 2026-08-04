@@ -170,6 +170,10 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 			return applyErr
 		}
 		for _, result := range results {
+			// 线外手改的列/属性不受 spec 管理，静默保留但必须告警，防止漂移无感知。
+			for _, change := range result.Unmanaged {
+				cmd.Printf("CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+			}
 			if result.Action == helper.ApplyUnchanged {
 				continue
 			}

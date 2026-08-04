@@ -216,6 +216,9 @@ func printApplyResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
 				cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.Reason)
 			}
 		}
+		for _, change := range result.Unmanaged {
+			cmd.Printf("CRUD apply WARNING table=%s field=%s: %s\n", result.Table, change.Field, change.Reason)
+		}
 		for _, menu := range result.MenuResults {
 			cmd.Printf("CRUD menu  %-9s %s\n", string(menu.Action), menu.Name)
 		}
