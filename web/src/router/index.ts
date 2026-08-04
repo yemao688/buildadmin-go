@@ -28,15 +28,18 @@ router.beforeEach(async (to) => {
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
-    // 门户语言目录按路径首段解析：/admin → backend，/seller → seller，
-    // /buyer → buyer，根路径 / → frontend。业务新开门户只需建
-    // lang/<portal>/{lang}/ 目录，无需改本文件。
-    const portalName = to.path.split('/')[1] || ''
-    const langDir = portalName === 'admin' ? 'backend' : portalName || 'frontend'
+    // 门户语言目录注册表：key = 路由前缀，value = lang 目录名。
+    // 后台固定映射 backend；根门户（/ 及其所有无前缀页面）默认 frontend；
+    // 业务新增带前缀门户（/seller、/buyer…）在此追加一行即可。
+    const portalLangDirs: Record<string, string> = {
+        [adminBaseRoutePath]: 'backend',
+    }
+    const portalPrefix = '/' + (to.path.split('/')[1] || '')
+    const langDir = portalLangDirs[portalPrefix] ?? 'frontend'
     const prefix = './' + langDir + '/' + lang
 
-    // 去除路径前缀（/admin 或 /seller 等门户前缀），页面语言包按相对路径加载
-    const relativePath = to.path.slice(1 + portalName.length)
+    // 页面语言包按相对路径加载：注册门户剥离其前缀，根门户用完整路径
+    const relativePath = portalLangDirs[portalPrefix] ? to.path.slice(portalPrefix.length) : to.path
     if (relativePath && relativePath !== '/') loadPath.push(prefix + relativePath + '.ts')
 
     // 根据路由 name 加载的语言包

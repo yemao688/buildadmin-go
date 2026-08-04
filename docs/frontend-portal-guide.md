@@ -28,16 +28,20 @@ web/src/views/buyer/      +  web/src/lang/buyer/       ← 买家门户（/buyer
 
 ## 3. 语言按需加载：路径首段映射
 
-`web/src/router/index.ts` 按**路径首段**解析门户语言目录：
+`web/src/router/index.ts` 通过**门户语言目录注册表**（`portalLangDirs`）
+解析：key 为路由前缀，value 为 lang 目录名。
 
 ```
-/admin/*   → ./backend/
-/seller/*  → ./seller/
-/buyer/*   → ./buyer/
-/（根）     → ./frontend/
+/admin/*   → ./backend/    （框架内置）
+/seller/*  → ./seller/     （业务追加一行注册）
+/buyer/*   → ./buyer/      （业务追加一行注册）
+/（根）     → ./frontend/   （默认，零注册）
 ```
 
-- 业务新开门户只需保证**路由前缀与语言目录同名**，无需改框架文件
+- **根门户（无前缀，如买家端）零改动**：`/` 及其所有无前缀页面
+  （`/index`、`/user/login`…）默认走 `./frontend/`。
+- **带前缀门户**（`/seller`、`/buyer`…）：在 `portalLangDirs` 追加一行
+  `'/<portal>': '<portal>'` 即可，页面语言包按剥离前缀后的路径加载。
 - 特例映射：`web/src/lang/autoload.ts` 的 `langAutoLoadMap`（path →
   语言包相对路径），用于补充特例场景
 
