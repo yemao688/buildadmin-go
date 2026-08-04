@@ -131,7 +131,7 @@ formFields: [username, password, nickname, status]
 columnFields: [id, username, nickname, status] # password 只进表单，不进列表
 ```
 
-**时间列约定**：`columnFields` 末尾建议始终带上 `create_time` 与 `update_time`（bigint 时间列，供排序与数据排查；它们是自动维护字段，不进请求 DTO，但列表展示时间戳是常规需求）。省略时列表没有时间列，后台按时间排序只能靠业务字段。
+**时间列约定**：`columnFields` 末尾建议始终带上 `update_time` 与 `create_time`（bigint 时间列，供排序与数据排查；它们是自动维护字段，不进请求 DTO，但列表展示时间戳是常规需求）。省略时列表没有时间列，后台按时间排序只能靠业务字段。
 
 文末"完整示例"演示了同一模式：`note` 只在 `formFields` 中，不进列表。注意带 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键例外：它们应保留在 `columnFields` 里以获得 FK 搜索和 relation display 列，原始 FK 列会被自动隐藏（规则见"关系"）。
 
