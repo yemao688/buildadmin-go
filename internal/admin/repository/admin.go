@@ -276,6 +276,14 @@ func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, 
 		admin.ParentID = newParent
 		if result := tx.Omit(append(omit, "parent_id")...).Save(&admin); result.Error != nil {
 			return result.Error
+		} else if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&model.Admin{}).Where("id = ?", admin.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible != 1 {
+				return cErr.BadRequest("update failed: rows affected mismatch")
+			}
 		} else if result.RowsAffected != 1 {
 			return cErr.BadRequest("update failed: rows affected mismatch")
 		}
@@ -334,6 +342,16 @@ func (s *AdminRepository) SelfEdit(ctx *gin.Context, admin model.Admin, selectFi
 		result := tx.Select(selectField).Save(&admin)
 		if result.Error != nil {
 			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&model.Admin{}).Where("id = ?", admin.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return cErr.BadRequest("update failed: rows affected mismatch")
 		}
 		if result.RowsAffected != 1 {
 			return cErr.BadRequest("update failed: rows affected mismatch")

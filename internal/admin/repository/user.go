@@ -242,6 +242,16 @@ func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, pa
 		if result.Error != nil {
 			return result.Error
 		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", user.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return gorm.ErrRecordNotFound
+		}
 		if result.RowsAffected != 1 {
 			return gorm.ErrRecordNotFound
 		}

@@ -58,6 +58,16 @@ func (s *AdminRuleRepository) UpdateTx(tx *gorm.DB, adminRule model.AdminRule) e
 	if result.Error != nil {
 		return result.Error
 	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.AdminRule{}).Where("id = ?", adminRule.ID).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
+		return cErr.BadRequest("update failed: rows affected mismatch")
+	}
 	if result.RowsAffected != 1 {
 		return cErr.BadRequest("update failed: rows affected mismatch")
 	}
@@ -70,6 +80,16 @@ func (s *AdminRuleRepository) DetachParentTx(tx *gorm.DB, id int32) error {
 	result := tx.Model(&model.AdminRule{}).Where("id=?", id).Update("pid", 0)
 	if result.Error != nil {
 		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		var visible int64
+		if err := tx.Model(&model.AdminRule{}).Where("id = ?", id).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
+		return cErr.BadRequest("parent update failed")
 	}
 	if result.RowsAffected != 1 {
 		return cErr.BadRequest("parent update failed")

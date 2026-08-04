@@ -80,6 +80,16 @@ func (s *ConfigRepository) Edit(ctx *gin.Context, data siteconfig.Config) error 
 			}
 			return result.Error
 		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&siteconfig.Config{}).Where("id = ?", data.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return fmt.Errorf("update failed: rows affected mismatch")
+		}
 		if result.RowsAffected != 1 {
 			return fmt.Errorf("update failed: rows affected mismatch")
 		}

@@ -119,6 +119,15 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 		Updates(updates)
 	if res.Error != nil {
 		FailByErr(ctx, res.Error)
+	} else if res.RowsAffected == 0 {
+		var visible int64
+		if err := db.Table(h.currentM.Table()).Where(primaryKey+" = ?", idVal).Count(&visible).Error; err != nil {
+			FailByErr(ctx, err)
+		} else if visible == 1 {
+			Success(ctx, "")
+		} else {
+			FailByErr(ctx, gorm.ErrRecordNotFound)
+		}
 	} else if res.RowsAffected != 1 {
 		FailByErr(ctx, gorm.ErrRecordNotFound)
 	} else {

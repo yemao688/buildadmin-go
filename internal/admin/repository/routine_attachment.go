@@ -89,6 +89,17 @@ func (s *AttachmentRepository) Edit(ctx *gin.Context, data upload.Attachment) er
 	if tx.Error != nil {
 		return tx.Error
 	}
+	if tx.RowsAffected == 0 {
+		var visible int64
+		scoped := s.scoped(ctx, s.DB().Table(s.TableName+" AS attachment"))
+		if err := scoped.Where("attachment.id = ?", data.ID).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
+		return gorm.ErrRecordNotFound
+	}
 	if tx.RowsAffected != 1 {
 		return gorm.ErrRecordNotFound
 	}

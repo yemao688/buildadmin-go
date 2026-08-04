@@ -53,6 +53,16 @@ func (s *AdminGroupRepository) Edit(ctx context.Context, adminGroup model.AdminG
 		if result.Error != nil {
 			return result.Error
 		}
+		if result.RowsAffected == 0 {
+			var visible int64
+			if err := tx.Model(&model.AdminGroup{}).Where("id = ?", adminGroup.ID).Count(&visible).Error; err != nil {
+				return err
+			}
+			if visible == 1 {
+				return nil
+			}
+			return cErr.BadRequest("update failed: rows affected mismatch")
+		}
 		if result.RowsAffected != 1 {
 			return cErr.BadRequest("update failed: rows affected mismatch")
 		}
