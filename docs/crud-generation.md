@@ -1,54 +1,26 @@
 # CRUD YAML 生成指南
 
-本文是 Go CRUD 生成器的 YAML 契约，对框架源仓库和业务仓库同时生效。它对齐 BuildAdmin v2.3.8 的手工 CRUD 设计器和官方数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM、Wire、路由、数据权限和迁移实现。
+本文是 Go CRUD 生成器的 YAML 契约，面向编写 `crud_specs/*.yaml` 的开发者与 AI agent。它对齐 BuildAdmin v2.3.8 的数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM/Wire 实现。
 
-## 目录
+## 1. 概述与流程
 
-1. 概述与标准流程
-2. 最小示例
-3. 顶层 YAML 契约
-4. `dataScope` 与 `menu`
-5. 字段契约与默认值
-6. `designType`、推断规则与默认属性
-7. `table` / `form` 属性
-8. 路径和数据库
-9. 关系
-10. 请求与时间字段 JSON 契约
-11. 命名、注释和数据库最佳实践
-12. 有意不支持的键
-13. 生成失败排查清单
-14. 完整示例
-15. 参考
-
-## 概述与标准流程
-
-写 spec 之前先与用户对齐需求：给出 2-3 个确定性的字段集方案供选择（例如方案 A：`id/name/create_time/update_time`；方案 B：`id/title/weigh/status/…`），并问清影响 spec 形态的业务关键点——归属与数据权限（是否 `admin_id` 属主）、审批/状态流、软删除、列表与表单的字段取舍、预期关系（`remoteSelect` 目标）。用户拍板后再落 YAML，不要凭空补全字段。编写 spec 时，为标题、内容、备注、URL、地址、名称等内容较长的列预设合适的 `table.width`，建议使用 `140–260` px，减少生成后的手工调整；操作列已固定为 `140` px，无需配置。
+写 spec 前先与用户对齐需求：给出 2-3 个确定的字段集方案供选择，问清归属与数据权限、审批流、软删除、列表/表单字段取舍、预期关系（`remoteSelect` 目标）。**用户拍板后再落 YAML，不要凭空补全字段。**
 
 在仓库根目录执行：
 
 ```bash
-go run ./cmd/server crud:validate crud_specs/<module>.yaml
+go run ./cmd/server crud:validate crud_specs/<module>.yaml  # 纯校验，不连库
 go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml
 go build ./...
 ```
 
-提交 spec 前可运行 `crud:validate <spec.yaml...>` 做纯校验。该命令不连接数据库、不生成文件，也不修改菜单或 spec；它检查恰好一个主键、`remoteController`/`remoteModel` 文件是否存在、`generateRelativePath` 路径是否合法，以及 `default`/`defaultType` 是否配对（`relationFields` 是远端表列，其真实性由生成期校验负责，不在此检查）。已存在但无法反查 route 常量的控制器，以及实体段使用大写/驼峰的非标准路径，会输出 `warning:`，不会导致失败。发现任意 error 时退出码为 `1`；只有 warning 或全部通过时退出码为 `0`，warning 和错误均输出到 stderr。
+生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护三处共享 provider。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
 
-生成器退出码 `0` 才表示成功。生成器会校验输入、记录文件 manifest，并在文件阶段失败时恢复文件；MySQL DDL 不可可靠回滚。生成器为每个后台模块产出五类 Go 产物（实体/仓库/DTO/handler/路由注册器），全部"文件名=表名"落单包，并维护三处共享 provider（`internal/admin/{repository,handler,router}/provider.go`）——路由经 `internal/admin/router/provider.go` 的 `ProvideRegistrars` 锚点挂载（新模块一行 handler 参数 + 返回条目），不再生成 `<name>_route.go`，也不修改 `cmd/server/wire.go`。使用 `crud:delete <table_name>` 删除生成文件、共享注册和菜单，不删除业务表。需要跳过菜单时加 `--skip-menu`。
+已有业务表通常用 `type: alter`。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。`type: create` 对已有表是删除重建，不能当作无损更新。
 
-所有生成或回写的 Go 文件都按同一 EOF 契约规范化：`gofmt` 后精确保留一个结尾 `LF`。这同样适用于共享 provider（`internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`、`internal/admin/router/provider.go`）这类 add/remove 回写场景；不要依赖"无结尾换行"或多个空行的历史状态。
+**字体惯例**：本文中使用 `pk` 等作为 designType 值时，不包含引号；`defaultType: <值>` 使用尖括号占位符表示实际值。
 
-已有业务表通常使用 `type: alter`。`alter` 只根据当前数据库列和 spec 派生新增/修改字段的设计变更，不自动删除未出现在 spec 的列；需要重建时必须明确确认破坏性影响。`type: create` 对已存在的表执行删除后重建，不能当作无损更新。
-
-### 定制方式与双提交工作流
-
-业务定制直接修改对应生成文件（实体 `internal/model/<table>.go`、仓库 `internal/admin/repository/<table>.go`、handler `internal/admin/handler/<table>.go` 等）；生成器不再生成定制骨架文件（旧"定制保护"机制已移除），重新生成时生成文件会被覆盖，定制内容依靠双提交工作流和 `git diff` 回补。历史旧布局的 manifest（模型文件位于旧渠道的 `model` 根，即 `internal/admin` 与 `internal/common` 下的 `model/` 目录，以及历史定制骨架路径）仍可被 `crud:delete` 识别清理，但这两个目录只用于删除侧兼容，生成器不再向它们写新产物。
-
-`crud:delete` 对历史 manifest 中的定制骨架文件按普通生成文件处理：随模块文件一起删除，不再做"保留已定制内容"的判断。
-
-CRUD 模块采用"生成 commit + 定制 commit"的双提交工作流：生成 commit 只提交 spec 和全部生成产物，提交信息标注框架/生成器版本；业务定制另提交，并在提交信息或模块清单中写明定制动机。重新生成后，对生成文件中的手工改动，应使用 `git diff` 对照定制 commit，逐项回补，而不是把手工改动混入生成 commit。这样可以区分机器生成结果与业务定制，也便于后续重新生成和审查。
-
-## 最小示例
+## 2. 快速开始
 
 一个可直接生成的最小业务表（演示组件推断、字典注释、自动时间字段；未写的键全部走默认值）：
 
@@ -93,71 +65,53 @@ fields:
     comment: 更新时间
 ```
 
-`default: "1"` 省略 `defaultType` 时按 `INPUT` 处理；`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码维护，不进入请求 DTO。`generateRelativePath` 必须显式设置，标准值就是表名本身（`generateRelativePath: ops_banner`）：Go 侧产物一律按"文件名=表名"落单包（实体 `internal/model/banner.go`、仓库 `internal/admin/repository/banner.go`、DTO `internal/admin/dto/banner.go`、handler `internal/admin/handler/banner.go`、注册器 `internal/admin/router/banner.go`）；`generateRelativePath` 只决定 views 目录（`web/src/views/backend/ops/banner/`）、菜单与路由名的形态（`ops.Banner`/`ops/banner`）。生成器对省略的兜底默认也是表名，但 spec 不依赖省略（规则见"路径和数据库"）。完整功能示例见文末"完整示例"。
+`create_time`/`update_time` 是 canonical 自动时间字段，由生成代码在 Add/Edit 写入 `time.Now().Unix()`，不进入请求 DTO。`generateRelativePath` 必须显式设置，标准值就是表名本身：Go 产物一律按文件名=表名落单包，`generateRelativePath` 只决定 views 目录与菜单/路由名的形态（见"路径与产物"）。完整功能示例见文末"完整示例"。
 
-## 顶层 YAML 契约
+## 3. 顶层 YAML
 
-所有键都是类型化配置；未知键不会成为任意透传属性。除特别说明外，字符串默认是空字符串，列表默认是"未提供"。
+| 键 | 类型 | 语义 |
+| --- | --- | --- |
+| `name` | `string`，必填 | 业务表名，安全下划线标识符，自动命名来源。 |
+| `comment` | `string`，默认空 | 表注释。以`表`结尾时管理名称转为`管理`，如`会员组表`→`会员组管理`。 |
+| `type` | `string`，默认 `create` | `create` 或 `alter`。`alter` 只派生变更，不删未在 spec 的列。 |
+| `generateRelativePath` | `string`，必填 | 标准值=表名本身。Go 产物不再由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。省略时兜底默认等于表名，但 spec 不应依赖省略。 |
+| `rebuild` | `string`，默认空 | PHP 上游兼容值，通常 `No`/`Yes`。 |
+| `databaseConnection` | `string`，默认 `mysql` | 当前 Go 应用只有一条注入连接，其它值失败。 |
+| `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。 |
+| `defaultSortField` | `string`，默认空 | 默认排序字段。 |
+| `defaultSortType` | `string`，默认空 | 通常 `asc` 或 `desc`。 |
+| `formFields` | `[]string`，省略时自动推导 | 省略时取非主键且未 `formBuildExclude` 的字段；显式 `[]` 表示无表单项。 |
+| `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带 relation enrichment 的外键（FK 自动隐藏）。建议始终显式设置，只放需要在列表出现的字段；`password`、密钥、长备注等不应进列表。 |
+| `dataScope` | map，默认 `mode: auto` | 数据权限策略（见下文）。 |
+| `menu` | map，默认未配置 | 菜单标题和父节点覆盖；省略时菜单仍按表注释创建，跳过使用 `--skip-menu`。 |
+| `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
+| `webViewsDir` | `string`，默认自动推导 | `web/src/views/backend` 下的视图目录。显式值优先。 |
 
-| 键                     | 类型和默认值               | 语义                                                                                                                                                                                                                     |
-| ---------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`                 | `string`，必填             | 业务表名，必须是安全的下划线标识符，也是自动命名来源。                                                                                                                                                                   |
-| `comment`              | `string`，默认空           | 表注释。以 `表` 结尾时，管理名称转为 `管理`，如 `会员组表` -> `会员组管理`。                                                                                                                                             |
-| `type`                 | `string`，默认 `create`    | `create` 或 `alter`。日志/数据库/SQL 兼容值会按 `rebuild` 归一化。                                                                                                                                                       |
-| `rebuild`              | `string`，默认空           | PHP 上游生成器选项值通常为 `No`/`Yes`；继续生成时 `Yes` 选择重建，否则选择 alter。                                                                                                                                       |
-| `generateRelativePath` | `string`，默认空           | 生成位置 shorthand。**必须显式设置，标准值 = 表名本身**。Go 侧产物不再由它定位（一律"文件名=表名"落单包）；它只决定 views 目录与菜单/路由名的形态（`ops_user_test_xxx` -> views `ops/userTestXxx/`、路由 `ops.UserTestXxx`）。省略时兜底默认等于表名，但 spec 不应依赖省略。路径规则和示例见下文"路径和数据库"。                                                                  |
-| `modelFile`            | `string`，默认自动推导     | 历史键，仅做安全校验与兼容：Go 产物位置恒由表名决定，显式值不再影响落点（旧布局前缀自动剥离后仅用于实体名兼容推导）。                                                                                                          |
-| `controllerFile`       | `string`，默认自动推导     | 历史键，仅做安全校验与兼容：Go handler 文件位置恒由表名决定（PHP controller 的对应物，不再由该键定位）。                                                                                                                     |
-| `webViewsDir`          | `string`，默认自动推导     | `web/src/views/backend` 下的视图目录。显式值优先。                                                                                                                                                                       |
-| `databaseConnection`   | `string`，默认 `mysql`     | 当前 Go 应用只有一条注入连接。空值和 `mysql` 解析并持久化为 `mysql`；其它标识符失败。                                                                                                                                    |
-| `isCommonModel`        | `int`，默认 `0`            | **已弃用**：新语义下实体一律进入共享记录层 `internal/model`（全部共享），非零值会被生成器/apply 拒绝；历史 common model 模块仍可通过 `crud:delete` 清理（旧布局 manifest 仅删除侧识别）。                             |
-| `quickSearchField`     | `[]string`，默认空         | 公共快速搜索字段；生成器会确保主键也可用于快速搜索。                                                                                                                                                                     |
-| `defaultSortField`     | `string`，默认空           | 默认排序字段。                                                                                                                                                                                                           |
-| `defaultSortType`      | `string`，默认空           | 通常为 `asc` 或 `desc`。                                                                                                                                                                                                 |
-| `formFields`           | `[]string`，省略时自动推导 | 省略时取非主键且未 `formBuildExclude` 的字段；显式 `[]` 表示没有表单项。                                                                                                                                                 |
-| `columnFields`         | `[]string`，省略时自动推导 | 省略时取全部字段，包括带有效 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键；建议显式设置以控制列表显示（见下文"显式控制列表列"），FK 自动隐藏和 relation display 规则见下文"关系"。显式 `[]` 表示不生成业务表格列，也会移除对应 FK 搜索。它不表示数据库没有字段。 |
-| `dataScope`            | map，默认 `mode: auto`     | 数据权限策略，见下文。                                                                                                                                                                                                   |
-| `menu`                 | map，默认未配置            | 菜单标题和父节点覆盖；菜单默认仍创建，跳过使用 `--skip-menu`。                                                                                                                                                           |
-| `fields`               | `[]map`，必填              | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。                                                                                                                                                               |
+`formFields` 和 `columnFields` 都必须区分"省略"和显式空列表：省略是自动推导，显式 `[]` 是明确没有。
 
-`formFields` 和 `columnFields` 都必须区分"省略"和显式空列表，分别写 `formFields: []`、`columnFields: []`。
-
-### 显式控制列表列（`columnFields`）
-
-建议始终显式设置 `columnFields`，明确哪些字段出现在后台列表页。省略时生成器把**全部字段**放进列表，敏感值和纯表单字段会一起出现在列表里。只在表单出现、不应进列表的字段——`password` 设计类型、密钥/令牌、长备注、大段 `content` 文本等——只写进 `formFields`，不写进 `columnFields`：
-
-```yaml
-formFields: [username, password, nickname, status]
-columnFields: [id, username, nickname, status] # password 只进表单，不进列表
-```
-
-**时间列约定**：`columnFields` 末尾建议始终带上 `update_time` 与 `create_time`（bigint 时间列，供排序与数据排查；它们是自动维护字段，不进请求 DTO，但列表展示时间戳是常规需求）。省略时列表没有时间列，后台按时间排序只能靠业务字段。
-
-文末"完整示例"演示了同一模式：`note` 只在 `formFields` 中，不进列表。注意带 relation enrichment 的 `remoteSelect`/`remoteSelects` 外键例外：它们应保留在 `columnFields` 里以获得 FK 搜索和 relation display 列，原始 FK 列会被自动隐藏（规则见"关系"）。
-
-## `dataScope` 与 `menu`
+### `dataScope` 与 `menu`
 
 ```yaml
 dataScope:
-  mode: auto # auto | required | none
+  mode: auto          # auto | required | none
   ownerColumn: admin_id
   assignOnCreate: true
+  readExtraOwners: [] # 额外属主列，OR 匹配读范围
 menu:
   title: 订单管理
   parent: 0
 ```
 
-### 三种模式
-
-- `auto`：只识别精确的 `admin_id` owner 字段并应用层级数据范围，不会把 `agent_admin_id`、`last_admin_id` 之类字段当成 owner。
+三种模式：
+- `auto`：只识别精确的 `admin_id` 字段并应用层级数据范围，不会把 `agent_admin_id` 等非 owner 字段当 owner。
 - `required`：要求显式 `ownerColumn`。
-- `none`：用于全局资源。
+- `none`：全局资源，不应用属主范围。
 
-`assignOnCreate` 控制新增时是否写入当前管理员。`menu` 只覆盖标题和父节点；省略时菜单仍按表注释创建。
+`assignOnCreate` 控制新增时是否写入当前管理员。`readExtraOwners` 列表中的列必须存在于 spec 字段，是整数兼容类型，且不能与主属主列相同。额外属主列只参与读范围，不能由 Add/Edit 参数提交（生成器自动排除）。
 
-### owner 列的正确写法
+### owner 列规范
 
-`dataScope.ownerColumn` 是后台数据范围使用的所有者列，不要求在表单中暴露，也不等同于 `remoteField`。用户订单、充值等代理运营业务应使用精确 bigint `admin_id` 表达代理/管理员归属，不要再引入一个额外的可见 `agent_admin_id` 业务字段。只要语义上是关联管理员/代理的字段，就应配置为 `remoteSelect`；owner 列与普通关系字段的区别，只在于它通常隐藏并自动赋值，而不是让操作员手工选择。常见写法如下：
+`dataScope.ownerColumn` 是后台数据范围使用的所有者列，不要求在表单中暴露。只要语义上是关联管理员的字段，就应配置为 `remoteSelect`，owner 列与普通关系字段的区别仅在于它通常隐藏并自动赋值，而非让操作员选择：
 
 ```yaml
 dataScope:
@@ -169,7 +123,6 @@ fields:
     type: bigint
     unsigned: true
     null: false
-    defaultType: INPUT
     default: "0"
     comment: 上级代理
     designType: remoteSelect
@@ -186,117 +139,104 @@ fields:
       label: 上级代理
 ```
 
-**owner 列三约定（AI 生成 spec 时必须遵守）**：
+**owner 列三约定**：① 位置靠前（紧跟 `id` 之后）；② comment 使用业务语义名（统一为"上级代理"）；③ 必须在 `table.label` 覆盖 relation display 列标题，否则列表页会显示远程表字段原文 comment（如"用户名"）。
 
-1. **位置靠前**：owner 列放在字段列表靠前位置（紧跟 `id` 之后），不要埋在业务字段末尾；
-2. **命名统一**：comment 使用业务语义名，本仓库代理类业务的归属/上级列统一为「上级代理」四个字；
-3. **展示列标题**：relation display 列标题默认取远程表字段的 comment（如 admin.username 的 comment「用户名」），必须在 `table.label` 里覆盖为与 comment 一致的「上级代理」，否则列表页列标题会显示「用户名」而不是归属语义。
+`formBuildExclude: true` 让操作员不能手工选择 owner，由 `assignOnCreate` 自动写入。不要加 `tableBuildExclude: true`，保留表格列才能同时获得自动隐藏的原始 FK 搜索和可见的 relation display 列（规则见"关系"）。
 
-`formBuildExclude: true` 让操作员不能手工选择 owner，由 `assignOnCreate` 自动写入；这里不要再加 `tableBuildExclude: true`，因为保留表格列才能同时获得自动隐藏的原始 FK 搜索和可见的 relation display 列（规则见"关系"）。owner/admin 归属列通常展示 `username`，reviewer 这类独立审批人语义再单独使用 `nickname` 等字段。
+## 4. 字段定义
 
-### 多属主读范围
+| 键 | 类型 | 语义 |
+| --- | --- | --- |
+| `name` | `string`，必填 | SQL 列名和 JSON 字段名，安全标识符。 |
+| `type` | `string` | 简洁 SQL 类型，如 `varchar`、`bigint`、`text`。省略时使用 `dataType`。 |
+| `dataType` | `string` | 完整类型定义，如 `enum('a','b')`、`decimal(10,2)`。 |
+| `length` | `int`，默认 `0` | 无完整 `dataType` 时的长度。 |
+| `precision` | `int`，默认 `0` | decimal/double/float 小数位。 |
+| `default` | `string`，默认空 | `defaultType: INPUT` 的值，也兼容旧哨兵。 |
+| `defaultType` | `string`，按 `default` 推导 | `INPUT`、`NULL`、`EMPTY STRING`、`NONE`。 |
+| `null` | `bool`，默认 `false` | 是否允许 NULL；`defaultType: NULL` 会强制为 true。 |
+| `primaryKey` | `bool`，默认 `false` | 主键；只支持单列主键。 |
+| `unsigned` | `bool`，默认 `false` | 数值列 unsigned。 |
+| `autoIncrement` | `bool`，默认 `false` | 自增，通常只与整数主键一起使用。 |
+| `comment` | `string`，默认空 | 权威字段标题和字典来源（见"最佳实践"）。 |
+| `designType` | `string`，按规则推断 | 29 个组件类型之一，显式值优先。 |
+| `formBuildExclude` | `bool`，默认按字段类型 | 是否排除自动表单；显式 `false` 可覆盖时间字段默认排除。 |
+| `tableBuildExclude` | `bool`，默认 `false` | 是否排除自动表格列。 |
+| `form` | map | 表单属性，见"table / form 属性"。 |
+| `table` | map | 表格和公共搜索属性，见"table / form 属性"。 |
 
-`dataScope.readExtraOwners` 是可选的字符串列表，用于声明除 `ownerColumn` 外也能看到该行的属主列。列表中的每一列必须存在于 spec 字段、是整数兼容类型，并且不能与主属主列相同。例如订单既按 `admin_id` 归属，也允许对应的卖家读取时，可以写：
-
-```yaml
-dataScope:
-  mode: required
-  ownerColumn: admin_id
-  readExtraOwners: [seller_id]
-  assignOnCreate: true
-```
-
-读范围按主属主列和所有额外属主列进行 OR 匹配；未配置额外属主时保持原有单属主读范围。额外属主列只参与读范围，不能由客户端通过 Add/Edit 参数提交，生成器会将其加入 handler 参数排除列表。`mode: none` 仍表示全局资源，不应用属主读范围。运行时该机制由 `internal/pkg/data_scope` 的 `ReadExtraOwners` 生效，按代码标识符检索可定位到实现。
-
-## 字段契约与默认值
-
-| 键                  | 类型和默认值                | 语义                                                  |
-| ------------------- | --------------------------- | ----------------------------------------------------- |
-| `name`              | `string`，必填              | SQL 列名和 JSON 字段名，必须是安全标识符。            |
-| `type`              | `string`                    | 简洁 SQL 类型；省略时使用 `dataType`。                |
-| `dataType`          | `string`                    | 完整类型定义，如 `enum('a','b')`、`decimal(10,2)`。   |
-| `length`            | `int`，默认 `0`             | 没有完整 `dataType` 时的长度。                        |
-| `precision`         | `int`，默认 `0`             | decimal/double/float 小数位。                         |
-| `default`           | `string`，默认空            | `defaultType: INPUT` 的值，也兼容旧哨兵。             |
-| `defaultType`       | `string`，按 `default` 推导 | 精确值 `INPUT`、`NULL`、`EMPTY STRING`、`NONE`。      |
-| `null`              | `bool`，默认 `false`        | 是否允许 NULL；`defaultType: NULL` 会强制为 true。    |
-| `primaryKey`        | `bool`，默认 `false`        | 主键；只支持单列主键，不支持复合主键。                |
-| `unsigned`          | `bool`，默认 `false`        | 数值列 unsigned。                                     |
-| `autoIncrement`     | `bool`，默认 `false`        | 自增，通常只与整数主键一起使用。                      |
-| `comment`           | `string`，默认空            | 权威字段标题和字典来源。                              |
-| `designType`        | `string`，按规则推断        | 29 个组件之一，显式值优先。                           |
-| `formBuildExclude`  | `bool`，默认按字段类型      | 是否排除自动表单；显式 false 可覆盖时间字段默认排除。 |
-| `tableBuildExclude` | `bool`，默认 `false`        | 是否排除自动表格列。                                  |
-| `form`              | map                         | 表单属性。                                            |
-| `table`             | map                         | 表格和公共搜索属性。                                  |
-
-`title` 仍接受以兼容旧 spec，但没有生成器消费者。新 spec 应写 `comment`；不要推荐 `title`。
+`title` 仍接受以兼容旧 spec，但新 spec 应写 `comment`。
 
 ### 默认值语义
 
-- `INPUT`：使用 `default`，SQL 为 `DEFAULT '...'`，并按组件写入 Vue 默认项。
-- `NULL`：SQL 为 `DEFAULT NULL`，并把 `null` 归一化为 true，避免 `NOT NULL DEFAULT NULL`。
-- `EMPTY STRING`：SQL 为 `DEFAULT ''`，仍受具体 SQL 类型限制。
-- `NONE`：不生成 SQL 默认子句，也不生成普通表单默认项；组件自身初始化行为仍适用。
+| `defaultType` | SQL 效果 | Vue 默认项 |
+| --- | --- | --- |
+| `INPUT` | `DEFAULT '<值>'` | 按组件写入默认值 |
+| `NULL` | `DEFAULT NULL`，`null` 归一化为 true | 不输出 |
+| `EMPTY STRING` | `DEFAULT ''`（受具体 SQL 类型限制） | 空字符串 |
+| `NONE` | 不生成 DEFAULT 子句 | 不生成（组件自身初始化行为仍适用） |
 
-未写 `defaultType` 时，旧 `default: null`、`default: empty string`、`default: none` 分别映射为 `NULL`、`EMPTY STRING`、`NONE`；其它非空值映射为 `INPUT`。自然的 `default: ""` 必须配合 `defaultType: INPUT` 才表示 `DEFAULT ''`。
+未写 `defaultType` 时，旧 `default: null`、`default: empty string`、`default: none` 分别映射为 `NULL`、`EMPTY STRING`、`NONE`；其它非空值映射为 `INPUT`。**`default: ""` 必须配合 `defaultType: INPUT` 才表示 `DEFAULT ''`。**
 
-PHP 的无默认值 SQL family 是：`text`、`blob`、`geometry`、`geometrycollection`、`json`、`linestring`、`longblob`、`longtext`、`mediumblob`、`mediumtext`、`multilinestring`、`multipoint`、`multipolygon`、`point`、`polygon`、`tinyblob`。这些 concise types 不写默认值。MySQL 版本、严格模式、NULL 约束和列类型仍可能拒绝某些默认值，生成前应按目标 MySQL 验证 DDL。
+text、blob、json 等 SQL 类型不写默认值（PHP 无默认值 family）。MySQL 版本、严格模式仍可能拒绝某些默认值，生成前应按目标 MySQL 验证 DDL。
 
-### `tinyint(1)` 布尔存储语义
+### `tinyint(1)` 布尔存储
 
-对于 `tinyint(1)` 布尔存储字段（包括 YAML 中 `type: tinyint` 且 `length: 1` 的字段），生成的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式，也兼容 `true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`，以保持与 BuildAdmin 前端开关约定一致；非规范值会被拒绝。`char(1)` 不按布尔存储处理。
+`tinyint(1)` 字段的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式、`true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`。非规范值会被拒绝。`char(1)` 不按布尔存储处理。
 
-### 组件类型选择指引
+## 5. designType 与推断规则
 
-选型先看语义，不要照搬字段名后缀：
-
-- **单布尔**（是/否、启用/禁用等二值字段）→ `switch`，存储 `tinyint(1)` 或 `char(1)`。**不要写成 `checkbox`**——checkbox 的语义是可多选，单布尔字段用 checkbox 会得到"只能勾一个的多选框"，语义和类型都错。
-- **多选**（可同时勾选多个值）→ `checkbox`，存储 `set` 或 varchar 逗号串，comment 每个键对应一个存储值。
-- **单选枚举** → `radio`（选项少）或 `select`（选项多/需要字典），存储 enum/varchar/tinyint，comment 键值如 `状态:0=待支付,1=已支付`。
-
-示例：`is_invoice`（是否需要发票）是单布尔 → `switch` + `tinyint(1)`，而不是 varchar + checkbox。
-
-## `designType`、推断规则与默认属性
-
-完整类型为：`pk`、`spk`、`weigh`、`switch`、`editor`、`textarea`、`array`、`timestamp`、`datetime`、`date`、`year`、`time`、`select`、`selects`、`remoteSelect`、`remoteSelects`、`city`、`image`、`images`、`file`、`files`、`icon`、`radio`、`checkbox`、`number`、`float`、`password`、`color`、`string`。
+完整类型列表：`pk`、`spk`、`weigh`、`switch`、`editor`、`textarea`、`array`、`timestamp`、`datetime`、`date`、`year`、`time`、`select`、`selects`、`remoteSelect`、`remoteSelects`、`city`、`image`、`images`、`file`、`files`、`icon`、`radio`、`checkbox`、`number`、`float`、`password`、`color`、`string`。
 
 显式 `designType` 优先；省略时按以下顺序首个命中：
 
-1. 自增且名含 `id` -> `pk`；`weigh` -> `weigh`；四个 canonical time 名 -> `timestamp`。
-2. 数字/enum 加 `switch/toggle`，或对应 `tinyint(1)`/`char(1)` -> `switch`。
-3. 文本加 `content/editor` -> `editor`；varchar 加 `textarea/multiline/rows` -> `textarea`；`array` 后缀 -> `array`。
-4. int 加 `time/datetime` -> `timestamp`；SQL `datetime/timestamp` 都推断为 `datetime`，SQL `date/year/time` 分别推断为同名类型。
-5. `select/list/data` -> `select`；`selects/multi/lists` -> `selects`；`_ids` -> `remoteSelects`；`_id` -> `remoteSelect`。
-6. `city`、`image/avatar`、`images/avatars`、`file`、`files`、`icon`、`color` 按后缀匹配；`color` 位于数字/文本/enum/set 规则之后、最终 `string` 回退之前。
-7. `tinyint(1)`/`char(1)` 加 `status/state/type` -> `radio`；`number/int/num` 后缀 -> `number`。
-8. 数字 SQL 类型 -> `number`；文本 -> `textarea`；enum -> `radio`；set -> `checkbox`；最后回退 `string`。
+1. 自增且名含 `id` → `pk`；`weigh` → `weigh`；四个 canonical 时间名 → `timestamp`。
+2. 数字/enum 加 `switch/toggle`，或 `tinyint(1)`/`char(1)` → `switch`。
+3. 文本加 `content/editor` → `editor`；varchar 加 `textarea/multiline/rows` → `textarea`；`array` 后缀 → `array`。
+4. int 加 `time/datetime` → `timestamp`；SQL `datetime`/`timestamp` → `datetime`；SQL `date/year/time` → 同名类型。
+5. `select/list/data` → `select`；`selects/multi/lists` → `selects`；`_ids` → `remoteSelects`；`_id` → `remoteSelect`。
+6. `city`、`image/avatar`、`images/avatars`、`file`、`files`、`icon`、`color` 按后缀匹配（`color` 在数字/文本/enum/set 之后、`string` 回退之前）。
+7. `tinyint(1)`/`char(1)` 加 `status/state/type` → `radio`；`number/int/num` 后缀 → `number`。
+8. 数字 SQL 类型 → `number`；文本 → `textarea`；enum → `radio`；set → `checkbox`；最后回退 `string`。
 
 `spk`、`float`、`password` 主要靠显式配置。
 
 ### 默认属性（只在空/零时补齐）
 
-| designType | 默认 render / operator / show 等补齐 |
+| designType | 默认补齐 |
 | --- | --- |
 | `pk` / `spk` | `RANGE` / `custom`（宽度约 70 / 180） |
 | `weigh` | `RANGE` / `custom` |
 | `switch` | `switch` / `eq` / `false` |
 | `select` / `selects` | `tag` / `eq` / `false`；`tags` / `FIND_IN_SET` / `false` |
 | `radio` / `checkbox` | `tag` / `eq` / `false`；`tags` / `FIND_IN_SET` / `false` |
-| `remoteSelect` / `remoteSelects` | `tags` / `LIKE` / `string`；`tags` / `FIND_IN_SET` / `remoteSelect`；并默认 `remotePk=id`、`remoteField=name` |
+| `remoteSelect` / `remoteSelects` | `tags` / `LIKE` / `string`；`tags` / `FIND_IN_SET` / `remoteSelect`；默认 `remotePk=id`、`remoteField=name` |
 | `string` | `none` / `LIKE` / `false` |
 | `textarea` / `editor` | `operator=false`；`textarea` `rows=3`；`editor` `validator=editorRequired` |
-| `number` / `float` | `none` / `RANGE` / `false`，`step=1`，`number`/`float` validator |
-| `datetime` / `timestamp` | `date` validator，`RANGE`、`datetime` 搜索、`custom` 排序、宽度 160 |
+| `number` / `float` | `none` / `RANGE` / `false`，`step=1`，相应 validator |
+| `datetime` / `timestamp` | `date` validator，`RANGE`，`datetime` 搜索，`custom` 排序，宽度 160 |
 | `date` / `year` | `date` validator |
 | `time` | 不添加 `date` validator |
-| `image` / `images` / `file` / `files` / `icon` / `color` | 各自 render 和 `operator=false`；多选类型自动打开对应 multi flag |
+| `image` / `images` / `file` / `files` / `icon` / `color` | 各自 render 和 `operator=false`；多选对应 multi flag |
 
-Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/selects/remoteSelects/city/images/files 的逗号值转数组；number/float 输出非零数字；switch/remoteSelect 的 `0` 不输出；非 INPUT 默认类型不输出。
+Vue default items：array 固定 `[]`；editor 空字符串；checkbox/selects/remoteSelects/city/images/files 逗号值转数组；number/float 输出非零数字；switch/remoteSelect 的 `0` 不输出；非 INPUT 默认类型不输出。
 
-## 字段的 `table` / `form` 属性
+### 时间字段 JSON 契约
 
-`table` 和 `form` 是 `fields[]` 中每个字段的**子属性**（见字段契约表 `table: map`、`form: map`），嵌套在字段定义内：
+| 存储与设计 | JSON 输出 | 请求侧 |
+| --- | --- | --- |
+| 原生 SQL `datetime`/`timestamp`（`FlexDateTime`） | 本地格式化 `"YYYY-MM-DD HH:mm:ss"`，零值 `null` | 格式化日期时间与 RFC3339 |
+| 自动时间字段 `create_time`/`update_time`（整数存储） | 普通整数 | 不进入请求 DTO，Add/Edit 自动写入 `time.Now().Unix()` |
+| 其它整数 `timestamp`（如 `end_time`，`FlexFormattedUnixTime`） | 本地格式化 `"YYYY-MM-DD HH:mm:ss"`，零值 `null` | Unix 数字/数字字符串/格式化日期时间 |
+| `date` | `"YYYY-MM-DD"` | 仓库 validator 接受的日期 |
+| `time` | `"HH:mm:ss"` | 仓库 validator 接受的时间 |
+| `year` | 可空空值 `null`；`0000` 为 `"0"`；非零为四位数字字符串 | 年份值 |
+
+表格列 `table.timeFormat` 使用前端 `timeFormat` token 语法（如 `yyyy-mm-dd hh:MM:ss`），与 Element Plus 日期选择器的 `value-format`（`YYYY-MM-DD HH:mm:ss`）不是同一套符号。
+
+## 6. table / form 属性
+
+`table` 和 `form` 是 `fields[]` 中每个字段的子属性，嵌套在字段定义内：
 
 ```yaml
 fields:
@@ -305,136 +245,74 @@ fields:
     table:
       width: 180
     form:
-      ...
+      validator: [required]
 ```
 
 ### `table` 属性
 
-主键字段（`designType: pk`/`spk`）的 `comment` 必须统一写为 `ID`，不要写`主键`或其它描述。字段 `comment` 会进入 zh-cn 语言包并作为后台列标题，因此 `id` 列在后台必须显示为 `ID`。对存量表，将主键注释对齐为 `comment: ID` 属于 comment-only 漂移，`crud:apply` 会自动放行，无需业务迁移。
+主键字段（`pk`/`spk`）的 `comment` 必须统一写为 `ID`，不要写`主键`或其它描述。`comment` 会进入 zh-cn 语言包并作为列标题，因此 `id` 列在后台必须显示为 `ID`。
 
-| 键                   | 类型          | 语义                                                |
-| -------------------- | ------------- | --------------------------------------------------- |
-| `width`              | `int`（px，可选） | 列宽，单位为 px；不填写时按 `designType` 使用默认值，**只有 `pk`(70)、`spk`(180)、`timestamp`/`datetime`(160) 有默认值，其余类型默认 0（auto）**。 |
-| `operator`           | `string`      | 搜索操作符，如 `LIKE`、`RANGE`、`eq`、`false`。     |
-| `sortable`           | `string`      | 如 `custom`、`false`。                              |
-| `render`             | `string`      | 如 `none`、`tag`、`tags`、`switch`、`datetime`。    |
-| `timeFormat`         | `string`      | 时间渲染格式。                                      |
-| `label`              | `string`      | 列标题表达式或文本。                                |
+| 键 | 类型 | 语义 |
+| --- | --- | --- |
+| `width` | `int`（px，可选） | 列宽，px。不填时按 `designType` 使用默认值：**只有 `pk`（70）、`spk`（180）、`timestamp`/`datetime`（160）有默认值，其余默认 0（auto）**。 |
+| `operator` | `string` | 搜索操作符，如 `LIKE`、`RANGE`、`eq`、`false`。 |
+| `sortable` | `string` | 如 `custom`、`false`。 |
+| `render` | `string` | 如 `none`、`tag`、`tags`、`switch`、`datetime`。 |
+| `timeFormat` | `string` | 时间渲染格式。 |
+| `label` | `string` | 列标题。只用于覆盖 relation display 列的默认标题。 |
+| `show` | `string` | 常见值 `false`（隐藏列）。 |
+| `comSearchRender` | `string` | 公共搜索渲染器。 |
+| `comSearchInputAttr` | string 或 map | 公共搜索输入扩展属性。 |
+| `remote` | `string` | 远程列配置片段，必须是数据型配置，不能注入任意 JS。 |
 
-**`width` 必须显式设置的场景（AI 生成 spec 时必须遵守）**：除 `pk`/`spk`/时间列外，默认宽度为 0（auto）——字段多时 el-table 会压缩 auto 列，**中文列标题会被截断成省略号**（如 4 字标题"上级代理"被压成"上级…"）。因此：
+**`width` 必须显式设置的场景**：除 `pk`/`spk`/时间列外，默认宽度为 0（auto）——字段多时 el-table 会将 auto 列压缩，**中文列标题会被截断**（如"上级代理"被压成"上级…"）。因此：
+- **标题 ≥3 个中文字**（或任意语言标题较长）的列，必须显式设置 `width`；
+- **render 为 `tag`/`tags`/`switch`/`image`/`images`/`datetime` 的列**同样必须设置。
 
-- **标题 ≥3 个中文字**（或任意语言标题较长）的列，必须显式设置 `table.width`；
-- **render 为 `tag`/`tags`/`switch`/`image`/`images`/`datetime` 的列**同样必须设置（渲染内容比纯文本更宽）。
+估算公式：`标题宽度 + 内容最大宽度 + 40px 余量`。中文字符约 **14px/字**，英文/数字约 **8px/字符**。参考值：4 字标题 → ≥140px；6 字标题 → ≥160px；普通文本列 140–180px；长内容列 200–260px；时间列默认 160px；操作列固定 140px 无需配置。
 
-**估算公式**：`标题宽度 + 内容最大宽度 + 40px 余量`；中文字符按约 **14px/字**、英文/数字按约 **8px/字符** 估算，tag 渲染列再加最长选项文本宽度。参考值：4 字标题（如"上级代理"）→ ≥140px；6 字标题 → ≥160px；普通文本列 140–180px；长内容列（地址/备注/URL）200–260px；时间列用默认 160px；操作列固定 140px 无需配置。
-| `show`               | `string`      | 常见值 `false`。                                    |
-| `comSearchRender`    | `string`      | 公共搜索渲染器。                                    |
-| `comSearchInputAttr` | string 或 map | 公共搜索输入扩展属性。                              |
-| `remote`             | `string`      | 远程列配置片段，必须是数据型配置，不能注入任意 JS。 |
+`comSearchInputAttr` 支持 textarea 或 map 写法。textarea 每行一个属性，空行忽略，保留第一个 `=` 后的全部文本；`true`/`false` 转 bool，数字转 number，其它为 string。点号使用第一层嵌套键（如 `remote.filter.limit` 形成 `{remote: {"filter.limit": 20}}`）。没有 `=`、空属性名、空键段（`.size`、`remote..size`）都会失败。
 
-`comSearchInputAttr` 支持设计器 textarea：每行一个属性，空行忽略，保留第一个 `=` 之后的全部文本；字面量 `true`/`false` 转 bool，数字转 number，其它为 string。
-
-例如：
-
-```yaml
-table:
-  width: 180
-```
-
-生成的列配置会将宽度作为数字通过 `v-bind` 透传给 `el-table-column`，例如 `{ label: ..., prop: "code", width: 180 }`。
-
-```yaml
-comSearchInputAttr: |
-  size=large
-  disabled=false
-  remote.filter.limit=20
-  placeholder=a=b
-```
-
-点号使用第一层嵌套键，例如 `remote.filter.limit` 形成 `{remote: {"filter.limit": 20}}`。没有 `=`、空属性名、空键段（`.size`、`remote..size`）都会失败。也可写 map：
-
-```yaml
-comSearchInputAttr:
-  size: large
-  disabled: false
-```
-
-输出按键排序，并安全转义字符串、非标识符键和第一个 `=` 后的内容；不要把字符串 `"true"`、`"null"`、数字样式文本、数组或 `t('...')` 当成 JavaScript。当前 Go JSON binding 同时接受 string/object；空 textarea 是合法空 map。
-
-Go 生成器的操作列有一个有意不同于 PHP 的前端改进：末列固定为 Element Plus `fixed: 'right'`，避免后台宽表横向滚动时操作按钮脱离视口。
+Go 生成器的操作列末列固定为 Element Plus `fixed: 'right'`，避免宽表横向滚动时操作按钮脱离视口。
 
 ### `form` 属性
 
-| 键                        | 类型             | 语义                                                                             |
-| ------------------------- | ---------------- | -------------------------------------------------------------------------------- |
-| `validator`               | `[]string`       | 如 `required`、`number`、`date`。                                                |
-| `validatorMsg`            | `string`         | 校验消息。                                                                       |
-| `rows`                    | `int`            | textarea/editor 行数。                                                           |
-| `step`                    | `float`/`number` | number/float 步进值，支持整数和小数，例如 `0.001`；省略或 `0` 时默认为 `1`。     |
-| `selectMulti`             | bool/string      | select 多选开关。                                                                |
-| `imageMulti`              | bool/string      | image 多图开关。                                                                 |
-| `fileMulti`               | bool/string      | file 多文件开关。                                                                |
-| `remotePk`                | `string`         | value 字段，默认 `id`，支持 `uuid` 或已限定的 `owner.uuid`。已限定值不再加前缀。 |
-| `remoteField`             | `string`         | label 字段，默认 `name`。                                                        |
-| `remoteTable`             | `string`         | 关联表名。                                                                       |
-| `remoteController`        | `string`         | handler/controller 参考路径，用于 CRUD 来源路由推导。                            |
-| `remoteModel`             | `string`         | 关联实体文件路径，语义为 `internal/model/<table>.go`（文件名=表名；历史布局前缀如 `internal/admin`、`internal/common` 下的旧 `model` 根会自动剥离后同样解析到该路径）。                                       |
-| `remoteUrl`               | `string`         | custom 来源的站内或 http(s) URL。                                                |
-| `remoteSourceConfigType`  | `crud`/`custom`  | 使用生成 CRUD，或显式 custom 配置。                                              |
-| `relationFields`          | 逗号分隔 string  | 远程显示/预载入字段。                                                            |
-| `remotePrimaryTableAlias` | `string`         | custom 查询主表 alias，生成 `alias.remotePk`。                                   |
+| 键 | 类型 | 语义 |
+| --- | --- | --- |
+| `validator` | `[]string` | 如 `required`、`number`、`date`。 |
+| `validatorMsg` | `string` | 校验消息。 |
+| `rows` | `int` | textarea/editor 行数。 |
+| `step` | `float`/`number` | number/float 步进值；省略或 `0` 时默认为 `1`。 |
+| `selectMulti` | bool/string | select 多选开关。 |
+| `imageMulti` | bool/string | image 多图开关。 |
+| `fileMulti` | bool/string | file 多文件开关。 |
+| `remotePk` | `string` | value 字段，默认 `id`，支持 `uuid` 或已限定的 `owner.uuid`。 |
+| `remoteField` | `string` | label 字段，默认 `name`。 |
+| `remoteTable` | `string` | 关联表名。 |
+| `remoteController` | `string` | handler 参考路径，用于路由推导。 |
+| `remoteModel` | `string` | 关联实体文件路径，语义为 `internal/model/<table>.go`。 |
+| `remoteUrl` | `string` | custom 来源的站内或 http(s) URL。 |
+| `remoteSourceConfigType` | `crud`/`custom` | 使用生成 CRUD 或显式 custom 配置。 |
+| `relationFields` | 逗号分隔 string | 远程显示/预载入字段。 |
+| `remotePrimaryTableAlias` | `string` | custom 查询主表 alias，生成 `alias.remotePk`。 |
 
-YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字符 JSON 键不是 YAML 契约。`remotePk` 是模型/alias 加字段的逻辑表达，不是已经拼好的带前缀物理表名。若已含点号，生成器原样保留，不重复加 alias 或表名。
+YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字符键不是 YAML 契约。
 
-## 路径和数据库
-
-- 逻辑输入接受点号、`/`、`\\`，规范化后 HTTP route、Vue component、菜单 component 和 import 标识符都使用 `/`；manifest/filesystem entries 使用平台原生 `filepath.Join` 路径。
-- 文件创建、snapshot、quarantine、删除使用平台原生 `filepath.Join`。
-- 拒绝 `..`、绝对路径、Windows drive prefix（如 `C:\\...`）、空段和无效段，包括 `a//b`、`a..b`。
-- 显式路径段保留下划线：`some_special_dir/orders` 不会拆成多层目录。
-- 业务表命名约定：表名首段是业务分类（也是 views 目录的分类段），其余段是实体名（蛇形）。**`generateRelativePath` 必须显式设置，标准值就是表名本身**（生成器对省略的兜底默认也是表名，但 spec 不依赖省略——显式写出让 views/菜单/路由形态一目了然）；单段输入在第一个下划线处拆一次，左侧为目录、右侧为实体名（实体名内的下划线保留）：`ops_user_test_xxx` -> 目录 `ops` + 实体 `user_test_xxx`；`ops_banner` -> `ops` + `banner`。
-- Go 侧产物落点与路径段无关：五类产物全部"文件名=表名"落单包（以表名 `order_item` 为例，实体名 `OrderItem`）：
-  - 实体（贫血共享记录层）：`internal/model/order_item.go`，包名恒为 `model`；
-  - 仓库：`internal/admin/repository/order_item.go`，包名恒为 `repository`，类型 `OrderItemRepository`、构造 `NewOrderItemRepository`，基于 `internal/pkg/persistence` 的 `BaseModel`；
-  - 请求 DTO：`internal/admin/dto/order_item.go`，包名恒为 `dto`；
-  - handler：`internal/admin/handler/order_item.go`，包名恒为 `handler`；
-  - 路由注册器：`internal/admin/router/order_item.go`，包名恒为 `router`，类型 `OrderItemRegistrar`（不再生成 `<name>_route.go`）。
-- 共享 provider 与锚点：仓库、handler 的合并 ProviderSet 落在 `internal/admin/repository/provider.go`、`internal/admin/handler/provider.go`（生成器逐项追加 `NewXxxRepository`/`NewXxxHandler`）；路由注册器经 `internal/admin/router/provider.go` 挂载——合并 ProviderSet 追加 `NewXxxRegistrar`，`ProvideRegistrars` 锚点增加一行 handler 参数与一行返回条目，再经 `AdminRouter` 注入挂载 /admin/*。生成器不再修改 `cmd/server/wire.go`。
-- views 与命名仍由 `generateRelativePath` 推导（以 `ops_user_test_xxx` 为例）：views 目录 `web/src/views/backend/ops/userTestXxx`（实体名 lcfirst 驼峰化）；路由名 `ops.UserTestXxx`（目录段小写原样、实体段 PascalCase，对齐 PHP 实际 URL 形态如 `/admin/country.LanguageContent/index`）；菜单/权限 name `ops/userTestXxx`（与 views 目录同形、斜杠连接，与框架既有菜单一致）。
-- 只有需要比"分类/实体"两级更深的 views 子目录时，才使用 `/` 或 `.` 分隔符（两者等价）：`ops/user/test_xxx` -> views `ops/user/testXxx`、路由 `ops.user.TestXxx`、菜单 `ops/user/testXxx`；Go 产物位置不受影响（仍按表名落单包）。显式路径末段原样保留（写蛇形得蛇形 views 目录、写驼峰得驼峰），views 叶子始终 lcfirst 驼峰化。
-- 不要把实体名拆成多段（`ops.user.test.xxx` 会让 views/菜单/路由变深）。分类应为单词；多词分类（如 `order_center`）写显式路径 `order_center/recharge`。一段表（无分类前缀）允许生成，但属于反模式。
-- `webViewsDir` 显式覆盖 shorthand 的 views 推导；`modelFile`/`controllerFile` 为历史键，只做安全校验与兼容（旧布局前缀自动剥离后仍可解析实体名），不再影响任何 Go 产物落点。Go `handler` 是 PHP controller 等价物。
-
-```yaml
-generateRelativePath: ops_user_test_xxx
-# Go 产物落点（与 generateRelativePath 无关，文件名=表名）:
-# 实体 -> internal/model/user_test_xxx.go
-# 仓库 -> internal/admin/repository/user_test_xxx.go
-# 请求 DTO -> internal/admin/dto/user_test_xxx.go
-# handler -> internal/admin/handler/user_test_xxx.go
-# 路由注册器 -> internal/admin/router/user_test_xxx.go
-# webViewsDir（由 generateRelativePath 推导）-> web/src/views/backend/ops/userTestXxx
-modelFile: internal/model/custom/model.go
-# 显式 modelFile 仅做安全校验与兼容，上述 Go 产物落点不变
-```
-
-当前应用只有一条 DI `*gorm.DB`，所以 `databaseConnection` 省略、空值和 `mysql` 都是 `mysql`；`postgres`、`analytics` 等未知值失败，不要暗示支持多 DB。
-
-## 关系
+## 7. 关系
 
 ### 基本配置与 enrichment
 
-远程下拉至少应配置 `remoteTable`、`remotePk`、`remoteField`、`relationFields` 和合适的 source type。对单值 `remoteSelect` 和多值 `remoteSelects`，`relationFields` 已用于 List/GetOne 的标签 enrichment：生成器会生成只含 remote PK 和这些字段的 slim DTO、主行上的指针关系字段，以及每个关系每页一次的批量查询；不会 preload 整个 remote model，也不会 JOIN 或应用 relation-side data scope。
+远程下拉至少应配置 `remoteTable`、`remotePk`、`remoteField`、`relationFields` 和合适的 source type。`relationFields` 用于 List/GetOne 的标签 enrichment：生成器会生成 slim DTO、主行上的指针关系字段，以及每页一次的批量查询（不会 preload 整个 remote model，不会 JOIN，不应用 relation-side data scope）。
 
-`remoteField` 是 select endpoint 返回的 option label key；`relationFields` 是生成 nested DTO 和 relation display column 使用的真实远程表列名，两者可以不同。`relationFields` 必须能在生成时从 `remoteTable` 的 introspected columns 中找到，未知列会使生成失败。字段名本身不会自动推断关系，也不能用概念上的列名替代实际 payload/表列；`remoteController` 必须指向真实 handler 文件（`internal/admin/handler/<table>.go`），`remoteModel` 必须指向共享实体（`internal/model/<table>.go`，文件名=表名；历史布局前缀自动剥离），不能虚构 `remoteUrl`。
+`remoteField` 是 select endpoint 返回的 option label key；`relationFields` 是生成 nested DTO 和 relation display column 使用的真实远程表列名，两者可以不同。`relationFields` 必须在生成时能从 `remoteTable` 的 introspected columns 中找到，未知列使生成失败。`remoteController` 必须指向真实 handler 文件，`remoteModel` 必须指向共享实体（`internal/model/<table>.go`），不能虚构 `remoteUrl`。
 
-### FK 列自动隐藏规则
+### FK 列自动隐藏
 
-当 `remoteSelect`/`remoteSelects` 同时配置了 `remoteTable` 和非空 `relationFields` 时，生成器会自动把原始 FK 列设为 `show: "false"`，保留它在 `columnFields` 中以支持远程公共搜索，并由 relation enrichment 生成可见列表列。显式 `show` 值保持不变，显式 `show: "true"` 仍会显示原始列。若把该 FK 从 `columnFields` 里完全省略，则会同时移除原始 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成；显式 `show: "false"` 仍是受支持的写法。
+当 `remoteSelect`/`remoteSelects` 同时配置了 `remoteTable` 和非空 `relationFields` 时，生成器自动将原始 FK 列的 `show` 设为 `"false"`，保留它在 `columnFields` 中以支持远程公共搜索，并由 relation enrichment 生成可见的列表列。显式 `show` 值保持不变；若把该 FK 从 `columnFields` 完全省略，则同时移除 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成。
 
 ### relation display 列标题
 
-`table.label` 只在 `relationFields` 恰好一个字段时复用到这个可见 relation display 列；多个 relation display 列不会共享同一个标题，因为那会把不同 payload 字段伪装成同名列。比如"上级代理"这种单列昵称展示可以这样写：
+`table.label` 只在 `relationFields` 恰好一个字段时复用到这个可见 relation display 列。多个 relation display 列不会共享同一个标题。
 
 ```yaml
 - name: parent_admin_id
@@ -454,7 +332,7 @@ modelFile: internal/model/custom/model.go
     show: "false"
 ```
 
-多字段 relation display 示例：
+多字段示例：
 
 ```yaml
 - name: reviewer_admin_ids
@@ -473,151 +351,98 @@ modelFile: internal/model/custom/model.go
     show: "false"
 ```
 
-未显式设置 label 时，每个 relation display 列使用自己的默认翻译键。
+### `remoteSelects` 顺序契约
 
-### `remoteSelects` 的顺序契约
-
-`remoteSelects` 的 FK 仍使用 `validate.CommaJoined`，JSON 保留 CSV token 的顺序和重复项。关系对象使用 `relationNameForField` 生成的 key；例如 `reviewer_admins` 对应 `reviewerAdminsTable`。每个 `relationFields` 属性都是与 FK token 一一对应的 nullable 数组，空 CSV 返回空数组，空/非法/溢出/缺失远程记录返回 `null`。例如：
-
-```json
-{
-  "reviewer_admins": ["2", "", "2"],
-  "reviewerAdminsTable": {
-    "nickname": ["代理 A", null, "代理 A"],
-    "email": ["a@example.test", null, "a@example.test"]
-  }
-}
-```
-
-这项 positional contract 有意不同于 PHP `whereIn` 后再按结果顺序回填的有损行为：Go 保留输入顺序和重复项。多值 comSearch 仍针对原始 FK 使用 `FIND_IN_SET`/远程选项按 ID 查询；relation label 不参与 JOIN、relation-column search 或 quick-search。带点号的 `quickSearchField`（例如 `user.username`）会在生成时拒绝，并提示 JOIN 支持尚未实现。
+`remoteSelects` 的 FK 使用 `validate.CommaJoined`，JSON 保留 CSV token 的顺序和重复项。关系对象使用 `relationNameForField` 生成的 key。每个 `relationFields` 属性都是与 FK token 一一对应的 nullable 数组，空 CSV 返回空数组，空/非法/溢出/缺失远程记录返回 `null`。这项 positional contract 有意不同于 PHP `whereIn` 后按结果顺序回填的有损行为：Go 保留输入顺序和重复项。
 
 ### 会员 `user_id` 选择
 
-用户相关业务表不要把需要运营人员选择的 `user_id` 留作普通数字字段。应将其显式声明为 `remoteSelect`，指向仓库中已经注册的会员 CRUD 来源。`remoteField` 必须匹配 source route 实际返回的 option label key，而不是凭概念猜测数据库列名。本仓库内置会员选择接口 `/admin/user.User/index` 的 `select=true` 返回 `id` 和 `nickname_text`，因此示例如下：
+用户相关业务表不要把 `user_id` 留作普通数字字段。应显式声明为 `remoteSelect`，`remoteField` 必须匹配 source route 实际返回的 option label key（不是凭概念猜测的数据库列名）。本仓库内置会员选择接口 `/admin/user.User/index` 的 `select=true` 返回 `id` 和 `nickname_text`：
 
 ```yaml
-name: user_id
-type: bigint
-unsigned: true
-designType: remoteSelect
-form:
-  remoteTable: user
-  remotePk: id
-  remoteField: nickname_text
-  relationFields: username
-  remoteSourceConfigType: crud
-  remoteController: internal/admin/handler/user.go
-  remoteModel: internal/model/user.go
+- name: user_id
+  type: bigint
+  unsigned: true
+  designType: remoteSelect
+  form:
+    remoteTable: user
+    remotePk: id
+    remoteField: nickname_text
+    relationFields: username
+    remoteSourceConfigType: crud
+    remoteController: internal/admin/handler/user.go
+    remoteModel: internal/model/user.go
 ```
 
 ### custom 来源
 
-custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`；例如管理员选择接口 `/admin/auth.Admin/index`。不要填写仓库中未注册的路由。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从 `internal/admin/router/<table>.go` 的注册器反查路由常量（按控制器文件名的 stem 匹配），查不到再按路径回退，因此 PHP controller 的动态 URL、插件权限、自定义组件和全部运行时 join 语义不保证一致。
+custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=true&quickSearch=...`，返回 `data.options` 或 `data.list`。多表查询需要时设置 `remotePrimaryTableAlias`。Go 优先从 `internal/admin/router/<table>.go` 的注册器反查路由常量，查不到再按路径回退。
 
-## 请求与时间字段 JSON 契约
+## 8. 路径与产物
 
-请求适配是 Go 实现：多值字段接收数组并存为逗号字符串，array 使用规范化 JSON，日期/时间使用仓库 validator，switch 的 bool 转为 `1`/`0`。不要把 PHP getter/cast 的全部运行时行为写进 spec 假设。
+`generateRelativePath` 必须显式设置，标准值 = 表名本身。只决定 views 目录、菜单/路由名形态，**不决定 Go 产物落点**（Go 产物一律按文件名=表名落单包）。
 
-时间字段的 JSON 契约（本仓库生成 CRUD）：
+以 `ops_user_test_xxx` 为例：
 
-| 存储与设计 | JSON 输出 | 请求侧接受 |
-| --- | --- | --- |
-| 原生 SQL `datetime`/`timestamp`（`FlexDateTime`） | 本地格式化字符串 `"YYYY-MM-DD HH:mm:ss"`，零值 `null` | 格式化日期时间与 RFC3339 |
-| canonical 自动时间字段 `create_time`/`update_time`/`createtime`/`updatetime`（整数存储） | 普通整数 | 不进入请求 DTO，生成代码在 Add/Edit 写入 `time.Now().Unix()`，不被客户端覆盖 |
-| 其它整数存储的 `timestamp` 设计字段（如 `end_time`，`FlexFormattedUnixTime`） | 本地格式化字符串 `"YYYY-MM-DD HH:mm:ss"`，零值 `null` | Unix 数字、数字字符串与格式化日期时间 |
-| `date` | `"YYYY-MM-DD"` | 仓库 validator 接受的日期 |
-| `time` | `"HH:mm:ss"` | 仓库 validator 接受的时间 |
-| `year` | 可空空值 `null`；显式 MySQL YEAR `0000` 为 `"0"`；非零年份为四位数字字符串（如 `"2026"`） | 年份值 |
+| 方面 | 结果 |
+| --- | --- |
+| 表名 | `ops_user_test_xxx` |
+| 实体名（Go） | `UserTestXxx` |
+| 实体文件 | `internal/model/user_test_xxx.go` |
+| 仓库文件 | `internal/admin/repository/user_test_xxx.go` |
+| DTO 文件 | `internal/admin/dto/user_test_xxx.go` |
+| handler 文件 | `internal/admin/handler/user_test_xxx.go` |
+| 路由注册器 | `internal/admin/router/user_test_xxx.go` |
+| views 目录 | `web/src/views/backend/ops/userTestXxx/` |
+| 路由名 | `ops.UserTestXxx` |
+| 菜单 name | `ops/userTestXxx` |
 
-第 3 类对齐 PHP 生成模型对非 auto 整数 timestamp 的 `timestamp:Y-m-d H:i:s` cast。
+`generateRelativePath` 拆法：单段输入在第一个下划线处拆为分类+实体（`ops_user_test_xxx` → 目录 `ops` + 实体 `user_test_xxx`，实体名下划线保留）。需要比"分类/实体"两级更深的 views 子目录时，使用 `/` 或 `.` 分隔符：`ops/user/test_xxx` → views `ops/user/testXxx`、路由 `ops.user.TestXxx`。不要把实体名拆成多段；分类应为单词；多词分类写显式路径（如 `order_center/recharge`）。
 
-表格列 `table.timeFormat` 使用前端 `timeFormat` 的 token 语法（例如 `yyyy-mm-dd hh:MM:ss`），与 Element Plus 日期选择器的 `value-format`（例如 `YYYY-MM-DD HH:mm:ss`）不是同一套符号。
+路径安全：拒绝 `..`、绝对路径、Windows drive prefix、空段、`a..b`。显式路径段保留下划线（`some_special_dir/orders` 不会拆成多层目录）。
 
-## 命名、注释和数据库最佳实践
+共享 provider 与锚点：仓库、handler 的合并 ProviderSet 落在 `internal/admin/{repository,handler}/provider.go`（生成器逐项追加构造器）；路由注册器经 `internal/admin/router/provider.go` 挂载——合并 ProviderSet 追加 `NewXxxRegistrar`，`ProvideRegistrars` 锚点增加一行 handler 参数与一行返回条目。生成器不再修改 `cmd/server/wire.go`。
+
+## 9. 最佳实践
+
+### 命名与注释
 
 - 只使用一个单列主键，不支持复合主键。
-- `weigh` 必须是 `int`，用于拖拽排序；新增行自动把 `weigh` 初始化为新行 id，拖拽排序使用与 PHP 上游一致的碰撞位移（collision-shift）算法。
-- 建议所有业务表都带 `create_time` 和 `update_time`，两者使用 `bigint`，由生成 CRUD 代码在 Add/Edit 自动写入 `time.Now().Unix()`，不进入请求 DTO。它们是排查数据、按时间排序和后续对账的基础字段，缺失时只能靠业务字段推断写入时间。
-- 组件推断依赖 SQL 类型和后缀：`array`、`list/select/data`、`lists/selects/multi`、`_id`、`_ids` 以及 image/file/icon/color/editor、switch/status 家族都很重要。
+- `weigh` 必须是 `int`，用于拖拽排序；新增行自动初始化为新行 id。
+- 所有业务表都应带 `create_time` 和 `update_time`（`bigint`，自动维护，不进请求 DTO）。
 - `comment` 是字段标题和字典来源。字典精确示例：`状态:0=禁用,1=启用`、`菜单类型:tab=选项卡,link=链接,iframe=Iframe`。
-- radio/select 应使用 enum 或 varchar 存储，并让注释键和值对应存储值，例如 `enum('opt0','opt1')` 配合 `单选框:opt0=选项一,opt1=选项二`。enum/set 即使没有 `key=value` 注释也会从列值生成静态键并使用回退标签；varchar/string 没有 `key=value` 注释时只有字段标签，没有静态选项。
-- checkbox/selects 应使用 set 或 varchar 逗号存储，并让每个注释 key 对应一个存储值，例如 `set('feature_a','feature_b')` 配合 `功能:feature_a=功能一,feature_b=功能二`。enum/set 值与注释 key 不一致时仍按 PHP 兼容语义合并，不会被生成器拒绝，因此应主动保持一致。
-- remoteSelect/remoteSelects 使用关系数据，不要为它们伪造静态字典或默认选项。
-- 表注释示例：`会员组表` -> `会员组管理`。
-- v2.2 起清空 number/float/time/select/single-remote 使用 `null`；对应数据库列通常必须允许 NULL，不要改成空字符串或 `0`。
+- enum/set 注释键值应与存储值一致，不一致时按 PHP 兼容语义合并，不会被拒绝。
+- 表注释示例：`会员组表` → `会员组管理`。
+- `columnFields` 末尾建议始终带上 `update_time` 与 `create_time`（列表展示时间戳是常规需求，且为排序提供依据）。
+- 为标题、内容、备注等较长列预设 `table.width`（140–260px），减少生成后手工调整。操作列固定 140px 无需配置。
 
-## 有意不支持的键
+### 组件选择
 
-不要添加 PHP `validateFile`、原始 Phinx `designChange`、plugin namespace、engine/charset/rowFormat 或任意 pass-through 属性。Go alter 根据当前 schema 和 fields 派生变更，不接受 raw migration 操作；Go 没有 PHP validator 文件，SQL 表属性使用固定实现。新属性必须进入明确的 model/spec contract 和测试。
+选型先看语义，不照搬字段名后缀：
+- **单布尔**（是/否、启用/禁用）→ `switch` + `tinyint(1)`。**不要写成 `checkbox`**——checkbox 语义是可多选，单布尔用 checkbox 会得到"只能勾一个的多选框"。
+- **多选** → `checkbox`，存储 `set` 或 varchar 逗号串，comment 每个键对应一个存储值。
+- **单选枚举** → `radio`（选项少）或 `select`（选项多/需要字典），存储 enum/varchar/tinyint，comment 键值如 `状态:0=待支付,1=已支付`。
+- `remoteSelect`/`remoteSelects` 使用关系数据，不要为它们伪造静态字典或默认选项。
+- v2.2 起清空 number/float/time/select/single-remote 使用 `null`；对应列通常必须允许 NULL，不要改成空字符串或 `0`。
 
-## 部署与 `crud:apply`（业务表结构同步）
+### 不支持的写法
 
-`crud:generate` 是开发工具（代码 + 开发库 DDL + 菜单）；`crud:apply` 是部署工具：把仓库里提交的 spec 幂等同步到任意目标库，**不写代码、不产生迁移文件**。spec 是业务表结构的唯一事实源。
+不要添加：`validateFile`、`designChange`、plugin namespace、engine/charset/rowFormat 或任意 pass-through 属性。Go alter 根据当前 schema 和 fields 派生变更，不接受 raw migration 操作。`isCommonModel` 已弃用（新语义下实体一律共享）。`modelFile`/`controllerFile` 为历史键，仅做安全校验与兼容，不再影响任何产物落点。
 
-```bash
-go run ./cmd/server --conf configs/config.yaml crud:apply                 # 应用 crud_specs/ 下全部 spec（文件名排序）
-go run ./cmd/server --conf configs/config.yaml crud:apply crud_specs/<module>.yaml
-# flags: --plan / --approve=<类别> / --allow-rebuild（主键漂移时破坏性重建，仅限可丢弃环境） / --skip-menu / --admin-id
-# example: crud:apply --approve=defaults,type-widening
-```
+## 10. 完整示例
 
-`--approve` 以逗号分隔批准类别，也可使用 `--approve=all` 全选。固定类别及语义为：`defaults`（默认值变更）、`auto-increment`（自增属性变更）、`type-widening`（命中显式安全矩阵的类型扩宽）、`attributes`（其它列属性变更）。未指定时行为与默认部署语义一致。批准只放行对应的 `requires-approval` diff；`rejected`（主键漂移、unsigned 变更、nullable→NOT NULL、类型收窄及安全矩阵外类型变更等）永不可批准，`--allow-rebuild` 仍只控制主键漂移的破坏性重建。
-
-`crud:apply --plan` 只读取数据库并逐表逐列输出风险等级和 DDL，不执行 schema、菜单或 `crud_log` 变更；阻塞的 `requires-approval` diff 会标注 `可被 --approve=<类别> 放行`，`rejected` 会标注必须使用业务迁移。未批准的 `requires-approval` 或存在 `rejected` 时返回非零退出码。`migrate` 只有在 `crud.apply_on_migrate: true` 时才会自动执行 apply，缺省关闭。
-
-`migrate` 尾部启用后执行同一应用流程（`crud_specs/` 存在且非空时），部署一条命令完成：
-
-```bash
-git pull && go run ./cmd/server --conf configs/config.yaml migrate        # 框架三轨道 + 业务表 apply
-```
-
-每个 spec 的应用语义：
-
-| 场景 | 动作 |
-| --- | --- |
-| 表不存在 | 按 spec 初始建表（安全，不是"重建"） |
-| 表已存在，无漂移 | `unchanged`，只同步表注释（幂等） |
-| 新增 nullable 列、带合法默认值的新增列、字段 comment-only | `safe-auto`，自动执行 |
-| 类型扩宽命中显式安全矩阵、默认值变更 | `requires-approval`，计划中明示，默认阻塞；可用对应 `--approve=<类别>` 放行 |
-| unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键列属性/列集合漂移 | `rejected`，拒绝并指向 business 迁移；`--allow-rebuild` 只对主键漂移允许破坏性重建 |
-
-关键约定：
-
-- **`type: create` 是生成时动词，不是稳态重建指令。** 仓库里停留在 `create` 的 spec 在已有表上同样幂等（无漂移即 unchanged）；apply 绝不因该字段隐式删表。
-- apply 同步菜单（按完整逻辑名及 `(pid,name)` 父级定位），更新生成器自有字段、补齐五个标准按钮并保留下游自定义按钮；菜单结果会输出 `created`/`updated`/`unchanged`。
-- generate/delete/apply/plan 共用进程内快速锁和数据库 GET_LOCK；锁名包含数据库名和表前缀，`start` 日志只在持有该数据库锁后对账，避免误判其它进程的活跃操作。
-- charset、collation、generated expression、ON UPDATE 等 spec 未建模属性标记为 `unmanaged`，默认不产生 `MODIFY`。
-- 列删除不在 alter 语义内（与生成一致：不出现在 spec 中的列保留不动）；确需删列请写 business 迁移。
-- 字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `migrate`（尾部 apply）→ 重启，全程无需手写 SQL。
-
-## 生成失败排查清单
-
-生成或生成后行为不符合预期时，按此清单自查：
-
-1. **恰好一个主键**：`fields` 必须有且只有一个 `primaryKey: true`，不支持复合主键。
-2. **relation 列真实性**：`relationFields` 每列都必须存在于 `remoteTable` 的 introspected columns，未知列直接失败；`remoteController`/`remoteModel` 必须指向真实文件，`remoteUrl` 必须是仓库已注册路由。
-3. **quickSearch 不带点号**：`quickSearchField: [user.username]` 会被拒绝（JOIN 未实现）；relation 字段只能进 `columnFields` 走 FK 搜索。
-4. **默认值配对**：`default: ""` 必须配 `defaultType: INPUT` 才表示 `DEFAULT ''`；text/blob/json 等无默认值 family 不写默认值。
-5. **布尔语义**：`tinyint(1)` 的非规范值（非 bool/`0`/`1`/`true`/`false`）会被请求层拒绝；`char(1)` 不参与布尔兼容。
-6. **路径合法性**：路径不得含 `..`、绝对路径、Windows drive prefix、空段（`a//b`）或 `a..b`。
-7. **省略 vs 空列表**：`formFields`/`columnFields` 省略是自动推导，显式 `[]` 是没有表单项/表格列。
-8. **数据库副作用**：`type: create` 对已有表是删除重建；MySQL DDL 不可由生成器回滚，执行前确认目标库。
-9. **生成后验证**：生成成功（退出码 0）后运行 `go build ./...`，前端改动在 `web/` 执行 `pnpm typecheck`。
-
-## 完整示例
+一个覆盖全部常见字段类型和配置的完整 spec：
 
 ```yaml
 name: order_item
 comment: 订单项表
 type: create
-rebuild: "No"
 generateRelativePath: order_sales_item
-databaseConnection: mysql
 quickSearchField: [order_no, reviewer_admin_ids]
 defaultSortField: weigh
 defaultSortType: desc
 formFields: [order_no, reviewer_admin_ids, quantity, status, note]
-columnFields: [id, admin_id, order_no, reviewer_admin_ids, quantity, status, weigh]
+columnFields: [id, admin_id, order_no, reviewer_admin_ids, quantity, status, weigh, create_time, update_time]
 dataScope:
   mode: required
   ownerColumn: admin_id
@@ -631,16 +456,14 @@ fields:
     primaryKey: true
     autoIncrement: true
     unsigned: true
-    null: false
-    defaultType: NONE
     comment: ID
     designType: pk
     formBuildExclude: true
+
   - name: admin_id
     type: bigint
     unsigned: true
     null: false
-    defaultType: INPUT
     default: "0"
     comment: 上级代理
     designType: remoteSelect
@@ -653,6 +476,10 @@ fields:
       remoteSourceConfigType: crud
       remoteController: internal/admin/handler/admin.go
       remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
+      width: 140
+
   - name: order_no
     type: varchar
     length: 64
@@ -663,10 +490,12 @@ fields:
     form:
       validator: [required]
     table:
+      width: 200
       operator: LIKE
-      comSearchInputAttr: |
-        size=large
-        placeholder=order=no
+      comSearchInputAttr:
+        size: large
+        placeholder: 订单号
+
   - name: reviewer_admin_ids
     type: varchar
     length: 255
@@ -684,48 +513,182 @@ fields:
       remotePrimaryTableAlias: admin
       selectMulti: true
     table:
+      width: 200
       comSearchRender: remoteSelect
       comSearchInputAttr:
         size: large
         clearable: true
+
   - name: quantity
     type: int
     null: false
-    defaultType: INPUT
     default: "1"
     comment: 数量
     designType: number
     form:
       step: 1
       validator: [required, number]
+    table:
+      width: 100
+
+  - name: price
+    type: decimal
+    length: 10
+    precision: 2
+    null: false
+    default: "0.00"
+    comment: 单价
+    designType: float
+    form:
+      step: 0.01
+      validator: [required, number]
+    table:
+      width: 110
+
   - name: status
     type: tinyint
     length: 1
     null: false
-    defaultType: INPUT
     default: "1"
     comment: 状态:0=禁用,1=启用
     designType: switch
+    table:
+      width: 100
+
+  - name: type
+    type: enum
+    dataType: "enum('standard','express','scheduled')"
+    null: false
+    default: standard
+    comment: 类型:standard=标准,express=加急,scheduled=定时
+    designType: select
+    table:
+      width: 110
+
+  - name: tags
+    type: varchar
+    length: 255
+    null: false
+    defaultType: EMPTY STRING
+    comment: 标签:urgent=紧急,special=特殊,wholesale=批发
+    designType: selects
+    table:
+      width: 160
+      render: tags
+
+  - name: cover_image
+    type: varchar
+    length: 255
+    null: true
+    defaultType: NULL
+    comment: 封面图
+    designType: image
+    table:
+      width: 100
+
+  - name: attachments
+    type: text
+    null: true
+    defaultType: NULL
+    comment: 附件
+    designType: files
+    table:
+      width: 160
+
+  - name: content
+    type: text
+    null: true
+    defaultType: NULL
+    comment: 备注说明
+    designType: editor
+    form:
+      rows: 6
+
+  - name: plan_time
+    type: bigint
+    null: true
+    defaultType: NULL
+    comment: 计划时间
+    designType: datetime
+    table:
+      width: 180
+      timeFormat: yyyy-mm-dd hh:MM:ss
+
   - name: weigh
     type: int
     null: false
-    defaultType: INPUT
     default: "0"
     comment: 权重
     designType: weigh
+    table:
+      width: 100
+
   - name: note
     type: text
     null: true
     defaultType: NONE
-    comment: 备注
+    comment: 内部备注
     designType: textarea
     form:
       rows: 4
+
+  - name: create_time
+    type: bigint
+    comment: 创建时间
+    table:
+      width: 180
+      timeFormat: yyyy-mm-dd hh:MM:ss
+
+  - name: update_time
+    type: bigint
+    comment: 更新时间
+    table:
+      width: 180
+      timeFormat: yyyy-mm-dd hh:MM:ss
 ```
 
-## 参考
+## 11. 附录
 
-以下资料对框架源仓库和业务仓库都可用：
+### 部署：`crud:apply`
+
+`crud:generate` 是开发工具（代码 + 开发库 DDL + 菜单）；`crud:apply` 是部署工具——把仓库里提交的 spec 幂等同步到任意目标库，不写代码、不产生迁移文件。spec 是业务表结构的唯一事实源。
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:apply                 # 全部 spec
+go run ./cmd/server --conf configs/config.yaml crud:apply crud_specs/<module>.yaml
+```
+
+`--approve=<类别>` 放行需要批准的变更（`defaults`、`auto-increment`、`type-widening`、`attributes`），`--approve=all` 全选。`rejected` 变更（主键漂移、unsigned 翻转、收窄、nullable→NOT NULL 等）永不可批准，必须写业务迁移。`--allow-rebuild` 只控制主键漂移的破坏性重建，仅限可丢弃环境。
+
+`migrate` 尾部在 `crud.apply_on_migrate: true` 时自动执行 apply：
+
+```bash
+git pull && go run ./cmd/server --conf configs/config.yaml migrate
+```
+
+| 场景 | 动作 |
+| --- | --- |
+| 表不存在 | 按 spec 初始建表 |
+| 表已存在，无漂移 | `unchanged`，只同步表注释 |
+| 新增 nullable 列、带合法默认值的新增列、comment-only | `safe-auto`，自动执行 |
+| 类型扩宽命中安全矩阵、默认值变更 | `requires-approval`，默认阻塞 |
+| unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键漂移 | `rejected`，拒绝并指向 business 迁移 |
+
+关键约定：`type: create` 是生成时动词，不是稳态重建指令——仓库里 `create` 的 spec 在已有表上同样幂等。apply 不因该字段隐式删表。列删除不在 alter 语义内（不出现在 spec 中的列保留不动）。字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `migrate`（尾部 apply）→ 重启。
+
+### 生成失败排查
+
+1. **恰好一个主键**：`fields` 必须有且只有一个 `primaryKey: true`。
+2. **relation 列真实性**：`relationFields` 每列必须存在于 `remoteTable` 的 introspected columns；`remoteController`/`remoteModel` 指向真实文件。
+3. **quickSearch 不带点号**：`quickSearchField: [user.username]` 会被拒绝（JOIN 未实现）。
+4. **默认值配对**：`default: ""` 必须配 `defaultType: INPUT` 才表示 `DEFAULT ''`。
+5. **布尔语义**：`tinyint(1)` 的非规范值会被请求层拒绝；`char(1)` 不参与布尔兼容。
+6. **路径合法性**：路径不得含 `..`、绝对路径、Windows drive prefix、空段（`a//b`）或 `a..b`。
+7. **省略 vs 空列表**：`formFields`/`columnFields` 省略是自动推导，显式 `[]` 是没有。
+8. **数据库副作用**：`type: create` 对已有表是删除重建；DDL 不可回滚。
+9. **生成后验证**：`go build ./...`；前端改动在 `web/` 执行 `pnpm typecheck`。
+
+### 参考
 
 - Official database specification: <https://doc.buildadmin.com/senior/databaseSpecification.html>
 - Official CRUD guidance: <https://doc.buildadmin.com/senior/CRUD.html>
