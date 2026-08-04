@@ -236,12 +236,21 @@ func (d RedisDriver) removeFromIndexes(ctx context.Context, store redisStore, to
 	return err
 }
 
+// keyPrefix 返回配置的 redis key 业务前缀；为空时返回空串，
+// 保持历史 "up:..." key 格式不变（向后兼容）。
+func (d RedisDriver) keyPrefix() string {
+	if d.config == nil || d.config.Redis.Prefix == "" {
+		return ""
+	}
+	return d.config.Redis.Prefix + ":"
+}
+
 func (d RedisDriver) GetUserKey(user_id int32) string {
-	return "up:" + com.ToStr(user_id)
+	return d.keyPrefix() + "up:" + com.ToStr(user_id)
 }
 
 func (d RedisDriver) GetUserKeyFor(t string, user_id int32) string {
-	return "up:" + tokenIndexType(t) + ":" + com.ToStr(user_id)
+	return d.keyPrefix() + "up:" + tokenIndexType(t) + ":" + com.ToStr(user_id)
 }
 
 func (d RedisDriver) GetTypeUserKey(t string, user_id int32) string {

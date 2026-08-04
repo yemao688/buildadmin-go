@@ -293,6 +293,32 @@ func redisTokenValue(t *testing.T, rawToken string, tokenType string, userID int
 	return encrypted, string(data)
 }
 
+func TestRedisDriverKeyPrefix(t *testing.T) {
+	store := newRedisStoreFake()
+	driver := newFakeRedisDriver(store)
+
+	// 向后兼容：prefix 为空时保持历史 "up:..." key 格式
+	require.Equal(t, "up:7", driver.GetUserKey(7))
+	require.Equal(t, "up:user:7", driver.GetUserKeyFor("user", 7))
+
+	// 非空 prefix：所有索引 key 增加 "prefix:" 前缀
+	driver.config.Redis.Prefix = "ba"
+	require.Equal(t, "ba:up:7", driver.GetUserKey(7))
+	require.Equal(t, "ba:up:user:7", driver.GetUserKeyFor("user", 7))
+	require.Equal(t, "ba:up:admin:7", driver.GetUserKeyFor("admin-refresh", 7))
+
+	// 端到端：Set/Clear 使用带前缀的索引，旧无前缀索引不受影响
+	require.NoError(t, driver.Set("admin-token", "admin", 7, 0))
+	encrypted, _ := redisTokenValue(t, "admin-token", "admin", 7)
+	require.Contains(t, store.sets["ba:up:admin:7"], encrypted)
+	require.NotContains(t, store.sets["up:admin:7"], encrypted)
+	require.NotContains(t, store.sets["up:7"], encrypted)
+
+	require.NoError(t, driver.Clear("admin", 7))
+	require.False(t, driver.Check("admin-token", "admin", 7))
+	require.NotContains(t, store.sets["ba:up:admin:7"], encrypted)
+}
+
 func TestRedisDriverSetUsesDurationTTLAndTypedIndex(t *testing.T) {
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)

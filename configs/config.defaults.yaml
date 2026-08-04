@@ -76,10 +76,11 @@ token:
 
 # Redis 配置（redis）
 redis:
-  host: '127.0.0.1'
-  port: 6379
-  db: 5
-  password: ''
+  host: '127.0.0.1' # 主机地址
+  port: 6379        # 端口
+  db: 0             # 数据库编号（默认 0）
+  password: ''      # 密码
+  prefix: ''        # redis key 业务前缀，多应用共用 redis 时避免 key 冲突；留空保持历史 key 格式
 
 # 上传配置（upload）
 # 说明：
