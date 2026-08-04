@@ -672,6 +672,8 @@ git pull && go run ./cmd/server --conf configs/config.yaml migrate
 
 需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，migrate 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。
 
+**迁移与 apply 的分工**：业务表结构只由 spec → apply 物化。不要在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表——会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，且常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只负责 apply 表达不了的东西：唯一索引（spec 暂不支持声明）、`rejected` 破坏性变更、种子数据，以及无 spec 的非 CRUD 自建表（自负责最终契约）。
+
 | 场景 | 动作 |
 | --- | --- |
 | 表不存在 | 按 spec 初始建表 |

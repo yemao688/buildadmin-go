@@ -37,6 +37,22 @@ func init() {
 
 `Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/migrations/internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
+## 职责边界：spec/apply 与迁移的分工
+
+业务表的 schema 物化只有一条路径：`crud_specs/*.yaml` → `crud:apply`（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。**不要在业务迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表**，原因：
+
+- **双重事实源**：apply 与迁移各按一份形状建表，一旦分歧，apply 会以 `safe-auto` 悄悄修正或 `rejected` 红牌阻塞，冲突难以归因；
+- **绕过安全矩阵**：`AutoMigrate` 静默建列/扩宽，没有 apply 的分类审批与拒绝机制；
+- **`Down` 删除数据**：`DROP TABLE` 连带删除业务数据，且下次 migrate 尾部 apply 又重建，回滚语义混乱；
+- **锁死删表**：常驻 `VerifySchema` 断言表存在，后续 `crud:delete` 删除 spec 会被红牌拦截。
+
+业务迁移的合理用途是 spec/apply 表达不了的东西：
+
+- **唯一索引**（spec 暂不支持声明索引；可参考 `ensureUniqueIndex` 模式：先查后建、前缀安全）；
+- **`rejected` 类破坏性变更**（主键漂移、收窄、nullable→NOT NULL 等，安全矩阵见 `docs/crud-generation.md`）；
+- **种子数据**（如 `SeedAdminRule`）；
+- **无 spec 的非 CRUD 自建表**——这类表允许在迁移中建表，但必须自己负责最终契约：`Up` 幂等、前缀安全、`VerifyBaseline`/`VerifySchema` 自断言基线。
+
 ## `admin_rule` seed helper
 
 业务迁移使用 `SeedAdminRule` 写入自己拥有的菜单或权限规则，不要复制 framework 轨的裸 SQL。`AdminRuleSeed` 的字段对应当前 `admin_rule` 模型的 seed 列；`ID`、`update_time` 和 `create_time` 由数据库处理。helper 使用 `name` 作为业务键：该名称已存在时保留原行，不新增或覆盖；因此重复执行 `Up` 不会产生重复规则。表名经过配置前缀和 `internal/migrations/internal/core.QuoteIdentifier` 构造，前缀不固定为 `ba_`。

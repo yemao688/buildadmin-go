@@ -133,6 +133,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/migrations/business/README.md`。
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
+- **业务 CRUD 表的结构只由 `crud_specs` → `crud:apply` 物化**（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。禁止在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表：会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只写 spec/apply 表达不了的东西——唯一索引（spec 暂不支持声明）、`rejected` 破坏性变更、种子数据；只有**无 spec 的非 CRUD 自建表**才允许在迁移里建表（自负责最终契约）。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
 - 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；旧迁移轨道下的 gen 模型文件已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
 
