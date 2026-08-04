@@ -25,6 +25,7 @@ func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.Cou
 func (h *CountryCurrencyHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		response.Success(ctx, data)
+		return
 	}
 	list, total, err := h.countryCurrencyM.List(ctx)
 	if err != nil {

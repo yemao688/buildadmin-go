@@ -32,6 +32,7 @@ func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentR
 func (h *AttachmentHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		response.Success(ctx, data)
+		return
 	}
 	result, total, err := h.attachmentM.List(ctx)
 	if err != nil {

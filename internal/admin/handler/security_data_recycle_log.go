@@ -36,6 +36,7 @@ func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataR
 func (h *DataRecycleLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		response.Success(ctx, data)
+		return
 	}
 	result, total, err := h.dataRecycleLogM.List(ctx)
 	if err != nil {

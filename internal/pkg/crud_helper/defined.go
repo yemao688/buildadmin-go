@@ -344,6 +344,7 @@ func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		response.Success(ctx, data)
+		return
 	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {

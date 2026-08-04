@@ -47,6 +47,7 @@ func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensit
 func (h *SensitiveDataHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
 		response.Success(ctx, data)
+		return
 	}
 	result, total, err := h.sensitiveDataM.List(ctx)
 	if err != nil {
