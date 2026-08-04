@@ -1,6 +1,6 @@
 # 框架维护指南
 
-本文**只面向框架源仓库的维护者**（包括 AI agent）：`git@github.com:yemao688/buildadmin-go.git`，发布分支 `v2`。
+本文**只面向框架源仓库的维护者**（包括 AI agent）：`git@github.com:yemao688/buildadmin-go.git`，发布分支 `v3`。
 
 **如果你在一个业务 fork 中开发，本文不适用你。** 业务开发的规则在 [`framework-workflow.md`](framework-workflow.md)；双方通用规则在根目录 [`AGENTS.md`](../AGENTS.md)。
 
@@ -8,7 +8,7 @@
 
 | 术语 | 含义 |
 |---|---|
-| 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v2` |
+| 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v3` |
 | 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支 `master` |
 | PHP 上游 | BuildAdmin PHP 原版项目，提供生态、接口兼容性和业务语义参考 |
 

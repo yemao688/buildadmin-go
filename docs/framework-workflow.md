@@ -1,17 +1,17 @@
 # 业务项目使用与升级指南
 
-本文面向**业务仓库**（fork 自框架源仓库的业务项目）的普通开发者和 AI agent。框架源仓库是 `git@github.com:yemao688/buildadmin-go.git`，框架发布分支是 `v2`；参与框架本身开发请改读 [`framework-maintenance.md`](framework-maintenance.md)。
+本文面向**业务仓库**（fork 自框架源仓库的业务项目）的普通开发者和 AI agent。框架源仓库是 `git@github.com:yemao688/buildadmin-go.git`，框架发布分支是 `v3`；参与框架本身开发请改读 [`framework-maintenance.md`](framework-maintenance.md)。
 
 ## 三方关系
 
-- `upstream/v2`：框架源仓库的发布分支，只从这里获取框架更新。
+- `upstream/v3`：框架源仓库的发布分支，只从这里获取框架更新。
 - `origin`：用户在 GitHub 上 fork 后自己的仓库，用于保存和发布业务代码。
 - `master`：用户 fork 中长期开发业务的分支。业务提交和框架升级合并结果都落在这里。
 
 ```text
 框架源仓库
 git@github.com:yemao688/buildadmin-go.git
-              v2
+              v3
                |
                | fetch / merge
                v
@@ -21,7 +21,7 @@ git@github.com:yemao688/buildadmin-go.git
           业务开发分支 master
 ```
 
-标准方向是把 `upstream/v2` merge 到自己的 `master`。不要在 `master` 上 rebase `upstream/v2`，也不要 force push。
+标准方向是把 `upstream/v3` merge 到自己的 `master`。不要在 `master` 上 rebase `upstream/v3`，也不要 force push。
 
 ## 首次使用
 
@@ -47,12 +47,12 @@ git remote set-url upstream git@github.com:yemao688/buildadmin-go.git
 先取得框架发布分支：
 
 ```bash
-git fetch upstream v2 --tags
+git fetch upstream v3 --tags
 ```
 
 根据 fork 是否已有 `master` 选择一种场景。
 
-**fork 已有 `master`：** 保留该分支及其业务历史，不要用 `v2` 覆盖它。如果本地尚未有该分支：
+**fork 已有 `master`：** 保留该分支及其业务历史，不要用 `v3` 覆盖它。如果本地尚未有该分支：
 
 ```bash
 git switch --track origin/master
@@ -68,7 +68,7 @@ git status
 **fork 没有 `master`：** 从框架发布分支创建用户业务分支，再推送到自己的 fork：
 
 ```bash
-git switch -c master upstream/v2
+git switch -c master upstream/v3
 git push -u origin master
 ```
 
@@ -189,11 +189,11 @@ CRUD 生成器自动建规则无需处理；手写路由按同一规则二选一
 ```bash
 git switch master
 git status
-git switch -c chore/merge-upstream-v2-YYYYMMDD
-git fetch upstream v2 --tags
-git log --oneline master..upstream/v2
-git diff --stat master...upstream/v2
-git merge upstream/v2
+git switch -c chore/merge-upstream-v3-YYYYMMDD
+git fetch upstream v3 --tags
+git log --oneline master..upstream/v3
+git diff --stat master...upstream/v3
+git merge upstream/v3
 ```
 
 将 `YYYYMMDD` 替换为实际日期。`git merge` 产生冲突时，按下表处理；解决后检查 `git status`，逐个 `git add`，再执行 `git commit`。
@@ -226,7 +226,7 @@ pnpm build
 
 ```bash
 git switch master
-git merge --no-ff chore/merge-upstream-v2-YYYYMMDD
+git merge --no-ff chore/merge-upstream-v3-YYYYMMDD
 git push origin master
 ```
 
@@ -269,14 +269,14 @@ git push origin master
 4. 用户订单/充值等用户业务表默认用精确 `admin_id` 做 data-scope owner；`auto` 只识别精确 `admin_id`，不会把 `agent_admin_id` 当成默认 owner。默认 `columnFields` 保留有效 relation FK 以支持原始 ID 搜索，生成器会自动隐藏其 raw ID 列。
 5. 不手改 `cmd/server/wire_gen.go`、生成的实体/仓库或其它 generated 文件；修改来源后重新生成。
 6. 不修改历史迁移，不硬编码 `ba_` 表前缀；使用配置中的 `mysql.prefix`。
-7. 框架升级只能把 `upstream/v2` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
+7. 框架升级只能把 `upstream/v3` merge 到业务 `master`，不自行 rebase、force push、reset 或覆盖用户业务历史。
 8. 按改动选择验证：受影响包聚焦测试、`go build ./...`、必要时 `go generate ./cmd/server`，前端在 `web/` 执行 pnpm typecheck/build。
 
 ## 危险或错误做法
 
 | 做法 | 问题 |
 |---|---|
-| 在 `master` 上 rebase `upstream/v2` 或 force push | 改写共享业务历史，破坏 fork 协作。 |
+| 在 `master` 上 rebase `upstream/v3` 或 force push | 改写共享业务历史，破坏 fork 协作。 |
 | 脏工作树直接 merge | 容易把未完成业务改动混入升级冲突。 |
 | 直接改 `wire_gen.go`、generated 文件或 migration model | 下次生成会覆盖，且来源问题仍未解决。 |
 | 直接改名、改 ID 或重写历史迁移 | 破坏迁移账本和已有环境。 |

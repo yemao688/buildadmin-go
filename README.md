@@ -22,10 +22,10 @@ go install github.com/air-verse/air@latest
 
 ## 框架使用与升级
 
-框架源仓库是 `git@github.com:yemao688/buildadmin-go.git`，发布分支为 `v2`。按你的角色选入口：
+框架源仓库是 `git@github.com:yemao688/buildadmin-go.git`，发布分支为 `v3`。按你的角色选入口：
 
-- **用框架开发业务**（大多数情况：fork 后在自己的 `master` 上长期开发）：先在 GitHub fork，自己的 fork 作为 `origin`，框架源仓库作为 `upstream`；框架更新时将 `upstream/v2` merge 到 `master`，验证后 push `origin/master`，不要 rebase 或 force push。完整的 fork、安装、CRUD 和升级流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。
-- **参与框架本身的开发**（在框架源仓库的 `v2` 分支上工作）：见 [`docs/framework-maintenance.md`](docs/framework-maintenance.md)。
+- **用框架开发业务**（大多数情况：fork 后在自己的 `master` 上长期开发）：先在 GitHub fork，自己的 fork 作为 `origin`，框架源仓库作为 `upstream`；框架更新时将 `upstream/v3` merge 到 `master`，验证后 push `origin/master`，不要 rebase 或 force push。完整的 fork、安装、CRUD 和升级流程见 [`docs/framework-workflow.md`](docs/framework-workflow.md)。
+- **参与框架本身的开发**（在框架源仓库的 `v3` 分支上工作）：见 [`docs/framework-maintenance.md`](docs/framework-maintenance.md)。
 
 以上两个文档同样约束 AI agent；AI 每会话先从 [`AGENTS.md`](AGENTS.md) 的"仓库身份自检"确认自己在哪一类仓库。
 

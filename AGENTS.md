@@ -17,7 +17,7 @@
 
 | 术语 | 含义 |
 |---|---|
-| 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v2` |
+| 框架源仓库 / 框架上游 | `git@github.com:yemao688/buildadmin-go.git`，发布分支 `v3` |
 | 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支通常为 `master` |
 | PHP 上游 | BuildAdmin PHP 原版项目，仅框架维护时需要参考 |
 | 框架版本 | 根目录 `VERSION_FRAMEWORK`，框架发行 semver |
