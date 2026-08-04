@@ -294,7 +294,19 @@ PHP 的无默认值 SQL family 是：`text`、`blob`、`geometry`、`geometrycol
 
 Vue default items 中，array 固定 `[]`；editor 有空字符串；checkbox/selects/remoteSelects/city/images/files 的逗号值转数组；number/float 输出非零数字；switch/remoteSelect 的 `0` 不输出；非 INPUT 默认类型不输出。
 
-## `table` / `form` 属性
+## 字段的 `table` / `form` 属性
+
+`table` 和 `form` 是 `fields[]` 中每个字段的**子属性**（见字段契约表 `table: map`、`form: map`），嵌套在字段定义内：
+
+```yaml
+fields:
+  - name: username
+    comment: 用户名
+    table:
+      width: 180
+    form:
+      ...
+```
 
 ### `table` 属性
 
