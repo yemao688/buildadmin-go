@@ -9,11 +9,14 @@
 
 ## 0. 语言包约定（先读）
 
-框架语言包**只支持 `zh-cn` 与 `en` 两个目录枚举**（`web/src/lang/` 下
-`zh-cn.json`/`en.json` + `backend/{zh-cn,en}/`）。业务不要创建第三种
-语言目录（如 `en-us`）——按需加载映射、路由守卫与构建产物都以这两个
-目录为准。新增业务语言文件必须落到 `zh-cn`/`en` 下（可建
-`frontend/zh-cn/seller.ts` 之类子路径，语言枚举不变）。
+框架语言包**只支持 `zh-cn` 与 `en` 两个语言枚举**（`web/src/lang/` 下
+`zh-cn`/`en` 目录体系）。业务不要创建第三种语言目录（如 `en-us`）——
+按需加载映射、路由守卫与构建产物都以这两个枚举为准。
+
+**门户 = 顶级目录**：买家门户 `web/src/views/frontend/` +
+`web/src/lang/frontend/`；新增卖家门户新开 `web/src/views/seller/` +
+`web/src/lang/seller/{zh-cn,en}/...`（不要塞进 frontend 下）。框架的
+lang glob 通配任意顶级目录，新门户零框架改动即被自动加载。
 
 ## 1. 静态路由接管 `/`
 
@@ -101,14 +104,20 @@ token.RegisterRefreshType("seller", token.RefreshTypeDescriptor{
 
 ## 5. lang 目录与按需加载约定
 
-- 语言文件目录枚举：`web/src/lang/`（`zh-cn`/`en`）+ 页面级
-  `web/src/lang/backend/{lang}/...`。业务门户语言放
-  `web/src/lang/frontend/{lang}/seller.ts` 之类，**目录语言枚举仍是
-  zh-cn/en**。
+- **门户 = 顶级目录**：每个门户一个顶级目录，买家门户为
+  `web/src/views/frontend/` + `web/src/lang/frontend/`，新增卖家门户
+  新开 `web/src/views/seller/` + `web/src/lang/seller/`，**不要**塞进
+  frontend 下（下游真实结构即此模式）。
+- 语言文件目录枚举：`web/src/lang/{portal}/{lang}/...`，其中 `{lang}`
+  **只支持 `zh-cn` 与 `en` 两种枚举**（业务不要创建 `en-us` 等第三种
+  目录）。框架的 lang glob 是通配的
+  （`import.meta.glob(['./*/zh-cn/**/*.ts', './*/zh-cn.ts'])`），任意顶级
+  门户目录零框架改动即被自动加载。
 - 按需加载：`web/src/lang/autoload.ts` 的 `langAutoLoadMap` 维护
-  path → 语言包映射；`web/src/router/index.ts` 加载 admin 分支语言。
-  业务门户如需按路由加载，向 `langAutoLoadMap` 追加映射（key 用门户
-  path 前缀）。
+  path → 语言包映射（示例：
+  `'/': ['./frontend/${lang}/index.ts']`）；`web/src/router/index.ts`
+  加载 admin 分支语言。业务门户如需按路由加载，向 `langAutoLoadMap`
+  追加映射（key 用门户 path 前缀）。
 
 ## 6. 常见误区
 
