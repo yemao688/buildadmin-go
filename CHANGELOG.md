@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.0.3
+
+> 门户接线机制落地：新增公共 `/api/index/index` 初始化端点与前端 `initialize` 封装、门户语言目录按注册表解析（根门户默认 `frontend`、带前缀门户一行注册）、删除休眠的会员中心前端管线、cron 自注册 + 门户接入指南。
+
+- **Added (api, 初始化):** 新增公共 `GET /api/index/index` 端点（public 集合）——下发 `site`（siteName/version/recordNumber/cdnUrl 三段链/upload 配置/cdnUrlParams）、`userInfo`（请求带有效 `ba-user-token` 时回填）、`language`、`currency`；前端补齐 `web/src/api/frontend/index.ts` 的 `initialize()` 封装（site → siteConfig store、userInfo → userInfo store、置 initialized 标记），业务门户入口调用即可，无需自建请求管线。
+- **Added (cron):** 定时任务自注册机制落地（内部 init + Register 模式，对齐 migrations/业务包扩展轨道），并配套 `docs/frontend-portal-guide.md` 门户接入指南。
+- **Changed (i18n, 门户语言目录):** `web/src/router/index.ts` 语言包按需加载由"路径首段即门户名"的启发式改为显式**门户语言目录注册表**（`portalLangDirs`：后台固定映射 `backend`，业务带前缀门户 `/seller`、`/buyer` 追加一行注册）——修复无前缀根门户页面（`/index`、`/user/login`…）被误判为独立门户、买家端语言包整体失效的问题；根门户（`/` 及其全部无前缀页面）默认 `./frontend/`，零注册即生效。
+- **Removed (休眠管线):** 删除从未接线的会员中心前端管线——`memberCenterBase.ts`（`/user` 骨架）、`memberCenter` store、`utils/router.ts` 的 `handleFrontendRoute` 与 `MemberCenter` 接口、`SiteConfig.headNav/setHeadNav`；`iframe` 路由基址改用 `adminBaseRoute` 直接取值；`lang/autoload.ts` 同步清理失效映射。
+- **Changed (docs):** `docs/frontend-portal-guide.md` 重写为纯框架约定（门户顶级目录组织、静态路由接管 `/`、门户语言目录注册表、token 域注册、refreshType 后端配套），删除失效的会员中心语义与业务守卫样板。
+
 ## v3.0.2
 
 > 修复战役 + 工程规范落地：上传链路与 PHP 上游全面对齐、代理感知的网络头处理（Cloudflare）、handler 内声明式豁免（对齐 PHP `$noNeedLogin`/`$noNeedPermission`）、handler 目录规范清理、编辑空操作误报修复、框架核心表注释、安装/容器零配置化。
