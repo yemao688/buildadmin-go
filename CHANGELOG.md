@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.0.4
+
+> CRUD 契约打磨：`crud-generation.md` 全面重写（完整示例覆盖全部常见字段类型、合并重叠章节、精简 400 行）、`crud:validate` 拦截臆造的 `xxx_text` remoteField、registrar_test 桩列表样本化（生成模块不再需要同步测试文件）、生成器 Index 模板补 return。
+
+- **Changed (docs, crud-generation.md 重写):** 完整示例从 8 个字段扩到 14 个，覆盖全部常见类型（pk/remoteSelect/string/remoteSelects/number/float/switch/select/selects/image/files/editor/datetime/weigh/textarea/自动时间列），每个字段配齐 `table.width`/`form.validator` 等完整配置；16 节合并为 11 节，默认值语义从 3 处重复收敛为 1 处；`table.width` 明确为 `fields[]` 子属性（原示例脱上下文易误读为顶层键）。
+- **Fixed (crud:validate, `_text` 臆造):** `remoteField` 以 `_text` 结尾且 `remoteTable` 非 user 时输出 warning——`xxx_text` 只是 user 表 select 手动构造的展示键（`username + "(ID:+id)"`），非生成器默认拼接，其它表返回真实字段名（name/nickname/username）；文档同步修正会员示例（`nickname_text` → `username_text`，旧文档抄了 PHP 上游 key 名与框架实现不符）。
+- **Changed (registrar_test 样本化):** `adminRegistrars()` 从全量 20 桩（调用 `ProvideRegistrars` 签名）改为固定样本（admin 手写模板代表 + country 三生成模板代表）——测试验证的是 registrar 机制而非每个模块；生成新模块（框架或业务仓库）不再需要同步测试桩，业务仓库也不会污染框架测试文件；全量签名一致性由 `wire_gen.go` 与生成器内置 `runWire`/`runProjectBuild` 兜底。
+- **Fixed (生成器模板):** Index 的 Select 分支 `Success` 后补 `return`——此前成功 select（远程选项）请求会 fall-through 执行 List 并二次写响应（当前无害：`Base.Select` 默认 false + `writeResponse` 有 `Writer.Written` 守卫，但业务重写 Select 时会白跑一次 List 查询）；模板与 7 个存量生成 handler 一并回补。
+- **Changed (docs, 门户指南):** §4 增补多门户并发登录的 token 域划分（每域独立 header/store、第三门户必须显式 `Options.tokenDomain`、刷新失败只清本域）与守卫样板（组合 `store().getToken()` + `loginRoute`，业务自建）。
+
 ## v3.0.3
 
 > 门户接线机制落地：新增公共 `/api/index/index` 初始化端点与前端 `initialize` 封装、门户语言目录按注册表解析（根门户默认 `frontend`、带前缀门户一行注册）、删除休眠的会员中心前端管线、cron 自注册 + 门户接入指南。
