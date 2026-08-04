@@ -49,7 +49,7 @@ APP_PORT=9901 make run-docker-dev
 
 Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
 
-`public/` 是**静态资源根**：应用从它服务 `/assets`、`/static`、`/storage/default` 与 `/favicon.ico`（`internal/router/router.go` 挂载），并存放 `install.lock`（安装完成标记）。**上传文件统一在 `public/storage/` 下**：`upload.savename` 配置（`configs/config.defaults.yaml` 的 `upload:` 段）模板为 `/storage/{topic}/{year}{mon}{day}/{filename}{filesha1}{.suffix}`，本地模式落盘到 `public/storage/<topic>/...`，经 `/storage/default` 等静态路由对外访问。整目录挂载让**上传与 install.lock 都跨容器重建持久化**（无需单独挂载 storage 子目录）。
+`public/` 是**静态资源根**：应用从它服务 `/assets`、`/static`、`/storage/default` 与 `/favicon.ico`（`internal/router/router.go` 挂载），并存放 `install.lock`（安装完成标记）。**上传文件统一在 `public/storage/` 下**：`upload.savename` 配置（`configs/config.defaults.yaml` 的 `upload:` 段）模板为 `/storage/{topic}/{year}{mon}{day}/{fileName}{fileSha1}{.suffix}`，本地模式落盘到 `public/storage/<topic>/...`，经 `/storage/default` 等静态路由对外访问。整目录挂载让**上传与 install.lock 都跨容器重建持久化**（无需单独挂载 storage 子目录）。
 
 ### 在容器内执行迁移
 

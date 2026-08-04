@@ -51,10 +51,13 @@ func (p UploadParams) sourceType() string {
 	return p.File.Header.Get("Content-Type")
 }
 
-// 获取文件后缀
+// 获取文件后缀（统一小写，对齐 PHP Upload::setFile/getSaveName 的 strtolower；
+// 非字母数字回退 'file'）
+var suffixRegexp = regexp.MustCompile(`^[a-z0-9]+$`)
+
 func (p UploadParams) suffix() string {
-	suffix := strings.TrimLeft(filepath.Ext(p.File.Filename), ".")
-	if suffix == "" {
+	suffix := strings.ToLower(strings.TrimLeft(filepath.Ext(p.File.Filename), "."))
+	if !suffixRegexp.MatchString(suffix) {
 		suffix = "file"
 	}
 	return suffix
@@ -200,10 +203,10 @@ func (s *UploadHelper) getSaveName(params UploadParams, sha1 string) string {
 		"{sec}":      fmt.Sprintf("%02d", now.Second()),
 		"{random}":   random.Build("alnum", 8),
 		"{random32}": random.Build("alnum", 32),
-		"{filename}": filename,
+		"{fileName}": filename,
 		"{suffix}":   suffix,
 		"{.suffix}":  dotSuffix,
-		"{filesha1}": sha1,
+		"{fileSha1}": sha1,
 	}
 	saveName := s.config.Upload.Savename
 	for k, v := range replaceArr {
@@ -277,11 +280,11 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 			}).Error; err != nil {
 				return nil, err
 			}
-			attach.Suffix = strings.TrimLeft(filepath.Ext(attach.URL), ".")
+			attach.Suffix = strings.ToLower(strings.TrimLeft(filepath.Ext(attach.URL), "."))
 			if storage == "alioss" && s.oss != nil {
 				attach.FullUrl = s.oss.URL(attach.URL)
 			} else {
-				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
+				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, "", util.GetBaseURL(ctx), "")
 			}
 			return attach, nil
 		}
@@ -314,7 +317,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 		attachment.FullUrl = s.oss.URL(savePath)
 		return attachment, nil
 	}
-	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
+	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, "", util.GetBaseURL(ctx), "")
 
 	dirPath := filepath.Dir(util.RootPath() + "/public" + savePath)
 	// 尝试创建路径中所有不存在的目录

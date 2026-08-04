@@ -49,11 +49,11 @@ func (s *AttachmentRepository) GetOne(ctx *gin.Context, id int32) (attachment up
 }
 
 func (s *AttachmentRepository) DealData(ctx *gin.Context, data *upload.Attachment) (*upload.Attachment, error) {
-	data.Suffix = strings.TrimLeft(filepath.Ext(data.URL), ".")
+	data.Suffix = strings.ToLower(strings.TrimLeft(filepath.Ext(data.URL), "."))
 	if data.Storage == "alioss" {
 		data.FullUrl = upload.NewAliossStorage(s.DB(), s.config).URL(data.URL)
 	} else {
-		data.FullUrl = util.FullUrl(data.URL, s.config.App.CdnUrl, util.GetBaseURL(ctx), "")
+		data.FullUrl = util.FullUrl(data.URL, s.config.App.CdnUrl, "", util.GetBaseURL(ctx), "")
 	}
 	return data, nil
 }

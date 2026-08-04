@@ -43,7 +43,7 @@ func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
 	// Use the concrete adapter below because UploadSiteConfig intentionally
 	// accepts ConfigModel's method shape.
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou"}
-	result, err := UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{filename}", Mimetype: "jpg,png"}})
+	result, err := UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,10 +53,36 @@ func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
 	if result["url"] != "https://demo.oss-cn-hangzhou.aliyuncs.com" {
 		t.Fatalf("url=%v", result["url"])
 	}
-	for _, key := range []string{"allowedSuffixes", "allowedMimeTypes", "maxSize", "mode", "params"} {
+	// alioss 直传档：未配置 upload_cdn_url 时 cdn 回退 bucketUrl（与 url 相同）
+	if result["cdn"] != "https://demo.oss-cn-hangzhou.aliyuncs.com" {
+		t.Fatalf("cdn=%v", result["cdn"])
+	}
+	for _, key := range []string{"allowedSuffixes", "allowedMimeTypes", "maxSize", "mode", "params", "cdn"} {
 		if _, ok := result[key]; !ok {
 			t.Fatalf("missing %s", key)
 		}
+	}
+}
+
+func TestUploadSiteConfigCDNPriority(t *testing.T) {
+	// upload_cdn_url 配置时优先于 bucketUrl
+	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou", "upload_cdn_url": "https://cdn.example.com"}
+	result, err := UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result["cdn"] != "https://cdn.example.com" {
+		t.Fatalf("cdn=%v, want upload_cdn_url", result["cdn"])
+	}
+
+	// 非 alioss 模式：不设置 cdn 键（与 PHP request->upload 仅在 alioss 时存在一致）
+	values = configValues{"upload_mode": "local"}
+	result, err = UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := result["cdn"]; ok {
+		t.Fatal("cdn must be absent when upload mode is not alioss")
 	}
 }
 

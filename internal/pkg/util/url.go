@@ -26,10 +26,14 @@ func DefaultUrl(relativeUrl string, defaultUrl string) string {
 	return relativeUrl
 }
 
-// 获取资源完整url地址；若安装了云存储或 config  配置了CdnUrl，则自动使用对应的CdnUrl
-func FullUrl(relativeUrl string, cdn string, domain string, defaultUrl string) string {
+// 获取资源完整url地址；cdn 优先，其次云存储上传档（uploadCDN，仅 alioss 模式存在），
+// 最后回退 domain；若安装了云存储或 config 配置了CdnUrl，则自动使用对应的CdnUrl
+func FullUrl(relativeUrl string, cdn string, uploadCDN string, domain string, defaultUrl string) string {
 	h := cdn
 	if cdn == "" {
+		h = uploadCDN
+	}
+	if h == "" {
 		h = domain
 	}
 

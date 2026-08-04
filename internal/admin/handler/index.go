@@ -60,6 +60,11 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		FailByErr(ctx, err)
 		return
 	}
+	// alioss 直传档的 CDN（request->upload['cdn']），本地模式无此档，FullUrl 会回退 domain
+	uploadCDN := ""
+	if cdn, ok := uploadConfig["cdn"].(string); ok {
+		uploadCDN = cdn
+	}
 	Success(ctx, map[string]any{
 		"adminInfo": map[string]any{
 			"id":              adminInfo.ID,
@@ -74,7 +79,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		"siteConfig": map[string]any{
 			"siteName":         basicConfig["site_name"],
 			"version":          basicConfig["version"],
-			"cdnUrl":           util.FullUrl("", h.config.App.CdnUrl, util.GetBaseURL(ctx), ""),
+			"cdnUrl":           util.FullUrl("", h.config.App.CdnUrl, uploadCDN, util.GetBaseURL(ctx), ""),
 			"apiUrl":           h.config.App.ApiUrl,
 			"upload":           uploadConfig,
 			"cdnUrlParams":     h.config.App.CdnUrlParams,

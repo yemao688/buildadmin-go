@@ -90,7 +90,7 @@ redis:
 #     maxsize/savename/mimetype 三个键
 upload:
   maxsize: 10 # 单位: MB（10MB）
-  savename: '/storage/{topic}/{year}{mon}{day}/{filename}{filesha1}{.suffix}' # 保存路径规则
+  savename: '/storage/{topic}/{year}{mon}{day}/{fileName}{fileSha1}{.suffix}' # 保存路径规则
   mimetype: 'jpg,png,bmp,jpeg,gif,webp,zip,rar,xls,xlsx,doc,docx,wav,mp4,mp3,txt' # 允许上传的文件类型
 
 # CRUD 生成配置（crud）

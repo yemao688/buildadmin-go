@@ -73,7 +73,7 @@ export async function fileUpload(fd: FormData, params: anyObj = {}, config: Axio
 }
 
 export function getSaveName(file: UploadRawFile, sha1: string) {
-    const fileSuffix = file.name.substring(file.name.lastIndexOf('.') + 1)
+    const fileSuffix = file.name.substring(file.name.lastIndexOf('.') + 1).toLowerCase()
     const fileName = file.name.substring(0, file.name.lastIndexOf('.'))
     const dateObj = new Date()
 

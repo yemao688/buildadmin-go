@@ -49,6 +49,12 @@ func UploadSiteConfig(ctx *gin.Context, configs interface {
 		policy, signature, expires := PostPolicy(time.Now(), int64(config.Upload.Maxsize)*1024*1024, c.Secret)
 		result["url"] = uploadURL(c)
 		result["params"] = map[string]any{"OSSAccessKeyId": c.AccessID, "policy": policy, "Signature": signature, "Expires": expires}
+		// cdn 档与 PHP 一致：upload_cdn_url 优先，为空回退 bucketUrl
+		cdn := c.CDNURL
+		if cdn == "" {
+			cdn = uploadURL(c)
+		}
+		result["cdn"] = cdn
 	}
 	return result, nil
 }
