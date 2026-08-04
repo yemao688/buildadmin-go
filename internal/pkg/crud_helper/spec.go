@@ -270,6 +270,14 @@ func inferDesignTypeForField(field crudmodel.Field) string {
 	if columnType == "" {
 		columnType = strings.ToLower(field.Type)
 	}
+	// Normalize type+length to the full column type so length:1 is treated
+	// identically to tinyint(1)/char(1): status/state/type then hit the radio
+	// rule below, switch/toggle suffixes hit switch, and neither depends on
+	// the author writing the parenthesized dataType.
+	if columnType != "" && !strings.Contains(columnType, "(") && field.Length == 1 &&
+		slicesContains([]string{"tinyint", "char"}, columnType) {
+		columnType = columnType + "(1)"
+	}
 
 	if field.AutoIncrement && strings.Contains(name, "id") {
 		return "pk"

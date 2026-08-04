@@ -182,7 +182,9 @@ text、blob、json 等 SQL 类型不写默认值（PHP 无默认值 family）。
 
 ### `tinyint(1)` 布尔存储
 
-`tinyint(1)` 字段的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式、`true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`。非规范值会被拒绝。`char(1)` 不按布尔存储处理。
+**布尔语义由 `designType: switch` 声明，不由 `length: 1` 决定。** `type: tinyint, length: 1` 的写法本身没有布尔含义：`status`/`state`/`type` 等多值枚举会推断为 `radio`，无后缀字段推断为 `number`——只有显式 `designType: switch`（或 `switch`/`toggle` 后缀命名）的字段才按布尔存储处理。生成器对 `type: tinyint, length: 1` 与 `dataType: tinyint(1)` 一视同仁（length 规范化为完整列类型参与推断），无需手写括号形式。
+
+`switch` 字段的请求参数兼容 JSON 布尔值、`0`/`1` 数字及其字符串形式、`true`/`false` 字符串。生成的 JSON 始终使用数值 `0` 或 `1`。非规范值会被拒绝。`char(1)` 不按布尔存储处理。
 
 ## 5. designType 与推断规则
 

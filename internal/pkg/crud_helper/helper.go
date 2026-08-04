@@ -781,7 +781,15 @@ func timestampAdapterType(fieldName string) string {
 	return "validator.FlexFormattedUnixTime"
 }
 
+// isBooleanStorageField reports whether the field is a boolean storage
+// contract. The bool decision is driven by the designType (switch), not by
+// a tinyint length: length:1 also appears on multi-value enums (radio with
+// status/state/type), which must stay numeric. Writing type: tinyint with
+// length:1 without designType does not imply boolean.
 func isBooleanStorageField(field crudmodel.Field) bool {
+	if field.DesignType != "switch" {
+		return false
+	}
 	if !strings.EqualFold(strings.TrimSpace(field.Type), "tinyint") {
 		return false
 	}

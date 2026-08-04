@@ -255,7 +255,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		want       string
 	}{
 		{name: "switch tinyint length", designType: "switch", typeName: "tinyint", length: 1, want: "validator.FlexBool"},
-		{name: "radio tinyint data type", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: "validator.FlexBool"},
+		{name: "radio tinyint data type stays numeric", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: ""},
 		{name: "year design type", designType: "year", typeName: "year", dataType: "year", want: "validator.FlexYear"},
 		{name: "tinyint input default remains numeric", designType: "number", typeName: "tinyint", defaultTyp: "INPUT", defaultVal: "1", want: ""},
 		{name: "char one is not bool", designType: "radio", typeName: "char", dataType: "char(1)", length: 1, want: ""},
@@ -303,7 +303,6 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 	got := buildModelFieldTypeOverrides(fields)
 	want := map[string]string{
 		"enabled":        "validator.FlexBool",
-		"visible":        "validator.FlexBool",
 		"published_year": "validator.FlexYear",
 		"flags":          "validator.CommaJoined",
 		"options":        "validator.KeyValueArray",

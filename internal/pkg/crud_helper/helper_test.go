@@ -754,3 +754,97 @@ func TestParseWebDirNameDataSeparatorsAndInvalidZeroValue(t *testing.T) {
 		t.Fatalf("invalid path did not return zero value: %+v", got)
 	}
 }
+
+func TestInferDesignTypeTinyintLengthOneNormalization(t *testing.T) {
+	cases := []struct {
+		name     string
+		field    crudmodel.Field
+		wantType string
+	}{
+		{
+			name:     "status tinyint length 1 becomes radio",
+			field:    crudmodel.Field{Name: "status", Type: "tinyint", Length: 1},
+			wantType: "radio",
+		},
+		{
+			name:     "state tinyint length 1 becomes radio",
+			field:    crudmodel.Field{Name: "state", Type: "tinyint", Length: 1},
+			wantType: "radio",
+		},
+		{
+			name:     "enabled_switch tinyint length 1 stays switch",
+			field:    crudmodel.Field{Name: "enabled_switch", Type: "tinyint", Length: 1},
+			wantType: "switch",
+		},
+		{
+			name:     "plain tinyint length 1 without suffix stays number",
+			field:    crudmodel.Field{Name: "level", Type: "tinyint", Length: 1},
+			wantType: "number",
+		},
+		{
+			name:     "tinyint length 2 is number",
+			field:    crudmodel.Field{Name: "status", Type: "tinyint", Length: 2},
+			wantType: "number",
+		},
+		{
+			name:     "status dataType tinyint(1) is radio (parity)",
+			field:    crudmodel.Field{Name: "status", Type: "tinyint", DataType: "tinyint(1)"},
+			wantType: "radio",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := inferDesignTypeForField(tc.field)
+			if got != tc.wantType {
+				t.Fatalf("designType = %q, want %q", got, tc.wantType)
+			}
+		})
+	}
+}
+
+func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
+	cases := []struct {
+		name  string
+		field crudmodel.Field
+		want  bool
+	}{
+		{
+			name:  "switch tinyint length 1 is bool",
+			field: crudmodel.Field{Name: "enabled", Type: "tinyint", Length: 1, DesignType: "switch"},
+			want:  true,
+		},
+		{
+			name:  "switch tinyint(1) is bool",
+			field: crudmodel.Field{Name: "enabled", Type: "tinyint", DataType: "tinyint(1)", DesignType: "switch"},
+			want:  true,
+		},
+		{
+			name:  "radio tinyint length 1 is not bool",
+			field: crudmodel.Field{Name: "status", Type: "tinyint", Length: 1, DesignType: "radio"},
+			want:  false,
+		},
+		{
+			name:  "radio tinyint(1) is not bool",
+			field: crudmodel.Field{Name: "status", Type: "tinyint", DataType: "tinyint(1)", DesignType: "radio"},
+			want:  false,
+		},
+		{
+			name:  "number tinyint length 1 is not bool",
+			field: crudmodel.Field{Name: "level", Type: "tinyint", Length: 1, DesignType: "number"},
+			want:  false,
+		},
+		{
+			name:  "switch without tinyint is not bool",
+			field: crudmodel.Field{Name: "enabled", Type: "varchar", Length: 1, DesignType: "switch"},
+			want:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isBooleanStorageField(tc.field)
+			if got != tc.want {
+				t.Fatalf("isBooleanStorageField = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
