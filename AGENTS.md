@@ -66,6 +66,7 @@
 设计约定（目标：防包名爆炸与循环依赖）：
 
 - **包结构规范（防包名爆炸）**：每层单包扁平、文件名=表名/模块名；新增模块=新增文件，永不新增子目录/子包。类型名携带模块前缀（`XxxRepository`/`XxxParam`/`XxxHandler`/`XxxRegistrar`，service 同理如 `MemberService`）保证单包内唯一。例外仅限真正独立的领域（commands/migrations）与技术基建内部组织（`pkg/*`）。
+- **api 侧命名由 `internal/api/naming_test.go` 机械执法**（手写代码无生成器兜底）：有类型声明的文件必须"文件名=模块名"（`repository/user.go` 只放 `UserRepository`），类型名=`<模块 PascalCase>`+精确后缀（`Repository`/`Service`/`Handler`/`Registrar`），禁止 `Repo`/`Dao`/`Svc`/`Mgr`/`Impl`/`Controller`/`Route` 等变体后缀；`ajax.go`/`alioss.go` 这类无类型声明的方法拆分文件豁免，`provider.go` 与 router 基础设施文件（`registrar.go`/`router.go`/`api_routes.go`）豁免。
 - **依赖方向规范（防循环依赖）**：单向向下 渠道→common→pkg→model（model 仅依赖外部库与 pkg）；渠道间禁互引（R1/R2）、common 禁依赖渠道（R3）、handler 禁持久化直连（R4/R5）、service 禁传输层（R6/R7）。**出现双向需求=类型放错层的信号**：共享类型一律下沉——真实先例：渠道投影下沉 `internal/model/projection`，Flex 适配类型下沉 `internal/pkg/validator`。
 - **角色规范**：handler=绑定+响应（禁业务、禁 SQL、禁加密），actor 从请求上下文提取后以参数传入；service=按需毕业的业务编排（纯 CRUD 不建透传），方法签名用普通类型；repository=唯一 GORM 入口；dto=一表一个 `XxxParam`（Add/Edit 复用）、响应直回实体/投影、`Resp` 按需个案引入；router=每表一个 registrar 文件 + `ProvideRegistrars` 一行锚点。
 - **repo/service 边界**：表 T 的仓库类名必须是 `TRepository`（非表模块例外：`AuthRepository`=auth 域模块仓、`TableRepository`=information_schema 元数据仓、`AdminHierarchy`=admin_closure 闭包表写者、`AdminRuleRepository.Delete`=pkg 层 CRUD 生成器工具入口）。repo 只留 scoped 原子原语（scoped 读、单表原子写、scope/锁构造与 `Transaction` 原语），禁止 gin 上下文 actor 提取、跨步骤事务编排、业务分支与 `cErr.*` 业务映射（RowsAffected 完整性守卫除外）；流程编排（actor 校验、事务链、业务规则、领域错误上抛）一律在 service，HTTP 映射留在 handler。先例与示例见 `docs/business-development.md`。
