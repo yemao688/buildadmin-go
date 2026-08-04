@@ -53,6 +53,14 @@
                             :placeholder="t('user.moneyLog.Please enter the balance change amount')"
                         ></el-input>
                     </el-form-item>
+                    <el-form-item prop="type" :label="t('user.moneyLog.Change type')">
+                        <el-select v-model="baTable.form.items!.type">
+                            <el-option :label="t('user.moneyLog.type system')" value="system" />
+                            <el-option :label="t('user.moneyLog.type recharge')" value="recharge" />
+                            <el-option :label="t('user.moneyLog.type withdraw')" value="withdraw" />
+                            <el-option :label="t('user.moneyLog.type extend')" value="extend" />
+                        </el-select>
+                    </el-form-item>
                     <el-form-item :label="t('user.moneyLog.Balance after change')">
                         <el-input v-model="state.after" type="number" disabled></el-input>
                     </el-form-item>
@@ -145,6 +153,9 @@ watch(
     (newValue) => {
         if (newValue) {
             getAdd()
+            if (!baTable.form.items!.type) {
+                baTable.form.items!.type = 'system'
+            }
         }
     }
 )
