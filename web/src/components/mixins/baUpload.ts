@@ -8,7 +8,9 @@ import { randomNum, shortUuid } from '/@/utils/random'
 
 export const state = () => {
     const siteConfig = useSiteConfig()
-    return siteConfig.upload.mode == 'local' ? 'disable' : 'enable'
+    // 只有 alioss 才走扩展上传（直接 POST 到 OSS + 回调）；其余任何模式值
+    // （local 或历史遗留值如 framework）都走内置 /admin|api/ajax/upload。
+    return siteConfig.upload.mode == 'alioss' ? 'enable' : 'disable'
 }
 
 export async function fileUpload(fd: FormData, params: anyObj = {}, config: AxiosRequestConfig = {}) {

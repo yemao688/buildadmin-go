@@ -123,7 +123,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	memberService := service2.NewMemberService(gormDB, tokenHelper, configuration)
 	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
 	captchaService := captcha.NewCaptchaService(gormDB)
-	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration)
+	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration, uploadHelper)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
 	v2 := router2.ProvideRegistrars(commonHandler, handlerUserHandler)
 	apiRouterDeps := router2.ApiRouterDeps{

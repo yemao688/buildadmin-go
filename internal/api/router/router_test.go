@@ -60,6 +60,8 @@ func TestApiRouterMountsAPIRoutes(t *testing.T) {
 		"GET /api/common/clickCaptcha",
 		"POST /api/common/checkClickCaptcha",
 		"POST /api/common/refreshToken",
+		"POST /api/ajax/upload",
+		"POST /api/Alioss/callback",
 	}
 	require.Len(t, engine.Routes(), len(want))
 	for _, route := range want {

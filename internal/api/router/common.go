@@ -20,4 +20,7 @@ func (r *CommonRegistrar) Register(g gin.IRoutes) {
 	g.GET("common/clickCaptcha", r.handler.ClickCaptcha)
 	g.POST("common/checkClickCaptcha", r.handler.CheckClickCaptcha)
 	g.POST("common/refreshToken", r.handler.RefreshToken)
+	// 会员上传：不在 public 集合内，自动进入 UserLogin 鉴权链
+	g.POST("ajax/upload", r.handler.Upload)
+	g.POST("Alioss/callback", r.handler.AliossCallback)
 }

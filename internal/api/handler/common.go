@@ -2,10 +2,12 @@ package handler
 
 import (
 	"buildadmin-go/internal/api/service"
+	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/token"
 	"buildadmin-go/internal/pkg/util"
@@ -23,11 +25,49 @@ type CommonHandler struct {
 	tokenHelper  *token.TokenHelper
 	authM        *service.MemberService
 	config       *conf.Configuration
+	uploadHelper *upload.UploadHelper
 }
 
-func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.CaptchaService, tokenHelper *token.TokenHelper, authM *service.MemberService, config *conf.Configuration) *CommonHandler {
+func NewCommonHandler(log *zap.Logger, clickCaptcha *clickcaptcha.ClickCaptcha, captcha *captcha.CaptchaService, tokenHelper *token.TokenHelper, authM *service.MemberService, config *conf.Configuration, uploadHelper *upload.UploadHelper) *CommonHandler {
 	registerBuiltinRefreshTypes()
-	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config}
+	return &CommonHandler{log: log, clickCaptcha: clickCaptcha, captcha: captcha, tokenHelper: tokenHelper, authM: authM, config: config, uploadHelper: uploadHelper}
+}
+
+// Upload 会员文件上传（本地存储），与 admin ajax/upload 对齐，属主为当前会员。
+func (h *CommonHandler) Upload(ctx *gin.Context) {
+	file, err := ctx.FormFile("file")
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	userAuth := header.GetUserAuth(ctx)
+
+	result, err := h.uploadHelper.Upload(ctx, upload.UploadParams{File: file}, 0, userAuth.Id)
+	if err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, map[string]any{
+		"file": result,
+	})
+}
+
+// AliossCallback 阿里云 OSS 直传回调：浏览器把文件 POST 到 OSS 后调用本接口
+// 登记附件记录（storage=alioss，sha1 幂等去重）。
+func (h *CommonHandler) AliossCallback(ctx *gin.Context) {
+	var params upload.OSSCallback
+	if err := ctx.ShouldBind(&params); err != nil {
+		FailByErr(ctx, err)
+		return
+	}
+	userAuth := header.GetUserAuth(ctx)
+	result, err := h.uploadHelper.CompleteOSS(params, 0, userAuth.Id)
+	if err != nil {
+		h.log.Error("AliOSS callback failed", zap.Error(err))
+		FailByErr(ctx, err)
+		return
+	}
+	Success(ctx, map[string]any{"file": result})
 }
 
 func FailByErrWithData(c *gin.Context, err error, data interface{}) {

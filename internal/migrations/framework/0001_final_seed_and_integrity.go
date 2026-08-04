@@ -184,7 +184,7 @@ func appendUploadConfigGroup(value string) (bool, string, error) {
 
 func aliossConfigRows() []siteconfig.Config {
 	return []siteconfig.Config{
-		{ID: 14, Name: "upload_mode", Group: "upload", Title: "存储方式", Type: "select", Value: "framework", Content: `{"framework":"本地磁盘存储","alioss":"阿里云对象存储OSS"}`, Rule: "required", Weigh: 99},
+		{ID: 14, Name: "upload_mode", Group: "upload", Title: "存储方式", Type: "select", Value: "local", Content: `{"local":"本地磁盘存储","alioss":"阿里云对象存储OSS"}`, Rule: "required", Weigh: 99},
 		{ID: 15, Name: "upload_bucket", Group: "upload", Title: "Bucket名称", Tip: "请在阿里云对象存储控制台查询", Type: "string", Value: "", Rule: "", Weigh: 98},
 		{ID: 16, Name: "upload_access_id", Group: "upload", Title: "AccessKey ID", Tip: "请在阿里云个人中心查询", Type: "string", Value: "", Rule: "", Weigh: 97},
 		{ID: 17, Name: "upload_secret_key", Group: "upload", Title: "AccessKey Secret", Tip: "请在阿里云个人中心查询", Type: "string", Value: "", Rule: "", Weigh: 96},
