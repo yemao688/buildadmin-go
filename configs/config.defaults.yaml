@@ -95,8 +95,9 @@ upload:
 
 # CRUD 生成配置（crud）
 crud:
-  # 是否在 migrate 尾部自动应用 crud_specs/*.yaml；生产环境默认关闭
-  apply_on_migrate: false
+  # 是否在 migrate 尾部自动应用 crud_specs/*.yaml（幂等；漂移时部署以失败红牌暴露，
+  # rejected 类变更必须走 business 迁移）。需要让库长期偏离 spec 的团队可显式关闭。
+  apply_on_migrate: true
 
 # 终端/安装器命令配置（terminal）
 terminal:

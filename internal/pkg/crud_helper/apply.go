@@ -88,6 +88,20 @@ func (e *ApplyBlockedError) Error() string {
 	return message
 }
 
+// Hint 返回自动执行场景（如 migrate 尾部）下可行动的后续指引。
+func (e *ApplyBlockedError) Hint() string {
+	hint := "schema sync blocked; review with: go run ./cmd/server --conf configs/config.yaml crud:apply --plan"
+	if len(e.Categories) > 0 {
+		categories := make([]string, 0, len(e.Categories))
+		for _, category := range e.Categories {
+			categories = append(categories, string(category))
+		}
+		hint += "; requires-approval changes can be applied explicitly with --approve=" + strings.Join(categories, ",")
+	}
+	hint += "; rejected changes must be fixed via a reviewed business migration"
+	return hint
+}
+
 // ParseApprovalCategories parses the comma-separated --approve value. An empty
 // value keeps the historical behavior: no requires-approval diff is allowed.
 func ParseApprovalCategories(value string) (map[ApprovalCategory]bool, error) {

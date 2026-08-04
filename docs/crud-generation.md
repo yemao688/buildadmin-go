@@ -664,11 +664,13 @@ go run ./cmd/server --conf configs/config.yaml crud:apply crud_specs/<module>.ya
 
 `--approve=<类别>` 放行需要批准的变更（`defaults`、`auto-increment`、`type-widening`、`attributes`），`--approve=all` 全选。`rejected` 变更（主键漂移、unsigned 翻转、收窄、nullable→NOT NULL 等）永不可批准，必须写业务迁移。`--allow-rebuild` 只控制主键漂移的破坏性重建，仅限可丢弃环境。
 
-`migrate` 尾部在 `crud.apply_on_migrate: true` 时自动执行 apply：
+`migrate` 尾部默认自动执行 apply（`crud.apply_on_migrate` 默认 `true`）——幂等同步在部署入口自动完成，漂移会以失败红牌暴露而不是静默上线：
 
 ```bash
 git pull && go run ./cmd/server --conf configs/config.yaml migrate
 ```
+
+需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，migrate 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；`rejected` 类变更永不可批准，必须写 business 迁移。
 
 | 场景 | 动作 |
 | --- | --- |

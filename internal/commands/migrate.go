@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -154,7 +155,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 	}
 	cmd.Println()
 	if h.config == nil || !h.config.Crud.ApplyOnMigrate {
-		cmd.Println("CRUD apply skipped (set crud.apply_on_migrate: true to enable)")
+		cmd.Println("CRUD apply skipped (crud.apply_on_migrate is disabled)")
 		return nil
 	}
 	// 部署闭环第四阶段：crud_specs 存在时幂等应用业务表结构与菜单（alter 安全子集）
@@ -162,6 +163,10 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1})
 		if applyErr != nil {
 			cmd.Printf("CRUD apply error: %v\n", applyErr)
+			var blocked *helper.ApplyBlockedError
+			if errors.As(applyErr, &blocked) {
+				cmd.Printf("hint: %s\n", blocked.Hint())
+			}
 			return applyErr
 		}
 		for _, result := range results {
