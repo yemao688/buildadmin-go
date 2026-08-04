@@ -156,9 +156,9 @@ func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 
 // 检查文件大小是否允许上传
 func (s *UploadHelper) checkSize(ctx *gin.Context, file *multipart.FileHeader) error {
-	if file.Size > int64(s.config.Upload.Maxsize) {
+	if file.Size > int64(s.config.Upload.Maxsize)*1024*1024 {
 		msg := util.Lang(ctx, "The uploaded file is too large (%sMiB), Maximum file size:%sMiB", map[string]string{
-			"min": fmt.Sprintf("%d", file.Size),
+			"min": fmt.Sprintf("%d", file.Size/(1024*1024)),
 			"max": fmt.Sprintf("%d", s.config.Upload.Maxsize),
 		})
 		return cErr.BadRequest(msg, 10002)

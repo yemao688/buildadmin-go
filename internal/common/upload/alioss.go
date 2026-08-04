@@ -42,11 +42,11 @@ func UploadSiteConfig(ctx *gin.Context, configs interface {
 		mode = config.Upload.Mode
 	}
 	allowed := strings.Split(config.Upload.Mimetype, ",")
-	result := map[string]any{"maxSize": config.Upload.Maxsize, "saveName": config.Upload.Savename, "allowedSuffixes": allowed, "allowedMimeTypes": allowed, "mode": mode}
+	result := map[string]any{"maxSize": config.Upload.Maxsize * 1024 * 1024, "saveName": config.Upload.Savename, "allowedSuffixes": allowed, "allowedMimeTypes": allowed, "mode": mode}
 	if mode == "alioss" {
 		endpoint := values["upload_url"]
 		c := AliOSSConfig{Mode: mode, Bucket: values["upload_bucket"], AccessID: values["upload_access_id"], Secret: values["upload_secret_key"], URL: endpoint, CDNURL: values["upload_cdn_url"]}
-		policy, signature, expires := PostPolicy(time.Now(), int64(config.Upload.Maxsize), c.Secret)
+		policy, signature, expires := PostPolicy(time.Now(), int64(config.Upload.Maxsize)*1024*1024, c.Secret)
 		result["url"] = uploadURL(c)
 		result["params"] = map[string]any{"OSSAccessKeyId": c.AccessID, "policy": policy, "Signature": signature, "Expires": expires}
 	}

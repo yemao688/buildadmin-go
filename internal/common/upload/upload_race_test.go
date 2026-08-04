@@ -38,7 +38,7 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 
 	cfg := &conf.Configuration{
 		Upload: conf.Upload{
-			Maxsize:  10 << 20,
+			Maxsize:  10,
 			Savename: "/storage/{topic}/{year}{mon}{day}/{filename}{filesha1}{.suffix}",
 			Mimetype: "*",
 		},

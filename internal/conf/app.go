@@ -4,7 +4,6 @@ type App struct {
 	Env                string `mapstructure:"env" json:"env" yaml:"env"`
 	Port               string `mapstructure:"port" json:"port" yaml:"port"`
 	TimeZone           string `mapstructure:"time_zone" json:"time_zone" yaml:"time_zone"`
-	CorsRequestDomain  string `mapstructure:"cors_request_domain" json:"cors_request_domain" yaml:"cors_request_domain"`
 	AdminLoginCaptcha  bool   `mapstructure:"admin_login_captcha" json:"admin_login_captcha" yaml:"admin_login_captcha"`
 	UserLoginRetry     int    `mapstructure:"user_login_retry" json:"user_login_retry" yaml:"user_login_retry"`
 	AdminLoginRetry    int    `mapstructure:"admin_login_retry" json:"admin_login_retry" yaml:"admin_login_retry"`
@@ -12,8 +11,6 @@ type App struct {
 	UserSso            bool   `mapstructure:"user_sso" json:"user_sso" yaml:"user_sso"`
 	UserTokenKeepTime  int64  `mapstructure:"user_token_keep_time" json:"user_token_keep_time" yaml:"user_token_keep_time"`
 	AdminTokenKeepTime int64  `mapstructure:"admin_token_keep_time" json:"admin_token_keep_time" yaml:"admin_token_keep_time"`
-	AutoSortEqWeight   bool   `mapstructure:"auto_sort_eq_weight" json:"auto_sort_eq_weight" yaml:"auto_sort_eq_weight"`
-	ModulePureInstall  bool   `mapstructure:"module_pure_install" json:"module_pure_install" yaml:"module_pure_install"`
 	AutoWriteAdminLog  bool   `mapstructure:"auto_write_admin_log" json:"auto_write_admin_log" yaml:"auto_write_admin_log"`
 	DefaultAvatar      string `mapstructure:"default_avatar" json:"default_avatar" yaml:"default_avatar"`
 	CdnUrl             string `mapstructure:"cdn_url" json:"cdn_url" yaml:"cdn_url"`
