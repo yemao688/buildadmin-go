@@ -113,10 +113,14 @@ token.RegisterRefreshType("seller", token.RefreshTypeDescriptor{
   目录）。框架的 lang glob 是通配的
   （`import.meta.glob(['./*/zh-cn/**/*.ts', './*/zh-cn.ts'])`），任意顶级
   门户目录零框架改动即被自动加载。
-- 按需加载：`web/src/lang/autoload.ts` 的 `langAutoLoadMap` 维护
-  path → 语言包映射（示例：
-  `'/': ['./frontend/${lang}/index.ts']`）；`web/src/router/index.ts`
-  加载 admin 分支语言。业务门户如需按路由加载，向 `langAutoLoadMap`
+- 按需加载：`web/src/router/index.ts` 按**路径首段**解析门户语言目录——
+  `/admin/*` → `./backend/`，`/seller/*` → `./seller/`，`/buyer/*` →
+  `./buyer/`，根路径 `/` → `./frontend/`。业务新开门户只需建
+  `web/src/lang/<portal>/{lang}/...` 目录并保证路由前缀与目录同名，
+  无需改框架文件。
+- 特例映射：`web/src/lang/autoload.ts` 的 `langAutoLoadMap` 维护
+  path → 语言包映射（示例：`'/': ['./frontend/${lang}/index.ts']`），
+  用于按需加载的补充特例；业务门户特殊页面可向 `langAutoLoadMap`
   追加映射（key 用门户 path 前缀）。
 
 ## 6. 常见误区
