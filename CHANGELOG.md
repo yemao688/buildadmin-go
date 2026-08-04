@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.0.2
+
+> 修复战役 + 工程规范落地：上传链路与 PHP 上游全面对齐、代理感知的网络头处理（Cloudflare）、handler 内声明式豁免（对齐 PHP `$noNeedLogin`/`$noNeedPermission`）、handler 目录规范清理、编辑空操作误报修复、框架核心表注释、安装/容器零配置化。
+
+- **Fixed (upload, 模式事实源):** 上传模式以 DB 系统配置（`ba_config` upload 组）为唯一事实源——框架种子把本地模式误存为 `framework`，前端落入扩展上传分支（url 为空、POST 到根路径）；种子改为 `local`，前端上传扩展分支只在 `alioss` 时启用；api 渠道补齐缺失的 `/api/ajax/upload` 与 `/api/Alioss/callback` 端点（会员上传、OSS 直传回调，附件属主为当前会员）。
+- **Fixed (upload, 契约):** savename 占位符对齐 PHP 驼峰 `{fileName}`/`{fileSha1}`（原小写占位符在前端替换时落空，OSS key 原样残留）；`siteConfig.cdnUrl` 对齐 PHP `full_url()` 三段链（静态 `cdn_url` → alioss `upload_cdn_url ?: bucketUrl` → 协议兜底）——`util.FullUrl` 新增 uploadCDN 档、`UploadSiteConfig` 下发 `cdn` 键；文件后缀统一小写（对齐 PHP `strtolower`），后端校验与附件记录同步。
+- **Fixed (config):** 系统配置编辑页 `upload_secret_key` 不再被后端置空（保存后刷新消失即由此导致）；移除 6 个全仓无读取的死配置键（`log.filename`/`log.show_line`/`mysql.log_filename`/`app.cors_request_domain`/`app.auto_sort_eq_weight`/`app.module_pure_install`），默认配置逐组加中文注释；`upload.maxsize` 改以 MB 为单位（前后端字节契约经换算保持）。
+- **Fixed (edits):** 编辑"值未变化"误报 record not found——MySQL 对同值 UPDATE 返回 RowsAffected=0，8 处按 PK 更新补齐 visible 兜底（含通用 quick-edit 路径），与生成器模板既有范式一致。
+- **Added (network, 代理感知):** `GetBaseURL` 支持 `X-Forwarded-Proto`/`X-Forwarded-Ssl`（Cloudflare/nginx TLS 终止不再误判 http）；新增 `GetClientIP`（优先 `CF-Connecting-IP`，回退 gin ClientIP），登录、token 校验、审计日志与 IP 黑名单 8 处调用点接入。
+- **Added (redis):** redis 配置新增业务前缀 `prefix`（空值完全向后兼容：`up:1` → `ba:up:1`），默认 db 5 → 0。
+- **Added (schema):** 框架 21 张核心表全新安装写入表注释（对齐 PHP install migration，`ALTER TABLE ... COMMENT` 幂等补齐）；既有库不追溯。
+- **Changed (handler, 规范):** handler 目录只放控制器——admin/api 重复的响应封装抽为共享 `internal/pkg/response`；refresh registry、`invalidateAfterMutation`、`normalizeControllerAs`、`CRUDRoutes`/`CollectRoutes`、`IDS` 各归其位（`pkg/token`、`pkg/requesttx`、`pkg/util`、`admin/router`、`admin/dto`）；api 上传接口拆为 `ajax.go`/`alioss.go`（对齐 PHP `Ajax.php`/`Alioss.php`）；CRUD 生成器模板同步引用共享 response 包。
+- **Changed (鉴权, 声明式豁免):** 新增 `NoNeedLoginer`/`NoNeedPermissioner` 接口——handler 内声明免登录/免权限 action（对齐 PHP `$noNeedLogin`/`$noNeedPermission` 属性），路由注册时 `RegisterHandlerExemptions` 自动收集；noNeedLogin 路由保留在保护组内，Login/Authorization/Security 中间件按 action 跳过（per-action 粒度替代分组级组外挂载）；admin `Index/logout` 与 api `user/logout` 改为免登录（从请求头直读 token）；`module/index` 移除豁免恢复鉴权。
+- **Changed (install/容器):** 移除 Web 安装渠道（setup CLI 为唯一入口，`install.lock` 为完成标记）；compose 零配置化（容器内端口固定 9900、env 文件可选）；setup 新增 make 目标与前端构建缺失指引。
+- **Changed (docs):** `docs/business-development.md` 新增 handler 规范（目录只放控制器、响应/DTO/路由工具/注册表归属）与豁免声明章节；crud spec 补 width/owner 列约定、时间列顺序（`update_time` 与 `create_time`）说明；CHANGELOG/框架文档随安装与容器改动同步。
+
 ## v3.0.0
 
 > **架构重构版本，无升级路径。** 与 v2.6.0 系列同一原则：只保证全新安装优雅，不支持对旧库执行 migrate 升级；所有环境（含下游业务仓库）必须用安装器全新安装后重新开始业务数据。后端私有代码全部迁入 `internal/` 并按"两业务渠道 + 安装渠道 + 共享内核"分层（admin 渠道最终拍平为单包），import 路径与生成器产物落点全面变更；全新安装 schema 与 v2.7.5 逐行一致（information_schema 全属性零 diff 验证），业务数据不兼容仅体现在代码与路径。
