@@ -21,7 +21,7 @@ const countryLanguageContentRoute = "country.LanguageContent"
 func (r *CountryLanguageContentRegistrar) Group() string { return "admin" }
 
 func (r *CountryLanguageContentRegistrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, countryLanguageContentRoute, r.handler)
+	CRUDRoutes(g, countryLanguageContentRoute, r.handler)
 }
 
 func (r *CountryLanguageContentRegistrar) Capabilities() []middleware.AtomicRoute {

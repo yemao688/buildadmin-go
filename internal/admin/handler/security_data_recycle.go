@@ -1,15 +1,19 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
+	dto "buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/route"
+	"buildadmin-go/internal/pkg/util"
+	"buildadmin-go/internal/pkg/validator"
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -45,24 +49,24 @@ func (h *DataRecycleHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	row, err := h.dataRecycleM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{"row": row})
+	response.Success(ctx, map[string]any{"row": row})
 }
 
 func (h *DataRecycleHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 
 	result, total, err := h.dataRecycleM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
 		"remark": h.GetRemark(ctx),
@@ -84,7 +88,7 @@ func (v DataRecycle) GetMessages() validator.ValidatorMessages {
 
 func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodGet {
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"tables":      h.getTableList(ctx),
 			"controllers": h.getRouteList(ctx),
 		})
@@ -93,18 +97,18 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 
 	var params DataRecycle
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	params.ControllerAs = normalizeControllerAs(params.Controller)
+	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
 	var data model.SecurityDataRecycle
 	copier.Copy(&data, params)
 	if err := h.svc.Add(ctx.Request.Context(), data); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
@@ -121,49 +125,49 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 				statusStr = fmt.Sprintf("%v", status)
 			}
 			if err := h.svc.UpdateStatus(ctx.Request.Context(), id, statusStr); err != nil {
-				FailByErr(ctx, err)
+				response.FailByErr(ctx, err)
 				return
 			}
-			Success(ctx, "")
+			response.Success(ctx, "")
 			return
 		}
 	}
 
 	var params = struct {
-		IDS
+		dto.IDS
 		DataRecycle
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	data, err := h.dataRecycleM.GetOne(ctx, params.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	params.ControllerAs = normalizeControllerAs(params.Controller)
+	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
 	copier.Copy(&data, params)
 	if err := h.svc.Edit(ctx.Request.Context(), data); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if err := h.dataRecycleM.Del(ctx, params.Ids); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
@@ -181,7 +185,7 @@ func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 	}
 
 	outRoutes := map[string]string{}
-	routes := GetAllRoutes()
+	routes := route.GetAllRoutes()
 	for _, r := range routes {
 		if !strings.HasPrefix(r.Path, "/admin") {
 			continue

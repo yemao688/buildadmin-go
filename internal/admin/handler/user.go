@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"bytes"
-	"encoding/json"
+	dto "buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/pkg/validator"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
+	"bytes"
+	"encoding/json"
 	"io"
 	"math"
 	"strconv"
@@ -29,16 +31,16 @@ func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository, svc *serv
 
 func (h *UserHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 
 	result, total, err := h.userM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
 		"remark": "",
@@ -69,24 +71,24 @@ func (v User) GetMessages() validator.ValidatorMessages {
 func (h *UserHandler) Add(ctx *gin.Context) {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
-		FailByErr(ctx, cErr.BadRequest("invalid request body"))
+		response.FailByErr(ctx, cErr.BadRequest("invalid request body"))
 		return
 	}
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 	adminID, hasAdminID, err := requestedAdminID(bodyBytes)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	var params User
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	userParams := userParams(params)
@@ -94,10 +96,10 @@ func (h *UserHandler) Add(ctx *gin.Context) {
 		userParams.AdminID = &adminID
 	}
 	if err := h.svc.Add(ctx.Request.Context(), userParams, actor); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func userParams(params User) service.UserParams {
@@ -123,23 +125,23 @@ func (h *UserHandler) One(ctx *gin.Context) {
 	id := com.StrTo(value).MustInt()
 	user, err := h.userM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	result, err := h.userM.DealData(ctx, &user)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	if userId != "" {
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"user": result,
 		})
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
@@ -147,7 +149,7 @@ func (h *UserHandler) One(ctx *gin.Context) {
 func (h *UserHandler) Edit(ctx *gin.Context) {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
-		FailByErr(ctx, cErr.BadRequest("invalid request body"))
+		response.FailByErr(ctx, cErr.BadRequest("invalid request body"))
 		return
 	}
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -168,33 +170,33 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 	if isSwitch {
 		actor, err := actorFromContext(ctx)
 		if err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
 		if err := h.svc.UpdateStatus(ctx.Request.Context(), switchReq.ID, switchReq.Status, actor); err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
-		Success(ctx, "")
+		response.Success(ctx, "")
 		return
 	}
 
 	var params = struct {
-		IDS
+		dto.IDS
 		User
 	}{}
 	if err = ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	adminID, hasAdminID, err := requestedAdminID(bodyBytes)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	userParams := userParams(params.User)
@@ -202,10 +204,10 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 		userParams.AdminID = &adminID
 	}
 	if err := h.svc.Edit(ctx.Request.Context(), params.ID, userParams, actor); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func requestedAdminID(body []byte) (int32, bool, error) {
@@ -230,21 +232,21 @@ func requestedAdminID(body []byte) (int32, bool, error) {
 func (h *UserHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	err = h.svc.Del(ctx.Request.Context(), params.Ids, actor)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {
@@ -254,7 +256,7 @@ func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {
 
 	result, total, err := h.userM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return nil, false
 	}
 

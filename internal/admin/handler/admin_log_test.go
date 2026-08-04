@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -39,9 +40,9 @@ func TestAdminLogDel(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodDelete, "/admin/auth.AdminLog/del?ids%5B%5D=1", nil))
 	require.Equal(t, http.StatusOK, recorder.Code)
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.Equal(t, 1, response.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Code)
 
 	var count int64
 	require.NoError(t, db.Model(&model.AdminLog{}).Count(&count).Error)

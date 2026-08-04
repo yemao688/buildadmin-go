@@ -9,6 +9,7 @@ import (
 	"buildadmin-go/internal/conf"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"net/http"
@@ -36,18 +37,18 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 
 	menus, _ := h.authM.GetMenus(ctx, info.Id)
 	if len(menus) == 0 {
-		FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!"))
+		response.FailByErr(ctx, cErr.BadRequest("No background menu, please contact super administrator!"))
 		return
 	}
 
 	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	languages, err := h.country.EnabledLanguages(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	languageTabs := make([]map[string]string, 0, len(languages))
@@ -57,7 +58,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 
 	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	// alioss 直传档的 CDN（request->upload['cdn']），本地模式无此档，FullUrl 会回退 domain
@@ -65,7 +66,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 	if cdn, ok := uploadConfig["cdn"].(string); ok {
 		uploadCDN = cdn
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"adminInfo": map[string]any{
 			"id":              adminInfo.ID,
 			"username":        adminInfo.Username,
@@ -115,7 +116,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 		tokenStr = ctx.Query("batoken")
 	}
 	if h.authSvc.IsLoggedIn(tokenStr) {
-		FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode))
+		response.FailByErr(ctx, cErr.BadRequest("You have already logged in. There is no need to log in again~", cErr.LoginResponseCode))
 		return
 	}
 
@@ -127,13 +128,13 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
-			FailByErr(ctx, validator.GetError(params, err))
+			response.FailByErr(ctx, validator.GetError(params, err))
 			return
 		}
 
 		result, err := h.authSvc.Login(params.Username, params.Password, params.Keep, params.CaptchaId, params.CaptchaInfo, util.GetClientIP(ctx))
 		if err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
 		adminID, _ := result["id"].(int32)
@@ -146,14 +147,14 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 			Username: username,
 			Token:    loginToken,
 		})
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"userInfo":  result,
 			"routePath": "/admin",
 		})
 		return
 	}
 
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"captcha": needCaptcha,
 	})
 
@@ -170,14 +171,14 @@ func (v Logout) GetMessages() validator.ValidatorMessages {
 func (h *IndexHandler) Logout(ctx *gin.Context) {
 	var params Logout
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	err := h.authSvc.Logout(params.RefreshToken, header.GetAdminAuth(ctx).Token)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

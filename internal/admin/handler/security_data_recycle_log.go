@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
+	"encoding/json"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -34,14 +35,14 @@ func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataR
 
 func (h *DataRecycleLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 	}
 	result, total, err := h.dataRecycleLogM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
 		"remark": "",
@@ -52,7 +53,7 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	dataRecycleLog, err := h.dataRecycleLogM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -64,11 +65,11 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	result := Result{}
 	copier.Copy(&result, dataRecycleLog)
 	if err := json.Unmarshal([]byte(dataRecycleLog.Data), &result.Data); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
@@ -76,26 +77,26 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 func (h *DataRecycleLogHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.dataRecycleLogM.Del(ctx, params.Ids); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *DataRecycleLogHandler) Restore(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if err := h.svc.Restore(ctx.Request.Context(), params.Ids); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

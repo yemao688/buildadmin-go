@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -81,9 +82,9 @@ func TestAdminGroupQuickEditAllowsAuthorizedOperator(t *testing.T) {
 	router := quickEditRouter(t, h, 5)
 
 	recorder := performQuickEdit(t, router, target.ID, "0")
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.Equal(t, 1, response.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Code)
 
 	var reloaded model.AdminGroup
 	require.NoError(t, db.First(&reloaded, target.ID).Error)
@@ -97,9 +98,9 @@ func TestAdminGroupQuickEditRejectsUnauthorized(t *testing.T) {
 	router := quickEditRouter(t, h, 5)
 
 	recorder := performQuickEdit(t, router, target.ID, "0")
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.NotEqual(t, 1, response.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.NotEqual(t, 1, resp.Code)
 
 	var reloaded model.AdminGroup
 	require.NoError(t, db.First(&reloaded, target.ID).Error)
@@ -114,9 +115,9 @@ func TestAdminGroupQuickEditRejectsSelfGroup(t *testing.T) {
 	router := quickEditRouter(t, h, 5)
 
 	recorder := performQuickEdit(t, router, target.ID, "0")
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.NotEqual(t, 1, response.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.NotEqual(t, 1, resp.Code)
 
 	var reloaded model.AdminGroup
 	require.NoError(t, db.First(&reloaded, target.ID).Error)

@@ -1,15 +1,16 @@
 package handler
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/common/money"
-	"buildadmin-go/internal/pkg/validator"
-	cErr "buildadmin-go/internal/pkg/error"
 	model "buildadmin-go/internal/model"
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -37,12 +38,12 @@ func NewMoneyLogHandler(log *zap.Logger, userMoneyLogM *adminmodel.UserMoneyLogR
 
 func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 	list, total, err := h.userMoneyLogM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -62,7 +63,7 @@ func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 			"user":        v.User,
 		})
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
 		"remark": "",
@@ -126,25 +127,25 @@ func parseMoneyAmount(raw []byte) (float64, error) {
 func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	var params Money
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	userMoneyLog := model.MoneyLog{}
 	amount, err := parseMoneyAmount(params.Money)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	if err := copier.Copy(&userMoneyLog, params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	userMoneyLog.Money = amount
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	err = h.svc.Add(ctx.Request.Context(), service.MoneyLogAddInput{
@@ -159,11 +160,11 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 	// business-relevant case lives here in the handler.
 	if err != nil {
 		if errors.Is(err, money.ErrInsufficientBalance) {
-			FailByErr(ctx, cErr.BadRequest("insufficient balance"))
+			response.FailByErr(ctx, cErr.BadRequest("insufficient balance"))
 			return
 		}
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

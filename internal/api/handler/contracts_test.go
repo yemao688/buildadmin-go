@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -42,11 +43,11 @@ func (d *handlerContractTokenDriver) Check(string, string, int32) bool { return 
 func (d *handlerContractTokenDriver) Delete(string) error              { d.deleted++; return nil }
 func (d *handlerContractTokenDriver) Clear(string, int32) error        { return nil }
 
-func decodeHandlerResponse(t *testing.T, recorder *httptest.ResponseRecorder) Response {
+func decodeHandlerResponse(t *testing.T, recorder *httptest.ResponseRecorder) response.Response {
 	t.Helper()
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	return response
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	return resp
 }
 
 func newContractTestRouter() *gin.Engine {

@@ -1,11 +1,11 @@
 package router
 
 import (
-	admin "buildadmin-go/internal/admin/handler"
 	adminRouter "buildadmin-go/internal/admin/router"
 	apiRouter "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/i18n"
 	"buildadmin-go/internal/middleware"
+	"buildadmin-go/internal/pkg/route"
 	"buildadmin-go/internal/pkg/util"
 	"net/http"
 	"path/filepath"
@@ -58,7 +58,7 @@ func InitRouter(
 	adminR.Register(router)
 	apiR.Register(router)
 
-	admin.CollectRoutes(router)
+	route.CollectRoutes(router)
 
 	return router
 }

@@ -5,6 +5,7 @@ import (
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"encoding/json"
@@ -69,7 +70,7 @@ func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *mode
 func (h *ConfigHandler) Index(ctx *gin.Context) {
 	configGroupItems, err := h.configJSON(ctx, "config_group")
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -93,7 +94,7 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 
 	all, err := h.configM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	for _, v := range all {
@@ -120,10 +121,10 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 
 	quickEntranceItems, err := h.configJSON(ctx, "config_quick_entrance")
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":          list,
 		"remark":        "",
 		"configGroup":   newConfigGroup,
@@ -151,7 +152,7 @@ func (v Config) GetMessages() validator.ValidatorMessages {
 func (h *ConfigHandler) Add(ctx *gin.Context) {
 	var params Config
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -167,50 +168,50 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 		InputExtend: params.InputExtend,
 		Weigh:       params.Weigh,
 	}); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ConfigHandler) Edit(ctx *gin.Context) {
 	var params map[string]interface{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	if err := h.svc.SaveAll(ctx.Request.Context(), params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ConfigHandler) Del(ctx *gin.Context) {
 	var param validator.Ids
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+		response.FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.configM.Del(ctx, param.Ids)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {
 	params := routinedto.MailParam{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if err := h.svc.SendTestMail(params); err != nil {
-		JsonReturn(ctx, http.StatusOK, 0, "Mail sending service unavailable", err.Error())
+		response.JsonReturn(ctx, http.StatusOK, 0, "Mail sending service unavailable", err.Error())
 		return
 	}
-	Success(ctx, "test mail sent successfully~")
+	response.Success(ctx, "test mail sent successfully~")
 }

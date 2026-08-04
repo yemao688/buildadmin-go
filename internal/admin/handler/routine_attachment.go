@@ -1,8 +1,10 @@
 package handler
 
 import (
+	dto "buildadmin-go/internal/admin/dto"
 	routinemodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -29,14 +31,14 @@ func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentR
 
 func (h *AttachmentHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 	}
 	result, total, err := h.attachmentM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
 		"remark": h.GetRemark(ctx),
@@ -64,57 +66,57 @@ func (h *AttachmentHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	result, err := h.attachmentM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
 
 func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 	var params = struct {
-		IDS
+		dto.IDS
 		Attachment
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	attachment, err := h.attachmentM.GetOne(ctx, int32(params.ID))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&attachment, params)
 	err = h.attachmentM.Edit(ctx, attachment)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *AttachmentHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	err = h.svc.Del(ctx.Request.Context(), params.Ids, actor)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

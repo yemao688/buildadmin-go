@@ -1,11 +1,14 @@
 package handler
 
 import (
+	dto "buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/tree"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
@@ -45,7 +48,7 @@ func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupRep
 
 func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 
@@ -53,7 +56,7 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 	whereP := []interface{}{}
 	groups, err := h.GetGroups(ctx, whereS, whereP)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -68,7 +71,7 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 	if isTree == "" || isTree == "true" {
 		result["list"] = h.AssembleChild(groups)
 	}
-	Success(ctx, result)
+	response.Success(ctx, result)
 }
 
 type AdminGroup struct {
@@ -87,34 +90,34 @@ func (v AdminGroup) GetMessages() validator.ValidatorMessages {
 func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 	var params AdminGroup
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	adminGroup := model.AdminGroup{}
 	if err := copier.Copy(&adminGroup, params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.Add(ctx.Request.Context(), adminGroup, params.Rules, adminAuth.Id); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminGroupHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	adminGroup, err := h.adminGroupM.GetOne(ctx.Request.Context(), int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	if err := h.svc.CheckAuth(header.GetAdminAuth(ctx).Id, header.GetAdminAuth(ctx).IsSuperAdmin, int32(id)); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -122,13 +125,13 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 	ruleIds := strings.Split(adminGroup.Rules, ",")
 	pids, err := h.adminRuleM.GetRulePIds(ctx.Request.Context(), ruleIds)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	rulesId32s, err := util.AtoiArr(ruleIds)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	childRuleIds := []int32{}
@@ -138,7 +141,7 @@ func (h *AdminGroupHandler) One(ctx *gin.Context) {
 		}
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": map[string]any{
 			"id":     adminGroup.ID,
 			"name":   adminGroup.Name,
@@ -192,7 +195,7 @@ func (h *AdminGroupHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map
 			continue
 		}
 		if err := validator(id, fieldName, fieldValue); err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return true
 		}
 	}
@@ -202,61 +205,61 @@ func (h *AdminGroupHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map
 	}
 	status, ok := fieldValue.(string)
 	if !ok {
-		FailByErr(ctx, cErr.BadRequest("status must be a string"))
+		response.FailByErr(ctx, cErr.BadRequest("status must be a string"))
 		return true
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.SwitchStatus(ctx.Request.Context(), id, status, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return true
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 	return true
 }
 
 func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
-		invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+		requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 		return
 	}
 
 	var params = struct {
-		IDS
+		dto.IDS
 		AdminGroup
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	adminGroup := model.AdminGroup{}
 	if err := copier.Copy(&adminGroup, params.AdminGroup); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminGroup, params.Rules, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminGroupHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.Del(ctx.Request.Context(), params.Ids, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
@@ -268,7 +271,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	whereP := []any{"1"}
 	list, err := h.GetGroups(ctx, whereS, whereP)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return nil, false
 	}
 

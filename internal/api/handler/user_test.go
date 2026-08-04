@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -52,10 +53,10 @@ func TestUserLoginRejectsInvalidAccount(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, http.StatusBadRequest, response.Code)
+	require.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
 func TestUserRegisterRequiresClickCaptcha(t *testing.T) {
@@ -69,10 +70,10 @@ func TestUserRegisterRequiresClickCaptcha(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, http.StatusBadRequest, response.Code)
+	require.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
 func TestUserRegisterRejectsInvalidUsernameBeforeCaptcha(t *testing.T) {
@@ -86,8 +87,8 @@ func TestUserRegisterRejectsInvalidUsernameBeforeCaptcha(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, http.StatusBadRequest, response.Code)
+	require.Equal(t, http.StatusBadRequest, resp.Code)
 }

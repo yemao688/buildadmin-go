@@ -21,7 +21,7 @@ const adminRuleRoute = "auth.Rule"
 func (r *AdminRuleRegistrar) Group() string { return "admin" }
 
 func (r *AdminRuleRegistrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, adminRuleRoute, r.handler)
+	CRUDRoutes(g, adminRuleRoute, r.handler)
 }
 
 func (r *AdminRuleRegistrar) Capabilities() []middleware.AtomicRoute {

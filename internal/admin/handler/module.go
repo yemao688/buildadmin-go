@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -17,7 +18,7 @@ func NewModuleHandler(log *zap.Logger) *ModuleHandler {
 
 func (h *ModuleHandler) Index(ctx *gin.Context) {
 
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":  []any{},
 		"total": 0,
 	})
@@ -25,35 +26,35 @@ func (h *ModuleHandler) Index(ctx *gin.Context) {
 
 func (h *ModuleHandler) State(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) Install(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) DependentInstallComplete(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) ChangeState(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) Uninstall(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) Update(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *ModuleHandler) Upload(ctx *gin.Context) {
 
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

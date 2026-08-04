@@ -1,13 +1,17 @@
-package handler
+// Package response 提供 admin/api 两渠道共享的 HTTP 响应封装：成功/失败
+// 返回、请求事务内的暂存与提交/回滚输出。以 admin 渠道实现为基座，
+// 同时提供 api 渠道的 Fail/FailByErrWithData 入口。
+package response
 
 import (
-	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/pkg/requesttx"
-	"buildadmin-go/internal/pkg/util"
 	"context"
 	"database/sql/driver"
 	"errors"
 	"net/http"
+
+	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	mysql "github.com/go-sql-driver/mysql"
@@ -115,4 +119,29 @@ func writeError(c *gin.Context, err error) {
 func FailByErr(c *gin.Context, err error) {
 	outcome := errorOutcome(err)
 	JsonReturn(c, outcome.HTTPCode, outcome.BusinessCode, outcome.Message, outcome.Data)
+}
+
+// Fail 以指定 HTTP 状态码与业务码返回失败信息（api 渠道入口）。
+func Fail(c *gin.Context, httpCode int, code int, msg string) {
+	JsonReturn(c, httpCode, code, msg, nil)
+}
+
+// FailByErrWithData 返回携带附加数据的失败响应（api 渠道入口）。
+func FailByErrWithData(c *gin.Context, err error, data interface{}) {
+	v, ok := err.(*cErr.Error)
+	if !ok {
+		FailByErr(c, err)
+		return
+	}
+
+	msg := util.Lang(c, v.Error(), nil)
+	if requesttx.Stage(c, requesttx.Outcome{
+		HTTPCode:     v.HttpCode(),
+		BusinessCode: v.ErrorCode(),
+		Message:      msg,
+		Data:         data,
+	}) {
+		return
+	}
+	c.JSON(v.HttpCode(), Response{v.ErrorCode(), data, msg, 0})
 }

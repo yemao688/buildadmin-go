@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -57,9 +58,9 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/admin/config/edit", bytes.NewBufferString(requestJSON)))
 
 	require.Equal(t, http.StatusOK, recorder.Code)
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.Equal(t, 1, response.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Code)
 
 	values := map[string]string{}
 	var persisted []siteconfig.Config

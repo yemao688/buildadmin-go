@@ -4,6 +4,7 @@ import (
 	dto "buildadmin-go/internal/admin/dto"
 	repository "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
@@ -23,14 +24,14 @@ func NewCountryLanguageContentHandler(log *zap.Logger, countryLanguageContentM *
 
 func (h *CountryLanguageContentHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 	}
 	list, total, err := h.countryLanguageContentM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   list,
 		"total":  total,
 		"remark": "",
@@ -40,17 +41,17 @@ func (h *CountryLanguageContentHandler) Index(ctx *gin.Context) {
 func (h *CountryLanguageContentHandler) Add(ctx *gin.Context) {
 	var params dto.CountryLanguageContentParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	var data model.CountryLanguageContent
 	copier.Copy(&data, params)
 	err := h.countryLanguageContentM.Add(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *CountryLanguageContentHandler) Edit(ctx *gin.Context) {
@@ -66,23 +67,23 @@ func (h *CountryLanguageContentHandler) Edit(ctx *gin.Context) {
 		dto.CountryLanguageContentParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	data, err := h.countryLanguageContentM.GetOne(ctx, params.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
 	err = h.countryLanguageContentM.Edit(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *CountryLanguageContentHandler) Del(ctx *gin.Context) {
@@ -90,13 +91,13 @@ func (h *CountryLanguageContentHandler) Del(ctx *gin.Context) {
 		Ids []int64 `form:"ids[]" binding:"required"`
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+		response.FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.countryLanguageContentM.Del(ctx, param.Ids)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	SuccessWithMessage(ctx, "Deleted successfully")
+	response.SuccessWithMessage(ctx, "Deleted successfully")
 }

@@ -1,20 +1,23 @@
 package handler
 
 import (
+	dto "buildadmin-go/internal/admin/dto"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
 
-	"buildadmin-go/internal/admin/service"
 	adminmodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/pkg/validator"
+	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/tree"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/unknwon/com"
@@ -42,19 +45,19 @@ func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM 
 func (h *AdminHandler) Index(ctx *gin.Context) {
 	if data, matched, err := h.Select(ctx); matched {
 		if err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 
 	result, total, err := h.adminM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
 		"remark": "",
@@ -122,22 +125,22 @@ func actorFromContext(ctx *gin.Context) (data_scope.Actor, error) {
 func (h *AdminHandler) Add(ctx *gin.Context) {
 	var params Admin
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.Add(ctx.Request.Context(), adminParams(params), actor, adminAuth.Id); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func adminParams(params Admin) service.AdminParams {
@@ -159,11 +162,11 @@ func (h *AdminHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	result, err := h.adminM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
@@ -210,7 +213,7 @@ func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[stri
 			continue
 		}
 		if err := validator(id, fieldName, fieldValue); err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return true
 		}
 	}
@@ -220,19 +223,19 @@ func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[stri
 	}
 	status, ok := fieldValue.(string)
 	if !ok {
-		FailByErr(ctx, cErr.BadRequest("status must be a string"))
+		response.FailByErr(ctx, cErr.BadRequest("status must be a string"))
 		return true
 	}
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return true
 	}
 	if err := h.svc.SwitchStatus(ctx.Request.Context(), id, status, header.GetAdminAuth(ctx).Id, actor); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return true
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 	return true
 }
 
@@ -242,47 +245,47 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 	}
 
 	var params = struct {
-		IDS
+		dto.IDS
 		Admin
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminParams(params.Admin), actor, adminAuth.Id); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	actor, err := actorFromContext(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	err = h.svc.Del(ctx.Request.Context(), params.Ids, actor)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 type adminTreeLeaf struct {

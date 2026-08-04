@@ -3,8 +3,9 @@ package handler
 import (
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/pkg/validator"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/unknwon/com"
@@ -31,14 +32,14 @@ func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sen
 
 func (h *SensitiveDataLogHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 	}
 	result, total, err := h.sensitiveDataLogM.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
 		"remark": "",
@@ -49,11 +50,11 @@ func (h *SensitiveDataLogHandler) Info(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
 	result, err := h.sensitiveDataLogM.GetOne(ctx, int32(id))
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
@@ -61,26 +62,26 @@ func (h *SensitiveDataLogHandler) Info(ctx *gin.Context) {
 func (h *SensitiveDataLogHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.sensitiveDataLogM.Del(ctx, params.Ids); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *SensitiveDataLogHandler) Rollback(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if err := h.svc.Rollback(ctx.Request.Context(), params.Ids); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

@@ -6,6 +6,7 @@ import (
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"regexp"
@@ -65,19 +66,19 @@ func (v Register) GetMessages() validator.ValidatorMessages {
 func (h *UserHandler) Login(ctx *gin.Context) {
 	var params Login
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if h.config.App.UserLoginCaptcha && !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
-		FailByErr(ctx, cErr.BadRequest("Captcha error"))
+		response.FailByErr(ctx, cErr.BadRequest("Captcha error"))
 		return
 	}
 	result, err := h.authM.Login(util.GetClientIP(ctx), params.Username, params.Password, params.Keep)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"userInfo":  result,
 		"routePath": "/user",
 	})
@@ -86,23 +87,23 @@ func (h *UserHandler) Login(ctx *gin.Context) {
 func (h *UserHandler) Register(ctx *gin.Context) {
 	var params Register
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if !usernamePattern.MatchString(params.Username) {
-		FailByErr(ctx, cErr.BadRequest("username invalid"))
+		response.FailByErr(ctx, cErr.BadRequest("username invalid"))
 		return
 	}
 	if !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
-		FailByErr(ctx, cErr.BadRequest("Captcha error"))
+		response.FailByErr(ctx, cErr.BadRequest("Captcha error"))
 		return
 	}
 	result, err := h.authM.Register(util.GetClientIP(ctx), params.Username, params.Password)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"userInfo":  result,
 		"routePath": "/user",
 	})
@@ -113,12 +114,12 @@ func (h *UserHandler) Logout(ctx *gin.Context) {
 		RefreshToken string `json:"refreshToken"`
 	}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	if err := h.authM.Logout(params.RefreshToken, header.GetUserAuth(ctx).Token); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

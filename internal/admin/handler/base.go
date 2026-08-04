@@ -3,6 +3,7 @@ package handler
 import (
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"bytes"
@@ -100,7 +101,7 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 			continue
 		}
 		if err := validator(id, fieldName, fieldValue); err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return true
 		}
 	}
@@ -118,20 +119,20 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 		Where(primaryKey+" = ?", idVal).
 		Updates(updates)
 	if res.Error != nil {
-		FailByErr(ctx, res.Error)
+		response.FailByErr(ctx, res.Error)
 	} else if res.RowsAffected == 0 {
 		var visible int64
 		if err := db.Table(h.currentM.Table()).Where(primaryKey+" = ?", idVal).Count(&visible).Error; err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 		} else if visible == 1 {
-			Success(ctx, "")
+			response.Success(ctx, "")
 		} else {
-			FailByErr(ctx, gorm.ErrRecordNotFound)
+			response.FailByErr(ctx, gorm.ErrRecordNotFound)
 		}
 	} else if res.RowsAffected != 1 {
-		FailByErr(ctx, gorm.ErrRecordNotFound)
+		response.FailByErr(ctx, gorm.ErrRecordNotFound)
 	} else {
-		Success(ctx, "")
+		response.Success(ctx, "")
 	}
 	return true
 }
@@ -155,10 +156,10 @@ func (h *Base) One(ctx *gin.Context) {
 	}
 	err := db.Table(h.currentM.Table()).Where(primaryKey+"=?", id).Take(scanTarget).Error
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"row": result,
 	})
 }
@@ -186,15 +187,15 @@ func (h *Base) Sortable(ctx *gin.Context) {
 	}
 	params := Sort{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	if err := Sortable(ctx, h.currentM, params.Move, params.Target, params.Direction, params.Order); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func primaryKeyName(m CommonModel) string {

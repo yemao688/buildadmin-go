@@ -1,11 +1,14 @@
 package handler
 
 import (
+	dto "buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/pkg/validator"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/tree"
+	"buildadmin-go/internal/pkg/validator"
 	"slices"
 	"strings"
 
@@ -34,26 +37,26 @@ func NewAdminRuleHandler(log *zap.Logger, adminRuleM *adminmodel.AdminRuleReposi
 
 func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 		return
 	}
 	whereP := []any{}
 	list, err := h.GetMenus(ctx, []string{}, whereP)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	isTree := ctx.Request.FormValue("isTree")
 	if isTree == "" || isTree == "true" {
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"list":   h.AssembleChild(list),
 			"remark": "",
 		})
 		return
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":   list,
 		"remark": "",
 	})
@@ -86,71 +89,71 @@ func (v AdminRule) GetMessages() validator.ValidatorMessages {
 func (h *AdminRuleHandler) Add(ctx *gin.Context) {
 	var params AdminRule
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	var adminRule model.AdminRule
 	if err := copier.Copy(&adminRule, params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	err := h.svc.Add(ctx.Request.Context(), adminRule)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 	if h.MaybePartialEdit(ctx, map[string]bool{"status": true}) {
-		invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+		requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 		return
 	}
 
 	var params = struct {
-		IDS
+		dto.IDS
 		AdminRule
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	adminRule, err := h.adminRuleM.GetOne(ctx, params.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	if err := copier.Copy(&adminRule, params); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	err = h.svc.Edit(ctx.Request.Context(), adminRule)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Del(ctx *gin.Context) {
 	var params validator.Ids
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	err := h.svc.Del(ctx.Request.Context(), params.Ids)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
-	invalidateAfterMutation(ctx, h.authM.InvalidateAll)
+	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.authM.InvalidateAll)
 }
 
 func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
@@ -162,7 +165,7 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
 	list, err := h.GetMenus(ctx, whereS, whereP)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return nil, false
 	}
 

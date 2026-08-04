@@ -1,14 +1,15 @@
 package router
 
 import (
+	routepkg "buildadmin-go/internal/pkg/route"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	admin "buildadmin-go/internal/admin/handler"
-	adminRouter "buildadmin-go/internal/admin/router"
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
+	adminRouter "buildadmin-go/internal/admin/router"
 	api "buildadmin-go/internal/api/handler"
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
@@ -29,8 +30,8 @@ func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testin
 		require.Contains(t, engineRoutes, route)
 	}
 
-	collectedRoutes := uniqueCollectedRoutes(t, admin.GetAllRoutes())
-	require.Len(t, collectedRoutes, len(admin.GetAllRoutes()))
+	collectedRoutes := uniqueCollectedRoutes(t, routepkg.GetAllRoutes())
+	require.Len(t, collectedRoutes, len(routepkg.GetAllRoutes()))
 	for _, route := range want {
 		require.Contains(t, collectedRoutes, route)
 	}
@@ -40,14 +41,14 @@ func TestInitRouterReplacesCollectedRoutesOnReinitialization(t *testing.T) {
 	newCompleteRouter()
 
 	newEngine := newCompleteRouter()
-	collectedRoutes := admin.GetAllRoutes()
+	collectedRoutes := routepkg.GetAllRoutes()
 
 	uniqueCollectedRoutes(t, collectedRoutes)
 	require.Len(t, collectedRoutes, len(newEngine.Routes()))
 
-	want := make([]admin.Route, 0, len(newEngine.Routes()))
+	want := make([]routepkg.Route, 0, len(newEngine.Routes()))
 	for _, route := range newEngine.Routes() {
-		want = append(want, admin.Route{
+		want = append(want, routepkg.Route{
 			Method:  route.Method,
 			Path:    route.Path,
 			Handler: route.Handler,
@@ -205,7 +206,7 @@ func uniqueRoutes(t *testing.T, routes []gin.RouteInfo) map[string]struct{} {
 	return result
 }
 
-func uniqueCollectedRoutes(t *testing.T, routes []admin.Route) map[string]struct{} {
+func uniqueCollectedRoutes(t *testing.T, routes []routepkg.Route) map[string]struct{} {
 	result := make(map[string]struct{}, len(routes))
 	for _, route := range routes {
 		key := routeKey(route.Method, route.Path)

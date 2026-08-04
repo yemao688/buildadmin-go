@@ -308,7 +308,7 @@ const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName
 func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
 
 func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, {{.RouteName}}Route, r.handler)
+	CRUDRoutes(g, {{.RouteName}}Route, r.handler)
 }
 
 func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
@@ -323,7 +323,8 @@ import (
 	model "{{.ModelImportPath}}"
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
 	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
-	{{end}}"buildadmin-go/internal/pkg/validator"
+	{{end}}"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -342,14 +343,14 @@ func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 	if data, ok := h.Select(ctx); ok {
-		Success(ctx, data)
+		response.Success(ctx, data)
 	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"list":   list,
 		"total":  total,
 		"remark": "",
@@ -360,17 +361,17 @@ func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
 func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 	var params {{.DTOQualifier}}{{.ClassName}}Param
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	var data model.{{.ClassName}}
 	copier.Copy(&data, params)
 	err := h.{{.ModelVar}}M.Add(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
@@ -386,23 +387,23 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 		{{.DTOQualifier}}{{.ClassName}}Param
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
 	copier.Copy(&data, params)
 	err = h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
@@ -410,15 +411,15 @@ func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
 		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
 	}
 	if err := ctx.ShouldBindQuery(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+		response.FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	SuccessWithMessage(ctx, "Deleted successfully")
+	response.SuccessWithMessage(ctx, "Deleted successfully")
 }
 `
 

@@ -21,7 +21,7 @@ const countryCurrencyRoute = "country.Currency"
 func (r *CountryCurrencyRegistrar) Group() string { return "admin" }
 
 func (r *CountryCurrencyRegistrar) Register(g gin.IRoutes) {
-	handler.CRUDRoutes(g, countryCurrencyRoute, r.handler)
+	CRUDRoutes(g, countryCurrencyRoute, r.handler)
 }
 
 func (r *CountryCurrencyRegistrar) Capabilities() []middleware.AtomicRoute {

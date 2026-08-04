@@ -924,15 +924,25 @@ type Base struct {
 	log      *zap.Logger
 }
 
-type IDS struct {
-	ID int32
-}
-
 func (b *Base) Select(ctx *gin.Context) (any, bool) { return nil, false }
 func (b *Base) MaybePartialEdit(ctx *gin.Context, fields map[string]bool) bool { return false }
-func Success(ctx *gin.Context, data any)            {}
-func SuccessWithMessage(ctx *gin.Context, message string) {}
-func FailByErr(ctx *gin.Context, err error)         {}
+`,
+		"internal/pkg/response/response.go": `package response
+
+import (
+	"github.com/gin-gonic/gin"
+)
+
+type Response struct {
+	Code int
+	Data any
+	Msg  string
+	Time int64
+}
+
+func Success(c *gin.Context, data any)                  {}
+func SuccessWithMessage(c *gin.Context, message string) {}
+func FailByErr(c *gin.Context, err error)               {}
 `,
 		"internal/pkg/validator/validator.go": `package validator
 

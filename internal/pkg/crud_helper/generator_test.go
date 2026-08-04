@@ -52,10 +52,10 @@ func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 		t.Fatal("generated handler template is missing delete handler")
 	}
 	deleteTemplate := handlerTemp[deleteStart:]
-	if !strings.Contains(deleteTemplate, `SuccessWithMessage(ctx, "Deleted successfully")`) {
+	if !strings.Contains(deleteTemplate, `response.SuccessWithMessage(ctx, "Deleted successfully")`) {
 		t.Fatal("generated delete handler must return the aligned success message")
 	}
-	if strings.Contains(deleteTemplate, "Success(ctx, \"\")") {
+	if strings.Contains(deleteTemplate, `response.Success(ctx, "")`) {
 		t.Fatal("generated delete handler must not use an empty success response")
 	}
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -31,10 +32,10 @@ func (h *AdminInfoHandler) Index(ctx *gin.Context) {
 	adminAuth := header.GetAdminAuth(ctx)
 	admin, err := h.authM.GetInfo(ctx, adminAuth.Id)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"info": map[string]interface{}{
 			"id":              admin.ID,
 			"username":        admin.Username,
@@ -72,14 +73,14 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 		SelfAdmin
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	adminAuth := header.GetAdminAuth(ctx)
 	admin, err := h.adminM.GetOne(ctx, adminAuth.Id)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -88,16 +89,16 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 		admin.Avatar = *params.Avatar
 		err = h.adminM.SelfEdit(ctx, admin, []string{"avatar"})
 		if err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
-		Success(ctx, "")
+		response.Success(ctx, "")
 		return
 	}
 
 	if params.Password != "" {
 		if err := h.adminM.ResetPassword(ctx, admin.ID, params.Password); err != nil {
-			FailByErr(ctx, err)
+			response.FailByErr(ctx, err)
 			return
 		}
 	}
@@ -105,8 +106,8 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 	copier.Copy(&admin, params)
 	err = h.adminM.SelfEdit(ctx, admin, []string{"nickname", "email", "mobile", "motto"})
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }

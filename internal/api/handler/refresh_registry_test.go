@@ -9,23 +9,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/token"
 )
-
-func TestRegisterRefreshTypeRejectsDuplicate(t *testing.T) {
-	typ := "test-refresh-duplicate"
-	desc := RefreshTypeDescriptor{AccessType: "test", AccessHeader: "test-token"}
-	require.Error(t, RegisterRefreshType("", desc))
-	require.NoError(t, RegisterRefreshType(typ, desc))
-	require.Error(t, RegisterRefreshType(typ, desc))
-}
 
 func TestRefreshTokenUsesRegisteredRefreshType(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "seller-refresh", UserID: 42}}
 	var gotRefreshToken string
 	var gotUserID int32
-	require.NoError(t, RegisterRefreshType("seller-refresh", RefreshTypeDescriptor{
+	require.NoError(t, token.RegisterRefreshType("seller-refresh", token.RefreshTypeDescriptor{
 		AccessType:   "seller",
 		AccessHeader: "seller-token",
 		Refresh: func(_ *gin.Context, refreshToken string, userID int32) (string, error) {
@@ -44,11 +37,11 @@ func TestRefreshTokenUsesRegisteredRefreshType(t *testing.T) {
 	request.Header.Set("seller-token", "seller-access")
 	router.ServeHTTP(recorder, request)
 
-	var response Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
-	require.Equal(t, 1, response.Code)
-	require.Equal(t, "seller-refresh", response.Data.(map[string]interface{})["type"])
-	require.Equal(t, "seller-access", response.Data.(map[string]interface{})["token"])
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 1, resp.Code)
+	require.Equal(t, "seller-refresh", resp.Data.(map[string]interface{})["type"])
+	require.Equal(t, "seller-access", resp.Data.(map[string]interface{})["token"])
 	require.Equal(t, "seller-refresh-token", gotRefreshToken)
 	require.Equal(t, int32(42), gotUserID)
 	require.Zero(t, driver.setCount)

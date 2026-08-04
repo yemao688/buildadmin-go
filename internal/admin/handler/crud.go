@@ -1,6 +1,7 @@
 package handler
 
 import (
+	dto "buildadmin-go/internal/admin/dto"
 	adminauth "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
@@ -10,6 +11,7 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/filesystem"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"encoding/json"
@@ -72,11 +74,11 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := requireCrudRoot(ctx); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	actor, _ := ctx.Get(data_scope.ActorContextKey)
@@ -95,11 +97,11 @@ func (h *CrudHandler) Generate(ctx *gin.Context) {
 			middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
 		},
 	}); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
-	Success(ctx, map[string]interface{}{})
+	response.Success(ctx, map[string]interface{}{})
 }
 
 // 从log开始
@@ -109,13 +111,13 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
 	crudLog, err := h.crudLogM.GetOne(ctx, params.Id)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 
@@ -127,7 +129,7 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 		crudLog.Table.Empty = true
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"table":  crudLog.Table,
 		"fields": crudLog.Fields,
 	})
@@ -135,29 +137,29 @@ func (h *CrudHandler) LogStart(ctx *gin.Context) {
 
 // 删除CRUD记录和生成的文件
 func (h *CrudHandler) Delete(ctx *gin.Context) {
-	var param IDS
+	var param dto.IDS
 	if err := ctx.ShouldBindJSON(&param); err != nil {
-		FailByErr(ctx, validator.GetError(param, err))
+		response.FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
 	if err := requireCrudRoot(ctx); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	crudLog, err := h.crudLogM.GetOne(ctx, param.ID)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	if err := helper.DeleteFromSpecWithHooks(h.tableM.DB(), h.config, crudLog.Tablename, func(method, route string) {
 		action := route[strings.LastIndex(route, "/")+1:]
 		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
 	}); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
-	Success(ctx, map[string]interface{}{})
+	response.Success(ctx, map[string]interface{}{})
 }
 
 // UploadCompleted records the sync marker for each uploaded CRUD log. A
@@ -166,14 +168,14 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
 	var params crudUploadCompletedParams
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	if err := h.crudLogM.UpdateSync(ctx, params.SyncIDs, bool(params.CancelSync)); err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, "")
+	response.Success(ctx, "")
 }
 
 func requireCrudRoot(ctx *gin.Context) error {
@@ -193,18 +195,18 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindQuery(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 	// 新语义：实体一律输出到共享记录层 internal/model（CommonModel 参数仅保留兼容）。
 	modelFile, err := helper.ParseEntityNameData(params.TableName, "")
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	handlerFile, err := helper.ParseHandlerNameData(params.TableName, "")
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
 	webViewsDir := helper.ParseWebDirNameData(params.TableName, "views", "")
@@ -225,7 +227,7 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 		v = path.Join("internal/admin/handler", v)
 		controllerFiles[v] = v
 	}
-	Success(ctx, map[string]any{
+	response.Success(ctx, map[string]any{
 		"modelFile":          modelFile.RootFileName + "\\" + modelFile.OriginalLastName + ".go",
 		"controllerFile":     handlerFile.RootFileName + "\\" + handlerFile.OriginalLastName + ".go",
 		"validateFile":       "",
@@ -241,7 +243,7 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 	//ctx.Request.FormValue("table")
 	crudLog, err := h.crudLogM.GetByTableName(ctx, tableName)
 	if err != nil {
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"id": 0,
 		})
 		return
@@ -251,7 +253,7 @@ func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 	if crudLog.Status == "success" {
 		id = crudLog.ID
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"id": id,
 	})
 }
@@ -261,7 +263,7 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 
 	params := map[string]any{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(nil, err))
+		response.FailByErr(ctx, validator.GetError(nil, err))
 		return
 	}
 
@@ -270,14 +272,14 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 	reqType, _ := params["type"].(string)
 
 	if tableName == "" {
-		FailByErr(ctx, cErr.BadRequest("table is required"))
+		response.FailByErr(ctx, cErr.BadRequest("table is required"))
 		return
 	}
 
 	if reqType == "db" {
 		comment := ""
 		if info, _ := h.tableM.GetInfo(tableName); len(info) == 0 {
-			FailByErr(ctx, cErr.BadRequest("Record not found"))
+			response.FailByErr(ctx, cErr.BadRequest("Record not found"))
 			return
 		} else {
 			comment = info[0]["TABLE_COMMENT"].(string)
@@ -285,7 +287,7 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 		empty, _ := h.tableM.IsHasData(tableName)
 
 		columns, _ := h.tableM.GetColumns(tableName)
-		Success(ctx, map[string]interface{}{
+		response.Success(ctx, map[string]interface{}{
 			"columns": helper.ParseTableColumns(columns, false), //TODO: 数据类型可能需要转换
 			"comment": comment,
 			"empty":   empty,
@@ -301,7 +303,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	}{}
 
 	if err := ctx.ShouldBindJSON(&params); err != nil {
-		FailByErr(ctx, validator.GetError(params, err))
+		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
@@ -320,18 +322,18 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	}
 
 	if tableExist || controllerExist {
-		ctx.JSON(200, Response{
-			-1,
-			map[string]interface{}{
+		ctx.JSON(200, response.Response{
+			Code: -1,
+			Data: map[string]interface{}{
 				"table":      tableExist,
 				"controller": controllerExist,
 			},
-			"",
-			0,
+			Msg:  "",
+			Time: 0,
 		})
 		return
 	}
-	Success(ctx, nil)
+	response.Success(ctx, nil)
 }
 
 // 数据表
@@ -356,7 +358,7 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 		}
 	}
 
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"dbs": outTables,
 	})
 }

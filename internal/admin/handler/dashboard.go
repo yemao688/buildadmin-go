@@ -2,6 +2,7 @@ package handler
 
 import (
 	adminauth "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -23,7 +24,7 @@ func NewDashboardHandler(log *zap.Logger, adminRuleM *adminauth.AdminRuleReposit
 
 func (h *DashboardHandler) Index(ctx *gin.Context) {
 	remark := h.GetRemark(ctx)
-	Success(ctx, map[string]string{
+	response.Success(ctx, map[string]string{
 		"remark": remark,
 	})
 }

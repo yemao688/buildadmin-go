@@ -1,10 +1,11 @@
 package handler
 
 import (
-	crudmodel "buildadmin-go/internal/model"
 	adminauth "buildadmin-go/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -32,15 +33,15 @@ func (h *LogHandler) Index(ctx *gin.Context) {
 	value, ok := ctx.Get(data_scope.ActorContextKey)
 	actor, actorOK := value.(data_scope.Actor)
 	if !ok || !actorOK || !h.authM.Check("crud/crud/index", actor.AdminID, "or") {
-		FailByErr(ctx, cErr.ForbiddenRequest("You have no permission"))
+		response.FailByErr(ctx, cErr.ForbiddenRequest("You have no permission"))
 		return
 	}
 	result, total, err := h.crudLog.List(ctx)
 	if err != nil {
-		FailByErr(ctx, err)
+		response.FailByErr(ctx, err)
 		return
 	}
-	Success(ctx, map[string]interface{}{
+	response.Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
 		"remark": "",
