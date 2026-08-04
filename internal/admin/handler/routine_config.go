@@ -100,9 +100,6 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 		if _, ok := list[v.Group]; ok {
 			title := util.Lang(ctx, v.Title, nil)
 			value := v.GetValueAttr()
-			if v.Name == "upload_secret_key" {
-				value = ""
-			}
 			list[v.Group].List = append(list[v.Group].List, map[string]any{
 				"id":           v.ID,
 				"name":         v.Name,
