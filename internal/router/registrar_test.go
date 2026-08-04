@@ -148,37 +148,23 @@ func apiRegistrars() []apiRouter.Registrar {
 	)
 }
 
-// adminRegistrars 用桩 handler 构造 admin 渠道模块注册器集合，与
-// AdminRouter 实际注入的 ProvideRegistrars 保持同一顺序。
+// adminRegistrars 用桩 handler 构造 admin 渠道的**样本**模块注册器集合。
+// 测试目的是验证 registrar 机制（路由收集、capability 双向匹配、去重），
+// 不是验证每个模块——所以只保留两类代表：手写 registrar（admin）+ 生成
+// registrar（country 三模块）。
 //
-// 本列表只覆盖框架内置模块：CRUD 生成器维护 provider.go 的
-// ProvideRegistrars，但不会（也不需要）同步本列表——测试引擎由本
-// 列表构造，桩列表不更新测试依然通过。业务模块生成后不要往这里加
-// 桩，避免框架测试文件被业务改动污染；crud:generate 后无需运行或
-// 修改本测试。
+// 有意不调用 ProvideRegistrars 全量签名：CRUD 生成器会扩展该签名（每新增
+// 一个模块加一个 handler 参数），若测试桩与签名耦合，框架和业务每次生成
+// 模块后都必须同步本文件，否则编译失败。样本化后测试与签名解耦——生成
+// 新模块（框架或业务）都无需改动本文件，业务仓库也不会污染框架测试文件。
+// 全量一致性由 wire_gen.go 与生成器内置 runWire/runProjectBuild 兜底。
 func adminRegistrars() []adminRouter.Registrar {
-	return adminRouter.ProvideRegistrars(
-		&admin.LogHandler{},
-		&admin.ModuleHandler{},
-		&admin.AdminGroupHandler{},
-		&admin.AdminRuleHandler{},
-		&admin.ConfigHandler{},
-		&admin.AttachmentHandler{},
-		&admin.AdminHandler{},
-		&admin.UserHandler{},
-		&admin.DataRecycleHandler{},
-		&admin.DataRecycleLogHandler{},
-		&admin.SensitiveDataHandler{},
-		&admin.SensitiveDataLogHandler{},
-		&admin.AdminInfoHandler{},
-		&admin.AdminLogHandler{},
-		&admin.CrudHandler{},
-		&admin.DashboardHandler{},
-		&admin.MoneyLogHandler{},
-		&admin.CountryCurrencyHandler{},
-		&admin.CountryLanguageHandler{},
-		&admin.CountryLanguageContentHandler{},
-	)
+	return []adminRouter.Registrar{
+		adminRouter.NewAdminRegistrar(&admin.AdminHandler{}),
+		adminRouter.NewCountryCurrencyRegistrar(&admin.CountryCurrencyHandler{}),
+		adminRouter.NewCountryLanguageRegistrar(&admin.CountryLanguageHandler{}),
+		adminRouter.NewCountryLanguageContentRegistrar(&admin.CountryLanguageContentHandler{}),
+	}
 }
 
 func countryRoutes() []string {
