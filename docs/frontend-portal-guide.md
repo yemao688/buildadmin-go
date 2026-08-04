@@ -45,7 +45,7 @@ web/src/views/buyer/      +  web/src/lang/buyer/       ← 买家门户（/buyer
 - 特例映射：`web/src/lang/autoload.ts` 的 `langAutoLoadMap`（path →
   语言包相对路径），用于补充特例场景
 
-## 4. token 域注册（前端）
+## 4. token 域注册与多门户划分（前端）
 
 请求注入、刷新队列走 token provider 注册表（`web/src/utils/tokenProvider.ts`）。
 `web/src/main.ts` 已注册内建 provider（admin/batoken、baAccount 与
@@ -63,6 +63,46 @@ registerTokenProvider({
 
 业务封装 axios 时通过 `Options.tokenDomain` 指定域（见
 `tokenProvider.ts` 头部注释）；header 名与后端 token 类型一一对应。
+
+### 多门户并发登录的域划分
+
+后台、买家、卖家可同时登录（浏览器并存三套 token），互不干扰的前提：
+
+- **域 = 独立 token 载体**：每个域独立 `header`（`batoken`/`ba-user-token`/
+  `ba-seller-token`）与独立 store——请求按 header 注入，刷新只更新本域
+  store，互不覆盖。
+- **请求显式指定域**：内建解析规则（无 `tokenDomain` 时按
+  `isUserRequest(url) ? userInfo : admin`）只覆盖后台/前台默认域；
+  第三门户的请求封装必须显式传 `Options.tokenDomain`，否则 token 会
+  注入到错误 header。
+- **刷新失败只清本域**：`/api/common/refreshToken` 刷新失败后仅移除该域
+  store 的 token 并 303 回该域 `loginRoute`，其余域登录态不受影响。
+
+### 门户守卫（业务样板参考）
+
+登录态守卫属于业务样板，框架不提供具体守卫组件（有意保留为业务样板，
+避免框架侧出现无人消费的守卫抽象）——业务在自建 `router.beforeEach`
+中组合注册表：`store().getToken()` 判登录、`loginRoute` 作重定向目标：
+
+```ts
+// web/src/router/guard.ts（业务文件，自建）
+router.beforeEach((to) => {
+    const userInfo = useUserInfo()
+    if (to.meta.auth === 'buyer' && !userInfo.getToken()) {
+        return { name: 'buyerLogin', query: { redirect: to.fullPath } }
+    }
+    if (to.path.startsWith('/seller')) {
+        const sellerInfo = useSellerInfo()
+        if (to.name !== 'sellerLogin' && !sellerInfo.getToken()) {
+            return { name: 'sellerLogin', query: { redirect: to.fullPath } }
+        }
+    }
+})
+```
+
+锚点任选：买家门户多用 `meta.auth` 声明（路由级），卖家门户多用路径前缀
+`/<portal>`（门户级）；`loginRoute` 与 provider 注册时保持一致。完整形态
+（已登录访问登录页跳回、redirect 回跳、刷新失败处理）由业务自定。
 
 ## 5. refreshType 注册（后端配套）
 
