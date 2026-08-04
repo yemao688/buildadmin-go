@@ -12,6 +12,7 @@ var ProviderSet = wire.NewSet(
 	NewApiRouter,
 	NewCommonRegistrar,
 	NewUserRegistrar,
+	NewIndexRegistrar,
 	ProvideRegistrars,
 )
 
@@ -20,9 +21,11 @@ var ProviderSet = wire.NewSet(
 func ProvideRegistrars(
 	apiCommon *api.CommonHandler,
 	apiUser *api.UserHandler,
+	apiIndex *api.IndexHandler,
 ) []Registrar {
 	return []Registrar{
 		NewCommonRegistrar(apiCommon),
 		NewUserRegistrar(apiUser),
+		NewIndexRegistrar(apiIndex),
 	}
 }

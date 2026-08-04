@@ -42,6 +42,7 @@ func TestApiRouterMountsAPIRoutes(t *testing.T) {
 		Registrars: []Registrar{
 			NewUserRegistrar(&api.UserHandler{}),
 			NewCommonRegistrar(&api.CommonHandler{}),
+			NewIndexRegistrar(&api.IndexHandler{}),
 		},
 	}).Register(engine)
 
@@ -62,6 +63,7 @@ func TestApiRouterMountsAPIRoutes(t *testing.T) {
 		"POST /api/common/refreshToken",
 		"POST /api/ajax/upload",
 		"POST /api/Alioss/callback",
+		"GET /api/index/index",
 	}
 	require.Len(t, engine.Routes(), len(want))
 	for _, route := range want {

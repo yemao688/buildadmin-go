@@ -193,6 +193,25 @@ func (s *MemberService) FilterData(user model.User) map[string]any {
 	}
 }
 
+// UserInfoByToken resolves the member behind an access token and returns the
+// filtered user payload; ok is false when the token is missing/invalid or the
+// member no longer exists. Used by the public api index endpoint to include
+// userInfo only for logged-in requests (php auth->getUserInfo()).
+func (s *MemberService) UserInfoByToken(tokenStr string) (map[string]any, bool) {
+	if tokenStr == "" {
+		return nil, false
+	}
+	tokenData, ok := s.IsLoginToken(tokenStr)
+	if !ok {
+		return nil, false
+	}
+	user, err := s.users.GetByID(tokenData.UserID)
+	if err != nil {
+		return nil, false
+	}
+	return s.FilterData(*user), true
+}
+
 // Register creates a member account and issues the access token. ip is passed
 // explicitly so the flow stays transport-free.
 func (s *MemberService) Register(ip string, username string, plainPassword string) (interface{}, error) {

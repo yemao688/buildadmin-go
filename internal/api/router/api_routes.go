@@ -29,6 +29,7 @@ func newAPIRouteSet(root gin.IRoutes, authenticated gin.IRoutes) gin.IRoutes {
 			http.MethodGet + " common/clickCaptcha":       {},
 			http.MethodPost + " common/checkClickCaptcha": {},
 			http.MethodPost + " common/refreshToken":      {},
+			http.MethodGet + " index/index":               {},
 		},
 	}
 }

@@ -144,6 +144,7 @@ func apiRegistrars() []apiRouter.Registrar {
 	return apiRouter.ProvideRegistrars(
 		&api.CommonHandler{},
 		&api.UserHandler{},
+		&api.IndexHandler{},
 	)
 }
 

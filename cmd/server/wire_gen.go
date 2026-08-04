@@ -125,7 +125,8 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	captchaService := captcha.NewCaptchaService(gormDB)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration, uploadHelper)
 	handlerUserHandler := handler2.NewUserHandler(zapLogger, configuration, memberService, clickCaptcha)
-	v2 := router2.ProvideRegistrars(commonHandler, handlerUserHandler)
+	handlerIndexHandler := handler2.NewIndexHandler(configuration, siteconfigService, countryService, memberService)
+	v2 := router2.ProvideRegistrars(commonHandler, handlerUserHandler, handlerIndexHandler)
 	apiRouterDeps := router2.ApiRouterDeps{
 		UserLoginM: userLogin,
 		Registrars: v2,
