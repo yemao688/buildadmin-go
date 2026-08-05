@@ -63,38 +63,6 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 			ownerCol := resolveOwnerColumn(table.DataScope, fields)
 			return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
 		}
-		// 改名和删除操作优先
-		for _, v := range designChange {
-			if !v.Sync {
-				continue
-			}
-
-			columnExists, err := hasColumn(db, fullTableName, v.OldName)
-			if err != nil {
-				return err
-			}
-			if slices.Contains([]string{"change-field-name", "del-field"}, v.Type) && !columnExists {
-				return cErr.BadRequest(v.OldName + " not exist")
-			}
-
-			if v.Type == "change-field-name" {
-				oldField := searchField(fields, v.OldName)
-				fieldData, err := getDDlFieldData(oldField)
-				if err != nil {
-					return err
-				}
-				fieldData = strings.ReplaceAll(fieldData, "'"+v.OldName+"'", "'"+v.OldName+"'"+" `"+v.NewName+"`")
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` CHANGE " + trimDDLFragment(fieldData)).Error; err != nil {
-					return err
-				}
-
-			} else if v.Type == "del-field" {
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` DROP COLUMN `" + v.OldName + "`").Error; err != nil {
-					return err
-				}
-			}
-		}
-
 		for _, v := range designChange {
 			if !v.Sync {
 				continue
@@ -136,10 +104,6 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 				}
 			}
 		}
-		// 表更新结构完成再处理字段排序
-		if err := updateFieldOrder(db, fullTableName, fields, designChange); err != nil {
-			return err
-		}
 	} else {
 		//创建表
 		ddl, err := createTableDDL(fullTableName, table, fields)
@@ -164,7 +128,7 @@ func createTableDDL(fullTableName string, table crudmodel.Table, fields []crudmo
 	for _, idx := range table.Indexes {
 		columns := make([]string, 0, len(idx.Columns))
 		for _, col := range idx.Columns {
-			columns = append(columns, "`"+col+"`")
+			columns = append(columns, quoteIndexColumn(col))
 		}
 		keyWord := "KEY"
 		if idx.Unique {
@@ -221,23 +185,6 @@ func hasColumn(db *gorm.DB, fullTableName, column string) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
-}
-
-// HandleTableDesignWithDataScope creates or updates the table and ensures an
-// index exists for the resolved data-scope owner column when required.
-func HandleTableDesignWithDataScope(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config) error {
-	table.DataScope = dsConfig
-	if err := HandleTableDesign(db, fullTableName, table, fields); err != nil {
-		return err
-	}
-	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
-		AllowNoneWithAdminID: dsConfig != nil && dsConfig.Mode == data_scope.ModeNone,
-		ProveIndex:           buildIndexProver(db, fullTableName),
-	})
-	if err != nil {
-		return err
-	}
-	return EnsureDataScopeIndex(db, fullTableName, ds.OwnerColumn, getPk(fields))
 }
 
 // EnsureDataScopeIndex creates idx_<ownerColumn> on fullTableName when the
@@ -393,42 +340,6 @@ var noDefaultValueTypes = map[string]bool{
 }
 
 func noDefaultValueType(dataType string) bool { return noDefaultValueTypes[strings.ToLower(dataType)] }
-
-func updateFieldOrder(db *gorm.DB, fullTableName string, fields []crudmodel.Field, designChange []crudmodel.ChangeField) error {
-	if len(designChange) == 0 {
-		return nil
-	}
-
-	for _, v := range designChange {
-		if !v.Sync {
-			continue
-		}
-
-		if v.After != "" {
-			fieldName := v.OldName
-			if slices.Contains([]string{"add-field", "change-field-name"}, v.Type) {
-				fieldName = v.NewName
-			}
-
-			field := searchField(fields, fieldName)
-			fieldData, err := getDDlFieldData(field)
-			if err != nil {
-				return err
-			}
-			fieldData = trimDDLFragment(fieldData)
-
-			if v.After == "FIRST FIELD" {
-				fieldData += " FIRST"
-			} else {
-				fieldData += " FIRST  AFTER `" + v.After + "`"
-			}
-			if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + fieldData).Error; err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
 
 // 分析字段的完整数据类型定义
 func analyseFieldDataType(field crudmodel.Field) string {

@@ -27,7 +27,15 @@ func newCrudValidateCommand() *cobra.Command {
 			for _, warning := range warnings {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %s\n", warning.SpecPath, warning.Message)
 			}
-			return err
+			if err != nil {
+				return err
+			}
+			if len(warnings) > 0 {
+				cmd.Printf("validated %d spec(s), %d warning(s)\n", len(args), len(warnings))
+			} else {
+				cmd.Printf("validated %d spec(s): ok\n", len(args))
+			}
+			return nil
 		},
 	}
 }
@@ -134,6 +142,9 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
 	cmd.Printf("CRUD generation success (log id: %d)\n", result.LogID)
+	for _, warning := range result.Warnings {
+		cmd.Printf("CRUD generation warning: %s\n", warning)
+	}
 	for _, file := range result.Files {
 		cmd.Printf("%s\n", file)
 	}

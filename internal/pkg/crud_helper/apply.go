@@ -506,10 +506,10 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 	}
 	// 索引在列变更之后执行（新增索引可能引用本表新列）；全新建表时
 	// createTableDDL 已内联索引，此处只处理已有表场景。
+	if _, err := syncSpecIndexes(db, fullName, spec.Table, spec.Fields); err != nil {
+		return nil, err
+	}
 	for _, change := range indexPlan.Added {
-		if err := db.Exec(change.DDL).Error; err != nil {
-			return nil, fmt.Errorf("add index %q: %w", change.Field, err)
-		}
 		result.Changes = append(result.Changes, change.Type+" "+change.Field)
 	}
 	if !opts.SkipMenu {

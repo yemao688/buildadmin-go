@@ -7,6 +7,10 @@ dataScope:
 quickSearchField: [code, name]
 menu:
   title: 货币管理
+indexes:
+  - name: uk_country_currency_code
+    unique: true
+    columns: [code]
 fields:
   - name: id
     type: bigint

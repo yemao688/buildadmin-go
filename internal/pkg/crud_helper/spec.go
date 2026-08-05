@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -233,6 +234,11 @@ func parseSpecIndexes(raw []specIndex, fields []crudmodel.Field) ([]crudmodel.In
 	}
 	indexes := make([]crudmodel.IndexSpec, 0, len(raw))
 	seen := make(map[string]bool, len(raw))
+	// 字段类型速查：text/blob/json 家族建索引必须带前缀长度（MySQL 1170）。
+	fieldType := make(map[string]string, len(fields))
+	for _, field := range fields {
+		fieldType[field.Name] = strings.ToLower(analyseFieldTypeForSpec(field))
+	}
 	for i, item := range raw {
 		name := strings.TrimSpace(item.Name)
 		if name == "" {
@@ -241,10 +247,15 @@ func parseSpecIndexes(raw []specIndex, fields []crudmodel.Field) ([]crudmodel.In
 		if err := ValidateIndexName(name); err != nil {
 			return nil, fmt.Errorf("indexes[%d] name %q: %w", i, name, err)
 		}
-		if seen[name] {
+		// PRIMARY 是 MySQL 主键索引保留名（错误 1280），必须在校验期拒绝。
+		if strings.EqualFold(name, "PRIMARY") {
+			return nil, fmt.Errorf("indexes[%d] name %q is reserved; pick a different index name", i, name)
+		}
+		// MySQL 索引名大小写不敏感：uk_a 与 UK_A 视为重复。
+		if seen[strings.ToLower(name)] {
 			return nil, fmt.Errorf("indexes[%d] duplicate index name %q", i, name)
 		}
-		seen[name] = true
+		seen[strings.ToLower(name)] = true
 		if len(item.Columns) == 0 {
 			return nil, fmt.Errorf("index %q must declare at least one column", name)
 		}
@@ -255,18 +266,68 @@ func parseSpecIndexes(raw []specIndex, fields []crudmodel.Field) ([]crudmodel.In
 			if col == "" {
 				return nil, fmt.Errorf("index %q has an empty column", name)
 			}
-			if !fieldNames[col] {
-				return nil, fmt.Errorf("index %q column %q is not a spec field", name, col)
+			baseName, prefix, err := parseIndexColumn(col)
+			if err != nil {
+				return nil, fmt.Errorf("index %q column %q: %w", name, col, err)
 			}
-			if columnSeen[col] {
-				return nil, fmt.Errorf("index %q declares column %q more than once", name, col)
+			if !fieldNames[baseName] {
+				return nil, fmt.Errorf("index %q column %q is not a spec field", name, baseName)
 			}
-			columnSeen[col] = true
-			columns = append(columns, col)
+			// 重复检测按基础列名判重：note(64) 与 note 是同一列。
+			if columnSeen[baseName] {
+				return nil, fmt.Errorf("index %q declares column %q more than once", name, baseName)
+			}
+			columnSeen[baseName] = true
+			if prefix > 0 {
+				// utf8mb4 下 InnoDB 单索引键上限 3072 字节（≈768 字符）；按字符数
+				// 拒绝明显超界的前缀长度，具体字节上限仍由 MySQL 兜底。
+				if prefix > 768 {
+					return nil, fmt.Errorf("index %q column %q prefix length %d exceeds the 768-char InnoDB utf8mb4 limit", name, baseName, prefix)
+				}
+				columns = append(columns, fmt.Sprintf("%s(%d)", baseName, prefix))
+			} else {
+				// text/blob/json 家族无前缀 → MySQL 1170 拒绝；校验期必须失败。
+				if isTextFamilyType(fieldType[baseName]) {
+					return nil, fmt.Errorf("index %q column %q (%s) requires a prefix length, use col(N)", name, baseName, fieldType[baseName])
+				}
+				columns = append(columns, baseName)
+			}
 		}
 		indexes = append(indexes, crudmodel.IndexSpec{Name: name, Unique: item.Unique, Columns: columns})
 	}
 	return indexes, nil
+}
+
+// isTextFamilyType 报告列类型是否属于必须前缀长度的 text/blob/json 家族。
+func isTextFamilyType(typ string) bool {
+	switch typ {
+	case "text", "tinytext", "mediumtext", "longtext",
+		"blob", "tinyblob", "mediumblob", "longblob", "json":
+		return true
+	}
+	return false
+}
+
+// parseIndexColumn 解析索引列声明，支持 MySQL 前缀索引语法 `col(N)`：
+// 返回基础列名与前缀长度（无前缀时为 0）。N 必须是正整数。
+func parseIndexColumn(raw string) (string, int, error) {
+	open := strings.IndexByte(raw, '(')
+	if open < 0 {
+		return raw, 0, nil
+	}
+	if !strings.HasSuffix(raw, ")") {
+		return "", 0, fmt.Errorf("malformed prefix syntax %q, want col(N)", raw)
+	}
+	base := strings.TrimSpace(raw[:open])
+	prefixStr := strings.TrimSpace(raw[open+1 : len(raw)-1])
+	if base == "" {
+		return "", 0, fmt.Errorf("missing column name in %q", raw)
+	}
+	prefix, err := strconv.Atoi(prefixStr)
+	if err != nil || prefix <= 0 {
+		return "", 0, fmt.Errorf("prefix length in %q must be a positive integer", raw)
+	}
+	return base, prefix, nil
 }
 
 // normalizeNullKeys fixes YAML's special null key token before Viper sees it.

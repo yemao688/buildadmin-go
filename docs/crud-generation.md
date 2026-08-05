@@ -84,7 +84,7 @@ fields:
 | `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带 relation enrichment 的外键（FK 自动隐藏）。建议始终显式设置，只放需要在列表出现的字段；`password`、密钥、长备注等不应进列表。 |
 | `dataScope` | map，默认 `mode: auto` | 数据权限策略（见下文）。 |
 | `menu` | map，默认未配置 | 菜单标题和父节点覆盖；省略时菜单仍按表注释创建，跳过使用 `--skip-menu`。 |
-| `indexes` | `[]map`，默认空 | 表级索引声明（见下文）：唯一/普通索引由 `crud:apply` 物化。 |
+| `indexes` | `[]map`，默认空 | 表级索引声明（见下文）：唯一/普通索引由 `crud:generate` 与 `crud:apply` 物化。 |
 | `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
 | `webViewsDir` | `string`，默认自动推导 | `web/src/views/backend` 下的视图目录。显式值优先。 |
 
@@ -92,7 +92,7 @@ fields:
 
 ### `indexes`
 
-表级索引声明，由 `crud:apply` 物化：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并输出 `unmanaged` 告警，不会自动删除或重建）。
+表级索引声明，由 `crud:generate` 与 `crud:apply` 共同物化（两条路径对已有表行为一致）：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并输出 `unmanaged` 告警，不会自动删除或重建）。
 
 ```yaml
 indexes:
@@ -102,9 +102,11 @@ indexes:
   - name: uk_seller_hotel
     unique: true
     columns: [seller_id, hotel_id]   # 复合唯一索引
+  - name: idx_note
+    columns: [note(64)]        # 前缀索引：text/varchar 长列可写 col(N) 取前 N 字符
 ```
 
-约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并告警）；需要删索引的破坏性变更走 business 迁移。
+约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。长文本列（text/varchar 等）建索引必须使用 `col(N)` 前缀语法（N 为正整数），与 MySQL 前缀索引一致。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并告警）；需要删索引的破坏性变更走 business 迁移。
 
 ### `dataScope` 与 `menu`
 

@@ -29,8 +29,24 @@ func TestParseSpecIndexesValid(t *testing.T) {
 	}
 }
 
+func TestParseSpecIndexesPrefixLength(t *testing.T) {
+	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "note", Type: "text"}}
+	indexes, err := parseSpecIndexes([]specIndex{{Name: "idx_note", Columns: []string{"note(64)"}}}, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(indexes) != 1 || indexes[0].Columns[0] != "note(64)" {
+		t.Fatalf("indexes = %+v, want note(64)", indexes)
+	}
+	for _, bad := range []string{"note(0)", "note(-1)", "note(x)", "note(", "note(64)extra"} {
+		if _, err := parseSpecIndexes([]specIndex{{Name: "idx_note", Columns: []string{bad}}}, fields); err == nil {
+			t.Fatalf("prefix %q accepted, want error", bad)
+		}
+	}
+}
+
 func TestParseSpecIndexesRejects(t *testing.T) {
-	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "order_no"}}
+	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "order_no"}, {Name: "note", Type: "text"}}
 	cases := []struct {
 		name  string
 		index specIndex
@@ -39,6 +55,11 @@ func TestParseSpecIndexesRejects(t *testing.T) {
 		{"unknown column", specIndex{Name: "uk_x", Columns: []string{"nope"}}},
 		{"duplicate column", specIndex{Name: "uk_x", Columns: []string{"order_no", "order_no"}}},
 		{"bad identifier", specIndex{Name: "uk bad", Columns: []string{"order_no"}}},
+		{"reserved PRIMARY", specIndex{Name: "PRIMARY", Columns: []string{"order_no"}}},
+		{"case-variant PRIMARY", specIndex{Name: "primary", Columns: []string{"order_no"}}},
+		{"text without prefix", specIndex{Name: "idx_note", Columns: []string{"note"}}},
+		{"same column different prefix", specIndex{Name: "idx_note", Columns: []string{"note(64)", "note(128)"}}},
+		{"prefix too long", specIndex{Name: "idx_note", Columns: []string{"note(9999)"}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -49,9 +70,9 @@ func TestParseSpecIndexesRejects(t *testing.T) {
 	}
 	if _, err := parseSpecIndexes([]specIndex{
 		{Name: "uk_x", Columns: []string{"order_no"}},
-		{Name: "uk_x", Columns: []string{"order_no"}},
+		{Name: "UK_X", Columns: []string{"order_no"}},
 	}, fields); err == nil {
-		t.Fatal("duplicate index names accepted")
+		t.Fatal("case-insensitive duplicate index names accepted")
 	}
 }
 
@@ -61,9 +82,10 @@ func TestCreateTableDDLIncludesIndexes(t *testing.T) {
 		Indexes: []crudmodel.IndexSpec{
 			{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}},
 			{Name: "idx_seller_hotel", Columns: []string{"seller_id", "hotel_id"}},
+			{Name: "idx_note", Columns: []string{"note(64)"}},
 		},
 	}
-	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true}, {Name: "order_no", Type: "varchar"}, {Name: "seller_id", Type: "bigint"}, {Name: "hotel_id", Type: "bigint"}}
+	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true}, {Name: "order_no", Type: "varchar"}, {Name: "seller_id", Type: "bigint"}, {Name: "hotel_id", Type: "bigint"}, {Name: "note", Type: "text"}}
 	ddl, err := createTableDDL("ba_orders", table, fields)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +95,9 @@ func TestCreateTableDDLIncludesIndexes(t *testing.T) {
 	}
 	if !strings.Contains(ddl, "KEY `idx_seller_hotel` (`seller_id`, `hotel_id`)") {
 		t.Fatalf("plain key missing: %s", ddl)
+	}
+	if !strings.Contains(ddl, "KEY `idx_note` (`note`(64))") {
+		t.Fatalf("prefix key missing: %s", ddl)
 	}
 	if !strings.Contains(ddl, "PRIMARY KEY (`id`)") {
 		t.Fatalf("primary key missing: %s", ddl)

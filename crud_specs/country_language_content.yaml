@@ -4,6 +4,10 @@ type: alter
 generateRelativePath: country_language_content
 menu:
   title: 语言文本管理
+indexes:
+  - name: uk_country_language_content_lan_group_key
+    unique: true
+    columns: [lan, group, key]
 dataScope:
   mode: none
 quickSearchField: [group, key]

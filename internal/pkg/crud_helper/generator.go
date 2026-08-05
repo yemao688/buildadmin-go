@@ -44,8 +44,9 @@ type MenuOptions struct {
 }
 
 type GenerateResult struct {
-	Files []string
-	LogID int32
+	Files    []string
+	LogID    int32
+	Warnings []string // 索引漂移等非致命告警（线外索引/定义不一致）
 }
 
 type atomicRouteRegistration struct {
@@ -92,6 +93,15 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	}
 	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
 		return nil, err
+	}
+	// 设计器曾发送的改名/删字段/排序 designChange 在后端被静默丢弃（生成代码
+	// 按新字段名产出，数据库旧列原样保留 → 数据孤儿）。框架纪律：破坏性变更
+	// 必须走 business 迁移，这里显式拒绝而不是吞掉用户操作。
+	for _, change := range opts.Table.DesignChange {
+		switch change.Type {
+		case "del-field", "change-field-name", "change-field-order":
+			return nil, fmt.Errorf("design change %q on field %q is not supported by crud:generate; destructive column changes must be applied via a business migration (see docs/crud-generation.md)", change.Type, change.OldName)
+		}
 	}
 	if db == nil || cfg == nil {
 		return nil, fmt.Errorf("crud generation requires database and configuration")
@@ -209,6 +219,12 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := HandleTableDesign(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields); err != nil {
 		return fail("table design", err)
 	}
+	// 开发库与部署库形状一致：crud:generate 同样物化 spec 声明的缺失索引
+	// （新建表时 createTableDDL 已内联，此处幂等；已有表 alter 时补建）。
+	indexWarnings, err := syncSpecIndexes(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields)
+	if err != nil {
+		return fail("index sync", err)
+	}
 	register := opts.RegisterAtomicRoute
 	if register != nil {
 		register = func(method, path string) {
@@ -241,7 +257,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return fail("success log update", err)
 	}
 	cleanupAllowed = true
-	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID}, nil
+	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID, Warnings: indexWarnings}, nil
 }
 
 func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {

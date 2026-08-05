@@ -7,6 +7,10 @@ dataScope:
 quickSearchField: [lan, name]
 menu:
   title: 语言管理
+indexes:
+  - name: uk_country_language_lan
+    unique: true
+    columns: [lan]
 fields:
   - name: id
     type: bigint

@@ -6,6 +6,7 @@ package crud_helper
 // 同名但列定义不同 → unmanaged 保留并告警（不自动重建，防数据风险）。
 
 import (
+	"database/sql"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 )
 
 // actualIndex 是 information_schema.statistics 按索引名分组后的实际形态。
+// Columns 元素与 spec 声明同构：普通列 `note`，前缀索引列 `note(64)`。
 type actualIndex struct {
 	Name    string
 	Unique  bool
@@ -29,9 +31,10 @@ func readActualIndexes(db *gorm.DB, fullTableName string) ([]actualIndex, error)
 		NonUnique  int64
 		ColumnName string
 		SeqInIndex int64
+		SubPart    sql.NullInt64
 	}
 	var rows []statRow
-	if err := db.Raw(`SELECT INDEX_NAME AS index_name, NON_UNIQUE AS non_unique, COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index
+	if err := db.Raw(`SELECT INDEX_NAME AS index_name, NON_UNIQUE AS non_unique, COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index, SUB_PART AS sub_part
 		FROM information_schema.STATISTICS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
 		ORDER BY index_name, seq_in_index`, fullTableName).Scan(&rows).Error; err != nil {
@@ -46,7 +49,11 @@ func readActualIndexes(db *gorm.DB, fullTableName string) ([]actualIndex, error)
 			byName[row.IndexName] = idx
 			order = append(order, row.IndexName)
 		}
-		idx.Columns = append(idx.Columns, row.ColumnName)
+		if row.SubPart.Valid && row.SubPart.Int64 > 0 {
+			idx.Columns = append(idx.Columns, fmt.Sprintf("%s(%d)", row.ColumnName, row.SubPart.Int64))
+		} else {
+			idx.Columns = append(idx.Columns, row.ColumnName)
+		}
 	}
 	sort.Strings(order)
 	indexes := make([]actualIndex, 0, len(order))
@@ -59,6 +66,27 @@ func readActualIndexes(db *gorm.DB, fullTableName string) ([]actualIndex, error)
 type indexDiffPlan struct {
 	Added     []ApplyChange // SafeAuto，需要执行 ADD
 	Unmanaged []ApplyChange // 保留 + 告警
+}
+
+// syncSpecIndexes 物化 spec 声明的缺失索引（safe-auto 补建）。在列变更之后
+// 调用（新增索引可能引用本表新列）；全新建表时 createTableDDL 已内联索引，
+// 本函数幂等（deriveIndexPlan 对已存在索引不产生 Added）。返回线外索引/定义
+// 漂移的告警文本（调用方决定是否输出；apply 与 generate 行为一致）。
+func syncSpecIndexes(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) ([]string, error) {
+	plan, err := deriveIndexPlan(db, fullTableName, dataScopeIndexName(table, fields), table.Indexes)
+	if err != nil {
+		return nil, err
+	}
+	for _, change := range plan.Added {
+		if err := db.Exec(change.DDL).Error; err != nil {
+			return nil, fmt.Errorf("add index %q: %w", change.Field, err)
+		}
+	}
+	warnings := make([]string, 0, len(plan.Unmanaged))
+	for _, change := range plan.Unmanaged {
+		warnings = append(warnings, fmt.Sprintf("index %s: %s", change.Field, change.Reason))
+	}
+	return warnings, nil
 }
 
 // deriveIndexDiffs 对比实际索引与 spec 声明（纯函数，便于测试）。
@@ -124,10 +152,18 @@ func sameIndexDefinition(actual actualIndex, spec crudmodel.IndexSpec) bool {
 	return true
 }
 
+// quoteIndexColumn 渲染索引列引用：普通列 `` `note` ``，前缀索引列 `` `note`(64) ``。
+func quoteIndexColumn(col string) string {
+	if i := strings.IndexByte(col, '('); i >= 0 {
+		return "`" + col[:i] + "`" + col[i:]
+	}
+	return "`" + col + "`"
+}
+
 func indexAddDDL(fullTableName string, idx crudmodel.IndexSpec) string {
 	columns := make([]string, 0, len(idx.Columns))
 	for _, col := range idx.Columns {
-		columns = append(columns, "`"+col+"`")
+		columns = append(columns, quoteIndexColumn(col))
 	}
 	keyWord := "INDEX"
 	if idx.Unique {
