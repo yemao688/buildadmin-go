@@ -1,10 +1,14 @@
 package crud_helper
 
 import (
+	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/util"
 	"path/filepath"
 	"testing"
+
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
@@ -63,5 +67,45 @@ func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
 	}
 	if drift != 0 {
 		t.Fatalf("country language content type drift count = %d", drift)
+	}
+}
+
+// TestCountryFreshInstallApplyUnblocked 模拟全新库路径：core model 的 gorm tag
+// 驱动 AutoMigrate 快照建表（与 orchestrator 全新安装一致），随后尾部 apply
+// 三张 country spec。此前 model 缺 default tag（spec 声明 EMPTY STRING/INPUT
+// default），AutoMigrate 建出的列 default 为 NULL → apply 判 requires-approval
+// blocked，全新安装被框架自带 spec 阻塞（下游 issue）。model 补齐 default 后
+// 本测试应全部 unchanged。
+func TestCountryFreshInstallApplyUnblocked(t *testing.T) {
+	db, cfg := testutil.OpenMySQL(t)
+	cfg.Database.Prefix = "ba_country_fresh_"
+	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
+	t.Cleanup(func() {
+		for _, table := range []string{"country_language", "country_language_content", "country_currency", "crud_log"} {
+			_ = db.Exec("DROP TABLE IF EXISTS `" + cfg.Database.Prefix + table + "`").Error
+		}
+	})
+
+	migrateDB := db.Session(&gorm.Session{NewDB: true})
+	if err := migrateDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(
+		&model.CountryLanguage{}, &model.CountryLanguageContent{}, &model.CountryCurrency{}, &model.Log{},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	specDir := filepath.Join(util.RootPath(), "crud_specs")
+	paths := []string{
+		filepath.Join(specDir, "country_language.yaml"),
+		filepath.Join(specDir, "country_language_content.yaml"),
+		filepath.Join(specDir, "country_currency.yaml"),
+	}
+	results, err := ApplySpecs(db, cfg, paths, ApplyOptions{AdminID: 1, SkipMenu: true})
+	if err != nil {
+		t.Fatalf("fresh-install tail apply blocked: %v", err)
+	}
+	for _, result := range results {
+		if result.Action != ApplyUnchanged {
+			t.Errorf("%s: action=%s, want unchanged (fresh install must not be blocked)", result.Table, result.Action)
+		}
 	}
 }
