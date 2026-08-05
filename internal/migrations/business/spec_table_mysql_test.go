@@ -7,9 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/testutil"
+	"buildadmin-go/internal/migrations/internal/core"
+
+	"gorm.io/gorm"
 )
 
 const specTableTestPrefix = "ba_spec_table_test_"
@@ -107,5 +111,48 @@ func TestEnsureSpecTableRejectsMissingSpec(t *testing.T) {
 
 	if err := EnsureSpecTableFrom(db, cfg, t.TempDir(), "no_such_table"); err == nil {
 		t.Fatal("EnsureSpecTableFrom with missing spec = nil error, want error")
+	}
+}
+
+// TestEnsureSpecTableInsideMigrationLock 复现下游 issue：迁移编排器
+// WithMigrationLock（advisorylock.With）把 db pin 到单连接（ConnPool =
+// *sql.Conn），EnsureSpecTable → ApplySpecs → acquireGenerationLocks 二次
+// advisory lock 时 db.DB() 返回 ErrInvalidDB。修复：已 pin 的会话降级跳过
+// 二次加锁（外层迁移锁已保证互斥），此处验证在迁移锁内调用不报
+// "crud advisory lock: invalid db" 且表正常物化。
+func TestEnsureSpecTableInsideMigrationLock(t *testing.T) {
+	db, cfg := testutil.OpenMySQL(t)
+	cfg.Database.Prefix = specTableTestPrefix
+	for _, table := range []string{"ops_seed_target", "crud_log"} {
+		if err := db.Exec("DROP TABLE IF EXISTS `" + specTableTestPrefix + table + "`").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"ops_seed_target", "crud_log"} {
+			_ = db.Exec("DROP TABLE IF EXISTS `" + specTableTestPrefix + table + "`").Error
+		}
+	})
+	if err := db.Exec("CREATE TABLE `" + specTableTestPrefix + "crud_log` (`id` int NOT NULL AUTO_INCREMENT, `admin_id` int NOT NULL, `table_name` varchar(200) NOT NULL, `table` blob, `fields` blob, `status` varchar(30) NOT NULL DEFAULT 'start', `comment` varchar(255), `connection` varchar(100) NOT NULL DEFAULT '', `sync` int NOT NULL DEFAULT 0, `create_time` bigint NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").Error; err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	writeSpecTableSpec(t, dir, "ops_seed_target", "")
+
+	// 模拟迁移编排锁：core.WithMigrationLock 内部 advisorylock.Acquire 把传入 fn
+	// 的 db pin 为单连接（*sql.Conn）。EnsureSpecTable 在此锁内必须正常工作。
+	err := core.WithMigrationLock(db, "test-ensure-spec-table-inside-lock", 10*time.Second, func(pinned *gorm.DB) error {
+		return EnsureSpecTableFrom(pinned, cfg, dir, "ops_seed_target")
+	})
+	if err != nil {
+		t.Fatalf("EnsureSpecTable inside migration lock: %v", err)
+	}
+	var count int64
+	if err := db.Raw("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", specTableTestPrefix+"ops_seed_target").Scan(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("table %s not created inside migration lock", specTableTestPrefix+"ops_seed_target")
 	}
 }

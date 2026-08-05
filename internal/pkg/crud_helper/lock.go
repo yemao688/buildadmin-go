@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -53,6 +54,13 @@ func acquireGenerationLocks(db *gorm.DB, cfg *conf.Configuration) (*gorm.DB, fun
 		return nil
 	}
 	if db == nil || cfg == nil || db.Dialector.Name() != "mysql" {
+		return db, release, nil
+	}
+	// 会话已被外层 pin（迁移编排锁 WithMigrationLock 把 ConnPool 置为
+	// *sql.Conn）时，db.DB() 返回 ErrInvalidDB，无法二次获取 advisory lock。
+	// 外层迁移锁已保证跨进程互斥，此处降级为仅进程内锁（进程内 generationMu
+	// 仍生效）；EnsureSpecTable 在迁移 Up 内调用 ApplySpecs 走的就是此路径。
+	if _, ok := db.Statement.ConnPool.(*sql.DB); !ok {
 		return db, release, nil
 	}
 	database := cfg.Database.Database
