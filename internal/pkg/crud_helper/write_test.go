@@ -437,3 +437,58 @@ func assertExactlyOneTrailingLF(t *testing.T, content string) {
 		t.Fatalf("content does not end with exactly one trailing LF: %q", content)
 	}
 }
+
+func TestApplySpecDefaultTags(t *testing.T) {
+	structContent := `type CountryLanguage struct {
+	ID     int64  ` + "`gorm:\"column:id;type:bigint unsigned;primaryKey;autoIncrement:true;comment:ID\" json:\"id\"`" + `
+	Lan    string ` + "`gorm:\"column:lan;type:varchar(20);not null;uniqueIndex:uk_country_language_lan,priority:1;comment:语言代码\" json:\"lan\"`" + `
+	Name   string ` + "`gorm:\"column:name;type:varchar(50);not null;comment:语言名称\" json:\"name\"`" + `
+	Status int32  ` + "`gorm:\"column:status;type:tinyint unsigned;not null;default:1;comment:状态:0=禁用,1=启用\" json:\"status\"`" + `
+	Weigh  int32  ` + "`gorm:\"column:weigh;type:int;not null;comment:权重\" json:\"weigh\"`" + `
+}`
+	fields := []crudmodel.Field{
+		{Name: "id", PrimaryKey: true},
+		{Name: "lan", DefaultType: "EMPTY STRING"},
+		{Name: "name", DefaultType: "EMPTY STRING"},
+		{Name: "status", DefaultType: "INPUT", Default: "1"},
+		{Name: "weigh", Type: "int", DefaultType: "INPUT", Default: "0"},
+	}
+	got := applySpecDefaultTags(structContent, fields)
+	if !strings.Contains(got, "column:lan;default:'';") {
+		t.Fatalf("lan missing default:'' :\n%s", got)
+	}
+	if !strings.Contains(got, "column:name;default:'';") {
+		t.Fatalf("name missing default:'' :\n%s", got)
+	}
+	// status 已有 gen 产出的 default:1，不得重复插入。
+	if strings.Count(got, "default:1") != 1 {
+		t.Fatalf("status default:1 duplicated:\n%s", got)
+	}
+	if !strings.Contains(got, "column:weigh;default:0;") {
+		t.Fatalf("weigh missing default:0 :\n%s", got)
+	}
+	// 主键不插入 default。
+	if strings.Contains(got, "column:id;default:") {
+		t.Fatalf("primary key got default tag:\n%s", got)
+	}
+}
+
+func TestSpecDefaultGormTag(t *testing.T) {
+	cases := []struct {
+		field crudmodel.Field
+		want  string
+	}{
+		{crudmodel.Field{Name: "lan", DefaultType: "EMPTY STRING"}, "default:''"},
+		{crudmodel.Field{Name: "weigh", Type: "int", DefaultType: "INPUT", Default: "0"}, "default:0"},
+		{crudmodel.Field{Name: "status", Type: "tinyint", DefaultType: "INPUT", Default: "1"}, "default:1"},
+		{crudmodel.Field{Name: "title", Type: "varchar", DefaultType: "INPUT", Default: "默认"}, "default:'默认'"},
+		{crudmodel.Field{Name: "remark", DefaultType: "NULL"}, ""},
+		{crudmodel.Field{Name: "note", DefaultType: "NONE"}, ""},
+		{crudmodel.Field{Name: "empty", DefaultType: "INPUT", Default: ""}, ""},
+	}
+	for _, tc := range cases {
+		if got := specDefaultGormTag(tc.field); got != tc.want {
+			t.Errorf("specDefaultGormTag(%+v) = %q, want %q", tc.field, got, tc.want)
+		}
+	}
+}

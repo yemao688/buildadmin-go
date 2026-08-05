@@ -323,7 +323,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	}
 
 	// 写入模型代码（实体 + 仓库 + DTO）
-	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile)
+	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile, fields)
 	if err != nil {
 		return WebDir{}, "", err
 	}

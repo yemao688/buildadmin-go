@@ -26,7 +26,7 @@ import (
 // writeModelFiles 写入共享贫血实体（internal/model）与 admin 仓库
 // （internal/admin/repository，XxxRepository）；DTO 由 writeHandlerFile
 // 另行落盘。返回实体 struct 内容供 DTO/测试复用。
-func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo) (string, error) {
+func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
@@ -34,6 +34,7 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 	if err != nil {
 		return "", err
 	}
+	structContent = applySpecDefaultTags(structContent, fields)
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
@@ -147,6 +148,68 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, structName string, fie
 }
 
 var generatedIDFieldRE = regexp.MustCompile(`(?m)^(\s*)([A-Za-z][A-Za-z0-9]*)Ids(\s+)`)
+
+// applySpecDefaultTags 把 spec 字段声明的 default（EMPTY STRING/INPUT）映射进
+// 生成 struct 的 gorm tag。gorm/gen 从数据库 introspection 生成时，对 DEFAULT ''
+// （string 零值）和 DEFAULT 0（int 零值）不产出 default tag（needDefaultTag
+// 语义），导致生成 model 与 spec 不一致、全新库 apply 被 default 差异阻塞。
+// 此函数按 spec 补齐；gen 已产出的（非零值）保持原样不重复插入。
+func applySpecDefaultTags(structContent string, fields []crudmodel.Field) string {
+	for _, field := range fields {
+		if field.PrimaryKey {
+			continue
+		}
+		defaultTag := specDefaultGormTag(field)
+		if defaultTag == "" {
+			continue
+		}
+		structContent = ensureFieldDefaultTag(structContent, field.Name, defaultTag)
+	}
+	return structContent
+}
+
+// specDefaultGormTag 把 spec 字段的 default 声明映射为 gorm tag 片段。
+// 数值类型不加引号（default:0），字符串类型加单引号（default:''）。
+func specDefaultGormTag(field crudmodel.Field) string {
+	switch field.DefaultType {
+	case "EMPTY STRING":
+		return "default:''"
+	case "INPUT":
+		if field.Default == "" {
+			return ""
+		}
+		if isNumericSpecField(field) {
+			return "default:" + field.Default
+		}
+		return "default:'" + field.Default + "'"
+	default:
+		return ""
+	}
+}
+
+// isNumericSpecField 报告 spec 字段是否为数值类型（int/decimal/float 家族）。
+func isNumericSpecField(field crudmodel.Field) bool {
+	typ := strings.ToLower(analyseFieldTypeForSpec(field))
+	for _, prefix := range []string{"int", "decimal", "float", "double", "tinyint", "smallint", "mediumint", "bigint", "bool"} {
+		if strings.HasPrefix(typ, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureFieldDefaultTag 在 gorm tag 的 column 段后插入 default 片段；
+// tag 已含 default: 时跳过（避免与 gen 产出的非零值重复）。
+func ensureFieldDefaultTag(structContent, columnName, defaultTag string) string {
+	re := regexp.MustCompile(`(gorm:"column:` + regexp.QuoteMeta(columnName) + `;)([^"]*)(")`)
+	return re.ReplaceAllStringFunc(structContent, func(m string) string {
+		if strings.Contains(m, "default:") {
+			return m
+		}
+		parts := re.FindStringSubmatch(m)
+		return parts[1] + defaultTag + ";" + parts[2] + parts[3]
+	})
+}
 
 func normalizeGeneratedIDInitialisms(structContent string) string {
 	return generatedIDFieldRE.ReplaceAllString(structContent, `${1}${2}IDs${3}`)
