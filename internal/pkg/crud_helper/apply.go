@@ -318,7 +318,7 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 		return result, nil
 	}
 	diffs := deriveAlterDiff(current, spec.Fields)
-	indexPlan, err := deriveIndexPlan(db, fullName, spec.Table.Indexes)
+	indexPlan, err := deriveIndexPlan(db, fullName, dataScopeIndexName(spec.Table, spec.Fields), spec.Table.Indexes)
 	if err != nil {
 		return nil, err
 	}
@@ -344,16 +344,24 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 }
 
 // deriveIndexPlan 读取实际索引并与 spec 声明对比，返回需要新增（SafeAuto）与
-// 保留告警（Unmanaged）的索引差量。
-func deriveIndexPlan(db *gorm.DB, fullTableName string, wanted []crudmodel.IndexSpec) (indexDiffPlan, error) {
-	if len(wanted) == 0 {
-		return indexDiffPlan{}, nil
-	}
+// 保留告警（Unmanaged）的索引差量。始终执行读取：即使 spec 未声明任何索引，
+// 线外索引漂移也必须被报告（文档承诺的 unmanaged 告警）。
+func deriveIndexPlan(db *gorm.DB, fullTableName, dataScopeIndexName string, wanted []crudmodel.IndexSpec) (indexDiffPlan, error) {
 	actual, err := readActualIndexes(db, fullTableName)
 	if err != nil {
 		return indexDiffPlan{}, err
 	}
-	return deriveIndexDiffs(actual, wanted, fullTableName), nil
+	return deriveIndexDiffs(actual, dataScopeIndexName, wanted, fullTableName), nil
+}
+
+// dataScopeIndexName 返回框架 data_scope 机制索引的精确名；无 owner 列或
+// owner 即主键时不建机制索引（与 EnsureDataScopeIndex 守卫一致），返回空串。
+func dataScopeIndexName(table crudmodel.Table, fields []crudmodel.Field) string {
+	owner := resolveOwnerColumn(table.DataScope, fields)
+	if owner == "" || owner == getPk(fields) {
+		return ""
+	}
+	return "idx_" + owner
 }
 
 func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyChange {
@@ -468,7 +476,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 			}
 		} else {
 			diffs := deriveAlterDiff(current, spec.Fields)
-			indexPlan, err = deriveIndexPlan(db, fullName, spec.Table.Indexes)
+			indexPlan, err = deriveIndexPlan(db, fullName, dataScopeIndexName(spec.Table, spec.Fields), spec.Table.Indexes)
 			if err != nil {
 				return nil, err
 			}

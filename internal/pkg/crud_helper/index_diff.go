@@ -31,10 +31,10 @@ func readActualIndexes(db *gorm.DB, fullTableName string) ([]actualIndex, error)
 		SeqInIndex int64
 	}
 	var rows []statRow
-	if err := db.Raw(`SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX
+	if err := db.Raw(`SELECT INDEX_NAME AS index_name, NON_UNIQUE AS non_unique, COLUMN_NAME AS column_name, SEQ_IN_INDEX AS seq_in_index
 		FROM information_schema.STATISTICS
 		WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
-		ORDER BY INDEX_NAME, SEQ_IN_INDEX`, fullTableName).Scan(&rows).Error; err != nil {
+		ORDER BY index_name, seq_in_index`, fullTableName).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("read indexes of %s: %w", fullTableName, err)
 	}
 	byName := make(map[string]*actualIndex)
@@ -62,7 +62,9 @@ type indexDiffPlan struct {
 }
 
 // deriveIndexDiffs 对比实际索引与 spec 声明（纯函数，便于测试）。
-func deriveIndexDiffs(actual []actualIndex, wanted []crudmodel.IndexSpec, fullTableName string) indexDiffPlan {
+// dataScopeIndexName 是框架 data_scope 机制索引的精确名（"idx_"+ownerColumn，
+// 无 owner 时为空串），只豁免该名；其它 idx_* 前缀索引一律视为线外索引告警。
+func deriveIndexDiffs(actual []actualIndex, dataScopeIndexName string, wanted []crudmodel.IndexSpec, fullTableName string) indexDiffPlan {
 	var plan indexDiffPlan
 	actualByName := make(map[string]actualIndex, len(actual))
 	wantedByName := make(map[string]crudmodel.IndexSpec, len(wanted))
@@ -74,6 +76,10 @@ func deriveIndexDiffs(actual []actualIndex, wanted []crudmodel.IndexSpec, fullTa
 	}
 	// spec 声明 → 实际缺失则新增；同名但定义不同则保留并告警。
 	for _, idx := range wanted {
+		// 与 data_scope 机制索引同名：由 EnsureDataScopeIndex 负责，apply 不重复建。
+		if idx.Name == dataScopeIndexName && dataScopeIndexName != "" {
+			continue
+		}
 		actualIdx, ok := actualByName[idx.Name]
 		if !ok {
 			plan.Added = append(plan.Added, ApplyChange{
@@ -90,12 +96,12 @@ func deriveIndexDiffs(actual []actualIndex, wanted []crudmodel.IndexSpec, fullTa
 			})
 		}
 	}
-	// 实际存在但 spec 未声明：主键与 data_scope 机制索引（idx_*）不算漂移，其余保留并告警。
+	// 实际存在但 spec 未声明：主键与 data_scope 机制索引不算漂移，其余保留并告警。
 	for _, idx := range actual {
 		if _, ok := wantedByName[idx.Name]; ok {
 			continue
 		}
-		if idx.Name == "PRIMARY" || strings.HasPrefix(idx.Name, "idx_") {
+		if idx.Name == "PRIMARY" || (dataScopeIndexName != "" && idx.Name == dataScopeIndexName) {
 			continue
 		}
 		plan.Unmanaged = append(plan.Unmanaged, ApplyChange{

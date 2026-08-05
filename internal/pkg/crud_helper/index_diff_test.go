@@ -86,11 +86,11 @@ func TestDeriveIndexDiffs(t *testing.T) {
 	}
 	actual := []actualIndex{
 		{Name: "PRIMARY", Unique: true, Columns: []string{"id"}},
-		{Name: "idx_seller_id", Columns: []string{"seller_id"}}, // data_scope 机制索引，豁免
+		{Name: "idx_seller_id", Columns: []string{"seller_id"}}, // data_scope 机制索引，精确名豁免
 		{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}},
 		{Name: "legacy_idx", Columns: []string{"create_time"}}, // 线外索引，unmanaged
 	}
-	plan := deriveIndexDiffs(actual, wanted, "ba_orders")
+	plan := deriveIndexDiffs(actual, "idx_seller_id", wanted, "ba_orders")
 	if len(plan.Added) != 1 || plan.Added[0].Field != "uk_seller_hotel" {
 		t.Fatalf("added = %+v, want uk_seller_hotel", plan.Added)
 	}
@@ -106,10 +106,49 @@ func TestDeriveIndexDiffs(t *testing.T) {
 	}
 }
 
+func TestDeriveIndexDiffsWarnsWithoutSpecIndexes(t *testing.T) {
+	// spec 未声明任何索引时，线外索引仍必须告警（评审修复：不得短路）。
+	actual := []actualIndex{
+		{Name: "PRIMARY", Unique: true, Columns: []string{"id"}},
+		{Name: "idx_created_at", Columns: []string{"create_time"}},
+	}
+	plan := deriveIndexDiffs(actual, "", nil, "ba_orders")
+	if len(plan.Added) != 0 {
+		t.Fatalf("added = %+v, want none", plan.Added)
+	}
+	if len(plan.Unmanaged) != 1 || plan.Unmanaged[0].Field != "idx_created_at" {
+		t.Fatalf("unmanaged = %+v, want idx_created_at warning", plan.Unmanaged)
+	}
+}
+
+func TestDeriveIndexDiffsDataScopeExactExemption(t *testing.T) {
+	// 只有精确匹配 dataScopeIndexName 才豁免；其它 idx_* 前缀视为线外索引。
+	actual := []actualIndex{
+		{Name: "idx_admin_id", Columns: []string{"admin_id"}},
+		{Name: "idx_status", Columns: []string{"status"}},
+	}
+	plan := deriveIndexDiffs(actual, "idx_admin_id", nil, "ba_orders")
+	if len(plan.Unmanaged) != 1 || plan.Unmanaged[0].Field != "idx_status" {
+		t.Fatalf("unmanaged = %+v, want idx_status warning only", plan.Unmanaged)
+	}
+}
+
+func TestDeriveIndexDiffsSpecIndexCollidingWithDataScope(t *testing.T) {
+	// spec 声明与 data_scope 机制索引同名：不重复 ADD（由 EnsureDataScopeIndex 负责）。
+	wanted := []crudmodel.IndexSpec{{Name: "idx_admin_id", Unique: false, Columns: []string{"admin_id"}}}
+	plan := deriveIndexDiffs(nil, "idx_admin_id", wanted, "ba_orders")
+	if len(plan.Added) != 0 {
+		t.Fatalf("added = %+v, want none (data_scope owned)", plan.Added)
+	}
+	if len(plan.Unmanaged) != 0 {
+		t.Fatalf("unmanaged = %+v, want none", plan.Unmanaged)
+	}
+}
+
 func TestDeriveIndexDiffsDefinitionDrift(t *testing.T) {
 	wanted := []crudmodel.IndexSpec{{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}}}
 	actual := []actualIndex{{Name: "uk_order_no", Unique: false, Columns: []string{"order_no"}}}
-	plan := deriveIndexDiffs(actual, wanted, "`t`")
+	plan := deriveIndexDiffs(actual, "", wanted, "t")
 	if len(plan.Added) != 0 {
 		t.Fatalf("added = %+v, want none", plan.Added)
 	}
