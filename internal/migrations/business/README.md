@@ -39,7 +39,7 @@ func init() {
 
 ## 职责边界：spec/apply 与迁移的分工
 
-业务表的 schema 物化只有一条路径：`crud_specs/*.yaml` → `crud:apply`（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。**不要在业务迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表**，原因：
+业务表的 schema 物化只有一条路径：`crud_specs/*.yaml` → `crud:apply`（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。**不要在业务迁移中用 `AutoMigrate` 或裸 SQL 创建有 spec 的业务表**，原因：
 
 - **双重事实源**：apply 与迁移各按一份形状建表，一旦分歧，apply 会以 `safe-auto` 悄悄修正或 `rejected` 红牌阻塞，冲突难以归因；
 - **绕过安全矩阵**：`AutoMigrate` 静默建列/扩宽，没有 apply 的分类审批与拒绝机制；
@@ -48,11 +48,32 @@ func init() {
 
 业务迁移的合理用途是 spec/apply 表达不了的东西：
 
-- **`rejected` 类破坏性变更**（主键漂移、收窄、nullable→NOT NULL 等，安全矩阵见 `docs/crud-generation.md`）；
 - **种子数据**（如 `SeedAdminRule`）；
+- **`rejected` 类破坏性变更**（主键漂移、收窄、nullable→NOT NULL 等，安全矩阵见 `docs/crud-generation.md`）；
 - **无 spec 的非 CRUD 自建表**——这类表允许在迁移中建表，但必须自己负责最终契约：`Up` 幂等、前缀安全、`VerifyBaseline`/`VerifySchema` 自断言基线。
 
-**不要用迁移"补"业务表的唯一索引**。唯一索引通过 `crud_specs` 的 `indexes:` 声明、由 `crud:generate` 与 `crud:apply` 物化（全新建表内联、已有表 `safe-auto` 补建）。迁移阶段先于 `crud:apply` 尾部，全新库上业务表尚未创建：`ALTER TABLE ADD INDEX` 会直接失败；即使 `Up` 容忍"表不存在"跳过，`Up` 只执行一次、apply 不建索引，索引会永久缺失，且常驻 `VerifySchema` 在下次 `migrate` 永远红牌。带 spec 的业务表在迁移中的正确形态只有两种：全表由迁移 `AutoMigrate` 建（接受双重事实源代价，形状必须与 spec 一致），或把索引写进 `indexes:` 交给 apply。
+### 种子迁移依赖业务表：`EnsureSpecTable`
+
+全新库编排为「业务迁移（Up）→ 尾部 apply」，而业务表由 apply 物化（在迁移之后）——种子迁移若直接写业务表会因表不存在失败。**正确形态**：迁移 Up 内先调用 `EnsureSpecTable(db, config, "<表名>")` 按 spec 幂等物化依赖表，再写种子：
+
+```go
+Up: func(db *gorm.DB, config *conf.Configuration) error {
+	// 依赖表由 spec 物化（全新库 ApplyCreated 无阻塞；已有库按安全矩阵处理，
+	// requires-approval/rejected 会报错阻止迁移——种子不能建在错误形状上）。
+	if err := EnsureSpecTable(db, config, "ops_banner"); err != nil {
+		return err
+	}
+	return db.Exec("INSERT INTO " + core.TableName(config, "ops_banner") + " (title) VALUES ('默认轮播')").Error
+},
+```
+
+约定：
+
+- `EnsureSpecTable` 只物化 schema 与索引，**不建菜单**（菜单由 migrate/apply 尾部全量 apply 统一同步）；
+- 表的所有权归 spec/apply：本迁移的 `Down` 只删种子数据，**不得 DROP 依赖表**；
+- spec 文件名必须等于逻辑表名（`crud_specs/<table>.yaml`），表名拼写错误会直接报错，不会静默创建空表。
+
+**不要用迁移"补"业务表的唯一索引**。唯一索引通过 `crud_specs` 的 `indexes:` 声明、由 `crud:generate` 与 `crud:apply` 物化（全新建表内联、已有表 `safe-auto` 补建）。迁移阶段先于 `crud:apply` 尾部，全新库上业务表尚未创建：`ALTER TABLE ADD INDEX` 会直接失败；即使 `Up` 容忍"表不存在"跳过，`Up` 只执行一次、apply 不建索引，索引会永久缺失，且常驻 `VerifySchema` 在下次 `migrate` 永远红牌。
 
 ## `admin_rule` seed helper
 
