@@ -10,16 +10,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// These routes are mounted before the protected /admin group and therefore do
-// not participate in Authorization. They are intentionally absent from this
-// report rather than being treated as missing permission rules.
-var authorizationReportBypassRoutes = map[string]struct{}{
-	"GET /admin/Index/login":         {},
-	"POST /admin/Index/login":        {},
-	"GET /admin/ajax/buildSuffixSvg": {},
-	"GET /admin/ajax/terminal":       {},
-}
-
 // ReportUnprotectedRoutes reports admin routes that have neither an admin_rule
 // nor an explicit PermissionExempt declaration. It is diagnostic only: rule
 // lookup failures are logged and never returned to the startup caller.
@@ -72,20 +62,23 @@ func (m *Authorization) ReportUnprotectedRoutes(routes gin.RoutesInfo) {
 // collectUnprotectedRoutes splits the route inventory into missing rules
 // (three-segment /admin routes with neither an admin_rule nor an exemption)
 // and unparseable routes (/admin paths that do not fit the three-segment
-// convention). Non-admin paths are out of scope and skipped silently.
+// convention). Routes registered as NoNeedLogin (login-exempt) and
+// PermissionExempt (logged-in but rule-free) are intentionally not reported,
+// mirroring the runtime authorization short-circuits in authorization.go.
+// Non-admin paths are out of scope and skipped silently.
 func collectUnprotectedRoutes(routes gin.RoutesInfo, ruleNames map[string]struct{}) (missing, unparseable []string) {
 	missing = make([]string, 0)
 	unparseable = make([]string, 0)
 	for _, route := range routes {
-		if _, bypass := authorizationReportBypassRoutes[route.Method+" "+route.Path]; bypass {
-			continue
-		}
 		if !strings.HasPrefix(route.Path, "/admin") {
 			continue
 		}
 		controller, action, ok := middlewarecore.NormalizeRouteAction(route.Path)
 		if !ok {
 			unparseable = append(unparseable, route.Method+" "+route.Path)
+			continue
+		}
+		if IsNoNeedLogin(controller, action) {
 			continue
 		}
 		if IsPermissionExempt(controller, action) {

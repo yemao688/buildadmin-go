@@ -249,7 +249,18 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 		},
 		runCrudApply: func(_ *gorm.DB, _ *conf.Configuration) ([]helper.ApplyTableResult, error) {
 			crudApplies++
-			return []helper.ApplyTableResult{{Action: helper.ApplyCreated, Table: "ops_banner"}}, nil
+			return []helper.ApplyTableResult{
+				{
+					Action: helper.ApplyCreated,
+					Table:  "ops_banner",
+					Unmanaged: []helper.ApplyChange{{
+						Field:  "legacy_idx",
+						Type:   "unmanaged-index",
+						Class:  helper.DiffUnmanaged,
+						Reason: "index \"legacy_idx\" exists in database but is not declared in spec (kept)",
+					}},
+				},
+			}, nil
 		},
 		buildFrontend: func(string, io.Writer, *conf.Configuration) error { return nil },
 		updateAdminConfig: func(_ *gorm.DB, username, password, site string) error {
@@ -294,6 +305,9 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "安装完成") || !strings.Contains(output.String(), "CRUD apply created") || !strings.Contains(output.String(), "ops_banner") {
 		t.Fatalf("completion output = %q", output.String())
+	}
+	if !strings.Contains(output.String(), "CRUD apply WARNING ops_banner.legacy_idx") {
+		t.Fatalf("drift warning missing from output = %q", output.String())
 	}
 }
 
@@ -372,7 +386,7 @@ func TestUpdateSetupAdminRejectsMissingSiteName(t *testing.T) {
 	}
 
 	err = updateSetupAdmin(db, "operator", "new-password", "Example")
-	if err == nil || !strings.Contains(err.Error(), "site_name config not found") {
+	if err == nil || !strings.Contains(err.Error(), "site_name 配置不存在") {
 		t.Fatalf("updateSetupAdmin() error = %v", err)
 	}
 }

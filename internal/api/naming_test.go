@@ -29,7 +29,8 @@ import (
 
 type apiNamingRule struct {
 	dir      string   // internal/api 下相对目录
-	suffix   string   // 该包类型必须使用的精确后缀
+	suffix   string   // 该包类型必须使用的精确后缀（suffix 模式）
+	prefix   bool     // dto 投影模式：类型名必须以文件模块名 PascalCase 开头（如 user.go 的 OutUser）
 	banned   []string // 禁止出现在类型名中的非规范词根
 	skipFile []string // 基础设施文件（无模块类型，豁免文件名对齐）
 }
@@ -39,6 +40,9 @@ var apiNamingRules = []apiNamingRule{
 	{dir: "service", suffix: "Service", banned: []string{"Svc", "ServiceImpl", "Mgr", "Manager", "Repo"}},
 	{dir: "handler", suffix: "Handler", banned: []string{"Controller", "HandlerImpl", "Api"}},
 	{dir: "router", suffix: "Registrar", banned: []string{"Route", "Router"}, skipFile: []string{"registrar.go", "router.go", "api_routes.go"}},
+	// dto 是投影层：类型名以文件模块名 PascalCase 开头（user.go → User，如 OutUser），
+	// 允许 Out/Resp 等前缀修饰；禁止 Repo/Dao 等仓库词根混入投影。
+	{dir: "dto", prefix: true, banned: []string{"Repo", "Dao", "DAO", "Svc", "Mgr", "Impl"}},
 }
 
 type apiNamingViolation struct {
@@ -106,6 +110,25 @@ func inspectAPINamingFile(file, base string, rule apiNamingRule) ([]apiNamingVio
 
 // checkAPITypeName 对单个导出类型做命名检查，返回 (违规, 是否违规)。
 func checkAPITypeName(typeName, fileNameBase string, rule apiNamingRule, line int, file string) (apiNamingViolation, bool) {
+	if rule.prefix {
+		// dto 投影模式：类型名必须以文件模块名 PascalCase 开头或结尾
+		// （user.go → User；OutUser 以 User 结尾、UserResp 以 User 开头均合法）。
+		module := toPascalModule(fileNameBase)
+		if module == "" {
+			return apiNamingViolation{}, false
+		}
+		if !strings.HasPrefix(typeName, module) && !strings.HasSuffix(typeName, module) {
+			return apiNamingViolation{File: file, Line: line, TypeName: typeName,
+				Message: fmt.Sprintf("type %s must start or end with module %s (filename = module; e.g. user.go holds OutUser projection)", typeName, module)}, true
+		}
+		for _, banned := range rule.banned {
+			if strings.Contains(typeName, banned) {
+				return apiNamingViolation{File: file, Line: line, TypeName: typeName,
+					Message: fmt.Sprintf("non-canonical word %q in dto projection; want <module>Out... (e.g. user.go holds OutUser)", banned)}, true
+			}
+		}
+		return apiNamingViolation{}, false
+	}
 	if strings.HasSuffix(typeName, rule.suffix) {
 		module := strings.TrimSuffix(typeName, rule.suffix)
 		if module == "" {
@@ -142,6 +165,27 @@ func toSnakeModule(name string) string {
 		} else {
 			b.WriteRune(r)
 		}
+	}
+	return b.String()
+}
+
+// toPascalModule 把 snake_case 文件名转成 PascalCase 模块名：user → User、
+// user_login → UserLogin（dto 投影前缀）。
+func toPascalModule(name string) string {
+	var b strings.Builder
+	upper := true
+	for _, r := range name {
+		if r == '_' {
+			upper = true
+			continue
+		}
+		if upper {
+			if r >= 'a' && r <= 'z' {
+				r -= 'a' - 'A'
+			}
+			upper = false
+		}
+		b.WriteRune(r)
 	}
 	return b.String()
 }

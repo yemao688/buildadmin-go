@@ -230,6 +230,10 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		return applyErr
 	}
 	for _, result := range results {
+		// 线外手改的列/属性不受 spec 管理，静默保留但必须告警，防止漂移无感知。
+		for _, change := range result.Unmanaged {
+			fmt.Fprintf(r.out, "CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+		}
 		if result.Action == helper.ApplyUnchanged {
 			continue
 		}
@@ -778,7 +782,7 @@ func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
 		return err
 	}
 	if adminCount != 1 {
-		return errors.New("seed admin not found")
+		return errors.New("seed 管理员不存在（安装种子异常）")
 	}
 	result := db.Model(&model.Admin{}).Where("id = ?", 1).Updates(map[string]any{
 		"username": username,
@@ -793,7 +797,7 @@ func updateSetupAdmin(db *gorm.DB, username, password, siteName string) error {
 		return err
 	}
 	if siteCount != 1 {
-		return errors.New("site_name config not found")
+		return errors.New("site_name 配置不存在（安装种子异常）")
 	}
 	// site_name 值未变化时 MySQL 报 0 rows affected，属正常幂等，不做行数断言。
 	result = db.Model(&siteconfig.Config{}).Where("name = ?", "site_name").Updates(map[string]any{"value": siteName})

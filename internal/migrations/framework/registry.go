@@ -29,6 +29,7 @@ func Migrations(official []core.OfficialMigration) []core.FrameworkMigration {
 		MigrationName:     "framework-final-seed-and-integrity",
 		RequiresOfficial:  requiresOfficial,
 		Up:                finalSeedAndIntegrity,
+		VerifyBaseline:    verifyBaselineContract,
 		VerifySchema:      verifyFinalTableContract,
 		VerifyUpgradeData: verifyFinalDataContract,
 	}}

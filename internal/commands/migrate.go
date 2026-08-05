@@ -62,7 +62,7 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 			return command.migrateH.Rollback(cmd, args)
 		},
 	}
-	rollbackMigrateCmd.Flags().Uint64("steps", 0, "rollback N business migrations; default is the latest applied batch")
+	rollbackMigrateCmd.Flags().Uint64("steps", 0, "rollback N business migrations; default is the latest applied business migration")
 	rollbackMigrateCmd.Flags().Bool("to-breakpoint", false, "rollback business migrations newer than the saved breakpoint")
 	breakpointCmd := &cobra.Command{
 		Use:           "breakpoint",
@@ -188,7 +188,7 @@ func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: migrate rollback [business]")
 	}
 	if len(args) == 1 && args[0] != "business" {
-		return fmt.Errorf("%s migration rollback is unsupported; official and local migrations are forward-only", args[0])
+		return fmt.Errorf("%s migration rollback is unsupported; official and framework migrations are forward-only", args[0])
 	}
 	steps, err := cmd.Flags().GetUint64("steps")
 	if err != nil {
@@ -206,7 +206,7 @@ func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) error {
 		} else if entry.DownExecuted {
 			status = "down-applied-ledger-retained"
 		}
-		cmd.Printf("business migration %-28s sequence=%d batch=%d %s\n", entry.ID, entry.Sequence, entry.Batch, status)
+		cmd.Printf("business migration %-28s sequence=%d %s\n", entry.ID, entry.Sequence, status)
 	}
 	if err != nil {
 		cmd.Printf("database rollback error: %v (rolled back %d, not rolled back %d)\n", err, report.RolledBack(), report.NotRolledBack())

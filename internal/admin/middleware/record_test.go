@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -114,6 +115,58 @@ func TestRecordDoesNotRecordGet(t *testing.T) {
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/admin/test", nil))
 	if spy.calls != 0 {
 		t.Fatalf("Add calls = %d, want 0", spy.calls)
+	}
+}
+
+func TestRecordSkipsBodyReadWhenDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spy := &recordLogSpy{}
+	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: false}}, spy)
+	router := gin.New()
+	router.Use(record.Handler())
+	var bodyRead bool
+	router.POST("/admin/test", func(c *gin.Context) {
+		raw, err := io.ReadAll(c.Request.Body)
+		bodyRead = err == nil && len(raw) > 0
+		c.Status(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/admin/test", strings.NewReader(`{"name":"alice"}`))
+	request.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(httptest.NewRecorder(), request)
+
+	if spy.calls != 0 {
+		t.Fatalf("Add calls = %d, want 0 (logging disabled)", spy.calls)
+	}
+	if !bodyRead {
+		t.Fatal("handler must still read the body when logging is disabled")
+	}
+}
+
+func TestRecordSkipsOversizedBodyCollection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spy := &recordLogSpy{}
+	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
+	router := gin.New()
+	router.Use(record.Handler())
+	router.POST("/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	// ContentLength 超过上限：不读 body、只记录元信息，请求本身不受影响。
+	bigBody := strings.Repeat("x", adminLogBodyLimit+1)
+	request := httptest.NewRequest(http.MethodPost, "/admin/test", strings.NewReader(bigBody))
+	request.Header.Set("Content-Type", "application/json")
+	request.ContentLength = int64(len(bigBody))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if spy.calls != 1 {
+		t.Fatalf("Add calls = %d, want 1", spy.calls)
+	}
+	if _, ok := spy.params["name"]; ok {
+		t.Fatalf("oversized body must not be collected into params: %#v", spy.params)
 	}
 }
 

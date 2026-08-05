@@ -37,7 +37,7 @@ func TestPhase2RegistrySplit(t *testing.T) {
 	}
 	want := []string{"framework-final-seed-and-integrity"}
 	for i, migration := range framework {
-		if migration.Version != uint64(i+1) || migration.MigrationName != want[i] || migration.Up == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil || migration.VerifyBaseline != nil {
+		if migration.Version != uint64(i+1) || migration.MigrationName != want[i] || migration.Up == nil || migration.VerifyBaseline == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil {
 			t.Fatalf("invalid framework registry entry %d: %#v", i, migration)
 		}
 	}

@@ -199,16 +199,10 @@ func verifyFinalTableContract(db *gorm.DB, config *conf.Configuration) error {
 			return err
 		}
 	}
-	if err := verifyUserTableContract(db, config); err != nil {
-		return err
-	}
 	if err := verifyAdminTableContract(db, config); err != nil {
 		return err
 	}
 	if err := verifyStatusContract(db, config); err != nil {
-		return err
-	}
-	if err := verifyMoneyDecimalContract(db, config); err != nil {
 		return err
 	}
 	for _, logical := range []string{"user", "user_money_log", "attachment", "admin_log", "crud_log"} {
@@ -226,7 +220,19 @@ func verifyFinalDataContract(db *gorm.DB, config *conf.Configuration) error {
 	if err := validateLogOwnerMatchesUser(db, core.TableName(config, "user_money_log"), core.TableName(config, "user")); err != nil {
 		return err
 	}
-	if err := verifySecuritySeedIdentity(db, config); err != nil {
+	return verifySecuritySeedIdentity(db, config)
+}
+
+// verifyBaselineContract 是 Up 应用后只执行一次的基线判据（VerifyBaseline，
+// 账本完成后不再运行）。此处存放"精确形状"断言：user 列清单/禁列、money
+// 精度、country 菜单与 upload 配置的 seed 身份——它们只约束安装基线，不
+// 能作为常驻不变量，否则会与文档承诺的业务塑形自由冲突（业务给 user 表加
+// gender、调整金额精度、删除后台菜单/配置都会在每次 migrate 永久红牌）。
+func verifyBaselineContract(db *gorm.DB, config *conf.Configuration) error {
+	if err := verifyUserTableContract(db, config); err != nil {
+		return err
+	}
+	if err := verifyMoneyDecimalContract(db, config); err != nil {
 		return err
 	}
 	if err := verifyCountryMenuData(db, config); err != nil {

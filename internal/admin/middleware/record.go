@@ -37,22 +37,28 @@ func newRecord(config *conf.Configuration, adminLogM adminLogWriter) *Record {
 func (m *Record) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("Timestamp", time.Now().Unix())
+		// AutoWriteAdminLog 关闭时完全不读 body（避免无谓的全量缓冲）；
+		// 预认证阶段对超大请求体同样跳过参数采集（内存放大 DoS 防线），
+		// body 原样保留给下游 handler。
+		shouldRecord := m.config.App.AutoWriteAdminLog && isAdminLogMethod(c.Request.Method) && isAdminLogRoute(c.Request.URL.Path)
 		params := make(map[string]interface{})
-		shouldRecord := isAdminLogMethod(c.Request.Method) && isAdminLogRoute(c.Request.URL.Path)
 		if shouldRecord {
-			var bodyBytes []byte
-			if c.Request.Body != nil {
-				bodyBytes, _ = io.ReadAll(c.Request.Body)
+			if c.Request.Body != nil && c.Request.ContentLength >= 0 && c.Request.ContentLength <= adminLogBodyLimit {
+				bodyBytes, _ := io.ReadAll(c.Request.Body)
+				c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				mergeRequestParams(c.Request, bodyBytes, params)
 			}
-			c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			mergeRequestParams(c.Request, bodyBytes, params)
 		}
 		c.Next()
-		if shouldRecord && m.config.App.AutoWriteAdminLog {
+		if shouldRecord {
 			m.adminLogM.Add(c, params)
 		}
 	}
 }
+
+// adminLogBodyLimit 是 AdminLog 参数采集的请求体上限（8MB）。超过上限时
+// 只记录元信息（URL/form/query），避免匿名大 body POST 的内存放大。
+const adminLogBodyLimit = 8 << 20
 
 func isAdminLogMethod(method string) bool {
 	return method == http.MethodPost || method == http.MethodDelete
