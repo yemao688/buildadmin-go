@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.0.5
+
+> 业务表结构闭环：spec 增加 `indexes` 声明能力（apply 物化唯一索引+普通索引，迁移禁止补索引）、`crud.apply_on_migrate` 默认开启、setup 尾部自动 apply 消除全新安装缺业务表、api 侧命名机械执法、修复索引 apply 时序漏洞。
+
+- **Added (spec indexes 声明):** `crud_specs/*.yaml` 顶层新增 `indexes:` 列表（name/unique/columns），由 `crud:apply` 物化——全新建表内联 `CREATE TABLE`、已有表 safe-auto 补建缺失索引；线外索引保留并 `unmanaged` 告警；data_scope 机制索引（`idx_<ownerColumn>`）精确豁免；跨层契约文档同步更新（`AGENTS.md`、`business/README.md`、`crud-generation.md`）。
+- **Changed (apply_on_migrate 默认开启):** `crud.apply_on_migrate` 默认值从 `false` 改为 `true`——`migrate` 尾部幂等同步业务表，漂移部署红牌；setup 尾部自动执行 apply（不依赖该配置项），全新安装开箱即含业务表；阻塞时输出可行动 hint（`--approve` 类别/business 迁移指路）。
+- **Added (api 侧命名机械执法):** `internal/api/naming_test.go` 对 repository/service/handler/router 四包自动检查——类型名 = `<模块 PascalCase>`+精确后缀（`Repository`/`Service`/`Handler`/`Registrar`），文件名=模块名，禁止 `Repo`/`Dao`/`Svc`/`Impl`/`Controller` 等变体（`AGENTS.md` 同步规范）。
+- **Fixed (索引 apply 时序):** 迁移阶段先于 `crud:apply`，新版 spec `indexes:` 由 apply 物化完全避开时序问题；文档明确"只补索引的迁移"在全新库上的两种失败模式（ALTER 失败 / Up 跳过则索引永久缺失 + VerifySchema 常驻红牌）。
+- **Changed (docs, 完整示例):** 完整示例（§10）新增 `indexes` 声明（`uk_order_no` 唯一索引 + `idx_note` 普通索引）。
+- **Fixed (readActualIndexes Scan):** information_schema.STATISTICS 查询加列别名（`INDEX_NAME AS index_name` 等），修复 GORM Scan 字符串字段映射失败。
+- **Added (MySQL 集成测试):** `TestApplyIndexesLifecycle` 覆盖建表内联索引/幂等 unchanged/线外索引 unmanaged 告警/spec 新增索引 safe-auto 补建/spec 移除索引保留并告警 5 场景。
+
 ## v3.0.4
 
 > CRUD 契约打磨：`crud-generation.md` 全面重写（完整示例覆盖全部常见字段类型、合并重叠章节、精简 400 行）、`crud:validate` 拦截臆造的 `xxx_text` remoteField、registrar_test 桩列表样本化（生成模块不再需要同步测试文件）、生成器 Index 模板补 return。

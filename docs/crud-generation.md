@@ -471,6 +471,12 @@ dataScope:
 menu:
   title: 订单项
   parent: 0
+indexes:
+  - name: uk_order_no
+    unique: true
+    columns: [order_no]
+  - name: idx_note
+    columns: [note(64)]
 fields:
   - name: id
     type: bigint
