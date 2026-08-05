@@ -71,7 +71,8 @@ Up: func(db *gorm.DB, config *conf.Configuration) error {
 
 - `EnsureSpecTable` 只物化 schema 与索引，**不建菜单**（菜单由 migrate/apply 尾部全量 apply 统一同步）；
 - 表的所有权归 spec/apply：本迁移的 `Down` 只删种子数据，**不得 DROP 依赖表**；
-- spec 文件名必须等于逻辑表名（`crud_specs/<table>.yaml`），表名拼写错误会直接报错，不会静默创建空表。
+- spec 文件名必须等于逻辑表名（`crud_specs/<table>.yaml`），表名拼写错误会直接报错，不会静默创建空表；
+- **部署要求**：任何执行迁移的运行时（含 Docker 镜像）必须携带 `crud_specs/` 目录——尾部 apply 在目录缺失时静默跳过，但 `EnsureSpecTable` 是显式声明依赖，缺失时迁移直接失败（这是有意的：种子不能建在不存在的表上）。
 
 **不要用迁移"补"业务表的唯一索引**。唯一索引通过 `crud_specs` 的 `indexes:` 声明、由 `crud:generate` 与 `crud:apply` 物化（全新建表内联、已有表 `safe-auto` 补建）。迁移阶段先于 `crud:apply` 尾部，全新库上业务表尚未创建：`ALTER TABLE ADD INDEX` 会直接失败；即使 `Up` 容忍"表不存在"跳过，`Up` 只执行一次、apply 不建索引，索引会永久缺失，且常驻 `VerifySchema` 在下次 `migrate` 永远红牌。
 

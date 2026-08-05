@@ -28,20 +28,26 @@ func EnsureSpecTable(db *gorm.DB, config *conf.Configuration, logicalName string
 }
 
 // EnsureSpecTableFrom 与 EnsureSpecTable 相同，但显式指定 spec 目录
-// （测试与嵌入场景使用；DefaultSpecDir 为空的场景直接报错）。
+// （测试与嵌入场景使用；DefaultSpecDir 为空的场景直接报错——运行迁移的
+// 运行时必须包含 crud_specs/，Docker 镜像部署需复制该目录）。
 func EnsureSpecTableFrom(db *gorm.DB, config *conf.Configuration, dir, logicalName string) error {
 	if dir == "" {
-		return fmt.Errorf("EnsureSpecTable(%q): crud_specs directory not found", logicalName)
+		return fmt.Errorf("EnsureSpecTable(%q): crud_specs directory not found; the runtime executing migrations must ship crud_specs/ (copy it into the Docker image)", logicalName)
 	}
 	specPath := filepath.Join(dir, logicalName+".yaml")
 	if _, err := os.Stat(specPath); err != nil {
-		return fmt.Errorf("EnsureSpecTable(%q): spec %s not found (spec filename must equal the logical table name)", logicalName, specPath)
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("EnsureSpecTable(%q): spec %s not found (spec filename must equal the logical table name)", logicalName, specPath)
+		}
+		return fmt.Errorf("EnsureSpecTable(%q): cannot read spec %s: %w", logicalName, specPath, err)
 	}
 	results, err := helper.ApplySpecs(db, config, []string{specPath}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
 	if err != nil {
+		// 保留原始错误链（ApplyBlockedError 携带具体 Reasons 与可批准类别），
+		// hint 仅作附加指引。
 		var blocked *helper.ApplyBlockedError
 		if errors.As(err, &blocked) {
-			return fmt.Errorf("EnsureSpecTable(%q) blocked: %s", logicalName, blocked.Hint())
+			return fmt.Errorf("EnsureSpecTable(%q) blocked: %w; hint: %s", logicalName, err, blocked.Hint())
 		}
 		return fmt.Errorf("EnsureSpecTable(%q): %w", logicalName, err)
 	}
