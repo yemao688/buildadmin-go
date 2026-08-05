@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.0.6
+
+> 正式版质量批次：索引物化双路径统一、spec 校验加固、设计器破坏性变更显式拒绝、framework 常驻 Verify 拆分、命名机械执法覆盖 admin/api、Record 请求体上限。
+
+- **Fixed (generate/apply 索引分叉):** `crud:generate` alter 路径不再静默丢弃 spec `indexes:`——接入 `syncSpecIndexes` 与 apply 一致物化缺失索引并透传 unmanaged 告警（开发库与部署库形状统一）；新增 MySQL 集成测试验证 generate 路径补建与幂等。
+- **Added (spec indexes 前缀索引):** `columns` 支持 `col(N)` 前缀语法（`note(64)`），DDL 内联/SUB_PART 比较/文档契约齐备。
+- **Fixed (spec 校验加固):** 索引名拒绝 `PRIMARY` 保留名；重名检测大小写折叠；text/blob/json 家族无前缀长度直接拒绝；同列不同前缀判重；N 上界 768 字符校验。
+- **Fixed (设计器破坏性变更):** `crud:generate` 入口显式拒绝 `del-field`/`change-field-name`/`change-field-order`（此前被静默丢弃→数据库旧列残留、数据孤儿）；清理 `HandleTableDesign` 死代码分支与含非法 SQL 的 `updateFieldOrder`。
+- **Fixed (module/index 硬 403):** `GET /admin/module/index` 加入 `NoNeedPermissionActions` 豁免，与文档"显式豁免"声明对齐（此前超管也 403，模块商店首屏必败且启动诊断持续告警）。
+- **Changed (framework VerifyBaseline):** user 列清单/禁列、money 精度、country 菜单、upload 配置等"形状锁"断言从常驻 `VerifySchema`/`VerifyUpgradeData` 移入 `VerifyBaseline`（Up 后只跑一次）——业务塑形（会员表加字段、金额精度调整、后台删菜单/配置）不再被每次 migrate 永久红牌；常驻位只保留真协议不变量（status 值域、owner 列、安全 seed 身份）。
+- **Fixed (权限诊断误报):** `collectUnprotectedRoutes` 增加 `IsNoNeedLogin` 短路（logout 等 noNeedLogin 路由不再误报 "unregistered and not exempt"）；删除与注册表重复的硬编码 bypass map；补 logout 回归用例。
+- **Added (admin 命名机械执法):** `internal/admin/naming_test.go` 覆盖 service/handler/dto 手写区域（文件名=模块名、类型=模块 PascalCase+后缀）；12 个 PHP 上游继承历史短名显式 allowlist 豁免，新代码一律红牌；api 侧补 dto 投影执法（`user.go` → `User` 前缀，如 `OutUser`）。
+- **Fixed (Record 中间件 DoS):** AdminLog 请求体采集加 8MB 上限（`adminLogBodyLimit`）；`AutoWriteAdminLog=false` 时完全不读 body（预认证内存放大防线）。
+- **Fixed (rollback CLI):** 帮助文本 "latest applied batch"→"latest applied business migration"；删除恒为 0 的 `batch=%d` 输出；错误信息 "local"→"framework"（local 轨已不存在）。
+- **Fixed (setup 可观测性):** setup 尾部 apply 输出 unmanaged 漂移告警（与 migrate 尾部对齐）；英文错误改中文。
+- **Changed (docs):** crud-generation.md indexes 契约补前缀语法与双路径物化表述；AGENTS.md 路由边界删过时"安装 API"、命名执法段补 admin 侧 coverage。
+
 ## v3.0.5
 
 > 业务表结构闭环：spec 增加 `indexes` 声明能力（apply 物化唯一索引+普通索引，迁移禁止补索引）、`crud.apply_on_migrate` 默认开启、setup 尾部自动 apply 消除全新安装缺业务表、api 侧命名机械执法、修复索引 apply 时序漏洞。
