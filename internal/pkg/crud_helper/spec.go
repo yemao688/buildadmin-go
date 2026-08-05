@@ -29,8 +29,15 @@ type specFile struct {
 	FormFields           *[]string      `mapstructure:"formFields"`
 	ColumnFields         *[]string      `mapstructure:"columnFields"`
 	DataScope            *specDataScope `mapstructure:"dataScope"`
+	Indexes              []specIndex    `mapstructure:"indexes"`
 	Fields               []specField    `mapstructure:"fields"`
 	Menu                 *specMenu      `mapstructure:"menu"`
+}
+
+type specIndex struct {
+	Name    string   `mapstructure:"name"`
+	Unique  bool     `mapstructure:"unique"`
+	Columns []string `mapstructure:"columns"`
 }
 
 type specDataScope struct {
@@ -196,6 +203,11 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
 		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope,
 	}
+	indexes, err := parseSpecIndexes(raw.Indexes, fields)
+	if err != nil {
+		return nil, fmt.Errorf("spec %q indexes: %w", path, err)
+	}
+	table.Indexes = indexes
 	if err := normalizeTableConfiguration(&table); err != nil {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
@@ -207,6 +219,54 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
 	return options, nil
+}
+
+// parseSpecIndexes 解析并校验 spec 的表级索引声明：索引名必填且为合法标识符、
+// 全 spec 内不重复；至少一列且全部引用真实字段；单索引内列不重复。
+func parseSpecIndexes(raw []specIndex, fields []crudmodel.Field) ([]crudmodel.IndexSpec, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	fieldNames := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		fieldNames[field.Name] = true
+	}
+	indexes := make([]crudmodel.IndexSpec, 0, len(raw))
+	seen := make(map[string]bool, len(raw))
+	for i, item := range raw {
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			return nil, fmt.Errorf("indexes[%d] name is required", i)
+		}
+		if err := ValidateIndexName(name); err != nil {
+			return nil, fmt.Errorf("indexes[%d] name %q: %w", i, name, err)
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("indexes[%d] duplicate index name %q", i, name)
+		}
+		seen[name] = true
+		if len(item.Columns) == 0 {
+			return nil, fmt.Errorf("index %q must declare at least one column", name)
+		}
+		columns := make([]string, 0, len(item.Columns))
+		columnSeen := make(map[string]bool, len(item.Columns))
+		for _, col := range item.Columns {
+			col = strings.TrimSpace(col)
+			if col == "" {
+				return nil, fmt.Errorf("index %q has an empty column", name)
+			}
+			if !fieldNames[col] {
+				return nil, fmt.Errorf("index %q column %q is not a spec field", name, col)
+			}
+			if columnSeen[col] {
+				return nil, fmt.Errorf("index %q declares column %q more than once", name, col)
+			}
+			columnSeen[col] = true
+			columns = append(columns, col)
+		}
+		indexes = append(indexes, crudmodel.IndexSpec{Name: name, Unique: item.Unique, Columns: columns})
+	}
+	return indexes, nil
 }
 
 // normalizeNullKeys fixes YAML's special null key token before Viper sees it.

@@ -84,10 +84,27 @@ fields:
 | `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带 relation enrichment 的外键（FK 自动隐藏）。建议始终显式设置，只放需要在列表出现的字段；`password`、密钥、长备注等不应进列表。 |
 | `dataScope` | map，默认 `mode: auto` | 数据权限策略（见下文）。 |
 | `menu` | map，默认未配置 | 菜单标题和父节点覆盖；省略时菜单仍按表注释创建，跳过使用 `--skip-menu`。 |
+| `indexes` | `[]map`，默认空 | 表级索引声明（见下文）：唯一/普通索引由 `crud:apply` 物化。 |
 | `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
 | `webViewsDir` | `string`，默认自动推导 | `web/src/views/backend` 下的视图目录。显式值优先。 |
 
 `formFields` 和 `columnFields` 都必须区分"省略"和显式空列表：省略是自动推导，显式 `[]` 是明确没有。
+
+### `indexes`
+
+表级索引声明，由 `crud:apply` 物化：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并输出 `unmanaged` 告警，不会自动删除或重建）。
+
+```yaml
+indexes:
+  - name: uk_order_no          # 索引名，数据库内唯一，合法标识符
+    unique: true               # 唯一索引；省略为普通索引
+    columns: [order_no]        # 至少一列，必须引用 fields 中的真实字段
+  - name: uk_seller_hotel
+    unique: true
+    columns: [seller_id, hotel_id]   # 复合唯一索引
+```
+
+约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并告警）；需要删索引的破坏性变更走 business 迁移。
 
 ### `dataScope` 与 `menu`
 
@@ -672,7 +689,7 @@ git pull && go run ./cmd/server --conf configs/config.yaml migrate
 
 需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，migrate 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。
 
-**迁移与 apply 的分工**：业务表结构只由 spec → apply 物化。不要在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表——会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，且常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只负责 apply 表达不了的东西：唯一索引（spec 暂不支持声明）、`rejected` 破坏性变更、种子数据，以及无 spec 的非 CRUD 自建表（自负责最终契约）。
+**迁移与 apply 的分工**：业务表结构只由 spec → apply 物化。不要在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表——会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，且常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只负责 apply 表达不了的东西：`rejected` 破坏性变更、种子数据，以及无 spec 的非 CRUD 自建表（自负责最终契约）。唯一索引通过本表 `indexes` 声明由 apply 物化，**不要写"只补索引"的迁移**：迁移阶段先于 apply 尾部，全新库上业务表尚未创建，`ALTER TABLE ADD INDEX` 会失败；即使容忍表不存在，`Up` 只执行一次、apply 不建索引，索引会永久缺失且常驻 `VerifySchema` 永远红牌。
 
 | 场景 | 动作 |
 | --- | --- |

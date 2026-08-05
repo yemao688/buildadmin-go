@@ -95,6 +95,14 @@ type ChangeField struct {
 	Reason  string `json:"reason,omitempty"`
 }
 
+// IndexSpec 声明业务表上的一条数据库索引（目前支持唯一索引；普通索引
+// unique=false 同样可声明）。apply 物化表结构时同步建/比对这些索引。
+type IndexSpec struct {
+	Name    string   `json:"name"`    //索引名（必填，数据库内唯一）
+	Unique  bool     `json:"unique"`  //是否唯一索引
+	Columns []string `json:"columns"` //索引列（至少一列，引用 spec 中真实字段）
+}
+
 type Table struct {
 	DataScope            *data_scope.Config `json:"dataScope,omitempty"`      //数据权限配置
 	Name                 string             `json:"name"`                     //数据表名
@@ -114,6 +122,7 @@ type Table struct {
 	DesignChange         []ChangeField      `json:"designChange"`             //表设计变更
 	Rebuild              string             `json:"rebuild"`                  //是否重建
 	Empty                bool               `json:"empty"`                    //表格是否有数据,后台增加
+	Indexes              []IndexSpec        `json:"indexes,omitempty"`        //表级索引声明（apply 物化）
 	GeneratedFiles       []string           `json:"generatedFiles,omitempty"` //最近一次成功生成的文件清单
 	Manifest             *CRUDFileManifest  `json:"manifest,omitempty" gorm:"-"`
 }

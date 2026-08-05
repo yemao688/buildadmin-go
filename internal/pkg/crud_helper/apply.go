@@ -318,7 +318,11 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 		return result, nil
 	}
 	diffs := deriveAlterDiff(current, spec.Fields)
-	result.Diffs = make([]ApplyChange, 0, len(diffs))
+	indexPlan, err := deriveIndexPlan(db, fullName, spec.Table.Indexes)
+	if err != nil {
+		return nil, err
+	}
+	result.Diffs = make([]ApplyChange, 0, len(diffs)+len(indexPlan.Added))
 	result.Unmanaged = unmanagedChanges(current, spec.Fields)
 	for _, diff := range diffs {
 		ddl, ddlErr := alterChangeDDL(fullName, diff)
@@ -327,7 +331,9 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 		}
 		result.Diffs = append(result.Diffs, ApplyChange{Field: diff.Field.Name, Type: diff.Change.Type, Class: diff.Class, Category: diff.Category, Reason: diff.Reason, DDL: ddl, Approved: isApprovedDiff(diff.Class, diff.Category, opts.ApprovedCategories), Unmanaged: diff.Unmanaged})
 	}
-	if len(diffs) == 0 {
+	result.Diffs = append(result.Diffs, indexPlan.Added...)
+	result.Unmanaged = append(result.Unmanaged, indexPlan.Unmanaged...)
+	if len(diffs) == 0 && len(indexPlan.Added) == 0 {
 		result.Action = ApplyUnchanged
 	} else if firstBlockingDiff(diffs, opts.ApprovedCategories) != nil {
 		result.Action = ApplyBlocked
@@ -335,6 +341,19 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 		result.Action = ApplyAltered
 	}
 	return result, nil
+}
+
+// deriveIndexPlan 读取实际索引并与 spec 声明对比，返回需要新增（SafeAuto）与
+// 保留告警（Unmanaged）的索引差量。
+func deriveIndexPlan(db *gorm.DB, fullTableName string, wanted []crudmodel.IndexSpec) (indexDiffPlan, error) {
+	if len(wanted) == 0 {
+		return indexDiffPlan{}, nil
+	}
+	actual, err := readActualIndexes(db, fullTableName)
+	if err != nil {
+		return indexDiffPlan{}, err
+	}
+	return deriveIndexDiffs(actual, wanted, fullTableName), nil
 }
 
 func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyChange {
@@ -421,6 +440,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 	exists := tableExists(db, cfg, spec.Table.Name)
 	fullName := tableM.Name(spec.Table.Name, true)
 	result := &ApplyTableResult{Table: spec.Table.Name, Action: ApplyCreated}
+	var indexPlan indexDiffPlan
 
 	if exists {
 		actualPKs, err := actualPrimaryKeys(db, fullName)
@@ -448,7 +468,13 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 			}
 		} else {
 			diffs := deriveAlterDiff(current, spec.Fields)
+			indexPlan, err = deriveIndexPlan(db, fullName, spec.Table.Indexes)
+			if err != nil {
+				return nil, err
+			}
 			result.Diffs = applyChangesFromDiffs(diffs, opts.ApprovedCategories)
+			result.Diffs = append(result.Diffs, indexPlan.Added...)
+			result.Unmanaged = append(result.Unmanaged, indexPlan.Unmanaged...)
 			if blocking := firstBlockingDiff(diffs, opts.ApprovedCategories); blocking != nil {
 				result.Action = ApplyBlocked
 				return result, newApplyBlockedError(spec.Table.Name, blockedApplyChanges(result.Diffs, opts.ApprovedCategories))
@@ -462,13 +488,21 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 				spec.Table.DesignChange = append(spec.Table.DesignChange, diff.Change)
 				result.Changes = append(result.Changes, diff.Change.Type+" "+diff.Change.NewName)
 			}
-			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 {
+			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 && len(indexPlan.Added) == 0 {
 				result.Action = ApplyUnchanged
 			}
 		}
 	}
 	if err := HandleTableDesign(db, fullName, spec.Table, spec.Fields); err != nil {
 		return nil, fmt.Errorf("table design: %w", err)
+	}
+	// 索引在列变更之后执行（新增索引可能引用本表新列）；全新建表时
+	// createTableDDL 已内联索引，此处只处理已有表场景。
+	for _, change := range indexPlan.Added {
+		if err := db.Exec(change.DDL).Error; err != nil {
+			return nil, fmt.Errorf("add index %q: %w", change.Field, err)
+		}
+		result.Changes = append(result.Changes, change.Type+" "+change.Field)
 	}
 	if !opts.SkipMenu {
 		webViewsDir := ParseWebDirNameData(spec.Table.Name, "views", spec.Table.WebViewsDir)

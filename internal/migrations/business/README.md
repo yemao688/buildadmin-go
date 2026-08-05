@@ -48,10 +48,11 @@ func init() {
 
 业务迁移的合理用途是 spec/apply 表达不了的东西：
 
-- **唯一索引**（spec 暂不支持声明索引；可参考 `ensureUniqueIndex` 模式：先查后建、前缀安全）；
 - **`rejected` 类破坏性变更**（主键漂移、收窄、nullable→NOT NULL 等，安全矩阵见 `docs/crud-generation.md`）；
 - **种子数据**（如 `SeedAdminRule`）；
 - **无 spec 的非 CRUD 自建表**——这类表允许在迁移中建表，但必须自己负责最终契约：`Up` 幂等、前缀安全、`VerifyBaseline`/`VerifySchema` 自断言基线。
+
+**不要用迁移"补"业务表的唯一索引**。唯一索引通过 `crud_specs` 的 `indexes:` 声明、由 `crud:apply` 物化（全新建表内联、已有表 `safe-auto` 补建）。迁移阶段先于 `crud:apply` 尾部，全新库上业务表尚未创建：`ALTER TABLE ADD INDEX` 会直接失败；即使 `Up` 容忍"表不存在"跳过，`Up` 只执行一次、apply 不建索引，索引会永久缺失，且常驻 `VerifySchema` 在下次 `migrate` 永远红牌。带 spec 的业务表在迁移中的正确形态只有两种：全表由迁移 `AutoMigrate` 建（接受双重事实源代价，形状必须与 spec 一致），或把索引写进 `indexes:` 交给 apply。
 
 ## `admin_rule` seed helper
 

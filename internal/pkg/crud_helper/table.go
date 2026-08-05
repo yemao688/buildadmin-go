@@ -160,10 +160,22 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 
 func createTableDDL(fullTableName string, table crudmodel.Table, fields []crudmodel.Field) (string, error) {
 	pk := getPk(fields)
+	keysSQL := "PRIMARY KEY (`" + pk + "`)"
+	for _, idx := range table.Indexes {
+		columns := make([]string, 0, len(idx.Columns))
+		for _, col := range idx.Columns {
+			columns = append(columns, "`"+col+"`")
+		}
+		keyWord := "KEY"
+		if idx.Unique {
+			keyWord = "UNIQUE KEY"
+		}
+		keysSQL += ",\n " + keyWord + " `" + idx.Name + "` (" + strings.Join(columns, ", ") + ")"
+	}
 	sqlData := SqlTemplData{
 		TableName: fullTableName,
 		Fields:    "",
-		Keys:      "PRIMARY KEY (`" + pk + "`)",
+		Keys:      keysSQL,
 		Engine:    "ENGINE=InnoDB",
 		Charset:   "DEFAULT CHARSET=utf8mb4",
 		SortRule:  "COLLATE=utf8mb4_unicode_ci",
