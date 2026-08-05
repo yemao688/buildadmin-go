@@ -22,6 +22,11 @@ RUN apk add --no-cache ca-certificates tzdata \
     && mkdir -p /app/configs /app/runtime /app/public/storage \
     && chown -R app:app /app
 COPY --from=go-build --chown=app:app /out/app /app/app
+# crud_specs 是业务表结构的唯一事实源：migrate 尾部 apply（apply_on_migrate
+# 默认 true）与 EnsureSpecTable 种子迁移都依赖它。spec 随镜像同版本构建，
+# 不挂 volume——volume 会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1
+# → apply 漂移），违背"spec 是唯一事实源"的部署纪律。
+COPY --from=go-build --chown=app:app /src/crud_specs /app/crud_specs
 USER 1000:1000
 EXPOSE 9900
 ENTRYPOINT ["/app/app"]

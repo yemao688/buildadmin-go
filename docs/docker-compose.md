@@ -1,6 +1,6 @@
 # Docker Compose 部署
 
-本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像只含 Go 二进制——不包含 Node/Go 工具链、源码，也不包含 `public/` 静态内容；前端产物与上传文件全部由宿主机 `public/` 目录经 bind mount 直接服务，安装统一由 `setup` CLI 完成（容器内 `docker compose run --rm buildadmin-go setup`，无需宿主机工具链）。
+本仓库的 Compose 方案是**单副本、仅应用服务**的部署：`docker-compose.yaml` 只编排应用容器，MySQL 在 Compose 外部提供，Redis 仅在配置选择 Redis token 时需要。镜像含 Go 二进制与 `crud_specs/`（业务表结构唯一事实源，随镜像同版本构建）——不包含 Node/Go 工具链、源码，也不包含 `public/` 静态内容；前端产物与上传文件全部由宿主机 `public/` 目录经 bind mount 直接服务，安装统一由 `setup` CLI 完成（容器内 `docker compose run --rm buildadmin-go setup`，无需宿主机工具链）。
 
 服务名为 `buildadmin-go`（不是 `app`），所有 `docker compose` 子命令都要用这个名字。
 
@@ -83,7 +83,9 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
-镜像只含 Go 二进制；`.env` 非必需（`APP_TIME_ZONE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
+`crud_specs/` **不在生产机清单里**——它随镜像同版本构建（Dockerfile 运行时阶段 COPY），不挂 volume：migrate 尾部 apply（`crud.apply_on_migrate` 默认 `true`）与业务迁移 `EnsureSpecTable` 在容器内直接使用镜像内 spec，宿主机无需也无法提供；volume 挂载会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1 → apply 漂移），违背"spec 是业务表结构唯一事实源"的部署纪律。
+
+镜像含 Go 二进制与 `crud_specs/`；`.env` 非必需（`APP_TIME_ZONE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
 
 ```bash
 cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
