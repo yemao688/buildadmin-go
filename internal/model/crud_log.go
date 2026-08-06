@@ -122,7 +122,8 @@ type Table struct {
 	DesignChange         []ChangeField      `json:"designChange"`             //表设计变更
 	Rebuild              string             `json:"rebuild"`                  //是否重建
 	Empty                bool               `json:"empty"`                    //表格是否有数据,后台增加
-	Indexes              []IndexSpec        `json:"indexes,omitempty"`        //表级索引声明（apply 物化）
+	RegisterOnly         bool               `json:"registerOnly,omitempty"`    //仅登记不生成：受保护核心表（user 等）以 crud_log 登记供级联校验/对账，不生成任何产物
+	Indexes              []IndexSpec        `json:"indexes,omitempty"`         //表级索引声明（apply 物化）
 	GeneratedFiles       []string           `json:"generatedFiles,omitempty"` //最近一次成功生成的文件清单
 	Manifest             *CRUDFileManifest  `json:"manifest,omitempty" gorm:"-"`
 }

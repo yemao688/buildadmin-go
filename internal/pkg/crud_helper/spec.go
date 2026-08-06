@@ -29,6 +29,7 @@ type specFile struct {
 	DefaultSortType      string         `mapstructure:"defaultSortType"`
 	FormFields           *[]string      `mapstructure:"formFields"`
 	ColumnFields         *[]string      `mapstructure:"columnFields"`
+	RegisterOnly         bool           `mapstructure:"registerOnly"`
 	DataScope            *specDataScope `mapstructure:"dataScope"`
 	Indexes              []specIndex    `mapstructure:"indexes"`
 	Fields               []specField    `mapstructure:"fields"`
@@ -214,7 +215,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		QuickSearchField: raw.QuickSearchField, DefaultSortField: raw.DefaultSortField, DefaultSortType: raw.DefaultSortType,
 		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
 		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
-		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope,
+		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope, RegisterOnly: raw.RegisterOnly,
 	}
 	indexes, err := parseSpecIndexes(raw.Indexes, fields)
 	if err != nil {

@@ -8,10 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"buildadmin-go/internal/conf"
-	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
-	"gorm.io/gorm"
+	"buildadmin-go/internal/pkg/util"
 )
 
 // 级联注册锚点：reassignable 主实体 repo 生成的 CascadeOwners() 方法体内
@@ -58,42 +56,80 @@ func findCascadeAnchor(content string) (begin, end int, ok bool) {
 	return begin, end, begin >= 0 && end >= 0 && begin < end
 }
 
-// validateInheritParent 校验 inheritFrom 指向的主实体已成功生成且声明了
-// reassignable（其 repo 才有 CascadeOwners() 锚点块可注册），并落实级联硬
-// 契约：主实体主键必须为 id、归属列必须为 admin_id（模板与 cascade:sync 均
-// 按 `Where("id = ?")`/`Select("admin_id")`/JOIN `p.id` 拼接 SQL）。抽成独立
-// 函数便于 MySQL 门禁单测；GenerateFromSpec 在子表生成前调用。
-func validateInheritParent(db *gorm.DB, cfg *conf.Configuration, parentTable string) error {
-	log, err := latestSuccessfulCrudLog(db, cfg, parentTable)
+// DefaultSpecsDir 返回 crud_specs/ 目录（仓库根；镜像内随二进制分发）。
+func DefaultSpecsDir() string {
+	return filepath.Join(util.RootPath(), "crud_specs")
+}
+
+// validateInheritParent 校验 inheritFrom 指向的主实体具备可注册的级联父表
+// 条件，并落实级联硬契约。事实源是 specsDir 目录里的父表 spec（声明式，
+// 随仓库/镜像分发，重装不丢），不再依赖 crud_log 生成历史：
+//   - 父表 spec 必须存在（registerOnly 登记表或普通业务表均可）；
+//   - 父表必须声明 reassignable: true（其 CascadeOwners() 锚点块才可注册）；
+//   - 硬契约：主实体归属列必须为 admin_id（auto 模式 ownerColumn 为空视为
+//     admin_id；required 显式声明时必须是 admin_id）；
+//   - 硬契约：主实体主键必须为 id（模板 `Where("id = ?", ...)` 与
+//     cascade:sync 的 JOIN `p.id` 按此拼接；非 id 主键运行时必炸）；
+//   - 父表 repo 文件必须已存在且含 CascadeOwners() 锚点块（registerOnly 表
+//     手写 repo 自带，业务表由生成器渲染）——applyCascadeAnchor 的落点。
+func validateInheritParent(specsDir, parentTable string) error {
+	parentSpec, err := loadSpecByTable(specsDir, parentTable)
 	if err != nil {
-		return err
+		return fmt.Errorf("inheritFrom parent %q spec not found in %s: %w; add %s/%s.yaml with dataScope.reassignable=true first", parentTable, specsDir, err, specsDir, parentTable)
 	}
-	if log == nil {
-		return fmt.Errorf("inheritFrom parent %q has no successful CRUD generation record; generate the parent table with dataScope.reassignable=true first", parentTable)
-	}
-	if log.Table.DataScope == nil || !log.Table.DataScope.Reassignable {
-		return fmt.Errorf("inheritFrom parent %q was not generated with dataScope.reassignable=true; regenerate the parent table first", parentTable)
+	ds := parentSpec.Table.DataScope
+	if ds == nil || !ds.Reassignable {
+		return fmt.Errorf("inheritFrom parent %q spec %s does not declare dataScope.reassignable=true; add or fix it first", parentTable, specFileNameFor(specsDir, parentTable))
 	}
 	// 硬契约：主实体归属列必须是 admin_id（auto 模式 ownerColumn 为空，视为
 	// 解析为 admin_id；required 显式声明时必须是 admin_id）。
-	if owner := log.Table.DataScope.OwnerColumn; owner != "" && owner != "admin_id" {
+	if owner := ds.OwnerColumn; owner != "" && owner != "admin_id" {
 		return fmt.Errorf("inheritFrom parent %q declares owner column %q; cascade contract requires admin_id", parentTable, owner)
 	}
 	// 硬契约：主实体主键必须为 id（模板 `Where("id = ?", ...)` 与
 	// cascade:sync 的 JOIN `p.id` 按此拼接；非 id 主键运行时必炸）。
-	pks := specPrimaryKeys([]crudmodel.Field(log.Fields))
+	pks := specPrimaryKeys(parentSpec.Fields)
 	if len(pks) != 1 || pks[0] != "id" {
 		return fmt.Errorf("inheritFrom parent %q primary key must be exactly id (cascade contract), got %v", parentTable, pks)
+	}
+	// 锚点落点：父表 repo 必须存在且含 CascadeOwners() 锚点块（registerOnly
+	// 表手写 repo 自带；业务表生成器渲染）。文件系统检查替代 crud_log 的
+	// "已成功生成"证据——比生成历史更直接可靠。
+	repoPath, err := parentRepositoryPath(parentTable)
+	if err != nil {
+		return err
+	}
+	content, err := os.ReadFile(repoPath)
+	if err != nil {
+		return fmt.Errorf("inheritFrom parent %q repository %s not found: %w; generate or hand-write it with a CascadeOwners() anchor block first", parentTable, repoPath, err)
+	}
+	if _, _, ok := findCascadeAnchor(string(content)); !ok {
+		return fmt.Errorf("inheritFrom parent %q repository %s has no cascade anchor block (@cascade:begin/end); add it first", parentTable, repoPath)
 	}
 	return nil
 }
 
+// loadSpecByTable 从 specsDir 目录按逻辑表名加载 spec（文件名须为
+// <table>.yaml，与 crud:generate 的调用约定一致）。目录缺失视为无此 spec。
+func loadSpecByTable(specsDir, table string) (*GenerateOptions, error) {
+	path := specFileNameFor(specsDir, table)
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	return LoadSpec(path)
+}
+
+// specFileNameFor 返回逻辑表名对应的 specs 目录文件路径。
+func specFileNameFor(specsDir, table string) string {
+	return filepath.Join(specsDir, table+".yaml")
+}
+
 // reapplyCascadeAnchors 在主实体重新生成后调用：重新生成会把 CascadeOwners()
-// 渲染为空锚点块（重置窗口），此处按 crud_log 中仍声明 inheritFrom 指向该主
-// 实体的子表逐条重注册（applyCascadeAnchor 整行幂等），消除重置窗口内的静默
-// 级联失效。无引用时为空操作。
-func reapplyCascadeAnchors(db *gorm.DB, cfg *conf.Configuration, parentTable string) error {
-	referrers, err := findInheritReferrers(db, cfg, parentTable)
+// 渲染为空锚点块（重置窗口），此处按 crud_specs/ 中仍声明 inheritFrom 指向该
+// 主实体的子表逐条重注册（applyCascadeAnchor 整行幂等），消除重置窗口内的
+// 静默级联失效。无引用时为空操作。声明事实源是 specs 目录（非 crud_log）。
+func reapplyCascadeAnchors(specsDir, parentTable string) error {
+	referrers, err := findInheritReferrers(specsDir, parentTable)
 	if err != nil {
 		return err
 	}
@@ -105,14 +141,15 @@ func reapplyCascadeAnchors(db *gorm.DB, cfg *conf.Configuration, parentTable str
 		return err
 	}
 	for _, child := range referrers {
-		childLog, err := latestSuccessfulCrudLog(db, cfg, child)
+		childSpec, err := loadSpecByTable(specsDir, child)
 		if err != nil {
-			return err
+			return fmt.Errorf("reapply cascade anchor for child %q: %w", child, err)
 		}
-		if childLog == nil || childLog.Table.DataScope == nil || childLog.Table.DataScope.InheritFrom == nil {
+		inherit := inheritRefOf(childSpec.Table.DataScope)
+		if inherit == nil || inherit.Table != parentTable {
 			continue
 		}
-		if err := applyCascadeAnchor(repoPath, child, childLog.Table.DataScope.InheritFrom.ByColumn); err != nil {
+		if err := applyCascadeAnchor(repoPath, child, inherit.ByColumn); err != nil {
 			return fmt.Errorf("reapply cascade anchor for child %q: %w", child, err)
 		}
 	}
@@ -127,74 +164,103 @@ func inheritRefOf(cfg *data_scope.Config) *data_scope.InheritRef {
 	return cfg.InheritFrom
 }
 
-// staleInheritParent 比较子表旧生成记录与新 spec 的 inheritFrom 指向，返回
-// 需要清理锚点条目的旧主实体表名：旧记录声明过 inheritFrom 且新声明为 nil
-// 或指向不同表时返回旧表名；指向未变（含 byColumn 变化）返回空串（由
-// applyCascadeAnchor 的整行替换处理）。
-func staleInheritParent(oldLog *crudmodel.Log, newInherit *data_scope.InheritRef) string {
-	if oldLog == nil || oldLog.Table.DataScope == nil || oldLog.Table.DataScope.InheritFrom == nil {
-		return ""
-	}
-	oldParent := oldLog.Table.DataScope.InheritFrom.Table
-	if newInherit != nil && newInherit.Table == oldParent {
-		return ""
-	}
-	return oldParent
+// InheritDeclaration 是 crud_specs/ 中一个子表的级联声明：子表名、父表名与
+// 关联列。specs 是级联声明的唯一事实源（随仓库/镜像分发，重装不丢）。
+type InheritDeclaration struct {
+	ChildTable  string
+	ParentTable string
+	ByColumn    string
 }
 
-// latestSuccessfulCrudLogs 读取 crud_log 全部行并按 table_name 去重：每个表只
-// 保留最新一行（create_time desc, id desc），该行 status 不是 success 则跳过该
-// 表——与 CLI cascade:sync 的 loadCrudLogRows 语义一致。
-// 必须"先按最新行去重、再过滤 success"：crud:delete 只把最新一条 success 行原
-// 地翻转为 delete（updateCrudStatus 按 log.ID），若先按 status 过滤，历史遗留
-// 的旧 success 行会把已删除模块复活为悬空引用（评审 blocker，回归见
-// TestFindInheritReferrersMySQL 的 delete 消费场景）。
-func latestSuccessfulCrudLogs(db *gorm.DB, cfg *conf.Configuration) ([]crudmodel.Log, error) {
-	var scanned []struct {
-		TableName string               `gorm:"column:table_name"`
-		Table     crudmodel.JSON_TABLE `gorm:"column:table"`
-		Status    string               `gorm:"column:status"`
+// ScanInheritDeclarations 扫描 specsDir 目录的 *.yaml，返回全部 inheritFrom
+// 声明（确定性排序）。被 cascade:sync 聚合与 findInheritReferrers 引用检查
+// 共用。spec 无法解析（LoadSpec 失败）时 fail-closed 报错：声明损坏必须修复，
+// 对账宁可中断也不静默漏掉潜在脏数据。
+func ScanInheritDeclarations(specsDir string) ([]InheritDeclaration, error) {
+	entries, err := filepath.Glob(filepath.Join(specsDir, "*.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("scan spec dir %q: %w", specsDir, err)
 	}
-	if err := db.Table(crudLogTable(cfg)).
-		Select("table_name", "`table`", "status").
-		Order("create_time desc, id desc").
-		Scan(&scanned).Error; err != nil {
-		return nil, err
-	}
-	seen := make(map[string]struct{}, len(scanned))
-	logs := make([]crudmodel.Log, 0, len(scanned))
-	for _, s := range scanned {
-		if _, ok := seen[s.TableName]; ok {
+	sort.Strings(entries)
+	decls := make([]InheritDeclaration, 0)
+	for _, path := range entries {
+		spec, err := LoadSpec(path)
+		if err != nil {
+			return nil, fmt.Errorf("load spec %q: %w", path, err)
+		}
+		inherit := inheritRefOf(spec.Table.DataScope)
+		if inherit == nil || inherit.Table == "" || inherit.ByColumn == "" {
 			continue
 		}
-		seen[s.TableName] = struct{}{}
-		if s.Status != "success" {
-			continue
-		}
-		logs = append(logs, crudmodel.Log{Tablename: s.TableName, Table: s.Table})
+		decls = append(decls, InheritDeclaration{
+			ChildTable:  spec.Table.Name,
+			ParentTable: inherit.Table,
+			ByColumn:    inherit.ByColumn,
+		})
 	}
-	return logs, nil
+	return decls, nil
 }
 
-// findInheritReferrers 扫描 crud_log 最新 success 记录，返回 inheritFrom 指向
-// parentTable 的子表名列表（确定性排序）。主实体自身的记录不计入引用。
-func findInheritReferrers(db *gorm.DB, cfg *conf.Configuration, parentTable string) ([]string, error) {
-	logs, err := latestSuccessfulCrudLogs(db, cfg)
+// findInheritReferrers 扫描 specsDir 中声明 inheritFrom 指向 parentTable 的
+// 子表名列表（确定性排序）。主实体自身的 spec 不计入引用。
+func findInheritReferrers(specsDir, parentTable string) ([]string, error) {
+	decls, err := ScanInheritDeclarations(specsDir)
 	if err != nil {
 		return nil, err
 	}
 	var referrers []string
-	for _, log := range logs {
-		if log.Tablename == parentTable {
+	for _, decl := range decls {
+		if decl.ChildTable == parentTable {
 			continue
 		}
-		if log.Table.DataScope != nil && log.Table.DataScope.InheritFrom != nil &&
-			log.Table.DataScope.InheritFrom.Table == parentTable {
-			referrers = append(referrers, log.Tablename)
+		if decl.ParentTable == parentTable {
+			referrers = append(referrers, decl.ChildTable)
 		}
 	}
 	sort.Strings(referrers)
 	return referrers, nil
+}
+
+// cleanupStaleCascadeAnchors 在子表生成/重新生成前清理旧的级联锚点注册：
+// 扫描 specsDir 中全部声明 reassignable 的父表 repo 锚点块，凡含 childTable
+// 条目的（无论其 spec 当前是否仍指向该父表）一律移除——子表已独立或改指向时
+// 旧父表锚点里的注册条目不再级联它。返回实际被清理的父表 repo 路径列表（调用
+// 方纳入快照，失败可回滚）。事实源是 specs 目录与 repo 锚点块本身，不依赖
+// crud_log 生成历史。
+func cleanupStaleCascadeAnchors(specsDir, childTable string) ([]string, error) {
+	entries, err := filepath.Glob(filepath.Join(specsDir, "*.yaml"))
+	if err != nil {
+		return nil, fmt.Errorf("scan spec dir %q: %w", specsDir, err)
+	}
+	sort.Strings(entries)
+	cleaned := make([]string, 0)
+	for _, path := range entries {
+		spec, err := LoadSpec(path)
+		if err != nil {
+			return nil, fmt.Errorf("load spec %q: %w", path, err)
+		}
+		ds := spec.Table.DataScope
+		if ds == nil || !ds.Reassignable {
+			continue
+		}
+		repoPath, err := parentRepositoryPath(spec.Table.Name)
+		if err != nil {
+			return nil, err
+		}
+		content, err := os.ReadFile(repoPath)
+		if err != nil {
+			// 父表 repo 缺失：无锚点可清理，跳过（父表未生成时没有级联注册）。
+			continue
+		}
+		if _, _, ok := findCascadeAnchor(string(content)); !ok {
+			continue
+		}
+		if err := removeCascadeAnchor(repoPath, childTable); err != nil {
+			return nil, fmt.Errorf("cleanup stale cascade anchor for child %q from parent %q: %w", childTable, spec.Table.Name, err)
+		}
+		cleaned = append(cleaned, repoPath)
+	}
+	return cleaned, nil
 }
 
 // cascadeAnchorEntryPattern 匹配锚点块内指向指定子表的一行注册条目。空白容忍

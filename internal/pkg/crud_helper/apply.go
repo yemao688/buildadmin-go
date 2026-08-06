@@ -36,6 +36,7 @@ const (
 	ApplyUnchanged ApplyAction = "unchanged"
 	ApplyRebuilt   ApplyAction = "rebuilt"
 	ApplyBlocked   ApplyAction = "blocked"
+	ApplySkipped   ApplyAction = "skipped" // registerOnly 登记 spec：仅 crud_log 登记，不建表不改表
 )
 
 type ApplyOptions struct {
@@ -281,6 +282,12 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 	if err != nil {
 		return nil, err
 	}
+	// registerOnly 登记 spec：仅 crud_log 登记（由 crud:generate 完成），
+	// apply 不建表不改表不校验——受保护核心表必须静默跳过（否则 setup/migrate
+	// 尾部 apply 扫描 crud_specs/ 会被受保护拒绝卡死）。
+	if spec.Table.RegisterOnly {
+		return &ApplyTableResult{Table: spec.Table.Name, Action: ApplySkipped}, nil
+	}
 	if IsProtectedTable(spec.Table.Name) {
 		return nil, fmt.Errorf("crud apply is forbidden for protected table %q", spec.Table.Name)
 	}
@@ -437,6 +444,11 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 	spec, err := LoadSpec(specPath)
 	if err != nil {
 		return nil, err
+	}
+	// registerOnly 登记 spec：apply 静默跳过（建表/改表由框架 core snapshot 与
+	// 手写迁移负责，生成器不物化受保护核心表）。
+	if spec.Table.RegisterOnly {
+		return &ApplyTableResult{Table: spec.Table.Name, Action: ApplySkipped}, nil
 	}
 	if IsProtectedTable(spec.Table.Name) {
 		return nil, fmt.Errorf("crud apply is forbidden for protected table %q", spec.Table.Name)

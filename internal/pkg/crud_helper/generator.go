@@ -85,6 +85,12 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			}
 		}
 	}()
+	if opts.Table.RegisterOnly {
+		if !IsProtectedTable(opts.Table.Name) {
+			return nil, fmt.Errorf("registerOnly is reserved for protected core tables; %q is not protected", opts.Table.Name)
+		}
+		return registerOnlyFromSpec(opts)
+	}
 	if IsProtectedTable(opts.Table.Name) {
 		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", opts.Table.Name)
 	}
@@ -94,8 +100,8 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
 		return nil, err
 	}
-	// 方案 A：inheritFrom 子表生成前校验主实体已以 reassignable 生成（其 repo
-	// 才有 CascadeOwners() 锚点可注册），并预推导主实体 repo 路径纳入快照。
+	// 方案 A：inheritFrom 子表生成前校验父表 spec 已声明 reassignable（其 repo
+	// 才有 CascadeOwners() 锚点可注册），并预推导父表 repo 路径纳入快照。
 	parentRepoPath := ""
 	if opts.Table.DataScope != nil && opts.Table.DataScope.InheritFrom != nil {
 		// 标识符先于路径推导校验：失败信息指向 spec 而不是文件系统错误。
@@ -107,7 +113,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 				return nil, fmt.Errorf("invalid %s %q: %w", id.kind, id.value, err)
 			}
 		}
-		if err := validateInheritParent(db, cfg, opts.Table.DataScope.InheritFrom.Table); err != nil {
+		if err := validateInheritParent(DefaultSpecsDir(), opts.Table.DataScope.InheritFrom.Table); err != nil {
 			return nil, err
 		}
 		parentRepoPath, err = parentRepositoryPath(opts.Table.DataScope.InheritFrom.Table)
@@ -115,18 +121,26 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			return nil, err
 		}
 	}
-	// 子表重新生成（spec 去掉 inheritFrom 或改指向）时，旧主实体锚点里的
-	// 注册条目会残留并继续级联已独立的子表——必须清理并纳入快照。
-	success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name)
+	// 子表重新生成（spec 去掉 inheritFrom 或改指向）时，旧父表锚点里的注册
+	// 条目会残留并继续级联已独立的子表——扫描 crud_specs/ 中所有 reassignable
+	// 父表的锚点块，凡含本子表条目者一律清理（幂等），并纳入快照。事实源是
+	// specs 目录与 repo 锚点块本身（crud_log 生成历史不参与）。
+	staleParentRepoPaths, err := cleanupStaleCascadeAnchors(DefaultSpecsDir(), opts.Table.Name)
 	if err != nil {
 		return nil, err
 	}
 	oldParentRepoPath := ""
-	if staleParent := staleInheritParent(success, inheritRefOf(opts.Table.DataScope)); staleParent != "" {
-		oldParentRepoPath, err = parentRepositoryPath(staleParent)
-		if err != nil {
-			return nil, err
+	for _, p := range staleParentRepoPaths {
+		if p != parentRepoPath {
+			oldParentRepoPath = p
+			break
 		}
+	}
+	// 业务子表自身的生成历史仍由 crud_log 维护（manifest 冲突检测、删除消费
+	// 语义）——registerOnly 的级联声明判断不参与此处。
+	success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name)
+	if err != nil {
+		return nil, err
 	}
 	// 设计器曾发送的改名/删字段/排序 designChange 在后端被静默丢弃（生成代码
 	// 按新字段名产出，数据库旧列原样保留 → 数据孤儿）。框架纪律：破坏性变更
@@ -292,9 +306,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	}
 	if opts.Table.DataScope != nil && opts.Table.DataScope.Reassignable {
 		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
-		// 立即按 crud_log 中仍声明 inheritFrom 指向本表的子表重注册（整行幂等），
-		// 消除重置窗口内的静默级联失效；其 repo 已在快照内，失败可整体回滚。
-		if err := reapplyCascadeAnchors(db, cfg, opts.Table.Name); err != nil {
+		// 立即按 crud_specs/ 中仍声明 inheritFrom 指向本表的子表重注册（整行
+		// 幂等），消除重置窗口内的静默级联失效；其 repo 已在快照内可整体回滚。
+		if err := reapplyCascadeAnchors(DefaultSpecsDir(), opts.Table.Name); err != nil {
 			return fail("cascade anchor heal", err)
 		}
 	}
@@ -440,8 +454,8 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	}
 	// 方案 A：删除主实体前检查 inbound inheritFrom 引用——存在声明指向本表的
 	// 子表时拒绝删除（否则子表 Add 运行时悬空、cascade:sync 被阻塞、子表也
-	// 无法重新生成）。主实体自身的记录不计入引用。
-	if referrers, err := findInheritReferrers(db, cfg, tableName); err != nil {
+	// 无法重新生成）。声明事实源是 crud_specs/（主实体自身的 spec 不计入）。
+	if referrers, err := findInheritReferrers(DefaultSpecsDir(), tableName); err != nil {
 		return err
 	} else if len(referrers) > 0 {
 		return fmt.Errorf("refusing to delete table %q: child table(s) %s still declare inheritFrom pointing at it; delete those child tables or regenerate them with a different inheritFrom first", tableName, strings.Join(referrers, ", "))
