@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.1.1
+
+> 级联声明事实源批次：inheritFrom/reassignable 声明全面改为 crud_specs/ 目录驱动（spec 存在即生效，重装不丢、无需逐表跑生成），registerOnly 受保护核心表登记落地（user/user_money_log 内置 spec），cascade:sync 对账改 specs 扫描 + information_schema 表存在性检查，user 手写 CascadeOwners() 锚点块 + 运行时级联同步对齐生成器模板语义。
+
+- **Changed (级联声明事实源):** `validateInheritParent`/`findInheritReferrers`/`reapplyCascadeAnchors`/`cleanupStaleCascadeAnchors`（新增）全部从 crud_log 生成历史改为 `crud_specs/*.yaml` 声明驱动——父表 spec 存在且 `reassignable: true` 即通过，父表 repo 锚点块存在性用文件系统检查（比 crud_log 的"已生成"证据更直接可靠）；子表重新生成时扫描全部 reassignable 父表锚点块清理旧条目。
+- **Added (registerOnly 登记):** 受保护核心表（user/user_money_log）`registerOnly: true` 声明即登记（spec 存在即生效，不写 crud_log、不生成代码、apply 返回 skipped）；`crud:generate` 对其仅为幂等校验。框架内置 `crud_specs/user.yaml`（父表）与 `crud_specs/user_money_log.yaml`（子表，含完整前端设计类型：remoteSelect/remoteField username_text、radio/select、validator、索引声明）。
+- **Changed (cascade:sync):** 对账聚合从 `loadCrudLogRows` 改为 `ScanInheritDeclarations`（specs 目录扫描，随仓库/镜像分发、重装不丢）；执行前用 information_schema 检查父/子表存在性，缺失时给出语义化错误（提示 `crud:apply`）替代裸 1146。
+- **Added (user 级联):** `internal/admin/repository/user.go` 手写 `CascadeOwners()` 锚点块（初始含 user_money_log 条目），`EditWithActor` 变更归属时按锚点遍历级联 UPDATE 子表（对齐生成器模板语义）；`sync/validateUserLogOwners` 从硬编码 user_money_log 改为遍历注册表。
+- **Fixed (server):** `internal/commands/server.go` 未缓冲 os.Signal channel 修复（`make(chan os.Signal, 1)`，vet 报错）。
+- **Changed (docs):** `crud-generation.md` 重写 registerOnly 小节（specs 驱动语义 + 与真实表/前端设计一致的完整示例）；AGENTS.md 更新受保护核心表登记表述。
+
 ## v3.1.0
 
 > 管理员层级能力批次：树形列表与确定性邀请码、admin_group 鉴权对齐 PHP 上游、余额变动类型收紧、CRUD 级联归属、EnsureSpecTable 业务迁移支持、web 端开发文档统一（framework-web.md 取代 frontend-portal-guide.md）。
