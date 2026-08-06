@@ -22,10 +22,14 @@ func writeTestSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 
 // TestValidateInheritParent 验证 inheritFrom 父表校验（specs 驱动）：
 // 父表 spec 缺失或未声明 reassignable 时拒绝；硬契约（owner 列、主键）落实。
-// repo 落点（internal/admin/repository/<table>.go 含锚点块）走真实仓库检查：
-// 仓库中不存在的业务表（如 seller_user）在 spec 合法后仍因 repo 缺失被拒。
+// repo 落点（internal/admin/repository/<table>.go 含锚点块）检查走可注入的
+// repoRootOverride：隔离根下"仓库无该表 repo"恒成立，业务 fork 拥有
+// seller_user.go 时测试也不失真。
 func TestValidateInheritParent(t *testing.T) {
 	specsDir := t.TempDir()
+	// 隔离仓库状态：repo 落点检查指向临时根，不依赖真实仓库内容。
+	repoRootOverride = t.TempDir()
+	t.Cleanup(func() { repoRootOverride = "" })
 
 	// 无父表 spec → 拒绝
 	err := validateInheritParent(specsDir, "seller_user")
@@ -44,6 +48,19 @@ func TestValidateInheritParent(t *testing.T) {
 	err = validateInheritParent(specsDir, "seller_user")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "repository")
+
+	// repo 文件存在但无锚点块（如未带 CascadeOwners() 的裸 package）→ 拒绝
+	repoDir := filepath.Join(repoRootOverride, "internal", "admin", "repository")
+	require.NoError(t, os.MkdirAll(repoDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte("package repository\n"), 0644))
+	err = validateInheritParent(specsDir, "seller_user")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no cascade anchor block")
+
+	// repo 文件含锚点块 → 通过
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte(anchorFixture("SellerUser")), 0644))
+	err = validateInheritParent(specsDir, "seller_user")
+	require.NoError(t, err)
 
 	// 硬契约：owner 列非 admin_id → 拒绝（owner 校验先于 repo 落点检查）
 	writeTestSpec(t, specsDir, "seller_user", "dataScope:\n  mode: required\n  ownerColumn: agent_id\n  assignOnCreate: true\n  reassignable: true\n")

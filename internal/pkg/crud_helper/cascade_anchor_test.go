@@ -204,7 +204,11 @@ func TestCleanupStaleCascadeAnchorsNoop(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, cleaned)
 
-	// reassignable 父表但仓库无对应 repo（seller_user 未生成）→ 跳过，空结果
+	// reassignable 父表但仓库无对应 repo（seller_user 未生成）→ 跳过，空结果。
+	// 隔离仓库状态：fork 拥有 seller_user.go 时真实仓库断言会失真，override 根
+	// 下该表恒无 repo。
+	repoRootOverride = t.TempDir()
+	t.Cleanup(func() { repoRootOverride = "" })
 	writeTestSpec(t, specsDir, "seller_user", "dataScope:\n  mode: auto\n  reassignable: true\n")
 	cleaned, err = cleanupStaleCascadeAnchors(specsDir, "order")
 	require.NoError(t, err)

@@ -285,6 +285,10 @@ func (s *UserRepository) validateUserOwner(ctx context.Context, tx *gorm.DB, own
 	return nil
 }
 
+// validateUserLogOwners 校验变更归属前所有级联子表（CascadeOwners 注册表）中
+// 该 user 的流水归属一致，防止归属迁移静默漂移。注册表遍历 + identifier 校验
+// 与 syncUserLogOwners 对称。缺失的子表（注册表指向的表尚未建/已被删）直接
+// 跳过：没有行需要校验，与 cascade:sync 的表存在性检查语义一致。
 func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
 	for _, owner := range s.CascadeOwners() {
 		table := owner.Table
@@ -308,6 +312,11 @@ func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int3
 		if err := data_scope.ValidateIdentifier(ownerColumn); err != nil {
 			return err
 		}
+		// 缺失的子表没有行需要校验，跳过；与 cascade:sync 的表存在性检查
+		// 语义一致（子表未建/被删时 Edit 不应失败）。
+		if !tx.Migrator().HasTable(s.config.Database.Prefix + table) {
+			continue
+		}
 		var logs []struct{ AdminID *int32 }
 		if err := tx.Table(s.config.Database.Prefix + table).Clauses(clause.Locking{Strength: "UPDATE"}).Select(ownerColumn).Where(byColumn+" = ?", userID).Find(&logs).Error; err != nil {
 			return err
@@ -321,6 +330,9 @@ func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int3
 	return nil
 }
 
+// syncUserLogOwners 变更归属后把 CascadeOwners 注册表内该 user 的行同步到新
+// 归属。与 validateUserLogOwners 对称地跳过缺失子表：表不存在则没有行需要
+// 同步，业务子表未建/被删时归属变更不因 1146 失败。
 func (s *UserRepository) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
 	for _, owner := range s.CascadeOwners() {
 		table := owner.Table
@@ -343,6 +355,9 @@ func (s *UserRepository) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) e
 		}
 		if err := data_scope.ValidateIdentifier(ownerColumn); err != nil {
 			return err
+		}
+		if !tx.Migrator().HasTable(s.config.Database.Prefix + table) {
+			continue
 		}
 		if err := tx.Table(s.config.Database.Prefix + table).Where(byColumn+" = ?", userID).Update(ownerColumn, ownerID).Error; err != nil {
 			return err

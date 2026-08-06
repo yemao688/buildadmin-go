@@ -48,6 +48,26 @@ func newScopeFixture(t *testing.T) *scopeFixture {
 	f := &scopeFixture{db: db, cfg: cfg, admins: map[int32]Admin{}, users: map[int32]model.User{}}
 	require.NoError(t, db.AutoMigrate(&Admin{}, &AdminGroup{}, &model.User{}))
 	require.NoError(t, db.Exec("CREATE TABLE `"+prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, user_id INT NOT NULL, money DECIMAL(12,2) NOT NULL, `before` DECIMAL(12,2) NOT NULL, `after` DECIMAL(12,2) NOT NULL, `type` VARCHAR(30) NOT NULL DEFAULT 'system', memo VARCHAR(255) NOT NULL DEFAULT '', create_time BIGINT NOT NULL)").Error)
+	// 级联注册表联动建表：UserService.Edit 变更归属会遍历 CascadeOwners()，
+	// 业务 fork 追加子表注册（如 user_recharge/user_withdraw）后未建表会 1146。
+	// 这里为除 user_money_log（上方已完整建表）外的每张注册表建最小表，列名
+	// 取条目的 byColumn/ownerColumn；Cleanup 联动 DROP。
+	for _, owner := range adminmodel.NewUserRepository(db, cfg, data_scope.NewClosureEnforcer(cfg)).CascadeOwners() {
+		if owner.Table == "" || owner.Table == "user_money_log" {
+			continue
+		}
+		byColumn := owner.ByColumn
+		if byColumn == "" {
+			byColumn = "user_id"
+		}
+		ownerColumn := owner.OwnerColumn
+		if ownerColumn == "" {
+			ownerColumn = "admin_id"
+		}
+		table := prefix + owner.Table
+		require.NoError(t, db.Exec("CREATE TABLE `"+table+"` (id INT AUTO_INCREMENT PRIMARY KEY, `"+byColumn+"` INT NOT NULL, `"+ownerColumn+"` INT NOT NULL DEFAULT 0)").Error)
+		t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS `" + table + "`") })
+	}
 	require.NoError(t, db.Exec("ALTER TABLE `"+prefix+"user` MODIFY `last_login_ip` VARCHAR(50) NOT NULL DEFAULT '', MODIFY `login_failure` INT NOT NULL DEFAULT 0").Error)
 	closure := prefix + "admin_closure"
 	require.NoError(t, db.Exec("CREATE TABLE `"+closure+"` (`ancestor_id` INT NOT NULL, `descendant_id` INT NOT NULL, `depth` INT NOT NULL, PRIMARY KEY (`ancestor_id`,`descendant_id`), KEY (`descendant_id`,`ancestor_id`)) ENGINE=InnoDB").Error)

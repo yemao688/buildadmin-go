@@ -26,10 +26,20 @@ func cascadeAnchorEntry(table, byColumn string) string {
 	return "\t\t{Table: \"" + table + "\", ByColumn: \"" + byColumn + "\", OwnerColumn: \"admin_id\"},"
 }
 
+// repoRootOverride 是仅供测试注入的仓库根覆盖（空值 = 默认 util.RootPath()）。
+// 下游业务 fork 拥有自己的业务表 repo（如 seller_user.go）时，依赖"真实仓库
+// 无该表 repo"的测试会失真的——用临时根隔离真实仓库状态，使 repo 落点检查
+// 在隔离根下成立。生产代码路径不设置它。
+var repoRootOverride string
+
 // parentRepositoryPath 推导主实体 repo 文件路径（拍平布局
 // internal/admin/repository/<table>.go），经既有路径解析与绝对路径归属校验
-// 防注入路径。
+// 防注入路径。测试注入 repoRootOverride 时直接按覆盖根拼接（跳过解析校验，
+// 仅供测试使用）。
 func parentRepositoryPath(table string) (string, error) {
+	if repoRootOverride != "" {
+		return filepath.Join(repoRootOverride, filepath.FromSlash("internal/admin/repository"), table+".go"), nil
+	}
 	info, err := ParseRepositoryNameData(table, "")
 	if err != nil {
 		return "", err
