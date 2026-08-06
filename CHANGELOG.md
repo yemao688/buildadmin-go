@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.1.0
+
+> 管理员层级能力批次：树形列表与确定性邀请码、admin_group 鉴权对齐 PHP 上游、余额变动类型收紧、CRUD 级联归属、EnsureSpecTable 业务迁移支持、web 端开发文档统一（framework-web.md 取代 frontend-portal-guide.md）。
+
+- **Added (管理员树形列表):** 后端 `ListTree`（`limit=-1` 全量）经 `tree.AssembleChild` 组装 children 返回（`isTree=1` 分支、`adminTableTreeLeaf` 导出 Children）；select options 树形前缀组装到 username（对齐前端 remoteSelect `field: 'username'`）；前端 el-table `tree-props` 渲染 + `unfold` 按钮 + 操作列 `fixed: 'right'`。
+- **Added (确定性邀请码):** 邀请码由 `HMAC-SHA256(token.key, "admin-invite:"+id)` 派生 6 位（32 字符表剔除 0/O/1/I），`gorm:"-"` 不落库、固定不可改、无写入路径；列表新增邀请码列（角色组后），移除邮箱/手机/个性签名/头像（表格+表单）。
+- **Added (CRUD 级联归属):** data_scope 支持 `reassignable`/`inheritFrom`、cascade anchors、`cascade:sync` 对账 CLI。
+- **Added (EnsureSpecTable 业务迁移):** business 迁移可用 `EnsureSpecTable` 按 spec 幂等物化依赖表（解决种子迁移与 apply 的时序矛盾）；Docker 镜像内置 crud_specs；迁移锁内二次 advisory lock 降级（ConnPool 已 pin 时跳过）。
+- **Fixed (手写 repo 越权):** List 拆分 `countDB`/`findDB` 独立 statement——Count 会重置 GORM statement，先 Count 再 Find 导致 Find 丢失 scope/搜索 WHERE（受限管理员看到上级数据）。
+- **Fixed (admin_group 鉴权):** 对齐 PHP 上游 `allAuthAndOthers`——非超管列表始终按"自己所在组 ∪ 有资格管理的组"过滤、`absoluteAuth=1` 只显示有资格组；仅超管可建 `rules="*"` 组；非超管超出可分配权限范围被拒。
+- **Fixed (moneyLog):** 余额变动类型仅超管可指定（非超管强制 `system`），备注非必填。
+- **Fixed (country):** 响应结构补齐 json tag（`/api/index/index` 与 `/admin/index/index` 的 language/currency 键名对齐 PHP 上游小写）；三表 model 补齐 default tag。
+- **Fixed (生成器 default tag):** 按 spec 补 default（EMPTY STRING/INPUT 映射进 gorm tag，重新生成不再丢 default）。
+- **Changed (docs):** web 端开发文档统一为 `docs/framework-web.md`（官方 WEB 专项 11 页整理 + 本框架差异与红线 + 业务门户接入约定并入，删除 `docs/frontend-portal-guide.md`）；AGENTS.md 与 framework-workflow.md 增加"修改 web 框架前先读该文档"引导。
+
 ## v3.0.6
 
 > 正式版质量批次：索引物化双路径统一、spec 校验加固、设计器破坏性变更显式拒绝、framework 常驻 Verify 拆分、命名机械执法覆盖 admin/api、Record 请求体上限。
@@ -44,10 +59,10 @@
 > 门户接线机制落地：新增公共 `/api/index/index` 初始化端点与前端 `initialize` 封装、门户语言目录按注册表解析（根门户默认 `frontend`、带前缀门户一行注册）、删除休眠的会员中心前端管线、cron 自注册 + 门户接入指南。
 
 - **Added (api, 初始化):** 新增公共 `GET /api/index/index` 端点（public 集合）——下发 `site`（siteName/version/recordNumber/cdnUrl 三段链/upload 配置/cdnUrlParams）、`userInfo`（请求带有效 `ba-user-token` 时回填）、`language`、`currency`；前端补齐 `web/src/api/frontend/index.ts` 的 `initialize()` 封装（site → siteConfig store、userInfo → userInfo store、置 initialized 标记），业务门户入口调用即可，无需自建请求管线。
-- **Added (cron):** 定时任务自注册机制落地（内部 init + Register 模式，对齐 migrations/业务包扩展轨道），并配套 `docs/frontend-portal-guide.md` 门户接入指南。
+- **Added (cron):** 定时任务自注册机制落地（内部 init + Register 模式，对齐 migrations/业务包扩展轨道），并配套 `docs/framework-web.md` 门户接入指南。
 - **Changed (i18n, 门户语言目录):** `web/src/router/index.ts` 语言包按需加载由"路径首段即门户名"的启发式改为显式**门户语言目录注册表**（`portalLangDirs`：后台固定映射 `backend`，业务带前缀门户 `/seller`、`/buyer` 追加一行注册）——修复无前缀根门户页面（`/index`、`/user/login`…）被误判为独立门户、买家端语言包整体失效的问题；根门户（`/` 及其全部无前缀页面）默认 `./frontend/`，零注册即生效。
 - **Removed (休眠管线):** 删除从未接线的会员中心前端管线——`memberCenterBase.ts`（`/user` 骨架）、`memberCenter` store、`utils/router.ts` 的 `handleFrontendRoute` 与 `MemberCenter` 接口、`SiteConfig.headNav/setHeadNav`；`iframe` 路由基址改用 `adminBaseRoute` 直接取值；`lang/autoload.ts` 同步清理失效映射。
-- **Changed (docs):** `docs/frontend-portal-guide.md` 重写为纯框架约定（门户顶级目录组织、静态路由接管 `/`、门户语言目录注册表、token 域注册、refreshType 后端配套），删除失效的会员中心语义与业务守卫样板。
+- **Changed (docs):** `docs/framework-web.md` 门户接入约定重写为纯框架约定（门户顶级目录组织、静态路由接管 `/`、门户语言目录注册表、token 域注册、refreshType 后端配套），删除失效的会员中心语义与业务守卫样板。
 
 ## v3.0.2
 
