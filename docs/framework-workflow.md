@@ -156,6 +156,10 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
+> 修改/调整 web 框架（组件、指令、样式、表格/表单、语言、门户接入等）前，
+> 必须先阅读 [`framework-web.md`](framework-web.md)——web 端唯一权威开发文档
+> （官方 WEB 专项整理 + 本框架差异与红线 + 业务门户接入约定）。
+
 后端默认使用 `APP_PORT=9900`，Vite 默认端口是 `9918` 并绑定 `0.0.0.0`；开发环境的 `VITE_AXIOS_BASE_URL` 默认指向 `http://localhost:9900`。修改后端端口时同步使用 `APP_PORT`，不要在 YAML 中设置 `app.port`。
 
 ### 业务 CRUD

@@ -39,6 +39,7 @@
 
 - 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
+- **web 前端框架开发与调整（组件、指令、样式、表格/表单、语言、门户接入等）必须先读 [`docs/framework-web.md`](docs/framework-web.md)**——它是 web 端唯一权威开发文档（官方 WEB 专项整理 + 本框架差异与红线 + 业务门户接入约定），修改/调整 web 框架前必须先看文档；不要再按官方 doc.buildadmin.com 零散页面或旧 `frontend-portal-guide.md` 行事（后者已并入该文档）。
 - 真实入口和 wiring 是 `cmd/server/main.go`（28 行极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。
 - `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 `setup` 安装器写入（只写 MySQL 连接和生成的 `token.key`）。全新检出且没有它时，任何命令（含默认 serve）打印 setup 安装指引并等待 3 秒后退出，不会自动复制基座。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
