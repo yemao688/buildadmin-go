@@ -35,8 +35,8 @@ func runServer(cmd *cobra.Command, appBootstrap AppBootstrap) {
 		panic(err)
 	}
 
-	// 等待中断信号以优雅地关闭应用
-	quit := make(chan os.Signal)
+	// 等待中断信号以优雅地关闭应用（带缓冲，避免信号丢失）
+	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 

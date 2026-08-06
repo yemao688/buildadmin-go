@@ -122,7 +122,7 @@ go run ./cmd/server crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...
 go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ```
 
-退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。
+退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。受保护核心表（`user`/`user_money_log` 等）可经 `registerOnly` 声明为级联父表/子表——框架自带 `crud_specs/user.yaml`（父表）与 `crud_specs/user_money_log.yaml`（子表），**spec 文件存在即登记生效**（不写 crud_log、不生成代码，重装不丢），业务子表即可 `inheritFrom: { table: user }` 并参与 `cascade:sync` 对账；登记形态与边界见 `docs/crud-generation.md` 的 registerOnly 小节。
 
 每张业务表都应带有 `bigint` 类型的 `create_time` 和 `update_time`；生成的 CRUD 代码维护这两个字段，它们不进入请求 DTO。
 

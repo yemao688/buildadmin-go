@@ -199,7 +199,7 @@ func (s *SellerUserRepository) CascadeOwners() []data_scope.CascadeOwner {
 - 子表 `admin_id` 仍是系统字段：表单/DTO/编辑列全部剥离，无手动修改入口。
 
 要求：
-- 子表生成前校验（`validateInheritParent`）：`inheritFrom.table` 必须有成功生成记录且 `reassignable: true`（否则 `crud:generate` 拒绝，错误信息提示先生成主实体）；同时落实硬契约——主实体主键必须为 `id`、归属列必须为 `admin_id`（`required` 声明其它 owner 列或主键非 `id` 的主实体被拒绝）。**受保护核心表（`user`/`admin` 等）不能作为 inheritFrom 父表**——它们不能以 CRUD 流程生成，`validateInheritParent` 必拒。
+- 子表生成前校验（`validateInheritParent`）：`inheritFrom.table` 必须有成功生成记录且 `reassignable: true`（否则 `crud:generate` 拒绝，错误信息提示先生成主实体）；同时落实硬契约——主实体主键必须为 `id`、归属列必须为 `admin_id`（`required` 声明其它 owner 列或主键非 `id` 的主实体被拒绝）。**受保护核心表（`user`/`admin` 等）默认不能作为 inheritFrom 父表**——它们不能以 CRUD 流程生成；但可通过 `registerOnly` 登记模式开放为级联父表/子表（见下文「受保护核心表的 registerOnly 登记」）。
 - `inheritFrom` → 必须 `reassignable: false`（互斥）；必须解析出 owner 列且为 `admin_id`（`mode: none`、无 owner 列或非 `admin_id` 列会校验失败）。
 - `inheritFrom.table`/`byColumn` 须为安全静态标识符（拒绝点号/空格/引号）；`inheritFrom.table` 不得是本表；`inheritFrom.byColumn` 必须是子表自身字段、整数兼容，且**不得 `formBuildExclude`**（Add 请求必须提交它以定位主实体行，被排除会恒落 0 → Add 恒 `ErrRecordNotFound`）。
 - 子表 owner 列必须是 int32 兼容类型（`bigint` 被生成期拒绝，理由同 reassignable 一节）。
@@ -221,6 +221,150 @@ go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对
 - **byColumn 建议建索引**：级联 UPDATE 按 `{byColumn} = 主键` 过滤，无索引时全表扫描且行锁放大；子表 spec 用 `indexes:` 为 byColumn 声明索引（如 `idx_user_id`），`crud:apply` 负责物化。
 - **级联只有一级**：`inheritFrom` 与 `reassignable` 互斥，运行时级联只在"主实体 Edit 改归属 → 子表回首"这一层发生。链式 A→B→C 场景（B 以 A 为主实体、C 以 B 为主实体）中，A 改归属的裸 UPDATE 不会触发 B→C 的级联，C 的归属漂移靠 B 自身 Edit 回首或 `cascade:sync B`（CLI 按 B 的声明对账 C）修复。
 - **主实体重新生成会重置锚点（自动重注册）**：重新 `crud:generate` 主实体本身会把 `CascadeOwners()` 渲染为空锚点；生成器随即按 `crud_log` 中仍声明 `inheritFrom` 指向它的子表逐条重注册（整行幂等），重置窗口已消除。手改锚点内容仍会被重新生成重置（自定义注册请新增独立文件/方法）。
+
+### 受保护核心表的 `registerOnly` 登记（手写父表/子表）
+
+受保护核心表（`user`、`user_money_log`、`admin` 等，见 `IsProtectedTable` 清单）不参与 CRUD 代码生成——它们的 repo/handler 由框架手写维护。业务子表经 `inheritFrom` 级联它们、`cascade:sync` 对账聚合它们时，**声明事实源是 `crud_specs/` 目录本身：spec 文件存在即登记生效**，不依赖 `crud_log` 生成历史（重新安装/全新安装后 crud_log 为空也能通过校验与对账）。`registerOnly` 标记只是声明"本 spec 仅用于登记，不生成任何产物"。
+
+```yaml
+# crud_specs/user.yaml —— 父表登记（业务子表可 inheritFrom: { table: user }）
+name: user
+comment: 会员表
+registerOnly: true            # 仅登记不生成（只允许受保护核心表）
+quickSearchField: [username, nickname]
+columnFields: [id, admin_id, username, nickname, mobile, money, last_login_ip, last_login_time, create_time, status]
+formFields: [username, nickname, admin_id, avatar, email, mobile, password, status]
+dataScope:
+  mode: auto
+  reassignable: true          # 父表登记：改归属入口 + 锚点注册条件
+indexes:                      # 按真实表索引声明（apply 跳过，不物化）
+  - name: username
+    unique: true
+    columns: [username]
+  - name: idx_admin_id
+    unique: false
+    columns: [admin_id]
+fields:                       # 必须含 id 主键与 admin_id 归属列（硬契约校验）；其余字段按真实表+前端设计类型声明
+  - name: id
+    type: int
+    unsigned: true
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    comment: ID
+  - name: admin_id
+    type: int
+    unsigned: true
+    null: false
+    designType: remoteSelect
+    comment: 上级代理
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: username
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/admin.go
+      remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
+      width: 130
+      comSearchRender: remoteSelect
+      remote: "pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true }"
+  - name: username
+    type: varchar
+    length: 32
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 用户名
+    form:
+      validator: [required, account]
+    table:
+      operator: LIKE
+  # ...其余字段按真实表与前端设计类型声明
+```
+
+```yaml
+# crud_specs/user_money_log.yaml —— 子表登记（user 变更归属时级联同步本表）
+name: user_money_log
+comment: 会员余额变动表
+registerOnly: true
+columnFields: [id, admin_id, user_id, user.username, money, type, before, after, memo, create_time]
+formFields: [user_id, money, type, memo]
+dataScope:
+  mode: auto
+  inheritFrom:
+    table: user              # 父表（crud_specs/user.yaml 存在且 reassignable 即可）
+    byColumn: user_id
+indexes:
+  - name: idx_admin_id
+    unique: false
+    columns: [admin_id]
+  - name: idx_user_id
+    unique: false
+    columns: [user_id]
+fields:
+  - name: id
+    type: int
+    unsigned: true
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    comment: ID
+  - name: admin_id
+    type: int
+    unsigned: true
+    null: false
+    designType: remoteSelect
+    comment: 上级代理
+    formBuildExclude: true
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: username
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/admin.go
+      remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
+      width: 130
+      comSearchRender: remoteSelect
+      remote: "pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true }"
+  - name: user_id
+    type: int
+    unsigned: true
+    null: false
+    designType: remoteSelect
+    comment: 会员ID
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: username_text
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/user.go
+      remoteModel: internal/model/user.go
+      validator: [required]
+    table:
+      operator: false
+  # ...其余字段按真实表与前端设计类型声明
+```
+
+登记语义与边界：
+
+- **spec 存在即登记，无需跑生成**：`validateInheritParent`（子表生成前校验父表）直接从 `crud_specs/<parent>.yaml` 读取声明；`cascade:sync` 通过 `ScanInheritDeclarations` 扫描 `crud_specs/*.yaml` 聚合。跑 `crud:generate crud_specs/user.yaml` 仅是**幂等校验**（合法即返回，不写 crud_log、不生成文件）——不跑也不影响任何链路。
+- **只允许受保护核心表**：`registerOnly` 用于非受保护业务表会直接报错（登记是核心表的特权）；反之受保护核心表不加 `registerOnly` 照旧拒绝生成。
+- **登记必须声明数据权限形态**：`reassignable: true`（父表）或 `inheritFrom`（子表）至少其一，否则拒绝——登记的目的就是参与级联。
+- **父表硬契约校验**：`validateInheritParent` 对父表 spec 落实——存在、`reassignable: true`、归属列 `admin_id`、主键 `id`；并检查父表 repo 文件已存在且含 `CascadeOwners()` 锚点块（registerOnly 表手写 repo 自带，业务表由生成器渲染）——这是锚点注册的落点，比 crud_log 的"已生成"证据更直接可靠。
+- **子表登记自动注册锚点**：业务子表（非 registerOnly）生成时，生成器把 `{Table, ByColumn, OwnerColumn: "admin_id"}` 条目写入父表 repo 的 `CascadeOwners()` 锚点块（幂等）。此后父表 Edit 改归属时在事务内级联 UPDATE 子表，`cascade:sync` 对账也聚合它。
+- **apply 静默跳过**：`crud:apply`/`plan` 对 `registerOnly` spec 返回 `skipped`——`setup`/`migrate` 尾部自动 apply 扫描 `crud_specs/` 时不会被受保护拒绝卡死，也不会尝试建表/改表。
+- **字段集按真实表声明**：`validateInheritParent` 对父表 spec 的 fields 做硬契约校验（主键 `id`、归属列 `admin_id`），字段必须与真实表一致。
+- **框架自带登记**：本框架已内置 `crud_specs/user.yaml`（父表）与 `crud_specs/user_money_log.yaml`（子表）；`internal/admin/repository/user.go` 的 `CascadeOwners()` 锚点块初始含 `user_money_log` 条目（手写子表），业务新增 user 子表时生成后自动追加。
+- **crud:delete 仍拒绝**：受保护核心表删除保护不变（`registerOnly` 不改变受保护身份），核心表永久存在。
 
 ### owner 列规范
 
