@@ -26,10 +26,13 @@ func NewAdminGroupService(adminGroupM *adminmodel.AdminGroupRepository, adminRul
 	return &AdminGroupService{adminGroupM: adminGroupM, adminRuleM: adminRuleM, authM: authM}
 }
 
-// HandleRules 权限节点入库前处理：全部规则视为超级管理员（*），并禁止
-// 添加"拥有自己全部权限"的分组。重复 ID 在序列化前先保序去重，避免
-// 重复项扭曲 repository 侧的 len 比较（"全部权限+额外权限"误判）。
-func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, operatorID int32) (string, error) {
+// HandleRules 权限节点入库前处理（对齐 PHP 上游 Group::handleRules）：
+//   - 提交全部规则且操作者为超管 → 超管级分组（rules="*"）；
+//   - 否则禁止"拥有自己全部权限"的分组（防复制自己的权限集）；
+//   - 非超管提交的分组权限不得超出自己可分配的范围（array_diff 语义）。
+// 重复 ID 在序列化前先保序去重，避免重复项扭曲 repository 侧的 len 比较
+// （"全部权限+额外权限"误判）。
+func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, operatorID int32, isSuperAdmin bool) (string, error) {
 	if len(rules) > 0 {
 		list, err := s.adminRuleM.List(ctx)
 		if err != nil {
@@ -53,7 +56,8 @@ func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, oper
 				break
 			}
 		}
-		if super {
+		// 正在建立超管级分组？仅超管允许（PHP: $superAdmin && isSuperAdmin()）。
+		if super && isSuperAdmin {
 			return "*", nil
 		}
 
@@ -61,7 +65,7 @@ func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, oper
 		for _, v := range uniqueRules {
 			stringRules = append(stringRules, strconv.Itoa(int(v)))
 		}
-		// 禁止添加`拥有自己全部权限`的分组
+		// 禁止添加`拥有自己全部权限`的分组（PHP: !array_diff($ownedRuleIds, $checkedRules)）。
 		hasRules, err := s.authM.GetRuleIds(operatorID)
 		if err != nil {
 			return "", err
@@ -74,6 +78,15 @@ func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, oper
 		}
 		if isAll {
 			return "", cErr.BadRequest("Role group has all your rights, please contact the upper administrator to add or do not need to add!")
+		}
+		// 非超管：分组权限节点不得超出自己可分配的范围
+		// （PHP: array_diff($checkedRules, $ownedRuleIds) 非空则拒绝；超管已在上方短路）。
+		if !isSuperAdmin {
+			for _, v := range uniqueRules {
+				if !slices.Contains(hasRules, strconv.Itoa(int(v))) {
+					return "", cErr.BadRequest("The group permission node exceeds the range that can be allocated")
+				}
+			}
 		}
 		return strings.Join(stringRules, ","), nil
 	}
@@ -98,8 +111,8 @@ func (s *AdminGroupService) CheckAuth(operatorID int32, isSuperAdmin bool, group
 }
 
 // Add 编排分组创建：规则装配 + 落库。
-func (s *AdminGroupService) Add(ctx context.Context, group model.AdminGroup, ruleIDs []int32, operatorID int32) error {
-	rules, err := s.HandleRules(ctx, ruleIDs, operatorID)
+func (s *AdminGroupService) Add(ctx context.Context, group model.AdminGroup, ruleIDs []int32, operatorID int32, isSuperAdmin bool) error {
+	rules, err := s.HandleRules(ctx, ruleIDs, operatorID, isSuperAdmin)
 	if err != nil {
 		return err
 	}
@@ -125,7 +138,7 @@ func (s *AdminGroupService) Edit(ctx context.Context, id int32, params model.Adm
 	if err := copyGroup(&adminGroup, &params); err != nil {
 		return err
 	}
-	adminGroup.Rules, err = s.HandleRules(ctx, ruleIDs, operatorID)
+	adminGroup.Rules, err = s.HandleRules(ctx, ruleIDs, operatorID, isSuperAdmin)
 	if err != nil {
 		return err
 	}

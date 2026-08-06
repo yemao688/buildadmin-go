@@ -118,13 +118,67 @@ func TestAdminGroupServiceHandleRulesDeduplicates(t *testing.T) {
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
 	createRuleFixture(t, db, 3)
-	operator := createGroupFixture(t, db, "operator", "1,2", "1")
+	// operator(5) 拥有规则 1,2,3，提交 1,3 不超出其可分配范围。
+	operator := createGroupFixture(t, db, "operator", "1,2,3", "1")
 	attachGroupFixture(t, db, 5, operator.ID)
 
 	// Duplicate ids must collapse before serialization: "1,1,3" would
 	// otherwise let len(groupRules) outgrow the real rule set and distort
 	// the "all rights + extras" comparison in GetAllAuthGroups.
-	rules, err := svc.HandleRules(context.Background(), []int32{1, 1, 3, 3}, 5)
+	rules, err := svc.HandleRules(context.Background(), []int32{1, 1, 3, 3}, 5, false)
 	require.NoError(t, err)
 	require.Equal(t, "1,3", rules)
+}
+
+// TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper 对齐 PHP 上游
+// Group::handleRules：非超管提交"拥有自己全部权限"的分组被拒绝（防止复制
+// 自己的权限集给下级）。
+func TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper(t *testing.T) {
+	svc, db := newAdminGroupServiceFixture(t)
+	createRuleFixture(t, db, 1)
+	createRuleFixture(t, db, 2)
+	// operator(5) 只拥有规则 1,2
+	operator := createGroupFixture(t, db, "operator", "1,2", "1")
+	attachGroupFixture(t, db, 5, operator.ID)
+
+	// 提交 1,2 = 拥有自己全部权限 → 拒绝
+	_, err := svc.HandleRules(context.Background(), []int32{1, 2}, 5, false)
+	require.EqualError(t, err, "Role group has all your rights, please contact the upper administrator to add or do not need to add!")
+}
+
+// TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper 对齐 PHP 上游：
+// 非超管提交超出自己可分配范围的分组权限被拒绝。
+func TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper(t *testing.T) {
+	svc, db := newAdminGroupServiceFixture(t)
+	createRuleFixture(t, db, 1)
+	createRuleFixture(t, db, 2)
+	createRuleFixture(t, db, 3)
+	// operator(5) 只拥有规则 1,2
+	operator := createGroupFixture(t, db, "operator", "1,2", "1")
+	attachGroupFixture(t, db, 5, operator.ID)
+
+	// 提交 1,3：3 超出 operator 可分配范围 → 拒绝
+	_, err := svc.HandleRules(context.Background(), []int32{1, 3}, 5, false)
+	require.EqualError(t, err, "The group permission node exceeds the range that can be allocated")
+}
+
+// TestAdminGroupServiceHandleRulesAllowsSuperAdminStar 对齐 PHP 上游：仅超管
+// 提交全部规则时获得超管级分组（rules="*"）；非超管即使提交全部规则也被
+// "拥有自己全部权限"规则拒绝。
+func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
+	svc, db := newAdminGroupServiceFixture(t)
+	createRuleFixture(t, db, 1)
+	createRuleFixture(t, db, 2)
+	createRuleFixture(t, db, 3)
+
+	// 超管提交全部规则 → "*"
+	rules, err := svc.HandleRules(context.Background(), []int32{1, 2, 3}, 5, true)
+	require.NoError(t, err)
+	require.Equal(t, "*", rules)
+
+	// 非超管提交全部规则 → 拒绝（拥有自己全部权限）
+	operator := createGroupFixture(t, db, "operator", "1,2", "1")
+	attachGroupFixture(t, db, 5, operator.ID)
+	_, err = svc.HandleRules(context.Background(), []int32{1, 2, 3}, 5, false)
+	require.EqualError(t, err, "Role group has all your rights, please contact the upper administrator to add or do not need to add!")
 }

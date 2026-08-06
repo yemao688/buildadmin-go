@@ -123,3 +123,68 @@ func TestAdminGroupQuickEditRejectsSelfGroup(t *testing.T) {
 	require.NoError(t, db.First(&reloaded, target.ID).Error)
 	require.Equal(t, "1", reloaded.Status)
 }
+
+// newGroupListFixture seeds a super-admin group (rules="*"), an operator
+// group (rules="1,2"), and a strict-subset group (rules="1"); uid 5 belongs
+// to the operator group and owns rules 1,2.
+func newGroupListFixture(t *testing.T, h *AdminGroupHandler, db *gorm.DB) {
+	t.Helper()
+	for _, id := range []int32{1, 2} {
+		rule := model.AdminRule{ID: id, Type: "button", Title: "rule-" + strconv.Itoa(int(id)), Name: "rule-" + strconv.Itoa(int(id)), Status: "1"}
+		require.NoError(t, db.Create(&rule).Error)
+	}
+	super := model.AdminGroup{Name: "super", Rules: "*", Status: "1"}
+	require.NoError(t, db.Create(&super).Error)
+	operator := model.AdminGroup{Name: "operator", Rules: "1,2", Status: "1"}
+	require.NoError(t, db.Create(&operator).Error)
+	require.NoError(t, db.Create(&model.AdminGroupAccess{UID: 5, GroupID: operator.ID}).Error)
+	subset := model.AdminGroup{Name: "subset", Rules: "1", Status: "1"}
+	require.NoError(t, db.Create(&subset).Error)
+}
+
+// groupListContext builds a gin context carrying a non-super admin (uid 5).
+func groupListContext(uid int32) *gin.Context {
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/admin/auth.Group/index", nil)
+	ctx.Set("AdminAuth", header.AdminAuth{Id: uid, IsSuperAdmin: false})
+	return ctx
+}
+
+// TestAdminGroupListExcludesSuperGroupForNonSuper 对齐 PHP 上游 Group::getGroups：
+// 非超管列表始终过滤——只能看到"自己所在组 ∪ 有资格管理的组"，看不到超管组
+// （rules="*"）。
+func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
+	h, db := newAdminGroupHandlerFixture(t)
+	newGroupListFixture(t, h, db)
+	ctx := groupListContext(5)
+
+	groups, err := h.GetGroups(ctx, nil, nil)
+	require.NoError(t, err)
+	names := map[string]bool{}
+	for _, g := range groups {
+		names[g.Name] = true
+	}
+	require.False(t, names["super"], "non-super must not see the super-admin group")
+	require.True(t, names["operator"], "non-super must see its own group")
+	require.True(t, names["subset"], "non-super must see the group it is qualified to manage")
+}
+
+// TestAdminGroupListAbsoluteAuthOnlyQualified 对齐 PHP 上游：absoluteAuth=1
+// （管理员编辑页的授权下拉）时不合并自己所在组，只显示有资格管理的分组。
+func TestAdminGroupListAbsoluteAuthOnlyQualified(t *testing.T) {
+	h, db := newAdminGroupHandlerFixture(t)
+	newGroupListFixture(t, h, db)
+	ctx := groupListContext(5)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/admin/auth.Group/index?absoluteAuth=1", nil)
+	ctx.Set("AdminAuth", header.AdminAuth{Id: 5, IsSuperAdmin: false})
+
+	groups, err := h.GetGroups(ctx, nil, nil)
+	require.NoError(t, err)
+	names := map[string]bool{}
+	for _, g := range groups {
+		names[g.Name] = true
+	}
+	require.False(t, names["super"], "absoluteAuth must still exclude the super-admin group")
+	require.False(t, names["operator"], "absoluteAuth=1 must not merge own group")
+	require.True(t, names["subset"], "absoluteAuth=1 shows only qualified groups")
+}

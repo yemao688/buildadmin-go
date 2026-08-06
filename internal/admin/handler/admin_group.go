@@ -100,7 +100,7 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
-	if err := h.svc.Add(ctx.Request.Context(), adminGroup, params.Rules, adminAuth.Id); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), adminGroup, params.Rules, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -308,11 +308,17 @@ func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP 
 			}
 			return nil, err
 		}
-		authGroups = util.RemoveStrDuplicates(authGroups)
-		if absoluteAuth == "true" {
-			whereS = append(whereS, " id in ? ")
-			whereP = append(whereP, authGroups)
+		// PHP 语义（Group::getGroups）：非超管始终按 authGroups 过滤。
+		// absoluteAuth=0/空（普通列表）时合并自己所在分组；
+		// absoluteAuth=1（管理员编辑页的授权下拉）时只显示有资格管理的分组。
+		if absoluteAuth != "1" {
+			for _, gid := range h.authM.GetGroupIds(adminAuth.Id) {
+				authGroups = append(authGroups, strconv.Itoa(int(gid)))
+			}
 		}
+		authGroups = util.RemoveStrDuplicates(authGroups)
+		whereS = append(whereS, " id in ? ")
+		whereP = append(whereP, authGroups)
 	}
 	list, err := h.adminGroupM.ListWhere(ctx.Request.Context(), strings.Join(whereS, " AND "), whereP...)
 	if err != nil {
