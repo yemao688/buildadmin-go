@@ -179,14 +179,20 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	if !manifestAllows(manifest, log, nil) {
 		t.Fatal("latest success manifest should allow its own target")
 	}
-	if manifestAllows(FileManifest{Generated: []string{path, path + ".new"}}, log, nil) {
+	// 路径迁移（替换形态）：上次 {path}，本次 {path.new}，两清单互不包含
+	// → 旧文件会残留，拒绝。注意"新增"形态（{path, path.new} 相对 {path}）
+	// 是合法演进（skip 恢复、remoteSelect 关联实体），双向子集语义允许它。
+	if manifestAllows(FileManifest{Generated: []string{path + ".new"}}, log, nil) {
 		t.Fatal("manifest path migration should be rejected")
 	}
 }
 
-// TestManifestAllowsSkippedSubset 验证 skip 模式下 manifest 对比允许"本次是
-// 上次的子集"：被跳过的路径从上次记录中剔除后参与比较（跳过后重新生成不应
-// 被拒绝），但新增路径仍拒绝（防路径漂移）。
+// TestManifestAllowsSkippedSubset 验证双向子集语义：
+//   - skip 方向（全量 → skip）：本次清单是上次清单剔除本次跳过路径后的
+//     等长子集，允许（跳过后重新生成不被拒）；
+//   - 恢复方向（skip → 全量）：上次清单是本次清单的子集，允许（被跳过产物
+//     重新纳入，无需先 crud:delete）；
+//   - 路径漂移（两清单互不包含）始终拒绝。
 func TestManifestAllowsSkippedSubset(t *testing.T) {
 	path := t.TempDir() + "/model.go"
 	skipped := map[string]bool{filepath.Clean(path): true}
@@ -195,9 +201,20 @@ func TestManifestAllowsSkippedSubset(t *testing.T) {
 	if !manifestAllows(FileManifest{Generated: nil}, log, skipped) {
 		t.Fatal("skip subset of previous manifest should be allowed")
 	}
-	// 新增路径仍拒绝（即使有跳过集合）。
+	// 新增路径仍拒绝（即使有跳过集合）：current 与 previous 互不包含。
 	if manifestAllows(FileManifest{Generated: []string{path + ".new"}}, log, skipped) {
 		t.Fatal("new path must still be rejected under skip mode")
+	}
+
+	// 恢复方向：上次 skip 记录（子集），本次全量（含被跳过路径）→ 允许。
+	fullLog := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path + ".skip-recorded"}}}
+	backToFull := FileManifest{Generated: []string{path, path + ".skip-recorded"}}
+	if !manifestAllows(backToFull, fullLog, nil) {
+		t.Fatal("restoring previously skipped paths (previous ⊆ current) should be allowed")
+	}
+	// 恢复方向的漂移防护：上次记录路径不在本次清单 → 拒绝。
+	if manifestAllows(FileManifest{Generated: []string{path + ".elsewhere"}}, fullLog, nil) {
+		t.Fatal("path drift must be rejected even under restore direction")
 	}
 }
 

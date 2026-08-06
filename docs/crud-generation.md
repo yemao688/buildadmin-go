@@ -27,8 +27,7 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 
 - **`--skip-frontend`**：跳过 `web/src/views/<module>/`（index.vue、popupForm.vue）与语言文件（en/zh-cn）的生成，并隐含 `--skip-menu`（views 未生成时菜单组件路径悬空）。用于前端已深度定制、重新生成后端改动时不想覆盖/回补 views 的场景。
 - **`--skip-repo`**：跳过 `internal/admin/repository/<table>.go` 与所在包 provider 合并。**前置检查：仓库文件必须已存在**（首次生成使用会直接报错——handler 引用 `NewXxxRepository` 编译必挂）。用于仓库已手写定制、只想刷新 entity/DTO/handler/registrar 的场景。
-- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 对比允许"本次是上次成功生成记录的子集"。重新生成时跳过路径从上次记录中剔除后参与一致性校验，新增路径仍被拒绝（防路径漂移）。
-- **注意**：从 skip 生成切回全量生成（去开关重跑）会因 manifest 与上次记录不一致被拒——先 `crud:delete` 再全量生成，或保持同一开关组合重新生成。
+- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成。
 
 已有业务表通常用 `type: alter`。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。`type: create` 对已有表是删除重建，不能当作无损更新。
 

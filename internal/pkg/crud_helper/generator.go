@@ -1003,26 +1003,53 @@ func filterManifestPaths(manifest FileManifest, skipped map[string]bool) FileMan
 	return FileManifest{Generated: filter(manifest.Generated), Shared: filter(manifest.Shared)}
 }
 
+// manifestAllows 判断重新生成是否被上次成功记录（crud_log GeneratedFiles）
+// 允许。双向子集语义，两类合法演进放行，真正的路径漂移（两清单互不包含）
+// 仍拒绝：
+//   - skip 方向（全量 → skip）：本次清单是上次清单剔除本次跳过路径后的
+//     等长子集——skip 产物不参与本次记录，重新生成不被拒；
+//   - 恢复方向（skip → 全量）：上次清单是本次清单的子集——被跳过产物重新
+//     纳入（新增路径来自 BuildFileManifest 的合法推导，含 remoteSelect 关联
+//     实体等演进），无需先 crud:delete；
+//   - 拒绝：previous 与 current 互不包含（换 generateRelativePath/表名等
+//     路径漂移会残留旧文件，必须 crud:delete 后再生成）。
 func manifestAllows(manifest FileManifest, log *crudmodel.Log, skipped map[string]bool) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
 	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	previous := normalizedPathSet(log.Table.GeneratedFiles)
+
+	// skip 方向：previous 剔除本次跳过路径后与 current 等长且完全一致。
+	prevFiltered := make(map[string]bool, len(previous))
 	for path := range previous {
 		if skipped[path] {
-			delete(previous, path)
+			continue
+		}
+		prevFiltered[path] = true
+	}
+	if len(current) == len(prevFiltered) {
+		equal := true
+		for path := range current {
+			if !prevFiltered[path] {
+				equal = false
+				break
+			}
+		}
+		if equal {
+			return true
 		}
 	}
-	if len(current) != len(previous) {
-		return false
-	}
-	for path := range current {
-		if !previous[path] {
-			return false
+
+	// 恢复方向：previous ⊆ current（上次记录的所有路径都保留在本次清单中）。
+	subset := true
+	for path := range previous {
+		if !current[path] {
+			subset = false
+			break
 		}
 	}
-	return true
+	return subset
 }
 
 // canonicalManifestLangPath normalizes manifest path separators for
