@@ -52,6 +52,27 @@ func (h *AdminHandler) Index(ctx *gin.Context) {
 		return
 	}
 
+	// 树状列表：全量拉取（管理员数量有限）并按 parent_id 组装 children，
+	// 前端 el-table 以 tree-props 渲染层级。搜索/排序仍走 QueryBuilder 条件。
+	if ctx.Request.FormValue("isTree") == "1" {
+		admins, err := h.adminM.ListTree(ctx)
+		if err != nil {
+			response.FailByErr(ctx, err)
+			return
+		}
+		leaves := make([]*adminTableTreeLeaf, 0, len(admins))
+		for _, a := range admins {
+			leaves = append(leaves, &adminTableTreeLeaf{Admin: a})
+		}
+		assembled := tree.AssembleChild(leaves)
+		response.Success(ctx, map[string]interface{}{
+			"list":   assembled,
+			"total":  len(admins),
+			"remark": "",
+		})
+		return
+	}
+
 	result, total, err := h.adminM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -62,6 +83,52 @@ func (h *AdminHandler) Index(ctx *gin.Context) {
 		"total":  total,
 		"remark": "",
 	})
+}
+
+// adminTableTreeLeaf 是管理员列表树状渲染的叶子：内嵌完整 Admin 记录（保留
+// 列表所需全部字段），额外携带 Children 供 el-table tree-props 使用。
+// Children 必须导出并带 json tag——encoding/json 不序列化未导出字段，
+// 否则前端拿不到层级数据。
+type adminTableTreeLeaf struct {
+	*model.Admin
+	Children []*adminTableTreeLeaf `json:"children,omitempty"`
+}
+
+func (l *adminTableTreeLeaf) GetId() int {
+	if l == nil || l.Admin == nil {
+		return 0
+	}
+	return int(l.ID)
+}
+
+func (l *adminTableTreeLeaf) GetPid() int {
+	if l == nil || l.Admin == nil || l.ParentID == nil {
+		return 0
+	}
+	return int(*l.ParentID)
+}
+
+func (l *adminTableTreeLeaf) GetTitle() string {
+	if l == nil || l.Admin == nil {
+		return ""
+	}
+	return l.Username
+}
+
+func (l *adminTableTreeLeaf) GetChildren() interface{} {
+	if l == nil {
+		return nil
+	}
+	return l.Children
+}
+
+func (l *adminTableTreeLeaf) SetTitle(title string) {}
+
+func (l *adminTableTreeLeaf) SetChildren(children interface{}) {
+	if l == nil {
+		return
+	}
+	l.Children = children.([]*adminTableTreeLeaf)
 }
 
 // NullableParentID is a presence-aware JSON type for parent_id.
@@ -341,7 +408,7 @@ func buildAdminTreeOptions(admins []*model.Admin) []map[string]any {
 		leaves = append(leaves, &adminTreeLeaf{
 			id:    int(a.ID),
 			pid:   pid,
-			title: a.Nickname + "(ID:" + strconv.Itoa(int(a.ID)) + ")",
+			title: a.Username + "(ID:" + strconv.Itoa(int(a.ID)) + ")",
 		})
 	}
 	assembled := tree.AssembleChild(leaves)
@@ -351,14 +418,14 @@ func buildAdminTreeOptions(admins []*model.Admin) []map[string]any {
 	options := make([]map[string]any, 0, len(flat))
 	for _, l := range flat {
 		admin := findAdminByID(admins, int32(l.GetId()))
-		username := ""
+		nickname := ""
 		if admin != nil {
-			username = admin.Username + "(ID:" + strconv.Itoa(int(admin.ID)) + ")"
+			nickname = admin.Nickname + "(ID:" + strconv.Itoa(int(admin.ID)) + ")"
 		}
 		options = append(options, map[string]any{
 			"id":       l.GetId(),
-			"nickname": l.GetTitle(),
-			"username": username,
+			"nickname": nickname,
+			"username": l.GetTitle(),
 		})
 	}
 	return options

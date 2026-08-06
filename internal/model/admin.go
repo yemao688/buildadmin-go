@@ -20,6 +20,7 @@ type Admin struct {
 	GroupArr      []int32       `gorm:"-" json:"group_arr"`
 	GroupNameArr  []string      `gorm:"-" json:"group_name_arr"`
 	Parent        *AdminSummary `gorm:"-" json:"parent,omitempty"`
+	InviteCode    string        `gorm:"-" json:"invite_code,omitempty"` // 邀请码：确定性派生，不落库
 }
 
 // AdminSummary 管理员摘要信息（用于关系字段展示）

@@ -32,6 +32,8 @@ func NewAdminRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminReposi
 
 func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error {
 	data.Avatar = util.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
+	// 邀请码为确定性派生（HMAC(token.key, admin id)），不落库、固定不可改
+	data.InviteCode = util.InviteCode(s.config.Token.Key, data.ID)
 
 	groups := []struct {
 		Id   int32
@@ -134,20 +136,37 @@ func (s *AdminRepository) List(ctx *gin.Context) (list []*model.Admin, total int
 	if err = countDB.Count(&total).Error; err != nil {
 		return
 	}
+	list, err = s.listScoped(ctx, whereS, whereP, orderS, limit, offset)
+	return
+}
+
+// ListTree 全量返回 scoped 管理员（不分页），供树状列表组装 children 使用。
+// 与 List 共享 listScoped（count 与 find 各自独立 statement 的纪律同样适用）。
+// 注意 GORM 语义：Limit(0) 会生成 `LIMIT 0`（0 行），Limit(-1) 才表示取消
+// LIMIT 子句——全量查询必须传 -1。
+func (s *AdminRepository) ListTree(ctx *gin.Context) (list []*model.Admin, err error) {
+	whereS, whereP, orderS, _, _, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return s.listScoped(ctx, whereS, whereP, orderS, -1, 0)
+}
+
+func (s *AdminRepository) listScoped(ctx *gin.Context, whereS string, whereP []interface{}, orderS string, limit, offset int) (list []*model.Admin, err error) {
 	findDB := s.DBFor(ctx).Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
 	err = findDB.Omit("password", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	if err != nil {
-		return
+		return nil, err
 	}
 	if err = s.loadParentSummaries(ctx, s.DBFor(ctx), s.scoped(ctx), list); err != nil {
-		return
+		return nil, err
 	}
 	for _, v := range list {
 		if err = s.DealData(ctx, v); err != nil {
-			return
+			return nil, err
 		}
 	}
-	return
+	return list, nil
 }
 
 func (s *AdminRepository) loadParentSummaries(ctx context.Context, db *gorm.DB, scope func(*gorm.DB) *gorm.DB, admins []*model.Admin) error {
