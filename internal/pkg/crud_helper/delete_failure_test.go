@@ -2,7 +2,8 @@ package crud_helper
 
 import (
 	"buildadmin-go/internal/conf"
-	crudmodel "buildadmin-go/internal/model"
+	model "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 	"encoding/json"
 	"errors"
@@ -33,7 +34,7 @@ func TestDeleteWireFailureRestoresMenuWithSameID(t *testing.T) {
 		t.Fatalf("wire failure stage = %v", err)
 	}
 	assertDeleteFixtureFilesRestored(t, fixture)
-	var rows []crudmodel.AdminRule
+	var rows []model.AdminRule
 	if err := db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).Find(&rows).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func TestDeleteMenuFailureRestoresFilesAndReportsStage(t *testing.T) {
 type deleteFailureFixture struct {
 	tableName string
 	menuName  string
-	menu      crudmodel.AdminRule
+	menu      model.AdminRule
 	generated []string
 	shared    map[string][]byte
 }
@@ -161,7 +162,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 		handlerProvider: []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"),
 	}
 
-	menu := crudmodel.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
+	menu := model.AdminRule{Pid: 0, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Status: "1"}
 	if err := db.Table("ba_admin_rule").Create(&menu).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package model
+package crudmodel
 
 import (
 	"encoding/json"

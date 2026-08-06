@@ -4,7 +4,8 @@ import (
 	adminauth "buildadmin-go/internal/admin/repository"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
-	crudmodel "buildadmin-go/internal/model"
+	model "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/util"
 	"context"
@@ -239,7 +240,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 		return nil, err
 	}
 	createdMenuIDs := []int32{}
-	var menuSnapshot []crudmodel.AdminRule
+	var menuSnapshot []model.AdminRule
 	fail = func(stage string, cause error) (*GenerateResult, error) {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
@@ -255,7 +256,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			}
 		}
 		if len(createdMenuIDs) > 0 {
-			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&crudmodel.AdminRule{}).Error
+			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
 		}
 		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
 		return nil, fmt.Errorf("%s: %w", stage, cause)
@@ -521,7 +522,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
-	var menuSnapshot []crudmodel.AdminRule
+	var menuSnapshot []model.AdminRule
 	fail = func(stage string, cause error) error {
 		message := fmt.Sprintf("stage=%s: %v", stage, cause)
 		quarantineRestoreErr := quarantine.Restore()
@@ -832,9 +833,9 @@ func remoteJoinTables(fields []crudmodel.Field) []string {
 	return tables
 }
 
-func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]crudmodel.AdminRule, error) {
+func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([]model.AdminRule, error) {
 	table := cfg.Database.Prefix + "admin_rule"
-	var rows []crudmodel.AdminRule
+	var rows []model.AdminRule
 	err := db.Table(table).Where("name=? OR name LIKE ?", menuName, menuName+"/%").Order("id asc").Find(&rows).Error
 	if err != nil {
 		return nil, err
@@ -847,7 +848,7 @@ func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([
 	for _, row := range rows {
 		pid := row.Pid
 		for pid != 0 && !seen[pid] {
-			var parent crudmodel.AdminRule
+			var parent model.AdminRule
 			if err := db.Table(table).Where("id=?", pid).First(&parent).Error; err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
 					break
@@ -864,12 +865,12 @@ func snapshotMenuRules(db *gorm.DB, cfg *conf.Configuration, menuName string) ([
 
 // restoreMenuRules 把菜单快照恢复回原状：不存在的行重建（按 ID 升序，父先于子），
 // 存在但被更新过的行恢复快照值。生成与删除两条失败路径共用。
-func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []crudmodel.AdminRule) error {
+func restoreMenuRules(db *gorm.DB, cfg *conf.Configuration, rows []model.AdminRule) error {
 	table := cfg.Database.Prefix + "admin_rule"
 	sorted := slices.Clone(rows)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 	for _, row := range sorted {
-		var existing crudmodel.AdminRule
+		var existing model.AdminRule
 		err := db.Table(table).Where("id=?", row.ID).First(&existing).Error
 		switch {
 		case err == nil:
@@ -942,7 +943,7 @@ func tableExists(db *gorm.DB, cfg *conf.Configuration, table string) bool {
 	return db.Migrator().HasTable(cfg.Database.Prefix + table)
 }
 
-func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*crudmodel.Log, error) {
+func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string) (*model.Log, error) {
 	// 已被后续 delete 消费的 success 记录不再约束重新生成,
 	// 否则删除后换新路径重新生成会被旧 manifest 拒绝
 	var lastDeleteID int32
@@ -953,7 +954,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	if lastDeleteID > 0 {
 		query = query.Where("id > ?", lastDeleteID)
 	}
-	var log crudmodel.Log
+	var log model.Log
 	err := query.Order("create_time desc, id desc").Take(&log).Error
 	if err == gorm.ErrRecordNotFound {
 		return nil, nil
@@ -1013,7 +1014,7 @@ func filterManifestPaths(manifest FileManifest, skipped map[string]bool) FileMan
 //     实体等演进），无需先 crud:delete；
 //   - 拒绝：previous 与 current 互不包含（换 generateRelativePath/表名等
 //     路径漂移会残留旧文件，必须 crud:delete 后再生成）。
-func manifestAllows(manifest FileManifest, log *crudmodel.Log, skipped map[string]bool) bool {
+func manifestAllows(manifest FileManifest, log *model.Log, skipped map[string]bool) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
@@ -1124,7 +1125,7 @@ func deriveAlterChanges(columns []adminmodel.Column, fields []crudmodel.Field) [
 }
 
 func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (int32, error) {
-	record := crudmodel.Log{
+	record := model.Log{
 		AdminID:    opts.AdminID,
 		Tablename:  opts.Table.Name,
 		Comment:    opts.Table.Comment,

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	crudmodel "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 )
 
 func TestParseSpecIndexesValid(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/middleware"
-	crudmodel "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"

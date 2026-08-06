@@ -2,7 +2,8 @@ package crud_helper
 
 import (
 	model "buildadmin-go/internal/admin/repository"
-	crudmodel "buildadmin-go/internal/model"
+	entity "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 	"errors"
 	"os"
@@ -175,7 +176,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil, nil) {
 		t.Fatal("first generation must reject existing model and handler targets")
 	}
-	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
+	log := &entity.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
 	if !manifestAllows(manifest, log, nil) {
 		t.Fatal("latest success manifest should allow its own target")
 	}
@@ -196,7 +197,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 func TestManifestAllowsSkippedSubset(t *testing.T) {
 	path := t.TempDir() + "/model.go"
 	skipped := map[string]bool{filepath.Clean(path): true}
-	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
+	log := &entity.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
 	// 上次全量生成（含 model.go），本次跳过它：manifest 不含该路径，允许。
 	if !manifestAllows(FileManifest{Generated: nil}, log, skipped) {
 		t.Fatal("skip subset of previous manifest should be allowed")
@@ -207,7 +208,7 @@ func TestManifestAllowsSkippedSubset(t *testing.T) {
 	}
 
 	// 恢复方向：上次 skip 记录（子集），本次全量（含被跳过路径）→ 允许。
-	fullLog := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path + ".skip-recorded"}}}
+	fullLog := &entity.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path + ".skip-recorded"}}}
 	backToFull := FileManifest{Generated: []string{path, path + ".skip-recorded"}}
 	if !manifestAllows(backToFull, fullLog, nil) {
 		t.Fatal("restoring previously skipped paths (previous ⊆ current) should be allowed")

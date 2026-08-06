@@ -2,7 +2,7 @@ package crud_helper
 
 import (
 	model "buildadmin-go/internal/admin/repository"
-	crudmodel "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"database/sql"
 	"math/big"
 	"regexp"

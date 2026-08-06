@@ -3,7 +3,7 @@ package crud_helper
 import (
 	"testing"
 
-	crudmodel "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 
 	"github.com/stretchr/testify/require"

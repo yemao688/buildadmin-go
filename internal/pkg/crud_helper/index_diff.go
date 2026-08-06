@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	crudmodel "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 
 	"gorm.io/gorm"
 )

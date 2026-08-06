@@ -10,7 +10,8 @@ import (
 	"testing"
 
 	"buildadmin-go/internal/conf"
-	crudmodel "buildadmin-go/internal/model"
+	model "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 
 	"github.com/stretchr/testify/require"
@@ -50,11 +51,11 @@ func TestDeleteFailureRestoresNestedMenuDirAncestors(t *testing.T) {
 	require.Contains(t, err.Error(), "stage=wire")
 
 	for _, name := range []string{"delete", "delete/sub", fixture.menuName} {
-		var row crudmodel.AdminRule
+		var row model.AdminRule
 		require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", name).First(&row).Error, "menu ancestor %q must be restored", name)
 	}
 	// Pid 链必须完整：delete/sub.pid == delete.id；menu.pid == delete/sub.id
-	var dir, sub, menu crudmodel.AdminRule
+	var dir, sub, menu model.AdminRule
 	require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", "delete").First(&dir).Error)
 	require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", "delete/sub").First(&sub).Error)
 	require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).First(&menu).Error)
@@ -76,7 +77,7 @@ func TestMenuSnapshotRestoresUpdatedExistingRows(t *testing.T) {
 		Updates(map[string]any{"title": "漂移标题", "component": "/src/views/backend/drift/index.vue"}).Error)
 	require.NoError(t, restoreMenuRules(db, cfg, rows))
 
-	var restored crudmodel.AdminRule
+	var restored model.AdminRule
 	require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).First(&restored).Error)
 	require.Equal(t, fixture.menu.Title, restored.Title, "updated menu row must be restored to snapshot value")
 	require.Equal(t, fixture.menu.Component, restored.Component)
@@ -88,7 +89,7 @@ func TestMenuSnapshotRestoresUpdatedExistingRows(t *testing.T) {
 type ownershipFixture struct {
 	tableName string
 	menuName  string
-	menu      crudmodel.AdminRule
+	menu      model.AdminRule
 }
 
 func newOwnershipFixture(t *testing.T) (*gorm.DB, *conf.Configuration, ownershipFixture) {
@@ -120,14 +121,14 @@ func newOwnershipFixture(t *testing.T) (*gorm.DB, *conf.Configuration, ownership
 
 	// 三层菜单：delete → delete/sub → delete/sub/fault（与 views 目录一致，
 	// F3 依赖删除真实命中该父链并回滚重建）。
-	dir := crudmodel.AdminRule{Pid: 0, Type: "menu_dir", Title: "delete", Name: "delete", Path: "delete", Status: "1"}
+	dir := model.AdminRule{Pid: 0, Type: "menu_dir", Title: "delete", Name: "delete", Path: "delete", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&dir).Error)
-	sub := crudmodel.AdminRule{Pid: dir.ID, Type: "menu_dir", Title: "sub", Name: "delete/sub", Path: "delete/sub", Status: "1"}
+	sub := model.AdminRule{Pid: dir.ID, Type: "menu_dir", Title: "sub", Name: "delete/sub", Path: "delete/sub", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&sub).Error)
 	menuName := "delete/sub/fault"
-	menu := crudmodel.AdminRule{Pid: sub.ID, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Component: "/src/views/backend/delete/sub/fault/index.vue", Status: "1"}
+	menu := model.AdminRule{Pid: sub.ID, Type: "menu", Title: "Delete fault", Name: menuName, Path: menuName, MenuType: "tab", Component: "/src/views/backend/delete/sub/fault/index.vue", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&menu).Error)
-	button := crudmodel.AdminRule{Pid: menu.ID, Type: "button", Title: "查看", Name: menuName + "/index", Status: "1"}
+	button := model.AdminRule{Pid: menu.ID, Type: "button", Title: "查看", Name: menuName + "/index", Status: "1"}
 	require.NoError(t, db.Table("ba_admin_rule").Create(&button).Error)
 
 	// 拍平载体：handler 文件落 internal/admin/handler/<table>.go（删除流程
@@ -172,7 +173,7 @@ func TestRestoreMenuRulesRestoresUpdatedRows(t *testing.T) {
 	db, cfg, fixture := newOwnershipFixture(t)
 	rows, err := snapshotMenuRules(db, cfg, fixture.menuName)
 	require.NoError(t, err)
-	snapshot := map[string]crudmodel.AdminRule{}
+	snapshot := map[string]model.AdminRule{}
 	for _, row := range rows {
 		snapshot[row.Name] = row
 	}
@@ -184,7 +185,7 @@ func TestRestoreMenuRulesRestoresUpdatedRows(t *testing.T) {
 
 	require.NoError(t, restoreMenuRules(db, cfg, rows))
 
-	var restored crudmodel.AdminRule
+	var restored model.AdminRule
 	require.NoError(t, db.Table(cfg.Database.Prefix+"admin_rule").Where("name=?", fixture.menuName).First(&restored).Error)
 	require.True(t, reflect.DeepEqual(restored, snapshot[fixture.menuName]), "restored row must equal snapshot: got %+v want %+v", restored, snapshot[fixture.menuName])
 }
