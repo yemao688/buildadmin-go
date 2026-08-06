@@ -8,22 +8,25 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// 注意：以下响应结构必须携带 json tag——它们会直接序列化进
+// /api/index/index（前台初始化）与 /admin/index/index 的响应，
+// 键名契约对齐 PHP 上游（全小写字段名）。
 type Language struct {
-	ID     int64  `gorm:"column:id;primaryKey;autoIncrement"`
-	Lan    string `gorm:"column:lan"`
-	Name   string `gorm:"column:name"`
-	Remark string `gorm:"column:remark"`
-	Status int8   `gorm:"column:status"`
-	Weigh  int32  `gorm:"column:weigh"`
+	ID     int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Lan    string `gorm:"column:lan" json:"lan"`
+	Name   string `gorm:"column:name" json:"name"`
+	Remark string `gorm:"column:remark" json:"remark"`
+	Status int8   `gorm:"column:status" json:"status"`
+	Weigh  int32  `gorm:"column:weigh" json:"weigh"`
 }
 
 type LanguageContent struct {
-	ID    int64  `gorm:"column:id;primaryKey;autoIncrement"`
-	Lan   string `gorm:"column:lan"`
-	Group string `gorm:"column:group"`
-	Key   string `gorm:"column:key"`
-	Type  string `gorm:"column:type"`
-	Value string `gorm:"column:value"`
+	ID    int64  `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Lan   string `gorm:"column:lan" json:"lan"`
+	Group string `gorm:"column:group" json:"group"`
+	Key   string `gorm:"column:key" json:"key"`
+	Type  string `gorm:"column:type" json:"type"`
+	Value string `gorm:"column:value" json:"value"`
 }
 
 const (
@@ -33,13 +36,13 @@ const (
 )
 
 type Currency struct {
-	ID     int64   `gorm:"column:id;primaryKey;autoIncrement"`
-	Code   string  `gorm:"column:code"`
-	Name   string  `gorm:"column:name"`
-	Symbol string  `gorm:"column:symbol"`
-	Rate   float64 `gorm:"column:rate"`
-	Status int8    `gorm:"column:status"`
-	Weigh  int32   `gorm:"column:weigh"`
+	ID     int64   `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	Code   string  `gorm:"column:code" json:"code"`
+	Name   string  `gorm:"column:name" json:"name"`
+	Symbol string  `gorm:"column:symbol" json:"symbol"`
+	Rate   float64 `gorm:"column:rate" json:"rate"`
+	Status int8    `gorm:"column:status" json:"status"`
+	Weigh  int32   `gorm:"column:weigh" json:"weigh"`
 }
 
 type Service struct {
