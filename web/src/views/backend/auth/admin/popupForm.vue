@@ -71,21 +71,6 @@
                             valueOnClear: 0,
                         }"
                     />
-                    <FormItem :label="t('auth.admin.avatar')" type="image" v-model="baTable.form.items!.avatar" />
-                    <FormItem
-                        :label="t('auth.admin.email')"
-                        prop="email"
-                        v-model="baTable.form.items!.email"
-                        type="string"
-                        :placeholder="t('Please input field', { field: t('auth.admin.email') })"
-                    />
-                    <FormItem
-                        :label="t('auth.admin.mobile')"
-                        prop="mobile"
-                        v-model="baTable.form.items!.mobile"
-                        type="string"
-                        :placeholder="t('Please input field', { field: t('auth.admin.mobile') })"
-                    />
                     <FormItem
                         :label="t('auth.admin.Password')"
                         prop="password"
@@ -98,15 +83,6 @@
                                 : t('auth.admin.Please leave blank if not modified')
                         "
                     />
-                    <el-form-item prop="motto" :label="t('auth.admin.Personal signature')">
-                        <el-input
-                            @keyup.enter.stop=""
-                            @keyup.ctrl.enter="baTable.onSubmit(formRef)"
-                            v-model="baTable.form.items!.motto"
-                            type="textarea"
-                            :placeholder="t('Please input field', { field: t('auth.admin.Personal signature') })"
-                        ></el-input>
-                    </el-form-item>
                     <FormItem
                         :label="t('State')"
                         v-model="baTable.form.items!.status"
@@ -204,32 +180,4 @@ watch(
 )
 </script>
 
-<style scoped lang="scss">
-.avatar-uploader {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    border-radius: var(--el-border-radius-small);
-    box-shadow: var(--el-box-shadow-light);
-    border: 1px dashed var(--el-border-color);
-    cursor: pointer;
-    overflow: hidden;
-    width: 110px;
-    height: 110px;
-}
-.avatar-uploader:hover {
-    border-color: var(--el-color-primary);
-}
-.avatar {
-    width: 110px;
-    height: 110px;
-    display: block;
-}
-.image-slot {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-}
-</style>
+

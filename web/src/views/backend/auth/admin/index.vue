@@ -4,13 +4,13 @@
 
         <!-- 表格顶部菜单 -->
         <TableHeader
-            :buttons="['refresh', 'add', 'edit', 'delete', 'comSearch', 'quickSearch', 'columnDisplay']"
+            :buttons="['refresh', 'add', 'edit', 'delete', 'unfold', 'comSearch', 'quickSearch', 'columnDisplay']"
             :quick-search-placeholder="t('Quick search placeholder', { fields: t('auth.admin.username') + '/' + t('auth.admin.nickname') })"
         />
 
         <!-- 表格 -->
         <!-- 要使用`el-table`组件原有的属性，直接加在Table标签上即可 -->
-        <Table />
+        <Table ref="tableRef" :pagination="false" :tree-props="{ children: 'children' }" />
 
         <!-- 表单 -->
         <PopupForm />
@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { provide } from 'vue'
+import { onMounted, provide, useTemplateRef } from 'vue'
 import baTableClass from '/@/utils/baTable'
 import PopupForm from './popupForm.vue'
 import Table from '/@/components/table/index.vue'
@@ -34,6 +34,7 @@ defineOptions({
 
 const { t } = useI18n()
 const adminInfo = useAdminInfo()
+const tableRef = useTemplateRef('tableRef')
 
 const optButtons = defaultOptButtons(['edit', 'delete'])
 optButtons[1].display = (row) => {
@@ -43,16 +44,15 @@ optButtons[1].display = (row) => {
 const baTable = new baTableClass(
     new baTableApi('/admin/auth.Admin/'),
     {
+        filter: { isTree: 1 },
+        expandAll: true,
         column: [
-            { type: 'selection', align: 'center', operator: false },
-            { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), width: 70 },
+            { label: t('Id'), prop: 'id', align: 'center', operator: '=', operatorPlaceholder: t('Id'), minWidth: 90 },
             { label: t('auth.admin.username'), prop: 'username', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('auth.admin.nickname'), prop: 'nickname', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
             { label: t('auth.admin.Parent agent'), prop: 'parent.username', align: 'center', operator: false, formatter: (row: anyObj) => row.parent?.username || '-' },
-            { label: t('auth.admin.group'), prop: 'group_name_arr', align: 'center', operator: false, render: 'tags' },
-            { label: t('auth.admin.avatar'), prop: 'avatar', align: 'center', render: 'image', operator: false },
-            { label: t('auth.admin.email'), prop: 'email', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
-            { label: t('auth.admin.mobile'), prop: 'mobile', align: 'center', operator: 'LIKE', operatorPlaceholder: t('Fuzzy query') },
+            { label: t('auth.admin.group'), prop: 'group_name_arr', align: 'center', operator: false, render: 'tags', minWidth: 80 },
+            { label: t('auth.admin.Invite code'), prop: 'invite_code', align: 'center', operator: false, width: 130 },
             {
                 label: t('auth.admin.Last login'),
                 prop: 'last_login_time',
@@ -78,6 +78,7 @@ const baTable = new baTableClass(
                 render: 'buttons',
                 buttons: optButtons,
                 operator: false,
+                fixed: 'right',
             },
         ],
         dblClickNotEditColumn: [undefined, 'status'],
@@ -91,8 +92,11 @@ const baTable = new baTableClass(
 
 provide('baTable', baTable)
 
-baTable.mount()
-baTable.getData()
+onMounted(() => {
+    baTable.table.ref = tableRef.value
+    baTable.mount()
+    baTable.getData()
+})
 </script>
 
 <style scoped lang="scss"></style>

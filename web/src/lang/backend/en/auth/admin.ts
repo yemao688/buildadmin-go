@@ -12,4 +12,5 @@ export default {
     'Administrator login': 'Administrator Login Name',
     'Parent agent': 'Parent agent',
     'The parent agent cannot be the admin itself': 'The parent agent cannot be the admin itself',
+    'Invite code': 'Invite Code',
 }
