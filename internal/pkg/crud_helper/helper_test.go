@@ -848,3 +848,37 @@ func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildLangTsContentDeterministic 验证语言 .ts 内容生成确定性：Go map
+// 迭代顺序由运行时随机决定，直接 range 会使每次生成的键序不同，破坏
+// "crud:delete + 重新生成逐字节一致"契约。keys 必须排序后输出，且多次调用
+// 结果恒定。
+func TestBuildLangTsContentDeterministic(t *testing.T) {
+	input := map[string]string{
+		"username": "用户名",
+		"nickname": "昵称",
+		"id":       "ID",
+		"status":   "状态",
+	}
+	first := buildLangTsContent(input)
+	second := buildLangTsContent(input)
+	require.Equal(t, first, second, "lang content must be deterministic across calls")
+
+	// 键按字典序输出（id < nickname < status < username）；值用单引号（.ts 风格）
+	require.Equal(t, `export default {
+    id: 'ID',
+    nickname: '昵称',
+    status: '状态',
+    username: '用户名',
+}
+`, first)
+
+	// 手写顺序（map 字面量）不得影响输出
+	reordered := map[string]string{
+		"status":   "状态",
+		"username": "用户名",
+		"id":       "ID",
+		"nickname": "昵称",
+	}
+	require.Equal(t, first, buildLangTsContent(reordered))
+}

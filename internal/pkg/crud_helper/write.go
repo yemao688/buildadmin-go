@@ -954,15 +954,27 @@ func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebD
 	if IsProtectedTable(logicalTableName) {
 		return fmt.Errorf("crud generation is forbidden for protected table %q", logicalTableName)
 	}
+	path := filepath.Join(util.RootPath(), webLangDir.LangFile(lang))
+	return writeFile(path, buildLangTsContent(langEnData))
+}
+
+// buildLangTsContent 组装语言 .ts 文件内容。keys 必须排序后迭代：Go map 的
+// 迭代顺序由运行时随机决定，直接 range 会导致每次生成的语言文件键序不同，
+// 破坏"crud:delete + 重新生成逐字节一致"的契约（重新生成 diff 噪音无法审查）。
+func buildLangTsContent(langEnData map[string]string) string {
+	keys := make([]string, 0, len(langEnData))
+	for k := range langEnData {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	langTsContent := ""
-	for k, v := range langEnData {
+	for _, k := range keys {
+		v := langEnData[k]
 		quote := getQuote(v)
 		keyStr := formatObjectKey(k)
 		langTsContent += Tab(1) + keyStr + ": " + quote + v + quote + ",\n"
 	}
-	langTsContent = "export default {\n" + langTsContent + "}\n"
-	path := filepath.Join(util.RootPath(), webLangDir.LangFile(lang))
-	return writeFile(path, langTsContent)
+	return "export default {\n" + langTsContent + "}\n"
 }
 
 func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo) error {

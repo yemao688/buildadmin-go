@@ -1195,8 +1195,15 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 	columnReplaceValue := []string{"tag", "tags", "switch"}
 	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) && (len(columnDict) > 0 || slices.Contains(columnReplaceValue, field.Table.Render)) {
 		itemJson := ""
-		for k, v := range columnDict {
-			itemJson += buildTableColumnKey(k, v)
+		// 排序 keys 后迭代：Go map 迭代顺序随机，直接 range 会使 index.vue 的
+		// replaceValue 键序每次生成都不同，破坏重新生成逐字节一致的契约。
+		dictKeys := make([]string, 0, len(columnDict))
+		for k := range columnDict {
+			dictKeys = append(dictKeys, k)
+		}
+		sort.Strings(dictKeys)
+		for _, k := range dictKeys {
+			itemJson += buildTableColumnKey(k, columnDict[k])
 		}
 		columnStr += " replaceValue: {" + strings.TrimRight(itemJson, ",") + "},"
 	}
