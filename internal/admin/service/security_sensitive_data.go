@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/gorm"
 )
@@ -40,12 +40,6 @@ type SensitiveDataParams struct {
 	Status     string
 }
 
-// NormalizeControllerAs normalizes a dot-style controller name into the
-// stored slash form.
-func (s *SensitiveDataService) NormalizeControllerAs(controller string) string {
-	return strings.ToLower(strings.ReplaceAll(controller, ".", "/"))
-}
-
 // MarshalFields encodes the fields payload into the DataFields JSON column.
 func (s *SensitiveDataService) MarshalFields(fields []Field) (string, error) {
 	dateField := map[string]string{}
@@ -74,7 +68,7 @@ func (s *SensitiveDataService) Add(ctx context.Context, p SensitiveDataParams) e
 	var sensitiveData model.SecuritySensitiveData
 	sensitiveData.Name = p.Name
 	sensitiveData.Controller = p.Controller
-	sensitiveData.ControllerAs = s.NormalizeControllerAs(p.Controller)
+	sensitiveData.ControllerAs = util.NormalizeControllerAs(p.Controller)
 	sensitiveData.DataTable = p.DataTable
 	sensitiveData.PrimaryKey = p.PrimaryKey
 	sensitiveData.Status = p.Status
@@ -122,7 +116,7 @@ func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDa
 	}
 	data.Name = p.Name
 	data.Controller = p.Controller
-	data.ControllerAs = s.NormalizeControllerAs(p.Controller)
+	data.ControllerAs = util.NormalizeControllerAs(p.Controller)
 	data.DataTable = p.DataTable
 	data.PrimaryKey = p.PrimaryKey
 	data.Status = p.Status

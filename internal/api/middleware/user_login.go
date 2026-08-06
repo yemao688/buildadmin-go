@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"net/http"
-
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	core "buildadmin-go/internal/middleware"
@@ -32,14 +30,7 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.Request.Header.Get("ba-user-token")
 		if tokenStr == "" {
-			msg := util.Lang(c, "missing Authorization header", nil)
-			c.JSON(http.StatusOK, map[string]interface{}{
-				"code": http.StatusUnauthorized,
-				"data": nil,
-				"msg":  msg,
-				"time": 0,
-			})
-			c.Abort()
+			core.AbortMissingToken(c)
 			return
 		}
 

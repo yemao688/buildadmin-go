@@ -337,21 +337,3 @@ func GetOperatorByAlias(operator string) string {
 	}
 	return operator
 }
-
-func LimitAddOffset(ctx *gin.Context) (int, int) {
-	limit := 10
-	offset := 0
-
-	l := ctx.Query("limit")
-	if l != "" {
-		num, _ := strconv.Atoi(l)
-		limit = num
-	}
-
-	p := ctx.Query("page")
-	if p != "" {
-		num, _ := strconv.Atoi(p)
-		offset = limit * (num - 1)
-	}
-	return limit, offset
-}

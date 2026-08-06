@@ -101,12 +101,6 @@ func (s *AdminService) IsMovingUnderSelf(nodeID int32, parentID *int32) bool {
 	return nodeID > 0 && parentID != nil && *parentID == nodeID
 }
 
-// ValidateAccountStatusValue enforces the account-status vocabulary shared by
-// the admin and user management flows.
-func (s *AdminService) ValidateAccountStatusValue(value any) error {
-	return ValidateAccountStatusValue(value)
-}
-
 // CheckGroupAuth verifies that the operator may assign every requested group.
 func (s *AdminService) CheckGroupAuth(groups []string, operatorID int32) error {
 	if s.authM.IsSuperAdmin(operatorID) {
@@ -237,7 +231,7 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 // SwitchStatus validates and performs a scoped status switch, refusing to
 // disable the operator's own account.
 func (s *AdminService) SwitchStatus(ctx context.Context, id int32, status string, operatorID int32, actor data_scope.Actor) error {
-	if err := s.ValidateAccountStatusValue(status); err != nil {
+	if err := ValidateAccountStatusValue(status); err != nil {
 		return err
 	}
 	if operatorID == id && status == "disable" {
@@ -246,28 +240,13 @@ func (s *AdminService) SwitchStatus(ctx context.Context, id int32, status string
 	return s.adminM.SwitchStatusWithActor(ctx, id, status, actor)
 }
 
-// normalizeAdminIDs validates and de-duplicates a batch of administrator ids.
-func normalizeAdminIDs(ids []int32) ([]int32, error) {
-	seen := make(map[int32]struct{}, len(ids))
-	out := make([]int32, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, cErr.BadRequest("ids must be positive")
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out, nil
-}
-
 // Del runs the whole scoped administrator-deletion flow: id normalization,
 // actor validation and the hierarchy delete (scope re-verification,
 // subordinate rejection, closure cleanup) in one transaction.
 func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
-	idList, err := normalizeAdminIDs(ids)
+	idList, err := normalizeIDs(ids, "admin", false, func(id int32) error {
+		return cErr.BadRequest("ids must be positive")
+	})
 	if err != nil {
 		return err
 	}

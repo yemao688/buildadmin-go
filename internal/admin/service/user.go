@@ -98,30 +98,13 @@ func (s *UserService) UpdateStatus(ctx context.Context, id int32, status string,
 	return s.userM.UpdateStatusWithActor(ctx, id, status, actor)
 }
 
-// normalizeUserIDs validates and de-duplicates a batch of user ids.
-func normalizeUserIDs(ids []int32) ([]int32, error) {
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("invalid user ids")
-	}
-	seen := make(map[int32]struct{}, len(ids))
-	normalized := make([]int32, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, fmt.Errorf("invalid user id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
-	}
-	return normalized, nil
-}
-
 // Del runs the whole scoped user-deletion flow: id normalization, actor
 // validation, the FOR UPDATE lock inside the actor's scope, the money-log
 // orphan guard and the atomic scoped delete — all in one transaction.
 func (s *UserService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
-	normalized, err := normalizeUserIDs(ids)
+	normalized, err := normalizeIDs(ids, "user", true, func(id int32) error {
+		return fmt.Errorf("invalid user id %d", id)
+	})
 	if err != nil {
 		return err
 	}

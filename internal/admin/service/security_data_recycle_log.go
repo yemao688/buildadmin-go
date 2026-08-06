@@ -24,7 +24,9 @@ func NewSecurityDataRecycleLogService(dataRecycleLogM *securitymodel.SecurityDat
 // Restore 恢复一批回收站日志：任何一条失败（无效目标、规则不可用、主键
 // 不匹配、JSON 损坏）都会让整个批次原子回退。
 func (s *SecurityDataRecycleLogService) Restore(ctx context.Context, ids []int32) error {
-	normalized, err := normalizeLogIDs(ids, "recycle log")
+	normalized, err := normalizeIDs(ids, "recycle log", true, func(id int32) error {
+		return fmt.Errorf("invalid recycle log id %d", id)
+	})
 	if err != nil {
 		return err
 	}

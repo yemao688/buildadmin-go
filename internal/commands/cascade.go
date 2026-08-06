@@ -28,14 +28,9 @@ func newCascadeSyncCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.cascadeH.Sync(cmd, args)
-		},
+		}),
 	}
 }
 

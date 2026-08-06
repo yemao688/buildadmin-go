@@ -5,9 +5,9 @@ package router
 
 import (
 	"net/http"
-	"strings"
 
 	"buildadmin-go/internal/middleware"
+	"buildadmin-go/internal/pkg/util"
 )
 
 const (
@@ -29,5 +29,5 @@ func CRUDCapabilities(name string) []middleware.AtomicRoute {
 }
 
 func capabilityRoute(name string) string {
-	return strings.ToLower(strings.ReplaceAll(name, ".", "/"))
+	return util.NormalizeControllerAs(name)
 }

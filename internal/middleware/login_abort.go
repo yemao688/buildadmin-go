@@ -29,3 +29,18 @@ func AbortLogin(c *gin.Context, err error) {
 	})
 	c.Abort()
 }
+
+// AbortMissingToken rejects a request whose bearer token header is absent,
+// using the same BuildAdmin login-response shell as AbortLogin (HTTP 200 +
+// code 401 + translated message). Shared by the admin and api login
+// middlewares, which previously inlined this exact block.
+func AbortMissingToken(c *gin.Context) {
+	msg := util.Lang(c, "missing Authorization header", nil)
+	c.JSON(http.StatusOK, map[string]interface{}{
+		"code": http.StatusUnauthorized,
+		"data": nil,
+		"msg":  msg,
+		"time": 0,
+	})
+	c.Abort()
+}

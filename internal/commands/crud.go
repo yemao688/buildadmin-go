@@ -48,14 +48,9 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.crudH.Generate(cmd, args)
-		},
+		}),
 	}
 	generateCmd.Flags().Bool("skip-menu", false, "skip menu creation")
 	generateCmd.Flags().Bool("skip-frontend", false, "skip web artifacts (lang/index.vue/form.vue); implies skip-menu; intended for modules whose frontend is already customized")
@@ -72,14 +67,9 @@ func newCrudDeleteCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.crudH.Delete(cmd, args)
-		},
+		}),
 	}
 }
 
@@ -91,14 +81,9 @@ func newCrudApplyCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.ArbitraryArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.crudH.Apply(cmd, args)
-		},
+		}),
 	}
 	applyCmd.Flags().Bool("allow-rebuild", false, "allow destructive drop-and-recreate for primary-key drift (data loss, disposable environments only)")
 	applyCmd.Flags().Bool("plan", false, "print the classified CRUD plan without executing changes")

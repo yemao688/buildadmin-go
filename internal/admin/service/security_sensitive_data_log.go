@@ -23,7 +23,9 @@ func NewSecuritySensitiveDataLogService(sensitiveDataLogM *securitymodel.Securit
 // Rollback 回滚一批敏感数据日志：任何一条失败（无效目标、规则不可用、
 // 主键不匹配、行被并发修改）都会让整个批次原子回退。
 func (s *SecuritySensitiveDataLogService) Rollback(ctx context.Context, ids []int32) error {
-	normalized, err := normalizeLogIDs(ids, "sensitive data log")
+	normalized, err := normalizeIDs(ids, "sensitive data log", true, func(id int32) error {
+		return fmt.Errorf("invalid sensitive data log id %d", id)
+	})
 	if err != nil {
 		return err
 	}
@@ -57,23 +59,4 @@ func (s *SecuritySensitiveDataLogService) Rollback(ctx context.Context, ids []in
 		}
 		return nil
 	})
-}
-
-// normalizeLogIDs validates and de-duplicates a batch of security log ids.
-func normalizeLogIDs(ids []int32, entity string) ([]int32, error) {
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("invalid %s ids", entity)
-	}
-	seen := make(map[int32]struct{}, len(ids))
-	normalized := make([]int32, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, fmt.Errorf("invalid %s id %d", entity, id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
-	}
-	return normalized, nil
 }

@@ -10,6 +10,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
+	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
@@ -128,11 +129,15 @@ func TestAdminModelDeleteRejectsSubordinates(t *testing.T) {
 }
 
 func TestNormalizeAdminIDs(t *testing.T) {
-	got, err := normalizeAdminIDs([]int32{4, 4, 2, 4})
+	got, err := normalizeIDs([]int32{4, 4, 2, 4}, "admin", false, func(id int32) error {
+		return cErr.BadRequest("ids must be positive")
+	})
 	require.NoError(t, err)
 	require.Equal(t, []int32{4, 2}, got)
 	for _, ids := range [][]int32{{0}, {-1}, {2, 0, 3}} {
-		_, err := normalizeAdminIDs(ids)
-		require.Error(t, err, "normalizeAdminIDs(%v) should reject non-positive IDs", ids)
+		_, err := normalizeIDs(ids, "admin", false, func(id int32) error {
+			return cErr.BadRequest("ids must be positive")
+		})
+		require.Error(t, err, "normalizeIDs(%v) should reject non-positive IDs", ids)
 	}
 }

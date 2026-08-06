@@ -23,14 +23,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.Run(cmd, args)
-		},
+		}),
 	}
 	runMigrateCmd := &cobra.Command{
 		Use:           "run",
@@ -38,14 +33,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.Run(cmd, args)
-		},
+		}),
 	}
 	rollbackMigrateCmd := &cobra.Command{
 		Use:           "rollback [business]",
@@ -53,14 +43,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.Rollback(cmd, args)
-		},
+		}),
 	}
 	rollbackMigrateCmd.Flags().Uint64("steps", 0, "rollback N business migrations; default is the latest applied business migration")
 	rollbackMigrateCmd.Flags().Bool("to-breakpoint", false, "rollback business migrations newer than the saved breakpoint")
@@ -70,14 +55,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.ListBreakpoints(cmd, args)
-		},
+		}),
 	}
 	breakpointSetCmd := &cobra.Command{
 		Use:           "set <version>",
@@ -85,14 +65,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.SetBreakpoint(cmd, args)
-		},
+		}),
 	}
 	breakpointClearCmd := &cobra.Command{
 		Use:           "clear",
@@ -100,14 +75,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.ClearBreakpoint(cmd, args)
-		},
+		}),
 	}
 	breakpointListCmd := &cobra.Command{
 		Use:           "list",
@@ -115,14 +85,9 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			command, cleanup, err := cmdBootstrap(config, loggerWriter, logger)
-			if err != nil {
-				return err
-			}
-			defer cleanup()
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
 			return command.migrateH.ListBreakpoints(cmd, args)
-		},
+		}),
 	}
 	breakpointCmd.AddCommand(breakpointSetCmd, breakpointClearCmd, breakpointListCmd)
 	migrateCmd.AddCommand(runMigrateCmd, rollbackMigrateCmd, breakpointCmd)

@@ -19,31 +19,3 @@ func GetQueryParameter(ctx *gin.Context) (*QueryParameter, error) {
 func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (whereS string, whereP []interface{}, orderS string, limit int, offset int, err error) {
 	return querybuilder.QueryBuilder(ctx, table, withTables)
 }
-
-func GetFieldTypeMap(table TableInfo, args ...TableInfo) map[string]string {
-	return querybuilder.GetFieldTypeMap(table, args...)
-}
-
-func GetFieldType(fieldName string, fieldTypeMap map[string]string, table TableInfo) string {
-	return querybuilder.GetFieldType(fieldName, fieldTypeMap, table)
-}
-
-func IsValidFieldName(fieldName string, fieldTypeMap map[string]string) bool {
-	return querybuilder.IsValidFieldName(fieldName, fieldTypeMap)
-}
-
-func GetFullField(field string, table TableInfo) string {
-	return querybuilder.GetFullField(field, table)
-}
-
-func Backquote(field string) string {
-	return querybuilder.Backquote(field)
-}
-
-func GetOperatorByAlias(operator string) string {
-	return querybuilder.GetOperatorByAlias(operator)
-}
-
-func LimitAddOffset(ctx *gin.Context) (int, int) {
-	return querybuilder.LimitAddOffset(ctx)
-}

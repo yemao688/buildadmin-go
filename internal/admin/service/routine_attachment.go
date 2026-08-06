@@ -31,7 +31,9 @@ func NewRoutineAttachmentService(attachmentM *adminmodel.AttachmentRepository, c
 // Del 删除一批附件：仍被引用的（quote>1）只减计数，最后一次引用才物理
 // 删除行并清理文件；任何越权或缺失的 id 让整批原子回退。
 func (s *RoutineAttachmentService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
-	normalized, err := normalizeAttachmentIDs(ids)
+	normalized, err := normalizeIDs(ids, "attachment", true, func(id int32) error {
+		return fmt.Errorf("invalid attachment id %d", id)
+	})
 	if err != nil {
 		return err
 	}
@@ -83,23 +85,4 @@ func (s *RoutineAttachmentService) Del(ctx context.Context, ids []int32, actor d
 		}
 	}
 	return nil
-}
-
-// normalizeAttachmentIDs validates and de-duplicates a batch of attachment ids.
-func normalizeAttachmentIDs(ids []int32) ([]int32, error) {
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("invalid attachment ids")
-	}
-	seen := make(map[int32]struct{}, len(ids))
-	normalized := make([]int32, 0, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			return nil, fmt.Errorf("invalid attachment id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
-	}
-	return normalized, nil
 }

@@ -18,14 +18,6 @@ func RemoveStrDuplicates(arr []string) []string {
 	return result
 }
 
-func ItoaArr(arr []int32) []string {
-	result := []string{}
-	for _, v := range arr {
-		result = append(result, strconv.FormatInt(int64(v), 10))
-	}
-	return result
-}
-
 func AtoiArr(arr []string) ([]int32, error) {
 	result := []int32{}
 	for _, v := range arr {

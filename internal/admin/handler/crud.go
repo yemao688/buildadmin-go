@@ -308,9 +308,6 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 	}
 
 	controllerFile := params.ControllerFile
-	if controllerFile == "" {
-		controllerFile = ""
-	}
 	controllerExist := util.PathExists(controllerFile)
 
 	tableExist := false

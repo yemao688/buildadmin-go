@@ -163,28 +163,6 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 	}
 }
 
-func TestLimitAddOffset(t *testing.T) {
-	tests := []struct {
-		name       string
-		query      string
-		wantLimit  int
-		wantOffset int
-	}{
-		{name: "default", query: "page=3", wantLimit: 10, wantOffset: 20},
-		{name: "custom", query: "page=2&limit=20", wantLimit: 20, wantOffset: 20},
-		{name: "first page", query: "page=1&limit=7", wantLimit: 7, wantOffset: 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			limit, offset := LimitAddOffset(queryContext(tt.query))
-			if limit != tt.wantLimit || offset != tt.wantOffset {
-				t.Fatalf("LimitAddOffset() = %d, %d; want %d, %d", limit, offset, tt.wantLimit, tt.wantOffset)
-			}
-		})
-	}
-}
-
 func TestQueryBuilderHelpers(t *testing.T) {
 	if got := GetFullField("name", TableInfo{TableName: "items"}); got != "items.name" {
 		t.Fatalf("GetFullField() = %q; want %q", got, "items.name")
