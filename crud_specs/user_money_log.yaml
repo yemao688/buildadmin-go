@@ -1,0 +1,146 @@
+name: user_money_log
+comment: 会员余额变动表
+registerOnly: true
+columnFields: [id, admin_id, user_id, user.username, money, type, before, after, memo, create_time]
+formFields: [user_id, money, type, memo]
+dataScope:
+  mode: auto
+  inheritFrom:
+    table: user
+    byColumn: user_id
+indexes:
+  - name: idx_admin_id
+    unique: false
+    columns: [admin_id]
+  - name: idx_user_id
+    unique: false
+    columns: [user_id]
+fields:
+  - name: id
+    type: int
+    unsigned: true
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    formBuildExclude: true
+    comment: ID
+  - name: admin_id
+    type: int
+    unsigned: true
+    null: false
+    defaultType: INPUT
+    default: "0"
+    designType: remoteSelect
+    comment: 上级代理
+    formBuildExclude: true
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: username
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/admin.go
+      remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
+      width: 130
+      comSearchRender: remoteSelect
+      remote: "pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true }"
+  - name: user_id
+    type: int
+    unsigned: true
+    null: false
+    defaultType: INPUT
+    default: "0"
+    designType: remoteSelect
+    comment: 会员ID
+    form:
+      remoteTable: user
+      remotePk: id
+      remoteField: username_text
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/user.go
+      remoteModel: internal/model/user.go
+      validator: [required]
+    table:
+      operator: false
+  - name: money
+    type: decimal
+    length: 12
+    precision: 2
+    null: false
+    defaultType: INPUT
+    default: "0.00"
+    designType: number
+    comment: 变更余额
+    form:
+      validator: [required, number]
+    table:
+      operator: RANGE
+      sortable: custom
+  - name: before
+    type: decimal
+    length: 12
+    precision: 2
+    null: false
+    defaultType: INPUT
+    default: "0.00"
+    designType: number
+    comment: 变更前余额
+    formBuildExclude: true
+    table:
+      operator: RANGE
+      sortable: custom
+  - name: after
+    type: decimal
+    length: 12
+    precision: 2
+    null: false
+    defaultType: INPUT
+    default: "0.00"
+    designType: number
+    comment: 变更后余额
+    formBuildExclude: true
+    table:
+      operator: RANGE
+      sortable: custom
+  - name: type
+    type: varchar
+    length: 30
+    null: false
+    defaultType: INPUT
+    default: system
+    designType: select
+    comment: 类型:system=系统,recharge=充值,withdraw=提现,extend=拓展
+    form:
+      validator: []
+    table:
+      operator: eq
+      width: 100
+      replaceValue: { system: 系统, recharge: 充值, withdraw: 提现, extend: 拓展 }
+  - name: memo
+    type: varchar
+    length: 255
+    null: false
+    defaultType: EMPTY STRING
+    designType: textarea
+    comment: 备注
+    form:
+      rows: 3
+    table:
+      operator: LIKE
+  - name: create_time
+    type: bigint
+    unsigned: true
+    null: true
+    defaultType: NULL
+    designType: timestamp
+    formBuildExclude: true
+    comment: 创建时间
+    table:
+      operator: RANGE
+      render: datetime
+      sortable: custom
+      width: 160

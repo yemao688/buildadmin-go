@@ -1,0 +1,217 @@
+name: user
+comment: 会员表
+registerOnly: true
+quickSearchField: [username, nickname]
+columnFields: [id, admin_id, username, nickname, mobile, money, last_login_ip, last_login_time, create_time, status]
+formFields: [username, nickname, admin_id, avatar, email, mobile, password, status]
+dataScope:
+  mode: auto
+  reassignable: true
+indexes:
+  - name: username
+    unique: true
+    columns: [username]
+  - name: idx_admin_id
+    unique: false
+    columns: [admin_id]
+fields:
+  - name: id
+    type: int
+    unsigned: true
+    primaryKey: true
+    autoIncrement: true
+    null: false
+    designType: pk
+    formBuildExclude: true
+    comment: ID
+  - name: admin_id
+    type: int
+    unsigned: true
+    null: false
+    defaultType: INPUT
+    default: "0"
+    designType: remoteSelect
+    comment: 上级代理
+    form:
+      remoteTable: admin
+      remotePk: id
+      remoteField: username
+      relationFields: username
+      remoteSourceConfigType: crud
+      remoteController: internal/admin/handler/admin.go
+      remoteModel: internal/model/admin.go
+    table:
+      label: 上级代理
+      width: 130
+      comSearchRender: remoteSelect
+      remote: "pk: 'id', field: 'username', remoteUrl: '/admin/auth.Admin/index', params: { isTree: true }"
+  - name: username
+    type: varchar
+    length: 32
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 用户名
+    form:
+      validator: [required, account]
+    table:
+      operator: LIKE
+  - name: nickname
+    type: varchar
+    length: 50
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 昵称
+    form:
+      validator: [required]
+    table:
+      operator: LIKE
+  - name: avatar
+    type: varchar
+    length: 255
+    null: false
+    defaultType: EMPTY STRING
+    designType: image
+    comment: 头像
+    table:
+      operator: false
+  - name: email
+    type: varchar
+    length: 50
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 邮箱
+    form:
+      validator: [email]
+    table:
+      operator: LIKE
+  - name: mobile
+    type: varchar
+    length: 11
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 手机
+    form:
+      validator: [mobile]
+    table:
+      operator: LIKE
+  - name: password
+    type: varchar
+    length: 255
+    null: false
+    defaultType: EMPTY STRING
+    designType: password
+    comment: 密码
+    form:
+      validator: [password]
+    table:
+      operator: false
+  - name: status
+    type: varchar
+    length: 30
+    null: false
+    defaultType: INPUT
+    default: enable
+    designType: radio
+    comment: 状态:enable=启用,disable=禁用
+    form:
+      validator: []
+    table:
+      operator: eq
+      render: tag
+      replaceValue: { disable: 禁用, enable: 启用 }
+  - name: money
+    type: decimal
+    length: 12
+    precision: 2
+    null: false
+    defaultType: INPUT
+    default: "0.00"
+    designType: number
+    comment: 余额
+    formBuildExclude: true
+    table:
+      operator: false
+  - name: last_login_time
+    type: bigint
+    unsigned: true
+    null: true
+    defaultType: NULL
+    designType: timestamp
+    comment: 上次登录时间
+    table:
+      operator: RANGE
+      render: datetime
+      sortable: custom
+      width: 160
+  - name: last_login_ip
+    type: varchar
+    length: 50
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 上次登录IP
+    table:
+      operator: LIKE
+      render: tag
+  - name: login_failure
+    type: tinyint
+    unsigned: true
+    null: false
+    defaultType: INPUT
+    default: "0"
+    designType: number
+    comment: 登录失败次数
+    formBuildExclude: true
+    table:
+      operator: false
+  - name: join_ip
+    type: varchar
+    length: 50
+    null: false
+    defaultType: EMPTY STRING
+    designType: string
+    comment: 加入IP
+    table:
+      operator: LIKE
+  - name: join_time
+    type: bigint
+    unsigned: true
+    null: true
+    defaultType: NULL
+    designType: timestamp
+    comment: 加入时间
+    table:
+      operator: RANGE
+      render: datetime
+      sortable: custom
+      width: 160
+  - name: create_time
+    type: bigint
+    unsigned: true
+    null: true
+    defaultType: NULL
+    designType: timestamp
+    formBuildExclude: true
+    comment: 创建时间
+    table:
+      operator: RANGE
+      render: datetime
+      sortable: custom
+      width: 160
+  - name: update_time
+    type: bigint
+    unsigned: true
+    null: true
+    defaultType: NULL
+    designType: timestamp
+    formBuildExclude: true
+    comment: 更新时间
+    table:
+      operator: RANGE
+      render: datetime
+      sortable: custom
+      width: 160
