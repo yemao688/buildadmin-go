@@ -6,6 +6,7 @@ import (
 	"buildadmin-go/internal/common/money"
 	model "buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
 	"encoding/json"
@@ -73,16 +74,24 @@ func (h *MoneyLogHandler) Index(ctx *gin.Context) {
 type Money struct {
 	UserID int32           `json:"user_id"  binding:"required"` // 会员ID
 	Money  json.RawMessage `json:"money"  binding:"required"`   // yuan, up to two decimals
-	Type   string          `json:"type"`                        // 类型:system=系统,recharge=充值,withdraw=提现,extend=拓展（缺省 system）
-	Memo   string          `json:"memo"  binding:"required"`    // 备注
+	Type   string          `json:"type"`                        // 类型:system=系统,recharge=充值,withdraw=提现,extend=拓展（缺省 system；仅超管可指定）
+	Memo   string          `json:"memo"`                        // 备注（可选）
 }
 
 func (v Money) GetMessages() validator.ValidatorMessages {
 	return validator.ValidatorMessages{
 		"user_id.required": "user_id required",
 		"money.required":   "money required",
-		"memo.required":    "memo required",
 	}
+}
+
+// moneyLogTypeFor 决定余额流水的变动类型：仅超管可指定任意类型，其余
+// 管理员一律强制 system（资金语义不允许非超管写入非系统类型）。
+func moneyLogTypeFor(requested string, isSuperAdmin bool) string {
+	if !isSuperAdmin {
+		return "system"
+	}
+	return requested
 }
 
 func parseMoneyAmount(raw []byte) (float64, error) {
@@ -142,6 +151,11 @@ func (h *MoneyLogHandler) Add(ctx *gin.Context) {
 		return
 	}
 	userMoneyLog.Money = amount
+
+	// 变动类型仅超管可指定：其余管理员一律强制 system（对齐 PHP 上游——
+	// 变动类型属于资金语义，非超管无权写入非系统类型）。
+	adminAuth := header.GetAdminAuth(ctx)
+	userMoneyLog.Type = moneyLogTypeFor(params.Type, adminAuth.IsSuperAdmin)
 
 	actor, err := actorFromContext(ctx)
 	if err != nil {

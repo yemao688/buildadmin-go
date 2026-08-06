@@ -53,13 +53,16 @@
                             :placeholder="t('user.moneyLog.Please enter the balance change amount')"
                         ></el-input>
                     </el-form-item>
-                    <el-form-item prop="type" :label="t('user.moneyLog.Change type')">
+                    <el-form-item v-if="adminInfo.super" prop="type" :label="t('user.moneyLog.Change type')">
                         <el-select v-model="baTable.form.items!.type">
                             <el-option :label="t('user.moneyLog.type system')" value="system" />
                             <el-option :label="t('user.moneyLog.type recharge')" value="recharge" />
                             <el-option :label="t('user.moneyLog.type withdraw')" value="withdraw" />
                             <el-option :label="t('user.moneyLog.type extend')" value="extend" />
                         </el-select>
+                    </el-form-item>
+                    <el-form-item v-else :label="t('user.moneyLog.Change type')">
+                        <el-input :model-value="t('user.moneyLog.type system')" disabled></el-input>
                     </el-form-item>
                     <el-form-item :label="t('user.moneyLog.Balance after change')">
                         <el-input v-model="state.after" type="number" disabled></el-input>
@@ -96,8 +99,10 @@ import FormItem from '/@/components/formItem/index.vue'
 import type { FormItemRule } from 'element-plus'
 import { buildValidatorData } from '/@/utils/validate'
 import { useConfig } from '/@/stores/config'
+import { useAdminInfo } from '/@/stores/adminInfo'
 
 const config = useConfig()
+const adminInfo = useAdminInfo()
 const { t } = useI18n()
 const baTable = inject('baTable') as baTableClass
 const rules: Partial<Record<string, FormItemRule[]>> = reactive({
@@ -114,7 +119,6 @@ const rules: Partial<Record<string, FormItemRule[]>> = reactive({
             trigger: 'blur',
         },
     ],
-    memo: [buildValidatorData({ name: 'required', title: t('user.moneyLog.remarks') })],
 })
 
 const formRef = useTemplateRef('formRef')
@@ -158,8 +162,7 @@ watch(
             }
         }
     }
-)
-</script>
+)</script>
 
 <style scoped lang="scss">
 .preview-img {
