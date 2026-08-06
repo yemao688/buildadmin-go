@@ -1,152 +1,97 @@
 package commands
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
-
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
-// buildCascadeSyncJobs 单元测试：用构造的 LogRow 覆盖反向聚合、过滤与
-// 失败关闭路径，不依赖真实 crud_log 数据。
-func TestBuildCascadeSyncJobs(t *testing.T) {
+// writeSpec 向 specsDir 写入一个合法的最小 spec（name + id 主键 + dataScope）。
+func writeSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
+	t.Helper()
+	spec := "name: " + name + "\ncomment: test\n" + dataScopeYAML +
+		"fields:\n" +
+		"  - name: id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n"
+	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestBuildCascadeSyncJobsFromSpecs 单元测试：用临时 specs 目录覆盖反向聚合、
+// 过滤与失败关闭路径，不依赖 crud_log 数据。
+func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 	tests := []struct {
-		name    string
-		logs    []LogRow
-		want    []CascadeJob
-		wantErr bool
-		errPart string
+		name     string
+		specs    map[string]string // 文件名 → dataScope YAML（写为合法 spec）
+		broken   string            // 若非空，写入一个非法 spec 文件（触发 LoadSpec 失败）
+		want     []CascadeJob
+		wantErr  bool
+		errPart  string
 	}{
 		{
 			name: "反向聚合：两个子表 inheritFrom 同一主表 → 1 job 含 2 children",
-			logs: []LogRow{
-				{TableName: "user_money_log", TableJSON: `{
-					"name": "user_money_log",
-					"comment": "余额流水",
-					"dataScope": {"mode": "auto", "inheritFrom": {"table": "user", "byColumn": "user_id"}}
-				}`},
-				{TableName: "order_recharge", TableJSON: `{
-					"name": "order_recharge",
-					"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user_id"}}
-				}`},
+			specs: map[string]string{
+				"user_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
+				"order_recharge": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
 			},
 			want: []CascadeJob{
 				{ParentTable: "user", Children: []ChildRef{
-					{ChildTable: "user_money_log", ByColumn: "user_id"},
 					{ChildTable: "order_recharge", ByColumn: "user_id"},
+					{ChildTable: "user_money_log", ByColumn: "user_id"},
 				}},
 			},
 		},
 		{
 			name: "不同主表的子表产出多个 job",
-			logs: []LogRow{
-				{TableName: "user_money_log", TableJSON: `{
-					"name": "user_money_log",
-					"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user_id"}}
-				}`},
-				{TableName: "seller_money_log", TableJSON: `{
-					"name": "seller_money_log",
-					"dataScope": {"inheritFrom": {"table": "seller_user", "byColumn": "seller_id"}}
-				}`},
+			specs: map[string]string{
+				"user_money_log":  "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
+				"seller_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: seller_user\n    byColumn: seller_id\n",
 			},
 			want: []CascadeJob{
-				{ParentTable: "user", Children: []ChildRef{{ChildTable: "user_money_log", ByColumn: "user_id"}}},
 				{ParentTable: "seller_user", Children: []ChildRef{{ChildTable: "seller_money_log", ByColumn: "seller_id"}}},
-			},
-		},
-		{
-			name: "key 大小写容错：DataScope/InheritFrom/ByColumn 均可解析",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"name": "user_money_log",
-				"DataScope": {
-					"Mode": "auto",
-					"InheritFrom": {"Table": "user", "ByColumn": "user_id"}
-				}
-			}`}},
-			want: []CascadeJob{
 				{ParentTable: "user", Children: []ChildRef{{ChildTable: "user_money_log", ByColumn: "user_id"}}},
 			},
 		},
 		{
-			name: "无 dataScope 的行被过滤",
-			logs: []LogRow{{TableName: "country", TableJSON: `{"name": "country"}`}},
-			want: nil,
-		},
-		{
-			name: "dataScope 存在但无 inheritFrom 的行被过滤（含历史 cascadeOwners 声明）",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"name": "user_money_log",
-				"dataScope": {"mode": "auto", "ownerColumn": "admin_id",
-					"cascadeOwners": [{"table": "user", "byColumn": "user_id"}]}
-			}`}},
-			want: nil,
-		},
-		{
-			name:    "非法 JSON 行报错且携带 table_name",
-			logs:    []LogRow{{TableName: "user_money_log", TableJSON: `{"name": "user_money_log", "dataScope": {`}},
-			wantErr: true,
-			errPart: `table "user_money_log"`,
-		},
-		{
-			name: "多行混合：合法行产出任务，非法行整体报错",
-			logs: []LogRow{
-				{TableName: "user_money_log", TableJSON: `{
-					"name": "user_money_log",
-					"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user_id"}}
-				}`},
-				{TableName: "broken", TableJSON: `not json`},
+			name: "无 dataScope 的 spec 被过滤",
+			specs: map[string]string{
+				"country": "",
 			},
-			wantErr: true,
-			errPart: `table "broken"`,
+			want: nil,
 		},
 		{
-			name:    "inheritFrom 缺 byColumn → 不完整声明报错",
-			logs:    []LogRow{{TableName: "user_money_log", TableJSON: `{"name": "user_money_log", "dataScope": {"inheritFrom": {"table": "user"}}}`}},
-			wantErr: true,
-			errPart: "incomplete inheritFrom",
+			name: "dataScope 存在但无 inheritFrom 的 spec 被过滤",
+			specs: map[string]string{
+				"country": "dataScope:\n  mode: none\n",
+			},
+			want: nil,
 		},
 		{
-			name:    "inheritFrom 缺 table → 不完整声明报错",
-			logs:    []LogRow{{TableName: "user_money_log", TableJSON: `{"name": "user_money_log", "dataScope": {"inheritFrom": {"byColumn": "user_id"}}}`}},
+			name: "非法 spec（缺字段）整体报错且携带文件名",
+			specs: map[string]string{
+				"user_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
+			},
+			broken:  "broken.yaml",
 			wantErr: true,
-			errPart: "incomplete inheritFrom",
+			errPart: "broken.yaml",
 		},
 		{
 			name: "非法标识符：inheritFrom 主表名含点号被拒绝",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"name": "user_money_log",
-				"dataScope": {"inheritFrom": {"table": "user.bad", "byColumn": "user_id"}}
-			}`}},
-			wantErr: true,
-			errPart: "invalid",
-		},
-		{
-			name: "非法标识符：子表名含空格被拒绝",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"name": "user money log",
-				"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user_id"}}
-			}`}},
+			specs: map[string]string{
+				"user_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user.bad\n    byColumn: user_id\n",
+			},
 			wantErr: true,
 			errPart: "invalid",
 		},
 		{
 			name: "非法标识符：byColumn 含反引号被拒绝",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"name": "user_money_log",
-				"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user` + "`" + `id"}}
-			}`}},
-			wantErr: true,
-			errPart: "invalid",
-		},
-		{
-			name: "空 name（子表名缺失）的 JSON 被拒绝（非法标识符）",
-			logs: []LogRow{{TableName: "user_money_log", TableJSON: `{
-				"dataScope": {"inheritFrom": {"table": "user", "byColumn": "user_id"}}
-			}`}},
+			specs: map[string]string{
+				"user_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: \"user`id\"\n",
+			},
 			wantErr: true,
 			errPart: "invalid",
 		},
@@ -154,18 +99,28 @@ func TestBuildCascadeSyncJobs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			jobs, err := buildCascadeSyncJobs(test.logs)
+			specsDir := t.TempDir()
+			for fileName, dsYAML := range test.specs {
+				writeSpec(t, specsDir, strings.TrimSuffix(fileName, ".yaml"), dsYAML)
+			}
+			if test.broken != "" {
+				if err := os.WriteFile(filepath.Join(specsDir, test.broken), []byte("name: broken\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			jobs, err := buildCascadeSyncJobsFromSpecs(specsDir)
 			if test.wantErr {
 				if err == nil {
-					t.Fatalf("buildCascadeSyncJobs() error = nil, want error")
+					t.Fatalf("buildCascadeSyncJobsFromSpecs() error = nil, want error")
 				}
 				if test.errPart != "" && !strings.Contains(err.Error(), test.errPart) {
-					t.Fatalf("buildCascadeSyncJobs() error = %v, want it to contain %q", err, test.errPart)
+					t.Fatalf("buildCascadeSyncJobsFromSpecs() error = %v, want it to contain %q", err, test.errPart)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("buildCascadeSyncJobs() unexpected error: %v", err)
+				t.Fatalf("buildCascadeSyncJobsFromSpecs() unexpected error: %v", err)
 			}
 			if len(jobs) != len(test.want) {
 				t.Fatalf("jobs = %+v, want %+v", jobs, test.want)
@@ -179,8 +134,8 @@ func TestBuildCascadeSyncJobs(t *testing.T) {
 	}
 }
 
-// sameJob 比较两个 CascadeJob（Children 顺序敏感，聚合顺序由行顺序决定，
-// 测试构造的行顺序即期望顺序）。
+// sameJob 比较两个 CascadeJob（Children 顺序敏感，聚合顺序由 spec 文件名字典
+// 序决定，测试构造的文件名即期望顺序）。
 func sameJob(a, b CascadeJob) bool {
 	if a.ParentTable != b.ParentTable || len(a.Children) != len(b.Children) {
 		return false
@@ -238,115 +193,5 @@ func TestValidateCascadeJob(t *testing.T) {
 	// 空 Children 的 job 通过校验（无可同步内容，Sync 汇总 0 行）。
 	if err := validateCascadeJob(CascadeJob{ParentTable: "user"}); err != nil {
 		t.Errorf("validateCascadeJob with no children: unexpected error %v", err)
-	}
-}
-
-// newCascadeCrudLogTestDB 构造 sqlite 内存库 + ba_crud_log 表，用于
-// loadCrudLogRows 的状态过滤单测（与 crud_helper 的 apply_test 同构）。
-func newCascadeCrudLogTestDB(t *testing.T) (*gorm.DB, *conf.Configuration) {
-	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := &conf.Configuration{}
-	cfg.Database.Prefix = "ba_"
-	if err := db.Exec("CREATE TABLE ba_crud_log (id INTEGER PRIMARY KEY AUTOINCREMENT, admin_id INTEGER NOT NULL, table_name TEXT NOT NULL, `table` BLOB, fields BLOB, status TEXT NOT NULL, comment TEXT, connection TEXT NOT NULL, sync INTEGER, create_time INTEGER)").Error; err != nil {
-		t.Fatal(err)
-	}
-	return db, cfg
-}
-
-// insertCrudLogRow 按 (create_time, id) 递增顺序写入 crud_log 行。
-func insertCrudLogRow(t *testing.T, db *gorm.DB, tableName, tableJSON, status string, id, createTime int) {
-	t.Helper()
-	if err := db.Exec("INSERT INTO ba_crud_log (id, admin_id, table_name, `table`, fields, status, connection, sync, create_time) VALUES (?, 1, ?, ?, '[]', ?, 'mysql', 0, ?)",
-		id, tableName, tableJSON, status, createTime).Error; err != nil {
-		t.Fatal(err)
-	}
-}
-
-// inheritFromJSON 构造子表声明 inheritFrom 主表的 table JSON。
-func inheritFromJSON(t *testing.T, childName, parentName string) string {
-	t.Helper()
-	return `{"name": "` + childName + `", "dataScope": {"mode": "auto",
-		"inheritFrom": {"table": "` + parentName + `", "byColumn": "user_id"}}}`
-}
-
-// TestLoadCrudLogRowsSkipsConsumedSuccess 回归评审修复：子表 X 存在
-// 成功A→成功B→delete(B) 序列时，X 的陈旧 success 行不得产出对账任务
-// （模块已删除，子表可能已 DROP，旧实现会生成 job 并在 UPDATE 报 1146）。
-func TestLoadCrudLogRowsSkipsConsumedSuccess(t *testing.T) {
-	db, cfg := newCascadeCrudLogTestDB(t)
-	insertCrudLogRow(t, db, "user_x_money_log", inheritFromJSON(t, "user_x_money_log", "user_x"), "success", 1, 1)
-	insertCrudLogRow(t, db, "user_x_money_log", inheritFromJSON(t, "user_x_money_log", "user_x"), "success", 2, 2)
-	insertCrudLogRow(t, db, "user_x_money_log", "", "delete", 3, 3)
-
-	rows, err := loadCrudLogRows(db, cfg)
-	if err != nil {
-		t.Fatalf("loadCrudLogRows() error: %v", err)
-	}
-	for _, row := range rows {
-		if row.TableName == "user_x_money_log" {
-			t.Fatalf("loadCrudLogRows() kept consumed table %q (latest row is delete)", row.TableName)
-		}
-	}
-	jobs, err := buildCascadeSyncJobs(rows)
-	if err != nil {
-		t.Fatalf("buildCascadeSyncJobs() error: %v", err)
-	}
-	for _, job := range jobs {
-		if job.ParentTable == "user_x" {
-			t.Fatalf("buildCascadeSyncJobs() produced job for consumed table user_x: %+v", job)
-		}
-	}
-}
-
-// TestLoadCrudLogRowsLatestSuccess 最新一行是 success 时正常产出任务；
-// 同时覆盖最新行是 error 时跳过、delete 后重新生成的 success 保留。
-func TestLoadCrudLogRowsLatestSuccess(t *testing.T) {
-	db, cfg := newCascadeCrudLogTestDB(t)
-	// user_ok_money_log：成功A→成功B，最新是 success → 保留并产出 job。
-	insertCrudLogRow(t, db, "user_ok_money_log", inheritFromJSON(t, "user_ok_money_log", "user_ok"), "success", 1, 1)
-	insertCrudLogRow(t, db, "user_ok_money_log", inheritFromJSON(t, "user_ok_money_log", "user_ok"), "success", 2, 2)
-	// user_broken_money_log：success→error，最新不是 success → 跳过。
-	insertCrudLogRow(t, db, "user_broken_money_log", inheritFromJSON(t, "user_broken_money_log", "user_broken"), "success", 3, 3)
-	insertCrudLogRow(t, db, "user_broken_money_log", "", "error", 4, 4)
-	// user_reborn_money_log：delete→success（删除后重新生成），最新 success → 保留。
-	insertCrudLogRow(t, db, "user_reborn_money_log", "", "delete", 5, 5)
-	insertCrudLogRow(t, db, "user_reborn_money_log", inheritFromJSON(t, "user_reborn_money_log", "user_reborn"), "success", 6, 6)
-
-	rows, err := loadCrudLogRows(db, cfg)
-	if err != nil {
-		t.Fatalf("loadCrudLogRows() error: %v", err)
-	}
-	got := map[string]bool{}
-	for _, row := range rows {
-		got[row.TableName] = true
-	}
-	for _, want := range []string{"user_ok_money_log", "user_reborn_money_log"} {
-		if !got[want] {
-			t.Errorf("loadCrudLogRows() missing %q (latest row is success)", want)
-		}
-	}
-	if got["user_broken_money_log"] {
-		t.Errorf("loadCrudLogRows() kept %q (latest row is error)", "user_broken_money_log")
-	}
-
-	jobs, err := buildCascadeSyncJobs(rows)
-	if err != nil {
-		t.Fatalf("buildCascadeSyncJobs() error: %v", err)
-	}
-	jobParents := map[string]bool{}
-	for _, job := range jobs {
-		jobParents[job.ParentTable] = true
-	}
-	if !jobParents["user_ok"] || !jobParents["user_reborn"] {
-		t.Fatalf("buildCascadeSyncJobs() jobs = %+v, want user_ok and user_reborn", jobs)
-	}
-	for _, job := range jobs {
-		if job.ParentTable == "user_broken" {
-			t.Fatalf("buildCascadeSyncJobs() produced job for user_broken: %+v", job)
-		}
 	}
 }

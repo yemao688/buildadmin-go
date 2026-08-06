@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	crudmodel "buildadmin-go/internal/model"
-	"buildadmin-go/internal/pkg/data_scope"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -190,24 +188,27 @@ func TestRemoveCascadeAnchorIdempotentAndTolerant(t *testing.T) {
 	require.NoError(t, removeCascadeAnchor(noAnchor, "ghost"))
 }
 
-func TestStaleInheritParent(t *testing.T) {
-	logWith := func(table string) *crudmodel.Log {
-		return &crudmodel.Log{Tablename: "order",
-			Table: crudmodel.JSON_TABLE(crudmodel.Table{
-				Name:      "order",
-				DataScope: &data_scope.Config{Mode: data_scope.ModeAuto, InheritFrom: &data_scope.InheritRef{Table: table, ByColumn: "user_id"}},
-			})}
-	}
-	// 无旧记录 → 无清理
-	assert.Equal(t, "", staleInheritParent(nil, &data_scope.InheritRef{Table: "seller_user", ByColumn: "user_id"}))
-	// 旧记录无 inheritFrom → 无清理
-	assert.Equal(t, "", staleInheritParent(&crudmodel.Log{Table: crudmodel.JSON_TABLE(crudmodel.Table{Name: "order"})}, &data_scope.InheritRef{Table: "seller_user", ByColumn: "user_id"}))
-	// 新声明去掉 inheritFrom → 清理旧主实体
-	assert.Equal(t, "seller_user", staleInheritParent(logWith("seller_user"), nil))
-	// 新声明改指向 → 清理旧主实体
-	assert.Equal(t, "seller_user", staleInheritParent(logWith("seller_user"), &data_scope.InheritRef{Table: "order_user", ByColumn: "user_id"}))
-	// 指向未变（含 byColumn 变化）→ 不清理（apply 整行替换处理）
-	assert.Equal(t, "", staleInheritParent(logWith("seller_user"), &data_scope.InheritRef{Table: "seller_user", ByColumn: "order_id"}))
+// TestCleanupStaleCascadeAnchorsNoop 验证 cleanupStaleCascadeAnchors 的空操作
+// 路径：specsDir 为空、无 reassignable 父表、或父表 repo 缺失时均返回空且不
+// 报错（幂等宽容；实际清理发生在子表生成流程，由父表 repo 锚点块驱动）。
+func TestCleanupStaleCascadeAnchorsNoop(t *testing.T) {
+	// 空目录 → 空结果
+	cleaned, err := cleanupStaleCascadeAnchors(t.TempDir(), "order")
+	require.NoError(t, err)
+	require.Empty(t, cleaned)
+
+	// 仅非 reassignable spec → 无父表可清理
+	specsDir := t.TempDir()
+	writeTestSpec(t, specsDir, "country", "dataScope:\n  mode: none\n")
+	cleaned, err = cleanupStaleCascadeAnchors(specsDir, "order")
+	require.NoError(t, err)
+	require.Empty(t, cleaned)
+
+	// reassignable 父表但仓库无对应 repo（seller_user 未生成）→ 跳过，空结果
+	writeTestSpec(t, specsDir, "seller_user", "dataScope:\n  mode: auto\n  reassignable: true\n")
+	cleaned, err = cleanupStaleCascadeAnchors(specsDir, "order")
+	require.NoError(t, err)
+	require.Empty(t, cleaned)
 }
 
 func TestParentRepositoryPath(t *testing.T) {
