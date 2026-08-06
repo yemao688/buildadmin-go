@@ -221,6 +221,8 @@ go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对
 - **byColumn 建议建索引**：级联 UPDATE 按 `{byColumn} = 主键` 过滤，无索引时全表扫描且行锁放大；子表 spec 用 `indexes:` 为 byColumn 声明索引（如 `idx_user_id`），`crud:apply` 负责物化。
 - **级联只有一级**：`inheritFrom` 与 `reassignable` 互斥，运行时级联只在"主实体 Edit 改归属 → 子表回首"这一层发生。链式 A→B→C 场景（B 以 A 为主实体、C 以 B 为主实体）中，A 改归属的裸 UPDATE 不会触发 B→C 的级联，C 的归属漂移靠 B 自身 Edit 回首或 `cascade:sync B`（CLI 按 B 的声明对账 C）修复。
 - **主实体重新生成会重置锚点（自动重注册）**：重新 `crud:generate` 主实体本身会把 `CascadeOwners()` 渲染为空锚点；生成器随即按 `crud_log` 中仍声明 `inheritFrom` 指向它的子表逐条重注册（整行幂等），重置窗口已消除。手改锚点内容仍会被重新生成重置（自定义注册请新增独立文件/方法）。
+- **手写写入路径继承归属时必须显式 `OwnerInScopeWithActor`**：归属继承 + 数据范围校验由**生成 repo 的 Add 自动完成**，但业务自定义的手写写入路径（如 `FinanceService` 直接创建充提单、批量导入等绕过生成 repo Add 的代码）继承主实体归属后很容易漏掉 `OwnerInScopeWithActor` 校验——非超管可跨 scope 植入归属到麾外主实体的记录（与生成 Add 的 `inheritFrom` 语义不一致）。手写写入必须与生成 repo Add 对齐：事务内 `SELECT ... FOR UPDATE` 读主实体归属、显式 `data_scope.OwnerInScopeWithActor(ctx, tx, enforcer, prefix, ownerID, actor)` 校验该归属在请求者麾下，再写入。评审手写业务代码时把这条作为必查项。
+- **锁序反转（已知事项）**：Add 路径（`FOR UPDATE` 父行 → 插子行）与归属变更 Edit 路径（`FOR UPDATE` 子行 → 更新父行）并发时锁序相反，InnoDB 会 abort 其中一方（transient 500，重试即可成功）——框架设计固有，接受为已知事项，不做跨事务锁序统一。
 
 ### 受保护核心表的 `registerOnly` 登记（手写父表/子表）
 
