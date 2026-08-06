@@ -106,7 +106,6 @@ func (h *CommonHandler) CheckClickCaptcha(ctx *gin.Context) {
 }
 
 func (h *CommonHandler) RefreshToken(ctx *gin.Context) {
-	token.RegisterBuiltinRefreshTypes()
 	var params struct {
 		RefreshToken string `json:"refreshToken"`
 	}
