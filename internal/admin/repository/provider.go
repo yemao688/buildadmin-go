@@ -13,6 +13,7 @@ var ProviderSet = wire.NewSet(
 	NewAdminRuleRepository,
 	NewAdminLogRepository,
 	NewAuthRepository,
+	NewCrudLogRepository,
 	NewConfigRepository,
 	NewAttachmentRepository,
 	NewSecurityDataRecycleRepository,

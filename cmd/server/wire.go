@@ -25,7 +25,6 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
-	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/terminal"
 	"buildadmin-go/internal/router"
 
@@ -54,7 +53,6 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Se
 		adminService.ProviderSet,
 		adminHandler.ProviderSet,
 		adminRepo.ProviderSet,
-		model.ProviderSet,
 		wire.Bind(new(terminal.AuthModel), new(*adminRepo.AuthRepository)),
 		apiHandler.ProviderSet,
 

@@ -26,7 +26,6 @@ import (
 	"buildadmin-go/internal/cron"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/infra/rds"
-	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/captcha"
 	"buildadmin-go/internal/pkg/clickcaptcha"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -63,8 +62,8 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	uploadHelper := upload.NewUploadHelper(gormDB, configuration, aliossStorage)
 	terminalTerminal := terminal.NewTerminal(configuration, zapLogger, authRepository)
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableRepository, uploadHelper, terminalTerminal, configuration)
-	logModel := model.NewLogModel(gormDB, configuration, closureEnforcer)
-	logHandler := handler.NewLogHandler(zapLogger, logModel, authRepository)
+	crudLogRepository := repository.NewCrudLogRepository(gormDB, configuration, closureEnforcer)
+	logHandler := handler.NewLogHandler(zapLogger, crudLogRepository, authRepository)
 	moduleHandler := handler.NewModuleHandler(zapLogger)
 	adminGroupRepository := repository.NewAdminGroupRepository(gormDB, configuration)
 	adminRuleRepository := repository.NewAdminRuleRepository(gormDB, configuration)
@@ -97,7 +96,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	sensitiveDataLogHandler := handler.NewSensitiveDataLogHandler(zapLogger, configuration, securitySensitiveDataLogRepository, securitySensitiveDataLogService)
 	adminInfoHandler := handler.NewAdminInfoHandler(zapLogger, adminRepository, authRepository)
 	adminLogHandler := handler.NewAdminLogHandler(zapLogger, adminLogRepository)
-	crudHandler := handler.NewCrudHandler(zapLogger, tableRepository, logModel, adminRuleRepository, configuration)
+	crudHandler := handler.NewCrudHandler(zapLogger, tableRepository, crudLogRepository, adminRuleRepository, configuration)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleRepository)
 	userMoneyLogRepository := repository.NewUserMoneyLogRepository(gormDB, configuration, closureEnforcer)
 	userBalanceService := money.NewUserBalanceService()

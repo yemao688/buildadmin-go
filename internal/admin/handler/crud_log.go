@@ -2,7 +2,6 @@ package handler
 
 import (
 	adminauth "buildadmin-go/internal/admin/repository"
-	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/response"
@@ -14,11 +13,11 @@ import (
 type LogHandler struct {
 	Base
 	log     *zap.Logger
-	crudLog *crudmodel.LogModel
+	crudLog *adminauth.CrudLogRepository
 	authM   *adminauth.AuthRepository
 }
 
-func NewLogHandler(log *zap.Logger, crudLog *crudmodel.LogModel, authM *adminauth.AuthRepository) *LogHandler {
+func NewLogHandler(log *zap.Logger, crudLog *adminauth.CrudLogRepository, authM *adminauth.AuthRepository) *LogHandler {
 	return &LogHandler{
 		Base:    NewBase(crudLog),
 		log:     log,
