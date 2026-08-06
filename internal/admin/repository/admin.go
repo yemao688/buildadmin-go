@@ -127,15 +127,19 @@ func (s *AdminRepository) List(ctx *gin.Context) (list []*model.Admin, total int
 	if err != nil {
 		return
 	}
-	db := s.DBFor(ctx).Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
-	if err = db.Count(&total).Error; err != nil {
+	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，
+	// GORM 的 Count 会重置 statement，导致 Find 丢失 scope/搜索 WHERE
+	// （受限管理员看到上级数据的根因；与生成器产物 countDB/findDB 模式对齐）。
+	countDB := s.DBFor(ctx).Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
+	if err = countDB.Count(&total).Error; err != nil {
 		return
 	}
-	err = db.Omit("password", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	findDB := s.DBFor(ctx).Model(&model.Admin{}).Scopes(s.scoped(ctx)).Where(whereS, whereP...)
+	err = findDB.Omit("password", "login_failure").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	if err != nil {
 		return
 	}
-	if err = s.loadParentSummaries(ctx, db, s.scoped(ctx), list); err != nil {
+	if err = s.loadParentSummaries(ctx, s.DBFor(ctx), s.scoped(ctx), list); err != nil {
 		return
 	}
 	for _, v := range list {

@@ -104,14 +104,18 @@ func (s *UserRepository) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	var total int64 = 0
 	list := []*model.User{}
 
-	db := s.DBFor(ctx).Model(&model.User{}).Where(whereS, whereP...)
-	db = db.Preload("Admin")
-	db = db.Scopes(s.scoped(ctx))
-	if err = db.Count(&total).Error; err != nil {
+	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，
+	// GORM 的 Count 会重置 statement，导致 Find 丢失 scope/搜索 WHERE
+	// （用户数据越权可见的根因；与生成器产物 countDB/findDB 模式对齐）。
+	countDB := s.DBFor(ctx).Model(&model.User{}).Where(whereS, whereP...)
+	countDB = countDB.Scopes(s.scoped(ctx))
+	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	if err := db.Omit("password").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
+	findDB := s.DBFor(ctx).Model(&model.User{}).Preload("Admin").Where(whereS, whereP...)
+	findDB = findDB.Scopes(s.scoped(ctx))
+	if err := findDB.Omit("password").Order(orderS).Limit(limit).Offset(offset).Find(&list).Error; err != nil {
 		return nil, 0, err
 	}
 

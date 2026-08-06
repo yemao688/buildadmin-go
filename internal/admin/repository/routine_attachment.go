@@ -67,14 +67,20 @@ func (s *AttachmentRepository) List(ctx *gin.Context) (list []*upload.Attachment
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.scoped(ctx, s.DB().Table(s.TableName+" AS attachment")).Model(&upload.Attachment{}).Preload("Admin").Preload("User").
+	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，
+	// GORM 的 Count 会重置 statement，导致 Find 丢失 scope/搜索 WHERE。
+	countDB := s.scoped(ctx, s.DB().Table(s.TableName+" AS attachment")).Model(&upload.Attachment{}).
 		Joins("Admin").
 		Joins("User").
 		Where(whereS, whereP...)
-	if err = db.Count(&total).Error; err != nil {
+	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	findDB := s.scoped(ctx, s.DB().Table(s.TableName+" AS attachment")).Model(&upload.Attachment{}).Preload("Admin").Preload("User").
+		Joins("Admin").
+		Joins("User").
+		Where(whereS, whereP...)
+	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	for _, v := range list {
 		if _, err = s.DealData(ctx, v); err != nil {
 			return nil, 0, err

@@ -33,11 +33,14 @@ func (s *SecurityDataRecycleRepository) List(ctx *gin.Context) (list []model.Sec
 	if err != nil {
 		return nil, 0, err
 	}
-	db := s.DBFor(ctx).Model(&model.SecurityDataRecycle{}).Where(whereS, whereP...)
-	if err = db.Count(&total).Error; err != nil {
+	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，
+	// GORM 的 Count 会重置 statement，导致 Find 丢失搜索 WHERE。
+	countDB := s.DBFor(ctx).Model(&model.SecurityDataRecycle{}).Where(whereS, whereP...)
+	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err = db.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	findDB := s.DBFor(ctx).Model(&model.SecurityDataRecycle{}).Where(whereS, whereP...)
+	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return
 }
 
