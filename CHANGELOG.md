@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.1.2
+
+> 下游 fork 反馈修复批次 + 生成器增强：级联运行时缺失子表容错、reassignable owner 自动渲染补齐关联查询（列表显示上级代理）、语言 .ts/replaceValue 生成确定性、`crud:generate` 支持 `--skip-frontend`/`--skip-repo`（定制产物重新生成时跳过手动回补）。
+
+- **Fixed (级联运行时容错):** `validateUserLogOwners`/`syncUserLogOwners` 跳过未建子表（`Migrator().HasTable` 检查）——`UserService.Edit` 改归属不再因注册表指向未物化/已删子表而 1146，与 cascade:sync 的表存在性检查语义一致。
+- **Fixed (级联测试可扩展):** 下游业务 fork 使用级联能力后不再必失败——`TestUserCascadeOwnersRegistration` 断言改为注册表可扩展语义；`TestValidateInheritParent`/`TestCleanupStaleCascadeAnchorsNoop` 经 `repoRootOverride`（仅测试注入）隔离真实仓库状态；MySQL 测试夹具建表与 `CascadeOwners()` 联动。
+- **Fixed (reassignable owner 关联查询):** owner 自动覆盖块补 `RelationFields`（未手写时默认 `username`，手写保留）——列表列关联显示列（admin.username 上级代理）与后端关联加载器以 `RelationFields` 为入口条件，缺失则不生成（下游 fork 反馈）。
+- **Fixed (生成确定性):** 语言 .ts 与 `replaceValue` 生成改为 keys 排序输出——Go map 迭代顺序随机导致每次生成键序不同，破坏"`crud:delete` + 重新生成逐字节一致"契约；`writeWebLangFile` 提取 `buildLangTsContent`，`getTableColumn` 的 `replaceValue` 同样排序；补确定性回归测试。
+- **Added (crud:generate skip 开关):** `--skip-frontend`（跳过 views/lang 生成并隐含 `--skip-menu`）与 `--skip-repo`（跳过 repository 文件与 provider 合并，前置校验仓库文件必须已存在，首次生成使用报错）——仅用于已成熟定制对应产物的模块重新生成（生成器无生成改动时跳过手动回补）；跳过产物不入 manifest（`crud:delete` 不删定制文件）、不参与快照。
+- **Added (manifest 双向子集):** `manifestAllows` 允许 skip 方向（本次是上次剔除跳过路径后的等长子集）与恢复方向（上次记录是本次的子集，从 skip 切回全量无需先 `crud:delete`）；两清单互不包含的路径漂移（换 generateRelativePath/表名，会残留旧文件）仍拒绝。
+- **Changed (docs):** `crud-generation.md` 补充 inheritFrom 手写写入路径必须显式 `OwnerInScopeWithActor`（与生成 repo Add 对齐，列为评审必查项）、锁序反转已知事项（Add 父行锁→插子行 vs Edit 子行锁→更新父行）、生成跳过开关小节。
+
 ## v3.1.1
 
 > 级联声明事实源批次：inheritFrom/reassignable 声明全面改为 crud_specs/ 目录驱动（spec 存在即生效，重装不丢、无需逐表跑生成），registerOnly 受保护核心表登记落地（user/user_money_log 内置 spec），cascade:sync 对账改 specs 扫描 + information_schema 表存在性检查，user 手写 CascadeOwners() 锚点块 + 运行时级联同步对齐生成器模板语义。
