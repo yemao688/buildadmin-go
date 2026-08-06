@@ -286,9 +286,30 @@ func (s *UserRepository) validateUserOwner(ctx context.Context, tx *gorm.DB, own
 }
 
 func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
-	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
+	for _, owner := range s.CascadeOwners() {
+		table := owner.Table
+		if table == "" {
+			continue
+		}
+		byColumn := owner.ByColumn
+		if byColumn == "" {
+			byColumn = "user_id"
+		}
+		ownerColumn := owner.OwnerColumn
+		if ownerColumn == "" {
+			ownerColumn = "admin_id"
+		}
+		if err := data_scope.ValidateIdentifier(table); err != nil {
+			return err
+		}
+		if err := data_scope.ValidateIdentifier(byColumn); err != nil {
+			return err
+		}
+		if err := data_scope.ValidateIdentifier(ownerColumn); err != nil {
+			return err
+		}
 		var logs []struct{ AdminID *int32 }
-		if err := tx.Table(table).Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("user_id = ?", userID).Find(&logs).Error; err != nil {
+		if err := tx.Table(s.config.Database.Prefix + table).Clauses(clause.Locking{Strength: "UPDATE"}).Select(ownerColumn).Where(byColumn+" = ?", userID).Find(&logs).Error; err != nil {
 			return err
 		}
 		for _, log := range logs {
@@ -301,12 +322,47 @@ func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int3
 }
 
 func (s *UserRepository) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
-	for _, table := range []string{s.config.Database.Prefix + "user_money_log"} {
-		if err := tx.Table(table).Where("user_id = ?", userID).Update("admin_id", ownerID).Error; err != nil {
+	for _, owner := range s.CascadeOwners() {
+		table := owner.Table
+		if table == "" {
+			continue
+		}
+		byColumn := owner.ByColumn
+		if byColumn == "" {
+			byColumn = "user_id"
+		}
+		ownerColumn := owner.OwnerColumn
+		if ownerColumn == "" {
+			ownerColumn = "admin_id"
+		}
+		if err := data_scope.ValidateIdentifier(table); err != nil {
+			return err
+		}
+		if err := data_scope.ValidateIdentifier(byColumn); err != nil {
+			return err
+		}
+		if err := data_scope.ValidateIdentifier(ownerColumn); err != nil {
+			return err
+		}
+		if err := tx.Table(s.config.Database.Prefix + table).Where(byColumn+" = ?", userID).Update(ownerColumn, ownerID).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// CascadeOwners 返回级联归属子表注册表：user 变更归属（admin_id）时，这些
+// 子表中引用本 user 的行会同步更新归属列。注册条目由 CRUD 生成器维护：
+// 子表 spec 声明 inheritFrom: { table: user, byColumn: user_id } 并以
+// registerOnly 登记后，生成器自动写入下方锚点块（@cascade:begin/end 之间）。
+// user_money_log 为框架手写子表，锚点块初始即含其注册条目（与生成器格式
+// 一致，applyCascadeAnchor 幂等收敛）；后续业务子表登记后自动追加。
+func (s *UserRepository) CascadeOwners() []data_scope.CascadeOwner {
+	return []data_scope.CascadeOwner{
+		// @cascade:begin
+		{Table: "user_money_log", ByColumn: "user_id", OwnerColumn: "admin_id"},
+		// @cascade:end
+	}
 }
 
 // UpdateStatusWithActor updates only the status field for a single user
