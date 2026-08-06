@@ -26,7 +26,7 @@ import (
 // writeModelFiles 写入共享贫血实体（internal/model）与 admin 仓库
 // （internal/admin/repository，XxxRepository）；DTO 由 writeHandlerFile
 // 另行落盘。返回实体 struct 内容供 DTO/测试复用。
-func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field) (string, error) {
+func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field, skipRepo bool) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
@@ -49,18 +49,20 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		return "", err
 	}
 
-	// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
-	repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
-	if err != nil {
-		return "", err
-	}
-	if err := writeGoFile(repositoryFile.ParseFile, repositoryContent); err != nil {
-		return "", err
-	}
+	if !skipRepo {
+		// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
+		repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
+		if err != nil {
+			return "", err
+		}
+		if err := writeGoFile(repositoryFile.ParseFile, repositoryContent); err != nil {
+			return "", err
+		}
 
-	// 扁平仓库包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
-	if err := writeProvider(repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
-		return "", err
+		// 扁平仓库包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
+		if err := writeProvider(repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
+			return "", err
+		}
 	}
 	return structContent, nil
 }

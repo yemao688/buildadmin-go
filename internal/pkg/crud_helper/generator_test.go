@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -81,31 +82,122 @@ func TestAlterChangesOnlyAddAndModify(t *testing.T) {
 	}
 }
 
+// TestSkipManifestPathsAndFilter 验证 skip 产物路径推导与 manifest 过滤：
+// skip-frontend 剔除 4 个 web 产物，skip-repo 剔除 repository 文件与所在包
+// provider.go；过滤后 Generated/Shared 不含被跳过路径，且 manifestAllows 的
+// skipped 集合与 filterManifestPaths 使用的集合同源。
+func TestSkipManifestPathsAndFilter(t *testing.T) {
+	table := crudmodel.Table{Name: "orders", WebViewsDir: "web/src/views/backend/order/orders"}
+	skipped := skipManifestPaths(table, true, true)
+	if len(skipped) != 6 { // 4 web + repository + repository provider
+		t.Fatalf("skipManifestPaths(frontend+repo) = %d paths, want 6", len(skipped))
+	}
+
+	views := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+	lang := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+	for _, p := range []string{
+		filepath.Join(util.RootPath(), lang.LangFile("en")),
+		filepath.Join(util.RootPath(), lang.LangFile("zh-cn")),
+		filepath.Join(util.RootPath(), views.Views, "index.vue"),
+		filepath.Join(util.RootPath(), views.Views, "popupForm.vue"),
+	} {
+		if !skipped[filepath.Clean(p)] {
+			t.Fatalf("skip-frontend should skip %s", p)
+		}
+	}
+	repo, err := ParseRepositoryNameData(table.Name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !skipped[filepath.Clean(repo.ParseFile)] {
+		t.Fatalf("skip-repo should skip repository file %s", repo.ParseFile)
+	}
+	if !skipped[filepath.Clean(filepath.Join(util.RootPath(), repo.RootFileName, "provider.go"))] {
+		t.Fatal("skip-repo should skip repository provider.go")
+	}
+
+	// 只 skip-frontend：web 产物剔除、repo 保留。
+	onlyWeb := skipManifestPaths(table, true, false)
+	if len(onlyWeb) != 4 {
+		t.Fatalf("skipManifestPaths(frontend only) = %d paths, want 4", len(onlyWeb))
+	}
+	if onlyWeb[filepath.Clean(repo.ParseFile)] {
+		t.Fatal("repo file must not be skipped when only skip-frontend is set")
+	}
+
+	// filterManifestPaths 与 skipManifestPaths 同源消费。
+	manifest := FileManifest{
+		Generated: []string{
+			filepath.Join(util.RootPath(), lang.LangFile("en")),
+			filepath.Join(util.RootPath(), views.Views, "index.vue"),
+			filepath.Join(util.RootPath(), "internal", "model", "orders.go"),
+			repo.ParseFile,
+		},
+		Shared: []string{filepath.Join(util.RootPath(), repo.RootFileName, "provider.go")},
+	}
+	filtered := filterManifestPaths(manifest, onlyWeb)
+	if len(filtered.Generated) != 2 { // model.go + repository 保留
+		t.Fatalf("filtered Generated = %d paths, want 2", len(filtered.Generated))
+	}
+	if slices.Contains(filtered.Generated, filepath.Join(util.RootPath(), lang.LangFile("en"))) {
+		t.Fatal("filtered manifest must drop lang en")
+	}
+	if slices.Contains(filtered.Generated, filepath.Join(util.RootPath(), views.Views, "index.vue")) {
+		t.Fatal("filtered manifest must drop index.vue")
+	}
+	if !slices.Contains(filtered.Generated, filepath.Join(util.RootPath(), "internal", "model", "orders.go")) {
+		t.Fatal("filtered manifest must keep entity file")
+	}
+	if !slices.Contains(filtered.Generated, repo.ParseFile) {
+		t.Fatal("filtered manifest must keep repository file")
+	}
+	if len(filtered.Shared) != 1 {
+		t.Fatalf("filtered Shared = %d paths, want 1", len(filtered.Shared))
+	}
+}
+
 func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	path := t.TempDir() + "/model.go"
 	manifest := FileManifest{Generated: []string{path}}
-	if !manifestAllows(manifest, nil) {
+	if !manifestAllows(manifest, nil, nil) {
 		t.Fatal("first generation without a success manifest should be allowed")
 	}
 	if err := os.WriteFile(path, []byte("package model"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if manifestAllows(manifest, nil) {
+	if manifestAllows(manifest, nil, nil) {
 		t.Fatal("first generation must reject an existing target")
 	}
 	handlerPath := path + ".handler"
 	if err := os.WriteFile(handlerPath, []byte("package handler"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil) {
+	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil, nil) {
 		t.Fatal("first generation must reject existing model and handler targets")
 	}
 	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
-	if !manifestAllows(manifest, log) {
+	if !manifestAllows(manifest, log, nil) {
 		t.Fatal("latest success manifest should allow its own target")
 	}
-	if manifestAllows(FileManifest{Generated: []string{path, path + ".new"}}, log) {
+	if manifestAllows(FileManifest{Generated: []string{path, path + ".new"}}, log, nil) {
 		t.Fatal("manifest path migration should be rejected")
+	}
+}
+
+// TestManifestAllowsSkippedSubset 验证 skip 模式下 manifest 对比允许"本次是
+// 上次的子集"：被跳过的路径从上次记录中剔除后参与比较（跳过后重新生成不应
+// 被拒绝），但新增路径仍拒绝（防路径漂移）。
+func TestManifestAllowsSkippedSubset(t *testing.T) {
+	path := t.TempDir() + "/model.go"
+	skipped := map[string]bool{filepath.Clean(path): true}
+	log := &crudmodel.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
+	// 上次全量生成（含 model.go），本次跳过它：manifest 不含该路径，允许。
+	if !manifestAllows(FileManifest{Generated: nil}, log, skipped) {
+		t.Fatal("skip subset of previous manifest should be allowed")
+	}
+	// 新增路径仍拒绝（即使有跳过集合）。
+	if manifestAllows(FileManifest{Generated: []string{path + ".new"}}, log, skipped) {
+		t.Fatal("new path must still be rejected under skip mode")
 	}
 }
 

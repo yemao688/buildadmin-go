@@ -31,6 +31,8 @@ type GenerateOptions struct {
 	Fields                []crudmodel.Field
 	Type                  string
 	SkipMenu              bool
+	SkipFrontend          bool // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
+	SkipRepo              bool // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -100,6 +102,21 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
 		return nil, err
 	}
+	// skip-frontend 隐含 skip-menu：views 未生成时菜单组件路径悬空，菜单同步
+	// 没有意义（CLI 已做同样归一，这里兜底 API 调用方）。
+	if opts.SkipFrontend {
+		opts.SkipMenu = true
+	}
+	// skip-repo 只允许用于已存在定制 repo 的模块重新生成：repo 文件缺失时
+	// handler 引用 NewXxxRepository 编译必挂——在生成前明确报错而不是留给
+	// wire/build 阶段（首次生成不要使用 skip-repo）。
+	if opts.SkipRepo {
+		if repo, err := ParseRepositoryNameData(opts.Table.Name, opts.Table.ModelFile); err != nil {
+			return nil, fmt.Errorf("--skip-repo: resolve repository for %q: %w", opts.Table.Name, err)
+		} else if !fileExists(repo.ParseFile) {
+			return nil, fmt.Errorf("--skip-repo: repository file %s does not exist; skip-repo is only for modules with an existing customized repository (first-time generation would not compile)", repo.ParseFile)
+		}
+	}
 	// 方案 A：inheritFrom 子表生成前校验父表 spec 已声明 reassignable（其 repo
 	// 才有 CascadeOwners() 锚点可注册），并预推导父表 repo 路径纳入快照。
 	parentRepoPath := ""
@@ -168,11 +185,15 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err != nil {
 		return nil, err
 	}
+	// skip 产物不参与本次 manifest 记录（crud:delete 不删定制文件）、不参与
+	// 快照（未写入无需回滚），并在 manifestAllows 对比时从上次记录中剔除。
+	skippedPaths := skipManifestPaths(opts.Table, opts.SkipFrontend, opts.SkipRepo)
+	manifest = filterManifestPaths(manifest, skippedPaths)
 	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
 	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
 	}
-	if !manifestAllows(manifest, success) {
+	if !manifestAllows(manifest, success, skippedPaths) {
 		if success == nil {
 			return nil, fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
 		}
@@ -287,7 +308,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			opts.RegisterAtomicRoute(method, path)
 		}
 	}
-	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, register)
+	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, register, opts.SkipFrontend, opts.SkipRepo)
 	if err != nil {
 		return fail("file generation", err)
 	}
@@ -304,10 +325,12 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			return fail("cascade anchor apply", err)
 		}
 	}
-	if opts.Table.DataScope != nil && opts.Table.DataScope.Reassignable {
+	if opts.Table.DataScope != nil && opts.Table.DataScope.Reassignable && !opts.SkipRepo {
 		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
 		// 立即按 crud_specs/ 中仍声明 inheritFrom 指向本表的子表重注册（整行
 		// 幂等），消除重置窗口内的静默级联失效；其 repo 已在快照内可整体回滚。
+		// skip-repo 时跳过：repo 文件不重写（保留用户定制），锚点块不会被重置，
+		// 无需重注册；reapply 会改写用户定制的 repo 文件。
 		if err := reapplyCascadeAnchors(DefaultSpecsDir(), opts.Table.Name); err != nil {
 			return fail("cascade anchor heal", err)
 		}
@@ -938,12 +961,59 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	return &log, err
 }
 
-func manifestAllows(manifest FileManifest, log *crudmodel.Log) bool {
+// skipManifestPaths 返回本次生成被跳过的绝对路径集合：--skip-frontend 跳过
+// 四个 web 产物（lang en/zh-cn、index.vue、popupForm.vue），--skip-repo 跳过
+// repository 文件与其所在包 provider.go。被跳过的路径不参与本次 manifest
+// 记录（crud:delete 不删用户定制文件）、不参与快照（未写入无需回滚），并在
+// manifestAllows 对比时从上次记录中剔除（允许"本次是上次的子集"的跳过后
+// 重新生成，而非被拒）。
+func skipManifestPaths(table crudmodel.Table, skipFrontend, skipRepo bool) map[string]bool {
+	skipped := map[string]bool{}
+	if skipFrontend {
+		views := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+		lang := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+		skipped[filepath.Clean(filepath.Join(util.RootPath(), lang.LangFile("en")))] = true
+		skipped[filepath.Clean(filepath.Join(util.RootPath(), lang.LangFile("zh-cn")))] = true
+		skipped[filepath.Clean(filepath.Join(util.RootPath(), views.Views, "index.vue"))] = true
+		skipped[filepath.Clean(filepath.Join(util.RootPath(), views.Views, "popupForm.vue"))] = true
+	}
+	if skipRepo {
+		if repo, err := ParseRepositoryNameData(table.Name, table.ModelFile); err == nil {
+			skipped[filepath.Clean(repo.ParseFile)] = true
+			skipped[filepath.Clean(filepath.Join(util.RootPath(), repo.RootFileName, "provider.go"))] = true
+		}
+	}
+	return skipped
+}
+
+// filterManifestPaths 从 manifest 的 Generated/Shared 中剔除被跳过路径。
+func filterManifestPaths(manifest FileManifest, skipped map[string]bool) FileManifest {
+	if len(skipped) == 0 {
+		return manifest
+	}
+	filter := func(paths []string) []string {
+		kept := paths[:0]
+		for _, path := range paths {
+			if !skipped[filepath.Clean(path)] {
+				kept = append(kept, path)
+			}
+		}
+		return kept
+	}
+	return FileManifest{Generated: filter(manifest.Generated), Shared: filter(manifest.Shared)}
+}
+
+func manifestAllows(manifest FileManifest, log *crudmodel.Log, skipped map[string]bool) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
 	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
 	previous := normalizedPathSet(log.Table.GeneratedFiles)
+	for path := range previous {
+		if skipped[path] {
+			delete(previous, path)
+		}
+	}
 	if len(current) != len(previous) {
 		return false
 	}

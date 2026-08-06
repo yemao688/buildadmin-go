@@ -23,7 +23,7 @@ func GenerateFile(table crudmodel.Table, fields []crudmodel.Field, getTableName 
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
-	return GenerateFileWithRouteRegistrar(table, fields, table.DataScope, getTableName, getColumns, db, nil)
+	return GenerateFileWithRouteRegistrar(table, fields, table.DataScope, getTableName, getColumns, db, nil, false, false)
 }
 
 // prepareGenerationData resolves data-scope policy and initializes the model/handler
@@ -222,10 +222,10 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
 // configuration. A nil dsConfig preserves legacy auto-detection behavior.
 func GenerateFileWithDataScope(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB) (WebDir, string, error) {
-	return GenerateFileWithRouteRegistrar(table, fields, dsConfig, getTableName, getColumns, db, nil)
+	return GenerateFileWithRouteRegistrar(table, fields, dsConfig, getTableName, getColumns, db, nil, false, false)
 }
 
-func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string)) (WebDir, string, error) {
+func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string), skipFrontend, skipRepo bool) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -356,27 +356,33 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	}
 
 	// 写入语言包代码
-	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
-		return WebDir{}, "", err
-	}
-	if err := writeWebLangFile(langZhData, "zh-cn", webLangDir); err != nil {
-		return WebDir{}, "", err
+	if !skipFrontend {
+		if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
+			return WebDir{}, "", err
+		}
+		if err := writeWebLangFile(langZhData, "zh-cn", webLangDir); err != nil {
+			return WebDir{}, "", err
+		}
 	}
 
 	// 写入index.vue代码
-	indexVueData.TablePk = tablePk
-	indexVueData.WebTranslate = webTranslate
-	if err := writeIndexFile(indexVueData, webViewsDir, handlerFile); err != nil {
-		return WebDir{}, "", err
+	if !skipFrontend {
+		indexVueData.TablePk = tablePk
+		indexVueData.WebTranslate = webTranslate
+		if err := writeIndexFile(indexVueData, webViewsDir, handlerFile); err != nil {
+			return WebDir{}, "", err
+		}
 	}
 
 	// 写入form.vue代码
-	if err := writeFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
-		return WebDir{}, "", err
+	if !skipFrontend {
+		if err := writeFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
+			return WebDir{}, "", err
+		}
 	}
 
 	// 写入模型代码（实体 + 仓库 + DTO）
-	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile, fields)
+	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile, fields, skipRepo)
 	if err != nil {
 		return WebDir{}, "", err
 	}

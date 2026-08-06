@@ -58,6 +58,8 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		},
 	}
 	generateCmd.Flags().Bool("skip-menu", false, "skip menu creation")
+	generateCmd.Flags().Bool("skip-frontend", false, "skip web artifacts (lang/index.vue/form.vue); implies skip-menu; intended for modules whose frontend is already customized")
+	generateCmd.Flags().Bool("skip-repo", false, "skip repository file and repository provider merge; intended only for modules with an existing customized repository (first-time generation would not compile)")
 	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	return generateCmd
 }
@@ -127,6 +129,12 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load CRUD spec error: %w", err)
 	}
 	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
+	opts.SkipFrontend, _ = cmd.Flags().GetBool("skip-frontend")
+	opts.SkipRepo, _ = cmd.Flags().GetBool("skip-repo")
+	if opts.SkipFrontend {
+		// 前端产物跳过时菜单同步同样跳过（views 未生成，菜单组件路径悬空）。
+		opts.SkipMenu = true
+	}
 	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
 	opts.RegisterAtomicRoute = func(method, path string) {
 		action := path[strings.LastIndex(path, "/")+1:]
