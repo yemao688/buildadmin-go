@@ -35,35 +35,88 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	tablePk := getPk(fields)
 	//表注释
 	tableComment := getComment(table.Comment)
+
 	// 生成文件信息解析：拍平布局，实体/仓库/DTO/handler/registrar 文件恒为
 	// <root>/<table>.go。
-	entityFile, err := ParseEntityNameData(tableName, table.ModelFile)
-	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
-	}
-	repositoryFile, err := ParseRepositoryNameData(tableName, table.ModelFile)
-	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
-	}
-	dtoFile, err := ParseDTONameData(tableName, table.ModelFile)
-	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
-	}
-	handlerFile, err := ParseHandlerNameData(tableName, table.ControllerFile)
-	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
-	}
-	registrarFile, err := ParseRegistrarNameData(tableName, table.ControllerFile)
+	entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, err := parseGenerationNameData(table, tableName)
 	if err != nil {
 		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 
-	webViewsDir := ParseWebDirNameData(tableName, "views", table.WebViewsDir)
-	webLangDir := ParseWebDirNameData(tableName, "lang", table.WebViewsDir)
+	// 模型数据与控制器数据结构组装（实体名派生自实体文件；仓库文件包名取自仓库路径）
+	modelData, handlerData, err := buildGenerationDataStructures(table, fields, tableName, tablePk, tableComment, entityFile, repositoryFile, dtoFile, handlerFile)
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+
+	// 数据权限解析：只有用户显式持久化 ModeNone 时才允许 admin_id 资源走 none。
+	allowNoneExplicit := dsConfig != nil && dsConfig.Mode == data_scope.ModeNone
+	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
+		AllowNoneWithAdminID: allowNoneExplicit,
+		ProveIndex:           proveIndex,
+		TableName:            table.Name,
+	})
+	if err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+	if err := applyGenerationDataScope(&modelData, ds, fields, tablePk); err != nil {
+		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+	}
+
+	// owner 字段表单预置：reassignable 时把 owner 渲染成 admin 的远程下拉（动机
+	// 与顺序约束见 prefillReassignableOwnerFormConfig）。必须在 effectiveFormFields /
+	// EditableColumns / ExcludeParamFields 消费 fields 之前完成。
+	prefillReassignableOwnerFormConfig(fields, ds.OwnerColumn, ds.Policy.Reassignable)
+
+	// 有效表单字段与编辑列
+	modelData.EffectiveFormFields, modelData.EditableColumns = buildEffectiveFormColumns(table, fields, tablePk, ds)
+	modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
+
+	// 排除参数字段（owner / 表单排除字段 / 只读归属 / 时间戳）
+	handlerData.ExcludeParamFields = buildExcludeParamFields(fields, ds)
+
+	handlerData.Reassignable = ds.Policy.Reassignable
+	handlerData.OwnerGoField = ds.OwnerGoField
+
+	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
+}
+
+// parseGenerationNameData 解析生成产物的文件信息：实体/仓库/DTO/handler/registrar
+// 五类 Go 文件位置、views/lang 前端目录，并派生语言翻译前缀。拍平布局下五类
+// Go 文件恒为 <root>/<table>.go。
+func parseGenerationNameData(table crudmodel.Table, tableName string) (entityFile, repositoryFile, dtoFile, handlerFile, registrarFile NameInfo, webViewsDir, webLangDir WebDir, webTranslate string, err error) {
+	entityFile, err = ParseEntityNameData(tableName, table.ModelFile)
+	if err != nil {
+		return
+	}
+	repositoryFile, err = ParseRepositoryNameData(tableName, table.ModelFile)
+	if err != nil {
+		return
+	}
+	dtoFile, err = ParseDTONameData(tableName, table.ModelFile)
+	if err != nil {
+		return
+	}
+	handlerFile, err = ParseHandlerNameData(tableName, table.ControllerFile)
+	if err != nil {
+		return
+	}
+	registrarFile, err = ParseRegistrarNameData(tableName, table.ControllerFile)
+	if err != nil {
+		return
+	}
+
+	webViewsDir = ParseWebDirNameData(tableName, "views", table.WebViewsDir)
+	webLangDir = ParseWebDirNameData(tableName, "lang", table.WebViewsDir)
 
 	// 语言翻译前缀
-	webTranslate := strings.Join(webLangDir.Lang, ".") + "."
+	webTranslate = strings.Join(webLangDir.Lang, ".") + "."
+	return
+}
 
+// buildGenerationDataStructures 组装模型数据与控制器数据结构：快速搜索字段、
+// 主键 Go 类型推导、仓库/DTO 导入引用与部分编辑字段。
+func buildGenerationDataStructures(table crudmodel.Table, fields []crudmodel.Field, tableName, tablePk, tableComment string, entityFile, repositoryFile, dtoFile, handlerFile NameInfo) (ModelData, HandlerData, error) {
 	// 快速搜索字段
 	if !slices.Contains(table.QuickSearchField, tablePk) {
 		table.QuickSearchField = append(table.QuickSearchField, tablePk)
@@ -77,9 +130,10 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	modelData.ModelVar = strings.ToLower(string(entityFile.LastName[0])) + entityFile.LastName[1:]
 	modelData.QuickSearchField = strings.Join(table.QuickSearchField, ",")
 	pkField := searchField(fields, tablePk)
+	var err error
 	modelData.PkGoType, err = primaryKeyGoType(pkField)
 	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+		return ModelData{}, HandlerData{}, err
 	}
 
 	modelData.Append = []string{}
@@ -116,16 +170,12 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	handlerData.ParamTypeOverrides = map[string]string{}
 	handlerData.PartialEditFields = buildPartialEditFields(fields)
 
-	// 数据权限解析：只有用户显式持久化 ModeNone 时才允许 admin_id 资源走 none。
-	allowNoneExplicit := dsConfig != nil && dsConfig.Mode == data_scope.ModeNone
-	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
-		AllowNoneWithAdminID: allowNoneExplicit,
-		ProveIndex:           proveIndex,
-		TableName:            table.Name,
-	})
-	if err != nil {
-		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
-	}
+	return modelData, handlerData, nil
+}
+
+// applyGenerationDataScope 把解析出的数据权限策略落到模型数据上：owner Go 字段、
+// 继承关系与 owner Go 类型推导。
+func applyGenerationDataScope(modelData *ModelData, ds ResolvedDataScope, fields []crudmodel.Field, tablePk string) error {
 	modelData.PkGoField = pkGoField(tablePk)
 	modelData.DataScopePolicy = ds.Policy
 	modelData.InheritFrom = ds.Policy.InheritFrom
@@ -138,38 +188,46 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	if ds.OwnerColumn != "" {
 		ownerType, err := ownerGoType(searchField(fields, ds.OwnerColumn))
 		if err != nil {
-			return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
+			return err
 		}
 		modelData.DataScopeOwnerGoType = ownerType
 	}
+	return nil
+}
 
-	// owner 字段表单预置：reassignable 时把 owner 渲染成 admin 的远程下拉，
-	// 选项天然按当前操作者（自己+后代）收敛。必须在此处（effectiveFormFields /
-	// EditableColumns / ExcludeParamFields 消费 fields 之前）完成：spec 若给
-	// owner 显式 formBuildExclude: true，这里强制 FormBuildExclude=false 才能
-	// 保证 DTO 保留 owner（否则 handler 引用 params.<OwnerGoField> 编译失败）
-	// 且编辑列包含 owner。RelationFields 同样预置（spec 未手写时）：列表列的
-	// 关联显示列（admin.username）与后端关联加载器都以 RelationFields 为入口
-	// 条件（parseJoinData / BuildFileManifestForFields），缺失则列表缺上级代理
-	// 列、关联查询不生成。
-	if ds.Policy.Reassignable && ds.OwnerColumn != "" {
-		for i := range fields {
-			if fields[i].Name != ds.OwnerColumn {
-				continue
-			}
-			fields[i].DesignType = "remoteSelect"
-			fields[i].Form.RemoteTable = "admin"
-			fields[i].Form.RemoteField = "username"
-			fields[i].Form.RemotePk = "id"
-			fields[i].Form.RemoteController = "admin"
-			if fields[i].Form.RelationFields == "" {
-				fields[i].Form.RelationFields = "username"
-			}
-			fields[i].FormBuildExclude = false
-		}
+// prefillReassignableOwnerFormConfig 预置 reassignable owner 字段的表单配置：
+// 把 owner 渲染成 admin 的远程下拉，选项天然按当前操作者（自己+后代）收敛。
+// 必须在 effectiveFormFields / EditableColumns / ExcludeParamFields 消费 fields
+// 之前完成：spec 若给 owner 显式 formBuildExclude: true，这里强制
+// FormBuildExclude=false 才能保证 DTO 保留 owner（否则 handler 引用
+// params.<OwnerGoField> 编译失败）且编辑列包含 owner。RelationFields 同样预置
+// （spec 未手写时）：列表列的关联显示列（admin.username）与后端关联加载器都
+// 以 RelationFields 为入口条件（parseJoinData / BuildFileManifestForFields），
+// 缺失则列表缺上级代理列、关联查询不生成。
+func prefillReassignableOwnerFormConfig(fields []crudmodel.Field, ownerColumn string, reassignable bool) {
+	if !reassignable || ownerColumn == "" {
+		return
 	}
+	for i := range fields {
+		if fields[i].Name != ownerColumn {
+			continue
+		}
+		fields[i].DesignType = "remoteSelect"
+		fields[i].Form.RemoteTable = "admin"
+		fields[i].Form.RemoteField = "username"
+		fields[i].Form.RemotePk = "id"
+		fields[i].Form.RemoteController = "admin"
+		if fields[i].Form.RelationFields == "" {
+			fields[i].Form.RelationFields = "username"
+		}
+		fields[i].FormBuildExclude = false
+	}
+}
 
-	effectiveFormFields := slices.Clone(table.FormFields)
+// buildEffectiveFormColumns 计算有效表单字段与编辑列：owner 列按可重分配策略
+// 保留（编辑时允许选择归属）或从表单剔除，再派生 EditableColumns。
+func buildEffectiveFormColumns(table crudmodel.Table, fields []crudmodel.Field, tablePk string, ds ResolvedDataScope) (effectiveFormFields, editableColumns []string) {
+	effectiveFormFields = slices.Clone(table.FormFields)
 	if ds.OwnerColumn != "" {
 		if ds.Policy.Reassignable {
 			// 可重分配：owner 列保留在表单中，允许编辑时选择归属。
@@ -182,41 +240,41 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 			})
 		}
 	}
-	modelData.EffectiveFormFields = effectiveFormFields
 	if ds.Policy.Reassignable {
 		// ownerColumn 传 "" 表示不排除 owner：编辑可写归属列。
-		modelData.EditableColumns = buildEditableColumns(tablePk, "", effectiveFormFields, fields)
+		editableColumns = buildEditableColumns(tablePk, "", effectiveFormFields, fields)
 	} else {
-		modelData.EditableColumns = buildEditableColumns(tablePk, ds.OwnerColumn, effectiveFormFields, fields)
+		editableColumns = buildEditableColumns(tablePk, ds.OwnerColumn, effectiveFormFields, fields)
 	}
-	modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
+	return effectiveFormFields, editableColumns
+}
 
+// buildExcludeParamFields 汇总 Add/Edit 参数中需排除的字段：不可重分配的 owner、
+// 表单排除字段（主键除外）、只读归属列与时间戳列。
+func buildExcludeParamFields(fields []crudmodel.Field, ds ResolvedDataScope) []string {
+	var exclude []string
 	if ds.OwnerColumn != "" && !ds.Policy.Reassignable {
-		handlerData.ExcludeParamFields = []string{ds.OwnerColumn}
+		exclude = []string{ds.OwnerColumn}
 	}
 	for _, field := range fields {
-		if !field.PrimaryKey && field.FormBuildExclude && !slices.Contains(handlerData.ExcludeParamFields, field.Name) {
-			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, field.Name)
+		if !field.PrimaryKey && field.FormBuildExclude && !slices.Contains(exclude, field.Name) {
+			exclude = append(exclude, field.Name)
 		}
 	}
 	for _, column := range ds.Policy.ReadExtraOwners {
-		if !slices.Contains(handlerData.ExcludeParamFields, column) {
-			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, column)
+		if !slices.Contains(exclude, column) {
+			exclude = append(exclude, column)
 		}
 	}
 	for _, name := range []string{"create_time", "createtime", "update_time", "updatetime"} {
 		if searchField(fields, name).Name == "" {
 			continue
 		}
-		if !slices.Contains(handlerData.ExcludeParamFields, name) {
-			handlerData.ExcludeParamFields = append(handlerData.ExcludeParamFields, name)
+		if !slices.Contains(exclude, name) {
+			exclude = append(exclude, name)
 		}
 	}
-
-	handlerData.Reassignable = ds.Policy.Reassignable
-	handlerData.OwnerGoField = ds.OwnerGoField
-
-	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
+	return exclude
 }
 
 // GenerateFileWithDataScope generates CRUD files using the persisted data-scope
@@ -242,8 +300,56 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	table.FormFields = slices.Clone(modelData.EffectiveFormFields)
 	quickSearchFieldZhCnTitle := []string{}
 
+	// 前端数据初始化：index.vue / form.vue / 语言包
+	indexVueData, formVueData, langEnData, langZhData := initFrontendGenerationData(handlerData.RouteName, table, fields, webTranslate, getTableName)
+
+	// 逐字段分析：字典/语言包、表格列、远程关联解析、模型方法与杂项属性
+	fieldsMap, err := analyseGenerationFields(fields, table, webTranslate, getTableName, getColumns, db, &handlerData, &modelData, &indexVueData, &formVueData, langEnData, langZhData, &quickSearchFieldZhCnTitle)
+	if err != nil {
+		return WebDir{}, "", err
+	}
+	finalizeRelationMetadata(&modelData)
+
+	// 快速搜索提示
+	langEnData["quick Search Fields"] = strings.Join(table.QuickSearchField, ",")
+	langZhData["quick Search Fields"] = strings.Join(quickSearchFieldZhCnTitle, "、")
+	handlerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
+
+	// 开启字段排序与表格操作列
+	applyWeighSortAndOperateConfig(fieldsMap, table, &handlerData, &indexVueData, &modelData)
+
+	// 写入语言包 / index.vue / form.vue（skipFrontend 时整体跳过，写入顺序不变）
+	if !skipFrontend {
+		if err := writeWebLangFiles(langEnData, langZhData, webLangDir); err != nil {
+			return WebDir{}, "", err
+		}
+		if err := writeWebIndexFile(indexVueData, webViewsDir, handlerFile, tablePk, webTranslate); err != nil {
+			return WebDir{}, "", err
+		}
+		if err := writeWebFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
+			return WebDir{}, "", err
+		}
+	}
+
+	// 写入模型代码（实体 + 仓库 + DTO）
+	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile, fields, skipRepo)
+	if err != nil {
+		return WebDir{}, "", err
+	}
+
+	//写入控制器代码
+	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
+		return WebDir{}, "", err
+	}
+	return webViewsDir, tableComment, err
+}
+
+// initFrontendGenerationData 初始化前端生成数据：index.vue 数据（路由名/排序
+// 开关/默认项/操作列）、form.vue 数据与中英文语言包（空 map，由后续逐字段
+// 分析填充）。
+func initFrontendGenerationData(routeName string, table crudmodel.Table, fields []crudmodel.Field, webTranslate string, getTableName GetTableName) (IndexVueData, FormVueData, map[string]string, map[string]string) {
 	indexVueData := IndexVueData{}
-	indexVueData.RouteName = handlerData.RouteName
+	indexVueData.RouteName = routeName
 	indexVueData.EnableDragSort = "false"
 	indexVueData.DefaultItems = []string{}
 	indexVueData.TableColumn = []string{" type: 'selection', align: 'center', operator: false"}
@@ -260,7 +366,13 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	langEnData := map[string]string{}
 	langZhData := map[string]string{}
 
-	// 简化的字段数据
+	return indexVueData, formVueData, langEnData, langZhData
+}
+
+// analyseGenerationFields 逐字段分析并累积生成数据：字段设计类型映射、参数类型
+// 覆盖、字典/语言包、快速搜索标题、双击编辑开关、表格列、远程关联解析、模型
+// 方法与杂项属性。返回字段设计类型映射（供 weigh 排序判定）。
+func analyseGenerationFields(fields []crudmodel.Field, table crudmodel.Table, webTranslate string, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, formVueData *FormVueData, langEnData, langZhData map[string]string, quickSearchFieldZhCnTitle *[]string) (map[string]string, error) {
 	fieldsMap := map[string]string{}
 	for _, field := range fields {
 		fieldsMap[field.Name] = field.DesignType
@@ -277,9 +389,9 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 		// 快速搜索字段
 		if slices.Contains(table.QuickSearchField, field.Name) {
 			if n, ok := langZhData[field.Name]; ok {
-				quickSearchFieldZhCnTitle = append(quickSearchFieldZhCnTitle, n)
+				*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, n)
 			} else {
-				quickSearchFieldZhCnTitle = append(quickSearchFieldZhCnTitle, field.Name)
+				*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, field.Name)
 			}
 		}
 
@@ -314,34 +426,33 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
 				columns, err := getColumns(field.Form.RemoteTable)
 				if err != nil {
-					return WebDir{}, "", fmt.Errorf("remote relation %q for field %q: %w", field.Form.RemoteTable, field.Name, err)
+					return nil, fmt.Errorf("remote relation %q for field %q: %w", field.Form.RemoteTable, field.Name, err)
 				}
-				if err := parseJoinData(db, columns, &langEnData, &langZhData, &handlerData, &modelData, &indexVueData, field, getTableName, webTranslate); err != nil {
-					return WebDir{}, "", err
+				if err := parseJoinData(db, columns, &langEnData, &langZhData, handlerData, modelData, indexVueData, field, getTableName, webTranslate); err != nil {
+					return nil, err
 				}
 			}
 		}
 
 		// 模型方法
-		parseModelMethods(field, &modelData)
+		parseModelMethods(field, modelData)
 
 		// 控制器/模型等文件的一些杂项属性解析
-		parseSundryData(&handlerData, &indexVueData, &formVueData, field, table)
+		parseSundryData(handlerData, indexVueData, formVueData, field, table)
 
 		if !slices.Contains(table.FormFields, field.Name) {
 			handlerData.Attr["preExcludeFields"] = field.Name
 		}
 	}
-	finalizeRelationMetadata(&modelData)
+	return fieldsMap, nil
+}
 
-	// 快速搜索提示
-	langEnData["quick Search Fields"] = strings.Join(table.QuickSearchField, ",")
-	langZhData["quick Search Fields"] = strings.Join(quickSearchFieldZhCnTitle, "、")
-	handlerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
-
+// applyWeighSortAndOperateConfig 开启 weigh 字段排序时联动 index.vue 的排序
+// 开关、拖拽与表格操作列配置。
+func applyWeighSortAndOperateConfig(fieldsMap map[string]string, table crudmodel.Table, handlerData *HandlerData, indexVueData *IndexVueData, modelData *ModelData) {
 	// 开启字段排序
 	_, hasWeigh := fieldsMap["weigh"]
-	applyDefaultSort(&handlerData, &indexVueData, table, hasWeigh)
+	applyDefaultSort(handlerData, indexVueData, table, hasWeigh)
 	if hasWeigh {
 		indexVueData.EnableDragSort = "true"
 		modelData.AfterInsert = assembleStub("mixins/model/afterInsert", map[string]string{
@@ -354,44 +465,26 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	if indexVueData.EnableDragSort == "true" {
 		indexVueData.OptButtons = append([]string{"weigh-sort"}, indexVueData.OptButtons...)
 	}
+}
 
-	// 写入语言包代码
-	if !skipFrontend {
-		if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
-			return WebDir{}, "", err
-		}
-		if err := writeWebLangFile(langZhData, "zh-cn", webLangDir); err != nil {
-			return WebDir{}, "", err
-		}
+// writeWebLangFiles 按固定顺序写入中英文语言包文件（en 先、zh-cn 后）。
+func writeWebLangFiles(langEnData, langZhData map[string]string, webLangDir WebDir) error {
+	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
+		return err
 	}
+	return writeWebLangFile(langZhData, "zh-cn", webLangDir)
+}
 
-	// 写入index.vue代码
-	if !skipFrontend {
-		indexVueData.TablePk = tablePk
-		indexVueData.WebTranslate = webTranslate
-		if err := writeIndexFile(indexVueData, webViewsDir, handlerFile); err != nil {
-			return WebDir{}, "", err
-		}
-	}
+// writeWebIndexFile 写入 index.vue（表主键与翻译前缀在写入前补全）。
+func writeWebIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo, tablePk, webTranslate string) error {
+	indexVueData.TablePk = tablePk
+	indexVueData.WebTranslate = webTranslate
+	return writeIndexFile(indexVueData, webViewsDir, handlerFile)
+}
 
-	// 写入form.vue代码
-	if !skipFrontend {
-		if err := writeFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
-			return WebDir{}, "", err
-		}
-	}
-
-	// 写入模型代码（实体 + 仓库 + DTO）
-	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, modelData, entityFile, repositoryFile, fields, skipRepo)
-	if err != nil {
-		return WebDir{}, "", err
-	}
-
-	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
-		return WebDir{}, "", err
-	}
-	return webViewsDir, tableComment, err
+// writeWebFormFile 写入 form.vue。
+func writeWebFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
+	return writeFormFile(formVueData, webViewsDir, fields, webTranslate)
 }
 
 // repositoryImportAlias 为 handler 中选择仓库包的别名：拍平后恒为根包 repository。
@@ -1544,8 +1637,21 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 
 func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) string {
 	var b strings.Builder
+	writeMultiRelationLoaderHeader(&b, modelData, relation)
+	writeMultiRelationParseKey(&b, relation.RemotePKType)
+	writeMultiRelationRowLoop(&b, relation, generatedGoFieldName(relation.FieldName))
+	b.WriteString("\tif len(keys) == 0 { for i := range *rows { (*rows)[i].")
+	b.WriteString(relation.RelationGoField)
+	b.WriteString(" = payloads[i] }; return nil }\n")
+	writeMultiRelationQueryAndIndex(&b, relation)
+	writeMultiRelationPayloadFill(&b, relation)
+	writeMultiRelationLoaderTail(&b, relation)
+	return b.String()
+}
+
+// writeMultiRelationLoaderHeader 渲染多对多关联加载器的方法签名行。
+func writeMultiRelationLoaderHeader(b *strings.Builder, modelData ModelData, relation RelationMetadata) {
 	methodName := "load" + relation.RelationGoField + "Relations"
-	rowField := generatedGoFieldName(relation.FieldName)
 	b.WriteString("func (s *")
 	b.WriteString(modelData.ClassName)
 	b.WriteString("Repository) ")
@@ -1553,25 +1659,30 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString("(ctx *gin.Context, rows *[]model.")
 	b.WriteString(modelData.ClassName)
 	b.WriteString(") error {\n")
+}
+
+// writeMultiRelationParseKey 渲染 relationRef 结构体声明与 parseKey 闭包：
+// CSV 令牌按主键类型解析（string 原样返回；int32/int64 走 strconv.ParseInt）。
+func writeMultiRelationParseKey(b *strings.Builder, pkType string) {
 	b.WriteString("\ttype relationRef struct { rowIndex int; valueIndex int; key ")
-	b.WriteString(relation.RemotePKType)
+	b.WriteString(pkType)
 	b.WriteString(" }\n")
 	b.WriteString("\tparseKey := func(token string) (")
-	b.WriteString(relation.RemotePKType)
+	b.WriteString(pkType)
 	b.WriteString(", bool) {\n")
 	b.WriteString("\t\ttoken = strings.TrimSpace(token)\n")
 	zero := "0"
-	if relation.RemotePKType == "string" {
+	if pkType == "string" {
 		zero = `""`
 	}
 	b.WriteString("\t\tif token == \"\" { return ")
 	b.WriteString(zero)
 	b.WriteString(", false }\n")
-	if relation.RemotePKType == "string" {
+	if pkType == "string" {
 		b.WriteString("\t\treturn token, true\n")
 	} else {
 		bits := "64"
-		if relation.RemotePKType == "int32" {
+		if pkType == "int32" {
 			bits = "32"
 		}
 		b.WriteString("\t\tvalue, err := strconv.ParseInt(token, 10, ")
@@ -1581,10 +1692,15 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 		b.WriteString(zero)
 		b.WriteString(", false }\n")
 		b.WriteString("\t\treturn ")
-		b.WriteString(relation.RemotePKType)
+		b.WriteString(pkType)
 		b.WriteString("(value), true\n")
 	}
 	b.WriteString("\t}\n")
+}
+
+// writeMultiRelationRowLoop 渲染行遍历：拆分 CSV 令牌、预置载荷切片、累积
+// 引用与去重主键列表。
+func writeMultiRelationRowLoop(b *strings.Builder, relation RelationMetadata, rowField string) {
 	b.WriteString("\tpayloads := make([]*model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString(", len(*rows))\n")
@@ -1613,9 +1729,10 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString("\t\t}\n")
 	b.WriteString("\t\tfor valueIndex, token := range tokens { key, ok := parseKey(token); if !ok { continue }; refs = append(refs, relationRef{rowIndex: rowIndex, valueIndex: valueIndex, key: key}); if _, exists := seen[key]; !exists { seen[key] = struct{}{}; keys = append(keys, key) } }\n")
 	b.WriteString("\t}\n")
-	b.WriteString("\tif len(keys) == 0 { for i := range *rows { (*rows)[i].")
-	b.WriteString(relation.RelationGoField)
-	b.WriteString(" = payloads[i] }; return nil }\n")
+}
+
+// writeMultiRelationQueryAndIndex 渲染远端表批量查询与 byKey 索引。
+func writeMultiRelationQueryAndIndex(b *strings.Builder, relation RelationMetadata) {
 	b.WriteString("\trelated := make([]model.")
 	b.WriteString(relation.RowDTOName)
 	b.WriteString(", 0)\n")
@@ -1639,6 +1756,11 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 	b.WriteString("\tfor i := range related { byKey[related[i].")
 	b.WriteString(relation.RemotePKGoField)
 	b.WriteString("] = &related[i] }\n")
+}
+
+// writeMultiRelationPayloadFill 渲染引用回填：把查询到的关联行按引用位置写入
+// 各载荷字段（可空字段直接取地址，非空字段用闭包取地址）。
+func writeMultiRelationPayloadFill(b *strings.Builder, relation RelationMetadata) {
 	b.WriteString("\tfor _, ref := range refs { if related, ok := byKey[ref.key]; ok {\n")
 	for _, field := range relation.PayloadFields {
 		b.WriteString("\t\t")
@@ -1658,11 +1780,14 @@ func renderMultiRelationLoader(modelData ModelData, relation RelationMetadata) s
 		b.WriteString("\n")
 	}
 	b.WriteString("\t} }\n")
+}
+
+// writeMultiRelationLoaderTail 渲染载荷写回与收尾（方法结束 + 空行）。
+func writeMultiRelationLoaderTail(b *strings.Builder, relation RelationMetadata) {
 	b.WriteString("\tfor i := range *rows { (*rows)[i].")
 	b.WriteString(relation.RelationGoField)
 	b.WriteString(" = payloads[i] }\n")
 	b.WriteString("\treturn nil\n}\n\n")
-	return b.String()
 }
 
 func renderRelationLoaderAggregator(modelData ModelData) string {
