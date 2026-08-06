@@ -128,6 +128,100 @@ menu:
 
 `assignOnCreate` 控制新增时是否写入当前管理员。`readExtraOwners` 列表中的列必须存在于 spec 字段，是整数兼容类型，且不能与主属主列相同。额外属主列只参与读范围，不能由 Add/Edit 参数提交（生成器自动排除）。
 
+### `dataScope.reassignable`（编辑可改归属）
+
+对带 `admin_id` 数据权限的业务表（如 `seller_user`），`reassignable: true` 允许在编辑时修改归属（上级代理）：
+
+```yaml
+dataScope:
+  mode: auto
+  reassignable: true   # 编辑可改归属；生成器自动保留 owner 表单并校验层级
+```
+
+语义：
+- **编辑（Edit）**：归属变更时校验新 owner 在当前操作者麾下（自己+后代，经 `admin_closure`）；超级管理员可任意指定存在的 admin。校验只做层级（`OwnerInScopeWithActor`），不检查 `enable` 状态。
+- **新增（Add）**：超级管理员可指定归属（传入的 admin 必须存在且注册过闭包层级），其余操作者强制归属操作者自己。
+- admin_id 未传（0）表示不修改归属；0 不是合法 admin id，不会误伤。
+
+要求：
+- 必须 `assignOnCreate: true`（`auto` 模式天然满足；`required` 模式显式声明，否则校验失败）。
+- 必须解析出 owner 列且为 `admin_id`（`mode: none`、无 `admin_id` 的表，或 `required` 声明其它列如 `agent_id`，均校验失败）。
+- owner 字段必须是 int32 兼容类型（`int`/`tinyint`/`smallint`/`mediumint`）。**`bigint` owner 被生成期拒绝**：模板把 owner 以 `int32(...)` 传入 `OwnerInScopeWithActor`（admin id 域），bigint 列会产生"截断校验通过、未截断值落库"的 fail-open 缺口。
+
+生成效果：
+- 生成器自动把表单中的 owner 字段渲染为 `remoteSelect`，remote-url 为 `/admin/auth.Admin/index`（无 query 参数）；前端 remoteSelect 组件自动追加 `select=true`，树形选项由 `buildAdminTreeOptions` 组装（不存在 `isTree` 参数）。选项天然按当前操作者自己+后代收敛，超管看全量，无需手工配置 `form` 属性。
+- reassignable 时 owner 字段在 spec 中的 `designType`/`form` 属性会被忽略（自动渲染为 admin remoteSelect，且强制 `formBuildExclude: false`），表单默认显示归属选择。
+- DTO 保留 `admin_id`（不再排除），编辑列包含 owner（可写）。
+
+残余 TOCTOU：Add 的归属校验发生在事务外（HTTP 请求路径上请求事务中间件使其实际处于同一事务；直接调用 repo 时校验在池连接上执行）。超管指定的目标 admin 若在校验与落库之间被并发删除，行为 fail-safe：悬挂的 owner 行对受限操作者不可见（闭包匹配不到），不构成权限放大。
+
+### `dataScope.inheritFrom`（级联归属，自动注册）
+
+业务表冗余 `admin_id` 用于数据权限/统计/索引。主实体表（如 `seller_user`，`reassignable: true`）改归属时在事务内级联回首子表冗余归属列；子表（订单/流水等，通过 `user_id`/`seller_id` 关联主实体）**不能手动改归属**，Add 时继承主实体当前归属。
+
+**主实体 spec 不再声明子表列表**（旧 `dataScope.cascadeOwners` 已移除，spec 中出现会直接报错）：主表设计在先，之后新增子表不需要回改主表——子表生成时生成器自动往主实体 repo 的 `CascadeOwners()` 注册方法锚点块追加条目，`crud:delete` 子表时自动移除。
+
+子表（Add 时归属继承自主实体，替代"归属操作者"）：
+
+```yaml
+dataScope:
+  mode: auto
+  inheritFrom:                  # Add 时归属继承自主实体（与 reassignable 互斥）
+    table: seller_user          # 主实体表（逻辑名，不得是本表；必须已以 reassignable 生成）
+    byColumn: user_id           # 子表自身关联主实体 id 的列（必须存在于本表 fields）
+```
+
+主实体（只需 reassignable，注册自动维护）：
+
+```yaml
+dataScope:
+  mode: auto
+  reassignable: true        # 改归属入口 + CascadeOwners() 注册锚点的生成条件
+```
+
+生成效果：reassignable 主实体 repo 生成：
+
+```go
+// CascadeOwners 由 CRUD 生成器模式维护，自定义请新增独立文件/方法。
+func (s *SellerUserRepository) CascadeOwners() []data_scope.CascadeOwner {
+	return []data_scope.CascadeOwner{
+		// @cascade:begin
+		// @cascade:end
+	}
+}
+```
+
+锚点块由生成器维护（子表生成 `apply`、删除 `remove`，幂等；子表重新生成改 byColumn 时整行替换）；自定义注册请新增独立文件/方法而不是手改锚点（重新生成会重置手改内容）。
+
+语义：
+- **子表 Add（inheritFrom）**：在事务内 `SELECT ... FOR UPDATE` 读取主实体当前 `admin_id`（防并发改归属），将其作为子表归属写入，并用 `OwnerInScopeWithActor` 校验该归属在请求者麾下（超管自动通过，总代理只能给麾下主实体加单）。主实体行不存在时自然失败（`gorm.ErrRecordNotFound`）。
+- **主表 Edit**：归属变更校验通过后，同一事务内遍历 `s.CascadeOwners()`（编译期注册表，零 DB 查询），对每个子表执行 `UPDATE ... SET {ownerColumn} = 新归属 WHERE {byColumn} = 主键 AND {ownerColumn} <> 新归属`——幂等（只动不一致行，NULL 归属行保持原样，与 `cascade:sync` 语义一致）。归属未变更时不触发级联。每次 UPDATE 前对表名/列名做 `ValidateIdentifier` 运行时校验（拒绝点号/空格/引号）。
+- 子表 `admin_id` 仍是系统字段：表单/DTO/编辑列全部剥离，无手动修改入口。
+
+要求：
+- 子表生成前校验（`validateInheritParent`）：`inheritFrom.table` 必须有成功生成记录且 `reassignable: true`（否则 `crud:generate` 拒绝，错误信息提示先生成主实体）；同时落实硬契约——主实体主键必须为 `id`、归属列必须为 `admin_id`（`required` 声明其它 owner 列或主键非 `id` 的主实体被拒绝）。**受保护核心表（`user`/`admin` 等）不能作为 inheritFrom 父表**——它们不能以 CRUD 流程生成，`validateInheritParent` 必拒。
+- `inheritFrom` → 必须 `reassignable: false`（互斥）；必须解析出 owner 列且为 `admin_id`（`mode: none`、无 owner 列或非 `admin_id` 列会校验失败）。
+- `inheritFrom.table`/`byColumn` 须为安全静态标识符（拒绝点号/空格/引号）；`inheritFrom.table` 不得是本表；`inheritFrom.byColumn` 必须是子表自身字段、整数兼容，且**不得 `formBuildExclude`**（Add 请求必须提交它以定位主实体行，被排除会恒落 0 → Add 恒 `ErrRecordNotFound`）。
+- 子表 owner 列必须是 int32 兼容类型（`bigint` 被生成期拒绝，理由同 reassignable 一节）。
+- 主实体文件（`internal/admin/repository/<table>.go`）纳入子表生成/删除的快照：锚点维护失败时整体回滚，不会留下半写状态；锚点写回采用同目录临时文件 + rename 的原子写，中断不损坏主实体 repo。
+- 子表重新生成（spec 去掉 inheritFrom 或改指向）会自动清理旧主实体锚点条目；`crud:delete` 主实体前会检查 inbound 引用——仍有子表声明指向它时拒绝删除（错误信息列出悬空子表名）。
+- **主实体重新生成会自动重注册锚点**：重新 `crud:generate` 主实体本身会把 `CascadeOwners()` 渲染为空锚点，随后生成器按 `crud_log` 中仍声明 `inheritFrom` 指向它的子表逐条重注册（整行幂等）——重置窗口已消除，无需手动回补或依赖 `cascade:sync`。
+
+对账 CLI（离线兜底）：`cascade:sync` 从 `crud_log` 反向聚合所有子表的 `inheritFrom` 声明，把子表归属列修正为主表当前值（只动不一致行），可选 `[table]` 参数限定主表：
+
+```bash
+go run ./cmd/server --conf configs/config.yaml cascade:sync             # 全量对账
+go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对账 seller_user
+```
+
+硬契约与注意事项：
+
+- **主键/归属列硬编码**：级联两侧的主实体主键必须为 `id`、归属列必须为 `admin_id`——模板按此生成 `Select("admin_id")`、`Where("id = ?", ...)` 与 `cascade:sync` 的 JOIN `p.id`。此契约在**生成期强制**：`validateInheritParent` 拒绝主键非 `id` 或归属列非 `admin_id` 的主实体，`ResolveDataScope` 拒绝 owner 列非 `admin_id`（或 `bigint` 类型）的子表。
+- **byColumn 必须是子表客户端可提交字段**：`inheritFrom.byColumn` 须存在于子表 fields（spec 校验）、整数兼容且**不得 `formBuildExclude`**（生成期拒绝）——Add 的请求参数若不含该字段，其值为 0，`WHERE id = 0` 恒不命中主表，子表 Add 恒 `gorm.ErrRecordNotFound`。注册表条目的 byColumn 来自子表 spec，主表无法在生成期校验子表列存在性，由运行时（`crud:apply`/`cascade:sync`）暴露。
+- **byColumn 建议建索引**：级联 UPDATE 按 `{byColumn} = 主键` 过滤，无索引时全表扫描且行锁放大；子表 spec 用 `indexes:` 为 byColumn 声明索引（如 `idx_user_id`），`crud:apply` 负责物化。
+- **级联只有一级**：`inheritFrom` 与 `reassignable` 互斥，运行时级联只在"主实体 Edit 改归属 → 子表回首"这一层发生。链式 A→B→C 场景（B 以 A 为主实体、C 以 B 为主实体）中，A 改归属的裸 UPDATE 不会触发 B→C 的级联，C 的归属漂移靠 B 自身 Edit 回首或 `cascade:sync B`（CLI 按 B 的声明对账 C）修复。
+- **主实体重新生成会重置锚点（自动重注册）**：重新 `crud:generate` 主实体本身会把 `CascadeOwners()` 渲染为空锚点；生成器随即按 `crud_log` 中仍声明 `inheritFrom` 指向它的子表逐条重注册（整行幂等），重置窗口已消除。手改锚点内容仍会被重新生成重置（自定义注册请新增独立文件/方法）。
+
 ### owner 列规范
 
 `dataScope.ownerColumn` 是后台数据范围使用的所有者列，不要求在表单中暴露。只要语义上是关联管理员的字段，就应配置为 `remoteSelect`，owner 列与普通关系字段的区别仅在于它通常隐藏并自动赋值，而非让操作员选择：

@@ -195,7 +195,7 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 	require.NoError(t, err)
 	handlerCode, err := renderHandler(handlerData)
 	require.NoError(t, err)
-	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp))
+	require.NoError(t, compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp, handlerData))
 }
 
 func TestModelQuickSearchFieldRendering(t *testing.T) {

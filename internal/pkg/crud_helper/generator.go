@@ -94,6 +94,40 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
 		return nil, err
 	}
+	// 方案 A：inheritFrom 子表生成前校验主实体已以 reassignable 生成（其 repo
+	// 才有 CascadeOwners() 锚点可注册），并预推导主实体 repo 路径纳入快照。
+	parentRepoPath := ""
+	if opts.Table.DataScope != nil && opts.Table.DataScope.InheritFrom != nil {
+		// 标识符先于路径推导校验：失败信息指向 spec 而不是文件系统错误。
+		for _, id := range []struct{ kind, value string }{
+			{"inheritFrom table", opts.Table.DataScope.InheritFrom.Table},
+			{"inheritFrom by column", opts.Table.DataScope.InheritFrom.ByColumn},
+		} {
+			if err := data_scope.ValidateIdentifier(id.value); err != nil {
+				return nil, fmt.Errorf("invalid %s %q: %w", id.kind, id.value, err)
+			}
+		}
+		if err := validateInheritParent(db, cfg, opts.Table.DataScope.InheritFrom.Table); err != nil {
+			return nil, err
+		}
+		parentRepoPath, err = parentRepositoryPath(opts.Table.DataScope.InheritFrom.Table)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// 子表重新生成（spec 去掉 inheritFrom 或改指向）时，旧主实体锚点里的
+	// 注册条目会残留并继续级联已独立的子表——必须清理并纳入快照。
+	success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name)
+	if err != nil {
+		return nil, err
+	}
+	oldParentRepoPath := ""
+	if staleParent := staleInheritParent(success, inheritRefOf(opts.Table.DataScope)); staleParent != "" {
+		oldParentRepoPath, err = parentRepositoryPath(staleParent)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// 设计器曾发送的改名/删字段/排序 designChange 在后端被静默丢弃（生成代码
 	// 按新字段名产出，数据库旧列原样保留 → 数据孤儿）。框架纪律：破坏性变更
 	// 必须走 business 迁移，这里显式拒绝而不是吞掉用户操作。
@@ -124,9 +158,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	if err := validateGenerationMode(opts.Type); err != nil {
 		return nil, err
 	}
-	if success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name); err != nil {
-		return nil, err
-	} else if !manifestAllows(manifest, success) {
+	if !manifestAllows(manifest, success) {
 		if success == nil {
 			return nil, fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
 		}
@@ -134,7 +166,16 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	}
 	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
 	opts.Table.Manifest = &crudmodel.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
-	snapshot, err := NewFileSnapshot(append(append([]string{}, manifest.Generated...), manifest.Shared...))
+	snapshotPaths := append(append([]string{}, manifest.Generated...), manifest.Shared...)
+	if parentRepoPath != "" {
+		// 主实体 repo 由锚点维护改写，纳入快照使失败回滚能恢复它；不进 manifest。
+		snapshotPaths = append(snapshotPaths, parentRepoPath)
+	}
+	if oldParentRepoPath != "" {
+		// 旧主实体 repo 同样纳入快照：remove 失败回滚可恢复。
+		snapshotPaths = append(snapshotPaths, oldParentRepoPath)
+	}
+	snapshot, err := NewFileSnapshot(snapshotPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +276,27 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, register)
 	if err != nil {
 		return fail("file generation", err)
+	}
+	if oldParentRepoPath != "" {
+		// 先清理旧主实体锚点条目（幂等宽容），再注册新指向；均在 wire/build 前。
+		if err := removeCascadeAnchor(oldParentRepoPath, opts.Table.Name); err != nil {
+			return fail("cascade anchor remove", err)
+		}
+	}
+	if parentRepoPath != "" {
+		// 方案 A：子表生成成功后自动注册到主实体 repo 的 CascadeOwners() 锚点块
+		//（在 wire/build 之前，保证编译包含改写后的主实体 repo）。
+		if err := applyCascadeAnchor(parentRepoPath, opts.Table.Name, opts.Table.DataScope.InheritFrom.ByColumn); err != nil {
+			return fail("cascade anchor apply", err)
+		}
+	}
+	if opts.Table.DataScope != nil && opts.Table.DataScope.Reassignable {
+		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
+		// 立即按 crud_log 中仍声明 inheritFrom 指向本表的子表重注册（整行幂等），
+		// 消除重置窗口内的静默级联失效；其 repo 已在快照内，失败可整体回滚。
+		if err := reapplyCascadeAnchors(db, cfg, opts.Table.Name); err != nil {
+			return fail("cascade anchor heal", err)
+		}
 	}
 	if !opts.SkipMenu {
 		// F4：菜单同步会 update 既有行，先快照（含祖先链）供失败回滚。
@@ -367,6 +429,23 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err := ValidateGenerationInput(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields)); err != nil {
 		return err
 	}
+	// 方案 A：子表删除时自动从主实体 repo 的 CascadeOwners() 锚点块移除注册
+	// 条目；主实体文件纳入 shared 快照（删除中途失败可恢复）。
+	parentRepoPath := ""
+	if log.Table.DataScope != nil && log.Table.DataScope.InheritFrom != nil {
+		parentRepoPath, err = parentRepositoryPath(log.Table.DataScope.InheritFrom.Table)
+		if err != nil {
+			return err
+		}
+	}
+	// 方案 A：删除主实体前检查 inbound inheritFrom 引用——存在声明指向本表的
+	// 子表时拒绝删除（否则子表 Add 运行时悬空、cascade:sync 被阻塞、子表也
+	// 无法重新生成）。主实体自身的记录不计入引用。
+	if referrers, err := findInheritReferrers(db, cfg, tableName); err != nil {
+		return err
+	} else if len(referrers) > 0 {
+		return fmt.Errorf("refusing to delete table %q: child table(s) %s still declare inheritFrom pointing at it; delete those child tables or regenerate them with a different inheritFrom first", tableName, strings.Join(referrers, ", "))
+	}
 	manifest, err := BuildFileManifestForFields(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields))
 	if err != nil {
 		return err
@@ -395,7 +474,11 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	if err != nil {
 		return err
 	}
-	shared, err := NewFileSnapshot(manifest.Shared)
+	sharedPaths := append([]string{}, manifest.Shared...)
+	if parentRepoPath != "" {
+		sharedPaths = append(sharedPaths, parentRepoPath)
+	}
+	shared, err := NewFileSnapshot(sharedPaths)
 	if err != nil {
 		_ = quarantine.Restore()
 		_ = quarantine.Commit()
@@ -453,6 +536,13 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	}
 	if err := parseDeleteGoFiles(guardPaths...); err != nil {
 		return fail("parse guard", err)
+	}
+	if parentRepoPath != "" {
+		// 方案 A：移除子表在主实体 repo 锚点块的注册条目（幂等容忍：主实体
+		// 已删或锚点缺失时直接跳过）；在 wire/build 之前执行。
+		if err := removeCascadeAnchor(parentRepoPath, log.Table.Name); err != nil {
+			return fail("cascade anchor remove", err)
+		}
 	}
 	if err := runWire(); err != nil {
 		return fail("wire", err)

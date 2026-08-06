@@ -366,6 +366,10 @@ func OwnerInScopeWithActor(ctx context.Context, db *gorm.DB, enforcer Enforcer, 
 	if err := ValidateTablePrefix(prefix); err != nil {
 		return err
 	}
+	// 校验只关心 admin / admin_closure 的层级事实，绝不继承调用方 DB 上可能
+	// 已施加的行级 scope 条件（例如生成仓库 Edit 传入的 scoped 事务）。使用
+	// 全新 statement，同时保留事务连接池。
+	db = db.Session(&gorm.Session{NewDB: true})
 	var admins int64
 	if err := db.Table(prefix+"admin").Where("id = ?", ownerID).Count(&admins).Error; err != nil || admins != 1 {
 		if err != nil {

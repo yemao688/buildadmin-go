@@ -42,10 +42,12 @@ type specIndex struct {
 }
 
 type specDataScope struct {
-	Mode            data_scope.Mode `mapstructure:"mode"`
-	OwnerColumn     string          `mapstructure:"ownerColumn"`
-	ReadExtraOwners []string        `mapstructure:"readExtraOwners"`
-	AssignOnCreate  *bool           `mapstructure:"assignOnCreate"`
+	Mode            data_scope.Mode        `mapstructure:"mode"`
+	OwnerColumn     string                 `mapstructure:"ownerColumn"`
+	ReadExtraOwners []string               `mapstructure:"readExtraOwners"`
+	AssignOnCreate  *bool                  `mapstructure:"assignOnCreate"`
+	Reassignable    bool                   `mapstructure:"reassignable"`
+	InheritFrom     *data_scope.InheritRef `mapstructure:"inheritFrom"`
 }
 
 type specMenu struct {
@@ -91,6 +93,9 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal(content, &document); err != nil {
 		return nil, fmt.Errorf("parse spec %q: %w", path, err)
+	}
+	if err := detectLegacyCascadeOwners(document.Content[0]); err != nil {
+		return nil, fmt.Errorf("spec %q: %w", path, err)
 	}
 	if err := normalizeNullKeys(&document); err != nil {
 		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
@@ -191,7 +196,14 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	}
 	dataScope := &data_scope.Config{Mode: data_scope.ModeAuto}
 	if raw.DataScope != nil {
-		dataScope = &data_scope.Config{Mode: raw.DataScope.Mode, OwnerColumn: raw.DataScope.OwnerColumn, ReadExtraOwners: raw.DataScope.ReadExtraOwners, AssignOnCreate: raw.DataScope.AssignOnCreate}
+		dataScope = &data_scope.Config{
+			Mode:            raw.DataScope.Mode,
+			OwnerColumn:     raw.DataScope.OwnerColumn,
+			ReadExtraOwners: raw.DataScope.ReadExtraOwners,
+			AssignOnCreate:  raw.DataScope.AssignOnCreate,
+			Reassignable:    raw.DataScope.Reassignable,
+			InheritFrom:     raw.DataScope.InheritFrom,
+		}
 	}
 	typeName := raw.Type
 	if typeName == "" {
@@ -220,6 +232,34 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
 	return options, nil
+}
+
+// detectLegacyCascadeOwners 检测 spec 中遗留的 dataScope.cascadeOwners 声明：
+// 方案 A 已移除主实体静态声明，子表继承改为 inheritFrom + 生成器自动维护主
+// 实体 repo 的 CascadeOwners() 注册块，旧声明必须显式报错而不是静默忽略。
+// key 匹配大小写不敏感（防 cascadeowners:/DataScope 等变体静默忽略）。
+func detectLegacyCascadeOwners(root *yaml.Node) error {
+	if root == nil || root.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if !strings.EqualFold(root.Content[i].Value, "dataScope") {
+			continue
+		}
+		value := root.Content[i+1]
+		if value.Kind == yaml.AliasNode {
+			value = value.Alias
+		}
+		if value == nil || value.Kind != yaml.MappingNode {
+			return nil
+		}
+		for j := 0; j+1 < len(value.Content); j += 2 {
+			if strings.EqualFold(value.Content[j].Value, "cascadeOwners") {
+				return fmt.Errorf("cascadeOwners is no longer supported; declare inheritFrom on the child table spec and the parent registry is updated automatically")
+			}
+		}
+	}
+	return nil
 }
 
 // parseSpecIndexes 解析并校验 spec 的表级索引声明：索引名必填且为合法标识符、

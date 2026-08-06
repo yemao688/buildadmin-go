@@ -103,5 +103,13 @@ func ResolveConfigWithOptions(cfg *Config, hasAdminID bool, opts ResolveOptions)
 		}
 	}
 
+	// Reassignable only takes effect when an owner column is resolved; callers
+	// that resolve to ModeNone (or a resource without an owner) must reject it.
+	resolved.Reassignable = cfg.Reassignable
+	// InheritFrom likewise only takes effect when an owner column is resolved
+	// (the child table copies the parent's owner column); ModeNone callers
+	// must reject it.
+	resolved.InheritFrom = cfg.InheritFrom
+
 	return resolved, nil
 }

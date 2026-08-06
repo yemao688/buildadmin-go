@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func writeSpecTest(t *testing.T, content string) string {
@@ -17,6 +20,97 @@ func writeSpecTest(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestLoadSpecRejectsLegacyCascadeOwners(t *testing.T) {
+	path := writeSpecTest(t, `name: user_order
+comment: User order
+dataScope:
+  mode: auto
+  reassignable: true
+  cascadeOwners:
+    - table: order_item
+      byColumn: order_id
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: admin_id
+    type: bigint
+  - name: name
+    type: varchar
+    length: 32
+`)
+	_, err := LoadSpec(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cascadeOwners is no longer supported")
+
+	// key 大小写变体（cascadeowners:/datascope:）同样拒绝，不静默忽略
+	path = writeSpecTest(t, `name: user_order
+comment: User order
+datascope:
+  cascadeowners:
+    - table: order_item
+      byColumn: order_id
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: admin_id
+    type: bigint
+  - name: name
+    type: varchar
+    length: 32
+`)
+	_, err = LoadSpec(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cascadeOwners is no longer supported")
+
+	// 合法 dataScope 键（含 inheritFrom）不受影响
+	path = writeSpecTest(t, `name: user_order
+comment: User order
+dataScope:
+  mode: auto
+  reassignable: true
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: admin_id
+    type: bigint
+  - name: name
+    type: varchar
+    length: 32
+`)
+	opts, err := LoadSpec(path)
+	require.NoError(t, err)
+	require.True(t, opts.Table.DataScope.Reassignable)
+}
+
+func TestLoadSpecParsesInheritFrom(t *testing.T) {
+	path := writeSpecTest(t, `name: order_item
+comment: Order item
+dataScope:
+  mode: auto
+  inheritFrom:
+    table: user_order
+    byColumn: order_id
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: order_id
+    type: bigint
+  - name: admin_id
+    type: bigint
+  - name: name
+    type: varchar
+    length: 32
+`)
+	opts, err := LoadSpec(path)
+	require.NoError(t, err)
+	require.NotNil(t, opts.Table.DataScope.InheritFrom)
+	require.Equal(t, &data_scope.InheritRef{Table: "user_order", ByColumn: "order_id"}, opts.Table.DataScope.InheritFrom)
 }
 
 func TestLoadSpecDefaultsAndMenu(t *testing.T) {

@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	"fmt"
 	crudmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -63,6 +63,10 @@ type DataScopeResolveOptions struct {
 	// ProveIndex is an optional callback that proves the owner column has a
 	// database index. If it returns false, ResolveDataScope fails closed.
 	ProveIndex func(column string) (bool, error)
+	// TableName is the logical (spec) name of the current table. It is used to
+	// reject cascadeOwners/inheritFrom declarations that reference the table
+	// itself. Empty means no self-reference check is possible.
+	TableName string
 }
 
 // IndexStrategy describes what we can prove about the owner column's indexing.
@@ -129,8 +133,45 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 	if err != nil {
 		return ResolvedDataScope{}, err
 	}
+	// reassignable 仅在有属主列时有效：ModeNone（含 auto 无 admin_id）没有
+	// 可重分配的 owner；ModeRequired 下 assignOnCreate 必须为 true，否则
+	// Add 不会写入归属、编辑归属也失去对照基线。
+	if cfg.Reassignable && resolved.Mode == data_scope.ModeNone {
+		return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable requires an owner column, got mode none")
+	}
+	if cfg.Reassignable && !resolved.AssignOnCreate {
+		return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable requires assignOnCreate=true for owner column %q", resolved.OwnerColumn)
+	}
+	// 级联归属校验：inheritFrom 与 reassignable 互斥（子表不能手动改归属，
+	// 归属只从主实体继承）；子表注册由生成器在生成/删除时自动维护主实体 repo
+	// 的 CascadeOwners() 锚点块，spec 侧不再声明级联子表列表。
+	if cfg.InheritFrom != nil {
+		if cfg.Reassignable {
+			return ResolvedDataScope{}, fmt.Errorf("data_scope: inheritFrom is mutually exclusive with reassignable")
+		}
+		if resolved.Mode == data_scope.ModeNone {
+			return ResolvedDataScope{}, fmt.Errorf("data_scope: inheritFrom requires an owner column, got mode none")
+		}
+		if err := validateInheritFrom(cfg.InheritFrom, opts.TableName, fields); err != nil {
+			return ResolvedDataScope{}, err
+		}
+	}
 	if err := validateReadExtraOwners(cfg.ReadExtraOwners, resolved.OwnerColumn, fields); err != nil {
 		return ResolvedDataScope{}, err
+	}
+
+	// 级联/重分配硬契约：owner 列必须是 admin_id 且 Go 类型为 int32。模板与
+	// cascade:sync 均按 admin_id 拼接 SQL，并把 owner 以 int32 传入
+	// OwnerInScopeWithActor（admin id 域）；bigint 列会"先截断校验、再写入
+	// 未截断值"（fail-open），非 admin_id 列会生成运行时必炸的代码——生成期
+	// 直接拒绝（评审 MAJOR）。
+	if cfg.Reassignable || cfg.InheritFrom != nil {
+		if resolved.OwnerColumn != "admin_id" {
+			return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable/inheritFrom requires owner column admin_id (cascade contract), got %q", resolved.OwnerColumn)
+		}
+		if err := requireInt32Owner(resolved.OwnerColumn, fields); err != nil {
+			return ResolvedDataScope{}, err
+		}
 	}
 
 	idx, err := proveIndexStrategy(resolved.OwnerColumn, fields, opts.ProveIndex)
@@ -245,6 +286,54 @@ func validateRequiredOwner(column string, fields []crudmodel.Field) error {
 	}
 	if !isIntegerCompatible(fields, column) {
 		return fmt.Errorf("%w: owner column %q is not integer-compatible", data_scope.ErrInvalidOwnerColumn, column)
+	}
+	return nil
+}
+
+// requireInt32Owner 拒绝非 int32 兼容的属主列：级联/重分配模板把 owner 值以
+// int32(...) 传入 OwnerInScopeWithActor（admin id 域），bigint 列会产生
+// "截断校验通过、未截断值落库"的 fail-open 缺口，因此生成期直接拒绝。
+func requireInt32Owner(column string, fields []crudmodel.Field) error {
+	f, ok := findField(fields, column)
+	if !ok {
+		return fmt.Errorf("data_scope: owner column %q not found in table metadata", column)
+	}
+	got, err := ownerGoType(f)
+	if err != nil {
+		return err
+	}
+	if got != "int32" {
+		return fmt.Errorf("data_scope: owner column %q must be int32-compatible (got %s); bigint owner columns are not supported for reassignable/inheritFrom", column, got)
+	}
+	return nil
+}
+
+// validateInheritFrom 校验 inheritFrom 声明：table/byColumn 均为安全静态标识符；
+// byColumn 必须是子表自身字段（关联主实体的列，如 user_id）；目标表不得是本表自身。
+func validateInheritFrom(ref *data_scope.InheritRef, tableName string, fields []crudmodel.Field) error {
+	for _, id := range []struct{ kind, value string }{
+		{"table", ref.Table},
+		{"by column", ref.ByColumn},
+	} {
+		if err := data_scope.ValidateIdentifier(id.value); err != nil {
+			return fmt.Errorf("invalid inheritFrom %s %q: %w", id.kind, id.value, err)
+		}
+	}
+	if ref.Table == tableName {
+		return fmt.Errorf("inheritFrom table %q must not be the table itself", ref.Table)
+	}
+	byField, ok := findField(fields, ref.ByColumn)
+	if !ok {
+		return fmt.Errorf("inheritFrom by column %q not found in table metadata", ref.ByColumn)
+	}
+	// byColumn 必须由 Add 请求提交（生成代码按它定位主实体行），被表单排除
+	// 会恒落 0 → `WHERE id = 0` 永不命中 → Add 恒 ErrRecordNotFound。
+	if byField.FormBuildExclude {
+		return fmt.Errorf("inheritFrom by column %q must not be formBuildExclude'd; the Add request must submit it to locate the parent row", ref.ByColumn)
+	}
+	// byColumn 与主实体主键（整数 id）等值连接，必须整数兼容。
+	if !isIntegerCompatible(fields, ref.ByColumn) {
+		return fmt.Errorf("inheritFrom by column %q is not integer-compatible", ref.ByColumn)
 	}
 	return nil
 }

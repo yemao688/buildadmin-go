@@ -145,7 +145,8 @@ func wireCommand(configuration *conf.Configuration, logger *lumberjack.Logger, z
 	exampleHandler := commands.NewExampleHandler(zapLogger)
 	migrateHandler := commands.NewMigrateHandler(zapLogger, configuration)
 	crudHandler := commands.NewCrudHandler(zapLogger, configuration)
-	command := commands.NewCommand(exampleHandler, migrateHandler, crudHandler)
+	cascadeHandler := commands.NewCascadeHandler(zapLogger, configuration)
+	command := commands.NewCommand(exampleHandler, migrateHandler, crudHandler, cascadeHandler)
 	return command, func() {
 	}, nil
 }

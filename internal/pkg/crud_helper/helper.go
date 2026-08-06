@@ -121,12 +121,19 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	ds, err := ResolveDataScope(dsConfig, fields, DataScopeResolveOptions{
 		AllowNoneWithAdminID: allowNoneExplicit,
 		ProveIndex:           proveIndex,
+		TableName:            table.Name,
 	})
 	if err != nil {
 		return ModelData{}, HandlerData{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, NameInfo{}, WebDir{}, WebDir{}, "", "", "", "", "", err
 	}
 	modelData.PkGoField = pkGoField(tablePk)
 	modelData.DataScopePolicy = ds.Policy
+	modelData.InheritFrom = ds.Policy.InheritFrom
+	if ds.Policy.InheritFrom != nil {
+		// inheritFrom.ByColumn 是子表自身关联主实体的列（如 user_id），其 Go
+		// 字段名按仓库既有推导对齐（commonInitialisms：user_id → UserID）。
+		modelData.InheritByGoField = generatedGoFieldName(ds.Policy.InheritFrom.ByColumn)
+	}
 	modelData.DataScopeOwnerGoField = ds.OwnerGoField
 	if ds.OwnerColumn != "" {
 		ownerType, err := ownerGoType(searchField(fields, ds.OwnerColumn))
@@ -135,17 +142,50 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		}
 		modelData.DataScopeOwnerGoType = ownerType
 	}
+
+	// owner 字段表单预置：reassignable 时把 owner 渲染成 admin 的远程下拉，
+	// 选项天然按当前操作者（自己+后代）收敛。必须在此处（effectiveFormFields /
+	// EditableColumns / ExcludeParamFields 消费 fields 之前）完成：spec 若给
+	// owner 显式 formBuildExclude: true，这里强制 FormBuildExclude=false 才能
+	// 保证 DTO 保留 owner（否则 handler 引用 params.<OwnerGoField> 编译失败）
+	// 且编辑列包含 owner。
+	if ds.Policy.Reassignable && ds.OwnerColumn != "" {
+		for i := range fields {
+			if fields[i].Name != ds.OwnerColumn {
+				continue
+			}
+			fields[i].DesignType = "remoteSelect"
+			fields[i].Form.RemoteTable = "admin"
+			fields[i].Form.RemoteField = "username"
+			fields[i].Form.RemotePk = "id"
+			fields[i].Form.RemoteController = "admin"
+			fields[i].FormBuildExclude = false
+		}
+	}
+
 	effectiveFormFields := slices.Clone(table.FormFields)
 	if ds.OwnerColumn != "" {
-		effectiveFormFields = slices.DeleteFunc(effectiveFormFields, func(s string) bool {
-			return s == ds.OwnerColumn
-		})
+		if ds.Policy.Reassignable {
+			// 可重分配：owner 列保留在表单中，允许编辑时选择归属。
+			if !slices.Contains(effectiveFormFields, ds.OwnerColumn) {
+				effectiveFormFields = append(effectiveFormFields, ds.OwnerColumn)
+			}
+		} else {
+			effectiveFormFields = slices.DeleteFunc(effectiveFormFields, func(s string) bool {
+				return s == ds.OwnerColumn
+			})
+		}
 	}
 	modelData.EffectiveFormFields = effectiveFormFields
-	modelData.EditableColumns = buildEditableColumns(tablePk, ds.OwnerColumn, effectiveFormFields, fields)
+	if ds.Policy.Reassignable {
+		// ownerColumn 传 "" 表示不排除 owner：编辑可写归属列。
+		modelData.EditableColumns = buildEditableColumns(tablePk, "", effectiveFormFields, fields)
+	} else {
+		modelData.EditableColumns = buildEditableColumns(tablePk, ds.OwnerColumn, effectiveFormFields, fields)
+	}
 	modelData.EditableColumnsGo = joinQuotedColumns(modelData.EditableColumns)
 
-	if ds.OwnerColumn != "" {
+	if ds.OwnerColumn != "" && !ds.Policy.Reassignable {
 		handlerData.ExcludeParamFields = []string{ds.OwnerColumn}
 	}
 	for _, field := range fields {
@@ -167,6 +207,9 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 		}
 	}
 
+	handlerData.Reassignable = ds.Policy.Reassignable
+	handlerData.OwnerGoField = ds.OwnerGoField
+
 	return modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, nil
 }
 
@@ -180,6 +223,10 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
+	// 本函数会改写 fields（reassignable owner 预置块），克隆入参避免污染
+	// 调用方的切片；同一生成 pass 内的下游（buildFormFieldMarkup 等）仍消费
+	// 改写后的克隆。
+	fields = slices.Clone(fields)
 	fullTableName := getTableName(table.Name, true)
 	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
 	if err != nil {

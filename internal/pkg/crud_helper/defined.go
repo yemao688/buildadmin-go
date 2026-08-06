@@ -276,6 +276,8 @@ type HandlerData struct {
 	Methods []string
 
 	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
+	Reassignable       bool     // data-scope reassignable: Edit may change the owner column
+	OwnerGoField       string   // data-scope owner Go field (e.g. "AdminID")
 }
 
 type RegistrarData struct {
@@ -397,8 +399,15 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 		response.FailByErr(ctx, err)
 		return
 	}
-
-	copier.Copy(&data, params)
+	{{if .Reassignable}}
+	originalOwner := data.{{.OwnerGoField}}
+	{{end}}
+	copier.Copy(&data, params){{if .Reassignable -}}
+	// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
+	if params.{{.OwnerGoField}} == 0 {
+		data.{{.OwnerGoField}} = originalOwner
+	}
+	{{- end}}
 	err = h.{{.ModelVar}}M.Edit(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -453,6 +462,8 @@ type ModelData struct {
 	DataScopePolicy           data_scope.ResourcePolicy
 	DataScopeOwnerGoField     string
 	DataScopeOwnerGoType      string
+	InheritFrom               *data_scope.InheritRef
+	InheritByGoField          string
 	EffectiveFormFields       []string
 	EditableColumns           []string
 	EditableColumnsGo         string
@@ -505,6 +516,8 @@ import (
 	{{end}}
 	{{if .RelationNeedsMultiNumeric}}"strconv"
 	{{end}}
+	{{if or .DataScopePolicy.Reassignable .InheritFrom}}"gorm.io/gorm/clause"
+	{{end}}
 	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
 	{{end}}
 	"buildadmin-go/internal/conf"
@@ -537,6 +550,8 @@ func New{{.ClassName}}Repository(sqlDB *gorm.DB, config *conf.Configuration, enf
 			OwnerColumn:     "{{.DataScopePolicy.OwnerColumn}}",
 			ReadExtraOwners: []string{ {{range $i, $column := .DataScopePolicy.ReadExtraOwners}}{{if $i}}, {{end}}{{printf "%q" $column}}{{end}} },
 			AssignOnCreate:  {{.DataScopePolicy.AssignOnCreate}},
+			Reassignable:    {{.DataScopePolicy.Reassignable}},
+			InheritFrom:   {{if .InheritFrom}}&data_scope.InheritRef{Table: "{{.InheritFrom.Table}}", ByColumn: "{{.InheritFrom.ByColumn}}"}{{else}}nil{{end}},
 		},
 		Enforcer: enforcer,
 		config:   config,
@@ -578,7 +593,14 @@ func (s *{{.ClassName}}Repository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.
 }
 
 {{.RelationLoaders}}
-
+{{if .DataScopePolicy.Reassignable}}// CascadeOwners 由 CRUD 生成器模式维护，自定义请新增独立文件/方法。
+func (s *{{.ClassName}}Repository) CascadeOwners() []data_scope.CascadeOwner {
+	return []data_scope.CascadeOwner{
+		// @cascade:begin
+		// @cascade:end
+	}
+}
+{{end}}
 func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} model.{{.ClassName}}, err error) {
 	db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
 	db.Statement.Table = s.TableName
@@ -614,6 +636,60 @@ func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.Class
 	{{end}}return
 }
 
+{{if .InheritFrom -}}
+func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		actor, err := s.Enforcer.Actor(ctx)
+		if err != nil {
+			return err
+		}
+		return s.Transaction(ctx, func(tx *gorm.DB) error {
+			// 归属继承自主实体（FOR UPDATE 防并发改归属），并校验请求者可操作该主实体
+			var inherited struct{ AdminID int32 }
+			if err := tx.Table(s.config.Database.Prefix + "{{.InheritFrom.Table}}").Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("id = ?", {{.ModelVar}}.{{.InheritByGoField}}).Take(&inherited).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(inherited.AdminID)
+			if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+			{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+			{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+			{{end}}{{end}}
+			if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+				return err
+			}
+			{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+				if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+					return err
+				}
+				{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+			}
+			{{end}}return nil
+		})
+	}
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+		{{end}}{{end}}
+		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+			return err
+		}
+		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+		}
+		{{end}}return nil
+	})
+}
+{{- else -}}
 func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
@@ -624,7 +700,15 @@ func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.
 			return err
 		}
 		if s.Policy.AssignOnCreate {
-			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
+			{{if .DataScopePolicy.Reassignable}}// 超管可指定归属（必须存在且注册过层级），其余强制归属操作者。
+			if !(actor.Unrestricted && {{.ModelVar}}.{{.DataScopeOwnerGoField}} > 0) {
+				{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
+			}
+			if err := data_scope.OwnerInScopeWithActor(ctx, s.DBFor(ctx), s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			{{else}}{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
+			{{end}}
 		}
 		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
 			return err
@@ -648,20 +732,54 @@ func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.
 		{{end}}return nil
 	})
 }
+{{- end}}
 
 func (s *{{.ClassName}}Repository) Edit(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
+	{{if .DataScopePolicy.Reassignable}}var actor data_scope.Actor
+	var err error
+	{{end}}
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
 		}
-		if _, err := s.Enforcer.Actor(ctx); err != nil {
+		{{if .DataScopePolicy.Reassignable}}actor, err = s.Enforcer.Actor(ctx)
+		if err != nil {
 			return err
 		}
+		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
+			return err
+		}
+		{{end}}
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		tx = s.scopeDB(ctx, tx)
 		{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = time.Now().Unix()
+		{{end}}
+		{{if .DataScopePolicy.Reassignable}}// 归属变更时校验新 owner 在当前操作者麾下（自己+后代），超管可任意指定。
+		var current model.{{.ClassName}}
+		if err := tx.Table(s.TableName).Clauses(clause.Locking{Strength: "UPDATE"}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).First(&current).Error; err != nil {
+			return err
+		}
+		if current.{{.DataScopeOwnerGoField}} != {{.ModelVar}}.{{.DataScopeOwnerGoField}} {
+			if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			for _, c := range s.CascadeOwners() {
+				if err := data_scope.ValidateIdentifier(c.Table); err != nil {
+					return err
+				}
+				if err := data_scope.ValidateIdentifier(c.ByColumn); err != nil {
+					return err
+				}
+				if err := data_scope.ValidateIdentifier(c.OwnerColumn); err != nil {
+					return err
+				}
+				{{$bt := "` + "`" + `"}}if err := tx.Session(&gorm.Session{NewDB: true}).Table(s.config.Database.Prefix + c.Table).Where("{{$bt}}"+c.ByColumn+"{{$bt}} = ? AND {{$bt}}"+c.OwnerColumn+"{{$bt}} <> ?", {{.ModelVar}}.{{.PkGoField}}, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Update(c.OwnerColumn, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Error; err != nil {
+					return fmt.Errorf("cascade owner %q: %w", c.Table, err)
+				}
+			}
+		}
 		{{end}}
 
 	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})

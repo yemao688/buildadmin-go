@@ -10,6 +10,7 @@ type Command struct {
 	exampleH *ExampleHandler
 	migrateH *MigrateHandler
 	crudH    *CrudHandler
+	cascadeH *CascadeHandler
 }
 
 // NewCommand .
@@ -17,11 +18,13 @@ func NewCommand(
 	exampleH *ExampleHandler,
 	migrateH *MigrateHandler,
 	crudH *CrudHandler,
+	cascadeH *CascadeHandler,
 ) *Command {
 	return &Command{
 		exampleH: exampleH,
 		migrateH: migrateH,
 		crudH:    crudH,
+		cascadeH: cascadeH,
 	}
 }
 
@@ -30,6 +33,7 @@ var ProviderSet = wire.NewSet(
 	NewExampleHandler,
 	NewMigrateHandler,
 	NewCrudHandler,
+	NewCascadeHandler,
 )
 
 // registerCommands 把全部子命令挂到根命令下。crud:validate 不依赖运行配置，
@@ -44,5 +48,6 @@ func registerCommands(rootCmd *cobra.Command, cmdBootstrap CmdBootstrap, appBoot
 		newCrudDeleteCommand(cmdBootstrap),
 		newCrudApplyCommand(cmdBootstrap),
 		newCrudValidateCommand(),
+		newCascadeSyncCommand(cmdBootstrap),
 	)
 }

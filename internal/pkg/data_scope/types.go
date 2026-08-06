@@ -37,6 +37,36 @@ type Config struct {
 	OwnerColumn     string   `json:"ownerColumn,omitempty"`
 	ReadExtraOwners []string `json:"readExtraOwners,omitempty"`
 	AssignOnCreate  *bool    `json:"assignOnCreate,omitempty"`
+	// Reassignable permits editing the owner column: restricted operators may
+	// only reassign to an admin inside their own subtree (self + descendants),
+	// unrestricted operators may pick any existing admin. Only meaningful when
+	// an owner column is resolved.
+	Reassignable bool `json:"reassignable,omitempty"`
+	// InheritFrom makes Add inherit this resource's owner from a parent
+	// entity instead of assigning the operating admin. The named table is
+	// looked up by the join column and its admin_id is copied. Mutually
+	// exclusive with Reassignable; only meaningful when an owner column is
+	// resolved. Child tables are registered on the parent repository's
+	// CascadeOwners() anchor block automatically at generation time.
+	InheritFrom *InheritRef `json:"inheritFrom,omitempty"`
+}
+
+// CascadeOwner names one child table whose redundant owner column is kept in
+// sync with the parent entity. It is the element type of the generated parent
+// repository's CascadeOwners() registry (maintained by the CRUD generator
+// anchor block) and is also read by the cascade:sync reconciliation CLI.
+type CascadeOwner struct {
+	Table       string `json:"table"`
+	ByColumn    string `json:"byColumn"`
+	OwnerColumn string `json:"ownerColumn,omitempty"` // 空时归一为 admin_id
+}
+
+// InheritRef names the parent entity a child table inherits its owner from on
+// Add. ByColumn is the child's own column referencing the parent's primary
+// key (for example user_id on an order table).
+type InheritRef struct {
+	Table    string `json:"table"`
+	ByColumn string `json:"byColumn"`
 }
 
 // Resolved is the effective policy after applying conventions and defaults.
@@ -46,6 +76,8 @@ type Resolved struct {
 	OwnerGoField    string
 	ReadExtraOwners []string
 	AssignOnCreate  bool
+	Reassignable    bool
+	InheritFrom     *InheritRef
 	Source          string
 }
 
@@ -55,6 +87,8 @@ type ResourcePolicy struct {
 	OwnerColumn     string
 	ReadExtraOwners []string
 	AssignOnCreate  bool
+	Reassignable    bool
+	InheritFrom     *InheritRef
 }
 
 // Actor carries the authenticated administrator identity and an explicit
@@ -209,6 +243,8 @@ func (r Resolved) Policy() ResourcePolicy {
 		OwnerColumn:     r.OwnerColumn,
 		ReadExtraOwners: append([]string(nil), r.ReadExtraOwners...),
 		AssignOnCreate:  r.AssignOnCreate,
+		Reassignable:    r.Reassignable,
+		InheritFrom:     r.InheritFrom,
 	}
 }
 
