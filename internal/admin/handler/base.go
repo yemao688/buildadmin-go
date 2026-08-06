@@ -57,32 +57,42 @@ func NewBase(currentM CommonModel) Base {
 // written. Existing callers can omit it and retain the historical behavior.
 type PartialEditValidator func(id int32, fieldName string, fieldValue any) error
 
-// MaybePartialEdit 检测并处理 Switch 单元格的部分字段更新
-// allowedFields 是该表允许通过 Switch 修改的字段名集合
-// 返回 true 表示已处理（Switch 请求），false 表示不是 Switch 请求，继续走正常 Edit
-func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
+// parsePartialEditRequest 解析 Switch 单元格部分更新请求的前导部分：读 body →
+// NopCloser 写回 → Unmarshal → len==2 判定 → 提取主键 → 提取唯一非主键字段 →
+// allowedFields 检查 → id 转换 → validators 执行。Base / AdminHandler /
+// AdminGroupHandler 三处 MaybePartialEdit 此前逐字重复该前导，统一收口于此。
+//
+// 返回 (idVal, id, fieldName, fieldValue, handled, failed)：
+//   - handled=false：不是 Switch 请求（body 读取失败 / 非 2 键 JSON / 缺
+//     primaryKey / 非白名单字段 / JSON 解析失败），调用方应返回 false 走正常 Edit。
+//   - handled=true 且 failed=true：某个 validator 失败，本函数已调用
+//     response.FailByErr 完成响应，调用方应直接返回 true。
+//   - handled=true 且 failed=false：解析成功，调用方继续自己的写入路径。
+//
+// idVal 是主键的原始 JSON 值（如 float64），id 是经
+// com.StrTo(fmt.Sprintf("%v", idVal)).MustInt() 转换后的值；写入路径需要精确
+// WHERE 条件时使用 idVal（Base 的 Updates 分支即如此）。
+func parsePartialEditRequest(ctx *gin.Context, primaryKey string,
+	allowedFields map[string]bool, validators ...PartialEditValidator) (idVal any, id int32, fieldName string, fieldValue any, handled bool, failed bool) {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
-		return false
+		return nil, 0, "", nil, false, false
 	}
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var m map[string]any
 	if err := json.Unmarshal(bodyBytes, &m); err != nil {
-		return false
+		return nil, 0, "", nil, false, false
 	}
 
 	if len(m) != 2 {
-		return false
+		return nil, 0, "", nil, false, false
 	}
-	primaryKey := h.primaryKey()
 	idVal, hasID := m[primaryKey]
 	if !hasID {
-		return false
+		return nil, 0, "", nil, false, false
 	}
 
-	var fieldName string
-	var fieldValue any
 	for k, v := range m {
 		if k != primaryKey {
 			fieldName = k
@@ -92,18 +102,33 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 	}
 
 	if !allowedFields[fieldName] {
-		return false
+		return nil, 0, "", nil, false, false
 	}
 
-	id := int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
+	id = int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
 	for _, validator := range validators {
 		if validator == nil {
 			continue
 		}
 		if err := validator(id, fieldName, fieldValue); err != nil {
 			response.FailByErr(ctx, err)
-			return true
+			return idVal, id, fieldName, fieldValue, true, true
 		}
+	}
+	return idVal, id, fieldName, fieldValue, true, false
+}
+
+// MaybePartialEdit 检测并处理 Switch 单元格的部分字段更新
+// allowedFields 是该表允许通过 Switch 修改的字段名集合
+// 返回 true 表示已处理（Switch 请求），false 表示不是 Switch 请求，继续走正常 Edit
+func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
+	primaryKey := h.primaryKey()
+	idVal, _, fieldName, fieldValue, handled, failed := parsePartialEditRequest(ctx, primaryKey, allowedFields, validators...)
+	if !handled {
+		return false
+	}
+	if failed {
+		return true
 	}
 	updates := map[string]any{fieldName: fieldValue}
 	db := h.currentM.DB()

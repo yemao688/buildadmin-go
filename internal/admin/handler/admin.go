@@ -4,10 +4,7 @@ import (
 	dto "buildadmin-go/internal/admin/dto"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"strconv"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
@@ -241,48 +238,12 @@ func (h *AdminHandler) One(ctx *gin.Context) {
 // MaybePartialEdit overrides Base.MaybePartialEdit so that switch-unit-cell
 // status updates run through the scoped, atomic service/repository path.
 func (h *AdminHandler) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
-	bodyBytes, err := io.ReadAll(ctx.Request.Body)
-	if err != nil {
+	_, id, fieldName, fieldValue, handled, failed := parsePartialEditRequest(ctx, "id", allowedFields, validators...)
+	if !handled {
 		return false
 	}
-	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-	var m map[string]any
-	if err := json.Unmarshal(bodyBytes, &m); err != nil {
-		return false
-	}
-
-	if len(m) != 2 {
-		return false
-	}
-	idVal, hasID := m["id"]
-	if !hasID {
-		return false
-	}
-
-	var fieldName string
-	var fieldValue any
-	for k, v := range m {
-		if k != "id" {
-			fieldName = k
-			fieldValue = v
-			break
-		}
-	}
-
-	if !allowedFields[fieldName] {
-		return false
-	}
-
-	id := int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt())
-	for _, validator := range validators {
-		if validator == nil {
-			continue
-		}
-		if err := validator(id, fieldName, fieldValue); err != nil {
-			response.FailByErr(ctx, err)
-			return true
-		}
+	if failed {
+		return true
 	}
 
 	if fieldName != "status" {
