@@ -148,7 +148,10 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 	// EditableColumns / ExcludeParamFields 消费 fields 之前）完成：spec 若给
 	// owner 显式 formBuildExclude: true，这里强制 FormBuildExclude=false 才能
 	// 保证 DTO 保留 owner（否则 handler 引用 params.<OwnerGoField> 编译失败）
-	// 且编辑列包含 owner。
+	// 且编辑列包含 owner。RelationFields 同样预置（spec 未手写时）：列表列的
+	// 关联显示列（admin.username）与后端关联加载器都以 RelationFields 为入口
+	// 条件（parseJoinData / BuildFileManifestForFields），缺失则列表缺上级代理
+	// 列、关联查询不生成。
 	if ds.Policy.Reassignable && ds.OwnerColumn != "" {
 		for i := range fields {
 			if fields[i].Name != ds.OwnerColumn {
@@ -159,6 +162,9 @@ func prepareGenerationData(table crudmodel.Table, fields []crudmodel.Field, dsCo
 			fields[i].Form.RemoteField = "username"
 			fields[i].Form.RemotePk = "id"
 			fields[i].Form.RemoteController = "admin"
+			if fields[i].Form.RelationFields == "" {
+				fields[i].Form.RelationFields = "username"
+			}
 			fields[i].FormBuildExclude = false
 		}
 	}

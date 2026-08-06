@@ -150,7 +150,7 @@ dataScope:
 
 生成效果：
 - 生成器自动把表单中的 owner 字段渲染为 `remoteSelect`，remote-url 为 `/admin/auth.Admin/index`（无 query 参数）；前端 remoteSelect 组件自动追加 `select=true`，树形选项由 `buildAdminTreeOptions` 组装（不存在 `isTree` 参数）。选项天然按当前操作者自己+后代收敛，超管看全量，无需手工配置 `form` 属性。
-- reassignable 时 owner 字段在 spec 中的 `designType`/`form` 属性会被忽略（自动渲染为 admin remoteSelect，且强制 `formBuildExclude: false`），表单默认显示归属选择。
+- reassignable 时 owner 字段在 spec 中的 `designType`/`form` 属性会被忽略（自动渲染为 admin remoteSelect，且强制 `formBuildExclude: false`），表单默认显示归属选择。**列表列与后端关联加载同样自动生成**：`RelationFields` 未手写时生成器默认注入 `username`（与 `remoteField` 对齐），列表自动显示 `admin.username` 上级代理列（隐藏原始 admin_id 列）、后端生成关联加载器——spec 手写了 `relationFields`（如 `nickname`）则保留用户指定。无需恢复手写 form 块。
 - DTO 保留 `admin_id`（不再排除），编辑列包含 owner（可写）。
 
 残余 TOCTOU：Add 的归属校验发生在事务外（HTTP 请求路径上请求事务中间件使其实际处于同一事务；直接调用 repo 时校验在池连接上执行）。超管指定的目标 admin 若在校验与落库之间被并发删除，行为 fail-safe：悬挂的 owner 行对受限操作者不可见（闭包匹配不到），不构成权限放大。

@@ -847,6 +847,16 @@ func TestPrepareGenerationData_Reassignable(t *testing.T) {
 	// handler 数据携带 reassignable 与 owner Go 字段
 	assert.True(t, handlerData.Reassignable)
 	assert.Equal(t, "AdminID", handlerData.OwnerGoField)
+	// 自动覆盖块注入 RelationFields（未手写时默认 username）：列表列关联显示
+	// 列与后端关联加载器都以 RelationFields 为入口条件，缺失则列表缺上级代理
+	// 列（下游 fork 反馈回归）。
+	for i := range fields {
+		if fields[i].Name == "admin_id" {
+			assert.Equal(t, "remoteSelect", fields[i].DesignType)
+			assert.Equal(t, "admin", fields[i].Form.RemoteTable)
+			assert.Equal(t, "username", fields[i].Form.RelationFields)
+		}
+	}
 
 	// DTO 保留 admin_id
 	structContent := compileDemoStruct(modelData.ClassName, "admin_id", "AdminID", "admin_id")
