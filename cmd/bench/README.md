@@ -1,4 +1,4 @@
-# 后端压测基线（scripts/bench）
+# 后端压测基线（cmd/bench）
 
 轻量 HTTP 压测工具（Go 标准库实现，无第三方依赖），用于建立框架后端请求的
 **可重复性能基线**：对比优化前后的量化收益，解锁"需要压测数据再决策"的
@@ -8,12 +8,12 @@
 
 ```bash
 # 后台列表页（带管理员 token）
-go run ./scripts/bench -url http://localhost:9902/admin/user.Admin/index \
+go run ./cmd/bench -url http://localhost:9902/admin/user.Admin/index \
     -n 2000 -c 50 \
     -header 'batoken: <token>, think-lang: zh-cn'
 
 # 前台认证接口（带会员 token）
-go run ./scripts/bench -url http://localhost:9902/api/user/checkIn \
+go run ./cmd/bench -url http://localhost:9902/api/user/checkIn \
     -n 2000 -c 50 -header 'ba-user-token: <token>'
 ```
 
