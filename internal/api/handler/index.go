@@ -37,6 +37,12 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		response.FailByErr(ctx, err)
 		return
 	}
+	// 默认语言 = 启用的语言第一条（与 country.Service.DefaultLan 语义一致），
+	// 空表兜底 "en"；复用上面的 languages 查询，避免重复查库。
+	defaultLan := "en"
+	if len(languages) > 0 {
+		defaultLan = languages[0].Lan
+	}
 	currencies, err := h.country.EnabledCurrencies(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -63,6 +69,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		},
 		"userInfo": userInfo,
 		"language": languages,
+		"default_language": defaultLan,
 		"currency": currencies,
 	})
 }

@@ -131,7 +131,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 		Registrars: v2,
 	}
 	apiRouter := router2.NewApiRouter(apiRouterDeps)
-	engine := router3.InitRouter(logger, adminRouter, apiRouter)
+	engine := router3.InitRouter(logger, adminRouter, apiRouter, countryService)
 	server := commands.NewHttpServer(configuration, engine)
 	cronCron := cron.NewCron(zapLogger)
 	serverApp := commands.NewServerApp(configuration, zapLogger, authorization, server, cronCron)

@@ -13,6 +13,7 @@ import (
 	api "buildadmin-go/internal/api/handler"
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
+	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -135,6 +136,9 @@ func newCompleteRouter() *gin.Engine {
 			UserLoginM: &apiMiddleware.UserLogin{},
 			Registrars: apiRegistrars(),
 		}),
+		// 零值桩：i18n 回调仅在 /api/* 无 think-lang header 时才会调用
+		// DefaultLan，本测试用例不会触发该路径。
+		&country.Service{},
 	)
 }
 
