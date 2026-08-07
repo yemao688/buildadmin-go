@@ -2,6 +2,7 @@ package crud_helper
 
 import (
 	"buildadmin-go/internal/conf"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 	"os"
 	"path/filepath"
@@ -145,5 +146,130 @@ func TestPruneEmptyDirsUpTo(t *testing.T) {
 	}
 	if _, err := os.Stat(withFile); !os.IsNotExist(err) {
 		t.Fatalf("empty leaf dir not pruned: %v", err)
+	}
+}
+
+// TestPruneFrontendEmptyDirs 验证生成/删除流程共用的前端空目录修剪：
+// 空模块目录链向上清空（止于 views/lang 根），共享父目录中的其他模块
+// 文件必须保留，stopAt 根目录绝不删除。路径按生产推导（LangFile 的末段
+// 是文件名，模块目录是其父目录）构造，与真实残留形态一致。
+func TestPruneFrontendEmptyDirs(t *testing.T) {
+	root := util.RootPath()
+	table := crudmodel.Table{Name: "prune_fixture", WebViewsDir: "web/src/views/backend/prune_fixture/user/account"}
+	viewsDir := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+	langDir := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+	viewsModule := filepath.Join(root, viewsDir.Views)
+	langENModule := filepath.Dir(filepath.Join(root, langDir.LangFile("en")))
+	langZhModule := filepath.Dir(filepath.Join(root, langDir.LangFile("zh-cn")))
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(root, "web/src/views/backend/prune_fixture"))
+		_ = os.RemoveAll(filepath.Join(root, "web/src/lang/backend/en/prune_fixture"))
+		_ = os.RemoveAll(filepath.Join(root, "web/src/lang/backend/zh-cn/prune_fixture"))
+	})
+	// 残留场景：模块目录已建但文件被清（生成失败回滚后的形态），全是空目录
+	for _, dir := range []string{viewsModule, langENModule, langZhModule} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// en 下与 account 平级的另一模块文件：共享父目录必须保留
+	sibling := filepath.Join(langENModule, "Orders.ts")
+	if err := os.WriteFile(sibling, []byte("export default {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pruneFrontendEmptyDirs(table)
+
+	if _, err := os.Stat(langENModule); err != nil {
+		t.Fatalf("en module dir with sibling file must be kept: %v", err)
+	}
+	if _, err := os.Stat(sibling); err != nil {
+		t.Fatalf("sibling file must be kept: %v", err)
+	}
+	if _, err := os.Stat(langZhModule); !os.IsNotExist(err) {
+		t.Fatalf("empty zh-cn module dir must be pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "web/src/lang/backend/zh-cn/prune_fixture")); !os.IsNotExist(err) {
+		t.Fatalf("empty zh-cn ancestor chain must be pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "web/src/lang/backend/zh-cn")); err != nil {
+		t.Fatalf("zh-cn locale root must be kept: %v", err)
+	}
+	if _, err := os.Stat(viewsModule); !os.IsNotExist(err) {
+		t.Fatalf("empty views module dir must be pruned: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "web/src/views/backend")); err != nil {
+		t.Fatalf("views root must be kept: %v", err)
+	}
+
+	// 非法 WebViewsDir 推导出零值 WebDir：no-op，不 panic、不误删根目录
+	pruneFrontendEmptyDirs(crudmodel.Table{Name: "prune_fixture", WebViewsDir: "../escape"})
+	if _, err := os.Stat(filepath.Join(root, "web/src/views/backend")); err != nil {
+		t.Fatalf("views root must survive invalid input: %v", err)
+	}
+	// 未生成过的模块目录：修剪 no-op，不创建任何东西
+	pruneFrontendEmptyDirs(crudmodel.Table{Name: "never_generated_fixture", WebViewsDir: "web/src/views/backend/never_generated_fixture/account"})
+	if _, err := os.Stat(filepath.Join(root, "web/src/lang/backend/en/never_generated_fixture")); !os.IsNotExist(err) {
+		t.Fatalf("prune must not create dirs: %v", err)
+	}
+}
+
+// TestRollbackPrunesEmptyFrontendDirs 复现生成失败回滚的真实序列：快照（目标
+// 文件均不存在）→ 生成写入文件并 MkdirAll 建目录 → 失败回滚 snapshot.Restore()
+// 只删文件、目录残留（修复前的 bug 形态）→ pruneFrontendEmptyDirs 清空目录链。
+// 路径全部按生产推导构造（LangFile 末段是文件名、Views 末段是模块目录）。
+func TestRollbackPrunesEmptyFrontendDirs(t *testing.T) {
+	root := util.RootPath()
+	table := crudmodel.Table{Name: "rollback_fixture", WebViewsDir: "web/src/views/backend/rollback_fixture/account"}
+	viewsDir := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+	langDir := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+	langEN := filepath.Join(root, langDir.LangFile("en"))
+	langZh := filepath.Join(root, langDir.LangFile("zh-cn"))
+	viewIndex := filepath.Join(root, viewsDir.Views, "index.vue")
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(root, "web/src/views/backend/rollback_fixture"))
+		_ = os.RemoveAll(filepath.Join(root, "web/src/lang/backend/en/rollback_fixture"))
+		_ = os.RemoveAll(filepath.Join(root, "web/src/lang/backend/zh-cn/rollback_fixture"))
+	})
+	// 生成前快照：目标文件均不存在
+	snapshot, err := NewFileSnapshot([]string{langEN, langZh, viewIndex})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = snapshot.Cleanup() }()
+	// 模拟生成写入：MkdirAll + 写文件
+	for _, p := range []string{langEN, langZh, viewIndex} {
+		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("generated"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 失败回滚：文件被删，目录残留（修复前的 bug 形态）
+	if err := snapshot.Restore(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(langEN); !os.IsNotExist(err) {
+		t.Fatalf("rollback must remove generated file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(langEN)); err != nil {
+		t.Fatalf("pre-fix: dir left after rollback must exist: %v", err)
+	}
+	// 修复：修剪空目录
+	pruneFrontendEmptyDirs(table)
+	for _, dir := range []string{filepath.Dir(langEN), filepath.Dir(langZh), filepath.Dir(viewIndex)} {
+		if _, err := os.Stat(dir); !os.IsNotExist(err) {
+			t.Fatalf("empty dir must be pruned after rollback: %s: %v", dir, err)
+		}
+	}
+	for _, rootDir := range []string{
+		filepath.Join(root, "web/src/lang/backend/en"),
+		filepath.Join(root, "web/src/lang/backend/zh-cn"),
+		filepath.Join(root, "web/src/views/backend"),
+	} {
+		if _, err := os.Stat(rootDir); err != nil {
+			t.Fatalf("stop root must be kept: %s: %v", rootDir, err)
+		}
 	}
 }

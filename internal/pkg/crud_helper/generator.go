@@ -232,6 +232,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			}
 		}
 	}()
+	// 生成结束（成功或失败回滚后）修剪空的前端目录链：文件级快照回滚只恢复
+	// 文件，不清理 writeFile 的 MkdirAll 创建的目录——wire/编译/菜单等阶段
+	// 失败后模块的 lang/views 目录会残留为空；skip-frontend 跳过写入或写失败
+	// 留下的残留同样在此收尾。只删空目录，止于 views/lang 根，绝不误删。
+	defer pruneFrontendEmptyDirs(opts.Table)
 
 	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
 	reconcileStaleGeneratingLogs(db, cfg)
@@ -596,11 +601,7 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 	}
 	// 删除后清理为空的目录链（视图、语言）；拍平根包 provider.go 是 wire
 	// 静态聚合根，永不修剪。
-	viewsDir := ParseWebDirNameData(log.Table.Name, "views", log.Table.WebViewsDir)
-	langDir := ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir)
-	pruneEmptyDirsUpTo(filepath.Join(util.RootPath(), viewsDir.Views), filepath.Join(util.RootPath(), "web", "src", "views", "backend"))
-	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(util.RootPath(), langDir.LangFile("en"))), filepath.Join(util.RootPath(), "web", "src", "lang", "backend", "en"))
-	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(util.RootPath(), langDir.LangFile("zh-cn"))), filepath.Join(util.RootPath(), "web", "src", "lang", "backend", "zh-cn"))
+	pruneFrontendEmptyDirs(crudmodel.Table(log.Table))
 	if unregister != nil {
 		// 注销键与生成注册键同源：RouteName 由 generateRelativePath 推导
 		routeName := routeNameFromRelativePath(log.Table.GenerateRelativePath, handlerFile.LastName)
@@ -1215,6 +1216,18 @@ func pruneEmptyDirsUpTo(dir, stopAt string) {
 		}
 		dir = filepath.Dir(dir)
 	}
+}
+
+// pruneFrontendEmptyDirs 自模块的视图/语言目录向上修剪为空的目录链：
+// views 止于 web/src/views/backend，语言止于 web/src/lang/backend/<locale>
+// （stopAt 本身不删）。只删空目录——非空目录（含其他模块文件）与根目录
+// 绝不误删。删除流程、生成成功收尾与生成失败回滚共用同一修剪语义。
+func pruneFrontendEmptyDirs(table crudmodel.Table) {
+	viewsDir := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+	langDir := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+	pruneEmptyDirsUpTo(filepath.Join(util.RootPath(), viewsDir.Views), filepath.Join(util.RootPath(), "web", "src", "views", "backend"))
+	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(util.RootPath(), langDir.LangFile("en"))), filepath.Join(util.RootPath(), "web", "src", "lang", "backend", "en"))
+	pruneEmptyDirsUpTo(filepath.Dir(filepath.Join(util.RootPath(), langDir.LangFile("zh-cn"))), filepath.Join(util.RootPath(), "web", "src", "lang", "backend", "zh-cn"))
 }
 
 func fileExists(path string) bool {
