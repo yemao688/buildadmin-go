@@ -89,15 +89,27 @@ func registerHealthRoute(router *gin.Engine) {
 //   - /api/* 无 header 时取前台默认语言（country_language 第一条，经
 //     NormalizeLang 规范化），失败或空值兜底 zh；
 //   - /admin/* 及其它路径默认 zh（后端 pack key）。
+//
+// 解析结果在首次调用时写入 gin context（i18n.SetLangToContext），同一请求内
+// 后续翻译调用（ginI18n 每次 getMessage 都会回调本函数）直接读缓存，不再
+// 重复解析或查库。同一请求内语言不会中途变化，缓存后行为与首次解析一致。
 func resolveRequestLang(c *gin.Context, defaultLng string, portalDefaultLang func(ctx context.Context) (string, error)) string {
-	if lng := c.Request.Header.Get("think-lang"); lng != "" {
-		return i18n.NormalizeLang(lng)
+	if lang, ok := i18n.LangFromContext(c); ok {
+		return lang
 	}
-	if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+	var lang string
+	switch {
+	case c.Request.Header.Get("think-lang") != "":
+		lang = i18n.NormalizeLang(c.Request.Header.Get("think-lang"))
+	case strings.HasPrefix(c.Request.URL.Path, "/api/"):
 		if lan, err := portalDefaultLang(c.Request.Context()); err == nil && lan != "" {
-			return i18n.NormalizeLang(lan)
+			lang = i18n.NormalizeLang(lan)
+		} else {
+			lang = "zh"
 		}
-		return "zh"
+	default: // /admin/* 及其它默认中文
+		lang = "zh"
 	}
-	return "zh" // /admin/* 及其它默认中文
+	i18n.SetLangToContext(c, lang)
+	return lang
 }

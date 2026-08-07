@@ -105,7 +105,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	countryCurrencyRepository := repository.NewCountryCurrencyRepository(gormDB, configuration, closureEnforcer)
 	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository)
 	countryLanguageRepository := repository.NewCountryLanguageRepository(gormDB, configuration, closureEnforcer)
-	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository)
+	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
 	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
 	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)

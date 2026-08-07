@@ -2,8 +2,11 @@ package country
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/i18n"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -45,9 +48,23 @@ type Currency struct {
 	Weigh  int32   `gorm:"column:weigh" json:"weigh"`
 }
 
+// languageCacheTTL 是启用的语言列表进程内缓存生存时间。缓存按 Service 实例
+// 持有：admin country_language CRUD 写成功经 requesttx 失效回调立即清空，
+// TTL 作为直改库、其它进程写入等旁路路径的兜底。包内测试可临时调短以验证
+// 过期重查路径。
+var languageCacheTTL = 60 * time.Second
+
+type languageCacheEntry struct {
+	languages []Language
+	expiresAt time.Time
+}
+
 type Service struct {
 	db     *gorm.DB
 	prefix string
+
+	mu    sync.RWMutex
+	cache *languageCacheEntry
 }
 
 func NewService(db *gorm.DB, config *conf.Configuration) *Service {
@@ -56,6 +73,28 @@ func NewService(db *gorm.DB, config *conf.Configuration) *Service {
 		prefix = config.Database.Prefix
 	}
 	return &Service{db: db, prefix: prefix}
+}
+
+// GetByRequest 按当前请求语言返回 DB 动态内容翻译（country_language_content）：
+//   - 请求语言取 H1 解析缓存（i18n.LangFromContext，与静态 UI 文案共用同一
+//     请求语言解析结果）；无请求语言时回退前台默认语言 DefaultLan；
+//   - 再走 Get 的既有语义：目标语言缺条时回退默认语言，仍未命中返回
+//     gorm.ErrRecordNotFound。
+//
+// 用途边界：静态 UI 文案走前端 t()/i18n YAML 语言包；动态内容翻译（商品名、
+// 公告等 DB 内容）走本方法，两条链共用同一请求语言。注意 context 中的请求
+// 语言是规范化 pack key（如 zh-cn→zh），与 country_language.lan 原始值
+// （如 zh-cn）可能不同，缺条时由 Get 的默认语言回退桥接。
+func (s *Service) GetByRequest(ctx context.Context, group, key string) (string, error) {
+	lan, ok := i18n.LangFromContext(ctx)
+	if !ok {
+		var err error
+		lan, err = s.DefaultLan(ctx)
+		if err != nil {
+			return "", err
+		}
+	}
+	return s.Get(ctx, lan, group, key)
 }
 
 func (s *Service) Get(ctx context.Context, lan, group, key string) (string, error) {
@@ -103,11 +142,44 @@ func (s *Service) DefaultLan(ctx context.Context) (string, error) {
 }
 
 func (s *Service) EnabledLanguages(ctx context.Context) ([]Language, error) {
+	if entry := s.loadLanguageCache(); entry != nil {
+		// 返回副本，避免调用方误改污染共享缓存
+		return append([]Language(nil), entry.languages...), nil
+	}
 	var values []Language
 	if err := s.db.WithContext(ctx).Table(s.table("country_language")).Where("status = ?", 1).Order("weigh DESC, id ASC").Find(&values).Error; err != nil {
 		return nil, err
 	}
+	s.storeLanguageCache(values)
 	return values, nil
+}
+
+// InvalidateLanguageCache 清空语言列表进程内缓存（下一次查询重新走库）。
+// country_language 写操作（admin CRUD）提交成功后经
+// requesttx.InvalidateAfterMutation 调用；包内测试也用它把缓存复位到未加载态。
+func (s *Service) InvalidateLanguageCache() {
+	s.mu.Lock()
+	s.cache = nil
+	s.mu.Unlock()
+}
+
+func (s *Service) loadLanguageCache() *languageCacheEntry {
+	s.mu.RLock()
+	entry := s.cache
+	s.mu.RUnlock()
+	if entry == nil || !time.Now().Before(entry.expiresAt) {
+		return nil
+	}
+	return entry
+}
+
+func (s *Service) storeLanguageCache(languages []Language) {
+	s.mu.Lock()
+	s.cache = &languageCacheEntry{
+		languages: append([]Language(nil), languages...),
+		expiresAt: time.Now().Add(languageCacheTTL),
+	}
+	s.mu.Unlock()
 }
 
 func (s *Service) EnabledCurrencies(ctx context.Context) ([]Currency, error) {

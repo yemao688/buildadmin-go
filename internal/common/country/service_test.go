@@ -42,6 +42,8 @@ func TestServiceDictionaryContract(t *testing.T) {
 	require.Equal(t, "标题", value)
 
 	require.NoError(t, db.Table("dw_country_language").Where("status = ?", 1).Update("status", 0).Error)
+	// 直改库绕过了服务写路径，语言列表缓存需显式失效
+	s.InvalidateLanguageCache()
 	defaultLan, err := s.DefaultLan(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "en", defaultLan)
@@ -60,6 +62,8 @@ func TestServiceDictionaryContract(t *testing.T) {
 	_, err = s.EnabledLanguages(ctx)
 	require.NoError(t, err)
 	require.NoError(t, db.Table("dw_country_language").Create(&Language{Lan: "ja", Name: "Japanese", Status: 1, Weigh: 20}).Error)
+	// 直改库绕过了服务写路径，语言列表缓存需显式失效
+	s.InvalidateLanguageCache()
 	languages, err := s.EnabledLanguages(ctx)
 	require.NoError(t, err)
 	require.Len(t, languages, 1)

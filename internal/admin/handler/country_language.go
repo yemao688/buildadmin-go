@@ -4,6 +4,8 @@ import (
 	dto "buildadmin-go/internal/admin/dto"
 	repository "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/common/country"
+	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -16,10 +18,11 @@ type CountryLanguageHandler struct {
 	Base
 	log              *zap.Logger
 	countryLanguageM *repository.CountryLanguageRepository
+	countrySvc       *country.Service
 }
 
-func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.CountryLanguageRepository) *CountryLanguageHandler {
-	return &CountryLanguageHandler{Base: Base{currentM: countryLanguageM}, log: log, countryLanguageM: countryLanguageM}
+func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.CountryLanguageRepository, countrySvc *country.Service) *CountryLanguageHandler {
+	return &CountryLanguageHandler{Base: Base{currentM: countryLanguageM}, log: log, countryLanguageM: countryLanguageM, countrySvc: countrySvc}
 }
 
 func (h *CountryLanguageHandler) Index(ctx *gin.Context) {
@@ -53,6 +56,8 @@ func (h *CountryLanguageHandler) Add(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	// 语言列表缓存失效：响应暂存成功后登记，请求事务提交后执行；非事务请求立即执行
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
 }
 
 func (h *CountryLanguageHandler) Edit(ctx *gin.Context) {
@@ -85,6 +90,7 @@ func (h *CountryLanguageHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
 }
 
 func (h *CountryLanguageHandler) Del(ctx *gin.Context) {
@@ -101,4 +107,5 @@ func (h *CountryLanguageHandler) Del(ctx *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(ctx, "Deleted successfully")
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
 }

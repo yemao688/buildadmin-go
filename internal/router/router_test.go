@@ -123,3 +123,34 @@ func TestResolveRequestLang(t *testing.T) {
 		require.Equal(t, "ja", got)
 	})
 }
+
+// TestResolveRequestLangCachedPerRequest 验证 H1 每请求缓存：首次解析后结果
+// 写入 gin context，同一请求内后续解析直接命中缓存，不再重复查库/解析。
+func TestResolveRequestLangCachedPerRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	queries := 0
+	portalDefaultLang := func(context.Context) (string, error) {
+		queries++
+		return "en", nil
+	}
+
+	// /api 无 header：首次解析查一次默认语言，之后走 context 缓存
+	c := newLangTestContext(t, "/api/index/index", "")
+	require.Equal(t, "en", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, 1, queries)
+	require.Equal(t, "en", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, "en", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, 1, queries)
+
+	// 有 header 时同样只解析一次
+	c = newLangTestContext(t, "/api/index/index", "zh-hant")
+	require.Equal(t, "zh-Hant", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, "zh-Hant", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, 1, queries)
+
+	// /admin 默认 zh 也只解析一次；不同请求（新 context）互不影响
+	c = newLangTestContext(t, "/admin/index/index", "")
+	require.Equal(t, "zh", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, "zh", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, 1, queries)
+}
