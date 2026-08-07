@@ -61,10 +61,23 @@ async function start() {
     if (!isAdminApp()) {
         try {
             const res = await axios.get(getUrl() + indexUrl + 'index')
-            const defaultLang = res?.data?.data?.default_language
+            const data = res?.data?.data
+            const defaultLang = data?.default_language
             if (defaultLang) config.initPortalLang(defaultLang)
+
+            // 同一请求一并返回 currency 数组（按 weigh DESC 排序，第一项为后端默认货币）：
+            // 对称 initPortalLang，写入默认货币与货币列表。列表（currencyArray/currencyRates）
+            // 是数据，始终以最新后端列表为准；默认货币仅在用户显式选择前写入（initPortalCurrency 内部判断）。
+            const currencyList = data?.currency
+            if (Array.isArray(currencyList) && currencyList.length > 0) {
+                config.initPortalCurrency(
+                    currencyList[0].code,
+                    currencyList.map((item) => ({ code: item.code, name: item.name, symbol: item.symbol })),
+                    Object.fromEntries(currencyList.map((item) => [item.code, Number(item.rate) || 1]))
+                )
+            }
         } catch (e) {
-            console.warn('[i18n] 获取门户默认语言失败，使用默认 zh-cn', e)
+            console.warn('[i18n] 获取门户默认语言/货币失败，使用默认 zh-cn / CNY', e)
         }
     }
 

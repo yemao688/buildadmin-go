@@ -7,4 +7,5 @@ export default {
     Welcome: 'Welcome',
     Language: 'Language',
     'Current language': 'Current language',
+    'Current money': 'Current money',
 }

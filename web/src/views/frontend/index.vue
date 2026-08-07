@@ -4,6 +4,10 @@
             <h1>{{ t('Welcome') }}</h1>
             <p class="current-lang">{{ t('Current language') }}: {{ currentLang }}</p>
             <LangSwitch :lang-array="langArray" :current="currentLang" @change="onLangChange" />
+            <p class="current-money">{{ t('Current money') }}: {{ formatMoney(100) }}（{{ config.portalCurrency.defaultCurrency }}）</p>
+            <!-- 货币切换组件（components/currency-switch，designer 并行线交付后）在此接入，
+                 组件契约：props currencyArray={code,name,symbol}[] / current=code，emit('change', code)，
+                 处理函数为 config.setPortalCurrency(code)。组件完成前先只展示 formatMoney 结果。 -->
         </el-card>
     </main>
 </template>
@@ -13,6 +17,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LangSwitch from '/@/components/lang-switch/index.vue'
 import { editDefaultLang } from '/@/lang/index'
+import { formatMoney } from '/@/utils/money'
 import { useConfig } from '/@/stores/config'
 
 const { t } = useI18n()
@@ -53,6 +58,12 @@ h1 {
 }
 
 .current-lang {
+    margin: 0 0 20px;
+    color: var(--el-text-color-secondary);
+    font-size: 14px;
+}
+
+.current-money {
     margin: 0 0 20px;
     color: var(--el-text-color-secondary);
     font-size: 14px;

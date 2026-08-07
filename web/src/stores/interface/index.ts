@@ -102,6 +102,28 @@ export interface PortalLang {
     fallbackLang: string
 }
 
+export interface CurrencyOption {
+    // 货币代码，如 CNY / USD
+    code: string
+    // 货币展示名，如 人民币 / US Dollar
+    name: string
+    // 货币符号，如 ¥ / $ / €
+    symbol: string
+}
+
+export interface PortalCurrency {
+    // 前台默认货币 code（全局一个前台默认货币，非 per-portal；默认取后端 country_currency 第一条）
+    defaultCurrency: string
+    // 前台货币是否已被用户显式设置过（随 storeConfig_v3 一并持久化）：
+    // 为 true 后 initPortalCurrency 不再用后端默认货币覆盖用户选择；老用户 localStorage
+    // 的 storeConfig_v3 中无此字段时默认 false，向后兼容。
+    currencySet: boolean
+    // 可用货币列表（供前台货币切换组件渲染；数据以 /api/index/index 返回的 currency 数组为准，只取 code/name/symbol）
+    currencyArray: CurrencyOption[]
+    // code → 换算率映射（formatMoney 换算用；与 currencyArray 同源于后端 currency 数组）
+    currencyRates: Record<string, number>
+}
+
 export interface Crud {
     // 日志同步方式
     syncType: 'manual' | 'automatic'

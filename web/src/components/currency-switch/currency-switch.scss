@@ -1,0 +1,180 @@
+/* =============================================================================
+ * currency-switch 货币切换组件样式（前台门户专用）
+ *
+ * 设计原则：中性、简洁、可覆盖（与 lang-switch 同策略）。
+ * - 默认是浅色中性样式（灰白文字 + 透明背景），适配常见门户页头/页脚。
+ * - 不依赖后台 design system 的任何 scss 变量 / 样式文件，可独立使用。
+ * - 全部类名以 currency-switch- 为前缀，不会污染全局命名空间。
+ *
+ * 业务方覆盖方式（任选其一）：
+ *
+ * 1. 【推荐】CSS 变量集中定制 —— 变量默认值在 :root 上，可任意层级覆盖：
+ *
+ *      .site-header .currency-switch {  深色页头示例
+ *          --currency-switch-text-color: #e5e7eb;
+ *          --currency-switch-hover-bg: rgba(255, 255, 255, 0.12);
+ *          --currency-switch-active-color: #60a5fa;
+ *          --currency-switch-radius: 6px;
+ *      }
+ *
+ *    注意：下拉菜单（el-dropdown 的 popper）渲染在 body 下，不继承
+ *    .currency-switch 上的变量，只继承 :root。菜单部分要定制时请直接覆盖：
+ *
+ *      .currency-switch__menu .el-dropdown-menu__item { color: #111827; }
+ *
+ * 2. 在全局样式或本文件直接覆盖 .currency-switch-* 类（注意选择器优先级）。
+ *
+ * 3. 想要完全自定义交互时，可只使用组件的 props/emits 自行实现触发器。
+ * ============================================================================= */
+
+:root {
+    /* 可覆盖变量（默认值 = 中性浅色） */
+    --currency-switch-text-color: #4b5563;             /* 触发器主文字（当前货币名） */
+    --currency-switch-label-color: #9ca3af;            /* 「货币」标签文字 */
+    --currency-switch-hover-bg: rgba(0, 0, 0, 0.05);   /* 触发器 / 下拉项 hover 背景 */
+    --currency-switch-active-color: #2563eb;           /* 下拉中当前货币的高亮色 */
+    --currency-switch-radius: 8px;                     /* 触发器圆角 */
+    --currency-switch-font-size: 14px;                 /* 触发器字号 */
+    --currency-switch-gap: 6px;                        /* 触发器内元素间距 */
+}
+
+.currency-switch {
+    display: inline-flex;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+/* ---- 触发器：货币符号 + 标签 + 当前货币名 + 箭头 ---- */
+.currency-switch__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--currency-switch-gap);
+    padding: 6px 10px;
+    font-size: var(--currency-switch-font-size);
+    line-height: 1.4;
+    color: var(--currency-switch-text-color);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--currency-switch-radius);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.currency-switch__trigger:hover {
+    background: var(--currency-switch-hover-bg);
+}
+
+.currency-switch__trigger:focus-visible {
+    outline: 2px solid var(--currency-switch-active-color);
+    outline-offset: 2px;
+}
+
+/* 货币符号（如 ¥ / $ / €），来自 currencyArray，组件不硬编码 */
+.currency-switch__symbol {
+    font-weight: 600;
+}
+
+.currency-switch__label {
+    color: var(--currency-switch-label-color);
+    font-size: 0.92em;
+}
+
+.currency-switch__value {
+    font-weight: 500;
+}
+
+/* 移动端紧凑形态显示的货币代码（如 CNY / USD），默认隐藏 */
+.currency-switch__code {
+    display: none;
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.currency-switch__caret {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: transform 0.2s ease;
+}
+
+/* 下拉展开时箭头翻转 */
+.currency-switch.is-open .currency-switch__caret {
+    transform: rotate(180deg);
+}
+
+/* ---- 下拉菜单 ----
+ * el-dropdown 的 popper 会被 teleport 到 body，样式必须写在全局
+ * （不能在组件 scoped 样式里用 :deep() 命中），因此放本文件。
+ */
+.currency-switch__menu {
+    min-width: 128px;
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.currency-switch__menu .el-dropdown-menu__item:not(.is-disabled) {
+    display: flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 10px;
+    font-size: var(--currency-switch-font-size);
+    line-height: 1;
+    color: var(--currency-switch-text-color);
+    border-radius: 6px;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.currency-switch__menu .el-dropdown-menu__item:not(.is-disabled):hover,
+.currency-switch__menu .el-dropdown-menu__item:not(.is-disabled):focus {
+    background: var(--currency-switch-hover-bg);
+    color: var(--currency-switch-text-color);
+}
+
+/* 当前货币高亮 */
+.currency-switch__menu .el-dropdown-menu__item:not(.is-disabled).is-current {
+    color: var(--currency-switch-active-color);
+    font-weight: 500;
+}
+
+.currency-switch__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 下拉项中的符号等宽对齐（¥ / $ / € 视觉宽度不一） */
+.currency-switch__option .currency-switch__symbol {
+    min-width: 1.1em;
+    text-align: center;
+}
+
+.currency-switch__check {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* ---- 移动端紧凑形态：只显示 货币符号 + 货币代码 ---- */
+@media (max-width: 767px) {
+    .currency-switch__label,
+    .currency-switch__value {
+        display: none;
+    }
+
+    .currency-switch__code {
+        display: inline-block;
+    }
+
+    .currency-switch__trigger {
+        padding: 6px 8px;
+    }
+}

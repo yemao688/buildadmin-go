@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, ref } from 'vue'
 import { STORE_CONFIG } from '/@/stores/constant/cacheKey'
-import type { Crud, Lang, Layout, PortalLang } from '/@/stores/interface'
+import type { Crud, CurrencyOption, Lang, Layout, PortalCurrency, PortalLang } from '/@/stores/interface'
 import { useNavTabs } from '/@/stores/navTabs'
 
 export const useConfig = defineStore(
@@ -81,6 +81,18 @@ export const useConfig = defineStore(
         // 老用户 localStorage 的 storeConfig_v3 中无此字段时默认 false，向后兼容。
         const portalLangSet = ref(false)
 
+        // 前台货币域（/api/* 与门户页）：全局一个前台默认货币（非 per-portal），
+        // 默认货币 = 后端 country_currency 第一条（weigh DESC），由 /api/index/index 返回的
+        // currency 数组经 initPortalCurrency 写入（后端并行线提供）；用户可在前台显式切换（setPortalCurrency）。
+        // 与后台 country/currency 管理互相独立。currencyArray/currencyRates 是数据（供切换组件渲染与
+        // formatMoney 换算），defaultCurrency 是用户选择，二者分开维护；缺省 CNY 兜底。
+        const portalCurrency: PortalCurrency = reactive({
+            defaultCurrency: 'CNY',
+            currencySet: false,
+            currencyArray: [] as CurrencyOption[],
+            currencyRates: {} as Record<string, number>,
+        })
+
         const crud: Crud = reactive({
             syncType: 'manual',
             syncedUpdate: 'yes',
@@ -146,6 +158,33 @@ export const useConfig = defineStore(
             portalLang.defaultLang = val
         }
 
+        /**
+         * 前台货币切换（由前台货币切换入口调用，如 currency-switch 组件 change 事件）：
+         * 标记为用户显式选择，此后 initPortalCurrency 不再用后端默认货币覆盖。
+         */
+        function setPortalCurrency(val: string) {
+            portalCurrency.defaultCurrency = val
+            portalCurrency.currencySet = true
+        }
+
+        /**
+         * 用后端返回的货币列表初始化前台货币域（由 /api/index/index 返回的 currency 数组驱动，
+         * 数组按 weigh DESC 排序、第一项为后端默认货币；后端并行线实现）。
+         * - 货币列表（currencyArray/currencyRates）是数据，始终以最新后端列表为准
+         *   （用户已显式切换后仍更新，供切换组件渲染）；
+         * - 默认货币是选择，仅在用户尚未显式设置过前台货币时写入，避免覆盖用户选择。
+         */
+        function initPortalCurrency(code: string, currencyArray: CurrencyOption[], currencyRates: Record<string, number>) {
+            if (currencyArray.length > 0) {
+                portalCurrency.currencyArray = currencyArray
+            }
+            if (currencyRates && Object.keys(currencyRates).length > 0) {
+                portalCurrency.currencyRates = currencyRates
+            }
+            if (!code || portalCurrency.currencySet) return
+            portalCurrency.defaultCurrency = code
+        }
+
         function setLayoutMode(data: string) {
             layout.layoutMode = data
         }
@@ -173,10 +212,13 @@ export const useConfig = defineStore(
             crud,
             portalLang,
             portalLangSet,
+            portalCurrency,
             menuWidth,
             setLang,
             setPortalLang,
             initPortalLang,
+            setPortalCurrency,
+            initPortalCurrency,
             setLayoutMode,
             setLayout,
             getColorVal,
