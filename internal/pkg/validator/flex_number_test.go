@@ -3,6 +3,7 @@ package validator
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -353,6 +354,61 @@ func TestFlexInt32MapRejectsInvalidEntries(t *testing.T) {
 	var got FlexInt32Map
 	if err := json.Unmarshal([]byte(`[1,2]`), &got); err == nil {
 		t.Fatal("expected array to be rejected")
+	}
+}
+
+func TestFlexInt64SliceJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want []int64
+	}{
+		{"numbers", `[1,2,3]`, []int64{1, 2, 3}},
+		{"strings", `["1","2","3"]`, []int64{1, 2, 3}},
+		{"mixed", `[1,"2",3]`, []int64{1, 2, 3}},
+		{"bools", `[true,false]`, []int64{1, 0}},
+		{"null elements", `[1,null,""]`, []int64{1, 0, 0}},
+		{"large int64", `[9223372036854775807,"9223372036854775806"]`, []int64{9223372036854775807, 9223372036854775806}},
+		{"empty array", `[]`, []int64{}},
+		{"null", `null`, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexInt64Slice
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal([]int64(got), test.want) {
+				t.Fatalf("got %v, want %v", []int64(got), test.want)
+			}
+		})
+	}
+}
+
+func TestFlexInt64SliceRejectsInvalidElements(t *testing.T) {
+	for _, test := range []struct {
+		data string
+		want string
+	}{
+		{`["abc"]`, "index 0"},
+		{`[1,"abc",2]`, "index 1"},
+		{`[1.5]`, "index 0"},
+		{`["1.5"]`, "index 0"},
+		{`[9223372036854775808]`, "index 0"},
+	} {
+		var got FlexInt64Slice
+		err := json.Unmarshal([]byte(test.data), &got)
+		if err == nil {
+			t.Fatalf("expected %s to be rejected", test.data)
+		}
+		if !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("error for %s = %v, want index info %q", test.data, err, test.want)
+		}
+	}
+	// 非数组 JSON 拒绝
+	var got FlexInt64Slice
+	if err := json.Unmarshal([]byte(`{"a":1}`), &got); err == nil {
+		t.Fatal("expected object to be rejected")
 	}
 }
 

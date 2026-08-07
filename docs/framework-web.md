@@ -444,7 +444,12 @@ const rules = reactive<FormRules>({
   `amount × rate`（rate 为乘数，即 `country_currency.rate` 语义），缺省按
   `defaultCurrency` 取 rate/symbol；未知货币兜底 `rate=1`、`symbol=''`；
   `opts` 可整体覆盖 `code/symbol/rate/position('prefix'|'suffix')/decimals`
-  （缺省 2，钳制 0–100）。
+  （缺省 2，钳制 0–100）、`thousandSeparator`（千分位，仅整数部分三位
+  分组，缺省 **true**，如 `1,234.56`；`false` 时维持 `1234.56`）、`signed`
+  （显式正负号：正数前缀 `+`、负数前缀 `-`，正负号在货币符号之前，如
+  `+$100.00`/`-$100.00`（suffix 位置 `+100.00$`），缺省 false）；`amount`
+  为 `null`/`undefined`/空串时返回空串（空态不显示金额，`0`/`'0'`/`'0.00'`
+  仍正常格式化）。
 - 初始化链路：门户入口 `main.ts` 与语言**共用同一请求**（`/api/index/index`）
   取 `currency` 数组 → 第一项为默认货币 → `initPortalCurrency(...)`；失败/缺失
   静默保持 CNY 兜底，不阻塞启动。

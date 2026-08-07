@@ -362,6 +362,45 @@ func (v *FlexInt32Slice) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// FlexInt64Slice 是 []int64 的宽松 JSON 绑定形态：与 FlexInt32Slice 完全
+// 同构（数字数组、字符串数字数组或混合数组；空数组与 null 均合法，null/
+// 空串元素 → 0，非法元素报错并携带索引信息），仅元素位宽为 64。
+// 用途：手写请求结构中 int64 整型数组字段的 PHP 弱类型兼容（与 32 位版
+// 对称，供 id 类大整数数组字段使用）。
+type FlexInt64Slice []int64
+
+func (v *FlexInt64Slice) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		*v = nil
+		return nil
+	}
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if len(raw) == 0 {
+		*v = FlexInt64Slice{}
+		return nil
+	}
+	out := make(FlexInt64Slice, len(raw))
+	for i, item := range raw {
+		text, err := flexNumberText(item)
+		if err != nil {
+			return fmt.Errorf("invalid int64 slice element at index %d: %w", i, err)
+		}
+		if text == "" {
+			continue // null / 空串元素 → 0
+		}
+		n, err := strconv.ParseInt(text, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid int64 slice element at index %d (%q): %w", i, text, err)
+		}
+		out[i] = n
+	}
+	*v = out
+	return nil
+}
+
 // FlexInt32Map 是 map[int32]int 的宽松 JSON 绑定形态。JSON 对象键恒为
 // 字符串，严格 Go 解码 map[int32]int 时键字符串转 int32 会失败；本类型对
 // 键与值都做宽松解析：键接受十进制数字串（"1"/1 形态），值接受数字或
