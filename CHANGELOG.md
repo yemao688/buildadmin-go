@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.1.3
+
+> 后端架构简化批次 + 前后台多语言域分离：架构简化审计（ora 评审）全部批次落地（死代码清理、重复逻辑归并、LogModel 迁层、生成器契约下沉 pkg/crudmodel、长函数拆分，行为零变化），多语言按渠道域分离（后台默认中文可切换、前台默认取 country_language 第一条、门户语言切换组件）。
+
+- **Added (多语言域分离):** 后端语言中间件按渠道分流——`think-lang` header 优先（经 `NormalizeLang` 规范化，zh-cn→zh、zh-hant/zh-tw→zh-Hant、未知语言原样保留）；`/api/*` 无 header 兜底 `country_language` 第一条（`DefaultLan`）；`/admin/*` 无 header 兜底中文。`/api/index/index` 响应新增 `default_language` 字段（复用已查询列表，空表兜底 en）。
+- **Added (前端语言域分离):** config store 拆后台域（`lang`，默认 zh-cn 可切换）与前台域（`portalLang` + `portalLangSet` 显式选择标记，向后兼容旧 localStorage）；axios 按 URL 前缀分流 `think-lang`（/admin/ 后台域，其余前台域）；`loadLang` 按应用域选 locale；语言包 glob 全量化（`./*/**/*.ts`）——新增语言目录零框架改动自动发现，扩展语言三步法（country_language 加行 + locales yaml + web 语言包 + `assignLocale` 一行）已铺好机制。
+- **Added (lang-switch 组件):** `web/src/components/lang-switch/`——门户语言切换组件，独立样式（`--lang-switch-*` CSS 变量容器层级覆盖，不依赖后台设计系统），props（langArray/current/label）+ emits（change）纯展示解耦，响应式（≤767px 缩为图标+缩写）；门户占位页接入最小示例 + `web/src/lang/frontend/` demo 语言包。
+- **Fixed (门户语言包加载):** 路由守卫语言包加载按域取值——原先固定取后台域 `config.lang.defaultLang` 导致门户页面语言包（`./frontend/<locale>.ts`）从不加载、`t()` 全回退中文；改为按 langDir 判断域（backend 用后台域，门户用 portalLang 域），前台切换语言生效。
+- **Refactor (架构简化第一批):** filesystem.go 删 7 个死函数（约 200 行 PHP 上游残留）、`util.ItoaArr`、`querybuilder.LimitAddOffset` + admin wrapper 7 个零调用透传函数（保留生成器锚定的 `QueryBuilder`/`GetQueryParameter`）；handler/crud.go no-op 块；`RefreshToken` 请求路径重复注册移除（测试显式登记刷新类型）。
+- **Refactor (重复逻辑归并):** service 四份 `normalizeXxxIDs` 归并 `normalizeIDs`（错误形状/文案逐点保留）；`NormalizeControllerAs` 重复实现归 util；缺 token 内联 401 归并 `AbortMissingToken`；`ValidateAccountStatusValue` 纯委托方法删除；commands 11 处 RunE bootstrap 样板提取 `withCmd`；`MaybePartialEdit` 前导解析三份拷贝收口 `parsePartialEditRequest`（6 元组保 idVal 原始绑定与 failed/handled 双子状态）；noNeedLogin/permissionExempt 同构注册表收口 `actionExemptionRegistry`（两实例数据隔离，公开 API 一字未动）。
+- **Refactor (LogModel 迁层):** `internal/model/crud_log.go` 仓库形态 `LogModel` 归位 `internal/admin/repository/crud_log.go`（`CrudLogRepository`，方法逐字搬移），model 包 454→26 行仅剩贫血实体；`cmd/server/wire.go` 删 model ProviderSet，wire_gen 重新生成。
+- **Refactor (生成器契约下沉):** 新包 `internal/pkg/crudmodel`（270 行）承接 Table/Field/FormAttr/TableAttr/IndexSpec/ChangeField/CRUDFileManifest/JSON_TABLE/JSON_FIELDS 等生成器契约类型（含 Scan/Value 与解析函数，逐字搬移）；crud_helper 30 文件 + admin/handler/crud.go import 纯路径切换，`model → pkg/crudmodel → pkg/data_scope` 无环保持；JSON_TABLE↔Table 双向转换因同包同底层合法。
+- **Refactor (crud_helper 长函数拆分):** `prepareGenerationData` 190→52 行、`GenerateFileWithRouteRegistrar` 168→60 行、`renderMultiRelationLoader` 122→10 行，共提取 18 个私有命名子函数；公开签名一字未动，生成输出逐字节一致（golden 夹具 + 确定性回归测试验证，MySQL 集成测试真实运行通过）。
+- **Changed (docs):** `docs/framework-web.md` 第 12 章重写——语言域分离语义、扩展新语言三步法、lang-switch 组件用法、前台默认语言链路、请求层分流与后端配套说明。
+
 ## v3.1.2
 
 > 下游 fork 反馈修复批次 + 生成器增强：级联运行时缺失子表容错、reassignable owner 自动渲染补齐关联查询（列表显示上级代理）、语言 .ts/replaceValue 生成确定性、`crud:generate` 支持 `--skip-frontend`/`--skip-repo`（定制产物重新生成时跳过手动回补）。
