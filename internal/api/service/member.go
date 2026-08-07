@@ -11,6 +11,7 @@ import (
 	"buildadmin-go/internal/pkg/token"
 	"fmt"
 	"regexp"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -19,9 +20,10 @@ import (
 )
 
 type MemberService struct {
-	users       *repository.UserRepository
-	tokenHelper *token.TokenHelper
-	config      *conf.Configuration
+	users        *repository.UserRepository
+	tokenHelper  *token.TokenHelper
+	config       *conf.Configuration
+	loginMetaTTL *loginMetaThrottle
 }
 
 var (
@@ -31,7 +33,51 @@ var (
 )
 
 func NewMemberService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *MemberService {
-	return &MemberService{users: repository.NewUserRepository(sqlDB), tokenHelper: tokenHelper, config: config}
+	return &MemberService{
+		users:        repository.NewUserRepository(sqlDB),
+		tokenHelper:  tokenHelper,
+		config:       config,
+		loginMetaTTL: newLoginMetaThrottle(loginMetaWriteTTL),
+	}
+}
+
+// loginMetaWriteTTL 是 ValidateUserToken 登录元信息写入的节流窗口：同一会员
+// 在窗口内至多写一次 login_failure/last_login_time/last_login_ip。PHP 上游
+// 只在登录时写，v3.x 改为每个已认证请求写一次库；窗口内跳过中间请求的写库，
+// 最后一次登录时间精度随之降至至多 60s 一次（真实登录仍每次都写）。
+const loginMetaWriteTTL = 60 * time.Second
+
+// loginMetaThrottle 是进程内登录元信息写入节流器（先例：data_scope 的
+// businessIdentifierCache 5 分钟 TTL 进程内缓存模式）。并发安全：读写均持锁；
+// TTL 以请求上下文时间（now 注入，默认 time.Now）计算。只节流写频率，不缓存
+// 任何账号状态，登出/禁用无需联动失效。
+type loginMetaThrottle struct {
+	mu      sync.Mutex
+	entries map[int32]time.Time // uid → 最近一次写入时刻
+	ttl     time.Duration
+	now     func() time.Time // 可注入时钟（测试入口，不导出）
+}
+
+func newLoginMetaThrottle(ttl time.Duration) *loginMetaThrottle {
+	return &loginMetaThrottle{
+		entries: make(map[int32]time.Time),
+		ttl:     ttl,
+		now:     time.Now,
+	}
+}
+
+// shouldWrite 报告该 uid 是否应执行一次登录元信息写入：TTL 窗口内已写过则
+// 跳过（不更新写时刻，写时刻仍为窗口起点）；否则记录本次写入时刻并返回 true。
+// 过期条目在再次访问时被覆盖，map 规模与曾出现过的 uid 数成正比。
+func (t *loginMetaThrottle) shouldWrite(uid int32) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	now := t.now()
+	if last, ok := t.entries[uid]; ok && now.Sub(last) < t.ttl {
+		return false
+	}
+	t.entries[uid] = now
+	return true
 }
 
 // IsLoginToken resolves a user session token. The header extraction from the
@@ -45,10 +91,6 @@ func (s *MemberService) IsLoginToken(tokenStr string) (*token.Token, bool) {
 		return tokenData, true
 	}
 	return nil, false
-}
-
-func (s *MemberService) IsEnabledUser(id int32) bool {
-	return s.users.IsEnabled(id)
 }
 
 func (s *MemberService) RefreshUserAccessToken(refreshToken string) (string, error) {
@@ -87,16 +129,26 @@ func (s *MemberService) RefreshUserAccessToken(refreshToken string) (string, err
 	return newToken, nil
 }
 
+// ValidateUserToken 校验会员访问 token 对应的账号并刷新登录元信息。
+// 单次查询完成原 IsEnabledUser + GetByID 两步独立查库（v3.x 曾对每个已认证
+// 请求依次执行 SELECT status 与全行 SELECT）：账号不存在、被禁用或加载失败
+// 时返回与旧 IsEnabledUser 分支一致的 Unauthorized("Please login first")，
+// 由 AbortLogin 渲染为 code=401 "Please login first"。登录元信息写入受
+// loginMetaWriteTTL 节流窗口限制，窗口内跳过中间请求的写库；真实登录
+// （Login/Register）不经过此处，仍每次写库。
 func (s *MemberService) ValidateUserToken(id int32, ip string) error {
 	user, err := s.users.GetByID(id)
 	if err != nil {
 		return err
 	}
 	if user == nil {
-		return cErr.BadRequest("Account not exist")
+		return cErr.Unauthorized("Please login first")
 	}
 	if user.Status != "enable" {
-		return cErr.BadRequest("Account disabled")
+		return cErr.Unauthorized("Please login first")
+	}
+	if !s.loginMetaTTL.shouldWrite(id) {
+		return nil
 	}
 	return s.users.UpdateLoginMeta(id, 0, time.Now().Unix(), ip)
 }

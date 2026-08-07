@@ -28,13 +28,6 @@ func (r *UserRepository) Transaction(fn func(tx *gorm.DB) error) error {
 	return r.db.Transaction(fn)
 }
 
-// IsEnabled 仅读取 status 列判断会员是否启用。
-func (r *UserRepository) IsEnabled(id int32) bool {
-	var user model.User
-	err := r.db.Model(&model.User{}).Select("status").Where("id=?", id).First(&user).Error
-	return err == nil && user.Status == "enable"
-}
-
 // GetByID 按主键取会员；记录不存在时返回 (nil, nil)。
 func (r *UserRepository) GetByID(id int32) (*model.User, error) {
 	var user model.User

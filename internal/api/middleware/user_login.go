@@ -4,7 +4,6 @@ import (
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	core "buildadmin-go/internal/middleware"
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/token"
 	"buildadmin-go/internal/pkg/util"
@@ -37,10 +36,6 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 		tokenData, err := m.tokenHelper.GetFor(tokenStr, "user")
 		if err != nil {
 			core.AbortLogin(c, err)
-			return
-		}
-		if !m.authM.IsEnabledUser(tokenData.UserID) {
-			core.AbortLogin(c, cErr.Unauthorized("Please login first"))
 			return
 		}
 		language := c.GetHeader("Accept-Language")
