@@ -24,7 +24,6 @@ router.beforeEach(async (to) => {
     // 按需动态加载页面的语言包-start
     const config = useConfig()
     const loadPath: string[] = []
-    const lang = config.lang.defaultLang
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
@@ -36,6 +35,8 @@ router.beforeEach(async (to) => {
     }
     const portalPrefix = '/' + (to.path.split('/')[1] || '')
     const langDir = portalLangDirs[portalPrefix] ?? 'frontend'
+    // 语言按域取值：后台目录（backend）用后台域语言，门户目录（frontend/业务）用前台域语言
+    const lang = langDir === 'backend' ? config.lang.defaultLang : config.portalLang.defaultLang
     const prefix = './' + langDir + '/' + lang
 
     // 页面语言包按相对路径加载：注册门户剥离其前缀，根门户用完整路径
