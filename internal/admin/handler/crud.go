@@ -33,8 +33,8 @@ type CrudHandler struct {
 }
 
 type crudUploadCompletedParams struct {
-	SyncIDs    map[int32]int `json:"syncIds"`
-	CancelSync boolValue     `json:"cancelSync"`
+	SyncIDs    validator.FlexInt32Map `json:"syncIds"`
+	CancelSync boolValue              `json:"cancelSync"`
 }
 
 type boolValue bool
@@ -146,7 +146,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		response.FailByErr(ctx, err)
 		return
 	}
-	crudLog, err := h.crudLogM.GetOne(ctx, param.ID)
+	crudLog, err := h.crudLogM.GetOne(ctx, int32(param.ID))
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -171,7 +171,7 @@ func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if err := h.crudLogM.UpdateSync(ctx, params.SyncIDs, bool(params.CancelSync)); err != nil {
+	if err := h.crudLogM.UpdateSync(ctx, map[int32]int(params.SyncIDs), bool(params.CancelSync)); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}

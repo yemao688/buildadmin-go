@@ -122,7 +122,7 @@ func (h *AdminRuleHandler) Edit(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	adminRule, err := h.adminRuleM.GetOne(ctx, params.ID)
+	adminRule, err := h.adminRuleM.GetOne(ctx, int32(params.ID))
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

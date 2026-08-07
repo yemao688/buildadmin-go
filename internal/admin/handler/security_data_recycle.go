@@ -142,7 +142,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	data, err := h.dataRecycleM.GetOne(ctx, params.ID)
+	data, err := h.dataRecycleM.GetOne(ctx, int32(params.ID))
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

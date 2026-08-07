@@ -48,16 +48,16 @@ func (h *UserHandler) Index(ctx *gin.Context) {
 }
 
 type User struct {
-	AdminID  int32  `json:"admin_id"`
-	Username string `json:"username" binding:"required"`
-	Nickname string `json:"nickname" binding:"required"`
-	Email    string `json:"email"`
-	Mobile   string `json:"mobile"`
-	Avatar   string `json:"avatar"`
-	JoinIP   string `json:"join_ip"`
-	JoinTime int64  `json:"join_time"`
-	Password string `json:"password"`
-	Status   string `json:"status" binding:"oneof=enable disable"`
+	AdminID  validator.FlexInt32 `json:"admin_id"`
+	Username string              `json:"username" binding:"required"`
+	Nickname string              `json:"nickname" binding:"required"`
+	Email    string              `json:"email"`
+	Mobile   string              `json:"mobile"`
+	Avatar   string              `json:"avatar"`
+	JoinIP   string              `json:"join_ip"`
+	JoinTime validator.FlexInt64 `json:"join_time"`
+	Password string              `json:"password"`
+	Status   string              `json:"status" binding:"oneof=enable disable"`
 }
 
 func (v User) GetMessages() validator.ValidatorMessages {
@@ -110,7 +110,7 @@ func userParams(params User) service.UserParams {
 		Mobile:   params.Mobile,
 		Avatar:   params.Avatar,
 		JoinIP:   params.JoinIP,
-		JoinTime: params.JoinTime,
+		JoinTime: int64(params.JoinTime),
 		Password: params.Password,
 		Status:   params.Status,
 	}
@@ -203,7 +203,7 @@ func (h *UserHandler) Edit(ctx *gin.Context) {
 	if hasAdminID {
 		userParams.AdminID = &adminID
 	}
-	if err := h.svc.Edit(ctx.Request.Context(), params.ID, userParams, actor); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), userParams, actor); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}

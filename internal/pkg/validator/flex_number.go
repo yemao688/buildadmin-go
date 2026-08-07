@@ -323,6 +323,86 @@ func (v *FlexFloat64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// FlexInt32Slice 是 []int32 的宽松 JSON 绑定形态：接受数字数组
+// （[1,2]）、字符串数字数组（["1","2"]）或混合数组；空数组与 null 均合法，
+// 元素逐一走与 FlexInt32 相同的宽松解析（null/空串元素 → 0），非法元素
+// 报错并携带索引信息。用途：手写请求结构中整型数组字段的 PHP 弱类型兼容
+// （如 admin_group 请求的 rules）。
+type FlexInt32Slice []int32
+
+func (v *FlexInt32Slice) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		*v = nil
+		return nil
+	}
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if len(raw) == 0 {
+		*v = FlexInt32Slice{}
+		return nil
+	}
+	out := make(FlexInt32Slice, len(raw))
+	for i, item := range raw {
+		text, err := flexNumberText(item)
+		if err != nil {
+			return fmt.Errorf("invalid int32 slice element at index %d: %w", i, err)
+		}
+		if text == "" {
+			continue // null / 空串元素 → 0
+		}
+		n, err := strconv.ParseInt(text, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid int32 slice element at index %d (%q): %w", i, text, err)
+		}
+		out[i] = int32(n)
+	}
+	*v = out
+	return nil
+}
+
+// FlexInt32Map 是 map[int32]int 的宽松 JSON 绑定形态。JSON 对象键恒为
+// 字符串，严格 Go 解码 map[int32]int 时键字符串转 int32 会失败；本类型对
+// 键与值都做宽松解析：键接受十进制数字串（"1"/1 形态），值接受数字或
+// 字符串数字（null/空串 → 0），非法键/值报错并携带键信息。用途：手写请求
+// 结构中 int32→int 映射字段的兼容（如 CRUD 上传完成的 syncIds）。
+type FlexInt32Map map[int32]int
+
+func (v *FlexInt32Map) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		*v = nil
+		return nil
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if *v == nil {
+		*v = FlexInt32Map{}
+	}
+	for key, item := range raw {
+		k, err := strconv.ParseInt(key, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid int32 map key %q: %w", key, err)
+		}
+		text, err := flexNumberText(item)
+		if err != nil {
+			return fmt.Errorf("invalid int32 map value for key %q: %w", key, err)
+		}
+		if text == "" {
+			(*v)[int32(k)] = 0
+			continue
+		}
+		n, err := strconv.ParseInt(text, 10, strconv.IntSize)
+		if err != nil {
+			return fmt.Errorf("invalid int32 map value %q for key %q: %w", text, key, err)
+		}
+		(*v)[int32(k)] = int(n)
+	}
+	return nil
+}
+
 func flexNumberText(data []byte) (string, error) {
 	text := strings.TrimSpace(string(data))
 	if text == "" || text == "null" {

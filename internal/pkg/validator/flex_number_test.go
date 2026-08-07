@@ -3,6 +3,7 @@ package validator
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -243,4 +244,126 @@ func TestFlexNumbersRejectInvalidStrings(t *testing.T) {
 			t.Fatal("expected invalid numeric string to fail")
 		}
 	}
+}
+
+func TestFlexInt32SliceJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want []int32
+	}{
+		{"numbers", `[1,2,3]`, []int32{1, 2, 3}},
+		{"strings", `["1","2","3"]`, []int32{1, 2, 3}},
+		{"mixed", `[1,"2",3]`, []int32{1, 2, 3}},
+		{"bools", `[true,false]`, []int32{1, 0}},
+		{"null elements", `[1,null,""]`, []int32{1, 0, 0}},
+		{"empty array", `[]`, []int32{}},
+		{"null", `null`, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexInt32Slice
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if !slicesEqual([]int32(got), test.want) {
+				t.Fatalf("got %v, want %v", []int32(got), test.want)
+			}
+		})
+	}
+}
+
+func TestFlexInt32SliceRejectsInvalidElements(t *testing.T) {
+	for _, test := range []struct {
+		data string
+		want string
+	}{
+		{`["abc"]`, "index 0"},
+		{`[1,"abc",2]`, "index 1"},
+		{`[1.5]`, "index 0"},
+		{`["1.5"]`, "index 0"},
+	} {
+		var got FlexInt32Slice
+		err := json.Unmarshal([]byte(test.data), &got)
+		if err == nil {
+			t.Fatalf("expected %s to be rejected", test.data)
+		}
+		if !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("error for %s = %v, want index info %q", test.data, err, test.want)
+		}
+	}
+	// 非数组 JSON 拒绝
+	var got FlexInt32Slice
+	if err := json.Unmarshal([]byte(`{"a":1}`), &got); err == nil {
+		t.Fatal("expected object to be rejected")
+	}
+}
+
+func TestFlexInt32MapJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want map[int32]int
+	}{
+		{"string keys numeric values", `{"1":2,"3":4}`, map[int32]int{1: 2, 3: 4}},
+		{"string values", `{"1":"2","3":"4"}`, map[int32]int{1: 2, 3: 4}},
+		{"mixed values", `{"1":2,"3":"4"}`, map[int32]int{1: 2, 3: 4}},
+		{"null values", `{"1":null,"3":""}`, map[int32]int{1: 0, 3: 0}},
+		{"empty object", `{}`, map[int32]int{}},
+		{"null", `null`, nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexInt32Map
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(test.want) {
+				t.Fatalf("got %v, want %v", map[int32]int(got), test.want)
+			}
+			for k, v := range test.want {
+				if got[k] != v {
+					t.Fatalf("got %v, want %v", map[int32]int(got), test.want)
+				}
+			}
+		})
+	}
+}
+
+func TestFlexInt32MapRejectsInvalidEntries(t *testing.T) {
+	for _, test := range []struct {
+		data string
+		want string
+	}{
+		{`{"abc":1}`, `key "abc"`},
+		{`{"1.5":2}`, `key "1.5"`},
+		{`{"1":"abc"}`, `key "1"`},
+		{`{"1":2.5}`, `key "1"`},
+	} {
+		var got FlexInt32Map
+		err := json.Unmarshal([]byte(test.data), &got)
+		if err == nil {
+			t.Fatalf("expected %s to be rejected", test.data)
+		}
+		if !strings.Contains(err.Error(), test.want) {
+			t.Fatalf("error for %s = %v, want key info %q", test.data, err, test.want)
+		}
+	}
+	// 非对象 JSON 拒绝
+	var got FlexInt32Map
+	if err := json.Unmarshal([]byte(`[1,2]`), &got); err == nil {
+		t.Fatal("expected array to be rejected")
+	}
+}
+
+func slicesEqual(a, b []int32) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

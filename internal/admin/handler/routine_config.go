@@ -133,16 +133,16 @@ func (h *ConfigHandler) Index(ctx *gin.Context) {
 }
 
 type Config struct {
-	Name        string   `json:"name"`
-	Group       string   `json:"group"`
-	Title       string   `json:"title"`
-	Tip         string   `json:"tip"`
-	Type        string   `json:"type"`
-	Content     string   `json:"content"`
-	Rule        []string `json:"rule"`
-	Extend      string   `json:"extend"`
-	InputExtend string   `json:"input_extend"`
-	Weigh       int32    `json:"weigh"`
+	Name        string              `json:"name"`
+	Group       string              `json:"group"`
+	Title       string              `json:"title"`
+	Tip         string              `json:"tip"`
+	Type        string              `json:"type"`
+	Content     string              `json:"content"`
+	Rule        []string            `json:"rule"`
+	Extend      string              `json:"extend"`
+	InputExtend string              `json:"input_extend"`
+	Weigh       validator.FlexInt32 `json:"weigh"`
 }
 
 func (v Config) GetMessages() validator.ValidatorMessages {
@@ -166,7 +166,7 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 		Rule:        params.Rule,
 		Extend:      params.Extend,
 		InputExtend: params.InputExtend,
-		Weigh:       params.Weigh,
+		Weigh:       int32(params.Weigh),
 	}); err != nil {
 		response.FailByErr(ctx, err)
 		return

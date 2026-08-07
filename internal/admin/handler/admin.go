@@ -137,7 +137,7 @@ func (l *adminTableTreeLeaf) SetChildren(children interface{}) {
 //   - Edit: 0 => move to root, allowed only for Unrestricted actors.
 //   - Edit: positive integer => move to that parent, subject to scope.
 type NullableParentID struct {
-	Value *int32
+	Value *validator.FlexInt32
 	IsSet bool
 }
 
@@ -147,7 +147,7 @@ func (n *NullableParentID) UnmarshalJSON(data []byte) error {
 		n.Value = nil
 		return nil
 	}
-	var v int32
+	var v validator.FlexInt32
 	if err := json.Unmarshal(data, &v); err != nil {
 		return err
 	}
@@ -208,6 +208,11 @@ func (h *AdminHandler) Add(ctx *gin.Context) {
 }
 
 func adminParams(params Admin) service.AdminParams {
+	var parentID *int32
+	if params.ParentID.Value != nil {
+		v := int32(*params.ParentID.Value)
+		parentID = &v
+	}
 	return service.AdminParams{
 		Username: params.Username,
 		Nickname: params.Nickname,
@@ -217,7 +222,7 @@ func adminParams(params Admin) service.AdminParams {
 		Password: params.Password,
 		Motto:    params.Motto,
 		Status:   params.Status,
-		ParentID: service.ParentSelection{Value: params.ParentID.Value, Set: params.ParentID.IsSet},
+		ParentID: service.ParentSelection{Value: parentID, Set: params.ParentID.IsSet},
 		GroupArr: params.GroupArr,
 	}
 }
@@ -287,7 +292,7 @@ func (h *AdminHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
-	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminParams(params.Admin), actor, adminAuth.Id); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), adminParams(params.Admin), actor, adminAuth.Id); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}

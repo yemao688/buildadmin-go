@@ -71,10 +71,10 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 }
 
 type AdminGroup struct {
-	Pid    int32   `json:"pid"`
-	Name   string  `json:"name" binding:"required"`
-	Rules  []int32 `json:"rules"`
-	Status string  `json:"status"`
+	Pid    validator.FlexInt32      `json:"pid"`
+	Name   string                   `json:"name" binding:"required"`
+	Rules  validator.FlexInt32Slice `json:"rules"`
+	Status string                   `json:"status"`
 }
 
 func (v AdminGroup) GetMessages() validator.ValidatorMessages {
@@ -96,7 +96,7 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
-	if err := h.svc.Add(ctx.Request.Context(), adminGroup, params.Rules, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), adminGroup, []int32(params.Rules), adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -198,7 +198,7 @@ func (h *AdminGroupHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	adminAuth := header.GetAdminAuth(ctx)
-	if err := h.svc.Edit(ctx.Request.Context(), params.ID, adminGroup, params.Rules, adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), adminGroup, []int32(params.Rules), adminAuth.Id, adminAuth.IsSuperAdmin); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}

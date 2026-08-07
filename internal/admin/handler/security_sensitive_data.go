@@ -176,7 +176,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if err := h.svc.Edit(ctx.Request.Context(), params.ID, sensitiveDataParams(params.SensitiveData)); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), sensitiveDataParams(params.SensitiveData)); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
