@@ -23,7 +23,7 @@
 
 未安装（无锁）时直接 `docker compose up` 启动应用：进程会打印 setup 安装指引并等待 3 秒后退出（`restart: unless-stopped` 下会循环打印），请先执行上面的 setup 再启动。
 
-安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（仅 MySQL 连接与随机生成的 `token.key`，其余键来自 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。重装 = 删除 `public/install.lock`（建议一并清除 `configs/config.yaml` 中的旧连接信息，重装 setup 会覆盖写入）后重走任一安装路径。
+安装器生成被 Git 忽略的稀疏覆盖层 `configs/config.yaml`（MySQL 连接、随机生成的 `token.key` 与 `--env` 选择的 `app.env`，其余键来自 `configs/config.defaults.yaml`），执行迁移并写入 `public/install.lock`。重装 = 删除 `public/install.lock`（建议一并清除 `configs/config.yaml` 中的旧连接信息，重装 setup 会覆盖写入）后重走任一安装路径。
 
 无论在哪安装，**编辑连接信息指向容器可达地址**：把 `configs/config.yaml` 中 `mysql.host` 的 `127.0.0.1` 改为 `host.docker.internal`（macOS）或宿主机网桥 IP（Linux）。容器内的 `127.0.0.1` 是容器自己，不是宿主机或数据库。
 
@@ -90,6 +90,10 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 ```bash
 cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
 # 设置外部 MySQL、密钥、日志目录等；log.root_dir 建议为 /app/runtime/logs
+# 生产必须将 gin 设为 release 模式：安装时用 `setup --env release`，或在这里加：
+#   app:
+#     env: release
+# 否则 gin 运行于 debug 模式，内部错误详情会暴露给客户端（recovery 仅 release 模式隐藏 err.Error()）
 ```
 
 在生产机执行：

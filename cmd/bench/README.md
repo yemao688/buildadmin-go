@@ -59,7 +59,7 @@ curl -s http://localhost:9902/admin/Index/login -X POST \
 |---|---|---|---|---|---|---|---|
 | 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=50） | 2574.1 | 3.869ms | 45.993ms | 260.085ms | air debug 构建（9902） |
 | 2026-08-07 | v3.1.5 | api/index/index（c=50） | 1585.0 | 3.582ms | 35.178ms | 242.118ms | air debug 构建（9902） |
-| 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=50） | 5128.3 | 1.830ms | 11.474ms | 202.164ms | release 构建（9903），gin 恒 debug 模式（config.go:141 硬编码） |
+| 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=50） | 5128.3 | 1.830ms | 11.474ms | 202.164ms | release 构建（9903），app.env 默认 debug（config.defaults.yaml），release 部署需 setup --env release 或 config.yaml 设 app.env: release |
 | 2026-08-07 | v3.1.5 | api/index/index（c=50） | 4763.1 | 4.189ms | 15.065ms | 25.167ms | release 构建（9903） |
 | 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=100） | 1561.0 | 2.175ms | 32.828ms | 1005.304ms | release（9903），并发 100 出现拐点（p99 飙升至 1s，疑似连接池/GC） |
 

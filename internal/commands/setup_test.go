@@ -319,10 +319,128 @@ func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute(--help) error = %v", err)
 	}
-	for _, flag := range []string{"--db-host", "--db-password", "--admin-password", "--skip-frontend", "--yes"} {
+	for _, flag := range []string{"--db-host", "--db-password", "--admin-password", "--env", "--skip-frontend", "--yes"} {
 		if !strings.Contains(output.String(), flag) {
 			t.Fatalf("help output missing %s: %q", flag, output.String())
 		}
+	}
+}
+
+func TestSetupCommandEnvFlagRejectsInvalidValues(t *testing.T) {
+	command := newSetupCommand()
+	command.SetArgs([]string{"--env", "local"})
+	err := command.Execute()
+	if err == nil || !strings.Contains(err.Error(), "invalid --env") {
+		t.Fatalf("Execute(--env local) error = %v, want --env validation error", err)
+	}
+}
+
+func TestValidateSetupEnv(t *testing.T) {
+	for _, env := range []string{"debug", "release"} {
+		if err := validateSetupEnv(env); err != nil {
+			t.Fatalf("validateSetupEnv(%q) error = %v", env, err)
+		}
+	}
+	if err := validateSetupEnv("local"); err == nil {
+		t.Fatal("validateSetupEnv(\"local\") error = nil, want validation error")
+	}
+}
+
+func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "configs", "config.yaml")
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 模拟安装器已写入的稀疏覆盖层（仅 mysql 段）。
+	if err := os.WriteFile(configPath, []byte("mysql:\n  host: 127.0.0.1\n  port: 3306\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeSetupAppEnv(configPath, "release"); err != nil {
+		t.Fatalf("writeSetupAppEnv() error = %v", err)
+	}
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "env: release") {
+		t.Fatalf("config.yaml missing app.env: %s", text)
+	}
+	if !strings.Contains(text, "host: 127.0.0.1") {
+		t.Fatalf("existing override keys were not preserved: %s", text)
+	}
+}
+
+func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
+	root := t.TempDir()
+	configPath := filepath.Join(root, "configs", "config.yaml")
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := setupDependencies{
+		isComplete: func(string) bool { return false },
+		newDB: func(installer.Database) (*gorm.DB, error) {
+			return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+		},
+		getDatabases:   func(installer.Database) ([]string, error) { return []string{"buildadmin"}, nil },
+		writeBaseConfig: installer.WriteBaseConfig,
+		runMigrations: func(_ *gorm.DB, _ *conf.Configuration) (migrations.Report, error) {
+			return migrations.Report{}, nil
+		},
+		runCrudApply: func(_ *gorm.DB, _ *conf.Configuration) ([]helper.ApplyTableResult, error) { return nil, nil },
+		buildFrontend: func(string, io.Writer, *conf.Configuration) error {
+			return nil
+		},
+		updateAdminConfig: func(*gorm.DB, string, string, string) error { return nil },
+		writeCompletion:   func(string) error { return nil },
+		generateTokenKey:  func() string { return "token" },
+	}
+	options := setupOptions{
+		dbUser:        "root",
+		dbPassword:    "secret",
+		adminPassword: "admin-password",
+		env:           "release",
+		skipFrontend:  true,
+		yes:           true,
+		provided: map[string]bool{
+			"db-user":        true,
+			"db-password":    true,
+			"admin-password": true,
+			"skip-frontend":  true,
+			"yes":            true,
+		},
+	}
+	var output bytes.Buffer
+	runner := setupRunner{rootPath: root, configPath: configPath, in: strings.NewReader(""), out: &output, deps: deps}
+	if err := runner.run(&cobra.Command{}, options); err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !strings.Contains(output.String(), "安装完成") {
+		t.Fatalf("completion output = %q", output.String())
+	}
+
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "env: release") {
+		t.Fatalf("installed config.yaml missing app.env: %s", text)
+	}
+	if !strings.Contains(text, "host: 127.0.0.1") || !strings.Contains(text, "key: token") {
+		t.Fatalf("installed config.yaml missing installer values: %s", text)
 	}
 }
 

@@ -115,6 +115,7 @@ go run ./cmd/server setup --yes \
 
 - 数据库不存在时 setup 会询问是否创建（`--yes` 下直接创建）；
 - `--skip-frontend` 跳过前端构建（要求 `public/index.html` 已存在，适合 `make frontend` 已执行的环境）；省略则自动构建前端，Node/npm/包管理器缺失时会打印对应安装命令；
+- `--env debug|release` 选择 gin 运行模式（默认 `debug`，与 `config.defaults.yaml` 一致）。**生产部署建议 `--env release`**：否则 gin 运行于 debug 模式，`internal/middleware/recovery.go` 会把内部错误详情暴露给客户端；安装后也可改 `configs/config.yaml` 的 `app.env: release`；
 - 显式 `--conf` 路径会作为本次 setup 的配置文件路径。
 
 **安装命令速查**（宿主机 / 容器内，参数见上）：
@@ -138,7 +139,7 @@ go run ./cmd/server setup --yes \
 5. 前端是否立即构建（默认为是；CI/容器可用 `--skip-frontend`）；
 6. 后端端口与时区不属 setup 收集范围，由 `.env` 的 `APP_PORT`/`APP_TIME_ZONE` 提供（默认 `9900`、`Asia/Shanghai`）。
 
-`configs/config.yaml` 应由安装器自动生成——它只写 MySQL 连接和随机生成的 `token.key` 的稀疏覆盖层；不要手写 YAML（容易漏 `token.key`、格式出错或误提交凭据），也不要把生成的 `configs/config.yaml` 提交进仓库。setup 不会覆盖已存在的 `configs/config.yaml`；重装需先删除 `public/install.lock`。
+`configs/config.yaml` 应由安装器自动生成——它是只写 MySQL 连接、随机生成的 `token.key` 与 `--env` 选择的 `app.env` 的稀疏覆盖层；不要手写 YAML（容易漏 `token.key`、格式出错或误提交凭据），也不要把生成的 `configs/config.yaml` 提交进仓库。setup 不会覆盖已存在的 `configs/config.yaml`；重装需先删除 `public/install.lock`。
 
 **手动配置和迁移：** 创建只含目标环境覆盖值的 `configs/config.yaml`，填写数据库、密钥等值，再执行迁移。`configs/config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`configs/config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
 

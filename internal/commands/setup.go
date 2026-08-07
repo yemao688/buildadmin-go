@@ -49,6 +49,7 @@ type setupOptions struct {
 	adminName     string
 	adminPassword string
 	siteName      string
+	env           string
 	skipFrontend  bool
 	yes           bool
 	provided      map[string]bool
@@ -67,6 +68,7 @@ type setupDependencies struct {
 	getDatabases      func(installer.Database) ([]string, error)
 	createDatabase    func(installer.Database) error
 	writeBaseConfig   func(string, installer.Database, string) error
+	writeAppEnv       func(string, string) error
 	writeCompletion   func(string) error
 	generateTokenKey  func() string
 	runMigrations     func(*gorm.DB, *conf.Configuration) (migrations.Report, error)
@@ -82,6 +84,7 @@ func defaultSetupDependencies() setupDependencies {
 		getDatabases:      installer.GetDatabases,
 		createDatabase:    installer.CreateDatabase,
 		writeBaseConfig:   installer.WriteBaseConfig,
+		writeAppEnv:       writeSetupAppEnv,
 		writeCompletion:   installer.WriteCompletionLock,
 		generateTokenKey:  installer.GenerateTokenKey,
 		runMigrations:     migrations.Run,
@@ -120,6 +123,9 @@ func newSetupCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateSetupEnv(opts.env); err != nil {
+				return err
+			}
 			for _, name := range setupFlagNames {
 				opts.provided[name] = cmd.Flags().Changed(name)
 			}
@@ -147,6 +153,7 @@ func newSetupCommand() *cobra.Command {
 	command.Flags().StringVar(&opts.adminName, "admin-name", "", "administrator username")
 	command.Flags().StringVar(&opts.adminPassword, "admin-password", "", "administrator password")
 	command.Flags().StringVar(&opts.siteName, "site-name", "", "site name")
+	command.Flags().StringVar(&opts.env, "env", "debug", "gin runtime mode: debug or release")
 	command.Flags().BoolVar(&opts.skipFrontend, "skip-frontend", false, "skip frontend build; public/index.html must exist")
 	command.Flags().BoolVar(&opts.yes, "yes", false, "non-interactive mode; accept defaults and create the database")
 	return command
@@ -189,6 +196,9 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 
 	if !configExists {
 		if err := r.deps.writeBaseConfig(r.configPath, input.database, r.deps.generateTokenKey()); err != nil {
+			return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
+		}
+		if err := r.deps.writeAppEnv(r.configPath, options.env); err != nil {
 			return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
 		}
 	}
@@ -275,6 +285,9 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 	if deps.writeBaseConfig == nil {
 		deps.writeBaseConfig = defaults.writeBaseConfig
 	}
+	if deps.writeAppEnv == nil {
+		deps.writeAppEnv = defaults.writeAppEnv
+	}
 	if deps.writeCompletion == nil {
 		deps.writeCompletion = defaults.writeCompletion
 	}
@@ -304,6 +317,24 @@ func resolveSetupConfigPath(rootPath string, flagChanged bool, flagValue string)
 		return flagValue
 	}
 	return filepath.Join(rootPath, flagValue)
+}
+
+// validateSetupEnv 校验 setup --env 的取值；与 applyGinMode 的合法集合
+// （debug/release）保持一致，非法值在进入安装流程前报错。
+func validateSetupEnv(env string) error {
+	if env != "debug" && env != "release" {
+		return fmt.Errorf("invalid --env %q: only 'debug' or 'release' is supported", env)
+	}
+	return nil
+}
+
+// writeSetupAppEnv 把 setup --env 选择的 gin 运行模式追加进稀疏覆盖层
+// configs/config.yaml：WriteConfigOverrides 保留既有覆盖键（mysql、token 等），
+// 只合并 app.env，未写的键仍由 config.defaults.yaml 提供。
+func writeSetupAppEnv(configPath, env string) error {
+	return conf.WriteConfigOverrides(configPath, map[string]any{
+		"app": map[string]any{"env": env},
+	})
 }
 
 func setupConfigPath(rootPath string) (string, error) {
