@@ -177,3 +177,181 @@ func TestQueryBuilderHelpers(t *testing.T) {
 		t.Fatalf("GetOperatorByAlias() = %q; want %q", got, "=")
 	}
 }
+
+// datetime 搜索基准（Asia/Shanghai）：2024-01-01 00:00:00 = unix 1704038400；
+// 2024-01-01 23:59:59 = 1704124799；2024-01-01 12:00:00 = 1704081600；
+// 2024-01-31 23:59:59 = 1706716799。
+func TestQueryBuilderDatetimeSearch(t *testing.T) {
+	baseTable := func(fieldTypes map[string]string) TableInfo {
+		return TableInfo{TableName: "items", Key: "id", FieldTypes: fieldTypes}
+	}
+
+	t.Run("native datetime column RANGE uses string BETWEEN", func(t *testing.T) {
+		// 陷阱①：FieldTypes 传入后 GetFieldType=="datetime"，不再与 unix 戳比较
+		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
+		}
+		wantParams := []interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("native datetime column non-RANGE keeps string equality", func(t *testing.T) {
+		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`published_at` = ? " {
+			t.Fatalf("whereS = %q; want string equality", whereS)
+		}
+		wantParams := []interface{}{"2024-01-01 12:00:00"}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("qualified field with underscore resolves once", func(t *testing.T) {
+		// 陷阱：strings.Replace 曾把 items.published_at 拼成 items.items.publishedat
+		ctx := queryContext("search[0][field]=items.published_at&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want string BETWEEN for qualified field", whereS)
+		}
+		wantParams := []interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("int timestamp column RANGE converts to unix", func(t *testing.T) {
+		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
+		}
+		wantParams := []interface{}{int64(1704038400), int64(1706716799)}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("int timestamp column non-RANGE converts to unix", func(t *testing.T) {
+		// 陷阱②：eq '2024-01-01 12:00:00' 曾直传原始字符串，MySQL 强转 2024 错乱
+		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`create_time` = ? " {
+			t.Fatalf("whereS = %q; want unix equality", whereS)
+		}
+		wantParams := []interface{}{int64(1704081600)}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("single-day RANGE pads end with 23:59:59", func(t *testing.T) {
+		// 陷阱③："2024-01-01,2024-01-01" 曾解析为 [零点,零点] 只命中零点整
+		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
+		}
+		wantParams := []interface{}{int64(1704038400), int64(1704124799)}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("hand-written nil FieldTypes falls back to unix path", func(t *testing.T) {
+		// 手写仓库传 nil：与显式 bigint 字段类型走同一 unix 转换路径
+		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(nil), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
+		}
+		wantParams := []interface{}{int64(1704038400), int64(1704124799)}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("nil FieldTypes non-RANGE still converts to unix", func(t *testing.T) {
+		// 手写仓库 nil：非 RANGE 也转 unix（与显式 bigint 一致）
+		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(nil), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`create_time` = ? " {
+			t.Fatalf("whereS = %q; want unix equality", whereS)
+		}
+		wantParams := []interface{}{int64(1704081600)}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+}
+
+func TestGetFieldTypeMapFromFieldTypes(t *testing.T) {
+	m := GetFieldTypeMap(TableInfo{
+		TableName: "items",
+		FieldTypes: map[string]string{
+			"published_at": "datetime",
+			"create_time":  "bigint",
+			"updated_at":   "TIMESTAMP", // 列类型大小写归一为小写
+		},
+	})
+	if got := m["items.publishedat"]; got != "datetime" {
+		t.Fatalf("m[items.publishedat] = %q; want %q", got, "datetime")
+	}
+	if got := m["items.createtime"]; got != "bigint" {
+		t.Fatalf("m[items.createtime] = %q; want %q", got, "bigint")
+	}
+	if got := m["items.updatedat"]; got != "timestamp" {
+		t.Fatalf("m[items.updatedat] = %q; want %q", got, "timestamp")
+	}
+	if len(m) != 3 {
+		t.Fatalf("GetFieldTypeMap() = %#v; want 3 entries", m)
+	}
+	// 手写仓库 nil FieldTypes：空 map，不产生任何静态伪条目
+	if m := GetFieldTypeMap(TableInfo{TableName: "items"}); len(m) != 0 {
+		t.Fatalf("GetFieldTypeMap() with nil FieldTypes = %#v; want empty", m)
+	}
+}
+
+func TestGetFieldTypeQualifiedForms(t *testing.T) {
+	m := GetFieldTypeMap(TableInfo{
+		TableName:  "items",
+		FieldTypes: map[string]string{"published_at": "datetime"},
+	})
+	if got := GetFieldType("published_at", m, TableInfo{TableName: "items"}); got != "datetime" {
+		t.Fatalf("GetFieldType(bare) = %q; want %q", got, "datetime")
+	}
+	if got := GetFieldType("items.published_at", m, TableInfo{TableName: "items"}); got != "datetime" {
+		t.Fatalf("GetFieldType(qualified) = %q; want %q (no items.items. prefix)", got, "datetime")
+	}
+	if got := GetFieldType("create_time", m, TableInfo{TableName: "items"}); got != "" {
+		t.Fatalf("GetFieldType(unknown) = %q; want empty", got)
+	}
+}

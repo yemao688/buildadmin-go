@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -43,6 +44,11 @@ type TableInfo struct {
 	TableName        string
 	Key              string
 	QuickSearchField string
+	// FieldTypes 各字段的 DB 列类型（小写），键为原始字段名（如
+	// {"create_time":"bigint","published_at":"datetime"}）。生成仓库由 CRUD
+	// 生成器按 spec 传入；手写仓库保持 nil（datetime 搜索回退 unix 时间戳
+	// 转换路径，行为不变）。
+	FieldTypes map[string]string
 }
 
 var fieldNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
@@ -156,33 +162,44 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 			}))
 			return
 		}
-		//判断是否是日期
+		//判断是否是日期。分流语义（由 GetFieldType 决定，字段类型信息来自
+		// TableInfo.FieldTypes，生成仓库按 spec 传入）：
+		//  - GetFieldType == "datetime"（原生 SQL datetime/timestamp 列）：
+		//    字符串比较——RANGE 直接 BETWEEN 字符串，非 RANGE 直接字符串等值；
+		//  - GetFieldType == ""（int unix 时间戳列，或手写仓库 FieldTypes
+		//    为 nil 的回退）：unix 转换——RANGE 解析为 unix 时间戳，非 RANGE
+		//    同样转 unix（防止 int 列与 '2024-01-01 12:00' 原始字符串比较时
+		//    MySQL 强转出 2024 等错乱值）。
 		if search[i].Render == "datetime" {
+			isNativeDatetime := GetFieldType(search[i].Field, fieldTypeMap, table) == "datetime"
 			if search[i].Operator == "RANGE" {
 				datetimeArr := strings.Split(search[i].Val.(string), ",")
 				if len(datetimeArr) != 2 {
 					continue
 				}
-				//判断数据字段类型
-				if GetFieldType(search[i].Field, fieldTypeMap, table) == "datetime" {
-					whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
+				whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
+				if isNativeDatetime {
+					// 原生 datetime 列：字符串 BETWEEN（'YYYY-MM-DD HH:mm:ss'）
 					whereP = append(whereP, datetimeArr[0], datetimeArr[1])
 				} else {
-					whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
-					if len(datetimeArr[0]) == 10 {
-						startUnix, _ := util.ParseTimeShort(datetimeArr[0])
-						endUnix, _ := util.ParseTimeShort(datetimeArr[1])
-						whereP = append(whereP, startUnix.Unix(), endUnix.Unix())
-					} else {
-						startUnix, _ := util.ParseTime(datetimeArr[0])
-						endUnix, _ := util.ParseTime(datetimeArr[1])
-						whereP = append(whereP, startUnix.Unix(), endUnix.Unix())
-					}
+					// int unix 时间戳列：解析后转 unix；起始值按当天零点，
+					// len==10 的结束值补 23:59:59（单日范围
+					// "2024-01-01,2024-01-01" 需命中整天而非零点整）
+					whereP = append(whereP, parseDatetimeValue(datetimeArr[0], false), parseDatetimeValue(datetimeArr[1], true))
 				}
 				continue
 			}
-			whereS += " AND " + Backquote(field) + " = ? "
-			whereP = append(whereP, search[i].Val)
+			// 非 RANGE（eq 等）操作符
+			if isNativeDatetime {
+				// 原生 datetime 列：字符串等值
+				whereS += " AND " + Backquote(field) + " = ? "
+				whereP = append(whereP, search[i].Val)
+			} else {
+				// int unix 时间戳列：转 unix 后再比较（原实现直传原始字符串，
+				// MySQL 会把 '2024-01-01 12:00' 强转成 2024 导致错乱匹配）
+				whereS += " AND " + Backquote(field) + " = ? "
+				whereP = append(whereP, parseDatetimeValue(search[i].Val.(string), false))
+			}
 			continue
 		}
 
@@ -277,34 +294,48 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	return
 }
 
-// tableInfoFields 是 TableInfo 自身字段的静态类型描述（TableName/Key/QuickSearchField）。
-// TableInfo 只携带表元信息、不含真实模型字段，反射遍历永远只会看到这三个 string 字段，
-// 用静态表替换 reflect 遍历，返回结果与反射版本逐字一致。
-var tableInfoFields = []struct {
-	name string
-	typ  string
-}{
-	{name: "tablename", typ: "string"},
-	{name: "key", typ: "string"},
-	{name: "quicksearchfield", typ: "string"},
-}
-
-// 获取结构体所有字段类型
+// 获取结构体所有字段类型：从 TableInfo.FieldTypes 构建，键形如
+// "items.publishedat"（表名 + 去下划线的字段名，不带表限定；限定前缀由
+// GetFieldType 统一补一次，避免重复拼接）。
 func GetFieldTypeMap(table TableInfo, args ...TableInfo) map[string]string {
 	args = append(args, table)
 	fieldTypeMap := map[string]string{}
 	for _, table := range args {
-		for _, f := range tableInfoFields {
-			fieldTypeMap[table.TableName+"."+f.name] = f.typ
+		if len(table.FieldTypes) == 0 {
+			continue
+		}
+		for fieldName, columnType := range table.FieldTypes {
+			fieldTypeMap[table.TableName+"."+strings.Replace(fieldName, "_", "", -1)] = strings.ToLower(columnType)
 		}
 	}
 	return fieldTypeMap
 }
 
-// 获取字段类型
+// 获取字段类型。兼容带表限定（items.published_at）与裸字段（published_at）
+// 两种形态：限定前缀只取一次（修复 strings.Replace 把 items.published_at
+// 拼成 items.items.publishedat 的重复拼接），再按当前表统一重新限定。
 func GetFieldType(fieldName string, fieldTypeMap map[string]string, table TableInfo) string {
+	if idx := strings.LastIndex(fieldName, "."); idx >= 0 {
+		fieldName = fieldName[idx+1:]
+	}
 	fieldName = table.TableName + "." + strings.Replace(fieldName, "_", "", -1)
 	return fieldTypeMap[fieldName]
+}
+
+// parseDatetimeValue 把前端 datetime 值解析为 unix 时间戳：
+//   - "YYYY-MM-DD HH:mm:ss"（len>10）→ 精确到秒；
+//   - "YYYY-MM-DD"（len==10）→ 当天零点；endOfDay 为 true 时补 23:59:59
+//     （RANGE 结束值的整天语义；起始值保持 00:00:00）。
+func parseDatetimeValue(value string, endOfDay bool) int64 {
+	if len(value) == 10 {
+		t, _ := util.ParseTimeShort(value)
+		if endOfDay {
+			return t.Add(24*time.Hour - time.Second).Unix()
+		}
+		return t.Unix()
+	}
+	t, _ := util.ParseTime(value)
+	return t.Unix()
 }
 
 // IsValidFieldName validates a qualified SQL identifier. The field type map is

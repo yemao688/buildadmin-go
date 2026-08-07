@@ -51,6 +51,7 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 
 	if !skipRepo {
 		// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
+		modelData.FieldTypesLiteral = buildFieldTypesLiteral(fields)
 		repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
 		if err != nil {
 			return "", err
@@ -80,6 +81,28 @@ func applyBaseRepositoryPackageRef(modelData *ModelData, repositoryFile NameInfo
 	modelData.BaseModelImport = "buildadmin-go/internal/admin/repository"
 	modelData.BaseModelAlias = "adminmodel"
 	modelData.BaseModelQualifier = modelData.BaseModelAlias + "."
+}
+
+// buildFieldTypesLiteral 构建仓库 List 传给 QueryBuilder 的 FieldTypes map
+// 字面量：键为去下划线的字段名（与 querybuilder.GetFieldType 的查找键一致），
+// 值为 DB 列类型小写；原生 SQL datetime/timestamp 列归一为 "datetime"（int
+// unix 时间戳列保持 bigint 等原样，datetime 搜索仍走 unix 转换路径）。
+// 按字段名排序保证可重复生成（crud:delete + 重新生成逐字节一致）。
+func buildFieldTypesLiteral(fields []crudmodel.Field) string {
+	if len(fields) == 0 {
+		return ""
+	}
+	sorted := slices.Clone(fields)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	entries := make([]string, 0, len(sorted))
+	for _, field := range sorted {
+		columnType := strings.ToLower(analyseFieldTypeForSpec(field))
+		if columnType == "timestamp" {
+			columnType = "datetime"
+		}
+		entries = append(entries, strconv.Quote(strings.ReplaceAll(field.Name, "_", ""))+": "+strconv.Quote(columnType))
+	}
+	return "map[string]string{" + strings.Join(entries, ", ") + "}"
 }
 
 func addCityTextFields(structContent string, cityFields []string) string {

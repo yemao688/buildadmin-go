@@ -229,6 +229,54 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 	require.Equal(t, "id", prepared.QuickSearchField)
 }
 
+// TestBuildFieldTypesLiteral 验证 spec 字段 → QueryBuilder FieldTypes map
+// 字面量的构建：去下划线键、列类型小写、datetime/timestamp 归一为
+// "datetime"、按键排序保证可重复生成。
+func TestBuildFieldTypesLiteral(t *testing.T) {
+	got := buildFieldTypesLiteral([]crudmodel.Field{
+		{Name: "published_at", Type: "datetime"},
+		{Name: "create_time", Type: "bigint"},
+		{Name: "updated_at", Type: "timestamp"},
+		{Name: "name", Type: "varchar(255)"},
+	})
+	want := `map[string]string{"createtime": "bigint", "name": "varchar", "publishedat": "datetime", "updatedat": "datetime"}`
+	if got != want {
+		t.Fatalf("buildFieldTypesLiteral() = %s; want %s", got, want)
+	}
+	if got := buildFieldTypesLiteral(nil); got != "" {
+		t.Fatalf("buildFieldTypesLiteral(nil) = %q; want empty", got)
+	}
+}
+
+// TestModelFieldTypesLiteralRendering 验证仓库模板：有 FieldTypesLiteral 时
+// 生成 tableInfo.FieldTypes 赋值并传入 QueryBuilder；为空时回退原
+// "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（与旧产物逐字节一致）。
+func TestModelFieldTypesLiteralRendering(t *testing.T) {
+	base := ModelData{
+		Namespace:        "model",
+		ClassName:        "Items",
+		Name:             "items",
+		Pk:               "id",
+		QuickSearchField: "id",
+		StructTemp:       "type Items struct{}",
+		DataScopePolicy:  data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
+	}
+
+	plain, err := renderRawModel(base)
+	require.NoError(t, err)
+	require.Contains(t, plain, "QueryBuilder(ctx, s.TableInfo(), nil)")
+	require.NotContains(t, plain, "tableInfo.FieldTypes")
+
+	data := base
+	data.FieldTypesLiteral = `map[string]string{"createtime": "bigint", "publishedat": "datetime"}`
+	withTypes, err := renderRawModel(data)
+	require.NoError(t, err)
+	require.Contains(t, withTypes, "tableInfo := s.TableInfo()")
+	require.Contains(t, withTypes, `tableInfo.FieldTypes = map[string]string{"createtime": "bigint", "publishedat": "datetime"}`)
+	require.Contains(t, withTypes, "QueryBuilder(ctx, tableInfo, nil)")
+	require.NotContains(t, withTypes, "QueryBuilder(ctx, s.TableInfo(), nil)")
+}
+
 func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
 	cases := []struct {
 		name, typ, dataType, want string

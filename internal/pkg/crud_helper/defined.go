@@ -449,6 +449,11 @@ type ModelData struct {
 	BaseModelAlias     string
 	BaseModelImport    string
 
+	// FieldTypesLiteral 仓库 List 传给 QueryBuilder 的字段类型 map 字面量
+	// （由 writeModelFiles 按 spec 字段构建；为空时模板回退原
+	// "QueryBuilder(ctx, s.TableInfo(), nil)" 形态，保证测试与旧产物逐字节一致）。
+	FieldTypesLiteral string
+
 	Append                    []string
 	Methods                   []string
 	FieldType                 map[string]string
@@ -616,7 +621,13 @@ func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({
 }
 
 func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.ClassName}}, total int64, err error) {
+{{- if .FieldTypesLiteral}}
+	tableInfo := s.TableInfo()
+	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
+	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
+{{- else}}
 	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
+{{- end}}
 	if err != nil {
 		return nil, 0, err
 	}

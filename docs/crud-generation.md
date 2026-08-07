@@ -495,6 +495,8 @@ text、blob、json 等 SQL 类型不写默认值（PHP 无默认值 family）。
 
 Vue default items：array 固定 `[]`；editor 空字符串；checkbox/selects/remoteSelects/city/images/files 逗号值转数组；number/float 输出非零数字；switch/remoteSelect 的 `0` 不输出；非 INPUT 默认类型不输出。
 
+**datetime 搜索语义**（列表页 `render: datetime` 的搜索条件，由 querybuilder 按字段实际存储分流）：原生 SQL `datetime`/`timestamp` 列（生成仓库按 spec 把字段类型传给 querybuilder）走字符串比较——RANGE 直接 `BETWEEN` 字符串、非 RANGE 字符串等值；整数 unix 时间戳列（`create_time`/`update_time` 等 bigint）自动解析为 unix 时间戳再比较（非 RANGE 同样转换，避免 int 列与 `'2024-01-01 12:00'` 原始字符串比较时 MySQL 强转错乱）。单日范围 `"2024-01-01,2024-01-01"` 的起始值按当天零点、结束值自动补 `23:59:59`，命中整天而非零点整。
+
 ### 时间字段 JSON 契约
 
 | 存储与设计 | JSON 输出 | 请求侧 |
