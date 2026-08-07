@@ -95,6 +95,13 @@ export interface Lang {
     langArray: { name: string; value: string }[]
 }
 
+export interface PortalLang {
+    // 前台默认语言（全局一个前台默认语言，非 per-portal；默认取后端 country_language 第一条）
+    defaultLang: string
+    // 当在默认语言包找不到翻译时，继续在 fallbackLang 语言包内查找翻译
+    fallbackLang: string
+}
+
 export interface Crud {
     // 日志同步方式
     syncType: 'manual' | 'automatic'

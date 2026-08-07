@@ -26,6 +26,16 @@ const loadingInstance: LoadingInstance = {
 }
 
 /**
+ * 按请求 URL 渠道返回 think-lang 请求头值：
+ * /admin/* 后台域请求 → 后台语言（config.lang.defaultLang，管理员可切换，默认 zh-cn）；
+ * 其余（/api/*、门户页）→ 前台语言（config.portalLang.defaultLang，默认取后端 default_language）
+ */
+const getLangByUrl = (url?: string) => {
+    const config = useConfig()
+    return /^\/admin\//.test(url ?? '') ? config.lang.defaultLang : config.portalLang.defaultLang
+}
+
+/**
  * 根据运行环境获取基础请求URL
  */
 export const getUrl = (): string => {
@@ -78,7 +88,8 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
         baseURL: getUrl(),
         timeout: 1000 * 30,
         headers: {
-            'think-lang': config.lang.defaultLang,
+            // 按请求 URL 渠道分流：/admin/* 用后台语言域，其余（/api/*、门户）用前台语言域
+            'think-lang': getLangByUrl(axiosConfig.url),
             server: true,
         },
         responseType: 'json',
@@ -127,7 +138,8 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
             const refresh = provider.refresher
                 ? provider.refresher({
                     provider,
-                    lang: config.lang.defaultLang,
+                    // 按渠道取语言：/api 域（userInfo/baAccount）→ 前台语言；admin 域 → 后台语言
+                    lang: provider.domain == 'admin' ? config.lang.defaultLang : config.portalLang.defaultLang,
                     refreshToken: store.getToken('refresh'),
                     token: store.getToken('auth'),
                 })

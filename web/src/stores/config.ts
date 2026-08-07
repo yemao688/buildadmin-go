@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { STORE_CONFIG } from '/@/stores/constant/cacheKey'
-import type { Crud, Lang, Layout } from '/@/stores/interface'
+import type { Crud, Lang, Layout, PortalLang } from '/@/stores/interface'
 import { useNavTabs } from '/@/stores/navTabs'
 
 export const useConfig = defineStore(
@@ -66,6 +66,21 @@ export const useConfig = defineStore(
             ],
         })
 
+        // 前台语言域（/api/* 与门户页）：全局一个前台默认语言（非 per-portal），
+        // 默认语言 = 后端 country_language 第一条，由 /api/index/index 返回的 default_language
+        // 字段经 initPortalLang 写入（后端并行线提供）；用户可在前台显式切换（setPortalLang）。
+        // 与 lang（后台域）互相独立、互不覆盖。
+        const portalLang: PortalLang = reactive({
+            defaultLang: 'zh-cn',
+            fallbackLang: 'zh-cn',
+        })
+
+        // 前台语言是否已被用户显式设置过（随 storeConfig_v3 一并持久化）。
+        // 策略：为 true 后 initPortalLang 不再用后端默认语言覆盖用户选择；
+        // 为 false 时每次启动都接受后端默认语言（例如管理员调整了 country_language 顺序）。
+        // 老用户 localStorage 的 storeConfig_v3 中无此字段时默认 false，向后兼容。
+        const portalLangSet = ref(false)
+
         const crud: Crud = reactive({
             syncType: 'manual',
             syncedUpdate: 'yes',
@@ -113,6 +128,24 @@ export const useConfig = defineStore(
             lang.defaultLang = val
         }
 
+        /**
+         * 前台语言切换（由前台语言切换入口调用，如 editDefaultLang(lang, 'portal')）：
+         * 标记为用户显式选择，此后 initPortalLang 不再用后端默认语言覆盖。
+         */
+        function setPortalLang(val: string) {
+            portalLang.defaultLang = val
+            portalLangSet.value = true
+        }
+
+        /**
+         * 用后端默认语言初始化前台语言域（由 /api/index/index 返回的 default_language 字段驱动，
+         * 后端并行线实现）。仅在用户尚未显式设置过前台语言时生效，避免覆盖用户选择。
+         */
+        function initPortalLang(val: string) {
+            if (!val || portalLangSet.value) return
+            portalLang.defaultLang = val
+        }
+
         function setLayoutMode(data: string) {
             layout.layoutMode = data
         }
@@ -134,7 +167,21 @@ export const useConfig = defineStore(
             ;(crud[name] as any) = value
         }
 
-        return { layout, lang, crud, menuWidth, setLang, setLayoutMode, setLayout, getColorVal, setCrud }
+        return {
+            layout,
+            lang,
+            crud,
+            portalLang,
+            portalLangSet,
+            menuWidth,
+            setLang,
+            setPortalLang,
+            initPortalLang,
+            setLayoutMode,
+            setLayout,
+            getColorVal,
+            setCrud,
+        }
     },
     {
         persist: {

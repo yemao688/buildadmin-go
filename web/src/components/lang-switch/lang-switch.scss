@@ -1,0 +1,175 @@
+/* =============================================================================
+ * lang-switch 语言切换组件样式（前台门户专用）
+ *
+ * 设计原则：中性、简洁、可覆盖。
+ * - 默认是浅色中性样式（灰白文字 + 透明背景），适配常见门户页头/页脚。
+ * - 不依赖后台 design system 的任何 scss 变量 / 样式文件，可独立使用。
+ * - 全部类名以 lang-switch- 为前缀，不会污染全局命名空间。
+ *
+ * 业务方覆盖方式（任选其一）：
+ *
+ * 1. 【推荐】CSS 变量集中定制 —— 变量默认值在 :root 上，可任意层级覆盖：
+ *
+ *      .site-header .lang-switch {  深色页头示例
+ *          --lang-switch-text-color: #e5e7eb;
+ *          --lang-switch-hover-bg: rgba(255, 255, 255, 0.12);
+ *          --lang-switch-active-color: #60a5fa;
+ *          --lang-switch-radius: 6px;
+ *      }
+ *
+ *    注意：下拉菜单（el-dropdown 的 popper）渲染在 body 下，不继承
+ *    .lang-switch 上的变量，只继承 :root。菜单部分要定制时请直接覆盖：
+ *
+ *      .lang-switch__menu .el-dropdown-menu__item { color: #111827; }
+ *
+ * 2. 在全局样式或本文件直接覆盖 .lang-switch-* 类（注意选择器优先级）。
+ *
+ * 3. 想要完全自定义交互时，可只使用组件的 props/emits 自行实现触发器。
+ * ============================================================================= */
+
+:root {
+    /* 可覆盖变量（默认值 = 中性浅色） */
+    --lang-switch-text-color: #4b5563;             /* 触发器主文字（当前语言名） */
+    --lang-switch-label-color: #9ca3af;            /* 「语言」标签文字 */
+    --lang-switch-hover-bg: rgba(0, 0, 0, 0.05);   /* 触发器 / 下拉项 hover 背景 */
+    --lang-switch-active-color: #2563eb;           /* 下拉中当前语言的高亮色 */
+    --lang-switch-radius: 8px;                     /* 触发器圆角 */
+    --lang-switch-font-size: 14px;                 /* 触发器字号 */
+    --lang-switch-gap: 6px;                        /* 触发器内元素间距 */
+}
+
+.lang-switch {
+    display: inline-flex;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+/* ---- 触发器：地球图标 + 标签 + 当前语言名 + 箭头 ---- */
+.lang-switch__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lang-switch-gap);
+    padding: 6px 10px;
+    font-size: var(--lang-switch-font-size);
+    line-height: 1.4;
+    color: var(--lang-switch-text-color);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--lang-switch-radius);
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    transition:
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        color 0.2s ease;
+}
+
+.lang-switch__trigger:hover {
+    background: var(--lang-switch-hover-bg);
+}
+
+.lang-switch__trigger:focus-visible {
+    outline: 2px solid var(--lang-switch-active-color);
+    outline-offset: 2px;
+}
+
+.lang-switch__globe {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.lang-switch__label {
+    color: var(--lang-switch-label-color);
+    font-size: 0.92em;
+}
+
+.lang-switch__value {
+    font-weight: 500;
+}
+
+/* 移动端紧凑形态显示的缩写（如 ZH / EN），默认隐藏 */
+.lang-switch__code {
+    display: none;
+    font-size: 0.85em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.lang-switch__caret {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: transform 0.2s ease;
+}
+
+/* 下拉展开时箭头翻转 */
+.lang-switch.is-open .lang-switch__caret {
+    transform: rotate(180deg);
+}
+
+/* ---- 下拉菜单 ----
+ * el-dropdown 的 popper 会被 teleport 到 body，样式必须写在全局
+ * （不能在组件 scoped 样式里用 :deep() 命中），因此放本文件。
+ */
+.lang-switch__menu {
+    min-width: 128px;
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.lang-switch__menu .el-dropdown-menu__item:not(.is-disabled) {
+    display: flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 10px;
+    font-size: var(--lang-switch-font-size);
+    line-height: 1;
+    color: var(--lang-switch-text-color);
+    border-radius: 6px;
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.lang-switch__menu .el-dropdown-menu__item:not(.is-disabled):hover,
+.lang-switch__menu .el-dropdown-menu__item:not(.is-disabled):focus {
+    background: var(--lang-switch-hover-bg);
+    color: var(--lang-switch-text-color);
+}
+
+/* 当前语言高亮 */
+.lang-switch__menu .el-dropdown-menu__item:not(.is-disabled).is-current {
+    color: var(--lang-switch-active-color);
+    font-weight: 500;
+}
+
+.lang-switch__option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.lang-switch__check {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* ---- 移动端紧凑形态：只显示 图标 + 语言缩写 ---- */
+@media (max-width: 767px) {
+    .lang-switch__label,
+    .lang-switch__value {
+        display: none;
+    }
+
+    .lang-switch__code {
+        display: inline-block;
+    }
+
+    .lang-switch__trigger {
+        padding: 6px 8px;
+    }
+}

@@ -356,16 +356,51 @@ const rules = reactive<FormRules>({
 
 ## 12. 语言与国际化（i18n）
 
-- 入口 `web/src/lang/index.ts`：默认只引 element-plus 中英文语言包；按需加载
-  `globs-<lang>.ts` 全局语言包与 `common/`、各页面语言包。
-- 语言目录：`web/src/lang/<dir>/{zh-cn,en}/`，**只支持 zh-cn 与 en**（禁止
-  en-us 等第三种语言）。
+> 前后台**语言域分离**：后台（`/admin`）默认中文、管理员可切换；前台（门户）
+> 默认语言取后端 `country_language` 表第一条（`/api/index/index` 的
+> `default_language` 字段），全站一个前台默认语言，门户内可切换。
+
+- 入口 `web/src/lang/index.ts`：`loadLang` 按应用域选 locale——`isAdminApp()`
+  为真走 `config.lang.defaultLang`（后台域），否则走 `config.portalLang.defaultLang`
+  （前台域）；`fallbackLocale` 同域取值。语言包按需加载 `globs-<lang>.ts`
+  全局语言包与 `common/`、各页面语言包。
+- 语言目录：`web/src/lang/<dir>/{zh-cn,en}/`，**框架内置 zh-cn 与 en**。
+  扩展新语言三步（见下），不建议在框架内引入第三种语言，业务可在下游按
+  三步法自行扩展。
+- **扩展新语言**（框架已铺好机制，下游按需添加）：
+  1. 后端：`country_language` 表新增一行（lan/name/weigh，status=1），
+     `/api/index/index` 的 `default_language` 与语言列表自动跟随；
+  2. 后端：`internal/i18n/locales/<lang>.yaml` 新增语言包文件，并在
+     `internal/i18n` 的 `NormalizeLang` 补充该语言到 pack key 的映射
+     （如 `ja` → `ja`；`zh-cn` → `zh`、`zh-hant`/`zh-tw` → `zh-Hant` 已内置）；
+  3. 前端：`web/src/lang/` 下新增 `<lang>` 目录与 `globs-<lang>.ts`，
+     并在 `web/src/lang/index.ts` 的 `assignLocale` 为 element-plus 语言包
+     追加一行。前端 lang glob 已全量化（`./*/**/*.ts`），新目录**零框架
+     改动**即被自动发现与加载；前端不登记支持的语言会回退 `zh-cn`。
+- 前台默认语言链路：门户入口 `main.ts` 先请求 `/api/index/index` 取
+  `default_language` → `config.initPortalLang(...)`（用户未显式切换时写入）→
+  `loadLang` 按 `portalLang.defaultLang` 选 locale。用户显式切换后
+  （`editDefaultLang(lang, 'portal')`）持久化 `portalLangSet`，后端默认值
+  不再覆盖。
+- **语言切换组件**：`web/src/components/lang-switch/`（独立样式，CSS 变量
+  `--lang-switch-*` 可在业务容器层级覆盖，不依赖后台设计系统）。props：
+  `langArray`（语言列表）/`current`/`label`；emits：`change(name)`。组件纯
+  展示交互，切换行为由父组件决定（门户示例：`editDefaultLang(name, 'portal')`；
+  后台仍用 `editDefaultLang(name)`）。业务门户通常自己设计样式，可直接改
+  该组件目录下的 scss 或按 README 覆盖变量。
+- 请求层按渠道传语言：`web/src/utils/axios.ts` 按 URL 前缀设置 `think-lang`
+  header——`/admin/*` 用后台域语言，其余（`/api/*`、门户）用前台域语言。
 - `web/src/lang/autoload.ts`：path → 语言包路径的特例映射（如 moduleStore、
   crud 页），按需自动加载。
 - 路由守卫按需加载语言包：`router/index.ts` 的 `portalLangDirs` 注册表
   （key=路由前缀，value=lang 目录名）：后台固定 `backend`；根门户（`/` 及
   无前缀页面）默认 `frontend`；带前缀门户（/seller、/buyer…）在此追加一行。
 - 全局语言包 key 用大写开头避免与页面语言包目录名/文件名冲突。
+- 后端配套（`internal/router`）：语言中间件按渠道分流——`think-lang` header
+  优先（经 `i18n.NormalizeLang` 规范化，`zh-cn`→`zh` pack key）；`/api/*`
+  无 header 时兜底 `country_language` 第一条（`country.Service.DefaultLan`）；
+  `/admin/*` 无 header 时兜底中文（`zh`）。响应层翻译仍走
+  `internal/pkg/response` 的自动翻译，无需业务改动。
 
 ## 13. 业务门户接入约定（合并自 frontend-portal-guide.md）
 
