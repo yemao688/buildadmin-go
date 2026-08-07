@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.1.5
+
+> 缓存与行为修复批次 + 工程基建：siteconfig 缓存与 ClearCache 接线、querybuilder datetime 搜索分流修复（A+B+C）、formatMoney 增强与 FlexInt64Slice（下游反馈）、压测基线工具。
+
+- **Perf (siteconfig 缓存 + ClearCache 接线):** `siteconfig.Service` 新增 group 级进程内缓存（`siteconfigTTL=60s` + RWMutex + 防御性副本，贴合 `GetKVByGroup` 调用面；`ConfigHandler` Add/Edit/Del 写路径经 `requesttx.InvalidateAfterMutation` 事务提交后失效；**活动事务期间绕过缓存直读库**——dbFor 走请求事务，防未提交数据入缓存，测试验证回滚不污染）。`ajax.go` 的 `ClearCache` TODO 空实现接线为真实清三类进程内缓存（permissioncache `InvalidateAll` + country 语言 + siteconfig），PHP 语义核对后确认不删 DB/不清 token/不登出。
+- **Fixed (querybuilder datetime A+B+C):** 修复 datetime 搜索三陷阱——①原生 MySQL datetime 列显式 `render: datetime` + RANGE 与 10 位 unix 戳比较静默空结果；②非 RANGE 操作符 int 列 = 原始字符串 MySQL 强转 2024 错乱；③单日范围只命中零点。C 契约：`TableInfo` 新增 `FieldTypes`（生成器模板按 spec 字段构建真实列类型 map 传入，按键排序保证可重复生成）、修复 `items.published_at` 重复限定拼接；B 分流：`GetFieldType=="datetime"`（原生列）走字符串比较（原死代码变活）、`""`（int 列/手写 nil）走 unix 转换——非 RANGE 也转 unix、单日补 23:59:59（顺带修混合长度解析 bug）；A 固化：分支注释 + docs/crud-generation.md 补 datetime 搜索语义。**默认行为零变化**：既有生成/手写仓库传 nil 仍走 unix 路径。
+- **Feat (formatMoney 增强, 下游反馈):** `thousandSeparator`（缺省 true，仅整数部分三位分组——拆 `.` 后应用 `\B(?=(\d{3})+(?!\d))` 避免 ≥4 位小数误分组）；`signed`（缺省 false，正负号在货币符号前 `+$100.00`/`-$100.00`，`Math.abs` 剥离负号防双负号）；null/undefined/空串 → `''`（空态不显示金额，0/'0'/NaN 行为不变）。
+- **Feat (FlexInt64Slice, 下游反馈):** validator 新增 `FlexInt64Slice []int64`（与 FlexInt32Slice 同构：null→nil、空数组→空、元素宽松解析、非法报错含索引）——业务 `HotelIDs []int64` 有真实调用方。
+- **Chore (压测基线):** 新增 `cmd/bench` 轻量 HTTP 压测工具（Go 标准库实现：`-url/-n/-c/-method/-body/-header/-timeout`，输出 RPS/平均/p50/p95/p99/成功失败数）+ README（两个推荐场景、登录示例、基线记录表、压测纪律）——解锁连接池调优/closure EXISTS 改写/事务缓冲/token 二级缓存等"需要压测数据再决策"项。
+
 ## v3.1.4
 
 > 后端运行时热点优化批次 + 下游反馈修复批次：请求热链 4 项优化（会员校验 4→2 次 DB、权限缓存零拷贝、scope 自引用一次性校验、语言链缓存）、货币基座（portalCurrency 与语言域对称）、DTO 数字字段 Flex 宽松化（Go 严格绑定 vs PHP 弱类型）、文档与组件收尾。
