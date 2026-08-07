@@ -149,10 +149,18 @@ export async function loadAndMergeMessages(rawPaths: string[], prefix: string, l
 
 /**
  * 切换默认语言
- * @param lang 语言代码（zh-cn / en / 新增语言）
+ * @param lang 语言代码（zh-cn / en / 新增语言；须已登记到 assignLocale，否则忽略切换）
  * @param domain 语言域：'admin' = 后台域（默认，现状行为）；'portal' = 前台域（写入 portalLang 并标记为用户显式选择）
  */
 export function editDefaultLang(lang: string, domain: 'admin' | 'portal' = 'admin'): void {
+    // 切换前校验目标语言已在前端语言注册表登记（assignLocale 含 element-plus
+    // locale 映射）。后端启用（country_language 有）但前端无语言包（assignLocale
+    // 无）的语言，reload 后 loadLang 会兜底回退 zh-cn 闪回，这里直接拒绝切换。
+    if (!assignLocale[lang]) {
+        console.warn(`[i18n] language "${lang}" has no frontend locale pack, switch ignored`)
+        return
+    }
+
     const config = useConfig()
     if (domain == 'portal') {
         // 前台域：标记为用户显式选择，此后后端 default_language 不再覆盖

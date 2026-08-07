@@ -358,7 +358,9 @@ const rules = reactive<FormRules>({
 
 > 前后台**语言域分离**：后台（`/admin`）默认中文、管理员可切换；前台（门户）
 > 默认语言取后端 `country_language` 表第一条（`/api/index/index` 的
-> `default_language` 字段），全站一个前台默认语言，门户内可切换。
+> `default_language` 字段），门户内可切换。**portalLang 是全局一个前台默认
+> 语言（非 per-portal）**：买家/卖家等门户共享同一 `portalLang`；如需按门户
+> 独立语言属业务扩展，不在框架内建语义内。
 
 - 入口 `web/src/lang/index.ts`：`loadLang` 按应用域选 locale——`isAdminApp()`
   为真走 `config.lang.defaultLang`（后台域），否则走 `config.portalLang.defaultLang`
@@ -381,7 +383,8 @@ const rules = reactive<FormRules>({
   `default_language` → `config.initPortalLang(...)`（用户未显式切换时写入）→
   `loadLang` 按 `portalLang.defaultLang` 选 locale。用户显式切换后
   （`editDefaultLang(lang, 'portal')`）持久化 `portalLangSet`，后端默认值
-  不再覆盖。
+  不再覆盖。**`portalLang`/`portalLangSet` 全站共享同一值**，买家/卖家等
+  门户间不区分（按门户独立语言属业务扩展，下游自行实现）。
 - **语言切换组件**：`web/src/components/lang-switch/`（独立样式，CSS 变量
   `--lang-switch-*` 可在业务容器层级覆盖，不依赖后台设计系统）。props：
   `langArray`（语言列表）/`current`/`label`；emits：`change(name)`。组件纯
@@ -401,6 +404,56 @@ const rules = reactive<FormRules>({
   无 header 时兜底 `country_language` 第一条（`country.Service.DefaultLan`）；
   `/admin/*` 无 header 时兜底中文（`zh`）。响应层翻译仍走
   `internal/pkg/response` 的自动翻译，无需业务改动。
+- **DB 动态内容翻译**（商品名、公告等库内内容）的官方入口：
+  `internal/common/country.Service.GetByRequest(ctx, group, key)`——从请求
+  语言上下文取当前语言（router 语言中间件已缓存 per-request，即
+  `i18n.LangFromContext`），无请求语言时回退前台默认语言（`country_language`
+  第一条），再走 `Get` 的默认语言 fallback（目标语言缺条回退默认语言，仍未
+  命中返回 `gorm.ErrRecordNotFound`）。注意 context 中的请求语言是规范化
+  pack key（如 `zh-cn`→`zh`），与 `country_language.lan` 原始值可能不同，
+  由 `Get` 的默认语言回退桥接。**静态 UI 文案仍走前端 `t()`/i18n YAML 语言
+  包，两条链共用同一请求语言**，不要为 DB 内容另开语言通道。调用示例
+  （`country.Service` 经 wire 注入 service/handler，`ctx` 自带请求语言）：
+
+  ```go
+  // 翻译商品名：先按请求语言取，缺条回退默认语言；再缺按业务兜底
+  name, err := countrySvc.GetByRequest(ctx, "product", "name")
+  if err != nil {
+      // err 为 gorm.ErrRecordNotFound 时通常展示默认语言或空串
+      return "", err
+  }
+  ```
+
+### 货币域（portalCurrency）
+
+> 与语言域完全对称：前台（门户）默认货币取后端 `country_currency` 表第一条
+> （`/api/index/index` 的 `currency` 数组首项，按 weigh DESC），门户内可切换；
+> **portalCurrency 是全局一个前台默认货币（非 per-portal）**，买家/卖家等
+> 门户共享同一值。
+
+- 状态（config store `portalCurrency` 域，与 `portalLang` 同 store 同持久化
+  key `storeConfig_v3`，旧 localStorage 缺字段落默认值、向后兼容）：
+  - `defaultCurrency`：当前货币 code，缺省 `'CNY'`
+  - `currencySet`：用户是否显式切换过（true 后后端默认不再覆盖）
+  - `currencyArray`：`{code, name, symbol}[]`，供切换组件渲染（数据）
+  - `currencyRates`：`code → rate` 映射，formatMoney 换算用（数据）
+  - `setPortalCurrency(code)`：写入 defaultCurrency 并标记显式选择；
+    `initPortalCurrency(code, array, rates)`：数组/汇率是**数据**、始终以最新
+    后端列表更新；`defaultCurrency` 是**选择**、仅 `!currencySet` 时写入
+- **金额换算工具** `web/src/utils/money.ts`：`formatMoney(amount, opts?)`——
+  `amount × rate`（rate 为乘数，即 `country_currency.rate` 语义），缺省按
+  `defaultCurrency` 取 rate/symbol；未知货币兜底 `rate=1`、`symbol=''`；
+  `opts` 可整体覆盖 `code/symbol/rate/position('prefix'|'suffix')/decimals`
+  （缺省 2，钳制 0–100）。
+- 初始化链路：门户入口 `main.ts` 与语言**共用同一请求**（`/api/index/index`）
+  取 `currency` 数组 → 第一项为默认货币 → `initPortalCurrency(...)`；失败/缺失
+  静默保持 CNY 兜底，不阻塞启动。
+- **货币切换组件** `web/src/components/currency-switch/`（与 lang-switch 完全
+  对称：独立全局 scss、`--currency-switch-*` CSS 变量容器层级可覆盖、不依赖
+  后台设计系统）。props：`currencyArray`（`{code,name,symbol}[]`）/`current`
+  （缺省 'CNY'）/`label`（缺省 `t('Currency')`）；emits：`change(code)`。纯展示
+  交互、不读 store、**无需 reload**（货币不影响 i18n locale），父组件
+  `setPortalCurrency(code)` 后价格展示即刷新。
 
 ## 13. 业务门户接入约定（合并自 frontend-portal-guide.md）
 

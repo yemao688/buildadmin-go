@@ -22,7 +22,9 @@ const viteConfig = ({ mode }: ConfigEnv): UserConfig => {
     return {
         plugins: [vue(), svgBuilder('./src/assets/icons/'), customHotUpdate()],
         root: process.cwd(),
-        resolve: { alias },
+        // 显式声明无扩展名 import 的解析顺序：纯 TS 项目将 .ts/.tsx 前置，
+        // 免疫未来混入 CJS 依赖后 Vite 默认顺序（.mjs/.js 在前）的解析歧义
+        resolve: { alias, extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'] },
         base: VITE_BASE_PATH,
         server: {
             host: '0.0.0.0',

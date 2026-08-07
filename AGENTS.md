@@ -84,7 +84,7 @@
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
-- 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 为显式豁免（handler 的 `NoNeedPermissionActions` 声明）。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。
+- 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 为显式豁免（handler 的 `NoNeedPermissionActions` 声明）。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。豁免机制按渠道分开、互不通用：`internal/admin/middleware` 的豁免注册表（`RegisterNoNeedLogin`/`RegisterPermissionExempt` 及 handler 声明式 `NoNeedLoginActions`/`NoNeedPermissionActions` 收集）只作用于**后台 /admin 渠道**（跳过登录/跳过规则校验，经 admin registrar 声明）；`internal/api/router` 的 `api_routes.go` public 集合是 **API /api 渠道**的免登录路由登记表（method+path 逐条，per-action 公共端点）。业务侧按目标渠道选择对应机制，不要混用。
 
 ## 常用命令
 
