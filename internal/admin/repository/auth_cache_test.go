@@ -91,6 +91,62 @@ func TestAdminAuthCheckNormalizesCamelCaseRuleNames(t *testing.T) {
 	require.NotContains(t, names, "country/languageContent/index")
 }
 
+func TestAdminAuthCheckSuperAdminWildcard(t *testing.T) {
+	m, db, _ := newAdminAuthCacheModel(t)
+	require.NoError(t, db.Create(&model.AdminGroup{ID: 2, Name: "super", Rules: "*", Status: "1"}).Error)
+	require.NoError(t, db.Create(&model.AdminGroupAccess{UID: 2, GroupID: 2}).Error)
+
+	_, err := m.GetRuleList(nil, 2)
+	require.NoError(t, err)
+	// A group with Rules="*" grants every permission via the wildcard entry.
+	require.True(t, m.Check("anything/at/all", 2, "or"))
+	require.True(t, m.Check("", 2, "or"))
+	require.True(t, m.Check("auth/initial", 2, "and"))
+}
+
+func TestAdminAuthCheckCommaSeparatedNamesAndRelations(t *testing.T) {
+	m, db, rule := newAdminAuthCacheModel(t)
+	second := model.AdminRule{Pid: 0, Type: "button", Title: "Second", Name: "auth/second", Status: "1", Weigh: 2}
+	require.NoError(t, db.Create(&second).Error)
+	require.NoError(t, db.Model(&model.AdminGroup{}).Where("id=?", 1).Update("rules", strconv.Itoa(int(rule.ID))+","+strconv.Itoa(int(second.ID))).Error)
+
+	_, err := m.GetRuleList(nil, 1)
+	require.NoError(t, err)
+
+	// "or": one granted name is enough.
+	require.True(t, m.Check("auth/initial,auth/second", 1, "or"))
+	require.True(t, m.Check("auth/initial,auth/missing", 1, "or"))
+	require.False(t, m.Check("auth/missing,auth/other", 1, "or"))
+	// "and": the inherited relation semantics break only on the first missing
+	// name before any match; a match preceding a later missing name still
+	// returns true (control flow preserved byte-for-byte from the original).
+	require.True(t, m.Check("auth/initial,auth/second", 1, "and"))
+	require.True(t, m.Check("auth/initial,auth/missing", 1, "and")) // inherited quirk
+	require.False(t, m.Check("auth/missing,auth/initial", 1, "and"))
+	require.False(t, m.Check("auth/missing,auth/other", 1, "and"))
+	// Names are matched case-insensitively, like the stored normalization.
+	require.True(t, m.Check("AUTH/INITIAL,auth/second", 1, "and"))
+}
+
+func TestAdminAuthHasRuleNameExactNormalizedMatch(t *testing.T) {
+	m, db, _ := newAdminAuthCacheModel(t)
+	require.NoError(t, db.Create(&model.AdminRule{Pid: 0, Type: "button", Title: "LanguageContent", Name: "country/languageContent/index", Status: "1", Weigh: 1}).Error)
+
+	ok, err := m.HasRuleName("country/languagecontent/index")
+	require.NoError(t, err)
+	require.True(t, ok)
+	// The lookup is exact against the normalized set: an unlowered input does
+	// not match, mirroring the previous GetAllRuleNames + slices.Contains
+	// membership check. The authorization middleware only ever looks up the
+	// lowercased route/action pair produced by NormalizeRouteAction.
+	ok, err = m.HasRuleName("country/languageContent/index")
+	require.NoError(t, err)
+	require.False(t, ok)
+	ok, err = m.HasRuleName("auth/unknown")
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
 func TestAdminAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
 	m, db, _ := newAdminAuthCacheModel(t)
 

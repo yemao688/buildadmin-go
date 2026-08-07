@@ -281,6 +281,70 @@ func TestClosureEnforcerExtraOwnerUnrestrictedBypass(t *testing.T) {
 	assert.Empty(t, db.Statement.Clauses["WHERE"])
 }
 
+func TestSelfRowMarkers(t *testing.T) {
+	// Unverified contexts report ok=false.
+	checked, ok := SelfRowChecked(context.Background())
+	assert.False(t, checked)
+	assert.False(t, ok)
+
+	gc, _ := gin.CreateTestContext(httptest.NewRecorder())
+	checked, ok = SelfRowChecked(gc)
+	assert.False(t, checked)
+	assert.False(t, ok)
+
+	// Marked contexts report the stored outcome.
+	MarkSelfRowChecked(gc, true)
+	checked, ok = SelfRowChecked(gc)
+	assert.True(t, ok)
+	assert.True(t, checked)
+
+	MarkSelfRowChecked(gc, false)
+	checked, ok = SelfRowChecked(gc)
+	assert.True(t, ok)
+	assert.False(t, checked)
+}
+
+func TestClosureEnforcerSelfRowCache(t *testing.T) {
+	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
+	db := openTestDB(t).Table("resource")
+
+	mkCtx := func(checked *bool) *gin.Context {
+		c, _ := gin.CreateTestContext(httptest.NewRecorder())
+		c.Set(actorContextKey, Actor{AdminID: 7})
+		if checked != nil {
+			MarkSelfRowChecked(c, *checked)
+		}
+		return c
+	}
+	whereText := func(scoped *gorm.DB) string { return fmt.Sprintf("%v", scoped.Statement.Clauses["WHERE"].Expression) }
+
+	// Unverified request keeps the full condition: self-EXISTS AND branches.
+	scoped := e.Scope(mkCtx(nil), db, OwnerRef{TableAlias: "resource", Column: "admin_id"})
+	require.NoError(t, scoped.Error)
+	assert.Contains(t, whereText(scoped), "AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?")
+	assert.Contains(t, whereText(scoped), "closure.descendant_id = `resource`.`admin_id`")
+
+	// Verified self-row: the self-EXISTS is dropped, the branch survives.
+	scopedTrue := e.Scope(mkCtx(ptr(true)), db, OwnerRef{TableAlias: "resource", Column: "admin_id"})
+	require.NoError(t, scopedTrue.Error)
+	assert.NotContains(t, whereText(scopedTrue), "self_closure")
+	assert.Contains(t, whereText(scopedTrue), "closure.descendant_id = `resource`.`admin_id`")
+
+	// Verified missing self-row: full condition kept, denial unchanged.
+	scopedFalse := e.Scope(mkCtx(ptr(false)), db, OwnerRef{TableAlias: "resource", Column: "admin_id"})
+	require.NoError(t, scopedFalse.Error)
+	assert.Contains(t, whereText(scopedFalse), "AS self_closure")
+
+	// Extra owners keep the OR grouping and both branches with the cache on.
+	scopedExtra := e.ScopeWithExtraOwners(mkCtx(ptr(true)), db, OwnerRef{TableAlias: "resource", Column: "admin_id"}, []OwnerRef{{TableAlias: "resource", Column: "secondary_admin_id"}})
+	require.NoError(t, scopedExtra.Error)
+	where := whereText(scopedExtra)
+	assert.NotContains(t, where, "self_closure")
+	assert.Contains(t, where, "closure.descendant_id = `resource`.`admin_id`")
+	assert.Contains(t, where, " OR ")
+	assert.Contains(t, where, "closure.descendant_id = `resource`.`secondary_admin_id`")
+}
+
 func TestClosureEnforcerInvalidPrefixesFailClosed(t *testing.T) {
 	for _, prefix := range []string{"bad.prefix", "bad`prefix", "bad prefix"} {
 		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: prefix}})

@@ -6,7 +6,6 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/util"
-	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -57,13 +56,13 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 		if PermissionExempt(route, action) {
 			return
 		}
-		ruleNames, err := m.authM.GetAllRuleNames()
+		registered, err := m.authM.HasRuleName(ruleName)
 		if err != nil {
 			m.logError("admin authorization rule lookup failed", err, route, action, auth.Id)
 			abortAuthorization(c, cErr.InternalServer("authorization rule lookup failed"))
 			return
 		}
-		if !slices.Contains(ruleNames, ruleName) {
+		if !registered {
 			m.logWarn("admin authorization rule not registered", route, action, auth.Id)
 			abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
 			return

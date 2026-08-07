@@ -236,6 +236,36 @@ func ActorFromContext(ctx context.Context) (Actor, bool) {
 	return a, ok
 }
 
+// SelfRowContextKey is the context key for the one-time per-request closure
+// self-row verification. It is intentionally a string so that it works both
+// with context.WithValue and with gin.Context.Get/Set lookups, mirroring
+// ActorContextKey.
+const SelfRowContextKey = "buildadmin-go/internal/pkg/data_scope.self_row_checked"
+
+// MarkSelfRowChecked records the result of the one-time closure self-row
+// verification (ancestor_id = descendant_id = admin id) for the request
+// actor. Only the actor construction lane (admin login middleware) sets it,
+// before any scoped query runs. checked=true means the actor's self-row
+// exists; checked=false means the closure table has no self-row for the
+// actor and scoped access must be denied. On a verification error the marker
+// is left unset so the enforcer falls back to the inline self-EXISTS guard.
+func MarkSelfRowChecked(ctx *gin.Context, checked bool) {
+	ctx.Set(SelfRowContextKey, checked)
+}
+
+// SelfRowChecked reports the cached closure self-row verification result.
+// ok=false means the request never performed the one-time verification (for
+// example tests or transport-free lanes), and callers must keep the inline
+// self-EXISTS guard; ok=true returns the verification outcome in checked.
+func SelfRowChecked(ctx context.Context) (checked bool, ok bool) {
+	v := ctx.Value(SelfRowContextKey)
+	if v == nil {
+		return false, false
+	}
+	checked, ok = v.(bool)
+	return checked, ok
+}
+
 // Policy returns the compact runtime policy for a resolved configuration.
 func (r Resolved) Policy() ResourcePolicy {
 	return ResourcePolicy{

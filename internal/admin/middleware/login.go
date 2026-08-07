@@ -72,6 +72,17 @@ func (m *Login) Handler() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": http.StatusInternalServerError, "msg": "invalid authenticated actor"})
 			return
 		}
+		// H8: one-time closure self-row verification for this request's
+		// actor. The data-scope enforcer reads the cached result to skip the
+		// per-query self-EXISTS subquery. On verification error the marker is
+		// left unset and the enforcer falls back to the inline guard with
+		// identical fail-closed semantics; unrestricted actors bypass scope
+		// entirely and need no marker.
+		if !actor.Unrestricted {
+			if ok, cerr := m.authM.HasClosureSelfRow(actor.AdminID); cerr == nil {
+				data_scope.MarkSelfRowChecked(c, ok)
+			}
+		}
 		header.SetAdminAuth(c, authParam)
 	}
 }

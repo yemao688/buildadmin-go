@@ -76,17 +76,17 @@ func (e ClosureEnforcer) ScopeWithExtraOwners(ctx *gin.Context, db *gorm.DB, pri
 	if err != nil {
 		return addScopeError(db, err, ErrScopedAccessDenied)
 	}
-	return e.scopeOwners(db, actor, append([]OwnerRef{primary}, extras...))
+	return e.scopeOwners(ctx, db, actor, append([]OwnerRef{primary}, extras...))
 }
 
 // ScopeWithActor applies the closure scope for an explicitly supplied actor.
 // It is the transport-free counterpart of Scope for service/domain layers
 // that receive the actor as a parameter instead of a gin request context.
 func (e ClosureEnforcer) ScopeWithActor(ctx context.Context, db *gorm.DB, actor Actor, owner OwnerRef) *gorm.DB {
-	return e.scopeOwners(db, actor, []OwnerRef{owner})
+	return e.scopeOwners(ctx, db, actor, []OwnerRef{owner})
 }
 
-func (e ClosureEnforcer) scopeOwners(db *gorm.DB, actor Actor, refs []OwnerRef) *gorm.DB {
+func (e ClosureEnforcer) scopeOwners(ctx context.Context, db *gorm.DB, actor Actor, refs []OwnerRef) *gorm.DB {
 	if db == nil {
 		// The interface does not allow returning an error. Return nil so the
 		// caller panics deterministically rather than silently running
@@ -112,14 +112,33 @@ func (e ClosureEnforcer) scopeOwners(db *gorm.DB, actor Actor, refs []OwnerRef) 
 		return addScopeError(db, fmt.Errorf("%w: closure table is not configured", ErrScopedAccessDenied))
 	}
 	closure := quoteIdentifier(e.closureTable)
-	branches := make([]string, 0, len(refs))
-	args := []interface{}{actor.AdminID, actor.AdminID}
-	for _, ref := range refs {
-		branches = append(branches, fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS closure WHERE closure.ancestor_id = ? AND closure.descendant_id = %s.%s)", closure, quoteIdentifier(ref.TableAlias), quoteIdentifier(ref.Column)))
+
+	// The self-EXISTS guard (the actor must have its mandatory closure
+	// self-row) is constant for the whole request, so the actor construction
+	// lane verifies it once and caches the result per request. When verified
+	// present, the per-query self-EXISTS subquery is dropped and only the
+	// ownership branches remain. When verified absent — or when the request
+	// never performed the verification — the full condition is kept, so
+	// denial semantics are byte-identical to the pre-cache behavior.
+	skipSelfCheck := false
+	if checked, ok := SelfRowChecked(ctx); ok {
+		skipSelfCheck = checked
+	}
+
+	branches := make([]string, len(refs))
+	args := make([]interface{}, 0, len(refs)+2)
+	for i, ref := range refs {
+		branches[i] = fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS closure WHERE closure.ancestor_id = ? AND closure.descendant_id = %s.%s)", closure, quoteIdentifier(ref.TableAlias), quoteIdentifier(ref.Column))
 		args = append(args, actor.AdminID)
 	}
-	condition := fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?) AND (%s)", closure, strings.Join(branches, " OR "))
-	return db.Session(&gorm.Session{}).Where(condition, args...)
+	if skipSelfCheck {
+		return db.Session(&gorm.Session{}).Where("("+strings.Join(branches, " OR ")+")", args...)
+	}
+	args = append([]interface{}{actor.AdminID, actor.AdminID}, args...)
+	return db.Session(&gorm.Session{}).Where(
+		fmt.Sprintf("EXISTS (SELECT 1 FROM %s AS self_closure WHERE self_closure.ancestor_id = ? AND self_closure.descendant_id = ?) AND (%s)", closure, strings.Join(branches, " OR ")),
+		args...,
+	)
 }
 
 func quoteIdentifier(s string) string { return "`" + strings.ReplaceAll(s, "`", "``") + "`" }

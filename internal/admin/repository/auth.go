@@ -86,29 +86,50 @@ func (s *AuthRepository) DatabaseAvailable() error {
 }
 
 // GetAllRuleNames returns the names of every admin rule, independent of the
-// current administrator's permissions.
+// current administrator's permissions. The returned slice is read-only:
+// callers must not modify it.
 func (s *AuthRepository) GetAllRuleNames() ([]string, error) {
 	if s == nil || s.sqlDB == nil {
 		return nil, errors.New("authorization database is unavailable")
 	}
-	return s.cache.AllRuleNames(func() ([]string, error) {
-		var names []string
-		if err := s.sqlDB.Model(&model.AdminRule{}).Pluck("name", &names).Error; err != nil {
-			return nil, err
-		}
+	return s.cache.AllRuleNames(s.loadAllRuleNames)
+}
 
-		seen := make(map[string]struct{}, len(names))
-		unique := make([]string, 0, len(names))
-		for _, name := range names {
-			name = strings.ToLower(name)
-			if _, ok := seen[name]; ok {
-				continue
-			}
-			seen[name] = struct{}{}
-			unique = append(unique, name)
+// HasRuleName reports whether name is a registered admin rule, independent of
+// the current administrator's permissions. The lookup is exact against the
+// normalized (lowercased, deduplicated) rule-name set, byte-identical to the
+// former GetAllRuleNames + slices.Contains membership check.
+func (s *AuthRepository) HasRuleName(name string) (bool, error) {
+	if s == nil || s.sqlDB == nil {
+		return false, errors.New("authorization database is unavailable")
+	}
+	set, err := s.cache.AllNamesSet(s.loadAllRuleNames)
+	if err != nil {
+		return false, err
+	}
+	_, ok := set[name]
+	return ok, nil
+}
+
+// loadAllRuleNames loads and normalizes every admin rule name: lowercased and
+// deduplicated. The returned slice is stored by the cache as-is.
+func (s *AuthRepository) loadAllRuleNames() ([]string, error) {
+	var names []string
+	if err := s.sqlDB.Model(&model.AdminRule{}).Pluck("name", &names).Error; err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{}, len(names))
+	unique := make([]string, 0, len(names))
+	for _, name := range names {
+		name = strings.ToLower(name)
+		if _, ok := seen[name]; ok {
+			continue
 		}
-		return unique, nil
-	})
+		seen[name] = struct{}{}
+		unique = append(unique, name)
+	}
+	return unique, nil
 }
 
 func (s *AuthRepository) IsLogin(ctx *gin.Context) (*token.Token, bool) {
@@ -136,6 +157,21 @@ func (s *AuthRepository) IsEnabledAdmin(id int32) bool {
 	var admin model.Admin
 	err := s.sqlDB.Model(&model.Admin{}).Select("status").Where("id=?", id).First(&admin).Error
 	return err == nil && admin.Status == "enable"
+}
+
+// HasClosureSelfRow reports whether the administrator has the mandatory
+// closure self-row (ancestor_id = descendant_id = adminID, depth=0). Every
+// admin is expected to have one: the framework migration backfills and
+// enforces them, and LinkNewNode inserts one per new admin. The login
+// middleware performs this check once per request so the data-scope enforcer
+// can drop the per-query self-EXISTS subquery. A missing self-row must deny
+// scope, never grant it; the enforcer keeps the inline guard for that case.
+func (s *AuthRepository) HasClosureSelfRow(adminID int32) (bool, error) {
+	var count int64
+	err := s.sqlDB.Table(s.config.Database.Prefix+"admin_closure").
+		Where("ancestor_id = ? AND descendant_id = ?", adminID, adminID).
+		Count(&count).Error
+	return count > 0, err
 }
 
 func (s *AuthRepository) GetInfo(ctx *gin.Context, id int32) (model.Admin, error) {
@@ -275,14 +311,14 @@ func (s *AuthRepository) getChildren(children map[int32][]Rule, rules []Rule) []
  *relation 如果出现两个 name,是两个都通过(and)还是一个通过即可(or)
  */
 func (s *AuthRepository) Check(name string, id int32, relation string) bool {
-	ruleNameList := s.cache.RuleNames(id)
-	if slices.Contains(ruleNameList, "*") {
+	ruleNameSet := s.cache.RuleNamesSet(id)
+	if _, ok := ruleNameSet["*"]; ok {
 		return true
 	}
 	result := false
 	checkNameArr := strings.Split(strings.ToLower(name), ",")
 	for _, v := range checkNameArr {
-		if slices.Contains(ruleNameList, v) {
+		if _, ok := ruleNameSet[v]; ok {
 			result = true
 		}
 

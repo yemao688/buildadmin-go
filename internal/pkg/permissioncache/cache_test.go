@@ -1,6 +1,8 @@
 package permissioncache
 
 import (
+	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -25,7 +27,7 @@ func TestCacheLoadsGroupsOnceAndCopiesValues(t *testing.T) {
 	require.Equal(t, 1, loads)
 }
 
-func TestCacheReloadsRulesAndCopiesReadValues(t *testing.T) {
+func TestCacheReloadClonesOnWriteAndReadPathsReturnInternalStorage(t *testing.T) {
 	cache := New[int, string]()
 	rules := []string{"dashboard"}
 	names := []string{"dashboard/index"}
@@ -33,13 +35,88 @@ func TestCacheReloadsRulesAndCopiesReadValues(t *testing.T) {
 		return rules, names, nil
 	})
 	require.NoError(t, err)
+	// The reload return value is a defensive copy (write path): mutating it
+	// must not corrupt the cached state.
 	returnedNames[0] = "changed"
+	require.Equal(t, []string{"dashboard/index"}, cache.RuleNames(7))
 
+	// Read paths return the cache's internal backing storage (zero-copy) and
+	// pin the read-only contract: mutations are visible through the cache, so
+	// callers must treat read results as immutable. Re-introducing a defensive
+	// copy on the read path would make this assertion fail.
 	readRules, ok := cache.Rules(7)
 	require.True(t, ok)
-	readRules[0] = "changed"
-	require.Equal(t, []string{"dashboard"}, cacheRules(cache, 7))
+	readRules[0] = "mutated"
+	require.Equal(t, []string{"mutated"}, cacheRules(cache, 7))
 	require.Equal(t, []string{"dashboard/index"}, cache.RuleNames(7))
+}
+
+func TestCacheRuleNamesSetMatchesRuleNamesMembership(t *testing.T) {
+	cache := New[int, string]()
+	_, err := cache.ReloadRules(7, func() ([]string, []string, error) {
+		return []string{"rule"}, []string{"dashboard/index", "auth/login", "dashboard/index"}, nil
+	})
+	require.NoError(t, err)
+
+	names := cache.RuleNames(7)
+	set := cache.RuleNamesSet(7)
+	require.Len(t, set, 2) // duplicates in the loader output collapse in the set
+	for _, n := range names {
+		_, ok := set[n]
+		require.True(t, ok, "set must contain every element of RuleNames: %q", n)
+	}
+	// Unknown names must be absent from both.
+	for _, n := range []string{"", "auth/login/extra", "Auth/Login"} {
+		require.False(t, slices.Contains(names, n), "slice must not contain %q", n)
+		_, ok := set[n]
+		require.False(t, ok, "set must not contain %q", n)
+	}
+
+	// Invalidation clears the per-user set along with the slice.
+	cache.InvalidateUser(7)
+	require.Nil(t, cache.RuleNamesSet(7))
+}
+
+func TestCacheAllNamesSetMatchesAllRuleNamesMembership(t *testing.T) {
+	cache := New[int, string]()
+	loads := 0
+	loader := func() ([]string, error) {
+		loads++
+		return []string{"auth/login", "dashboard/index", "auth/login"}, nil
+	}
+
+	names, err := cache.AllRuleNames(loader)
+	require.NoError(t, err)
+	require.Equal(t, 1, loads)
+	// The set shares the same single load and the same stored names.
+	set, err := cache.AllNamesSet(loader)
+	require.NoError(t, err)
+	require.Equal(t, 1, loads)
+	require.Len(t, set, 2)
+	for _, n := range names {
+		_, ok := set[n]
+		require.True(t, ok, "set must contain every element of AllRuleNames: %q", n)
+	}
+	_, ok := set["auth/login/extra"]
+	require.False(t, ok)
+
+	// Invalidation clears both and the next load rebuilds them consistently.
+	cache.InvalidateAll()
+	_, err = cache.AllRuleNames(loader)
+	require.NoError(t, err)
+	require.Equal(t, 2, loads)
+	set, err = cache.AllNamesSet(loader)
+	require.NoError(t, err)
+	require.Equal(t, 2, loads)
+	require.Len(t, set, 2)
+}
+
+func TestCacheAllNamesSetPropagatesLoaderError(t *testing.T) {
+	cache := New[int, string]()
+	_, err := cache.AllRuleNames(func() ([]string, error) { return nil, errors.New("boom") })
+	require.Error(t, err)
+	_, err = cache.AllNamesSet(func() ([]string, error) { return nil, errors.New("boom") })
+	require.Error(t, err)
 }
 
 func TestCacheInvalidationClearsGroupsRulesAndNames(t *testing.T) {
