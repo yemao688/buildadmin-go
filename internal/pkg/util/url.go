@@ -26,6 +26,12 @@ func GetBaseURL(ctx *gin.Context) string {
 	return baseURL
 }
 
+// 包级预编译正则，避免每次调用重复编译
+var (
+	fullURLSchemeRe = regexp.MustCompile(`^((?:[a-z]+:)?\/\/|data:image\/)(.*)`)
+	httpSchemeRe    = regexp.MustCompile(`^http(s)?:\/\/`)
+)
+
 // 没有就取默认地址
 func DefaultUrl(relativeUrl string, defaultUrl string) string {
 	if relativeUrl == "" {
@@ -53,9 +59,8 @@ func FullUrl(relativeUrl string, cdn string, uploadCDN string, domain string, de
 		return h
 	}
 
-	regex := regexp.MustCompile(`^((?:[a-z]+:)?\/\/|data:image\/)(.*)`)
-	ok, _ := regexp.MatchString(`^http(s)?:\/\/`, relativeUrl)
-	if ok || regex.MatchString(relativeUrl) {
+	ok := httpSchemeRe.MatchString(relativeUrl)
+	if ok || fullURLSchemeRe.MatchString(relativeUrl) {
 		return relativeUrl
 	}
 	return h + relativeUrl

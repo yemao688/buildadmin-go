@@ -5,10 +5,24 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
-// RootPath 获取项目根目录绝对路径
+var (
+	rootPathOnce sync.Once
+	rootPathVal  string
+)
+
+// RootPath 获取项目根目录绝对路径（首次调用计算后缓存复用；
+// os.Executable/UserHomeDir/逐级 Stat 的开销只在首次发生）
 func RootPath() string {
+	rootPathOnce.Do(func() {
+		rootPathVal = computeRootPath()
+	})
+	return rootPathVal
+}
+
+func computeRootPath() string {
 	exePath, err := os.Executable()
 	if err != nil {
 		panic(err)

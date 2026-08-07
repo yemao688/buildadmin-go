@@ -7,7 +7,6 @@ import (
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"fmt"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -278,15 +277,25 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	return
 }
 
+// tableInfoFields 是 TableInfo 自身字段的静态类型描述（TableName/Key/QuickSearchField）。
+// TableInfo 只携带表元信息、不含真实模型字段，反射遍历永远只会看到这三个 string 字段，
+// 用静态表替换 reflect 遍历，返回结果与反射版本逐字一致。
+var tableInfoFields = []struct {
+	name string
+	typ  string
+}{
+	{name: "tablename", typ: "string"},
+	{name: "key", typ: "string"},
+	{name: "quicksearchfield", typ: "string"},
+}
+
 // 获取结构体所有字段类型
 func GetFieldTypeMap(table TableInfo, args ...TableInfo) map[string]string {
 	args = append(args, table)
 	fieldTypeMap := map[string]string{}
 	for _, table := range args {
-		tableType := reflect.TypeOf(table)
-		for i := 0; i < tableType.NumField(); i++ {
-			field := tableType.Field(i)
-			fieldTypeMap[table.TableName+"."+strings.ToLower(field.Name)] = field.Type.String()
+		for _, f := range tableInfoFields {
+			fieldTypeMap[table.TableName+"."+f.name] = f.typ
 		}
 	}
 	return fieldTypeMap
@@ -322,17 +331,19 @@ func Backquote(field string) string {
 	return field
 }
 
+// operatorAliases 操作符别名映射（包级只读，避免每次调用新建 map 字面量）
+var operatorAliases = map[string]string{
+	"ne":  "<>",
+	"eq":  "=",
+	"gt":  ">",
+	"egt": ">=",
+	"lt":  "<",
+	"elt": "<=",
+}
+
 // 根据别名获取操作符
 func GetOperatorByAlias(operator string) string {
-	alias := map[string]string{
-		"ne":  "<>",
-		"eq":  "=",
-		"gt":  ">",
-		"egt": ">=",
-		"lt":  "<",
-		"elt": "<=",
-	}
-	if value, ok := alias[operator]; ok {
+	if value, ok := operatorAliases[operator]; ok {
 		return value
 	}
 	return operator
