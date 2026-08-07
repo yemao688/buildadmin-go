@@ -255,9 +255,13 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 		want       string
 	}{
 		{name: "switch tinyint length", designType: "switch", typeName: "tinyint", length: 1, want: "validator.FlexBool"},
-		{name: "radio tinyint data type stays numeric", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: ""},
+		{name: "radio tinyint data type stays numeric", designType: "radio", typeName: "tinyint", dataType: "tinyint(1)", want: "validator.FlexInt32"},
 		{name: "year design type", designType: "year", typeName: "year", dataType: "year", want: "validator.FlexYear"},
-		{name: "tinyint input default remains numeric", designType: "number", typeName: "tinyint", defaultTyp: "INPUT", defaultVal: "1", want: ""},
+		{name: "tinyint input default remains numeric", designType: "number", typeName: "tinyint", defaultTyp: "INPUT", defaultVal: "1", want: "validator.FlexInt32"},
+		{name: "int field", designType: "number", typeName: "int", want: "validator.FlexInt32"},
+		{name: "bigint field", designType: "number", typeName: "bigint", want: "validator.FlexInt64"},
+		{name: "decimal field", designType: "number", typeName: "decimal", want: "validator.FlexFloat64"},
+		{name: "float db type stays strict", designType: "number", typeName: "float", want: ""},
 		{name: "char one is not bool", designType: "radio", typeName: "char", dataType: "char(1)", length: 1, want: ""},
 		{name: "checkbox", designType: "checkbox", dataType: "set", want: "validator.CommaJoined"},
 		{name: "selects", designType: "selects", dataType: "set", want: "validator.CommaJoined"},
@@ -280,6 +284,78 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 				t.Fatalf("override = %q, want %q (analysed field: %+v)", got[tc.name], tc.want, field)
 			}
 		})
+	}
+}
+
+// TestNumericFlexOverridesFollowEntityGoTypes 验证普通数字字段（非时间戳）被改写
+// 为与实体 Go 类型严格对应的 Flex 类型：int 家族→FlexInt32、bigint→FlexInt64、
+// decimal/double→FlexFloat64，float（实体 float32，无 FlexFloat32）保持严格；
+// canonical 时间字段不被改写；datetime/date/year/timestamp 仍走各自分支，且
+// 最终 DTO（buildParamStruct）得到与实体类型一致的宽松绑定。
+func TestNumericFlexOverridesFollowEntityGoTypes(t *testing.T) {
+	fields := []crudmodel.Field{
+		{Name: "user_id", Type: "bigint", DesignType: "number"}, // 实体 int64 → FlexInt64
+		{Name: "count", Type: "int", DesignType: "number"},      // 实体 int32 → FlexInt32
+		{Name: "small_count", Type: "smallint", DesignType: "number"},
+		{Name: "rate", Type: "decimal", DesignType: "number"}, // 实体 float64 → FlexFloat64
+		{Name: "ratio", Type: "double", DesignType: "number"},
+		{Name: "float32_col", Type: "float", DesignType: "number"},       // 实体 float32，无 FlexFloat32，保持严格
+		{Name: "create_time", Type: "bigint", DesignType: "timestamp"},   // canonical → 无 override
+		{Name: "end_time", Type: "bigint", DesignType: "timestamp"},      // timestamp 数字字段 → FlexFormattedUnixTime
+		{Name: "published_at", Type: "datetime", DesignType: "datetime"}, // → FlexDateTime
+		{Name: "birth_year", Type: "year", DesignType: "year"},           // → FlexYear
+	}
+	analysed := make([]crudmodel.Field, len(fields))
+	for i, field := range fields {
+		analysed[i] = analyseField(field)
+	}
+	overrides := buildHandlerParamTypeOverrides(analysed)
+	want := map[string]string{
+		"user_id":      "validator.FlexInt64",
+		"count":        "validator.FlexInt32",
+		"small_count":  "validator.FlexInt32",
+		"rate":         "validator.FlexFloat64",
+		"ratio":        "validator.FlexFloat64",
+		"end_time":     "validator.FlexFormattedUnixTime",
+		"published_at": "validator.FlexDateTime",
+		"birth_year":   "validator.FlexYear",
+	}
+	for name, typeName := range want {
+		if overrides[name] != typeName {
+			t.Errorf("%s override = %q, want %q", name, overrides[name], typeName)
+		}
+	}
+	for _, name := range []string{"float32_col", "create_time"} {
+		if _, ok := overrides[name]; ok {
+			t.Errorf("%s must not be overridden, got %q", name, overrides[name])
+		}
+	}
+
+	// 端到端：DTO 派生自实体 struct（gen 映射的 Go 类型），override 落在最终参数
+	// 结构体上，类型与实体严格对应（copier Flex→plain 转换成立的前提）。
+	structContent := "type Demo struct {\n" +
+		"\tUserID int64 `json:\"user_id\"`\n" +
+		"\tCount int32 `json:\"count\"`\n" +
+		"\tRate float64 `json:\"rate\"`\n" +
+		"\tFloat32Col float32 `json:\"float32_col\"`\n" +
+		"\tEndTime int64 `json:\"end_time\"`\n" +
+		"\tCreateTime int64 `json:\"create_time\"`\n" +
+		"}\n"
+	hd := HandlerData{ClassName: "Demo", PkJSONName: "id", ExcludeParamFields: []string{"create_time"}, ParamTypeOverrides: overrides}
+	out := buildParamStruct(structContent, hd)
+	for _, wantLine := range []string{
+		"UserID validator.FlexInt64 `json:\"user_id\"`",
+		"Count validator.FlexInt32 `json:\"count\"`",
+		"Rate validator.FlexFloat64 `json:\"rate\"`",
+		"Float32Col float32 `json:\"float32_col\"`",
+		"EndTime validator.FlexFormattedUnixTime `json:\"end_time\"`",
+	} {
+		if !strings.Contains(out, wantLine) {
+			t.Errorf("DTO missing %q:\n%s", wantLine, out)
+		}
+	}
+	if strings.Contains(out, `json:"create_time"`) {
+		t.Fatalf("canonical create_time leaked into DTO:\n%s", out)
 	}
 }
 

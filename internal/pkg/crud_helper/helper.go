@@ -863,6 +863,16 @@ func analyseField(field crudmodel.Field) crudmodel.Field {
 	return field
 }
 
+// flexNumericIntDbTypes / flexNumericFloatDbTypes 是普通数字字段宽松化的 dbType
+// 集合，与实体 Go 类型严格对应（实体类型来自 gorm/gen v0.3.26 默认映射，见
+// getGenerateStruct 使用的 gen dataTypeMap）：tinyint/smallint/mediumint/int/
+// integer → int32；bigint → int64；decimal/double/real → float64。注意 float
+// dbType 被 gen 映射为 float32，validator 无 FlexFloat32，保持严格绑定；year
+// dbType 走 FlexYear 分支，不落入这里。
+var flexNumericIntDbTypes = []string{"tinyint", "smallint", "mediumint", "int", "integer"}
+
+var flexNumericFloatDbTypes = []string{"decimal", "double", "real"}
+
 func buildHandlerParamTypeOverrides(fields []crudmodel.Field) map[string]string {
 	overrides := make(map[string]string)
 	for _, field := range fields {
@@ -887,6 +897,15 @@ func buildHandlerParamTypeOverrides(fields []crudmodel.Field) map[string]string 
 			overrides[field.Name] = "validator.FlexClock"
 		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
 			overrides[field.Name] = timestampAdapterType(field.Name)
+			// 普通数字字段宽松化：对齐 PHP 弱类型——前端/第三方可能传字符串数字
+			// （"2"），严格 int32 绑定会 400。本兜底位于所有特殊分支之后，且
+			// timestamp 数字字段分支优先，保证 canonical/日期类字段不被覆盖。
+		case slices.Contains(flexNumericIntDbTypes, dbType):
+			overrides[field.Name] = "validator.FlexInt32"
+		case dbType == "bigint":
+			overrides[field.Name] = "validator.FlexInt64"
+		case slices.Contains(flexNumericFloatDbTypes, dbType):
+			overrides[field.Name] = "validator.FlexFloat64"
 		}
 	}
 	return overrides
