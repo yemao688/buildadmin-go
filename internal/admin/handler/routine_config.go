@@ -4,7 +4,9 @@ import (
 	routinedto "buildadmin-go/internal/admin/dto"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
@@ -21,10 +23,11 @@ import (
 
 type ConfigHandler struct {
 	Base
-	log     *zap.Logger
-	config  *conf.Configuration
-	configM *model.ConfigRepository
-	svc     *service.ConfigService
+	log           *zap.Logger
+	config        *conf.Configuration
+	configM       *model.ConfigRepository
+	svc           *service.ConfigService
+	siteconfigSvc *siteconfig.Service
 }
 
 type configJSONItem struct {
@@ -61,10 +64,10 @@ func decodeConfigValue(field, value string, err error) ([]configJSONItem, error)
 	return decodeConfigJSON(field, value)
 }
 
-func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository, svc *service.ConfigService) *ConfigHandler {
+func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository, svc *service.ConfigService, siteconfigSvc *siteconfig.Service) *ConfigHandler {
 	return &ConfigHandler{
 		Base: NewBase(configM),
-		log:  log, config: config, configM: configM, svc: svc}
+		log:  log, config: config, configM: configM, svc: svc, siteconfigSvc: siteconfigSvc}
 }
 
 func (h *ConfigHandler) Index(ctx *gin.Context) {
@@ -172,6 +175,8 @@ func (h *ConfigHandler) Add(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	// KV 分组缓存失效：响应暂存成功后登记，请求事务提交后执行；非事务请求立即执行
+	requesttx.InvalidateAfterMutation(ctx, h.siteconfigSvc.InvalidateSiteConfigCache)
 }
 
 func (h *ConfigHandler) Edit(ctx *gin.Context) {
@@ -186,6 +191,7 @@ func (h *ConfigHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.siteconfigSvc.InvalidateSiteConfigCache)
 }
 
 func (h *ConfigHandler) Del(ctx *gin.Context) {
@@ -200,6 +206,7 @@ func (h *ConfigHandler) Del(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.siteconfigSvc.InvalidateSiteConfigCache)
 }
 
 func (h *ConfigHandler) SendTestMail(ctx *gin.Context) {

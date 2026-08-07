@@ -3,6 +3,8 @@ package handler
 import (
 	adminModel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/common/area"
+	"buildadmin-go/internal/common/country"
+	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -18,16 +20,19 @@ import (
 )
 
 type AjaxHandler struct {
-	log          *zap.Logger
-	areaM        *area.AreaModel
-	tableM       *adminModel.TableRepository
-	uploadHelper *upload.UploadHelper
-	terminal     *terminal.Terminal
-	config       *conf.Configuration
+	log           *zap.Logger
+	areaM         *area.AreaModel
+	tableM        *adminModel.TableRepository
+	uploadHelper  *upload.UploadHelper
+	terminal      *terminal.Terminal
+	config        *conf.Configuration
+	authM         *adminModel.AuthRepository
+	countrySvc    *country.Service
+	siteconfigSvc *siteconfig.Service
 }
 
-func NewAjaxHandler(log *zap.Logger, areaM *area.AreaModel, tableM *adminModel.TableRepository, uploadHelper *upload.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration) *AjaxHandler {
-	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal, config: config}
+func NewAjaxHandler(log *zap.Logger, areaM *area.AreaModel, tableM *adminModel.TableRepository, uploadHelper *upload.UploadHelper, terminal *terminal.Terminal, config *conf.Configuration, authM *adminModel.AuthRepository, countrySvc *country.Service, siteconfigSvc *siteconfig.Service) *AjaxHandler {
+	return &AjaxHandler{log: log, areaM: areaM, tableM: tableM, uploadHelper: uploadHelper, terminal: terminal, config: config, authM: authM, countrySvc: countrySvc, siteconfigSvc: siteconfigSvc}
 }
 
 func (h *AjaxHandler) Upload(ctx *gin.Context) {
@@ -144,7 +149,12 @@ func (h *AjaxHandler) ChangeTerminalConfig(ctx *gin.Context) {
 }
 
 func (h *AjaxHandler) ClearCache(ctx *gin.Context) {
-	//TODO: 清除缓存
+	// 清除全站进程内缓存（对齐 PHP 上游"清除缓存"语义，前端仅 system
+	// 类型命中本接口）：权限缓存、语言列表缓存与站点配置 KV 缓存。
+	// 只清内存缓存，不动数据、不清 token、不登出用户。
+	h.authM.InvalidateAll()
+	h.countrySvc.InvalidateLanguageCache()
+	h.siteconfigSvc.InvalidateSiteConfigCache()
 	response.JsonReturn(ctx, http.StatusOK, 1, "Cache cleaned~", nil)
 }
 

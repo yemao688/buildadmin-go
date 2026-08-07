@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"sync"
+	"time"
+
 	"buildadmin-go/internal/pkg/requesttx"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"slices"
 	"strings"
@@ -119,8 +122,23 @@ func (s *Config) GetInputExtendAttr() any {
 	return extend
 }
 
+// siteconfigTTL 是 siteconfig KV 分组列表进程内缓存生存时间。缓存按 Service
+// 实例持有：admin config CRUD 写成功经 requesttx 失效回调立即清空，
+// TTL 作为直改库、其它进程写入等旁路路径的兜底。包内测试可临时调短以验证
+// 过期重查路径。
+var siteconfigTTL = 60 * time.Second
+
+// siteconfigCacheEntry 保存一个分组的 KV 快照与过期时间。
+type siteconfigCacheEntry struct {
+	kv        map[string]string
+	expiresAt time.Time
+}
+
 type Service struct {
 	sqlDB *gorm.DB
+
+	mu    sync.RWMutex
+	cache map[string]*siteconfigCacheEntry
 }
 
 func NewService(sqlDB *gorm.DB) *Service {
@@ -149,6 +167,15 @@ func (s *Service) GetValueByName(ctx *gin.Context, name string) (string, error) 
 }
 
 func (s *Service) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
+	// 请求事务内的读可能看到未提交数据，绕过缓存直接走库（缓存只保存已提交
+	// 快照；写路径在事务提交后经 InvalidateAfterMutation 清空）。
+	if !requesttx.Active(requestContext(ctx)) {
+		if entry := s.loadGroupCache(group); entry != nil {
+			// 返回副本，避免调用方误改污染共享缓存
+			return cloneStringMap(entry.kv), nil
+		}
+	}
+
 	var configList []*Config
 	err := s.dbFor(ctx).Where("`group`=?", group).Find(&configList).Error
 	if err != nil {
@@ -159,5 +186,47 @@ func (s *Service) GetKVByGroup(ctx *gin.Context, group string) (map[string]strin
 	for _, v := range configList {
 		data[v.Name] = v.Value
 	}
+	if !requesttx.Active(requestContext(ctx)) {
+		s.storeGroupCache(group, data)
+	}
 	return data, nil
+}
+
+// InvalidateSiteConfigCache 清空 KV 分组进程内缓存（下一次查询重新走库）。
+// siteconfig 写操作（admin config CRUD）提交成功后经
+// requesttx.InvalidateAfterMutation 调用；包内测试也用它把缓存复位到未加载态。
+func (s *Service) InvalidateSiteConfigCache() {
+	s.mu.Lock()
+	s.cache = nil
+	s.mu.Unlock()
+}
+
+func (s *Service) loadGroupCache(group string) *siteconfigCacheEntry {
+	s.mu.RLock()
+	entry := s.cache[group]
+	s.mu.RUnlock()
+	if entry == nil || !time.Now().Before(entry.expiresAt) {
+		return nil
+	}
+	return entry
+}
+
+func (s *Service) storeGroupCache(group string, kv map[string]string) {
+	s.mu.Lock()
+	if s.cache == nil {
+		s.cache = make(map[string]*siteconfigCacheEntry)
+	}
+	s.cache[group] = &siteconfigCacheEntry{
+		kv:        cloneStringMap(kv),
+		expiresAt: time.Now().Add(siteconfigTTL),
+	}
+	s.mu.Unlock()
+}
+
+func cloneStringMap(src map[string]string) map[string]string {
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

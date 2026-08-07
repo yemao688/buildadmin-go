@@ -35,7 +35,8 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteConfigTable(db, "ba_config"))
 
 	config := &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}
-	configModel := model.NewConfigRepository(db, config, siteconfig.NewService(db))
+	siteconfigSvc := siteconfig.NewService(db)
+	configModel := model.NewConfigRepository(db, config, siteconfigSvc)
 	initialGroup := `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"config_quick_entrance","value":"Config Quick entrance"},{"key":"upload","value":"Upload"}]`
 	rows := []siteconfig.Config{
 		{ID: 1, Name: "config_group", Type: "array", Value: initialGroup, Weigh: -1},
@@ -49,7 +50,7 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 		require.NoError(t, db.Table(configModel.TableName).Create(&row).Error)
 	}
 
-	h := NewConfigHandler(nil, config, configModel, service.NewConfigService(configModel))
+	h := NewConfigHandler(nil, config, configModel, service.NewConfigService(configModel), siteconfigSvc)
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/admin/config/edit", h.Edit)
