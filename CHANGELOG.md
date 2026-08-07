@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.1.4
+
+> 后端运行时热点优化批次 + 下游反馈修复批次：请求热链 4 项优化（会员校验 4→2 次 DB、权限缓存零拷贝、scope 自引用一次性校验、语言链缓存）、货币基座（portalCurrency 与语言域对称）、DTO 数字字段 Flex 宽松化（Go 严格绑定 vs PHP 弱类型）、文档与组件收尾。
+
+- **Added (货币基座):** config store 新增 `portalCurrency` 域（defaultCurrency 缺省 CNY/currencySet 显式选择标记/currencyArray/currencyRates），与 portalLang 对称持久化（storeConfig_v3 深合并向后兼容）；`web/src/utils/money.ts` 的 `formatMoney(amount, opts?)`（rate 乘数换算、symbol 前缀/后缀、未知货币兜底 rate=1）；`web/src/components/currency-switch/` 切换组件（与 lang-switch 完全对称：独立全局 scss、`--currency-switch-*` CSS 变量可覆盖、props currencyArray/current/label + emits change、无需 reload）；main.ts 门户启动与语言共用同一 `/api/index/index` 请求初始化默认货币。
+- **Fixed (数字字段宽松化):** Go 严格 JSON 绑定 vs PHP 弱类型——DTO/手写请求结构数字字段收到字符串数字（`"user_id":"2"`）报 400 "请求参数不合法"。生成器 `buildHandlerParamTypeOverrides` 追加数字兜底（int 家族→`validator.FlexInt32`、bigint→FlexInt64、decimal/double/real→FlexFloat64，case 顺序保证时间戳/日期分支优先，映射与实体 Go 类型严格对应），重新生成的 DTO 自动宽松；validator 新增 `FlexInt32Slice`/`FlexInt32Map`（JSON 键恒为字符串的 map 解码、非法元素/键值报错含索引/键信息）；8 处手写字段转 Flex（admin_group.Pid/Rules、user.AdminID/JoinTime、routine_config.Weigh、admin.NullableParentID.Value、crud.SyncIDs、dto/common.go IDS.ID），消费链最小显式转换，json tag/binding 标签/函数签名不变，required 校验语义无回归。
+- **Perf (会员 token 校验):** 已认证 /api 请求 4→2 次 DB/请求——`IsEnabledUser`（SELECT status）与 `ValidateUserToken`（GetByID 全行）合并为单查询（禁用/不存在返回与旧分支逐字节一致的 401 "Please login first"）；`UpdateLoginMeta` 每请求写库 → 进程内 60s 节流（loginMetaThrottle，可注入时钟，真实登录/注册直调不受节流；last_login_time 精度影响已核查无下游排序/关联依赖）。
+- **Perf (权限热链):** permissioncache 读路径 3 次整切片 clone + 2 次线性扫描 → 零拷贝只读引用 + O(1) map 查找（8 调用点审计 7 只读 + 1 测试改写按新契约更新；写路径保留防御拷贝；顺带修复零值 Cache 的 ReloadRules 懒初始化 nil 守卫）；scoped 自引用 self_closure EXISTS 请求内一次性校验（login 中间件 SetActor 后 `HasClosureSelfRow` 点查写三态 marker——未校验走全量 SQL 逐字节不变、true 省子查询、false 保留守卫零行；超管短路不动；fail-closed 语义不变）。
+- **Perf (语言链):** `/api/*` 无 think-lang 时语言解析每条翻译一次查库 → `resolveRequestLang` 结果 per-request 缓存（gin context，`SetLangToContext` 双写 c.Keys + Request.Context 覆盖三种调用惯例）；country 语言列表进程内缓存（60s TTL + `requesttx.InvalidateAfterMutation` 提交回调组合失效，country_language Add/Edit/Del 挂接，命中返回防御性副本）；新增 `country.GetByRequest(ctx, group, key)`——DB 动态内容翻译（商品名/公告）官方入口，请求语言 → 默认语言 → Get fallback 三级。
+- **Perf (工具层):** `FullUrl` 每次 2 次正则编译 → 包级预编译；`RootPath` 多级 syscall → sync.Once 进程级缓存；querybuilder `GetFieldTypeMap` 死反射（TableInfo 仅 3 字段永远反射不出真实模型）→ 静态表 + `GetOperatorByAlias` 包级只读 map（datetime 分支语义原样保持，行为疑点单独立项）。
+- **Fixed (crud 残留空目录):** `crud:generate` 失败路径（回滚只恢复文件、不清理 MkdirAll 建的目录）残留空 views/lang 目录 → 抽出 `pruneFrontendEmptyDirs` 助手 + `GenerateFromSpec` 注册 defer 统一收尾（成功/失败/panic；只删空目录、共享父目录保留、止于 views/lang 根）；补回滚序列回归测试。
+- **Fixed+Docs (下游反馈):** vite.config.ts `resolve.extensions` 显式 .ts 前置（纯 TS 项目免疫解析歧义）；`editDefaultLang` 目标语言存在性校验（不在 `assignLocale` 则 warn 不切换不 reload，消除"后端启用但前端无语言包"切换后闪回 zh-cn）；framework-web.md 补 DB 动态内容翻译（GetByRequest）用法、portalLang 全局单例声明、货币域小节；AGENTS.md 补两套豁免机制边界（admin 渠道注册表 vs api_routes.go public 集合）。
+- **Fixed (前端收尾):** App.vue element-plus locale 按应用域取值（门户组件文案跟随 portalLang）；删除 `web/src/lang/{zh-cn,en}.json` 遗留（i18n-ally 开发索引生成产物，dev.ts 每次 pnpm dev 重建、从未被 git 跟踪、构建/运行时零依赖）。
+
 ## v3.1.3
 
 > 后端架构简化批次 + 前后台多语言域分离：架构简化审计（ora 评审）全部批次落地（死代码清理、重复逻辑归并、LogModel 迁层、生成器契约下沉 pkg/crudmodel、长函数拆分，行为零变化），多语言按渠道域分离（后台默认中文可切换、前台默认取 country_language 第一条、门户语言切换组件）。
