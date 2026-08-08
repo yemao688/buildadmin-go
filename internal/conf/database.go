@@ -10,6 +10,8 @@ type Database struct {
 	Charset             string `mapstructure:"charset" json:"charset" yaml:"charset"`
 	MaxIdleConns        int    `mapstructure:"max_idle_conns" json:"max_idle_conns" yaml:"max_idle_conns"`
 	MaxOpenConns        int    `mapstructure:"max_open_conns" json:"max_open_conns" yaml:"max_open_conns"`
+	MaxIdleTime         int    `mapstructure:"max_idle_time" json:"max_idle_time" yaml:"max_idle_time"`
+	ConnMaxLifetime     int    `mapstructure:"conn_max_lifetime" json:"conn_max_lifetime" yaml:"conn_max_lifetime"`
 	LogMode             string `mapstructure:"log_mode" json:"log_mode" yaml:"log_mode"`
 	EnableFileLogWriter bool   `mapstructure:"enable_file_log_writer" json:"enable_file_log_writer" yaml:"enable_file_log_writer"`
 	Prefix              string `mapstructure:"prefix" json:"prefix" yaml:"prefix"`

@@ -50,8 +50,10 @@ mysql:
   username: 'root'             # 用户名
   password: ''                 # 密码
   charset: 'utf8mb4'           # 字符集
-  max_idle_conns: 10           # 连接池最大空闲连接数
-  max_open_conns: 100          # 连接池最大打开连接数
+  max_idle_conns: 50            # 连接池最大空闲连接数（c=100 压测拐点根因之一：idle 过小导致连接抖动）
+  max_open_conns: 300           # 连接池最大打开连接数（并发天花板，MySQL max_connections 需 >= 该值）
+  max_idle_time: 300            # 空闲连接回收秒数（<=0 时回退默认 300s）
+  conn_max_lifetime: 1800       # 连接最大复用秒数（<=0 时回退默认 1800s，防旧连接老化）
   log_mode: 'info'             # SQL 日志模式
   enable_file_log_writer: true # 是否将 SQL 日志写入文件
   prefix: 'ba_'                # 数据表前缀
