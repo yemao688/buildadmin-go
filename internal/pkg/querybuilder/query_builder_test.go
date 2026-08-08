@@ -280,6 +280,40 @@ func TestQueryBuilderDatetimeSearch(t *testing.T) {
 		}
 	})
 
+	t.Run("native datetime single-day RANGE pads end with 23:59:59", func(t *testing.T) {
+		// 陷阱④：原生 datetime 列 "2024-01-01,2024-01-01" 曾直传原始字符串，
+		// BETWEEN 只命中零点整；结束值 len==10 必须显式补 23:59:59（起始值
+		// 保持 'YYYY-MM-DD' 原样，MySQL 隐式按当天零点）
+		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
+		}
+		wantParams := []interface{}{"2024-01-01", "2024-01-01 23:59:59"}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
+	t.Run("native datetime single-day RANGE keeps full start and pads short end", func(t *testing.T) {
+		// 起始值带时分秒、结束值 len==10 的混合形态：起始值原样透传，仅结束值补全
+		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00,2024-01-02") + "&search[0][operator]=RANGE&search[0][render]=datetime")
+		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
+		if err != nil {
+			t.Fatalf("QueryBuilder() error = %v", err)
+		}
+		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
+			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
+		}
+		wantParams := []interface{}{"2024-01-01 12:00:00", "2024-01-02 23:59:59"}
+		if !reflect.DeepEqual(whereP, wantParams) {
+			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+		}
+	})
+
 	t.Run("hand-written nil FieldTypes falls back to unix path", func(t *testing.T) {
 		// 手写仓库传 nil：与显式 bigint 字段类型走同一 unix 转换路径
 		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")

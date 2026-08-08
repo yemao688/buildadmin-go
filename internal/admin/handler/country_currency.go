@@ -3,7 +3,9 @@ package handler
 import (
 	dto "buildadmin-go/internal/admin/dto"
 	repository "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/common/country"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
 
@@ -16,10 +18,11 @@ type CountryCurrencyHandler struct {
 	Base
 	log              *zap.Logger
 	countryCurrencyM *repository.CountryCurrencyRepository
+	countrySvc       *country.Service
 }
 
-func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.CountryCurrencyRepository) *CountryCurrencyHandler {
-	return &CountryCurrencyHandler{Base: Base{currentM: countryCurrencyM}, log: log, countryCurrencyM: countryCurrencyM}
+func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.CountryCurrencyRepository, countrySvc *country.Service) *CountryCurrencyHandler {
+	return &CountryCurrencyHandler{Base: Base{currentM: countryCurrencyM}, log: log, countryCurrencyM: countryCurrencyM, countrySvc: countrySvc}
 }
 
 func (h *CountryCurrencyHandler) Index(ctx *gin.Context) {
@@ -53,6 +56,8 @@ func (h *CountryCurrencyHandler) Add(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	// 货币列表缓存失效：响应暂存成功后登记，请求事务提交后执行；非事务请求立即执行
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateCurrencyCache)
 }
 
 func (h *CountryCurrencyHandler) Edit(ctx *gin.Context) {
@@ -85,6 +90,7 @@ func (h *CountryCurrencyHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	response.Success(ctx, "")
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateCurrencyCache)
 }
 
 func (h *CountryCurrencyHandler) Del(ctx *gin.Context) {
@@ -101,4 +107,5 @@ func (h *CountryCurrencyHandler) Del(ctx *gin.Context) {
 		return
 	}
 	response.SuccessWithMessage(ctx, "Deleted successfully")
+	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateCurrencyCache)
 }

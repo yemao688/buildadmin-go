@@ -179,8 +179,16 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 				}
 				whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
 				if isNativeDatetime {
-					// 原生 datetime 列：字符串 BETWEEN（'YYYY-MM-DD HH:mm:ss'）
-					whereP = append(whereP, datetimeArr[0], datetimeArr[1])
+					// 原生 datetime 列：字符串 BETWEEN（'YYYY-MM-DD HH:mm:ss'）。
+					// 起始值保持零点语义——MySQL 对 'YYYY-MM-DD' 隐式按当天
+					// 00:00:00；结束值 len==10 时显式补 23:59:59，否则单日范围
+					// "2024-01-01,2024-01-01" 只命中零点整（与 unix 路径的
+					// parseDatetimeValue endOfDay 语义对齐）。
+					end := datetimeArr[1]
+					if len(end) == 10 {
+						end += " 23:59:59"
+					}
+					whereP = append(whereP, datetimeArr[0], end)
 				} else {
 					// int unix 时间戳列：解析后转 unix；起始值按当天零点，
 					// len==10 的结束值补 23:59:59（单日范围

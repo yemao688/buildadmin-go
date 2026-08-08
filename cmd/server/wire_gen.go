@@ -103,7 +103,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	userMoneyLogService := service.NewUserMoneyLogService(userMoneyLogRepository, userBalanceService)
 	moneyLogHandler := handler.NewMoneyLogHandler(zapLogger, userMoneyLogRepository, userMoneyLogService)
 	countryCurrencyRepository := repository.NewCountryCurrencyRepository(gormDB, configuration, closureEnforcer)
-	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository)
+	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository, countryService)
 	countryLanguageRepository := repository.NewCountryLanguageRepository(gormDB, configuration, closureEnforcer)
 	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)

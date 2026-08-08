@@ -103,6 +103,77 @@ func TestEnabledLanguagesCacheTTLExpiry(t *testing.T) {
 	require.Equal(t, "zh-cn", languages[0].Lan)
 }
 
+// newCurrencyCacheTestService 构造带 dw_ 前缀与 CNY/USD 两种货币的 Service
+// （CNY weigh 更大）。dbName 需在测试间唯一——sqlite 命名内存库在同一进程
+// 内共享。
+func newCurrencyCacheTestService(t *testing.T, dbName string) (*Service, *gorm.DB) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:"+dbName+"?mode=memory&cache=shared"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "dw_"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Table("dw_country_currency").AutoMigrate(&Currency{}))
+
+	s := NewService(db, &conf.Configuration{Database: conf.Database{Prefix: "dw_"}})
+	require.NoError(t, db.Table("dw_country_currency").Create(&[]Currency{
+		{Code: "CNY", Name: "人民币", Symbol: "¥", Rate: 1, Status: 1, Weigh: 2},
+		{Code: "USD", Name: "美元", Symbol: "$", Rate: 7.2, Status: 1, Weigh: 1},
+	}).Error)
+	return s, db
+}
+
+// TestEnabledCurrenciesCache 验证货币列表进程内缓存：首次查库、二次走缓存、
+// 显式失效后重查、缓存命中返回副本。
+func TestEnabledCurrenciesCache(t *testing.T) {
+	s, db := newCurrencyCacheTestService(t, "country-currency-cache")
+	ctx := context.Background()
+
+	currencies, err := s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Len(t, currencies, 2)
+	require.Equal(t, "CNY", currencies[0].Code)
+
+	// 直改库（绕过服务写路径）：缓存未失效时仍返回旧快照
+	require.NoError(t, db.Table("dw_country_currency").Where("code = ?", "USD").Update("status", 0).Error)
+	currencies, err = s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Len(t, currencies, 2)
+
+	// 显式失效后重查，命中最新数据
+	s.InvalidateCurrencyCache()
+	currencies, err = s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Len(t, currencies, 1)
+	require.Equal(t, "CNY", currencies[0].Code)
+
+	// 缓存命中时返回副本，调用方修改不影响后续读取
+	currencies[0].Code = "mutated"
+	fresh, err := s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "CNY", fresh[0].Code)
+}
+
+// TestEnabledCurrenciesCacheTTLExpiry 验证 TTL 过期后自动重查。
+func TestEnabledCurrenciesCacheTTLExpiry(t *testing.T) {
+	s, db := newCurrencyCacheTestService(t, "country-currency-cache-ttl")
+	ctx := context.Background()
+
+	originalTTL := currencyCacheTTL
+	currencyCacheTTL = time.Millisecond
+	defer func() { currencyCacheTTL = originalTTL }()
+
+	currencies, err := s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Len(t, currencies, 2)
+
+	require.NoError(t, db.Table("dw_country_currency").Where("code = ?", "USD").Update("status", 0).Error)
+	time.Sleep(5 * time.Millisecond) // 越过 TTL
+	currencies, err = s.EnabledCurrencies(ctx)
+	require.NoError(t, err)
+	require.Len(t, currencies, 1)
+	require.Equal(t, "CNY", currencies[0].Code)
+}
+
 // TestGetByRequest 验证 DB 翻译串联：有请求语言/无请求语言回退默认语言、
 // 目标语言缺条回退默认语言、缺失 key 返回 ErrRecordNotFound。
 func TestGetByRequest(t *testing.T) {

@@ -59,12 +59,26 @@ type languageCacheEntry struct {
 	expiresAt time.Time
 }
 
+// currencyCacheTTL 是启用的货币列表进程内缓存生存时间。缓存按 Service 实例
+// 持有：admin country_currency CRUD 写成功经 requesttx 失效回调立即清空，
+// TTL 作为直改库、其它进程写入等旁路路径的兜底。包内测试可临时调短以验证
+// 过期重查路径。
+var currencyCacheTTL = 60 * time.Second
+
+type currencyCacheEntry struct {
+	currencies []Currency
+	expiresAt  time.Time
+}
+
 type Service struct {
 	db     *gorm.DB
 	prefix string
 
 	mu    sync.RWMutex
 	cache *languageCacheEntry
+
+	currencyMu    sync.RWMutex
+	currencyCache *currencyCacheEntry
 }
 
 func NewService(db *gorm.DB, config *conf.Configuration) *Service {
@@ -183,11 +197,44 @@ func (s *Service) storeLanguageCache(languages []Language) {
 }
 
 func (s *Service) EnabledCurrencies(ctx context.Context) ([]Currency, error) {
+	if entry := s.loadCurrencyCache(); entry != nil {
+		// 返回副本，避免调用方误改污染共享缓存
+		return append([]Currency(nil), entry.currencies...), nil
+	}
 	var values []Currency
 	if err := s.db.WithContext(ctx).Table(s.table("country_currency")).Where("status = ?", 1).Order("weigh DESC, id ASC").Find(&values).Error; err != nil {
 		return nil, err
 	}
+	s.storeCurrencyCache(values)
 	return values, nil
+}
+
+// InvalidateCurrencyCache 清空货币列表进程内缓存（下一次查询重新走库）。
+// country_currency 写操作（admin CRUD）提交成功后经
+// requesttx.InvalidateAfterMutation 调用；包内测试也用它把缓存复位到未加载态。
+func (s *Service) InvalidateCurrencyCache() {
+	s.currencyMu.Lock()
+	s.currencyCache = nil
+	s.currencyMu.Unlock()
+}
+
+func (s *Service) loadCurrencyCache() *currencyCacheEntry {
+	s.currencyMu.RLock()
+	entry := s.currencyCache
+	s.currencyMu.RUnlock()
+	if entry == nil || !time.Now().Before(entry.expiresAt) {
+		return nil
+	}
+	return entry
+}
+
+func (s *Service) storeCurrencyCache(currencies []Currency) {
+	s.currencyMu.Lock()
+	s.currencyCache = &currencyCacheEntry{
+		currencies: append([]Currency(nil), currencies...),
+		expiresAt:  time.Now().Add(currencyCacheTTL),
+	}
+	s.currencyMu.Unlock()
 }
 
 func (s *Service) table(name string) string { return s.prefix + name }
