@@ -3,6 +3,7 @@ package router
 import (
 	"context"
 	"net/http"
+	"net/http/pprof"
 	"path/filepath"
 	"strings"
 
@@ -34,11 +35,20 @@ func InitRouter(
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
+	// pprof 调试端点仅在非 release 模式挂载，release 生产环境不暴露。
+	if gin.Mode() != gin.ReleaseMode {
+		registerPprofRoutes(router)
+	}
 
 	// 跨域处理。Record 是 admin 渠道的中间件，但按既有语义挂在全局链上。
 	router.Use(middleware.Cors(), adminR.RecordHandler())
+	// gin.Logger 仅在非 release 模式挂载：debug 开发逐请求打 stdout 有用，
+	// release 去掉逐请求访问日志（SQL 日志由 gorm 配置控制，API 访问日志
+	// 非本框架职责）。挂载顺序保持 Logger 在 CustomRecovery/i18n 之前。
+	if gin.Mode() != gin.ReleaseMode {
+		router.Use(gin.Logger())
+	}
 	router.Use(
-		gin.Logger(),
 		middleware.CustomRecovery(loggerWriter),
 		//开启多语言：按渠道分流（think-lang header 优先，/api/* 无 header
 		//取前台默认语言，/admin/* 及其它默认中文），返回 ginI18n pack key。
@@ -81,6 +91,25 @@ func registerHealthRoute(router *gin.Engine) {
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+}
+
+// registerPprofRoutes 挂载标准库 net/http/pprof 调试端点（非 release 模式）。
+// 逐路径注册，路由集与 import _ "net/http/pprof" 在默认 mux 上注册的完全一致：
+// Index 负责 /debug/pprof/ 索引页，cmdline/profile/symbol/trace 是独立函数，
+// 六个命名 profile（allocs/block/goroutine/heap/mutex/threadcreate）经
+// pprof.Handler 按名分发。不引入 gin-contrib/pprof 等第三方依赖。
+func registerPprofRoutes(router *gin.Engine) {
+	router.GET("/debug/pprof/", gin.WrapF(pprof.Index))
+	router.GET("/debug/pprof/cmdline", gin.WrapF(pprof.Cmdline))
+	router.GET("/debug/pprof/profile", gin.WrapF(pprof.Profile))
+	router.GET("/debug/pprof/symbol", gin.WrapF(pprof.Symbol))
+	router.GET("/debug/pprof/trace", gin.WrapF(pprof.Trace))
+	router.GET("/debug/pprof/allocs", gin.WrapH(pprof.Handler("allocs")))
+	router.GET("/debug/pprof/block", gin.WrapH(pprof.Handler("block")))
+	router.GET("/debug/pprof/goroutine", gin.WrapH(pprof.Handler("goroutine")))
+	router.GET("/debug/pprof/heap", gin.WrapH(pprof.Handler("heap")))
+	router.GET("/debug/pprof/mutex", gin.WrapH(pprof.Handler("mutex")))
+	router.GET("/debug/pprof/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
 }
 
 // resolveRequestLang 按渠道决定当前请求的语言（ginI18n WithGetLngHandle 回调，

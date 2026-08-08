@@ -14,6 +14,7 @@ import (
 	apiMiddleware "buildadmin-go/internal/api/middleware"
 	apiRouter "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/common/country"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -119,7 +120,13 @@ func lookupAtomicRouteCapability(t *testing.T, route gin.RouteInfo) (middleware.
 }
 
 func newCompleteRouter() *gin.Engine {
-	gin.SetMode(gin.TestMode)
+	return newCompleteRouterWithMode(gin.TestMode)
+}
+
+// newCompleteRouterWithMode 按指定 gin 模式构造完整路由器（中间件条件挂载
+// 与 pprof 条件注册依赖 gin.Mode()，测试需能控制该全局值）。
+func newCompleteRouterWithMode(mode string) *gin.Engine {
+	gin.SetMode(mode)
 
 	return InitRouter(
 		&lumberjack.Logger{},
@@ -127,10 +134,12 @@ func newCompleteRouter() *gin.Engine {
 			LoginM:         &adminMiddleware.Login{},
 			AuthorizationM: &adminMiddleware.Authorization{},
 			SecurityM:      &adminMiddleware.Security{},
-			RecordM:        &adminMiddleware.Record{},
-			IndexHandler:   &admin.IndexHandler{},
-			AjaxHandler:    &admin.AjaxHandler{},
-			Registrars:     adminRegistrars(),
+			// 零值配置（AutoWriteAdminLog=false）的 Record：不采集、不落日志，
+			// 保证 404 等任意请求走全局链时不会因 nil config 崩溃。
+			RecordM:      adminMiddleware.NewRecord(&conf.Configuration{}, nil),
+			IndexHandler: &admin.IndexHandler{},
+			AjaxHandler:  &admin.AjaxHandler{},
+			Registrars:   adminRegistrars(),
 		}),
 		apiRouter.NewApiRouter(apiRouter.ApiRouterDeps{
 			UserLoginM: &apiMiddleware.UserLogin{},

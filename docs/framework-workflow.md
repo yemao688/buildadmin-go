@@ -293,3 +293,15 @@ git push origin master
 ## 部署
 
 部署流程请直接阅读 [`docs/docker-compose.md`](docker-compose.md)，本文不重复部署细节。
+
+### 多实例部署与进程内缓存一致性
+
+country 语言列表（country_language）与 siteconfig KV 分组等进程内缓存（60s TTL +
+requesttx 失效回调）在多实例部署时，失效回调只清空写入请求所在实例的缓存，其它实例
+在 TTL 过期前仍可能读到旧值，即实例间存在 ≤60s 的陈旧窗口。要点：
+
+- 对一致性敏感的数据（金额、余额类）一律直接走库（money 流只走
+  `common/money.UserBalanceService`），不要依赖此类进程内缓存窗口；
+- 业务自建的进程内缓存若对一致性敏感，应缩短 TTL，或在写路径上加消息/共享存储失效
+  机制（如 Redis pub/sub、DB 版本号轮询）——此类机制为业务可选扩展，框架不内置；
+- 缓存本身是既有行为（TTL 与失效回调由各 Service 自持），本节只说明多实例下的语义边界。
