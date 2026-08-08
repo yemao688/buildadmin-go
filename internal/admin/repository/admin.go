@@ -30,10 +30,17 @@ func NewAdminRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminReposi
 	}
 }
 
-func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error {
+// applyAdminDerived 应用与数据库无关的派生字段（头像默认值、邀请码）。
+// 单行路径（DealData）与列表批处理路径（loadGroupSummaries 之后）共用，
+// 保证两条路径的字段填充逐字段一致。邀请码为确定性派生
+// （HMAC(token.key, admin id)），不落库、固定不可改。
+func (s *AdminRepository) applyAdminDerived(data *model.Admin) {
 	data.Avatar = util.DefaultUrl(data.Avatar, s.config.App.DefaultAvatar)
-	// 邀请码为确定性派生（HMAC(token.key, admin id)），不落库、固定不可改
 	data.InviteCode = util.InviteCode(s.config.Token.Key, data.ID)
+}
+
+func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error {
+	s.applyAdminDerived(data)
 
 	groups := []struct {
 		Id   int32
@@ -51,6 +58,53 @@ func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error
 	for _, v := range groups {
 		data.GroupArr = append(data.GroupArr, v.Id)
 		data.GroupNameArr = append(data.GroupNameArr, v.Name)
+	}
+	return nil
+}
+
+// loadGroupSummaries 批量装载列表管理员的组信息（GroupArr/GroupNameArr），
+// 取代 listScoped 原先对每行执行一次 admin_group_access 查询的 N+1 形态。
+// 与 loadParentSummaries 同构：收集全部行的 uid → 一次 WHERE uid IN 查询 →
+// 按 uid 回填。逐行填充顺序沿用查询返回顺序（与逐行查询同一访问路径的
+// 返回顺序一致），缺失组的行保持空数组，与逐行 DealData 输出一致。
+func (s *AdminRepository) loadGroupSummaries(ctx context.Context, db *gorm.DB, admins []*model.Admin) error {
+	ids := make([]int32, 0, len(admins))
+	seen := make(map[int32]struct{}, len(admins))
+	for _, admin := range admins {
+		if admin == nil || admin.ID <= 0 {
+			continue
+		}
+		if _, ok := seen[admin.ID]; !ok {
+			seen[admin.ID] = struct{}{}
+			ids = append(ids, admin.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	groups := []struct {
+		Uid  int32
+		Id   int32
+		Name string
+	}{}
+	prefix := s.config.Database.Prefix
+	if err := db.Session(&gorm.Session{NewDB: true}).Table(prefix+"admin_group_access").
+		Joins("left join "+prefix+"admin_group g on g.id="+prefix+"admin_group_access.group_id").
+		Select(prefix+"admin_group_access.uid as uid,g.id as id,g.name as name").
+		Where(prefix+"admin_group_access.uid IN ?", ids).Scan(&groups).Error; err != nil {
+		return err
+	}
+	byAdmin := make(map[int32]*model.Admin, len(admins))
+	for _, admin := range admins {
+		if admin != nil {
+			byAdmin[admin.ID] = admin
+		}
+	}
+	for _, v := range groups {
+		if admin := byAdmin[v.Uid]; admin != nil {
+			admin.GroupArr = append(admin.GroupArr, v.Id)
+			admin.GroupNameArr = append(admin.GroupNameArr, v.Name)
+		}
 	}
 	return nil
 }
@@ -161,10 +215,13 @@ func (s *AdminRepository) listScoped(ctx *gin.Context, whereS string, whereP []i
 	if err = s.loadParentSummaries(ctx, s.DBFor(ctx), s.scoped(ctx), list); err != nil {
 		return nil, err
 	}
+	// 组信息批量装载（一次 WHERE uid IN 查询），替代逐行 DealData 的 N+1；
+	// 派生字段（头像/邀请码）与数据库无关，逐行就地应用。
+	if err = s.loadGroupSummaries(ctx, s.DBFor(ctx), list); err != nil {
+		return nil, err
+	}
 	for _, v := range list {
-		if err = s.DealData(ctx, v); err != nil {
-			return nil, err
-		}
+		s.applyAdminDerived(v)
 	}
 	return list, nil
 }

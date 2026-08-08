@@ -1,10 +1,14 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"net/http/httptest"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
@@ -14,8 +18,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
 
@@ -137,6 +143,76 @@ func TestLoadParentSummariesSelectsUsername(t *testing.T) {
 	if !slices.Contains(captured, "id") || !slices.Contains(captured, "nickname") || !slices.Contains(captured, "username") {
 		t.Fatalf("captured selects = %v, want id/nickname/username", captured)
 	}
+}
+
+// adminGroupSQLCounter 统计命中的 admin_group_access SELECT 次数，
+// 用于断言列表组信息装载是单次批量查询而非逐行 N+1。
+type adminGroupSQLCounter struct {
+	logger.Interface
+	groupAccessSelects int
+}
+
+func (l *adminGroupSQLCounter) Trace(_ context.Context, _ time.Time, fc func() (string, int64), _ error) {
+	sql, _ := fc()
+	if strings.Contains(sql, "admin_group_access") && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(sql)), "SELECT") {
+		l.groupAccessSelects++
+	}
+}
+
+func TestLoadGroupSummariesBatchesOneQuery(t *testing.T) {
+	counter := &adminGroupSQLCounter{Interface: logger.Default.LogMode(logger.Silent)}
+	db, err := gorm.Open(sqlite.Open("file:admin-group-summaries-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"?mode=memory&cache=shared"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
+		Logger:         counter,
+	})
+	require.NoError(t, err)
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
+
+	groups := []model.AdminGroup{
+		{ID: 1, Name: "super"},
+		{ID: 2, Name: "ops"},
+		{ID: 3, Name: "audit"},
+	}
+	require.NoError(t, db.Create(&groups).Error)
+	// 故意按非 group_id 序插入（2,1），验证批处理保留逐行查询的返回顺序。
+	access := []model.AdminGroupAccess{
+		{UID: 1, GroupID: 2},
+		{UID: 1, GroupID: 1},
+		{UID: 3, GroupID: 3},
+	}
+	require.NoError(t, db.Create(&access).Error)
+
+	m := NewAdminRepository(db, &conf.Configuration{
+		Database: conf.Database{Prefix: "ba_"},
+		Token:    conf.Token{Key: "test-key"},
+		App:      conf.App{DefaultAvatar: ""},
+	})
+	ctx := context.Background()
+	admins := []*model.Admin{{ID: 1}, {ID: 2}, {ID: 3}}
+	require.NoError(t, m.loadGroupSummaries(ctx, db, admins))
+
+	// 3 行管理员只允许 1 次 admin_group_access 查询（原先为 3 次）。
+	require.Equal(t, 1, counter.groupAccessSelects, "expected one batched group query")
+
+	require.Equal(t, []int32{2, 1}, admins[0].GroupArr)
+	require.Equal(t, []string{"ops", "super"}, admins[0].GroupNameArr)
+	// 无分组的行保持空数组（与逐行 DealData 的兜底一致）。
+	require.Empty(t, admins[1].GroupArr)
+	require.Empty(t, admins[1].GroupNameArr)
+	require.Equal(t, []int32{3}, admins[2].GroupArr)
+	require.Equal(t, []string{"audit"}, admins[2].GroupNameArr)
+
+	// 与单行路径 DealData 输出逐字段一致（同一访问路径下逐行顺序相同）。
+	ref := &model.Admin{ID: 1}
+	require.NoError(t, m.DealData(ctx, ref))
+	require.Equal(t, ref.GroupArr, admins[0].GroupArr)
+	require.Equal(t, ref.GroupNameArr, admins[0].GroupNameArr)
+
+	// 边界：空列表 / 零 id / nil 行跳过查询，避免 IN () 语法错误。
+	before := counter.groupAccessSelects
+	require.NoError(t, m.loadGroupSummaries(ctx, db, nil))
+	require.NoError(t, m.loadGroupSummaries(ctx, db, []*model.Admin{nil, {ID: 0}}))
+	require.Equal(t, before, counter.groupAccessSelects)
 }
 
 func prepareAdminModelMySQL(t *testing.T) *gorm.DB {
