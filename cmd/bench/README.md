@@ -62,6 +62,9 @@ curl -s http://localhost:9902/admin/Index/login -X POST \
 | 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=50） | 5128.3 | 1.830ms | 11.474ms | 202.164ms | release 构建（9903），app.env 默认 debug（config.defaults.yaml），release 部署需 setup --env release 或 config.yaml 设 app.env: release |
 | 2026-08-07 | v3.1.5 | api/index/index（c=50） | 4763.1 | 4.189ms | 15.065ms | 25.167ms | release 构建（9903） |
 | 2026-08-07 | v3.1.5 | admin/auth.Admin/index（c=100） | 1561.0 | 2.175ms | 32.828ms | 1005.304ms | release（9903），并发 100 出现拐点（p99 飙升至 1s，疑似连接池/GC） |
+| 2026-08-09 | v3.1.5+ | admin/auth.Admin/index（c=50） | 4891.6 | 1.959ms | 7.117ms | 201.040ms | release + app.env=release + SQL 日志关 + 第二轮优化（9904）；p95 11.5→7.1ms，RPS 微降疑本机波动 |
+| 2026-08-09 | v3.1.5+ | api/index/index（c=50） | 8557.9 | 1.072ms | 4.036ms | 29.474ms | release + app.env=release + SQL 日志关 + EnabledCurrencies 缓存（9904）；RPS 4763→8558（+80%）、p50 4.19→1.07ms |
+| 2026-08-09 | v3.1.5+ | admin/auth.Admin/index（c=100） | 1938.4 | 3.812ms | 19.321ms | 218.382ms | release + app.env=release + SQL 日志关 + 池 300/50 + DealData 批处理（9904）；c=100 拐点缓解：p99 1005→218ms、RPS +24% |
 
 ## 纪律
 
