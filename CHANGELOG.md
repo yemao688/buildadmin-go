@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.1.6
+
+> 第二轮后端优化批次 + 工程基建：压测驱动的性能修复（c=100 拐点四项根因、DealData N+1、attachment N+1、货币缓存）、gin mode 生产引导、压测工具固化、storage 路由调整。
+
+- **Perf (数据库基建, c=100 拐点根因):** `max_open_conns 100→300`、`max_idle_conns 10→50`、新增 `max_idle_time: 300`/`conn_max_lifetime: 1800`（配置化，<=0 回退）；DSN 追加 `timeout/readTimeout/writeTimeout=5s`（防挂死连接无限阻塞）；GORM `SkipDefaultTransaction: true`（写路径安全性逐条审计：requesttx 外层事务路径不变，裸写全部单语句由 autocommit 保证原子性）。
+- **Perf (admin 列表 N+1→1):** `loadGroupSummaries` 收集全行 uid 去重 → 一次 `WHERE uid IN (?)` + map 回填（空列表 0 查询、无 `IN ()`）；List/ListTree 共用；输出顺序/兜底经测试锚定。单请求组信息 10 查询→1。
+- **Perf (attachment alioss N+1→1):** `Settings()` 导出 + `URLWithConfig`（单行 `URL()` 行为不变）；`DealDataList` 列表级懒加载一次 settings 逐行复用（失败回退原始 URL 且不重试）——alioss 列表 config 表查询 N+1→1。
+- **Perf (EnabledCurrencies 缓存):** `currencyCacheTTL=60s` 进程内缓存（独立锁 + 防御性副本 + country_currency handler 写路径 requesttx 失效）——api/index 每请求省 1 次查库。
+- **Fixed (datetime 原生列单日):** fix-25 偏离②补全——datetime 列 RANGE 分支结束值 `len==10` 拼 ` 23:59:59`（此前单日 `BETWEEN '2024-01-01' AND '2024-01-01'` 只命中零点整）；起始值原样透传，unix/非单日/等值路径零改动。
+- **Perf+Feat (gin 运行环境):** `gin.Logger()` 仅非 release 挂载（release 去掉逐请求 stdout）；debug 环境挂标准库 `net/http/pprof` 全 11 端点（release 不注册，规避 gin 通配符冲突）；`setup` 新增 `--env debug|release`（写入 config.yaml 的 app.env，非法值在任何副作用前拦截）；`applyGinMode` 补单元测试；部署文档引导生产 `--env release`（否则 gin 跑 debug、recovery 暴露内部错误详情）。
+- **Perf (installer 一致性):** 安装 CLI 连接池参数由硬编码 10/100/100s 改为读分层运行配置（50/300/300s/1800s，`loadPoolConfig`/`poolSettings`/`applyPoolConfig`）——安装与运行期同源。
+- **Chore (压测基建):** 新增 `cmd/bench/run-bench.sh` 一键复测（release 构建 + `app.env: release` + 关 SQL 日志 + 独立端口 + trap 兜底还原 config）；`bench-config.yaml` 蓝本（占位符防敏感值入库）；README 基线记录表补 8 组数据（air debug / release / release+优化后，含 c=100 拐点 1005ms→218ms 缓解验证、api/index RPS 4763→8558 +80%）。pprof 归因定案：c=100 剩余长尾为 MySQL I/O syscall（认证链必要查询 50.7% CPU），非 GC——GC 调优不做。
+- **Fixed (storage 路由):** `/storage/default` 挂载改 `/storage` 整目录——上传 URL 前缀本就是 `/storage/{topic}`（savename 规则），topic 变化（新增细目）无需改路由；`/storage/default/...` 旧路径兼容（冒烟 200）。
+- **Changed (docs):** framework-workflow.md 补多实例部署与进程内缓存一致性小节（60s TTL + requesttx 失效回调仅本进程、实例间 ≤60s 陈旧窗口，金额类数据勿依赖）；部署与 docker-compose 补 `--env release` 引导。
+
 ## v3.1.5
 
 > 缓存与行为修复批次 + 工程基建：siteconfig 缓存与 ClearCache 接线、querybuilder datetime 搜索分流修复（A+B+C）、formatMoney 增强与 FlexInt64Slice（下游反馈）、压测基线工具。
