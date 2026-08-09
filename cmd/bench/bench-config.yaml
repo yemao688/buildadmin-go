@@ -1,0 +1,42 @@
+# ============================================================
+# cmd/bench/bench-config.yaml — 压测专用配置模板（蓝本）
+#
+# 用途：cmd/bench/run-bench.sh 一键复测时，以本文件为蓝本生成"临时运行配置"
+# 并临时替换 configs/config.yaml（服务从仓库根启动时固定分层加载
+# configs/config.defaults.yaml + configs/config.yaml；-c/--conf 会把 defaults
+# 基准目录也切走，不能用于指定独立压测配置）。压测结束（或中途失败）后脚本
+# 自动还原 configs/config.yaml。
+#
+# 占位符说明：<MYSQL_HOST>/<MYSQL_PORT>/<MYSQL_DATABASE>/<MYSQL_PREFIX>/
+# <MYSQL_USERNAME>/<MYSQL_PASSWORD>/<TOKEN_KEY> 由 run-bench.sh 启动时从当前
+# configs/config.yaml 自动提取填入（即"压测连的就是安装时配置的库"）；某字段在
+# configs/config.yaml 中缺失时，对应行会被省略，回退 config.defaults.yaml 默认值。
+#
+# 警告：
+#   - 本文件仅供压测，勿直接用作生产配置。
+#   - 不要把真实 token.key / 数据库密码写进本文件（会被提交进 git）。
+#     token.key 由 setup 安装器随机生成并写入 configs/config.yaml，从这里复制。
+# ============================================================
+
+# 运行模式固定为 release：gin release 模式（不输出 gin.Logger 请求日志、
+# 不挂 /debug/pprof 调试端点），与基线记录的"release 构建 + app.env=release"一致。
+app:
+  env: 'release'
+
+# MySQL 连接段：连接目标随 configs/config.yaml（见上方占位符说明）；
+# 下方 log_mode / enable_file_log_writer 是压测专属覆盖——SQL 日志关到 error、
+# 不写 SQL 日志文件，避免日志 I/O 干扰测得的延迟（对比必须与基线同配置）。
+mysql:
+  host: '<MYSQL_HOST>'
+  port: <MYSQL_PORT>
+  database: '<MYSQL_DATABASE>'
+  prefix: '<MYSQL_PREFIX>'
+  username: '<MYSQL_USERNAME>'
+  password: '<MYSQL_PASSWORD>'
+  log_mode: 'error'               # 压测覆盖：SQL 日志级别（默认 info）
+  enable_file_log_writer: false   # 压测覆盖：不写 SQL 日志文件（默认 true）
+
+# token.key：由 run-bench.sh 从 configs/config.yaml 的 token.key 自动复制；
+# 服务端与客户端共用该密钥，缺失会导致登录/校验异常。
+token:
+  key: '<TOKEN_KEY>'

@@ -4,7 +4,28 @@
 **可重复性能基线**：对比优化前后的量化收益，解锁"需要压测数据再决策"的
 优化项（连接池调优、closure EXISTS 改写、事务缓冲、token 二级缓存等）。
 
-## 用法
+## 一键复测（推荐）
+
+`run-bench.sh` 固化压测正确姿势（release 构建 + `app.env: release` + 关 SQL
+日志 + 独立端口），自动完成"临时替换 configs/config.yaml → 起服务 → 压测 →
+还原配置 → 停服务"，trap 兜底保证中途失败也还原：
+
+```bash
+./cmd/bench/run-bench.sh                              # 默认两场景 × {c=50, c=100}
+./cmd/bench/run-bench.sh -p 9905                      # 指定端口（默认 9904，不干扰 9902 air）
+./cmd/bench/run-bench.sh -n 1000                      # 每场景每并发请求数（默认 2000）
+./cmd/bench/run-bench.sh -t '<batoken>'               # 追加后台 admin 场景（或设 BENCH_ADMIN_TOKEN）
+./cmd/bench/run-bench.sh --raw -url http://127.0.0.1:9904/api/index/index \
+    -n 500 -c 20 -method POST -body '{"x":1}'          # 透传任意 bench 参数
+```
+
+- 内置场景：`/api/index/index`（公开）+ `/admin/auth.Admin/index`（提供 `-t` 后）
+- 连接配置取自当前 `configs/config.yaml`（压测连的就是安装时配置的库）；
+  蓝本模板见 `bench-config.yaml`（勿写入真实 token.key/密码——脚本自动从
+  config.yaml 提取，勿提交敏感值）
+- 基线数据记录到下方「基线记录」表；对比必须同环境、同参数、同数据量
+
+## 用法（手动）
 
 ```bash
 # 后台列表页（带管理员 token）
