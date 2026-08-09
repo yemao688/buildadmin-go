@@ -81,12 +81,46 @@ func (s *AttachmentRepository) List(ctx *gin.Context) (list []*upload.Attachment
 		Joins("User").
 		Where(whereS, whereP...)
 	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
-	for _, v := range list {
-		if _, err = s.DealData(ctx, v); err != nil {
-			return nil, 0, err
-		}
+	if err != nil {
+		return nil, 0, err
+	}
+	if err := s.DealDataList(ctx, list); err != nil {
+		return nil, 0, err
 	}
 	return
+}
+
+// DealDataList 是列表批处理路径：alioss 的 upload 配置查询（固定
+// group='upload' 过滤，结果与行数据无关）全列表只读取一次，逐行复用组装
+// FullUrl，消除逐行 DealData 的 config 表 N+1（每行 1 次 → 全列表 1 次）。
+// settings 读取失败时逐行回退原始 URL（与单行路径 URL() 的容错一致），且
+// 不再重试，避免失败路径退化回 N+1。非 alioss 行逐行走 DealData（纯计算，
+// 无查询），输出与单行路径逐字段一致。
+func (s *AttachmentRepository) DealDataList(ctx *gin.Context, list []*upload.Attachment) error {
+	storage := upload.NewAliossStorage(s.DB(), s.config)
+	var ossSettings *upload.AliOSSConfig
+	settingsAttempted := false
+	for _, v := range list {
+		if v.Storage == "alioss" {
+			if !settingsAttempted {
+				settingsAttempted = true
+				if c, err := storage.Settings(); err == nil {
+					ossSettings = &c
+				}
+			}
+			v.Suffix = strings.ToLower(strings.TrimLeft(filepath.Ext(v.URL), "."))
+			if ossSettings == nil {
+				v.FullUrl = v.URL
+			} else {
+				v.FullUrl = storage.URLWithConfig(v.URL, *ossSettings)
+			}
+			continue
+		}
+		if _, err := s.DealData(ctx, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *AttachmentRepository) Edit(ctx *gin.Context, data upload.Attachment) error {

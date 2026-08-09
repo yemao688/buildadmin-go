@@ -67,7 +67,11 @@ func NewAliossStorage(db *gorm.DB, config *conf.Configuration) *AliossStorage {
 	return &AliossStorage{db: db, table: config.Database.Prefix + "config"}
 }
 
-func (s *AliossStorage) settings() (AliOSSConfig, error) {
+// Settings loads the upload group config (fixed `group = 'upload'` filter;
+// the result never depends on attachment row data). List paths should call it
+// once and reuse the value per row via URLWithConfig, instead of issuing one
+// config-table query per row through URL.
+func (s *AliossStorage) Settings() (AliOSSConfig, error) {
 	var rows []struct{ Name, Value string }
 	err := s.db.Table(s.table).Select("name, value").Where("`group` = ?", "upload").Find(&rows).Error
 	if err != nil {
@@ -141,11 +145,22 @@ func publicURL(c AliOSSConfig) string {
 	return strings.TrimRight(base, "/") + "/"
 }
 
+// URL computes the public URL from the upload config read from the config
+// table (one query per call; single-row paths). List paths should use
+// URLWithConfig with a settings value loaded once via Settings.
 func (s *AliossStorage) URL(name string) string {
-	c, err := s.settings()
+	c, err := s.Settings()
 	if err != nil {
 		return name
 	}
+	return s.URLWithConfig(name, c)
+}
+
+// URLWithConfig computes the public URL from an already loaded upload config.
+// It is behavior-identical to URL (same fallbacks and normalization) but
+// skips the config-table read, so batch paths can load the settings once per
+// list instead of once per row.
+func (s *AliossStorage) URLWithConfig(name string, c AliOSSConfig) string {
 	if name == "" {
 		return publicURL(c)
 	}
@@ -156,7 +171,7 @@ func (s *AliossStorage) URL(name string) string {
 }
 
 func (s *AliossStorage) Save(file io.Reader, saveName string) error {
-	c, err := s.settings()
+	c, err := s.Settings()
 	if err != nil || c.Mode != "alioss" {
 		if err != nil {
 			return err
@@ -170,7 +185,7 @@ func (s *AliossStorage) Save(file io.Reader, saveName string) error {
 	return b.PutObject(normalize(saveName, c), file)
 }
 func (s *AliossStorage) Delete(saveName string) error {
-	c, err := s.settings()
+	c, err := s.Settings()
 	if err != nil {
 		return err
 	}
@@ -181,7 +196,7 @@ func (s *AliossStorage) Delete(saveName string) error {
 	return b.DeleteObject(normalize(saveName, c))
 }
 func (s *AliossStorage) Exists(saveName string) bool {
-	c, err := s.settings()
+	c, err := s.Settings()
 	if err != nil {
 		return false
 	}

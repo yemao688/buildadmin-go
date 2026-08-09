@@ -1,9 +1,13 @@
 package installer
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"buildadmin-go/internal/conf"
 
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -97,4 +101,73 @@ func TestGenerateTokenKey(t *testing.T) {
 	for _, char := range key {
 		require.Contains(t, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", string(char))
 	}
+}
+
+func TestPoolSettings(t *testing.T) {
+	// 零值配置回退默认，与 config.defaults.yaml / 运行期 infra/db 语义一致。
+	maxIdle, maxOpen, lifetime, idleTime := poolSettings(conf.Database{})
+	require.Equal(t, 50, maxIdle)
+	require.Equal(t, 300, maxOpen)
+	require.Equal(t, 1800*time.Second, lifetime)
+	require.Equal(t, 300*time.Second, idleTime)
+
+	// 配置值生效。
+	maxIdle, maxOpen, lifetime, idleTime = poolSettings(conf.Database{MaxIdleConns: 7, MaxOpenConns: 9, ConnMaxLifetime: 60, MaxIdleTime: 15})
+	require.Equal(t, 7, maxIdle)
+	require.Equal(t, 9, maxOpen)
+	require.Equal(t, 60*time.Second, lifetime)
+	require.Equal(t, 15*time.Second, idleTime)
+
+	// 负值同样回退。
+	_, _, lifetime, idleTime = poolSettings(conf.Database{ConnMaxLifetime: -1, MaxIdleTime: -1})
+	require.Equal(t, 1800*time.Second, lifetime)
+	require.Equal(t, 300*time.Second, idleTime)
+}
+
+// TestLoadPoolConfig 覆盖分层配置读取：基座 config.defaults.yaml 提供连接池
+// 值；稀疏覆盖层 config.yaml 存在时合并生效；覆盖层不存在（全新安装早期，
+// 安装器尚未写入 config）时退化为仅基座。
+func TestLoadPoolConfig(t *testing.T) {
+	root := t.TempDir()
+	configs := filepath.Join(root, "configs")
+	require.NoError(t, os.MkdirAll(configs, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configs, conf.DefaultsFileName), []byte("mysql:\n"+
+		"  max_idle_conns: 50\n"+
+		"  max_open_conns: 300\n"+
+		"  max_idle_time: 300\n"+
+		"  conn_max_lifetime: 1800\n"), 0o600))
+
+	// 覆盖层不存在：仅基座生效。
+	cfg, err := loadPoolConfig(root)
+	require.NoError(t, err)
+	require.Equal(t, 50, cfg.MaxIdleConns)
+	require.Equal(t, 300, cfg.MaxOpenConns)
+	require.Equal(t, 300, cfg.MaxIdleTime)
+	require.Equal(t, 1800, cfg.ConnMaxLifetime)
+
+	// 覆盖层存在：稀疏合并（未覆盖键保持基座值）。
+	require.NoError(t, os.WriteFile(filepath.Join(configs, "config.yaml"), []byte("mysql:\n  max_open_conns: 42\n"), 0o600))
+	cfg, err = loadPoolConfig(root)
+	require.NoError(t, err)
+	require.Equal(t, 42, cfg.MaxOpenConns)
+	require.Equal(t, 50, cfg.MaxIdleConns)
+
+	// 基座缺失：返回错误，由 NewDB 的零值回退兜底。
+	_, err = loadPoolConfig(t.TempDir())
+	require.Error(t, err)
+}
+
+// TestApplyPoolConfig 验证连接池参数实际应用到 sql.DB（sql.Open 惰性，
+// 无需真实 MySQL）。
+func TestApplyPoolConfig(t *testing.T) {
+	db, err := sql.Open("mysql", "installer:pw@tcp(127.0.0.1:1)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local")
+	require.NoError(t, err)
+	defer db.Close()
+
+	applyPoolConfig(db, conf.Database{MaxIdleConns: 50, MaxOpenConns: 300, MaxIdleTime: 300, ConnMaxLifetime: 1800})
+	require.Equal(t, 300, db.Stats().MaxOpenConnections)
+
+	// 零值回退默认。
+	applyPoolConfig(db, conf.Database{})
+	require.Equal(t, defaultMaxOpenConns, db.Stats().MaxOpenConnections)
 }

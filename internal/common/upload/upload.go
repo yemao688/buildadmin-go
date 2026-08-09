@@ -171,7 +171,7 @@ func (s *UploadHelper) checkSize(ctx *gin.Context, file *multipart.FileHeader) e
 
 func (s *UploadHelper) uploadMode() string {
 	if s.oss != nil {
-		if c, err := s.oss.settings(); err == nil && c.Mode != "" {
+		if c, err := s.oss.Settings(); err == nil && c.Mode != "" {
 			return c.Mode
 		}
 	}

@@ -26,6 +26,14 @@ import (
 const (
 	LockFileName               = "install.lock"
 	InstallationCompletionMark = "install-end"
+
+	// 连接池回退默认值：与 config.defaults.yaml 及运行期 infra/db 的
+	// 回退语义保持一致（安装 CLI 串行单用户，池参数非瓶颈，但配置化
+	// 一致性避免与运行期漂移）。
+	defaultMaxIdleConns    = 50
+	defaultMaxOpenConns    = 300
+	defaultMaxIdleTime     = 300 * time.Second
+	defaultConnMaxLifetime = 1800 * time.Second
 )
 
 // Database contains the database connection values collected during install.
@@ -83,10 +91,63 @@ func NewDB(cfg Database) (*gorm.DB, error) {
 	}
 
 	sqlDB, _ := db.DB()
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(100 * time.Second)
+	// 连接池参数读取分层运行配置（config.defaults.yaml 基座 + 可选稀疏覆盖
+	// 层），与运行期一致；读取失败时以零值走回退默认。
+	pool, poolErr := loadPoolConfig(util.RootPath())
+	if poolErr != nil {
+		pool = conf.Database{}
+	}
+	applyPoolConfig(sqlDB, pool)
 	return db, nil
+}
+
+// loadPoolConfig 读取 config.defaults.yaml（含 mysql 连接池字段）并可选
+// 合并稀疏覆盖层 configs/config.yaml；覆盖层不存在（全新安装早期，安装器
+// 尚未写入）时退化为仅基座。任何读取/解析失败返回零值，由 poolSettings
+// 的回退语义兜底。
+func loadPoolConfig(rootPath string) (conf.Database, error) {
+	overridePath := filepath.Join(rootPath, "configs", "config.yaml")
+	if _, err := os.Stat(overridePath); err != nil {
+		overridePath = ""
+	}
+	v, _, err := conf.LoadLayeredConfig(filepath.Join(rootPath, "configs", conf.DefaultsFileName), overridePath)
+	if err != nil {
+		return conf.Database{}, err
+	}
+	var configuration conf.Configuration
+	if err := v.Unmarshal(&configuration); err != nil {
+		return conf.Database{}, err
+	}
+	return configuration.Database, nil
+}
+
+// poolSettings 返回连接池参数：配置值 <=0（含未配置）时回退默认，语义与
+// 运行期 infra/db 的 connMaxLifetime/connMaxIdleTime 回退一致。
+func poolSettings(cfg conf.Database) (maxIdle, maxOpen int, lifetime, idleTime time.Duration) {
+	maxIdle, maxOpen = cfg.MaxIdleConns, cfg.MaxOpenConns
+	if maxIdle <= 0 {
+		maxIdle = defaultMaxIdleConns
+	}
+	if maxOpen <= 0 {
+		maxOpen = defaultMaxOpenConns
+	}
+	lifetime = time.Duration(cfg.ConnMaxLifetime) * time.Second
+	if lifetime <= 0 {
+		lifetime = defaultConnMaxLifetime
+	}
+	idleTime = time.Duration(cfg.MaxIdleTime) * time.Second
+	if idleTime <= 0 {
+		idleTime = defaultMaxIdleTime
+	}
+	return
+}
+
+func applyPoolConfig(sqlDB *sql.DB, cfg conf.Database) {
+	maxIdle, maxOpen, lifetime, idleTime := poolSettings(cfg)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetConnMaxLifetime(lifetime)
+	sqlDB.SetConnMaxIdleTime(idleTime)
 }
 
 func databaseDSN(cfg Database) string {
