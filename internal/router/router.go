@@ -64,7 +64,9 @@ func InitRouter(
 	// 静态资源与前台入口（不经渠道注册器）。
 	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
 	router.Static("/static", filepath.Join(rootDir, "public/static"))
-	router.Static("/storage/default", filepath.Join(rootDir, "public/storage/default"))
+	// 整个 storage 目录：上传 URL 前缀是 /storage/{topic}（savename 规则），
+	// 挂载目录级而非 /storage/default，topic 变化（default/其它细目）无需改路由。
+	router.Static("/storage", filepath.Join(rootDir, "public/storage"))
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
