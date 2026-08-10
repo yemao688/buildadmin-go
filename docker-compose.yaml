@@ -1,3 +1,7 @@
+# 固定 compose project 名（默认取目录名）：容器名为 <name>_<service>_1，
+# 不随运行目录/面板注入的 project 变化；与 DEPLOY_IMAGE_NAME 一致便于识别。
+name: ${DEPLOY_IMAGE_NAME:-buildadmin-go}
+
 services:
   buildadmin-go:
     image: ${DEPLOY_REGISTRY:-registry.example.com}/${DEPLOY_IMAGE_NAME:-buildadmin-go}:${DEPLOY_IMAGE_TAG:-latest}
