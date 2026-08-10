@@ -49,6 +49,15 @@ APP_PORT=9901 make run-docker-dev
 
 Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
 
+**挂载目录权限（bind mount 常见坑）**：容器以 `user: "1000:1000"` 运行，挂载点所有权来自宿主机目录——**镜像内 `chown app:app /app` 对 bind mount 不生效**。git 不跟踪空目录，`runtime/` 若不存在于宿主机，Docker 会**自动以 root 创建**它（日志 `mkdir /app/runtime/logs: permission denied` 的典型来源）。框架已用 `runtime/.gitignore` 占位文件让 git 跟踪目录本身（`git check-ignore` 忽略其实际内容），新检出 clone 后 `runtime/` 即存在且归部署用户所有，避免 Docker 自动创建。**仍需注意**：容器 uid 固定 1000，宿主机检出用户若不是 uid 1000，需对齐一次：
+
+```bash
+# 宿主机（部署机）clone 后执行一次；若部署用户 uid 恰为 1000 可跳过
+chown -R 1000:1000 runtime public/storage
+```
+
+若 `configs/`、`public/`、`runtime/` 出现 root 属主（`ls -l` 可见），一律 `chown -R 1000:1000` 对齐后重启容器。
+
 `public/` 是**静态资源根**：应用从它服务 `/assets`、`/static`、`/storage/default` 与 `/favicon.ico`（`internal/router/router.go` 挂载），并存放 `install.lock`（安装完成标记）。**上传文件统一在 `public/storage/` 下**：`upload.savename` 配置（`configs/config.defaults.yaml` 的 `upload:` 段）模板为 `/storage/{topic}/{year}{mon}{day}/{fileName}{fileSha1}{.suffix}`，本地模式落盘到 `public/storage/<topic>/...`，经 `/storage/default` 等静态路由对外访问。整目录挂载让**上传与 install.lock 都跨容器重建持久化**（无需单独挂载 storage 子目录）。
 
 ### 在容器内执行迁移

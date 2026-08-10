@@ -17,6 +17,7 @@ yarn.lock
 # common
 /nbproject
 /runtime/*
+!/runtime/.gitignore
 /install
 node_modules
 dist

@@ -1,0 +1,6 @@
+# runtime/ 目录占位文件：让 git 跟踪目录本身（git 不跟踪空目录），
+# 保证部署机 clone 后 runtime/ 即存在——compose bind mount 挂载已存在的
+# 源目录时 Docker 不会自动以 root 创建它（否则容器内 uid 1000 无写权限，
+# 日志目录 mkdir 报 permission denied）。runtime 下的实际内容仍全部忽略。
+*
+!.gitignore
