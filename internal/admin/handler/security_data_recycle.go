@@ -74,12 +74,12 @@ func (h *DataRecycleHandler) Index(ctx *gin.Context) {
 }
 
 type DataRecycle struct {
-	Name         string `json:"name"`
-	Controller   string `json:"controller"`
-	ControllerAs string `json:"controller_as"`
-	DataTable    string `json:"data_table"`
-	PrimaryKey   string `json:"primary_key"`
-	Status       string `json:"status"`
+	Name         string               `json:"name"`
+	Controller   string               `json:"controller"`
+	ControllerAs string               `json:"controller_as"`
+	DataTable    string               `json:"data_table"`
+	PrimaryKey   string               `json:"primary_key"`
+	Status       validator.FlexStatus `json:"status"`
 }
 
 func (v DataRecycle) GetMessages() validator.ValidatorMessages {

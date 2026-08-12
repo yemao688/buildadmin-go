@@ -74,7 +74,7 @@ type AdminGroup struct {
 	Pid    validator.FlexInt32      `json:"pid"`
 	Name   string                   `json:"name" binding:"required"`
 	Rules  validator.FlexInt32Slice `json:"rules"`
-	Status string                   `json:"status"`
+	Status validator.FlexStatus     `json:"status"`
 }
 
 func (v AdminGroup) GetMessages() validator.ValidatorMessages {

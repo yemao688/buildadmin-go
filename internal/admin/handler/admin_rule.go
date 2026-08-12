@@ -76,8 +76,8 @@ type AdminRule struct {
 	Keepalive int32  `json:"keepalive"`
 	Extend    string `json:"extend"`
 	Remark    string `json:"remark"`
-	Weigh     int32  `json:"weigh"`
-	Status    string `json:"status"`
+	Weigh     int32                `json:"weigh"`
+	Status    validator.FlexStatus `json:"status"`
 }
 
 func (v AdminRule) GetMessages() validator.ValidatorMessages {

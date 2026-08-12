@@ -67,13 +67,13 @@ type SensitiveField struct {
 }
 
 type SensitiveData struct {
-	Name         string           `json:"name"`
-	Controller   string           `json:"controller"`
-	ControllerAs string           `json:"controller_as"`
-	DataTable    string           `json:"data_table"`
-	PrimaryKey   string           `json:"primary_key"`
-	Fields       []SensitiveField `json:"fields"`
-	Status       string           `json:"status"`
+	Name         string               `json:"name"`
+	Controller   string               `json:"controller"`
+	ControllerAs string               `json:"controller_as"`
+	DataTable    string               `json:"data_table"`
+	PrimaryKey   string               `json:"primary_key"`
+	Fields       []SensitiveField     `json:"fields"`
+	Status       validator.FlexStatus `json:"status"`
 }
 
 func (v SensitiveData) GetMessages() validator.ValidatorMessages {
@@ -91,7 +91,7 @@ func sensitiveDataParams(params SensitiveData) service.SensitiveDataParams {
 		DataTable:  params.DataTable,
 		PrimaryKey: params.PrimaryKey,
 		Fields:     fields,
-		Status:     params.Status,
+		Status:     string(params.Status),
 	}
 }
 

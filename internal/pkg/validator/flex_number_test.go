@@ -59,6 +59,41 @@ func TestFlexBoolRejectsNonCanonicalValues(t *testing.T) {
 	}
 }
 
+func TestFlexStatusJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want FlexStatus
+	}{
+		{"string one", `"1"`, "1"},
+		{"string zero", `"0"`, "0"},
+		{"number one", `1`, "1"},
+		{"number zero", `0`, "0"},
+		{"bool true", `true`, "1"},
+		{"bool false", `false`, "0"},
+		{"empty string", `""`, ""},
+		{"null", `null`, ""},
+		{"arbitrary string passthrough", `"enable"`, "enable"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got FlexStatus
+			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got != test.want {
+				t.Fatalf("got %q, want %q", got, test.want)
+			}
+		})
+	}
+	for _, data := range []string{`{}`, `[]`, `["1"]`, `1.5`, `1e2`, `"unterminated`} {
+		var got FlexStatus
+		if err := json.Unmarshal([]byte(data), &got); err == nil {
+			t.Errorf("expected %s to be rejected", data)
+		}
+	}
+}
+
 func TestFlexBoolScanAndValue(t *testing.T) {
 	for _, test := range []struct {
 		input any

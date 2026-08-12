@@ -166,6 +166,48 @@ func flexBoolUint64(value uint64) (bool, error) {
 	return false, fmt.Errorf("invalid bool scan value %d: expected 0 or 1", value)
 }
 
+// FlexStatus 是 PHP tinyint 0/1 状态字段的宽松 JSON 绑定形态（字符串方向）：
+// 接受字符串（"1"/"0"/任意串原样保留）、整数数字（1/0 等，转规范十进制
+// 字符串）、布尔（true → "1"、false → "0"）与 null/空串（→ 空串）；
+// 对象/数组/小数/科学计数法等非法值报错。用途：手写请求结构中 string 型
+// status 字段的 PHP 弱类型兼容——前端可能发数字或字符串（如 admin_rule /
+// admin_group / security 各表的 status），Go 严格 JSON 绑定在 string 字段
+// 收到数字时会直接 400。
+type FlexStatus string
+
+func (v *FlexStatus) UnmarshalJSON(data []byte) error {
+	text := strings.TrimSpace(string(data))
+	if text == "" || text == "null" {
+		*v = ""
+		return nil
+	}
+	if text == "true" {
+		*v = "1"
+		return nil
+	}
+	if text == "false" {
+		*v = "0"
+		return nil
+	}
+	if strings.HasPrefix(text, `"`) {
+		var value string
+		if err := json.Unmarshal(data, &value); err != nil {
+			return fmt.Errorf("invalid status value: %w", err)
+		}
+		*v = FlexStatus(strings.TrimSpace(value))
+		return nil
+	}
+	if strings.HasPrefix(text, "{") || strings.HasPrefix(text, "[") || !json.Valid(data) {
+		return fmt.Errorf("invalid status value %q: expected string, number, or boolean", text)
+	}
+	n, err := strconv.ParseInt(text, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid status value %q: expected integer number", text)
+	}
+	*v = FlexStatus(strconv.FormatInt(n, 10))
+	return nil
+}
+
 func (v *FlexYear) UnmarshalJSON(data []byte) error {
 	text := strings.TrimSpace(string(data))
 	if text == "" || text == "null" {

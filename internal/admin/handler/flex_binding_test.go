@@ -6,6 +6,7 @@ package handler
 
 import (
 	dto "buildadmin-go/internal/admin/dto"
+	"buildadmin-go/internal/pkg/validator"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -82,4 +83,36 @@ func TestCrudUploadCompletedFlexBinding(t *testing.T) {
 	var params crudUploadCompletedParams
 	require.NoError(t, json.Unmarshal([]byte(`{"syncIds":{"1":"2","3":4}}`), &params))
 	require.Equal(t, map[int32]int{1: 2, 3: 4}, map[int32]int(params.SyncIDs))
+}
+
+// TestAdminRuleStatusFlexBinding 覆盖下游反馈回归：/admin/auth.Rule/edit
+// 发数字 status（{"status":1}）时，string 字段严格绑定会 400；改为
+// validator.FlexStatus 后数字/字符串/布尔形态必须等价解码。
+func TestAdminRuleStatusFlexBinding(t *testing.T) {
+	var params AdminRule
+	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &params))
+	require.Equal(t, validator.FlexStatus("1"), params.Status)
+	require.NoError(t, json.Unmarshal([]byte(`{"status":"1"}`), &params))
+	require.Equal(t, validator.FlexStatus("1"), params.Status)
+	require.NoError(t, json.Unmarshal([]byte(`{"status":0}`), &params))
+	require.Equal(t, validator.FlexStatus("0"), params.Status)
+	require.NoError(t, json.Unmarshal([]byte(`{"status":true}`), &params))
+	require.Equal(t, validator.FlexStatus("1"), params.Status)
+	// 非法形态仍拒绝
+	require.Error(t, json.Unmarshal([]byte(`{"status":{}}`), &params))
+}
+
+// TestSecurityStatusFlexBinding 同规则覆盖 security 两个 handler 的请求结构。
+func TestSecurityStatusFlexBinding(t *testing.T) {
+	var recycle DataRecycle
+	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &recycle))
+	require.Equal(t, validator.FlexStatus("1"), recycle.Status)
+	require.NoError(t, json.Unmarshal([]byte(`{"status":"0"}`), &recycle))
+	require.Equal(t, validator.FlexStatus("0"), recycle.Status)
+
+	var sensitive SensitiveData
+	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &sensitive))
+	require.Equal(t, validator.FlexStatus("1"), sensitive.Status)
+	require.NoError(t, json.Unmarshal([]byte(`{"status":"1"}`), &sensitive))
+	require.Equal(t, validator.FlexStatus("1"), sensitive.Status)
 }

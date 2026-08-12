@@ -440,6 +440,33 @@ func TestFlexYearCopierPreservesAbsentAndExplicitZero(t *testing.T) {
 	}
 }
 
+func TestFlexStatusCopierToPlainString(t *testing.T) {
+	// admin_rule/admin_group/security 各 handler 经 copier.Copy 把请求
+	// DTO 的 Status（FlexStatus）拷到 model.Status（string）：底层类型同为
+	// string，copier 走 ConvertibleTo 直接转换，无需显式 string() 转换。
+	type input struct{ Status FlexStatus }
+	type output struct{ Status string }
+	for _, test := range []struct {
+		name string
+		in   FlexStatus
+		want string
+	}{
+		{"one", FlexStatus("1"), "1"},
+		{"zero", FlexStatus("0"), "0"},
+		{"empty", FlexStatus(""), ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var got output
+			if err := copier.Copy(&got, &input{Status: test.in}); err != nil {
+				t.Fatal(err)
+			}
+			if got.Status != test.want {
+				t.Fatalf("copied status = %q, want %q", got.Status, test.want)
+			}
+		})
+	}
+}
+
 func assertFlexTime(t *testing.T, name string, got, want time.Time) {
 	t.Helper()
 	if !got.Equal(want) {
