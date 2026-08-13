@@ -550,6 +550,27 @@ func TestParseJoinDataSingleRelationFieldUsesLiteralLabel(t *testing.T) {
 	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `label: "上级代理"`)
 }
 
+func TestParseJoinDataSingleRelationFieldInheritsFKWidth(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	field.Table.Label = "上级代理"
+	field.Table.Width = 150
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `width: 150`)
+}
+
+func TestParseJoinDataWithoutWidthKeepsNoWidthColumn(t *testing.T) {
+	field := relationTestField("remoteSelect", "username")
+	field.Table.Label = "上级代理"
+	indexData := IndexVueData{}
+	modelData := ModelData{ClassName: "Orders"}
+	dictEn, dictZh := map[string]string{}, map[string]string{}
+	require.NoError(t, parseJoinData(nil, relationTestColumns(), &dictEn, &dictZh, nil, &modelData, &indexData, field, nil, "user."))
+	require.NotContains(t, strings.Join(indexData.TableColumn, "\n"), "width:")
+}
+
 func TestParseJoinDataMultipleRelationFieldsIgnoreSharedLabel(t *testing.T) {
 	field := relationTestField("remoteSelects", "nickname,email")
 	field.Form.RemoteTable = "admin"

@@ -586,9 +586,11 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 
 当 `remoteSelect`/`remoteSelects` 同时配置了 `remoteTable` 和非空 `relationFields` 时，生成器自动将原始 FK 列的 `show` 设为 `"false"`，保留它在 `columnFields` 中以支持远程公共搜索，并由 relation enrichment 生成可见的列表列。显式 `show` 值保持不变；若把该 FK 从 `columnFields` 完全省略，则同时移除 FK 的显示/搜索列，但 relation display 列和后端 loader 仍会生成。
 
-### relation display 列标题
+### relation display 列标题与宽度
 
 `table.label` 只在 `relationFields` 恰好一个字段时复用到这个可见 relation display 列。多个 relation display 列不会共享同一个标题。
+
+`table.width` 遵循同样的继承规则：FK 列配置的 `table.width` 同时作用于隐藏的 FK 搜索列与（单 `relationFields` 时的）可见 relation display 列；未配置 `table.width`（`Width == 0`）则关联列不输出宽度，由 el-table 自动分配。relation display 列默认 `render: "tags"`，继承宽度时建议按 tag 渲染适当放宽（内容 + padding + tag 间距），具体数值由业务 spec 决定。
 
 ```yaml
 - name: parent_admin_id
