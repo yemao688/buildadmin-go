@@ -1354,6 +1354,9 @@ func parseJoinData(_ *gorm.DB, columns []model.Column, dictEn *map[string]string
 		if len(relationFields) == 1 && field.Table.Label != "" {
 			joinField.Table.Label = field.Table.Label
 		}
+		if len(relationFields) == 1 && field.Table.Width != 0 {
+			joinField.Table.Width = field.Table.Width
+		}
 
 		relationFieldPrefix := relationName + "."
 		relationFieldLangPrefix := strings.ToLower(relationName) + "__"
