@@ -84,7 +84,10 @@ func (s *CountryCurrencyRepository) GetOne(ctx *gin.Context, id int64) (countryC
 }
 
 func (s *CountryCurrencyRepository) List(ctx *gin.Context) (list []model.CountryCurrency, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	tableInfo := s.TableInfo()
+	tableInfo.FieldTypes = map[string]string{"code": "varchar", "id": "bigint", "name": "varchar", "rate": "decimal", "status": "tinyint", "symbol": "varchar", "weigh": "int"}
+	tableInfo.DefaultOrder = "weigh,desc"
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, tableInfo, nil)
 	if err != nil {
 		return nil, 0, err
 	}

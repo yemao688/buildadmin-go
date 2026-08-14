@@ -84,7 +84,10 @@ func (s *CountryLanguageRepository) GetOne(ctx *gin.Context, id int64) (countryL
 }
 
 func (s *CountryLanguageRepository) List(ctx *gin.Context) (list []model.CountryLanguage, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	tableInfo := s.TableInfo()
+	tableInfo.FieldTypes = map[string]string{"id": "bigint", "lan": "varchar", "name": "varchar", "remark": "varchar", "status": "tinyint", "weigh": "int"}
+	tableInfo.DefaultOrder = "weigh,desc"
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, tableInfo, nil)
 	if err != nil {
 		return nil, 0, err
 	}

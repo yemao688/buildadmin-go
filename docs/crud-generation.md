@@ -93,6 +93,8 @@ fields:
 | `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。 |
 | `defaultSortField` | `string`，默认空 | 默认排序字段。 |
 | `defaultSortType` | `string`，默认空 | 通常 `asc` 或 `desc`。 |
+
+`defaultSortField`/`defaultSortType`（或省略时存在 `weigh` 列的 `weigh desc` 回退）同时驱动前端 `index.vue` 的 `defaultOrder` 与后端仓库 `List()` 无 `order` 参数时的默认 `ORDER BY`（生成器写入 `TableInfo.DefaultOrder`），两处保持一致。后端排序始终追加主键 `desc` 兜底（orderGuarantee，对齐 PHP BuildAdmin `queryOrderBuilder()`）：主排序字段不是主键时在末尾追加上主键 `desc`，保证同权重行分页稳定；非法默认排序静默回退主键 `desc`。
 | `formFields` | `[]string`，省略时自动推导 | 省略时取非主键且未 `formBuildExclude` 的字段；显式 `[]` 表示无表单项。 |
 | `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带 relation enrichment 的外键（FK 自动隐藏）。建议始终显式设置，只放需要在列表出现的字段；`password`、密钥、长备注等不应进列表。 |
 | `dataScope` | map，默认 `mode: auto` | 数据权限策略（见下文）。 |
@@ -932,6 +934,8 @@ fields:
       width: 180
       timeFormat: yyyy-mm-dd hh:MM:ss
 ```
+
+`defaultSortField`/`defaultSortType` 除驱动前端 `defaultOrder` 外，还驱动后端仓库 `List()` 无 `order` 参数时的默认 `ORDER BY`（如上述示例生成 `tableInfo.DefaultOrder = "weigh,desc"`）；后端排序始终追加主键 `desc` 兜底保证分页稳定（orderGuarantee），即使未配置默认排序，无 `order` 参数时也会按主键 `desc` 返回。
 
 ## 11. 附录
 

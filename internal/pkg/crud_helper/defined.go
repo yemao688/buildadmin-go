@@ -454,6 +454,12 @@ type ModelData struct {
 	// "QueryBuilder(ctx, s.TableInfo(), nil)" 形态，保证测试与旧产物逐字节一致）。
 	FieldTypesLiteral string
 
+	// DefaultOrderLiteral 仓库 List 传给 QueryBuilder 的表默认排序 Go 字符串
+	// 字面量（如 "weigh,desc"；id,desc 或空解析结果置空串）。由
+	// writeModelFiles 按 spec defaultSortField/defaultSortType 与 weigh 列
+	// 回退构建，与前端 defaultOrder 保持一致；为空时不输出赋值行。
+	DefaultOrderLiteral string
+
 	Append                    []string
 	Methods                   []string
 	FieldType                 map[string]string
@@ -621,10 +627,11 @@ func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({
 }
 
 func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.ClassName}}, total int64, err error) {
-{{- if .FieldTypesLiteral}}
+{{- if or .FieldTypesLiteral .DefaultOrderLiteral}}
 	tableInfo := s.TableInfo()
-	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
-	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
+{{if .FieldTypesLiteral}}	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
+{{end}}{{if .DefaultOrderLiteral}}	tableInfo.DefaultOrder = {{.DefaultOrderLiteral}}
+{{end}}	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
 {{- else}}
 	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
 {{- end}}

@@ -49,6 +49,11 @@ type TableInfo struct {
 	// 生成器按 spec 传入；手写仓库保持 nil（datetime 搜索回退 unix 时间戳
 	// 转换路径，行为不变）。
 	FieldTypes map[string]string
+	// DefaultOrder 表默认排序，格式与 order 参数一致（"field,dir"，如
+	// "weigh,desc"）。生成仓库由 CRUD 生成器按 spec 填充（defaultSortField/
+	// defaultSortType 显式值优先，否则有 weigh 列时 weigh desc）；手写仓库
+	// 保持空——空时回退主键 desc，行为不变。
+	DefaultOrder string
 }
 
 var fieldNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
@@ -125,26 +130,52 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
 		}
 	}
-	// 排序
-	if queryParameter.Order != "" {
-		orderArr := strings.Split(queryParameter.Order, ",")
+	// 排序：请求参数 order 优先，为空时回退表默认排序（生成器按 spec 填充
+	// DefaultOrder，手写仓库保持空），都没有时按主键 desc。请求参数非法
+	// 直接拒绝；默认排序非法（生成器产物，PHP 也不校验）静默回退主键
+	// desc。orderGuarantee：主排序字段不是主键时，末尾追加主键 desc，
+	// 保证同权重行分页稳定（GORM Order 支持逗号分隔多字段）。
+	orderSource := queryParameter.Order
+	fromDefaultOrder := false
+	if orderSource == "" && table.DefaultOrder != "" {
+		orderSource = table.DefaultOrder
+		fromDefaultOrder = true
+	}
+	primaryOrder := table.TableName + "." + table.Key + " desc"
+	if orderSource != "" {
+		orderArr := strings.Split(orderSource, ",")
 		if len(orderArr) != 2 || (orderArr[1] != "asc" && orderArr[1] != "desc") {
-			err = cErr.BadRequest(util.Lang(ctx, "Order express error:{name}", map[string]string{
-				"name": queryParameter.Order,
-			}))
-			return
+			if fromDefaultOrder {
+				// 默认排序非法：静默回退主键 desc（PHP 不校验 defaultSortField）
+				orderS = primaryOrder
+			} else {
+				err = cErr.BadRequest(util.Lang(ctx, "Order express error:{name}", map[string]string{
+					"name": orderSource,
+				}))
+				return
+			}
+		} else {
+			field := GetFullField(orderArr[0], table)
+			if !IsValidFieldName(field, fieldTypeMap) {
+				if fromDefaultOrder {
+					orderS = primaryOrder
+				} else {
+					err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+						"name": orderArr[0],
+					}))
+					return
+				}
+			} else {
+				orderS = field + " " + orderArr[1]
+				// orderGuarantee：主排序字段是主键（裸名或带表前缀）时
+				// 不再追加，否则末尾追加主键 desc 保证分页稳定
+				if orderArr[0] != table.Key && field != table.TableName+"."+table.Key {
+					orderS += ", " + primaryOrder
+				}
+			}
 		}
-
-		field := GetFullField(orderArr[0], table)
-		if !IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-				"name": orderArr[0],
-			}))
-			return
-		}
-		orderS = field + " " + orderArr[1]
 	} else {
-		orderS = table.TableName + "." + table.Key + " desc"
+		orderS = primaryOrder
 	}
 	search := queryParameter.Search
 	// 通用搜索组装

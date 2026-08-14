@@ -87,8 +87,8 @@ func TestQueryBuilderOrder(t *testing.T) {
 		wantError bool
 	}{
 		{name: "id ascending", query: "order=id,asc", wantOrder: "items.id asc"},
-		{name: "name descending", query: "order=name,desc", wantOrder: "items.name desc"},
-		{name: "qualified field", query: "order=items.name,desc", wantOrder: "items.name desc"},
+		{name: "name descending", query: "order=name,desc", wantOrder: "items.name desc, items.id desc"},
+		{name: "qualified field", query: "order=items.name,desc", wantOrder: "items.name desc, items.id desc"},
 		{name: "function injection", query: "order=sleep(5)", wantError: true},
 		{name: "statement injection", query: "order=id,desc%3Bdrop", wantError: true},
 		{name: "missing direction", query: "order=id", wantError: true},
@@ -112,6 +112,40 @@ func TestQueryBuilderOrder(t *testing.T) {
 				}
 				return
 			}
+			if err != nil {
+				t.Fatalf("QueryBuilder() error = %v", err)
+			}
+			if orderS != tt.wantOrder {
+				t.Fatalf("orderS = %q; want %q", orderS, tt.wantOrder)
+			}
+		})
+	}
+}
+
+// TestQueryBuilderDefaultOrder 验证表默认排序（生成器填充 DefaultOrder）：
+// 无 order 参数时生效并追加主键 desc（orderGuarantee）；主排序本身是主键
+// 时不追加；非法默认排序静默回退主键 desc；显式 order 参数优先覆盖。
+func TestQueryBuilderDefaultOrder(t *testing.T) {
+	tests := []struct {
+		name         string
+		defaultOrder string
+		query        string
+		wantOrder    string
+	}{
+		{name: "DefaultOrder 生效", defaultOrder: "weigh,desc", wantOrder: "items.weigh desc, items.id desc"},
+		{name: "DefaultOrder 为主键不追加", defaultOrder: "id,desc", wantOrder: "items.id desc"},
+		{name: "DefaultOrder 非法回退", defaultOrder: "sleep(5)", wantOrder: "items.id desc"},
+		{name: "显式 order 覆盖 DefaultOrder", defaultOrder: "weigh,desc", query: "order=name,desc", wantOrder: "items.name desc, items.id desc"},
+		{name: "DefaultOrder 字段非法回退", defaultOrder: "name;drop,desc", wantOrder: "items.id desc"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, orderS, _, _, err := QueryBuilder(queryContext(tt.query), TableInfo{
+				TableName:    "items",
+				Key:          "id",
+				DefaultOrder: tt.defaultOrder,
+			}, nil)
 			if err != nil {
 				t.Fatalf("QueryBuilder() error = %v", err)
 			}

@@ -26,7 +26,7 @@ import (
 // writeModelFiles 写入共享贫血实体（internal/model）与 admin 仓库
 // （internal/admin/repository，XxxRepository）；DTO 由 writeHandlerFile
 // 另行落盘。返回实体 struct 内容供 DTO/测试复用。
-func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field, skipRepo bool) (string, error) {
+func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, table crudmodel.Table, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field, skipRepo bool) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
@@ -52,6 +52,7 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 	if !skipRepo {
 		// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
 		modelData.FieldTypesLiteral = buildFieldTypesLiteral(fields)
+		modelData.DefaultOrderLiteral = buildDefaultOrderLiteral(table, fields)
 		repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
 		if err != nil {
 			return "", err
@@ -103,6 +104,35 @@ func buildFieldTypesLiteral(fields []crudmodel.Field) string {
 		entries = append(entries, strconv.Quote(strings.ReplaceAll(field.Name, "_", ""))+": "+strconv.Quote(columnType))
 	}
 	return "map[string]string{" + strings.Join(entries, ", ") + "}"
+}
+
+// buildDefaultOrderLiteral 构建仓库 List 传给 QueryBuilder 的默认排序 Go
+// 字符串字面量（"field,dir"，如 "weigh,desc"）：复用 resolveDefaultSort 语义
+// （spec 显式 defaultSortField/defaultSortType 优先，否则有 weigh 列时
+// weigh desc），与前端 defaultOrder 保持一致。field 为空、sortType 为空、
+// 结果恰为 id,desc（applyDefaultSort 的跳过语义，主键兜底由 QueryBuilder
+// 的 orderGuarantee 处理）或显式字段不存在于 spec 字段集（defaultSortField
+// 拼写错误）时返回空串——后者防止生成非法排序字面量，导致无 order 参数的
+// 每次 List 查询 MySQL 1054 报错。
+func buildDefaultOrderLiteral(table crudmodel.Table, fields []crudmodel.Field) string {
+	hasWeigh := false
+	fieldSet := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		fieldSet[field.Name] = true
+		if field.Name == "weigh" {
+			hasWeigh = true
+		}
+	}
+	field, sortType := resolveDefaultSort(table, hasWeigh)
+	if field == "" || sortType == "" || (field == "id" && sortType == "desc") {
+		return ""
+	}
+	if !fieldSet[field] {
+		// 显式 defaultSortField 指向不存在的字段（typo）：不生成字面量，
+		// 后端回退主键 desc，避免非法 ORDER BY 使每次列表请求 500。
+		return ""
+	}
+	return strconv.Quote(field + "," + sortType)
 }
 
 func addCityTextFields(structContent string, cityFields []string) string {
