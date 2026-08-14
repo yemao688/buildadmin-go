@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.1.8
+
+> 后端默认排序对齐 PHP 上游批次：QueryBuilder 每表默认排序（defaultSortField/defaultSortType，weigh 列回退 weigh desc）+ orderGuarantee 主键兜底，修复带 defaultOrder 列表页首屏错序（下游反馈）；生成器按 spec 产出默认排序字面量，country 模块仓库重新对齐。
+
+- **Fixed (首屏错序, 下游反馈):** 带 `defaultOrder` 的列表页首屏与刷新顺序不一致——前端 `initSort()` 只在首次 `getIndex()` 之后补排序参数（PHP 上游继承的时序），首屏请求不带 `order` 时后端兜底主键 desc，语言页（id 与 weigh 顺序相反）一眼可见错序。修复按 PHP `defaultSortField` 语义落到后端：`TableInfo` 新增 `DefaultOrder`，QueryBuilder 排序三选一（请求 `order` 参数 → 表默认排序 → 主键 desc），首屏即按默认排序返回，与刷新一致。
+- **Added (orderGuarantee):** 主排序字段不是主键时末尾追加 `{表}.{主键} desc`（PHP `orderGuarantee` 语义），同权重行分页稳定；主键本身或非法默认排序（静默回退主键 desc，PHP 不校验）不追加；请求参数非法仍拒绝，错误消息逐字不变。
+- **Changed (CRUD 生成器):** 生成仓库 List() 按 spec 产出 `tableInfo.DefaultOrder` 字面量（`buildDefaultOrderLiteral`：spec 显式 `defaultSortField`/`defaultSortType` 优先，否则有 weigh 列时 `weigh,desc`；`id,desc` 跳过；**typo 字段防护**——显式字段不存在于 spec 字段集时置空回退主键 desc，防止非法 ORDER BY 使每次列表请求 500）。与前端 `defaultOrder` 保持 lockstep（`id,asc` 等显式方向同样生效）。
+- **Changed (country 模块):** `country_currency` / `country_language` 仓库 List() 对齐新模板（FieldTypes + DefaultOrder = "weigh,desc"），与渲染输出逐字节一致；`country_language_content` 无 weigh 不变。
+- **Docs:** crud-generation.md 补充 `defaultSortField`/`defaultSortType` 后端默认 ORDER BY 语义与 orderGuarantee 说明。
+
 ## v3.1.7
 
 > 跨域对齐 PHP 上游白名单反射 + 下游反馈修复批次：CORS 中间件按 PHP AllowCrossDomain 语义重写（origin 反射 + 白名单配置 + Max-Age）、FlexStatus 宽松类型、CRUD 生成器 remoteSelect 列宽继承、部署工程修复（compose project 名、runtime 占位、gitignore）。
