@@ -130,6 +130,8 @@ func newCompleteRouterWithMode(mode string) *gin.Engine {
 
 	return InitRouter(
 		&lumberjack.Logger{},
+		// 零值配置：跨域白名单为空，本测试不涉及跨域场景。
+		&conf.Configuration{},
 		adminRouter.NewAdminRouter(adminRouter.AdminRouterDeps{
 			LoginM:         &adminMiddleware.Login{},
 			AuthorizationM: &adminMiddleware.Authorization{},

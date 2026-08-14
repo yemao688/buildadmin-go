@@ -17,4 +17,5 @@ type App struct {
 	CdnUrlParams       string `mapstructure:"cdn_url_params" json:"cdnUrlParams" yaml:"cdn_url_params"`
 	UserLoginCaptcha   bool   `mapstructure:"user_login_captcha" json:"userLoginCaptcha" yaml:"user_login_captcha"`
 	ApiUrl             string `mapstructure:"api_url" json:"api_url" yaml:"api_url"`
+	CorsRequestDomain  string `mapstructure:"cors_request_domain" json:"cors_request_domain" yaml:"cors_request_domain"`
 }

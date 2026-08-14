@@ -20,6 +20,7 @@ app:
   cdn_url: ''                    # 内容分发网络URL，末尾不带`/`
   cdn_url_params: ''             # CDN URL 附加参数
   api_url: 'https://buildadmin.com' # 接口地址
+  cors_request_domain: '*' # 跨域请求白名单域名（逗号分隔），支持 *
 
 # 点选验证码配置
 click_captcha:

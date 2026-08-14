@@ -10,6 +10,7 @@ import (
 	adminRouter "buildadmin-go/internal/admin/router"
 	apiRouter "buildadmin-go/internal/api/router"
 	"buildadmin-go/internal/common/country"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/i18n"
 	"buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/route"
@@ -26,9 +27,11 @@ import (
 // （internal/admin/router.ProvideRegistrars、internal/api/router.ProvideRegistrars），
 // 根装配件不再按 Group() 分派。
 // countrySvc 提供前台默认语言（country_language 第一条）供 /api/* 无
-// think-lang header 时分流取用。
+// think-lang header 时分流取用。config 提供跨域白名单等应用配置，nil 时
+// 按空白名单处理（跨域仅自身 host 放行）。
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
+	config *conf.Configuration,
 	adminR *adminRouter.AdminRouter,
 	apiR *apiRouter.ApiRouter,
 	countrySvc *country.Service,
@@ -41,7 +44,12 @@ func InitRouter(
 	}
 
 	// 跨域处理。Record 是 admin 渠道的中间件，但按既有语义挂在全局链上。
-	router.Use(middleware.Cors(), adminR.RecordHandler())
+	// config 为 nil 时按空白名单处理（Cors 空串白名单，自身 host 仍放行）。
+	corsRequestDomain := ""
+	if config != nil {
+		corsRequestDomain = config.App.CorsRequestDomain
+	}
+	router.Use(middleware.Cors(corsRequestDomain), adminR.RecordHandler())
 	// gin.Logger 仅在非 release 模式挂载：debug 开发逐请求打 stdout 有用，
 	// release 去掉逐请求访问日志（SQL 日志由 gorm 配置控制，API 访问日志
 	// 非本框架职责）。挂载顺序保持 Logger 在 CustomRecovery/i18n 之前。
