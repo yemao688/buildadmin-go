@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.1.7
+
+> 跨域对齐 PHP 上游白名单反射 + 下游反馈修复批次：CORS 中间件按 PHP AllowCrossDomain 语义重写（origin 反射 + 白名单配置 + Max-Age）、FlexStatus 宽松类型、CRUD 生成器 remoteSelect 列宽继承、部署工程修复（compose project 名、runtime 占位、gitignore）。
+
+- **Fixed (CORS 对齐 PHP 上游):** 中间件从硬编码 `*`+`Allow-Credentials: true`（规范矛盾组合）重写为 PHP `AllowCrossDomain` 语义——`Access-Control-Allow-Origin` 按 `app.cors_request_domain` 白名单（逗号分隔，默认 `*`，支持具体域名）反射具体 origin，自身 host 恒放行，不命中则不加头由浏览器拒绝；补 `Access-Control-Max-Age: 1800` 与 `Vary: Origin`（PHP 版缺失的规范项）；OPTIONS 预检 204 短路保留；Allow-Methods/Allow-Headers 保留显式列表（避免 wildcard+credentials 兼容坑）。配置新增 `conf.App.CorsRequestDomain`（config.defaults.yaml 默认 `*`），经 wire 注入 InitRouter；`originAllowed`/`parseCorsDomains` 纯函数 + 表驱动单测。
+- **Fixed (FlexStatus, 下游反馈):** Status 字符串字段接收数字——新增 `validator.FlexStatus` 宽松类型（`auth.Rule/edit` 400 场景），与 PHP 弱类型对齐。
+- **Fixed (CRUD 生成器):** remoteSelect 关联显示列继承 FK 的 `table.width`，避免列表标题截断 (#8)。
+- **Chore (部署工程):** docker-compose 固定 project 名（容器名不随运行目录/面板注入变化）；`runtime/` 目录 git 占位（bind mount 不再被 Docker 自动创建为 root 属主）；整理 gitignore。
+
 ## v3.1.6
 
 > 第二轮后端优化批次 + 工程基建：压测驱动的性能修复（c=100 拐点四项根因、DealData N+1、attachment N+1、货币缓存）、gin mode 生产引导、压测工具固化、storage 路由调整。
