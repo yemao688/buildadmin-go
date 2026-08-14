@@ -1,10 +1,36 @@
 package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCorsAllowHeadersWildcard(t *testing.T) {
+	// 对齐 PHP 上游 AllowCrossDomain：Allow-Methods/Allow-Headers 为通配符，
+	// 业务扩展 token 域（如 ba-seller-token）无需改动中间件即可通过预检。
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(Cors("*"))
+	router.GET("/api/index/index", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	// 模拟业务门户跨域预检：扩展头 ba-seller-token 不在任何显式列表里。
+	req := httptest.NewRequest(http.MethodOptions, "/api/index/index", nil)
+	req.Header.Set("Origin", "http://portal.example.com")
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "think-lang, server, ba-seller-token")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusNoContent, w.Code)
+	require.Equal(t, "*", w.Header().Get("Access-Control-Allow-Headers"))
+	require.Equal(t, "*", w.Header().Get("Access-Control-Allow-Methods"))
+	require.Equal(t, "http://portal.example.com", w.Header().Get("Access-Control-Allow-Origin"))
+	require.Equal(t, "true", w.Header().Get("Access-Control-Allow-Credentials"))
+}
 
 func TestParseCorsDomains(t *testing.T) {
 	require.Equal(t, []string{"localhost", "127.0.0.1"}, parseCorsDomains("localhost,127.0.0.1"))

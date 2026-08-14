@@ -22,12 +22,14 @@ func Cors(corsRequestDomain string) gin.HandlerFunc {
 		// 公共头（每次请求都设置）：凭据 + 预检缓存 30 分钟。
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Max-Age", "1800")
-		// Allow-Methods / Allow-Headers 保留显式列表：已覆盖 think-lang、
-		// server、ba-user-token、batoken、Authorization、Content-Type、
-		// X-Requested-With 等前端实际使用的头。不用通配符，避免与
-		// Allow-Credentials: true 组合时的浏览器兼容坑。
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "think-lang, server, ba-user-token, batoken, Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With")
+		// Allow-Methods / Allow-Headers 用通配符（对齐 PHP 上游 AllowCrossDomain
+		// 的 '*'）：tokenProvider 支持业务注册任意 header 域（如 ba-seller-token），
+		// 显式列表无法感知扩展域会导致跨域预检失败。本框架前端为纯 token
+		// header 模式（无 withCredentials），请求不带 credentials，'*' 通配符
+		// 按规范合法生效（PHP 生态同款验证）；仅当未来启用 cookie 会话
+		// （withCredentials）且发自定义头时，'*' 不匹配，需改回显式/反射方案。
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
 		c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length")
 
 		// Origin 为空（同源/无 Origin 请求）直接进入公共头逻辑，不做反射。
