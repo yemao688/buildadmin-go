@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.1
+
+> 台账表兼容 `explicit_defaults_for_timestamp=OFF`（阿里云 RDS 默认参数）——建表 DDL 显式 `DEFAULT CURRENT_TIMESTAMP(6)`（无 ON UPDATE），校验接受无默认或 CURRENT_TIMESTAMP(6) 形态，Bootstrap 幂等自愈旧版 DDL 留下的 ON UPDATE 坏表。
+
+- **Fixed (下游反馈):** `explicit_defaults_for_timestamp=OFF`（阿里云 RDS 默认参数）下 `migrate` 必然失败：`migrations_framework schema mismatch at start_time`——旧版建表 DDL `start_time TIMESTAMP(6) NOT NULL`（无 DEFAULT）依赖 `explicit_defaults_for_timestamp=ON`，OFF 模式被 MySQL 强加隐式 `DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)`，与校验 `RequireNoDefault` 自相矛盾（开发环境默认 ON 掩盖）。更隐蔽的是 ON UPDATE 会在 `CompleteTrackedMigration` 更新 `end_time` 时静默改写 `start_time`，台账"迁移开始时间"语义损坏。修复：建表 DDL 显式声明 `DEFAULT CURRENT_TIMESTAMP(6)`（实测两种模式行为一致、无 ON UPDATE）；校验放宽为接受无默认或 `CURRENT_TIMESTAMP(6)`（拒绝其它默认）；`BootstrapTrackedLedger` 检测旧坏表（EXTRA 含 on update）幂等 `ALTER MODIFY` 自愈，下游合并后跑一次 `migrate` 即恢复，无需手动 SQL。
+
 ## v3.2.0
 
 > 部署与运维批次 + 下游反馈修复：构建加速三层闭环（基础镜像 BASE_REGISTRY 前缀化 + GOPROXY/APK_MIRROR 统一透传）、banner/--version 业务版本显示、容器 crud:apply 路径校验修复、remoteSelect 搜索列 show:false、Makefile 重构（BUILDER 死变量激活 / BUILDX_ARGS 公共参数 / run 目标修复）。
