@@ -14,6 +14,24 @@ const Framework = "3.1.9"
 // Upstream is the compatible PHP BuildAdmin baseline; framework maintainers update it when syncing PHP upstream.
 const Upstream = "2.3.8"
 
+// Business 是业务仓库版本（业务根 VERSION 文件），构建时经 ldflags 注入
+// （-X buildadmin-go/internal/pkg/version.Business=${VERSION}-${GIT_SHA}-${BUILD_TS}，
+// Makefile 从业务根 VERSION 文件读取）；未注入（本地 go run / 框架开发）
+// 时保持 "dev"。
+var Business = "dev"
+
+// Display 返回展示用版本：业务版本有效（非 dev 前缀）时以业务版本为主、
+// 框架版本为辅（"1.0.0-gitabc-ts (framework 3.1.9)"）；未注入时仅框架
+// 版本（框架源仓库 / 本地开发场景，线上业务镜像注入后即正确显示业务版本）。
+// 用 dev 前缀而非精确等于 "dev"：无业务 VERSION 文件时 Makefile 默认
+// VERSION=dev，Dockerfile 会注入 "dev-<gitsha>-<ts>"，精确匹配会漏判。
+func Display() string {
+	if Business != "" && !strings.HasPrefix(Business, "dev") {
+		return Business + " (framework " + Framework + ")"
+	}
+	return Framework
+}
+
 // 比较两个版本号
 func Compare(v1, v2 string) bool {
 	if v2 == "" {

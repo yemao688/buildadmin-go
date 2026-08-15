@@ -14,8 +14,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-// Version 是命令行输出的框架版本。
-var Version = appVersion.Framework
+// Version 是命令行输出的版本（业务版本优先，框架版本兜底，见 version.Display）。
+var Version = appVersion.Display()
 
 var (
 	rootPath     = util.RootPath()

@@ -11,8 +11,10 @@ import (
 )
 
 func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
-	if Version != appVersion.Framework {
-		t.Fatalf("Version = %q, want %q", Version, appVersion.Framework)
+	// 未注入业务版本（Business == "dev"）时 Display() 回退框架版本，
+	// 线上业务镜像经 ldflags 注入后 Version 即为业务版本 + 框架标注。
+	if Version != appVersion.Display() {
+		t.Fatalf("Version = %q, want %q", Version, appVersion.Display())
 	}
 }
 

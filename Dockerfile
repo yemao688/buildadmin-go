@@ -9,7 +9,7 @@ ENV GOPROXY=${GOPROXY}
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}-${GIT_SHA}-${BUILD_TS}" -o /out/app ./cmd/server
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X buildadmin-go/internal/pkg/version.Business=${VERSION}-${GIT_SHA}-${BUILD_TS}" -o /out/app ./cmd/server
 
 FROM alpine:3.22
 WORKDIR /app

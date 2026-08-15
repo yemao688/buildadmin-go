@@ -106,7 +106,7 @@ func (a *ServerApp) ReportUnprotectedRoutes() {
 // printBanner 输出 vite dev 风格的入口地址，方便直接点选访问
 func (a *ServerApp) printBanner() {
 	port := a.config.App.Port
-	fmt.Printf("\n  %s ready in %d ms\n\n", appVersion.Framework, time.Since(appStartedAt).Milliseconds())
+	fmt.Printf("\n  %s ready in %d ms\n\n", appVersion.Display(), time.Since(appStartedAt).Milliseconds())
 	fmt.Printf("  ➜  Local:   http://localhost:%s/\n", port)
 	if ip := firstLanIPv4(); ip != "" {
 		fmt.Printf("  ➜  Network: http://%s:%s/\n", ip, port)
