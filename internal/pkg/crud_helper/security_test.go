@@ -2,6 +2,8 @@ package crud_helper
 
 import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -109,6 +111,33 @@ func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
 	}
 	if err := ValidateGeneratedAbsolutePath("/tmp/outside.go", "internal/admin/model"); err == nil {
 		t.Fatal("absolute path outside root was accepted")
+	}
+}
+
+// TestValidateSymlinkContainmentMissingRoot 覆盖生产容器镜像场景：root 目录
+// 不存在（容器里没有 internal/ 源码树，只有二进制 + crud_specs），
+// EvalSymlinks 失败时须回退原始路径参与包含性比较，不能误判逃逸
+// （修复前 resolvedRoot 为空串导致 filepath.Rel 报错 → "outside permitted
+// roots"，阻断容器内 crud:apply/plan 部署用法）。
+func TestValidateSymlinkContainmentMissingRoot(t *testing.T) {
+	tmp := t.TempDir()
+	missingRoot := filepath.Join(tmp, "internal", "model")
+	// root 与 candidate 均不存在（容器场景），且 candidate 位于 root 之下
+	candidate := filepath.Join(missingRoot, "seller_user.go")
+	if err := validateSymlinkContainment(missingRoot, candidate); err != nil {
+		t.Fatalf("missing root with contained candidate rejected: %v", err)
+	}
+	// root 存在时同路径仍须通过（开发场景不受影响）
+	if err := os.MkdirAll(missingRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateSymlinkContainment(missingRoot, candidate); err != nil {
+		t.Fatalf("existing root with contained candidate rejected: %v", err)
+	}
+	// 逃逸场景仍拒绝：candidate 在 root 之外（同级相邻目录）
+	sibling := filepath.Join(tmp, "internal", "other", "escape.go")
+	if err := validateSymlinkContainment(missingRoot, sibling); err == nil {
+		t.Fatal("sibling candidate outside root was accepted")
 	}
 }
 

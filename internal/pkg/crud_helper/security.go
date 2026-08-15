@@ -442,8 +442,12 @@ func validateAbsolutePathUnderRoots(candidate string, roots ...string) error {
 }
 
 func validateSymlinkContainment(root, candidate string) error {
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil && !os.IsNotExist(err) {
+	// root 与 candidate 用同一套解析逻辑（存在则 EvalSymlinks，不存在则
+	// 向上解析最近存在的祖先再拼回后缀）：root 目录不存在（如生产容器
+	// 镜像无源码树）时同样可解析，避免 EvalSymlinks 失败零值空串导致
+	// filepath.Rel 相对/绝对混合报错而误判逃逸。
+	resolvedRoot, err := resolveExistingPath(root)
+	if err != nil {
 		return err
 	}
 	resolvedCandidate, err := resolveExistingPath(candidate)
