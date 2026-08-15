@@ -459,7 +459,7 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 
 func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 	db := getDB(t)
-	variants := []string{"engine", "signed-version", "timestamp", "default", "missing-autoincrement", "missing-unique", "wrong-unique"}
+	variants := []string{"engine", "signed-version", "timestamp", "missing-autoincrement", "missing-unique", "wrong-unique"}
 	for i, variant := range variants {
 		config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("negative_%d_", i)}}
 		table := config.Database.Prefix + "migrations_framework"
@@ -475,6 +475,74 @@ func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// TestLedgerDefaultCurrentTimestampAccepted 验证显式 DEFAULT CURRENT_TIMESTAMP(6)
+// 的 start_time 通过校验（新 DDL 形态，explicit_defaults_for_timestamp 两种模式下一致）。
+func TestLedgerDefaultCurrentTimestampAccepted(t *testing.T) {
+	db := getDB(t)
+	config := &conf.Configuration{Database: conf.Database{Prefix: "default_ok_"}}
+	table := config.Database.Prefix + "migrations_framework"
+	if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
+		t.Fatal(err)
+	}
+	defer db.Exec("DROP TABLE IF EXISTS `" + table + "`")
+	if err := createLedgerVariant(db, table, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
+		t.Fatalf("DEFAULT CURRENT_TIMESTAMP(6) schema rejected: %v", err)
+	}
+}
+
+// TestLedgerStartTimeOnUpdateSelfHeal 模拟 explicit_defaults_for_timestamp=OFF
+// （阿里云 RDS 默认参数）下旧版 DDL 建出的坏表（start_time 被隐式强加
+// ON UPDATE CURRENT_TIMESTAMP(6)），验证 Bootstrap 幂等自愈并可通过校验。
+func TestLedgerStartTimeOnUpdateSelfHeal(t *testing.T) {
+	db := getDB(t)
+	config := &conf.Configuration{Database: conf.Database{Prefix: "selfheal_"}}
+	table := config.Database.Prefix + "migrations_framework"
+	if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
+		t.Fatal(err)
+	}
+	defer db.Exec("DROP TABLE IF EXISTS `" + table + "`")
+	// 旧版 DDL 形态（start_time 无显式 DEFAULT），含唯一索引以通过索引校验
+	if err := db.Exec("CREATE TABLE `" + table + "` (`version` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, `migration_name` VARCHAR(191) NOT NULL, `start_time` TIMESTAMP(6) NOT NULL, `end_time` TIMESTAMP(6) NULL DEFAULT NULL, `breakpoint` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`version`), UNIQUE KEY `uq_migrations_framework_migration_name` (`migration_name`)) ENGINE=InnoDB").Error; err != nil {
+		t.Fatal(err)
+	}
+	// OFF 模式下该形态会被 MySQL 强加隐式 ON UPDATE；若当前会话为 ON 模式
+	// 则不会出现，此时显式 MODIFY 模拟坏表形态
+	var extra string
+	if err := db.Raw("SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'start_time'", table).Scan(&extra).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.ToLower(extra), "on update") {
+		if err := db.Exec("ALTER TABLE `" + table + "` MODIFY `start_time` TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)").Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	// 自愈前校验应失败（RequireNoDefault 语义在旧校验下……实际新校验允许
+	// CURRENT_TIMESTAMP(6) 默认，但 ON UPDATE 形态必须被 Bootstrap 修复）
+	if err := BootstrapFrameworkLedger(db, config); err != nil {
+		t.Fatal(err)
+	}
+	var healed string
+	if err := db.Raw("SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'start_time'", table).Scan(&healed).Error; err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(healed), "on update") {
+		t.Fatalf("start_time still carries ON UPDATE after bootstrap self-heal: %q", healed)
+	}
+	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
+		t.Fatalf("self-healed schema rejected: %v", err)
+	}
+	// 幂等：再次 Bootstrap 不报错且不再改动
+	if err := BootstrapFrameworkLedger(db, config); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
+		t.Fatalf("second bootstrap schema rejected: %v", err)
 	}
 }
 

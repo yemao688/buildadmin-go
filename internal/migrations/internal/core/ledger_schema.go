@@ -23,6 +23,7 @@ type ledgerColumnSpec struct {
 	Precision            int
 	CheckPrecision       bool
 	RequireNoDefault     bool
+	AllowCurrentTimestampDefault bool
 	AcceptUnsigned       bool
 	RequireAutoIncrement bool
 	ExpectedDefault      *string
@@ -58,6 +59,10 @@ func compareLedgerColumns(actual []ledgerColumn, expected []ledgerColumnSpec) *l
 			return &ledgerColumnMismatch{columnName: column.Name}
 		}
 		if spec.RequireNoDefault && column.Default.Valid {
+			return &ledgerColumnMismatch{columnName: column.Name}
+		}
+		if spec.AllowCurrentTimestampDefault && column.Default.Valid &&
+			!strings.EqualFold(column.Default.String, "CURRENT_TIMESTAMP(6)") {
 			return &ledgerColumnMismatch{columnName: column.Name}
 		}
 		if spec.ExpectedDefault != nil && (!column.Default.Valid || column.Default.String != *spec.ExpectedDefault) {

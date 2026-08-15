@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"buildadmin-go/internal/conf"
@@ -20,13 +21,34 @@ func BootstrapTrackedLedger(db *gorm.DB, config *conf.Configuration, logicalName
 	if err := ValidatePrefix(config); err != nil {
 		return err
 	}
-	return db.Exec("CREATE TABLE IF NOT EXISTS " + QuoteIdentifier(TableName(config, logicalName)) + " (" +
+	if err := db.Exec("CREATE TABLE IF NOT EXISTS " + QuoteIdentifier(TableName(config, logicalName)) + " (" +
 		"`version` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, " +
 		"`migration_name` VARCHAR(191) NOT NULL, " +
-		"`start_time` TIMESTAMP(6) NOT NULL, " +
+		"`start_time` TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), " +
 		"`end_time` TIMESTAMP(6) NULL DEFAULT NULL, " +
 		"`breakpoint` TINYINT(1) NOT NULL DEFAULT 0, " +
-		"PRIMARY KEY (`version`), UNIQUE KEY `uq_" + logicalName + "_migration_name` (`migration_name`)) ENGINE=InnoDB").Error
+		"PRIMARY KEY (`version`), UNIQUE KEY `uq_" + logicalName + "_migration_name` (`migration_name`)) ENGINE=InnoDB").Error; err != nil {
+		return err
+	}
+	return repairLedgerStartTimeSelfHeal(db, config, logicalName)
+}
+
+// repairLedgerStartTimeSelfHeal 修复 explicit_defaults_for_timestamp=OFF（阿里云
+// RDS 默认参数）下旧版 DDL 建出的台账表：start_time 无显式 DEFAULT 时被 MySQL
+// 强制加隐式 ON UPDATE CURRENT_TIMESTAMP(6)，不仅校验失败（RequireNoDefault），
+// 更新 end_time 时 start_time 还会被静默改写为完成时间。检测到该形态时幂等
+// ALTER 为显式 DEFAULT CURRENT_TIMESTAMP(6)（无 ON UPDATE，两种模式下一致）。
+func repairLedgerStartTimeSelfHeal(db *gorm.DB, config *conf.Configuration, logicalName string) error {
+	table := TableName(config, logicalName)
+	var extra string
+	if err := db.Raw("SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'start_time'", table).Scan(&extra).Error; err != nil {
+		return err
+	}
+	if !strings.Contains(strings.ToLower(extra), "on update") {
+		return nil
+	}
+	return db.Exec("ALTER TABLE " + QuoteIdentifier(table) +
+		" MODIFY `start_time` TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)").Error
 }
 
 func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logicalName string) error {
@@ -49,7 +71,7 @@ func ValidateTrackedLedgerSchema(db *gorm.DB, config *conf.Configuration, logica
 	want := []ledgerColumnSpec{
 		{Name: "version", Type: "bigint unsigned", Nullable: "NO", CheckPrecision: true, RequireNoDefault: true, RequireAutoIncrement: true},
 		{Name: "migration_name", Type: "varchar(191)", Nullable: "NO", CheckPrecision: true, RequireNoDefault: true},
-		{Name: "start_time", Type: "timestamp(6)", Nullable: "NO", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
+		{Name: "start_time", Type: "timestamp(6)", Nullable: "NO", Precision: 6, CheckPrecision: true, AllowCurrentTimestampDefault: true},
 		{Name: "end_time", Type: "timestamp(6)", Nullable: "YES", Precision: 6, CheckPrecision: true, RequireNoDefault: true},
 		{Name: "breakpoint", Type: "tinyint(1)", Nullable: "NO", CheckPrecision: true, ExpectedDefault: &defaultZero},
 	}
