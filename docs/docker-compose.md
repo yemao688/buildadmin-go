@@ -83,6 +83,20 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 
 `make frontend` 会替换根 `public/assets/` 并复制 `public/index.html`，替换而非叠加可避免旧 hash 资源残留；Dockerfile 不构建前端，也不消费 `web/dist/`。`make build` 仅接受单个平台并使用 `--load`；多平台发布使用 `make push`。
 
+#### 构建加速（国内网络）
+
+框架已为国内环境覆盖三层拉取加速，`make build`/`make push` 开箱即用（三个加速点统一由 Makefile `BUILDX_ARGS` 透传）：
+
+- **基础镜像**（本层是 buildx 独立 buildkitd 的唯一阻断点）：镜像名与版本号在 Dockerfile 维护（`FROM golang:1.25-alpine` / `FROM alpine:3.22`），构建时经 `BASE_REGISTRY` 前缀加速——默认 `docker.m.daocloud.io/`（daocloud 镜像站，全量同步 Docker Hub）。buildx 的 `docker-container` driver 不继承 daemon 的 `registry-mirrors`（`~/.docker/daemon.json` 或 OrbStack 配置对它无效），必须由构建参数注入。
+- **Go 模块**：`GOPROXY` 默认 `https://goproxy.cn,direct`。
+- **apk 包**：`APK_MIRROR` 默认 `https://mirrors.aliyun.com/alpine`。
+
+海外构建机一条命令覆盖回官方源（三个加速点统一）：
+
+```bash
+make push BASE_REGISTRY= GOPROXY=https://proxy.golang.org,direct APK_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+```
+
 ### 生产机文件
 
 生产机保存：

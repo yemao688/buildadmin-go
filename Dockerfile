@@ -1,4 +1,9 @@
-FROM golang:1.25-alpine AS go-build
+# 基础镜像加速地址前缀（默认 daocloud 国内加速；buildx 独立 buildkitd 不
+# 继承 daemon 的 registry-mirrors，FROM 直连 docker.io 是国内发布阻断点；
+# 海外构建机 --build-arg BASE_REGISTRY= 传空回官方源）
+ARG BASE_REGISTRY=docker.m.daocloud.io/
+
+FROM ${BASE_REGISTRY}golang:1.25-alpine AS go-build
 WORKDIR /src
 ARG VERSION=dev
 ARG GIT_SHA=unknown
@@ -11,7 +16,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X buildadmin-go/internal/pkg/version.Business=${VERSION}-${GIT_SHA}-${BUILD_TS}" -o /out/app ./cmd/server
 
-FROM alpine:3.22
+FROM ${BASE_REGISTRY}alpine:3.22
 WORKDIR /app
 # 国内 apk 镜像加速；海外构建机可 --build-arg APK_MIRROR=https://dl-cdn.alpinelinux.org/alpine 覆盖
 ARG APK_MIRROR=https://mirrors.aliyun.com/alpine

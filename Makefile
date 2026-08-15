@@ -7,15 +7,39 @@ endif
 DEPLOY_REGISTRY ?= registry.example.com
 DEPLOY_IMAGE_NAME ?= buildadmin-go
 DEPLOY_PLATFORMS ?= linux/amd64,linux/arm64
-BUILDER ?= buildadmin-go-builder
+BUILDER ?= buildadmin-builder
 VERSION ?= $(shell tr -d '[:space:]' < VERSION 2>/dev/null)
 VERSION := $(if $(VERSION),$(VERSION),dev)
 GIT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
 BUILD_TS ?= $(shell date -u +%Y%m%dT%H%M%SZ)
 FULL_TAG := $(VERSION)-$(GIT_SHA)-$(BUILD_TS)
 IMAGE := $(DEPLOY_REGISTRY)/$(DEPLOY_IMAGE_NAME)
+# 基础镜像加速前缀（镜像名与版本号在 Dockerfile 维护；默认 daocloud 国内
+# 加速，海外构建机: make push BASE_REGISTRY= 传空回官方源）
+BASE_REGISTRY ?= docker.m.daocloud.io/
+# Go 模块代理与 apk 镜像源（Dockerfile 内置同款默认；海外构建机可覆盖）
+GOPROXY ?= https://goproxy.cn,direct
+APK_MIRROR ?= https://mirrors.aliyun.com/alpine
 
-.PHONY: frontend login builder build push version run setup setup-docker run-docker run-docker-dev logs ps stop clean
+# build/push 共用的 buildx 参数（三个加速点统一透传，海外一条命令全覆盖）
+BUILDX_ARGS := \
+	--platform $(DEPLOY_PLATFORMS) \
+	--build-arg VERSION=$(VERSION) \
+	--build-arg GIT_SHA=$(GIT_SHA) \
+	--build-arg BUILD_TS=$(BUILD_TS) \
+	--build-arg BASE_REGISTRY=$(BASE_REGISTRY) \
+	--build-arg GOPROXY=$(GOPROXY) \
+	--build-arg APK_MIRROR=$(APK_MIRROR) \
+	--tag $(IMAGE):$(FULL_TAG) \
+	--tag $(IMAGE):$(VERSION) \
+	--tag $(IMAGE):latest
+
+.PHONY: frontend builder login build push version run setup setup-docker run-docker run-docker-dev logs ps stop clean
+
+# 确保多平台 buildkit builder 存在（docker-container driver）
+builder:
+	@docker buildx use $(BUILDER) 2>/dev/null || \
+		docker buildx create --use --name $(BUILDER) --driver docker-container
 
 # pnpm-lock.yaml 被 gitignore，发布机本地生成；存在且新于 node_modules 时才重装
 frontend:
@@ -48,33 +72,11 @@ login:
 	@echo "Login to $(DEPLOY_REGISTRY) as $$DEPLOY_REGISTRY_USER (via stdin) ..."
 	@echo "$$DEPLOY_REGISTRY_PASSWORD" | docker login -u "$$DEPLOY_REGISTRY_USER" --password-stdin $(DEPLOY_REGISTRY)
 
-build:
-	docker buildx use buildadmin-builder 2>/dev/null || \
-		docker buildx create --use --name buildadmin-builder --driver docker-container
-	docker buildx build \
-		--platform $(DEPLOY_PLATFORMS) \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_TS=$(BUILD_TS) \
-		--tag $(IMAGE):$(FULL_TAG) \
-		--tag $(IMAGE):$(VERSION) \
-		--tag $(IMAGE):latest \
-		--load \
-		.
+build: builder
+	docker buildx build $(BUILDX_ARGS) --load .
 
-push: login
-	docker buildx use buildadmin-builder 2>/dev/null || \
-		docker buildx create --use --name buildadmin-builder --driver docker-container
-	docker buildx build \
-		--platform $(DEPLOY_PLATFORMS) \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_TS=$(BUILD_TS) \
-		--tag $(IMAGE):$(FULL_TAG) \
-		--tag $(IMAGE):$(VERSION) \
-		--tag $(IMAGE):latest \
-		--push \
-		.
+push: login builder
+	docker buildx build $(BUILDX_ARGS) --push .
 	@echo ""
 	@echo "Pushed 3 tags:"
 	@echo "  $(IMAGE):$(FULL_TAG)  (精确,git-sha 在内)"
@@ -86,7 +88,7 @@ push: login
 
 # 本地前台运行 Go 服务。
 run:
-	go run .
+	go run ./cmd/server
 
 # 宿主机安装（交互式）。Web 安装向导已移除，安装统一走 setup CLI。
 # 无人值守: make setup ARGS="--yes --db-host ... --db-name ... --db-user ... --db-password ... --admin-password ..."
@@ -127,7 +129,8 @@ version:
 	@echo "BUILD_TS                    = $(BUILD_TS)"
 	@echo "FULL_TAG                    = $(FULL_TAG)"
 	@echo "IMAGE                       = $(IMAGE)"
+	@echo "BASE_REGISTRY               = $(BASE_REGISTRY)"
 
 clean:
 	docker rmi -f $(IMAGE):$(FULL_TAG) $(IMAGE):$(VERSION) $(IMAGE):latest 2>/dev/null || true
-	docker buildx rm buildadmin-builder 2>/dev/null || true
+	docker buildx rm $(BUILDER) 2>/dev/null || true
