@@ -1343,10 +1343,11 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 // RelationFields 第一个字段（逗号分割 trim）作为搜索字段，prop 为
 // "<alias>.<field>" 点号形态（alias 由字段名派生：admin_id → admin、
 // editor_id → editor，同表多 FK 各自独立别名，对齐 PHP withJoinTable）。
-// operator 固定 LIKE。语言键沿用 parseJoinData 的 relationFieldLangPrefix
-// 约定（<小写 relationName>__<字段>），prop 前缀、语言键与关联显示列三者
-// 同源（relationNameForField），保证前端提交的查询参数能被后端 SearchJoins
-// 命中。
+// operator 固定 LIKE，show: false 仅服务公共搜索、不渲染表格列（显示由
+// FK 列 formatter 承担，避免与关联显示列重复两列）。语言键沿用
+// parseJoinData 的 relationFieldLangPrefix 约定（<小写 relationName>__<字段>），
+// prop 前缀、语言键与关联显示列三者同源（relationNameForField），保证前端
+// 提交的查询参数能被后端 SearchJoins 命中。
 func buildRelationSearchColumn(field crudmodel.Field, webTranslate string) string {
 	relationField := strings.TrimSpace(strings.Split(field.Form.RelationFields, ",")[0])
 	relationName := relationNameForField(field.Name)
@@ -1356,6 +1357,7 @@ func buildRelationSearchColumn(field crudmodel.Field, webTranslate string) strin
 	column += buildTableColumnKey("align", "center")
 	column += buildTableColumnKey("operator", "LIKE")
 	column += buildTableColumnKey("operatorPlaceholder", "t('Fuzzy query')")
+	column += buildTableColumnKey("show", "false")
 	return column
 }
 

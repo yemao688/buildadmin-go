@@ -80,6 +80,7 @@ func TestBuildRelationSearchColumn(t *testing.T) {
 		`align: "center"`,
 		`operator: "LIKE"`,
 		`operatorPlaceholder: t('Fuzzy query')`,
+		`show: false`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("buildRelationSearchColumn() = %s; want contains %s", got, want)
