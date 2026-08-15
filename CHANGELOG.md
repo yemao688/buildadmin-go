@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.2.0
+
+> 部署与运维批次 + 下游反馈修复：构建加速三层闭环（基础镜像 BASE_REGISTRY 前缀化 + GOPROXY/APK_MIRROR 统一透传）、banner/--version 业务版本显示、容器 crud:apply 路径校验修复、remoteSelect 搜索列 show:false、Makefile 重构（BUILDER 死变量激活 / BUILDX_ARGS 公共参数 / run 目标修复）。
+
+- **Chore (构建加速, 下游反馈):** buildx 独立 buildkitd 不继承 daemon 的 registry-mirrors，`FROM` 直连 docker.io 是国内发布唯一阻断点——Dockerfile 基础镜像 `BASE_REGISTRY` 前缀化（默认 `docker.m.daocloud.io/` 国内加速，海外 `--build-arg BASE_REGISTRY=` 传空回官方源），镜像名与版本号仍在 Dockerfile 维护；Makefile `BUILDX_ARGS` 统一透传三个加速点（BASE_REGISTRY / GOPROXY / APK_MIRROR），海外一条命令全覆盖。
+- **Fixed (版本显示, 下游反馈):** banner/`--version` 原硬编码框架版本——Dockerfile ldflags `-X main.Version` 注入落空（main 包无该变量），改为注入 `version.Business`；新增 `version.Display()`：业务版本主显 + 框架版本辅显（"1.0.0-gitabc-ts (framework 3.2.0)"），未注入（dev/空）回退框架版本。
+- **Fixed (容器 crud:apply, 下游反馈):** 生产镜像无源码树（root 目录缺失）时 `validateSymlinkContainment` 的 `EvalSymlinks` 失败零值空串导致 `filepath.Rel` 误判逃逸——root 与 candidate 统一经 `resolveExistingPath` 对称解析（存在则 EvalSymlinks，缺失则向上解析最近存在祖先再拼回后缀），容器内 `crud:apply`/`--plan` 部署用法恢复；逃逸拒绝能力保留。
+- **Fixed (remoteSelect 搜索列, 下游反馈):** 生成器关联搜索列补 `show: false`——仅服务公共搜索不渲染表格列（显示由 FK 列 formatter 承担），避免与关联显示列重复两列。
+- **Chore (Makefile 重构):** `BUILDER` 死变量激活（原 build/push/clean 硬编码同名串）+ 独立 `builder` target 收敛 buildx use/create；`BUILDX_ARGS` 公共参数消除 build/push 90% 重复；`run` 目标修复为 `go run ./cmd/server`（原 `go run .` 根目录无 Go 文件必败）；`version` 目标补 BASE_REGISTRY 输出。
+
 ## v3.1.9
 
 > remoteSelect 关联字段搜索对齐 PHP 上游批次 + 部署工程：QueryBuilder EXISTS 子查询关联搜索（alias.field 点号参数，count 天然正确）、生成器产出 SearchJoins 与关联搜索列（alias 字段名派生、仅 remoteSelect）、CORS Allow-Headers 通配符修复业务扩展 token 域、内置可选 /docs 文档服务、Dockerfile 精简与 apk 镜像加速。
