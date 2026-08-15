@@ -21,7 +21,7 @@ const Upstream = "2.3.8"
 var Business = "dev"
 
 // Display 返回展示用版本：业务版本有效（非 dev 前缀）时以业务版本为主、
-// 框架版本为辅（"1.0.0-gitabc-ts (framework 3.2.0)"）；未注入时仅框架
+// 框架版本为辅（形如 "业务版本 (framework 框架版本)"）；未注入时仅框架
 // 版本（框架源仓库 / 本地开发场景，线上业务镜像注入后即正确显示业务版本）。
 // 用 dev 前缀而非精确等于 "dev"：无业务 VERSION 文件时 Makefile 默认
 // VERSION=dev，Dockerfile 会注入 "dev-<gitsha>-<ts>"，精确匹配会漏判。
