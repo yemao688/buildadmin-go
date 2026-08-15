@@ -421,6 +421,17 @@ func analyseGenerationFields(fields []crudmodel.Field, table crudmodel.Table, we
 			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", webTranslate))
 		}
 
+		// 关联搜索列：remoteSelect 且配置了关联表与展示字段时，在 FK 列之外
+		// 额外追加一列 alias.field 的 LIKE 搜索列（prop 为点号形态，前端直接
+		// 以该 key 提交查询参数；无 comSearchRender，走既有文本输入分支，组件
+		// 零改动）。语言键复用 parseJoinData 的 relationFieldLangPrefix 约定，
+		// 保证 i18n 字典已有对应条目。仅 remoteSelect 参与：remoteSelects 的
+		// CSV 多选 FK 无法等值关联（对齐 PHP withJoinTable 只覆盖 remoteSelect）。
+		if field.DesignType == "remoteSelect" &&
+			field.Form.RemoteTable != "" && strings.TrimSpace(field.Form.RelationFields) != "" {
+			indexVueData.TableColumn = append(indexVueData.TableColumn, buildRelationSearchColumn(field, webTranslate))
+		}
+
 		// 关联表数据解析
 		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
 			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
@@ -1326,6 +1337,55 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 		columnStr += " replaceValue: {" + strings.TrimRight(itemJson, ",") + "},"
 	}
 	return columnStr
+}
+
+// buildRelationSearchColumn 构建 remoteSelect 字段的关联搜索列：取
+// RelationFields 第一个字段（逗号分割 trim）作为搜索字段，prop 为
+// "<alias>.<field>" 点号形态（alias 由字段名派生：admin_id → admin、
+// editor_id → editor，同表多 FK 各自独立别名，对齐 PHP withJoinTable）。
+// operator 固定 LIKE。语言键沿用 parseJoinData 的 relationFieldLangPrefix
+// 约定（<小写 relationName>__<字段>），prop 前缀、语言键与关联显示列三者
+// 同源（relationNameForField），保证前端提交的查询参数能被后端 SearchJoins
+// 命中。
+func buildRelationSearchColumn(field crudmodel.Field, webTranslate string) string {
+	relationField := strings.TrimSpace(strings.Split(field.Form.RelationFields, ",")[0])
+	relationName := relationNameForField(field.Name)
+	relationFieldLangPrefix := strings.ToLower(relationName) + "__"
+	column := buildTableColumnKey("label", "t("+strconv.Quote(webTranslate+relationFieldLangPrefix+relationField)+")")
+	column += buildTableColumnKey("prop", relationName+"."+relationField)
+	column += buildTableColumnKey("align", "center")
+	column += buildTableColumnKey("operator", "LIKE")
+	column += buildTableColumnKey("operatorPlaceholder", "t('Fuzzy query')")
+	return column
+}
+
+// buildSearchJoinLiteral 构建仓库 List 传给 QueryBuilder 的 SearchJoins 关联
+// 搜索字面量：仅 remoteSelect（且声明了 RemoteTable）的字段各生成一条
+// SearchJoin（Alias=由字段名派生的关联名：admin_id → admin、editor_id →
+// editor，同表多 FK 互不冲突；Table=mysql.prefix+RemoteTable 真实表名；
+// PK=关联表主键列（缺省 id）；FK=主表外键列）。remoteSelects 的 CSV 多选
+// FK 无法等值关联，从不参与（对齐 PHP withJoinTable 只覆盖 remoteSelect）。
+// 按条目整体排序（首键即 Alias）保证可重复生成（crud:delete + 重新生成
+// 逐字节一致）；无匹配返回空串（不生成赋值行，无关联字段的表产物零 diff）。
+// querybuilder 类型引用由渲染期 goimports 自动补 import。
+func buildSearchJoinLiteral(table crudmodel.Table, fields []crudmodel.Field, prefix string) string {
+	joins := make([]string, 0)
+	for _, field := range fields {
+		if field.DesignType != "remoteSelect" || field.Form.RemoteTable == "" {
+			continue
+		}
+		alias := relationNameForField(field.Name)
+		pk := field.Form.RemotePk
+		if pk == "" {
+			pk = "id"
+		}
+		joins = append(joins, "{Alias: "+strconv.Quote(alias)+", Table: "+strconv.Quote(prefix+field.Form.RemoteTable)+", PK: "+strconv.Quote(pk)+", FK: "+strconv.Quote(field.Name)+"}")
+	}
+	if len(joins) == 0 {
+		return ""
+	}
+	sort.Strings(joins)
+	return "[]querybuilder.SearchJoin{" + strings.Join(joins, ", ") + "}"
 }
 
 // parseJoinData validates and records one slim relation, then adds its nested

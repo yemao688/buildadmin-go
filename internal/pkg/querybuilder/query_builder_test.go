@@ -164,7 +164,9 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 		wantError bool
 	}{
 		{name: "valid field", field: "name", wantWhere: "`items`.`name` = ? "},
-		{name: "valid qualified field", field: "items.name", wantWhere: "`items`.`name` = ? "},
+		// 主表自带限定（alias == TableName，如 items.name）：回退主表路径
+		// 原样透传（改动前行为，PHP 主表别名限定同样合法）
+		{name: "qualified own-table field", field: "items.name", wantWhere: "`items`.`name` = ? "},
 		{name: "hyphen", field: "name-drop", wantError: true},
 		{name: "expression", field: "name);drop", wantError: true},
 		{name: "leading digit", field: "1name", wantError: true},
@@ -192,6 +194,139 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 			}
 			if whereS != tt.wantWhere {
 				t.Fatalf("whereS = %q; want %q", whereS, tt.wantWhere)
+			}
+		})
+	}
+}
+
+// TestQueryBuilderSearchJoinExists 验证点号关联字段搜索（对齐 PHP 上游
+// withJoin 语义的 Go EXISTS 落地）：LIKE/等值/IN/RANGE 生成正确的 EXISTS
+// 子查询与参数；alias 未登记、无 SearchJoins、多层点号、注入形态字段名
+// 一律 400；点号字段与主表普通字段可组合搜索。
+func TestQueryBuilderSearchJoinExists(t *testing.T) {
+	itemsTable := func() TableInfo {
+		return TableInfo{
+			TableName: "items",
+			Key:       "id",
+			SearchJoins: []SearchJoin{
+				{Alias: "admin", Table: "ba_admin", PK: "id", FK: "admin_id"},
+			},
+		}
+	}
+	// EXISTS 骨架：`ba_admin`.`id` = `items`.`admin_id`（主表外键列引用）
+	const existsHead = "EXISTS (SELECT 1 FROM `ba_admin` WHERE `ba_admin`.`id` = `items`.`admin_id` AND "
+
+	tests := []struct {
+		name       string
+		query      string
+		table      TableInfo
+		wantWhere  string
+		wantParams []interface{}
+		wantError  bool
+	}{
+		{
+			name:       "LIKE 生成 EXISTS 且忽略 datetime render",
+			query:      "search[0][field]=admin.username&search[0][val]=a&search[0][operator]=LIKE&search[0][render]=datetime",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` LIKE ?)",
+			wantParams: []interface{}{"%a%"},
+		},
+		{
+			name:       "eq 直接绑定原始值",
+			query:      "search[0][field]=admin.username&search[0][val]=boss&search[0][operator]=eq",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` = ?)",
+			wantParams: []interface{}{"boss"},
+		},
+		{
+			name:       "IN 逗号串拆分为参数切片",
+			query:      "search[0][field]=admin.username&search[0][val]=1,2,3&search[0][operator]=IN",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` IN ?)",
+			wantParams: []interface{}{[]string{"1", "2", "3"}},
+		},
+		{
+			name:       "RANGE 双值 BETWEEN",
+			query:      "search[0][field]=admin.username&search[0][val]=10,20&search[0][operator]=RANGE",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` BETWEEN ? AND ?)",
+			wantParams: []interface{}{"10", "20"},
+		},
+		{
+			name:       "RANGE 前缀逗号开区间 <= 单值",
+			query:      "search[0][field]=admin.username&search[0][val]=" + url.QueryEscape(",20") + "&search[0][operator]=RANGE",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` <= ?)",
+			wantParams: []interface{}{"20"},
+		},
+		{
+			// 无逗号值曾越界 panic（dataArr[1]）被 gin recovery 转 500
+			name:      "RANGE 无逗号值返回 400 而非 panic",
+			query:     "search[0][field]=admin.username&search[0][val]=20&search[0][operator]=RANGE",
+			table:     itemsTable(),
+			wantError: true,
+		},
+		{
+			// 无逗号值曾越界 panic（dataArr[1]）被 gin recovery 转 500
+			name:      "NOT RANGE 无逗号值返回 400 而非 panic",
+			query:     "search[0][field]=admin.username&search[0][val]=20&search[0][operator]=NOT%20RANGE",
+			table:     itemsTable(),
+			wantError: true,
+		},
+		{
+			name:      "alias 未登记返回 400",
+			query:     "search[0][field]=owner.username&search[0][val]=a&search[0][operator]=eq",
+			table:     itemsTable(),
+			wantError: true,
+		},
+		{
+			name:      "无 SearchJoins 时点号字段返回 400 而非 unknown table",
+			query:     "search[0][field]=admin.username&search[0][val]=a&search[0][operator]=eq",
+			table:     TableInfo{TableName: "items", Key: "id"},
+			wantError: true,
+		},
+		{
+			name:      "关联字段名注入形态返回 400",
+			query:     "search[0][field]=" + url.QueryEscape("admin.name);drop") + "&search[0][val]=a&search[0][operator]=eq",
+			table:     itemsTable(),
+			wantError: true,
+		},
+		{
+			name:      "多层点号返回 400（alias 已登记也拒绝）",
+			query:     "search[0][field]=admin.username.extra&search[0][val]=a&search[0][operator]=eq",
+			table:     itemsTable(),
+			wantError: true,
+		},
+		{
+			name:       "点号字段与主表普通字段组合",
+			query:      "search[0][field]=admin.username&search[0][val]=a&search[0][operator]=LIKE&search[1][field]=status&search[1][val]=1&search[1][operator]=eq",
+			table:      itemsTable(),
+			wantWhere:  existsHead + "`ba_admin`.`username` LIKE ?) AND `items`.`status` = ? ",
+			wantParams: []interface{}{"%a%", "1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			whereS, whereP, _, _, _, err := QueryBuilder(queryContext(tt.query), tt.table, nil)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("QueryBuilder() error = nil; want bad request")
+				}
+				badRequest, ok := err.(interface{ ErrorCode() int })
+				if !ok || badRequest.ErrorCode() != http.StatusBadRequest {
+					t.Fatalf("QueryBuilder() error = %v; want bad request", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("QueryBuilder() error = %v", err)
+			}
+			if whereS != tt.wantWhere {
+				t.Fatalf("whereS = %q; want %q", whereS, tt.wantWhere)
+			}
+			if !reflect.DeepEqual(whereP, tt.wantParams) {
+				t.Fatalf("whereP = %#v; want %#v", whereP, tt.wantParams)
 			}
 		})
 	}
@@ -251,15 +386,18 @@ func TestQueryBuilderDatetimeSearch(t *testing.T) {
 		}
 	})
 
-	t.Run("qualified field with underscore resolves once", func(t *testing.T) {
-		// 陷阱：strings.Replace 曾把 items.published_at 拼成 items.items.publishedat
+	t.Run("qualified own-table field resolves once", func(t *testing.T) {
+		// 主表自带限定（alias == TableName，如 items.published_at）回退主表
+		// 路径原样透传：strings.Replace 曾把 items.published_at 拼成
+		// items.items.publishedat，GetFieldType 的限定形态修复后走 datetime
+		// 分支正常生成（PHP 主表别名限定同样合法）。
 		ctx := queryContext("search[0][field]=items.published_at&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
 		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
 		if err != nil {
 			t.Fatalf("QueryBuilder() error = %v", err)
 		}
 		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want string BETWEEN for qualified field", whereS)
+			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
 		}
 		wantParams := []interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"}
 		if !reflect.DeepEqual(whereP, wantParams) {

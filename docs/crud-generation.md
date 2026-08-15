@@ -631,6 +631,14 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
     show: "false"
 ```
 
+### 关联搜索列与后端 EXISTS 实现
+
+配置了 `remoteTable` 与非空 `relationFields` 的 `remoteSelect` 字段，生成器在 FK 列之外额外生成一列关联搜索列：`prop` 为 `alias.field` 点号形态——alias 由**字段名**派生（`admin_id` → `admin`、`editor_id` → `editor`，与 relation enrichment 显示列 prop/语言键同源，同表多 FK 各自独立别名互不冲突，对齐 PHP 上游 `withJoinTable` 的 `relationName` 派生），`operator` 固定 `LIKE`，语言键复用关联显示列的 `admin__<字段>` 翻译条目（i18n 字典随 relation enrichment 一并写入）。该列无 `comSearchRender`，前端走既有文本输入分支，组件零改动；查询参数以 `admin.username` 原样提交。
+
+后端仓库 List 同步生成 `tableInfo.SearchJoins` 字面量（对齐 PHP 上游 `withJoinTable` 语义的 Go 落地）：每条关联记录 `{Alias, Table, PK, FK}`——Alias 与前端点号前缀一致（字段名派生），Table 为含 `mysql.prefix` 的真实表名（如 `ba_admin`，取自 `remoteTable`），PK 缺省 `id`，FK 即主表外键列（如 `admin_id`）。QueryBuilder 对点号字段生成 EXISTS 子查询（条件只引用主表列），count 独立查询天然正确，仅支持一层关联。
+
+**仅 `remoteSelect` 参与关联搜索**：`remoteSelects` 的 CSV 多选 FK（如 `"1,2,3"`）无法等值关联，既不生成关联搜索列也不生成 SearchJoins 条目（对齐 PHP `withJoinTable` 只覆盖 remoteSelect）；其显示列与后端 loader 仍照常生成。
+
 ### `remoteSelects` 顺序契约
 
 `remoteSelects` 的 FK 使用 `validate.CommaJoined`，JSON 保留 CSV token 的顺序和重复项。关系对象使用 `relationNameForField` 生成的 key。每个 `relationFields` 属性都是与 FK token 一一对应的 nullable 数组，空 CSV 返回空数组，空/非法/溢出/缺失远程记录返回 `null`。这项 positional contract 有意不同于 PHP `whereIn` 后按结果顺序回填的有损行为：Go 保留输入顺序和重复项。

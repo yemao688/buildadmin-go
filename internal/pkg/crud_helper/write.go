@@ -53,6 +53,9 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		// 仓库文件（internal/admin/repository/<path>.go，XxxRepository）
 		modelData.FieldTypesLiteral = buildFieldTypesLiteral(fields)
 		modelData.DefaultOrderLiteral = buildDefaultOrderLiteral(table, fields)
+		// 关联搜索 Join 字面量：prefix 由 fullTableName（getTableName 已含
+		// mysql.prefix）与无前缀 tableName 的差值推导。
+		modelData.SearchJoinLiteral = buildSearchJoinLiteral(table, fields, strings.TrimSuffix(fullTableName, tableName))
 		repositoryContent, err := render(repositoryFile.ParseFile, modelTemp, modelData)
 		if err != nil {
 			return "", err

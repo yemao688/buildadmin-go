@@ -460,6 +460,11 @@ type ModelData struct {
 	// 回退构建，与前端 defaultOrder 保持一致；为空时不输出赋值行。
 	DefaultOrderLiteral string
 
+	// SearchJoinLiteral 仓库 List 传给 QueryBuilder 的关联搜索 Join 字面量
+	// （remoteSelect/remoteSelects 字段推导，Table 含 mysql.prefix 的真实表
+	// 名）；为空时不输出赋值行，模板回退原形态，保证无关联字段的表零 diff。
+	SearchJoinLiteral string
+
 	Append                    []string
 	Methods                   []string
 	FieldType                 map[string]string
@@ -627,10 +632,11 @@ func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({
 }
 
 func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.ClassName}}, total int64, err error) {
-{{- if or .FieldTypesLiteral .DefaultOrderLiteral}}
+{{- if or .FieldTypesLiteral .DefaultOrderLiteral .SearchJoinLiteral}}
 	tableInfo := s.TableInfo()
 {{if .FieldTypesLiteral}}	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
 {{end}}{{if .DefaultOrderLiteral}}	tableInfo.DefaultOrder = {{.DefaultOrderLiteral}}
+{{end}}{{if .SearchJoinLiteral}}	tableInfo.SearchJoins = {{.SearchJoinLiteral}}
 {{end}}	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
 {{- else}}
 	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)

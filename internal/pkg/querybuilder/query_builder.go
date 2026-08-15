@@ -54,6 +54,23 @@ type TableInfo struct {
 	// defaultSortType 显式值优先，否则有 weigh 列时 weigh desc）；手写仓库
 	// 保持空——空时回退主键 desc，行为不变。
 	DefaultOrder string
+	// SearchJoins 可搜索关联表列表（对齐 PHP 上游 withJoinTable 语义的 Go
+	// 落地）：搜索字段以 "alias.field" 点号形式提交（如 "admin.username"），
+	// QueryBuilder 生成 EXISTS 子查询而非常规 join——条件只引用主表列，
+	// count 独立查询天然正确。生成仓库由生成器按 spec remoteSelect 推导；
+	// 手写仓库保持空（点号字段搜索返回错误而非 unknown table）。
+	SearchJoins []SearchJoin
+}
+
+// SearchJoin 描述一条可搜索关联。Alias 是前端提交用的点号前缀（无表
+// 前缀的表名，如 "admin"）；Table 是真实表名（含 mysql.prefix，如
+// "ba_admin"）；PK 是关联表主键列（如 "id"）；FK 是主表外键列（如
+// "admin_id"）。
+type SearchJoin struct {
+	Alias string
+	Table string
+	PK    string
+	FK    string
 }
 
 var fieldNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`)
@@ -182,6 +199,24 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	for i := 0; i < len(search); i++ {
 		if search[i].Field == "" || search[i].Val == "" || search[i].Operator == "" {
 			continue
+		}
+		// 关联字段 EXISTS 子查询搜索（点号字段，如 "admin.username"）：
+		// 由 buildSearchJoinExists 组装，条件只引用主表列，count 独立查询
+		// 天然正确；点号字段不进入下方 datetime/RANGE 等主表分支（continue
+		// 隔离），关联字段按字符串处理（对齐 PHP 不转换）。主表自带限定
+		// （alias == TableName，如 "items.name"）回退下方主表路径原样透传
+		// （改动前行为，PHP 主表别名限定同样合法）。
+		if strings.Contains(search[i].Field, ".") {
+			if alias, _, _ := strings.Cut(search[i].Field, "."); alias != table.TableName {
+				existsCond, existsParams, existsErr := buildSearchJoinExists(ctx, table, search[i])
+				if existsErr != nil {
+					err = existsErr
+					return
+				}
+				whereS += existsCond
+				whereP = append(whereP, existsParams...)
+				continue
+			}
 		}
 		field := GetFullField(search[i].Field, table)
 		operater := GetOperatorByAlias(search[i].Operator)
@@ -331,6 +366,121 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		whereS = whereS[5:]
 	}
 	return
+}
+
+// buildSearchJoinExists 为点号关联字段搜索（"alias.field"，如
+// "admin.username"）组装 EXISTS 子查询条件，语义对齐 PHP 上游 withJoin 的
+// 关联搜索（Go 用 EXISTS 轻量落地）。条件形如：
+//
+//	AND EXISTS (SELECT 1 FROM `{Table}` WHERE `{Table}`.`{PK}` =
+//	`{主表TableName}`.`{FK}` AND `{Table}`.`{fieldName}` {op} ...)
+//
+// 关联字段按字符串处理（对齐 PHP 不转换），不做 datetime/unix 转换，也不
+// 进入主表 datetime/RANGE 分支；所有标识符经 Backquote 转义，值一律参数
+// 绑定。返回带 " AND " 前缀的完整条件与参数；多层点号、alias 未登记、
+// 关联字段名非法（注入形态）或操作符不支持时返回 BadRequest。
+func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilter) (string, []interface{}, error) {
+	// 拆分为 alias 与 fieldName；再含 "."（多层点号 a.b.c）直接拒绝
+	parts := strings.SplitN(filter.Field, ".", 2)
+	if len(parts) != 2 || strings.Contains(parts[1], ".") {
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": filter.Field,
+		}))
+	}
+	alias, fieldName := parts[0], parts[1]
+	// 在 SearchJoins 中查找 alias；找不到（含手写仓库保持空的场景）返回
+	// 400，避免落入 unknown table 的歧义路径
+	var join *SearchJoin
+	for i := range table.SearchJoins {
+		if table.SearchJoins[i].Alias == alias {
+			join = &table.SearchJoins[i]
+			break
+		}
+	}
+	if join == nil {
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": filter.Field,
+		}))
+	}
+	// 关联字段名合法性（正则防注入）
+	if !IsValidFieldName(fieldName, nil) {
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": filter.Field,
+		}))
+	}
+	// 关联列（joinColumn）与 EXISTS 骨架：主表外键列 = 关联表主键列，
+	// 条件只引用主表列，count 独立查询天然正确
+	joinColumn := Backquote(join.Table) + "." + Backquote(fieldName)
+	exists := func(cond string) string {
+		return " AND EXISTS (SELECT 1 FROM " + Backquote(join.Table) + " WHERE " +
+			Backquote(join.Table) + "." + Backquote(join.PK) + " = " +
+			Backquote(table.TableName) + "." + Backquote(join.FK) + " AND " + cond + ")"
+	}
+	operater := GetOperatorByAlias(filter.Operator)
+	switch operater {
+	case "=", "<>", ">", ">=", "<", "<=":
+		// 直接绑定原始值（对齐 PHP 关联搜索不做类型转换；主表数值分支的
+		// Atoi 转换不适用于关联列）
+		return exists(joinColumn + " " + operater + " ?"), []interface{}{filter.Val}, nil
+	case "LIKE", "NOT LIKE":
+		return exists(joinColumn + " " + operater + " ?"), []interface{}{
+			"%" + strings.Replace(filter.Val.(string), "%", "\\%", -1) + "%",
+		}, nil
+	case "IN", "NOT IN":
+		// 与主表 IN 分支一致的参数形态：逗号串拆成 []string，数组原样绑定
+		if strValue, ok := filter.Val.(string); ok {
+			return exists(joinColumn + " " + operater + " ?"), []interface{}{strings.Split(strValue, ",")}, nil
+		}
+		return exists(joinColumn + " " + operater + " ?"), []interface{}{filter.Val}, nil
+	case "RANGE", "NOT RANGE":
+		// 逗号前后缀语义与主表 RANGE 分支一致：",x" 开区间（RANGE <= x /
+		// NOT RANGE > x）、"x," 闭区间（RANGE >= x / NOT RANGE < x）、
+		// 双值 BETWEEN / NOT BETWEEN
+		valStr := filter.Val.(string)
+		if strings.HasPrefix(valStr, ",") {
+			if operater == "RANGE" {
+				return exists(joinColumn + " <= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+			}
+			return exists(joinColumn + " > ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		if strings.HasSuffix(valStr, ",") {
+			if operater == "RANGE" {
+				return exists(joinColumn + " >= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+			}
+			return exists(joinColumn + " < ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		// 双值形态：Split 后必须恰好两个值（无逗号或多余逗号都视为参数
+		// 非法返回 400——否则 dataArr[1] 越界 panic 被 gin recovery 转 500）
+		dataArr := strings.Split(valStr, ",")
+		if len(dataArr) != 2 {
+			return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
+				"name": filter.Field,
+			}))
+		}
+		if operater == "RANGE" {
+			return exists(joinColumn + " BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
+		}
+		return exists(joinColumn + " NOT BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
+	case "NULL", "NOT NULL":
+		return exists(joinColumn + " IS " + operater), nil, nil
+	case "FIND_IN_SET":
+		// 与主表 FIND_IN_SET 分支一致：[]string 逐值各生成一条 EXISTS，
+		// 单值原样绑定
+		if sets, ok := filter.Val.([]string); ok {
+			var cond string
+			var params []interface{}
+			for _, v := range sets {
+				cond += exists(operater + "( ? ," + joinColumn + ")>0")
+				params = append(params, v)
+			}
+			return cond, params, nil
+		}
+		return exists(operater + "( ? ," + joinColumn + ")>0"), []interface{}{filter.Val}, nil
+	default:
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
+			"name": operater,
+		}))
+	}
 }
 
 // 获取结构体所有字段类型：从 TableInfo.FieldTypes 构建，键形如
