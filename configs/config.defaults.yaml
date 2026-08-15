@@ -21,6 +21,11 @@ app:
   cdn_url_params: ''             # CDN URL 附加参数
   api_url: 'https://buildadmin.com' # 接口地址
   cors_request_domain: '*' # 跨域请求白名单域名（逗号分隔），支持 *
+  docs_enabled: false      # 是否挂载 /docs 静态文档服务（public/docs/，业务图文操作指南），
+                           #   默认关闭（不挂载，行为同历史版本）；业务在 configs/config.yaml 覆盖开启
+  docs_password: ''        # /docs 访问密码：留空则公开访问；非空时挂载服务端密码门（cookie 放行，
+                           #   仅防随意浏览，非安全边界）。可用环境变量 DOCS_PASSWORD 覆盖（机密走环境，
+                           #   避免写入仓库或镜像）；docs_enabled 关闭时该值不生效
 
 # 点选验证码配置
 click_captcha:

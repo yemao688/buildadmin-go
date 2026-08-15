@@ -18,4 +18,6 @@ type App struct {
 	UserLoginCaptcha   bool   `mapstructure:"user_login_captcha" json:"userLoginCaptcha" yaml:"user_login_captcha"`
 	ApiUrl             string `mapstructure:"api_url" json:"api_url" yaml:"api_url"`
 	CorsRequestDomain  string `mapstructure:"cors_request_domain" json:"cors_request_domain" yaml:"cors_request_domain"`
+	DocsEnabled        bool   `mapstructure:"docs_enabled" json:"docs_enabled" yaml:"docs_enabled"`
+	DocsPassword       string `mapstructure:"docs_password" json:"docs_password" yaml:"docs_password"`
 }

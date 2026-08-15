@@ -43,6 +43,7 @@
 - 真实入口和 wiring 是 `cmd/server/main.go`（28 行极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。
 - `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 `setup` 安装器写入（只写 MySQL 连接和生成的 `token.key`）。全新检出且没有它时，任何命令（含默认 serve）打印 setup 安装指引并等待 3 秒后退出，不会自动复制基座。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
+- `/docs` 可选静态文档服务（业务图文操作指南，`public/docs/`）：默认关闭，业务配置 `app.docs_enabled` 开启；`app.docs_password` 非空（或环境变量 `DOCS_PASSWORD` 覆盖）时挂载服务端密码门，仅防随意浏览、非安全边界，实现见 `internal/router/docs.go`。**业务要做文档模块（往 `public/docs/` 发布操作指南）前，先读 `public/docs/guide.html` 引导**——它说明目录约定（根目录只放 HTML、图片按文档分目录 `images/<文档名>/`）、启用配置与密码门行为，该文件由业务仓库自行维护。
 
 ## 分层与边界（v3.0.0 架构）
 

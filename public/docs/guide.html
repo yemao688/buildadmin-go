@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文档模块引导 · /docs 静态文档服务</title>
+<style>
+  :root { --accent: #3370ff; --text: #1f2329; --muted: #646a73; --line: #e5e6eb; --bg: #f5f6f8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+         line-height: 1.75; }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 40px 24px 64px; }
+  header { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 32px; margin-bottom: 24px; }
+  h1 { margin: 0 0 8px; font-size: 24px; font-weight: 700; }
+  .sub { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #eef4ff; color: var(--accent);
+           font-size: 12px; font-weight: 600; }
+  nav { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 20px; margin-bottom: 24px; font-size: 14px; }
+  nav a { color: var(--accent); text-decoration: none; margin-right: 18px; }
+  nav a:hover { text-decoration: underline; }
+  section { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px 32px; margin-bottom: 24px; }
+  h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  h3 { margin: 20px 0 8px; font-size: 15px; font-weight: 600; }
+  p { margin: 8px 0; font-size: 14px; }
+  ol, ul { margin: 8px 0; padding-left: 22px; font-size: 14px; }
+  li { margin: 4px 0; }
+  code { background: #f2f3f5; border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; font-size: 13px;
+         font-family: "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+  pre code { background: none; border: none; padding: 0; }
+  .img-box { text-align: center; margin: 20px 0; }
+  .img-box img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .img-box figcaption { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+  th, td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+  th { background: #f7f8fa; font-weight: 600; }
+  .note { background: #fff8e8; border: 1px solid #f5d18a; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #8a6116; margin: 14px 0; }
+  footer { color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="badge">引导文档</span>
+    <h1>文档模块引导</h1>
+    <p class="sub">框架内置 /docs 静态文档服务（public/docs/）的使用引导。本文档本身即用法示例，业务仓库可整体替换或删除。</p>
+  </header>
+
+  <nav>
+    <a href="#usage">用法说明</a>
+    <a href="#layout">目录约定</a>
+    <a href="#config">配置与密码门</a>
+    <a href="#faq">常见问题</a>
+  </nav>
+
+  <section id="usage">
+    <h2>用法说明</h2>
+    <p>框架已内置可选的 <code>/docs</code> 静态文档服务：把图文操作指南（<code>*.html</code>、图片等）放进 <code>public/docs/</code> 目录，即可通过 <code>/docs/</code> 访问，<strong>不需要改动任何后端装配代码</strong>。</p>
+    <h3>启用方式</h3>
+    <p>在 <code>configs/config.yaml</code> 中开启（默认关闭，不挂载）：</p>
+    <pre><code>app:
+  docs_enabled: true      # 挂载 /docs 静态服务
+  docs_password: ''       # 留空公开；非空时开启服务端密码门</code></pre>
+    <p>保存后重启后端（<code>air</code> 或重新 <code>go run ./cmd/server</code>），打开 <code>http://localhost:9900/docs/</code>。目录请求不展示文件列表（返回 404），请直接访问具体文档 URL，或提供 <code>index.html</code> 作为入口页。</p>
+  </section>
+
+  <section id="layout">
+    <h2>目录约定</h2>
+    <p>发布文档时请遵循以下约定：</p>
+    <ol>
+      <li><code>public/docs/</code> 根目录只放 HTML 文件，一份文档一个文件（如 <code>guide.html</code>、<code>install.html</code>）。</li>
+      <li>图片按文档分目录：每份 HTML 的图片统一放进对应的 <code>public/docs/images/&lt;文档名&gt;/</code>（如 <code>guide.html</code> 对应 <code>images/guide/</code>）。</li>
+      <li>页面内用相对路径（如 <code>images/guide/step-flow.svg</code>）或绝对路径（如 <code>/docs/images/guide/step-flow.svg</code>）引用图片。</li>
+      <li>图片与 HTML 同属 <code>public/docs/</code> 发布，提交到仓库后随项目部署，无需走上传模块。</li>
+      <li><code>/docs/</code> 及任何目录请求都不展示文件列表（返回 404），访问请用具体文档 URL（如 <code>/docs/guide.html</code>）；如需根路径入口，可自行提供 <code>index.html</code>。</li>
+    </ol>
+    <p>当前目录结构示例：</p>
+    <pre><code>public/docs/
+├── guide.html              # 根目录只放 HTML
+└── images/
+    └── guide/              # guide.html 的图片
+        └── step-flow.svg</code></pre>
+    <h3>图片引用示例</h3>
+    <figure class="img-box">
+      <img src="/docs/images/guide/step-flow.svg" alt="发布流程示意图">
+      <figcaption>图 1：发布流程示意图（/docs/images/guide/step-flow.svg）</figcaption>
+    </figure>
+  </section>
+
+  <section id="config">
+    <h2>配置与密码门</h2>
+    <table>
+      <tr><th>配置</th><th>说明</th></tr>
+      <tr><td><code>app.docs_enabled</code></td><td>是否挂载 /docs，默认 false（不挂载，行为同历史版本）。</td></tr>
+      <tr><td><code>app.docs_password</code></td><td>访问密码，留空公开访问；非空时挂载服务端密码门。</td></tr>
+      <tr><td><code>DOCS_PASSWORD</code> 环境变量</td><td>覆盖 YAML 密码，机密走环境，避免写入仓库或镜像；仅在 docs_enabled 开启时生效。</td></tr>
+    </table>
+    <h3>密码门行为</h3>
+    <ul>
+      <li>未携带有效 cookie 访问 <code>/docs/*</code>：返回密码页（<code>POST /docs/password</code> 验密）。</li>
+      <li>验密通过：写入 <code>ba_docs_auth</code> cookie（HttpOnly，7 天）并回跳原路径。</li>
+      <li>密码门只防随意浏览（共享密码），<strong>不是安全边界</strong>；敏感内容请走既有登录体系。</li>
+    </ul>
+  </section>
+
+  <section id="faq">
+    <h2>常见问题</h2>
+    <table>
+      <tr><th>问题</th><th>说明</th></tr>
+      <tr><td>访问 /docs 返回 404？</td><td>未开启 <code>app.docs_enabled</code>（默认关闭）、目录为空，或请求的是目录路径（目录不展示列表，请访问具体文档 URL，如 <code>/docs/guide.html</code>）。</td></tr>
+      <tr><td>密码门如何退出？</td><td>清除浏览器中 <code>ba_docs_auth</code> cookie（或换无痕窗口），7 天后自动过期。</td></tr>
+      <tr><td>如何让 /docs/ 有入口页？</td><td>在 <code>public/docs/</code> 提供 <code>index.html</code>，<code>/docs/</code> 会直接渲染它。</td></tr>
+    </table>
+  </section>
+
+  <footer>框架 /docs 静态文档服务 · 引导文档（public/docs/guide.html）</footer>
+
+</div>
+</body>
+</html>

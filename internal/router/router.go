@@ -75,6 +75,11 @@ func InitRouter(
 	// 整个 storage 目录：上传 URL 前缀是 /storage/{topic}（savename 规则），
 	// 挂载目录级而非 /storage/default，topic 变化（default/其它细目）无需改路由。
 	router.Static("/storage", filepath.Join(rootDir, "public/storage"))
+	// /docs 静态文档服务（可选，默认关闭）：业务配置 app.docs_enabled 开启，
+	// app.docs_password（或环境变量 DOCS_PASSWORD）非空时挂服务端密码门。
+	if config != nil && config.App.DocsEnabled {
+		registerDocsRoute(router, rootDir, config.App.DocsPassword)
+	}
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
 
