@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.1.9
+
+> remoteSelect 关联字段搜索对齐 PHP 上游批次 + 部署工程：QueryBuilder EXISTS 子查询关联搜索（alias.field 点号参数，count 天然正确）、生成器产出 SearchJoins 与关联搜索列（alias 字段名派生、仅 remoteSelect）、CORS Allow-Headers 通配符修复业务扩展 token 域、内置可选 /docs 文档服务、Dockerfile 精简与 apk 镜像加速。
+
+- **Added (remoteSelect 关联字段搜索, 下游反馈):** QueryBuilder 支持 `alias.field` 点号搜索字段（如 `admin.username`）——生成 `EXISTS (SELECT 1 FROM ba_admin WHERE ba_admin.id = 主表.admin_id AND ba_admin.username LIKE ?)` 子查询：条件只引用主表列，count 独立查询天然正确；全操作符支持（= / LIKE / IN / RANGE 含逗号前后缀 / NULL / FIND_IN_SET），标识符 Backquote 转义 + 值参数绑定；alias 未登记、多层点号、注入形态一律 400；RANGE 无逗号值守卫防越界 panic。主表自带限定（`items.name`）回退主表路径原样透传（PHP 主表别名限定同样合法）。
+- **Changed (CRUD 生成器):** 生成仓库 List() 按 spec 产出 `tableInfo.SearchJoins` 字面量（`buildSearchJoinLiteral`）；index.vue 为 remoteSelect 字段生成关联搜索列（`prop: 'admin.username', operator: 'LIKE'`，走既有文本输入分支，前端组件零改动）。Alias 由字段名派生（`admin_id → admin`、`editor_id → editor`，对齐 PHP `parse_name` 语义）——同表多 FK（如 admin_id + editor_id 都指向 admin 表）生成独立别名不冲突；与显示列 prop、语言键三者同源。仅 remoteSelect 参与关联搜索，remoteSelects（CSV 多选 FK）不生成（对齐 PHP withJoinTable 只覆盖 remoteSelect，CSV 无法等值关联）。
+- **Fixed (CORS, 下游反馈):** `Access-Control-Allow-Methods`/`Access-Control-Allow-Headers` 改通配符 `*` 对齐 PHP 上游——tokenProvider 支持业务注册任意 header 域（如 ba-seller-token），显式列表无法感知扩展域导致第三方门户跨域预检失败；纯 token header 模式（无 withCredentials）下 `*` 按规范合法生效。
+- **Added (可选 /docs 静态文档服务):** `app.docs_enabled` 开启挂载 `public/docs/`，`app.docs_password`/`DOCS_PASSWORD` 服务端密码门（仅防随意浏览、非安全边界）；guide.html 引导目录约定（根目录只放 HTML、图片按 `images/<文档名>/` 分目录）。
+- **Chore (部署工程):** Dockerfile 精简（删 syntax 指令与冗余注释）+ alpine apk 国内镜像加速（`APK_MIRROR` 可覆盖，海外构建机 `--build-arg` 还原）。
+
 ## v3.1.8
 
 > 后端默认排序对齐 PHP 上游批次：QueryBuilder 每表默认排序（defaultSortField/defaultSortType，weigh 列回退 weigh desc）+ orderGuarantee 主键兜底，修复带 defaultOrder 列表页首屏错序（下游反馈）；生成器按 spec 产出默认排序字面量，country 模块仓库重新对齐。
