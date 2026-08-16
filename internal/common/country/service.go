@@ -97,7 +97,7 @@ func NewService(db *gorm.DB, config *conf.Configuration) *Service {
 //
 // 用途边界：静态 UI 文案走前端 t()/i18n YAML 语言包；动态内容翻译（商品名、
 // 公告等 DB 内容）走本方法，两条链共用同一请求语言。注意 context 中的请求
-// 语言是规范化 pack key（如 zh-cn→zh），与 country_language.lan 原始值
+// 语言是规范化 pack key（如 zh-cn→zh-CN），与 country_language.lan 原始值
 // （如 zh-cn）可能不同，缺条时由 Get 的默认语言回退桥接。
 func (s *Service) GetByRequest(ctx context.Context, group, key string) (string, error) {
 	lan, ok := i18n.LangFromContext(ctx)

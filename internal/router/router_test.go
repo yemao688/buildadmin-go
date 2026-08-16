@@ -123,9 +123,9 @@ func TestResolveRequestLang(t *testing.T) {
 
 	t.Run("/api 无 header 取前台默认语言并规范化", func(t *testing.T) {
 		c := newLangTestContext(t, "/api/index/index", "")
-		// DefaultLan 返回 seed 值 zh-cn，经 NormalizeLang → zh（pack key）
+		// DefaultLan 返回 seed 值 zh-cn，经 NormalizeLang → zh-CN（pack key）
 		got := resolveRequestLang(c, "zh", defaultLanFunc("zh-cn", nil))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "zh-CN", got)
 	})
 
 	t.Run("/api 无 header 前台默认 en 时返回 en", func(t *testing.T) {
@@ -134,22 +134,22 @@ func TestResolveRequestLang(t *testing.T) {
 		require.Equal(t, "en", got)
 	})
 
-	t.Run("/api 无 header 空表兜底 zh", func(t *testing.T) {
+	t.Run("/api 无 header 空表兜底 en", func(t *testing.T) {
 		c := newLangTestContext(t, "/api/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("", nil))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "en", got)
 	})
 
-	t.Run("/api 无 header 查询出错兜底 zh", func(t *testing.T) {
+	t.Run("/api 无 header 查询出错兜底 en", func(t *testing.T) {
 		c := newLangTestContext(t, "/api/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("", errors.New("db down")))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "en", got)
 	})
 
 	t.Run("/api 有 header 时 header 优先且规范化", func(t *testing.T) {
 		c := newLangTestContext(t, "/api/index/index", "zh-cn")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "zh-CN", got)
 	})
 
 	t.Run("/api 有 header zh-hant 映射到 zh-Hant", func(t *testing.T) {
@@ -158,10 +158,10 @@ func TestResolveRequestLang(t *testing.T) {
 		require.Equal(t, "zh-Hant", got)
 	})
 
-	t.Run("/admin 无 header 默认 zh", func(t *testing.T) {
+	t.Run("/admin 无 header 默认 en", func(t *testing.T) {
 		c := newLangTestContext(t, "/admin/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "en", got)
 	})
 
 	t.Run("/admin 有 header en 时返回 en", func(t *testing.T) {
@@ -170,10 +170,10 @@ func TestResolveRequestLang(t *testing.T) {
 		require.Equal(t, "en", got)
 	})
 
-	t.Run("未知路径无 header 默认 zh", func(t *testing.T) {
+	t.Run("未知路径无 header 默认 en", func(t *testing.T) {
 		c := newLangTestContext(t, "/", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
-		require.Equal(t, "zh", got)
+		require.Equal(t, "en", got)
 	})
 
 	t.Run("未知语言原样返回", func(t *testing.T) {
@@ -207,9 +207,9 @@ func TestResolveRequestLangCachedPerRequest(t *testing.T) {
 	require.Equal(t, "zh-Hant", resolveRequestLang(c, "zh", portalDefaultLang))
 	require.Equal(t, 1, queries)
 
-	// /admin 默认 zh 也只解析一次；不同请求（新 context）互不影响
+	// /admin 默认 en 也只解析一次；不同请求（新 context）互不影响
 	c = newLangTestContext(t, "/admin/index/index", "")
-	require.Equal(t, "zh", resolveRequestLang(c, "zh", portalDefaultLang))
-	require.Equal(t, "zh", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, "en", resolveRequestLang(c, "zh", portalDefaultLang))
+	require.Equal(t, "en", resolveRequestLang(c, "zh", portalDefaultLang))
 	require.Equal(t, 1, queries)
 }

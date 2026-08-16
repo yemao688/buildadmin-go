@@ -16,8 +16,9 @@ func TestNormalizeLang(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"zh-cn 映射到 zh pack key", "zh-cn", "zh"},
-		{"zh-CN 大写映射到 zh", "zh-CN", "zh"},
+		{"zh-cn 映射到 zh-CN pack key", "zh-cn", "zh-CN"},
+		{"zh-CN 大写映射到 zh-CN", "zh-CN", "zh-CN"},
+		{"zh 泛化标识映射到 zh-CN", "zh", "zh-CN"},
 		{"zh-hant 映射到 zh-Hant", "zh-hant", "zh-Hant"},
 		{"zh-Hant 原格式映射到 zh-Hant", "zh-Hant", "zh-Hant"},
 		{"zh-tw 映射到 zh-Hant", "zh-tw", "zh-Hant"},
@@ -26,7 +27,6 @@ func TestNormalizeLang(t *testing.T) {
 		{"EN 大写归一为 en", "EN", "en"},
 		{"未知语言原样返回", "ja", "ja"},
 		{"空字符串原样返回", "", ""},
-		{"zh 本身原样返回", "zh", "zh"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -59,7 +59,7 @@ func InitRouter(
 	router.Use(
 		middleware.CustomRecovery(loggerWriter),
 		//开启多语言：按渠道分流（think-lang header 优先，/api/* 无 header
-		//取前台默认语言，/admin/* 及其它默认中文），返回 ginI18n pack key。
+		//取前台默认语言，/admin/* 及其它默认英文），返回 ginI18n pack key。
 		ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg()), ginI18n.WithGetLngHandle(
 			func(context *gin.Context, defaultLng string) string {
 				return resolveRequestLang(context, defaultLng, countrySvc.DefaultLan)
@@ -131,8 +131,8 @@ func registerPprofRoutes(router *gin.Engine) {
 // defaultLng 为 bundle 默认语言，与 ginI18n handler 签名保持一致）：
 //   - think-lang header 优先（任何渠道），经 NormalizeLang 规范化到 pack key；
 //   - /api/* 无 header 时取前台默认语言（country_language 第一条，经
-//     NormalizeLang 规范化），失败或空值兜底 zh；
-//   - /admin/* 及其它路径默认 zh（后端 pack key）。
+//     NormalizeLang 规范化），失败或空值兜底 en；
+//   - /admin/* 及其它路径默认 en（后端 pack key）。
 //
 // 解析结果在首次调用时写入 gin context（i18n.SetLangToContext），同一请求内
 // 后续翻译调用（ginI18n 每次 getMessage 都会回调本函数）直接读缓存，不再
@@ -149,10 +149,10 @@ func resolveRequestLang(c *gin.Context, defaultLng string, portalDefaultLang fun
 		if lan, err := portalDefaultLang(c.Request.Context()); err == nil && lan != "" {
 			lang = i18n.NormalizeLang(lan)
 		} else {
-			lang = "zh"
+			lang = "en"
 		}
-	default: // /admin/* 及其它默认中文
-		lang = "zh"
+	default: // /admin/* 及其它默认英文
+		lang = "en"
 	}
 	i18n.SetLangToContext(c, lang)
 	return lang

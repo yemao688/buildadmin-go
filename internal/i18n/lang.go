@@ -8,13 +8,15 @@ import (
 )
 
 // NormalizeLang 将外部语言标识规范化到后端本地化 pack key
-// （ginI18n localizer map key 为 zh / zh-Hant / en，见 NewBundleCfg）。
-// 前端传 zh-cn 需显式映射到 zh，不再依赖 localizer map 未命中的
+// （ginI18n localizer map key 为 zh-CN / zh-Hant / en，见 NewBundleCfg；
+// 对外契约——country_language.lan、前端 lang、think-lang header——用
+// zh-cn 小写，这里统一规范化为 BCP 47 的 zh-CN）。
+// 前端传 zh-cn 需显式映射到 zh-CN，不再依赖 localizer map 未命中的
 // 默认兜底巧合。未知语言原样返回，便于下游扩展语言时在此追加映射。
 func NormalizeLang(lng string) string {
 	switch strings.ToLower(lng) {
-	case "zh-cn":
-		return "zh"
+	case "zh-cn", "zh":
+		return "zh-CN"
 	case "zh-hant", "zh-tw":
 		return "zh-Hant"
 	case "en":
@@ -30,7 +32,7 @@ func NormalizeLang(lng string) string {
 const langContextKey = "request.lang"
 
 // LangFromContext 读取当前请求已解析的语言（resolveRequestLang 的缓存结果，
-// 规范化 pack key，如 zh / zh-Hant / en）。ctx 可以是 *gin.Context、其派生
+// 规范化 pack key，如 zh-CN / zh-Hant / en）。ctx 可以是 *gin.Context、其派生
 // context（context.WithValue 链），或经 SetLangToContext 写入的请求 context。
 // 未设置或为空值时返回 ok=false，调用方自行回退。
 func LangFromContext(ctx context.Context) (string, bool) {

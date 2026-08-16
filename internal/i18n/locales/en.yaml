@@ -170,3 +170,57 @@ Member center disabled: The member centre has been disabled, please contact the 
 Invalid token: Invalid Token!
 Unknown operation: Unknown operation
 No action available, please contact the administrator~: There is no action available, please contact the administrator~
+You need to have all permissions of this group to operate this group~: you need to have all permissions of this group to operate this group~
+You need to have all the permissions of the group and have additional permissions before you can operate the group~: you need to have all the permissions of the group and have additional permissions before you can operate this group~
+Role group has all your rights, please contact the upper administrator to add or do not need to add!: the role group has all your rights, please contact the upper administrator to add it or no need to add!
+Role remark: To ensure system security, the parent-child relationship of role groups is for reference only; the actual hierarchy is determined by `permission amount`. Two administrators with the same permission nodes are considered `peers`; one containing the other's nodes plus extra permissions is considered `superior`. Peers cannot manage peers; a superior can assign its own permission nodes to subordinates. If an administrator needs to become a `superior` in special cases, a virtual permission node can be created
+Parse field data: CRUD code generation - parse field data
+Log start: CRUD code generation - start from history
+Generate check: CRUD code generation - pre-generation check
+The current page configuration item was updated successfully: the current page configuration item was updated successfully!
+DataRecycle Remark: define the data to be recycled here to achieve automatic unified data recycling
+SensitiveData Remark: define the sensitive fields to be protected here; the system will automatically monitor modification of these fields and provide rollback for sensitive field changes
+Order not found: order not found!
+Module already exists: module already exists!
+Package download failed: package download failed!
+Package check failed: package check failed!
+No permission to write temporary files: no permission to write temporary files!
+Zip file not found: zip file not found
+Unable to open the zip file: unable to open the zip file
+Unable to extract ZIP file: unable to extract the ZIP file
+Unable to package zip file: unable to package the zip file
+Basic configuration of the Module is incomplete: the basic configuration of the module is incomplete
+Module package file does not exist: the module package file does not exist
+Module file conflicts: module file conflicts, please handle them manually!
+Configuration file has no write permission: the configuration file has no write permission
+The current state of the module cannot be set to disabled: the module cannot be set to disabled in its current state
+The current state of the module cannot be set to enabled: the module cannot be set to enabled in its current state
+Module file updated: the module file has been updated
+Please disable the module first: please disable the module first
+Please disable the module before updating: please disable the module before updating
+The directory required by the module is occupied: the directory required by the module is occupied
+Install module: install module
+Unload module: unload module
+Update module: update module
+Change module state: change module state
+Upload install module: upload and install module
+Please login to the official website account first: please log in to the BuildAdmin official website account to access the module market first
+Account exist: account already exists
+Please delete the child element first, or use batch deletion: please delete the child element first, or use batch deletion!
+'Configuration write failed: {content}': 'configuration write failed: {{.content}}'
+Not found field:{name}: 'field {{.name}} does not exist'
+Where express error:{name}: 'invalid query operator condition: {{.name}}'
+Please use the account registration email to send the verification code: please use the account registration email to send the verification code
+The system has completed installation. If you need to reinstall, please delete the {lock} file first: the system has completed installation. If you need to reinstall, please delete the {lock} file first
+Username is exist!: username already exists!
+Email is exist!: email already exists!
+Mobile is exist!: mobile phone already exists!
+The email phone has been bound to another account: the email or phone has been bound to another account
+The mobile phone has been bound to another account: the mobile phone has been bound to another account
+Depend content file content is incomplete: the dependent content file is incomplete
+mobile format error: invalid mobile phone number format!
+You need to verify your account before modifying the binding information: you need to verify your account before modifying the binding information!
+Password error: incorrect password!
+email is occupied: the email address is already occupied!
+mobile is occupied: the mobile phone number is already occupied!
+Token expiration: login expired, please log in again!

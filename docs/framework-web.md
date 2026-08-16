@@ -374,7 +374,7 @@ const rules = reactive<FormRules>({
      `/api/index/index` 的 `default_language` 与语言列表自动跟随；
   2. 后端：`internal/i18n/locales/<lang>.yaml` 新增语言包文件，并在
      `internal/i18n` 的 `NormalizeLang` 补充该语言到 pack key 的映射
-     （如 `ja` → `ja`；`zh-cn` → `zh`、`zh-hant`/`zh-tw` → `zh-Hant` 已内置）；
+     （如 `ja` → `ja`；`zh-cn` → `zh-CN`、`zh-hant`/`zh-tw` → `zh-Hant` 已内置）；
   3. 前端：`web/src/lang/` 下新增 `<lang>` 目录与 `globs-<lang>.ts`，
      并在 `web/src/lang/index.ts` 的 `assignLocale` 为 element-plus 语言包
      追加一行。前端 lang glob 已全量化（`./*/**/*.ts`），新目录**零框架
@@ -400,9 +400,9 @@ const rules = reactive<FormRules>({
   无前缀页面）默认 `frontend`；带前缀门户（/seller、/buyer…）在此追加一行。
 - 全局语言包 key 用大写开头避免与页面语言包目录名/文件名冲突。
 - 后端配套（`internal/router`）：语言中间件按渠道分流——`think-lang` header
-  优先（经 `i18n.NormalizeLang` 规范化，`zh-cn`→`zh` pack key）；`/api/*`
+  优先（经 `i18n.NormalizeLang` 规范化，`zh-cn`→`zh-CN` pack key）；`/api/*`
   无 header 时兜底 `country_language` 第一条（`country.Service.DefaultLan`）；
-  `/admin/*` 无 header 时兜底中文（`zh`）。响应层翻译仍走
+  `/admin/*` 无 header 时兜底英文（`en`）。响应层翻译仍走
   `internal/pkg/response` 的自动翻译，无需业务改动。
 - **DB 动态内容翻译**（商品名、公告等库内内容）的官方入口：
   `internal/common/country.Service.GetByRequest(ctx, group, key)`——从请求
@@ -410,7 +410,7 @@ const rules = reactive<FormRules>({
   `i18n.LangFromContext`），无请求语言时回退前台默认语言（`country_language`
   第一条），再走 `Get` 的默认语言 fallback（目标语言缺条回退默认语言，仍未
   命中返回 `gorm.ErrRecordNotFound`）。注意 context 中的请求语言是规范化
-  pack key（如 `zh-cn`→`zh`），与 `country_language.lan` 原始值可能不同，
+  pack key（如 `zh-cn`→`zh-CN`），与 `country_language.lan` 原始值可能不同，
   由 `Get` 的默认语言回退桥接。**静态 UI 文案仍走前端 `t()`/i18n YAML 语言
   包，两条链共用同一请求语言**，不要为 DB 内容另开语言通道。调用示例
   （`country.Service` 经 wire 注入 service/handler，`ctx` 自带请求语言）：

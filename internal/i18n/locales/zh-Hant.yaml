@@ -1,1 +1,226 @@
-{}
+Group Name Arr: 管理員分組
+Please use another administrator account to disable the current account!: 請使用另外的管理員賬戶禁用當前賬戶！
+You have no permission to add an administrator to this group!: 您沒有權限向此分組添加管理員！
+Super administrator: 超級管理員
+No permission: 無權限
+You cannot modify your own management group!: 不能修改自己所在的管理組！
+You need to have all permissions of this group to operate this group~: 您需要擁有該分組的所有權限纔可以操作該分組~
+You need to have all the permissions of the group and have additional permissions before you can operate the group~: 您需要擁有該分組的所有權限且還有額外權限時，纔可以操作該分組~
+Role group has all your rights, please contact the upper administrator to add or do not need to add!: 角色組擁有您的全部權限，請聯繫上級管理員添加或無需添加！
+Role remark: 爲保障系統安全，角色組本身的上下級關係僅供參考，系統的實際上下級劃分是根據`權限多寡`來確定的，兩位管理員的權限節點：相同被認爲是`同級`、包含且有額外權限才被認爲是`上級`，同級不可管理同級，上級可爲下級分配自己擁有的權限節點；若有特殊情況管理員需轉`上級`，可建立一個虛擬權限節點
+Dashboard remark: 開源等於互助；開源需要大家一起來支持，支持的方式有很多種，比如使用、推薦、寫教程、保護生態、貢獻代碼、回答問題、分享經驗、打賞讚助等；歡迎您加入我們！
+Rule Type: 規則類型
+Rule Title: 規則標題
+Rule Name: 規則名稱
+Parse field data: CRUD代碼生成-解析字段數據
+Log start: CRUD代碼生成-從歷史記錄開始
+Generate check: CRUD代碼生成-生成前預檢
+Change-field-name fail not exist: 字段 {{.field}} 改名失敗，數據表內不存在該字段
+Del-field fail not exist: 字段 {{.field}} 刪除失敗，數據表內不存在該字段
+Change-field-attr fail not exist: 修改字段 {{.field}} 的屬性失敗，數據表內不存在該字段
+Add-field fail exist: 添加字段 {{.field}} 失敗，數據表內已經存在該字段
+Please input correct username: 請輸入正確的用戶名
+Please input correct password: 請輸入正確的密碼
+Avatar modified successfully!: 頭像修改成功！
+Attachment Remark: 同一文件被多次上傳時，只會保存一份至磁盤和增加一條附件記錄；刪除附件記錄，將自動刪除對應文件！
+'{num} records and files have been deleted': 刪除了{{.num}}條記錄和文件
+Basics: 基礎配置
+Mail: 郵件配置
+Config group: 配置分組
+Site Name: 站點名稱
+Config Quick entrance: 快捷配置入口
+Record number: 備案號
+Version number: 版本號
+time zone: 時區
+No access ip: 禁止訪問IP
+smtp server: SMTP 服務器
+smtp port: SMTP 端口
+smtp user: SMTP 用戶名
+smtp pass: SMTP 密碼
+smtp verification: SMTP 驗證方式
+smtp sender mail: SMTP 發件人郵箱
+Variable name: 變量名
+Test mail sent successfully~: 測試郵件發送成功~
+This is a test email: 這是一封測試郵件
+Congratulations, receiving this email means that your email service has been configured correctly: 恭喜您，收到此郵件代表您的郵件服務已配置正確；這是郵件主體 <b>在主體中可以使用Html!</b>
+The current page configuration item was updated successfully: 當前頁配置項更新成功！
+Controller: 控制器
+Data Table: 對應數據表
+Primary Key: 數據表主鍵
+DataRecycle Remark: 在此定義需要回收的數據，實現數據自動統一回收
+No rows were restore: 沒有記錄被還原
+Data Fields: 敏感數據字段
+SensitiveData Remark: 在此定義需要保護的敏感字段，隨後系統將自動監聽該字段的修改操作，並提供了敏感字段的修改回滾功能
+No rows were rollback: 沒有記錄被回滾
+User_id: 用戶
+Money: 變更金額
+Memo: 變更備註
+The user can't find it: 用戶找不到啦
+Change note cannot be blank: 變更備註不能爲空
+Score: 變更積分
+Failed to switch package manager. Please modify the configuration file manually:{content}: 包管理器切換失敗，請手動修改配置文件：{{.content}}
+Failed to modify the terminal configuration. Please modify the configuration file manually:{content}: 修改終端配置失敗，請手動修改配置文件：{{.content}}
+Upload: 上傳文件
+ChangeTerminalConfig: 修改終端配置
+Data table does not exist: 數據表不存在~
+No background menu, please contact super administrator!: 無後臺菜單，請聯繫超級管理員！
+You have already logged in. There is no need to log in again~: 您已經登錄過了，無需重複登錄~
+Login succeeded!: 登錄成功！
+Incorrect user name or password!: 用戶名或密碼不正確！
+Login: 登錄
+Logout: 註銷登錄
+Order not found: 訂單找不到啦！
+Module already exists: 模塊已存在！
+Package download failed: 包下載失敗！
+Package check failed: 包檢查失敗！
+No permission to write temporary files: 沒有權限寫入臨時文件！
+Zip file not found: 找不到壓縮包文件
+Unable to open the zip file: 無法打開壓縮包文件
+Unable to extract ZIP file: 無法提取ZIP文件
+Unable to package zip file: 無法打包zip文件
+Basic configuration of the Module is incomplete: 模塊基礎配置不完整
+Module package file does not exist: 模塊包文件不存在
+Module file conflicts: 模塊文件存在衝突，請手動處理！
+Configuration file has no write permission: 配置文件無寫入權限
+The current state of the module cannot be set to disabled: 模塊當前狀態無法設定爲禁用
+The current state of the module cannot be set to enabled: 模塊當前狀態無法設定爲啓用
+Module file updated: 模塊文件有更新
+Please disable the module first: 請先禁用模塊
+Please disable the module before updating: 更新前請先禁用模塊
+The directory required by the module is occupied: 模塊所需目錄已被佔用
+Install module: 安裝模塊
+Unload module: 卸載模塊
+Update module: 更新模塊
+Change module state: 改變模塊狀態
+Upload install module: 上傳安裝模塊
+Please login to the official website account first: 請先使用BuildAdmin官網賬戶登錄到模塊市場~
+Please login first: 請先登錄！
+You have no permission: 沒有權限操作！
+Username: 用戶名
+Password: 密碼
+Nickname: 暱稱
+Email: 郵箱
+Mobile: 手機號
+Captcha: 驗證碼
+CaptchaId: 驗證碼ID
+Parameter {name} can not be empty: 參數{{.name}}不能爲空
+Record not found: 記錄未找到
+No rows were added: 未添加任何行
+No rows were deleted: 未刪除任何行
+No rows updated: 未更新任何行
+Update successful: 更新成功!
+Added successfully: 添加成功!
+Deleted successfully: 刪除成功!
+Invalid collation because the weights of the two targets are equal: 無效排序整理，因爲兩個目標權重是相等的
+File uploaded successfully: 文件上傳成功！
+No files were uploaded: 沒有文件被上傳
+The uploaded file format is not allowed: 上傳的文件格式未被允許
+The uploaded image file is not a valid image: 上傳的圖片文件不是有效的圖像
+The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: 上傳的文件太大({{.min}}byte)，最大文件大小：{{.max}}byte
+No files have been uploaded or the file size exceeds the upload limit of the server: 沒有文件被上傳或文件大小超出服務器上傳限制！
+Unknown: 未知
+Account exist: 帳戶已存在
+Username is incorrect: 用戶名不正確
+Cache cleaned~: 緩存已清理，請刷新後臺~
+Please delete the child element first, or use batch deletion: 請首先刪除子元素，或使用批量刪除！
+'Configuration write failed: {content}': 配置寫入失敗：{{.content}}
+Not found field:{name}: '{{.name}}字段不存在'
+Where express error:{name}: 數據查詢操作符條件錯誤:{{.name}}
+Old password error: 舊密碼錯誤
+Frequent email sending: 發送郵件太頻繁
+Email has been registered, please log in directly: 郵箱已註冊，請直接登錄
+The email has been occupied: 郵箱已被佔用
+Email not registered: 未註冊郵箱
+Please use the account registration email to send the verification code: 請使用賬戶註冊郵箱發送驗證碼
+The system has completed installation. If you need to reinstall, please delete the {lock} file first: 系統已安裝完成。如果需要重新安裝，請先刪除鎖定文件
+No built front-end file found, please rebuild manually!: 沒有找到已構建的前端文件，請手動重建!
+Username is exist!: 用戶名已存在
+Email is exist!: 郵箱已存在
+Mobile is exist!: 電話已存在
+The email phone has been bound to another account: 手機已綁定其他賬號
+The mobile phone has been bound to another account: 郵箱已綁定其他賬號
+Depend content file content is incomplete: 依賴內容文件內容不完整
+nickname: 暱稱
+birthday: 生日
+Data updated successfully~: 資料更新成功~
+nicknameChsDash: 用戶名只能是漢字、字母、數字和下劃線_及破折號-
+Password has been changed~: 密碼已修改~
+Password has been changed, please login again~: 密碼已修改，請重新登錄~
+Account does not exist~: 賬戶不存在~
+Failed to modify password, please try again later~: 修改密碼失敗，請稍後重試~
+'{account} has been registered': '{{.account}}已被註冊，請直接登錄~'
+email format error: 電子郵箱格式錯誤！
+mobile format error: 手機號格式錯誤！
+You need to verify your account before modifying the binding information: 您需要先通過賬戶驗證才能修改綁定信息！
+Password error: 密碼錯誤！
+email is occupied: 電子郵箱地址已被佔用！
+mobile is occupied: 手機號已被佔用！
+user_register: 會員註冊驗證
+user_change_email: 修改郵箱驗證
+user_retrieve_pwd: 找回密碼驗證
+user_email_verify: 會員身份驗證
+'Your verification code is: {content}': 您的驗證碼是：{{.content}}，十分鐘內有效~
+Mail sent successfully~: 郵件發送成功~
+Mail sending service unavailable: 郵件發送服務不可用，請聯繫網站管理員進行配置~
+Install the controller: 安裝控制器
+need: 需要
+Click to see how to solve it: 點擊查看如何解決
+Please check the config directory permissions: 請檢查 config 目錄權限
+Please check the public directory permissions: 請檢查 public 目錄權限
+open: 開啓
+close: 關閉
+The installation can continue, and some operations need to be completed manually: 可以繼續安裝,部分操作需手動完成
+Allow execution: 允許執行
+disabled: 已禁用
+Allow operation: 允許操作
+Acquisition failed: 獲取失敗
+Click Install {content}: 點擊安裝{{.content}}
+Writable: 可寫
+No write permission: 無寫權限
+already installed: 已安裝
+Not installed: 未安裝
+Mysqli extension for PHP is required: 需要PHP的Mysqli和PDO擴展
+File has no write permission:{content}: 文件無寫入權限：{{.content}}
+The system has completed installation. If you need to reinstall, please delete the {content} file first: 系統已完成安裝。如果需要重新安裝，請先刪除 {{.content}} 文件
+Database connection failed:{content}: 數據庫連接失敗：{{.content}}
+Failed to install SQL execution:{content}: 安裝SQL執行失敗：{{.content}}
+unknown: 未知
+Database does not exist: 數據庫不存在!
+Failed to move the front-end file, please move it manually!: 移動前端文件失敗，請手動移動！
+How to solve?: 如何解決?
+View reason: 查看原因
+Click to view the reason: 點擊查看原因
+PDO extensions need to be installed: 需要安裝PDO擴展
+proc_open or proc_close functions in PHP Ini is disabled: proc_open和proc_close函數在php.ini中被禁用掉了
+How to modify: 如何修改
+Click to view how to modify: 點擊查看如何修改
+Security assurance?: 安全保證？
+Using the installation service correctly will not cause any potential security problems. Click to view the details: 安裝服務使用正確不會造成任何潛在安全問題，點擊查看詳情
+Please install NPM first: 請先安裝npm
+Installation error:{content}: 安裝出錯：{{.content}}
+Please upgrade {content} version: 請升級{{.content}}版本
+nothing: 無
+The gd extension and freeType library need to be installed: 需要gd2擴展和freeType庫
+username: 用戶名
+email: 郵箱
+mobile: 手機號
+password: 密碼
+captcha: 驗證碼
+captchaId: 驗證碼標識
+Registration parameter error: 註冊參數錯誤
+Please enter the correct verification code: 請輸入正確的驗證碼
+Check in failed, please try again or contact the website administrator~: 簽入失敗，請重試或聯繫網站管理員~
+Member center disabled: 會員中心已禁用，請聯繫網站管理員開啓。
+Invalid token: Token 無效！
+Login expired, please login again.: 登錄過期，請重新登錄。
+Account not exist: 帳戶不存在
+Account disabled: 帳戶已禁用
+Token login failed: 令牌登錄失敗
+Please try again after 1 day: 登錄失敗次數超限，請在1天后再試
+Password is incorrect: 密碼不正確
+You are not logged in: 你沒有登錄
+Unknown operation: 未知操作
+No action available, please contact the administrator~: 沒有可用操作，請聯繫管理員~
+Parameter error: 參數錯誤!
+Token expiration: 登錄態過期，請重新登錄！
+Captcha error: 驗證碼錯誤！

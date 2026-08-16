@@ -26,15 +26,15 @@ func TestServiceDictionaryContract(t *testing.T) {
 	s := NewService(db, &conf.Configuration{Database: conf.Database{Prefix: "dw_"}})
 	ctx := context.Background()
 	require.NoError(t, db.Table("dw_country_language").Create(&[]Language{
-		{Lan: "zh", Name: "Chinese", Status: 1, Weigh: 10},
+		{Lan: "zh-cn", Name: "Chinese", Status: 1, Weigh: 10},
 		{Lan: "en", Name: "English", Status: 1, Weigh: 1},
 	}).Error)
 	require.NoError(t, s.BatchUpsert(ctx, []LanguageContent{
-		{Lan: "zh", Group: "site", Key: "title", Type: ContentTypeText, Value: "标题"},
+		{Lan: "zh-cn", Group: "site", Key: "title", Type: ContentTypeText, Value: "标题"},
 		{Lan: "en", Group: "site", Key: "title", Type: ContentTypeText, Value: "Title"},
 	}))
 
-	value, err := s.Get(ctx, "zh", "site", "title")
+	value, err := s.Get(ctx, "zh-cn", "site", "title")
 	require.NoError(t, err)
 	require.Equal(t, "标题", value)
 	value, err = s.Get(ctx, "fr", "site", "title")

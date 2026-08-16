@@ -54,7 +54,7 @@ func newContractTestRouter() *gin.Engine {
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",
-		AcceptLanguage:   []language.Tag{language.Chinese, language.TraditionalChinese, language.English},
+		AcceptLanguage:   []language.Tag{language.Make("zh-CN"), language.TraditionalChinese, language.English},
 		DefaultLanguage:  language.English,
 		UnmarshalFunc:    yaml.Unmarshal,
 		FormatBundleFile: "yaml",

@@ -85,7 +85,7 @@ func TestAdminRouterProtectedRouteRequiresLogin(t *testing.T) {
 	// The Login middleware relies on the global i18n context for its abort
 	// message, mirroring the composer's global chain.
 	engine.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
-		DefaultLanguage: language.Chinese,
+		DefaultLanguage: language.English,
 	})))
 	NewAdminRouter(AdminRouterDeps{
 		LoginM:         &adminMiddleware.Login{},
