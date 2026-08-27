@@ -70,7 +70,9 @@ func InitRouter(
 	rootDir := util.RootPath()
 
 	// 静态资源与前台入口（不经渠道注册器）。
-	router.Static("/assets", filepath.Join(rootDir, "public/assets"))
+	// /assets 产物内容哈希命名，加 immutable 缓存头（见 assetsImmutableCache）；
+	// /static 与 /storage 不加：/storage 是上传文件会被覆盖，immutable 会缓住旧内容。
+	router.Group("/assets", assetsImmutableCache).Static("/", filepath.Join(rootDir, "public/assets"))
 	router.Static("/static", filepath.Join(rootDir, "public/static"))
 	// 整个 storage 目录：上传 URL 前缀是 /storage/{topic}（savename 规则），
 	// 挂载目录级而非 /storage/default，topic 变化（default/其它细目）无需改路由。
@@ -92,9 +94,23 @@ func InitRouter(
 	return router
 }
 
+// assetsImmutableCache 给 /assets/* 的**成功响应**加 immutable 缓存头：前端产物
+// 内容哈希命名，永不失效——发版删除旧 hash 文件后，已打开页面内的旧 chunk 从
+// 浏览器缓存命中，懒加载不再 404（配合 index.html 的 no-cache）。404 等失败
+// 响应不加头：RFC 9111 允许缓存 404，若发布窗口内 index.html 先于 chunk 生效、
+// 浏览器拉到了未上传 chunk 的 404，缓存 30 天会让看门狗 reload 也无济于事。
+func assetsImmutableCache(c *gin.Context) {
+	c.Next()
+	if c.Writer.Status() < 400 {
+		c.Header("Cache-Control", "public, max-age=2592000, immutable")
+	}
+}
+
 func registerRootRoute(router *gin.Engine, rootDir string) {
 	indexPath := filepath.Join(rootDir, "public", "index.html")
 	serveIndex := func(c *gin.Context) {
+		// index.html 不缓存：每次刷新都重新校验，拿到最新 hash 资源引用。
+		c.Header("Cache-Control", "no-cache")
 		c.File(indexPath)
 	}
 

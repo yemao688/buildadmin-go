@@ -83,6 +83,10 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 
 `make frontend` 会替换根 `public/assets/` 并复制 `public/index.html`，替换而非叠加可避免旧 hash 资源残留；Dockerfile 不构建前端，也不消费 `web/dist/`。`make build` 仅接受单个平台并使用 `--load`；多平台发布使用 `make push`。
 
+### 静态缓存与发布窗口
+
+静态服务已配置缓存头（`internal/router/router.go`）：`/assets/*` 内容哈希命名、`Cache-Control: public, max-age=2592000, immutable`（一个月长缓存），`/` 的 `index.html` 为 `no-cache`（每次刷新重新校验）。因此**发版时旧 hash 资源可安全删除、无发布窗口残留问题**：已打开页面的用户旧 chunk 从浏览器本地缓存命中（懒加载不再 404），新用户经 `index.html` 的 no-cache 拿到最新 hash 引用全新加载；配合前端 chunk 加载失败自愈看门狗（`web/src/utils/chunkReload.ts`，检测到动态导入失败自动刷新、3 秒节流 + 累计 3 次上限，发布窗口内避免无限循环），缓存缺失等极端场景也能自动恢复而无需手动刷新。
+
 #### 构建加速（国内网络）
 
 框架已为国内环境覆盖三层拉取加速，`make build`/`make push` 开箱即用（三个加速点统一由 Makefile `BUILDX_ARGS` 透传）：

@@ -104,6 +104,52 @@ func TestRootRouteServesIndex(t *testing.T) {
 	require.Equal(t, indexContent, recorder.Body.String())
 }
 
+// TestStaticAssetsCacheHeaders 验证 SPA 部署缓存策略：/assets/*（内容哈希
+// 命名）带 immutable 长缓存头，旧 hash chunk 发版删除后仍可从浏览器缓存命中；
+// index.html 带 no-cache，刷新即重新校验拿到最新 hash 引用。只复制 router.go
+// 的相关挂载片段在测试内注册，不依赖 wire 注入的渠道注册器。
+func TestStaticAssetsCacheHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	const assetContent = "console.log('cache me')"
+	const indexContent = "frontend index"
+
+	rootDir := t.TempDir()
+	publicDir := filepath.Join(rootDir, "public")
+	require.NoError(t, os.MkdirAll(filepath.Join(publicDir, "assets"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "assets", "app-hash.js"), []byte(assetContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o644))
+
+	engine := gin.New()
+	// 与 router.go 相同的 group+中间件+Static 组合（/storage 未注册，保持测试最小）
+	engine.Group("/assets", assetsImmutableCache).Static("/", filepath.Join(rootDir, "public/assets"))
+	registerRootRoute(engine, rootDir)
+
+	t.Run("assets 带 immutable 长缓存头", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/assets/app-hash.js", nil))
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, assetContent, recorder.Body.String())
+		require.Contains(t, recorder.Header().Get("Cache-Control"), "immutable")
+	})
+
+	t.Run("index.html 带 no-cache", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, "no-cache", recorder.Header().Get("Cache-Control"))
+	})
+
+	t.Run("assets 404 不加缓存头（避免缓存缺失 chunk 的 404）", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/assets/missing-hash.js", nil))
+
+		require.Equal(t, http.StatusNotFound, recorder.Code)
+		require.Empty(t, recorder.Header().Get("Cache-Control"))
+	})
+}
+
 // newLangTestContext 构造带指定请求路径与 think-lang header 的 gin.Context。
 func newLangTestContext(t *testing.T, path, thinkLang string) *gin.Context {
 	t.Helper()

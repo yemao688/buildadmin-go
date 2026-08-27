@@ -16,6 +16,7 @@ import { useConfig } from '/@/stores/config'
 import { useUserInfo } from '/@/stores/userInfo'
 import { directives } from '/@/utils/directives'
 import { registerTokenProvider } from '/@/utils/tokenProvider'
+import { resetChunkReloadCounter, setupChunkReloadWatchdog } from '/@/utils/chunkReload'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/display.css'
 import 'font-awesome/css/font-awesome.min.css'
@@ -81,6 +82,10 @@ async function start() {
         }
     }
 
+    // chunk 加载失败自愈看门狗（须在 loadLang 之前注册：初始语言包 chunk
+    // 404 时 loadLang 抛错会中断后续代码，未注册的看门狗无法兜底该失败）
+    setupChunkReloadWatchdog(router)
+
     // 全局语言包加载
     await loadLang(app)
 
@@ -92,6 +97,9 @@ async function start() {
     registerIcons(app) // icons
 
     app.mount('#app')
+
+    // mount 成功 = 本次启动正常：重置自动刷新预算，给下一次部署全新计数
+    resetChunkReloadCounter()
 
     // modules start mark, Please do not remove.
 
