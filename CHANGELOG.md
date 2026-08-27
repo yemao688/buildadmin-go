@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.2
+
+> SPA 发版旧 chunk 404 治理：静态资源缓存头（/assets 长缓存 + index.html no-cache）+ 前端 chunk 加载失败自愈看门狗。
+
+- **Fixed (下游反馈):** SPA 部署后旧 chunk 404、三端需手动刷新——后台/买家/卖家共用同一 Vue 构建产物，发版替换 `public/assets`（内容哈希命名）后，已打开页面的懒加载（路由分包、语言包）请求旧 chunk URL 404。修复：`/assets/*` 加 `Cache-Control: public, max-age=2592000, immutable`（仅成功响应加头，404 不加避免缓存缺失 chunk——RFC 9111 允许缓存 404），hash 命名资源一旦加载即长缓存命中，发版不再影响已打开页面；`/` index.html 加 `no-cache`，刷新即重新校验拿到最新 hash 引用。前端新增 chunk 加载失败自愈看门狗（`web/src/utils/chunkReload.ts`）：宽匹配动态导入失败错误（覆盖路由分包 + 语言包两条懒加载链），自动刷新恢复；3 秒节流 + 累计 3 次上限防发布窗口死循环，mount 成功后重置预算，sessionStorage 不可用（隐私模式）时优雅降级。`/static`、`/storage`（上传文件会覆盖）不加 immutable。部署文档补充发布窗口说明：旧 hash 资源可安全删除、无窗口残留问题。
+
 ## v3.2.1
 
 > 台账表兼容 `explicit_defaults_for_timestamp=OFF`（阿里云 RDS 默认参数）——建表 DDL 显式 `DEFAULT CURRENT_TIMESTAMP(6)`（无 ON UPDATE），校验接受无默认或 CURRENT_TIMESTAMP(6) 形态，Bootstrap 幂等自愈旧版 DDL 留下的 ON UPDATE 坏表。
