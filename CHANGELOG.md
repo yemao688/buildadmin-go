@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.3
+
+> crud apply 空 Database 场景修复：信息 schema 查询回退 DATABASE()，消除 EnsureSpecTable 二次物化 primary key drift 误判。
+
+- **Fixed (下游反馈):** `crud apply` 在 `cfg.Database` 为空时静默返回 0 列——`TableRepository` 的 `GetColumns` 等查询以 `table_schema = ?` 传 `config.Database.Database`，fresh 场景（`freshMigrationDatabase` 构造 cfg 仅含 Prefix）传空串，information_schema 不报错但返回 0 行；`applyOneSpec` 表已存在路径拿到空 `current`，`primaryKeyDrift` 误报 `primary key column "id" has attribute drift`（真实环境 config 含 database 完全正常，单次建表 ApplyCreated 也正常，仅表已存在 + cfg.Database 为空触发）。修复：新增 `schemaClause()` helper——`Database` 非空时保持参数化 `?`（防注入），为空时回退 `DATABASE()`（当前连接默认库，与同文件 `GetTablePk`/`IsExist` 既有模式一致）；统一改造 `GetColumns`/`GetTableList`/`GetTableListV2`/`GetTableFields`/`GetInfo` 五个信息 schema 查询。顺带修复 `IsExist` 缺失的 `?` 占位符（SQL 语法无效、Scan 吞错、恒返回 false）。新增 MySQL 门禁回归测试（cfg 仅 Prefix 时 GetColumns 返回真实列）。
+
 ## v3.2.2
 
 > SPA 发版旧 chunk 404 治理：静态资源缓存头（/assets 长缓存 + index.html no-cache）+ 前端 chunk 加载失败自愈看门狗。
