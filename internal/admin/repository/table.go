@@ -26,6 +26,19 @@ func (s *TableRepository) DB() *gorm.DB {
 	return s.sqlDB
 }
 
+// schemaClause 返回 information_schema 查询的 schema 定位表达式与参数：
+// 配置了 Database 时参数化取值；为空时回退 DATABASE()（当前连接默认库，
+// 与 GetTablePk/IsExist 的既有模式一致）。否则空字符串作为参数会静默匹配
+// 0 行且无错误（information_schema 不报 schema 不存在），导致 GetColumns
+// 返回空列被 primaryKeyDrift 误判（如 EnsureSpecTable 二次物化时
+// cfg.Database 仅含 Prefix 的场景）。
+func (s *TableRepository) schemaClause() (string, []any) {
+	if s.config.Database.Database == "" {
+		return "DATABASE()", nil
+	}
+	return "?", []any{s.config.Database.Database}
+}
+
 // 获取数据表的名称,包含数据表前缀
 func (s *TableRepository) Name(tableName string, fullName bool) string {
 	prefix := ""
@@ -43,7 +56,8 @@ func (s *TableRepository) GetTableList() map[string]string {
 		TABLE_COMMENT string
 	}
 	var tableList []Table
-	s.sqlDB.Raw("SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = ? ", s.config.Database.Database).Scan(&tableList)
+	schemaExpr, schemaArgs := s.schemaClause()
+	s.sqlDB.Raw("SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = "+schemaExpr, schemaArgs...).Scan(&tableList)
 	data := map[string]string{}
 	for _, v := range tableList {
 		if v.TABLE_COMMENT != "" {
@@ -71,10 +85,11 @@ func (s *TableRepository) GetTableListV2(quickSearch string, samePrefix bool, ex
 		TABLE_COMMENT string
 	}
 	var tableList []Table
-	query := "SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = ?"
+	schemaExpr, schemaArgs := s.schemaClause()
+	query := "SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema = " + schemaExpr
 
 	result := []TableListItem{}
-	if err := s.sqlDB.Raw(query, s.config.Database.Database).Scan(&tableList).Error; err != nil {
+	if err := s.sqlDB.Raw(query, schemaArgs...).Scan(&tableList).Error; err != nil {
 		return result
 	}
 	prefix := s.config.Database.Prefix
@@ -145,7 +160,9 @@ func (s *TableRepository) GetTableFields(tableName string, onlyCleanComment bool
 	tableName = s.Name(tableName, true)
 
 	var columnList []Column
-	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, tableName).Scan(&columnList)
+	schemaExpr, schemaArgs := s.schemaClause()
+	args := append(schemaArgs, tableName)
+	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? ORDER BY ORDINAL_POSITION", args...).Scan(&columnList)
 	data := map[string]any{}
 	for _, v := range columnList {
 		if onlyCleanComment {
@@ -164,7 +181,9 @@ func (s *TableRepository) GetTableFields(tableName string, onlyCleanComment bool
 // 获取表信息
 func (s *TableRepository) GetInfo(tableName string) ([]map[string]any, error) {
 	result := []map[string]any{}
-	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = ? AND table_name = ?", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
+	schemaExpr, schemaArgs := s.schemaClause()
+	args := append(schemaArgs, s.Name(tableName, true))
+	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ?", args...).Scan(&result).Error
 	if err != nil {
 		return result, err
 	}
@@ -173,7 +192,9 @@ func (s *TableRepository) GetInfo(tableName string) ([]map[string]any, error) {
 
 func (s *TableRepository) GetColumns(tableName string) ([]Column, error) {
 	result := []Column{}
-	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = ? AND table_name = ? ORDER BY ORDINAL_POSITION", s.config.Database.Database, s.Name(tableName, true)).Scan(&result).Error
+	schemaExpr, schemaArgs := s.schemaClause()
+	args := append(schemaArgs, s.Name(tableName, true))
+	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? ORDER BY ORDINAL_POSITION", args...).Scan(&result).Error
 	if err != nil {
 		return result, err
 	}
@@ -213,6 +234,6 @@ func (s *TableRepository) DelTable(tableName string) error {
 // 数据表是否存在
 func (s *TableRepository) IsExist(tableName string) bool {
 	result := map[string]int{}
-	s.sqlDB.Raw("SELECT COUNT(*) AS num FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ", tableName).Scan(&result)
+	s.sqlDB.Raw("SELECT COUNT(*) AS num FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", tableName).Scan(&result)
 	return result["num"] == 1
 }
