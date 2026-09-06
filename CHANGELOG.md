@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.4
+
+> 新增多语言表单组件（languageTabs）与后端翻译接口：后台表单项可按启用语言 Tab 编辑 + 一键翻译。
+
+- **Feature (业务门户能力):** 后台多语言表单组件——`web/src/components/languageTabs`（多语言 Tab 编辑：input/editor 双形态、按 `country_language` 启用语言渲染、`fillLang` 按 modelValue 对齐补齐、翻译按钮调后端接口回填全部语言），`baInput` 内置 `type: 'languageTabs'` 分发（含 `inputTypes` 校验双登记），`useLanguageTabs` persist store（layouts 初始化从 `/admin/index/index` 的 `languageTabs` 字段填充）。后端配套：`internal/common/translate` 跨渠道翻译客户端（`TranslateMulti`，外部翻译服务调用，配置缺失回退代码默认）、`configs/config.defaults.yaml` 新增 `translate:` 段（api 地址 + timeout 默认 120s）、handler `CountryLanguage.GetMultTranslations`（绑定 lan/lan_value 必填、取启用语言列表、`NoNeedPermissionActions` 豁免——通用工具不挂业务菜单）、wire 注入。文档：`docs/framework-web.md` 6.1 多语言表单字段用法、`docs/business-development.md` 4.3 handler+common+豁免组合先例。
+
 ## v3.2.3
 
 > crud apply 空 Database 场景修复：信息 schema 查询回退 DATABASE()，消除 EnsureSpecTable 二次物化 primary key drift 误判。
