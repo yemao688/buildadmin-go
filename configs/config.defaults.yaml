@@ -36,6 +36,15 @@ click_captcha:
   # 混淆点长度
   confuse_length: 2
 
+# 翻译服务配置（translate）
+# 说明：多语言表单组件"一键翻译"调用的外部翻译服务。
+#   - api: 翻译服务 base URL（translateMulti 接口挂在 {api}translateMulti）；
+#     对齐 PHP 上游 env('translate.api') 默认值，业务可在 configs/config.yaml 覆盖
+#   - timeout: 单次翻译请求超时（秒，<=0 时客户端回退默认 120s）
+translate:
+  api: 'https://translate.preview-dev.live/api/country/' # 翻译服务 base URL
+  timeout: 120                                           # 单次翻译请求超时（秒）
+
 # 日志配置（log）
 # 说明：lumberjack 轮转日志；max_size 单位 MB，max_age 单位 天
 log:

@@ -29,6 +29,7 @@ export const inputTypes = [
     'files',
     'icon',
     'color',
+    'languageTabs',
 ]
 export type ModelValueTypes = string | number | boolean | object
 

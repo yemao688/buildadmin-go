@@ -240,3 +240,19 @@ export interface SiteConfig {
     initialize: boolean
     userInitialize: boolean
 }
+
+export interface langItem {
+    // 是否为默认语言
+    is_default: number | string
+    // 语言代码,如 zh-cn / en
+    lan: string
+    // 语言名称,如 中文简体 / English
+    remark: string
+    // 语言对应的内容值
+    value: string
+}
+
+export interface UseLanguageTabs {
+    // 多语言表单组件可用的语言列表
+    langList: langItem[]
+}

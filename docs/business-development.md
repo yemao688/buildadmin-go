@@ -132,6 +132,27 @@ func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"ind
   `<img>` 标签直接引用的端点必须免登录（`NoNeedLoginActions`），否则图片
   无法携带 token 加载。
 
+### 4.3 多语言翻译接口示例（handler + common 跨渠道服务 + 豁免）
+
+后台多语言表单翻译接口（`GET/POST /admin/country.Language/getMultTranslations`）
+是 handler → common 领域服务 → 外部 HTTP 的组合先例，三处规范各自落实：
+
+- **跨渠道翻译客户端**落在 `internal/common/translate`（`Client.TranslateMulti`），
+  与 money 同层：只做外部 HTTP 调用与 `lan_to → text_to` 映射，不 import
+  gin/net-http 之外的传输层，`provider.go` 提供 `ProviderSet` 供 wire 注入。
+  翻译服务地址与超时从 `configs/config.defaults.yaml` 的 `translate:` 段读取
+  （`translate.api` 默认 `https://translate.preview-dev.live/api/country/`、
+  `timeout` 秒），未配置时客户端兜底默认值。
+- **handler**（`internal/admin/handler/country_language.go` 的
+  `GetMultTranslations`）：绑定 `{lan, lan_value}` 必填 → 经
+  `country.Service.EnabledLanguages` 取启用语言构造 `tos` → 调 translate
+  客户端 → 按语言顺序返回 `[{lan, value}]`。构造器注入 `*translate.Client`
+  与 `country.Service`，不做裸 SQL。
+- **豁免**：该接口无 DB 写、是任意模块表单共用的通用翻译工具（不挂单张
+  业务菜单），声明 `NoNeedPermissionActions()` 返回 `getmulttranslations`
+  （需登录、免 admin_rule，由 registrar `RegisterHandlerExemptions` 收集）；
+  不登记 admin_rule——业务仓库不得改动 framework 迁移 seed。
+
 ## 5. money 流（会员余额）
 
 - 唯一入口：`common/money.UserBalanceService.ApplyDelta(tx, ApplyInput)`

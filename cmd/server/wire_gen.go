@@ -21,6 +21,7 @@ import (
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/money"
 	"buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/common/translate"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
@@ -105,7 +106,8 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	countryCurrencyRepository := repository.NewCountryCurrencyRepository(gormDB, configuration, closureEnforcer)
 	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository, countryService)
 	countryLanguageRepository := repository.NewCountryLanguageRepository(gormDB, configuration, closureEnforcer)
-	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService)
+	translateClient := translate.NewClient(configuration)
+	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService, translateClient)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
 	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
 	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)

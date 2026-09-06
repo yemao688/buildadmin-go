@@ -18,6 +18,7 @@ import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
 import { BEFORE_RESIZE_LAYOUT } from '/@/stores/constant/cacheKey'
+import { useLanguageTabs } from '/@/stores/languageTab'
 import { useNavTabs } from '/@/stores/navTabs'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { useTerminal } from '/@/stores/terminal'
@@ -35,6 +36,7 @@ const config = useConfig()
 const route = useRoute()
 const siteConfig = useSiteConfig()
 const adminInfo = useAdminInfo()
+const languageTabs = useLanguageTabs()
 
 const state = reactive({
     autoMenuCollapseLock: false,
@@ -61,6 +63,8 @@ const init = () => {
         terminal.changePackageManager(res.data.terminal.npmPackageManager)
         terminal.changePHPDevelopmentServer(res.data.terminal.phpDevelopmentServer)
         siteConfig.setInitialize(true)
+
+        languageTabs.setLang(res.data.languageTabs ?? [])
 
         if (!isEmpty(res.data.adminInfo)) {
             adminInfo.dataFill(res.data.adminInfo)

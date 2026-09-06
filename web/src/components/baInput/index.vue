@@ -10,6 +10,7 @@ import BaUpload from '/@/components/baInput/components/baUpload.vue'
 import Editor from '/@/components/baInput/components/editor.vue'
 import IconSelector from '/@/components/baInput/components/iconSelector.vue'
 import RemoteSelect from '/@/components/baInput/components/remoteSelect.vue'
+import LanguageTabs from '/@/components/languageTabs/index.vue'
 
 export default defineComponent({
     name: 'baInput',
@@ -355,6 +356,17 @@ export default defineComponent({
             ],
             ['remoteSelect', remoteSelect],
             ['remoteSelects', remoteSelect],
+            [
+                'languageTabs',
+                () => {
+                    return () =>
+                        createVNode(LanguageTabs, {
+                            modelValue: props.modelValue,
+                            'onUpdate:modelValue': onValueUpdate,
+                            ...attrs.value,
+                        })
+                },
+            ],
             [
                 'city',
                 () => {

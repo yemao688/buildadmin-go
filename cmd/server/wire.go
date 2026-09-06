@@ -20,6 +20,7 @@ import (
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/money"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/common/translate"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
@@ -47,6 +48,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Se
 		area.ProviderSet,
 		money.ProviderSet,
 		country.ProviderSet,
+		translate.ProviderSet,
 		upload.ProviderSet,
 		siteconfig.ProviderSet,
 		apiService.ProviderSet,

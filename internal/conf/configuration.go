@@ -10,5 +10,6 @@ type Configuration struct {
 	Terminal     Terminal     `mapstructure:"terminal" json:"terminal" yaml:"terminal"`
 	ClickCaptcha ClickCaptcha `mapstructure:"click_captcha" json:"click_captcha" yaml:"click_captcha"`
 	Upload       Upload       `mapstructure:"upload" json:"upload" yaml:"upload"`
+	Translate    Translate    `mapstructure:"translate" json:"translate" yaml:"translate"`
 	Crud         Crud         `mapstructure:"crud" json:"crud" yaml:"crud"`
 }

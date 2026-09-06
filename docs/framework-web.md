@@ -174,6 +174,37 @@ number 用 `v-model.number`)、`radio`(el-radio-group)、`checkbox`(el-checkbox-
 | `icon` | iconSelector.vue | 见第 2 章 |
 | `remoteSelect/remoteSelects` | remoteSelect.vue | 基于 el-select；`pk`/`field`/`remoteUrl`/`params`/`labelFormatter`/`tooltipParams`（hover 显示更多字段）/`escBlur`；`onRow` 事件返回整行数据 |
 | `city` | — | `level`：1=省份，2=城市，3=区域（默认 3） |
+| `languageTabs` | languageTabs/index.vue | 多语言表单字段（后台）；按启用语言 Tab 编辑，翻译按钮一键多语言互译 |
+
+### 6.1 多语言表单字段（type=`languageTabs`）
+
+后台表单项需要按多语言分别填值时（商品名、公告内容等，DB 内容翻译存
+`country_language_content`），表单字段配置 `type: 'languageTabs'`：
+
+```ts
+// popupForm 字段配置（后端表单 DTO 对应字段接收 langItem[]）
+{
+    name: 'name',
+    type: 'languageTabs',
+    // 可选：
+    //   showDefault: false   // 隐藏默认语言（首项）tab，默认渲染全部
+    //   defaultValue: 'xxx'  // 翻译按钮的源文本（优先于当前 tab 值）
+},
+// 富文本多语言字段：
+{ name: 'content', type: 'languageTabs', editor: true } // 或 type: 'editor'
+```
+
+- **组件**：`web/src/components/languageTabs/index.vue`；按 `country_language`
+  启用的语言渲染 Tab（`web/src/layouts/backend/index.vue` 初始化时经
+  `useLanguageTabs().setLang` 从 `/admin/index/index` 的 `languageTabs` 字段
+  填充），`v-model` 绑定 `langItem[]`（`{is_default, lan, remark, value}`）。
+- **翻译按钮**：取当前 Tab 值（或 `defaultValue`）→ 调
+  `getMultTranslations`（`/admin/country.Language/getMultTranslations`）→
+  回填全部语言；翻译服务地址由后端 `configs/config.defaults.yaml` 的
+  `translate.api` 配置（未配置时客户端回退代码内默认地址，正式部署请显式
+  配置为自建/商用翻译服务）。
+- **类型映射**：`langItem` 的 `lan` 为语言码（zh-cn/en/…），与后端
+  `country_language` 表一致；提交时随表单 DTO 上传原样数组。
 
 ## 7. 表格组件（baTable）
 
