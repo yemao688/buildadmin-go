@@ -32,6 +32,7 @@ var ProviderSet = wire.NewSet(
 	NewCountryCurrencyRegistrar,
 	NewCountryLanguageRegistrar,
 	NewCountryLanguageContentRegistrar,
+	NewCountryLanguageTranslateRegistrar,
 )
 
 // ProvideRegistrars 聚合全部 admin 模块 registrar，返回给 AdminRouter
@@ -82,5 +83,6 @@ func ProvideRegistrars(
 		NewCountryCurrencyRegistrar(countryCurrency),
 		NewCountryLanguageRegistrar(countryLanguage),
 		NewCountryLanguageContentRegistrar(countryLanguageContent),
+		NewCountryLanguageTranslateRegistrar(countryLanguage),
 	}
 }
