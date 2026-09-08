@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.2.5
+
+> 修复 v3.2.4 引入的生成器形状守卫回归：getMultTranslations 自定义路由移出生成器主文件，独立 registrar 承载（下游反馈）。
+
+- **Fixed (下游反馈):** v3.2.4 将 `getMultTranslations` 自定义路由 + 豁免声明直接写入生成器主文件 `internal/admin/router/country_language.go`，偏离模板形状导致 `TestRegistrarTemplateMatchesCountryLanguageShape`（模板渲染 == 磁盘文件守卫）确定性变红，所有 fork 合并 v3.2.4 后 `go test ./internal/pkg/crud_helper/` 必红；且违背文件头自带约定（"自定义额外接口请新增独立 registrar 文件"）。修复：路由与豁免迁移到新独立 registrar `router/country_language_translate.go`（`CountryLanguageTranslateRegistrar`，生成器重写不影响），主文件恢复纯模板形状（与 v3.2.3 字节一致，含文件尾换行）、恢复原注释；provider 两处接线。文件头补充维护边界说明（`crud:delete country_language` 需同步移除本文件与 provider 接线）。路由行为完全等价（路径/方法/handler/豁免/能力不变）。
+
 ## v3.2.4
 
 > 新增多语言表单组件（languageTabs）与后端翻译接口：后台表单项可按启用语言 Tab 编辑 + 一键翻译。
