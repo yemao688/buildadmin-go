@@ -166,3 +166,12 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 		assert.Equal(t, "admin_id", firstColumn)
 	})
 }
+
+func TestColumnPositionClause(t *testing.T) {
+	cases := map[string]string{"": "", firstFieldSentinel: " FIRST", "image": " AFTER `image`"}
+	for after, want := range cases {
+		if got := columnPositionClause(after); got != want {
+			t.Errorf("columnPositionClause(%q) = %q, want %q", after, got, want)
+		}
+	}
+}

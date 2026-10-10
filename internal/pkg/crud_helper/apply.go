@@ -388,7 +388,56 @@ func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyC
 		}
 		changes = append(changes, ApplyChange{Field: field.Name, Type: "unmanaged", Class: DiffUnmanaged, Reason: "database attributes are not modeled by CRUD spec", Unmanaged: attributes})
 	}
-	return changes
+	return append(changes, columnOrderDrift(columns, fields)...)
+}
+
+// columnOrderDrift 在托管列（spec 中存在的列）物理顺序与 spec 字段顺序不一致时
+// 返回一条 DiffUnmanaged 告警（不阻断）。既有库因历史 apply 追加到末尾造成的
+// 列序漂移因此可见；spec 有而物理无的新列不参与比较，避免误报。
+func columnOrderDrift(columns []model.Column, fields []crudmodel.Field) []ApplyChange {
+	specIndex := make(map[string]int, len(fields))
+	for i, field := range fields {
+		specIndex[strings.ToLower(field.Name)] = i
+	}
+	physical := make([]string, 0, len(columns))
+	for _, column := range columns {
+		name := strings.ToLower(column.COLUMN_NAME)
+		if _, ok := specIndex[name]; ok {
+			physical = append(physical, name)
+		}
+	}
+	expected := make([]string, 0, len(physical))
+	for _, field := range fields {
+		name := strings.ToLower(field.Name)
+		for _, column := range columns {
+			if strings.ToLower(column.COLUMN_NAME) == name {
+				expected = append(expected, name)
+				break
+			}
+		}
+	}
+	if len(physical) <= 1 || sameStringOrder(physical, expected) {
+		return nil
+	}
+	return []ApplyChange{{
+		Field:     "<column order>",
+		Type:      "column-order-drift",
+		Class:     DiffUnmanaged,
+		Reason:    "physical column order differs from spec field order",
+		Unmanaged: []string{"db: " + strings.Join(physical, ", "), "spec: " + strings.Join(expected, ", ")},
+	}}
+}
+
+func sameStringOrder(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func alterChangeDDL(tableName string, diff AlterDiff) (string, error) {
@@ -398,7 +447,7 @@ func alterChangeDDL(tableName string, diff AlterDiff) (string, error) {
 	}
 	fieldData = trimDDLFragment(fieldData)
 	if diff.Change.Type == "add-field" {
-		return "ALTER TABLE `" + tableName + "` ADD " + fieldData, nil
+		return "ALTER TABLE `" + tableName + "` ADD " + fieldData + columnPositionClause(diff.Change.After), nil
 	}
 	return "ALTER TABLE `" + tableName + "` MODIFY " + fieldData, nil
 }

@@ -219,3 +219,32 @@ func TestUnmanagedColumnAttributesDoNotChangeModeledMatch(t *testing.T) {
 		t.Fatalf("unmanaged attributes = %v", attributes)
 	}
 }
+
+func TestDeriveAlterDiffAddFieldPosition(t *testing.T) {
+	columns := []model.Column{
+		alterTestColumn("id", "bigint", "NO", nil, "auto_increment", "ID"),
+		alterTestColumn("name", "varchar(20)", "NO", "", "", "名称"),
+	}
+	fields := []crudmodel.Field{
+		{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DefaultType: "NONE", Comment: "ID"},
+		{Name: "name", Type: "varchar", Length: 20, Null: false, DefaultType: "EMPTY STRING", Comment: "名称"},
+		{Name: "images", Type: "varchar", Length: 1000, DefaultType: "EMPTY STRING", Comment: "图片集"},
+		{Name: "tag", Type: "varchar", Length: 50, DefaultType: "EMPTY STRING", Comment: "标签"},
+	}
+	diffs := deriveAlterDiff(columns, fields)
+	if len(diffs) != 2 {
+		t.Fatalf("diffs = %+v", diffs)
+	}
+	if diffs[0].Change.After != "name" || diffs[1].Change.After != "images" {
+		t.Fatalf("add positions = %q, %q", diffs[0].Change.After, diffs[1].Change.After)
+	}
+
+	leading := deriveAlterDiff([]model.Column{alterTestColumn("name", "varchar(20)", "NO", "", "", "名称")},
+		[]crudmodel.Field{
+			{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DefaultType: "NONE", Comment: "ID"},
+			{Name: "name", Type: "varchar", Length: 20, Null: false, DefaultType: "EMPTY STRING", Comment: "名称"},
+		})
+	if len(leading) != 1 || leading[0].Change.After != firstFieldSentinel {
+		t.Fatalf("leading add = %+v", leading)
+	}
+}

@@ -98,7 +98,7 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	}
 	for _, change := range table.DesignChange {
 		for _, name := range []string{change.OldName, change.NewName, change.After} {
-			if name != "" && name != "FIRST FIELD" {
+			if name != "" && name != firstFieldSentinel {
 				if err := data_scope.ValidateIdentifier(name); err != nil {
 					return fmt.Errorf("invalid design-change identifier %q: %w", name, err)
 				}

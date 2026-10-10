@@ -387,12 +387,12 @@ func deriveAlterDiff(columns []model.Column, fields []crudmodel.Field) []AlterDi
 		}
 	}
 	changes := make([]AlterDiff, 0, len(fields))
-	for _, field := range fields {
+	for i, field := range fields {
 		column, ok := existing[strings.ToLower(field.Name)]
 		if !ok {
 			class, reason := riskForNewField(field)
 			changes = append(changes, AlterDiff{
-				Change: crudmodel.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
+				Change: crudmodel.ChangeField{Type: "add-field", OldName: field.Name, NewName: field.Name, After: specPredecessorField(fields, i), Sync: class == DiffSafeAuto, Risk: string(class), Reason: reason},
 				Field:  field, Class: class, Reason: reason,
 			})
 			continue
@@ -407,4 +407,14 @@ func deriveAlterDiff(columns []model.Column, fields []crudmodel.Field) []AlterDi
 		})
 	}
 	return changes
+}
+
+// specPredecessorField 返回 spec 中指定下标字段的前驱字段名，供 ALTER ADD 定位
+// （AFTER <prev>）；首字段返回 FIRST FIELD 哨兵（置表首）。差量按 spec 顺序产出、
+// 逐条执行且 rejected 变更会先行阻断，因此前驱列在执行时必然已存在。
+func specPredecessorField(fields []crudmodel.Field, index int) string {
+	if index <= 0 {
+		return firstFieldSentinel
+	}
+	return fields[index-1].Name
 }

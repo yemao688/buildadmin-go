@@ -99,7 +99,7 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 				if err != nil {
 					return err
 				}
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD  " + trimDDLFragment(fieldData)).Error; err != nil {
+				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD " + trimDDLFragment(fieldData) + columnPositionClause(v.After)).Error; err != nil {
 					return err
 				}
 			}
@@ -234,6 +234,23 @@ func EnsureDataScopeIndex(db *gorm.DB, fullTableName, ownerColumn, pk string) er
 // FIRST/AFTER) require a bare fragment.
 func trimDDLFragment(fieldData string) string {
 	return strings.TrimSuffix(strings.TrimRight(fieldData, " \t\r\n"), ",")
+}
+
+// firstFieldSentinel 是 ChangeField.After 的哨兵值，表示新列应置于表首；
+// 与 security.go 的 ValidateGenerationInput 校验白名单保持一致。
+const firstFieldSentinel = "FIRST FIELD"
+
+// columnPositionClause 把 ChangeField.After 渲染为 MySQL 列定位子句。
+// 空串表示未知/历史 payload：不定位（保持 MySQL 默认追加行为）。
+func columnPositionClause(after string) string {
+	switch strings.TrimSpace(after) {
+	case "":
+		return ""
+	case firstFieldSentinel:
+		return " FIRST"
+	default:
+		return " AFTER `" + after + "`"
+	}
 }
 
 func searchField(fields []crudmodel.Field, name string) crudmodel.Field {

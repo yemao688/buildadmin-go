@@ -143,3 +143,25 @@ func TestDefaultSpecDirExists(t *testing.T) {
 		t.Fatal("repository crud_specs directory must be discovered")
 	}
 }
+
+func TestAlterChangeDDLAddFieldPosition(t *testing.T) {
+	diff := AlterDiff{
+		Change: crudmodel.ChangeField{Type: "add-field", NewName: "images", After: "image"},
+		Field:  crudmodel.Field{Name: "images", Type: "varchar", Length: 1000, DefaultType: "EMPTY STRING", Comment: "图片集"},
+	}
+	ddl, err := alterChangeDDL("ba_ops_hotel", diff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ddl, "AFTER `image`") {
+		t.Fatalf("ddl = %q", ddl)
+	}
+	diff.Change.After = firstFieldSentinel
+	ddl, err = alterChangeDDL("ba_ops_hotel", diff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ddl, " FIRST") {
+		t.Fatalf("first ddl = %q", ddl)
+	}
+}
