@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.2.6
+
+> crud apply 列序一致性修复：新增列按 spec 前驱字段定位（`ADD ... AFTER <prev>` / `FIRST`），消除全新安装（`CREATE TABLE` 按 spec 顺序）与存量库 apply 追加到末尾的列序漂移；既有列序漂移以 `column-order-drift` 告警暴露但不自动重排。
+
+- **Fixed (下游反馈):** `crud:apply` 新增列总是追加到表末尾——`deriveAlterDiff` 从不填充 `ChangeField.After`，`HandleTableDesign` 与 `alterChangeDDL` 生成的 `ALTER TABLE ... ADD` 均无位置子句，MySQL 默认追加，导致同一 spec 下全新安装（`CREATE TABLE` 按 `fields[]` 顺序）与存量库 apply 的物理列顺序不一致（`information_schema.ORDINAL_POSITION` / `SELECT *` / dump 受影响）。修复：`deriveAlterDiff` 为新增字段填充 `After`（spec 前驱字段名，首字段用 `FIRST FIELD` 哨兵）；`HandleTableDesign` 与 plan DDL 经共享 `columnPositionClause` 渲染 ``ADD ... AFTER `<prev>` `` / `FIRST`（`MODIFY` 保持不带位置，避免无谓表重建）；`security.go` 的 `"FIRST FIELD"` 字面量收敛为常量。生成路径（`crud:generate` alter）经 `deriveAlterChanges` 同步受益，开发库与部署库形状一致。
+- **Added (漂移感知):** `unmanagedChanges` 增加 `columnOrderDrift`——托管列（spec 已存在列）物理顺序与 spec 字段顺序不一致时输出非阻断 `CRUD apply WARNING`（`column-order-drift`，附 db/spec 两侧顺序），使既有库历史追加造成的列序漂移可见；新列（spec 有、物理无）不参与比较，避免误报。既有漂移不自动重排（重排触发表重建），需 business 迁移显式 `MODIFY ... AFTER`。
+- **Tests:** 单测 `TestDeriveAlterDiffAddFieldPosition` / `TestColumnPositionClause` / `TestAlterChangeDDLAddFieldPosition`；MySQL 门禁 `column_order_apply_mysql_test.go`（`TestApplyAddsColumnAtSpecPosition` 断言 `ORDINAL_POSITION` 与 spec 一致且二次 apply `unchanged`；`TestApplyWarnsOnColumnOrderDrift` 断言漂移告警）。文档：`docs/crud-generation.md` §11。
+
 ## v3.2.5
 
 > 修复 v3.2.4 引入的生成器形状守卫回归：getMultTranslations 自定义路由移出生成器主文件，独立 registrar 承载（下游反馈）。
