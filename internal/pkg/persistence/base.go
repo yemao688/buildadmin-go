@@ -44,12 +44,34 @@ func requestContext(ctx context.Context) context.Context {
 
 // DBFor returns the request transaction when one is active and otherwise the
 // model's normal connection.
+//
+// The returned handle shares the connection pool (and therefore the request
+// transaction) but owns a fresh statement. That matters because GORM's
+// Session(&gorm.Session{}) keeps the statement pointer: code such as
+// `db := s.DBFor(ctx).Session(&gorm.Session{}); db.Statement.Table = t` would
+// otherwise rewrite the statement of the long-lived connection (or the request
+// transaction), and every later query on that handle would inherit the table
+// (issue #9). Callers must build queries through GORM's public builders, which
+// only ever mutate the handle handed out here.
 func (s *BaseModel) DBFor(ctx context.Context) *gorm.DB {
 	ctx = requestContext(ctx)
-	if db := requesttx.DB(ctx); db != nil {
+	db := s.sqlDB
+	if tx := requesttx.DB(ctx); tx != nil {
+		db = tx
+	}
+	if db == nil || db.Statement == nil {
 		return db
 	}
-	return s.sqlDB
+	// NewDB keeps chained calls copy-on-write (clone == 1) instead of mutating
+	// in place; the explicit statement keeps this handle's fields private.
+	scoped := db.Session(&gorm.Session{NewDB: true})
+	scoped.Statement = &gorm.Statement{
+		DB:        scoped,
+		ConnPool:  db.Statement.ConnPool,
+		Context:   db.Statement.Context,
+		SkipHooks: db.Statement.SkipHooks,
+	}
+	return scoped
 }
 
 // Transaction participates in a request transaction, or starts a fallback

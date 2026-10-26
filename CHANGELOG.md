@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.2.7
+
+> 生成仓库串表修复（issue #9）：`GetOne`/`List` 不再直接赋值 `db.Statement.Table`，改用 GORM 公开构造器 `.Table(s.TableName)`；`persistence.BaseModel.DBFor` 改为每次返回独立 statement。修复“先访问过某生成模块后，其它依赖模型推断表名的查询 FROM 错误表、MySQL 1054/接口 500，重启才恢复”的进程级状态污染。
+
+- **Fixed (issue #9):** GORM v1.25.9 的 `Session(&gorm.Session{})` 只置 `clone=2`，Statement 指针仍与父句柄共享；生成器模板随后的 `db.Statement.Table = s.TableName` 实际改写的是 `DBFor` 返回的长连接（或请求事务）Statement。之后任何走 `Session`/`WithContext` 克隆路径的查询（`data_scope` 的 scope 构造、`security_transaction` 中间件的 `tx.WithContext`、手写 `WithContext`/`Session` 链）都会继承该表名，FROM 串成上一次访问的生成模块表（如 `SELECT count(*) FROM ba_support_message WHERE status = ...` → `1054 Unknown column`）；表现取决于调用顺序，属跨请求的进程级状态污染。修复：`internal/pkg/crud_helper/defined.go` 的 GetOne/List 模板改为 `s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)`，`country_*` 生成产物同步修正。
+- **Hardened:** `persistence.BaseModel.DBFor` 每次调用返回独立 statement 的句柄（保留 `ConnPool`/`Context`/`SkipHooks`，`NewDB` 保持 clone=1 写时复制）。下游即使暂不重新生成旧模块，升级框架后旧产物的 `Statement.Table` 也只污染一次性句柄、不再串表；重新生成后完全走 `.Table()`。
+- **Tests:** 新增离线 dry-run 回归测试 `statement_isolation_test.go`（生成仓库 A 读后共享句柄/请求事务 statement 保持为空，第二个仓库与模型推断查询各自 FROM 自己的表；已在旧代码上验证必红）；`base_test.go` 改为断言 DBFor 独立 statement + 复用请求事务连接池；`data_scope_test.go` 断言生成产物不含 `Statement.Table`。
+- **Docs:** `docs/business-development.md` 新增“查询构造纪律”，明确禁止直接赋值 `Statement.*`。
+
 ## v3.2.6
 
 > crud apply 列序一致性修复：新增列按 spec 前驱字段定位（`ADD ... AFTER <prev>` / `FIRST`），消除全新安装（`CREATE TABLE` 按 spec 顺序）与存量库 apply 追加到末尾的列序漂移；既有列序漂移以 `column-order-drift` 告警暴露但不自动重排。

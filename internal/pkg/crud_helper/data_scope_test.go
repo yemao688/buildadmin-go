@@ -315,9 +315,11 @@ func TestModelTemplate_ReadExtraOwners(t *testing.T) {
 	assert.Contains(t, out, `ReadExtraOwners: []string{"seller_id", "hotel_id"}`)
 	assert.Contains(t, out, "func (s *DemoRepository) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB")
 	assert.Contains(t, out, "return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)")
-	assert.Contains(t, out, "db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
-	assert.Contains(t, out, "countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
-	assert.Contains(t, out, "findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})")
+	assert.Contains(t, out, "db := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)")
+	assert.Contains(t, out, "countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)")
+	assert.Contains(t, out, "findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)")
+	// issue #9: writing db.Statement.Table pollutes the shared *gorm.DB statement.
+	assert.NotContains(t, out, "Statement.Table")
 
 	editStart := strings.Index(out, "func (s *DemoRepository) Edit")
 	require.GreaterOrEqual(t, editStart, 0)

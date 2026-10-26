@@ -57,6 +57,17 @@
    领域错误（gorm 哨兵、plain error、`money.Err*`），由 service 上抛、
    handler 映射 HTTP。
 
+### 查询构造纪律
+
+查询一律从 `s.DBFor(ctx)`（有请求事务即复用事务）出发，用 GORM 公开构造器
+指定表名：`s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)`，随后正常链
+式拼装 `Where/Order/Count/Find`。**禁止直接赋值 `db.Statement.*`**
+（典型错误是 `db.Statement.Table = s.TableName`）：`Session(&gorm.Session{})`
+与父句柄共享 statement 指针，写字段会污染长连接或请求事务，之后所有按模型
+推断表名的查询都会串到这张表（MySQL `1054 Unknown column`，框架 issue #9）。
+`persistence.BaseModel.DBFor` 已为每次调用返回独立 statement 作为结构兜底，
+但生成产物与手写仓库仍应使用 `.Table()`。
+
 ## 3. service：有业务才毕业
 
 - 纯 CRUD 模块**不建透传 service**：handler → repository 直连。
