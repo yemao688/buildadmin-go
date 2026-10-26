@@ -77,8 +77,7 @@ func (s *CountryCurrencyRepository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm
 }
 
 func (s *CountryCurrencyRepository) GetOne(ctx *gin.Context, id int64) (countryCurrency model.CountryCurrency, err error) {
-	db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	db.Statement.Table = s.TableName
+	db := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	err = db.Where("id=?", id).First(&countryCurrency).Error
 	return
 }
@@ -91,14 +90,12 @@ func (s *CountryCurrencyRepository) List(ctx *gin.Context) (list []model.Country
 	if err != nil {
 		return nil, 0, err
 	}
-	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	countDB.Statement.Table = s.TableName
+	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	countDB = countDB.Where(whereS, whereP...)
 	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	findDB.Statement.Table = s.TableName
+	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	findDB = findDB.Where(whereS, whereP...)
 	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	return

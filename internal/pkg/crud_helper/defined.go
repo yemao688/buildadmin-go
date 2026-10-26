@@ -618,8 +618,7 @@ func (s *{{.ClassName}}Repository) CascadeOwners() []data_scope.CascadeOwner {
 }
 {{end}}
 func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} model.{{.ClassName}}, err error) {
-	db := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	db.Statement.Table = s.TableName
+	db := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
 	{{if .Relations}}if err == nil {
 		rows := []model.{{.ClassName}}{ {{.ModelVar}} }
@@ -644,14 +643,12 @@ func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.Class
 	if err != nil {
 		return nil, 0, err
 	}
-	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	countDB.Statement.Table = s.TableName
+	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	countDB = countDB.Where(whereS, whereP...)
 	if err = countDB.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Session(&gorm.Session{})
-	findDB.Statement.Table = s.TableName
+	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
 	findDB = findDB.Where(whereS, whereP...)
 	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
 	{{if .Relations}}if err == nil {
