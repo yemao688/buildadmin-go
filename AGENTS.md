@@ -74,7 +74,6 @@
 - **repo/service 边界**：表 T 的仓库类名必须是 `TRepository`（非表模块例外：`AuthRepository`=auth 域模块仓、`TableRepository`=information_schema 元数据仓、`AdminHierarchy`=admin_closure 闭包表写者、`AdminRuleRepository.Delete`=pkg 层 CRUD 生成器工具入口）。repo 只留 scoped 原子原语（scoped 读、单表原子写、scope/锁构造与 `Transaction` 原语），禁止 gin 上下文 actor 提取、跨步骤事务编排、业务分支与 `cErr.*` 业务映射（RowsAffected 完整性守卫除外）；流程编排（actor 校验、事务链、业务规则、领域错误上抛）一律在 service，HTTP 映射留在 handler。先例与示例见 `docs/business-development.md`。
 - **money 流**：会员余额变动只走 `common/money.UserBalanceService.ApplyDelta`（FOR UPDATE + 归属校验 + 负余额拒绝 + 余额更新 + 日志写入，调用方自持事务）；`ApplyInput.Scope` 由仓库构造（repo 的 `UserScope(ctx, actor)`），`Type` 字段缺省 `system`、`Log` 载体预置优先；领域错误（`ErrInsufficientBalance` 等）上抛到 handler 映射 HTTP。未来卖家余额按同契约毕业 `SellerBalanceService`，不要往 UserBalanceService 里塞新用户域逻辑。
 
-
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
@@ -86,6 +85,48 @@
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
 - 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 为显式豁免（handler 的 `NoNeedPermissionActions` 声明）。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。豁免机制按渠道分开、互不通用：`internal/admin/middleware` 的豁免注册表（`RegisterNoNeedLogin`/`RegisterPermissionExempt` 及 handler 声明式 `NoNeedLoginActions`/`NoNeedPermissionActions` 收集）只作用于**后台 /admin 渠道**（跳过登录/跳过规则校验，经 admin registrar 声明）；`internal/api/router` 的 `api_routes.go` public 集合是 **API /api 渠道**的免登录路由登记表（method+path 逐条，per-action 公共端点）。业务侧按目标渠道选择对应机制，不要混用。
+
+## 编码规范（注释 / 测试 / 验证）
+
+适用于 Go 后端（`internal/`、`cmd/`）；`web/` 前端沿用 `pnpm lint`/`typecheck`/`build`，但「不得虚报验证结果」的纪律同样适用。
+
+### 注释
+
+- 默认不写注释，只写解释「为什么」、约束、副作用或反直觉取舍的内容。删掉后读者不会困惑的注释不写。
+- 新增或修改的导出标识符写一句中文 godoc，以标识符名开头，说明用途与边界；不复述签名。既有不合规注释不因本条做全仓重写，改动文件时顺带清理被触碰区域。
+- 禁止：复述代码、分隔符、右花括号注释、空泛 TODO、注释掉的死代码、AI/生成标记。临时 TODO 必须带可追踪上下文，否则删除。
+- 测试文件不写 godoc/文档注释，只保留解释测试意图与边界条件的必要注释。一律中文。
+
+### 测试策略
+
+先做「测试必要性评估」并给结论，再写测试：
+
+- **默认不写**：getter/setter、DTO/配置结构体、无业务规则的 CRUD handler、生成代码，以及为「看起来完整」补的测试。
+- **必须写**：核心业务逻辑（权限、状态机、金额/余额、计算）、复杂算法与易错边界、并发/异步、**修复 bug 的回归测试**（随修复提交，不删除）。用户明确要求时按其范围执行。
+- **框架维护优先**：迁移、兼容性差异、边界守卫等按 `docs/framework-maintenance.md` 的要求必须配套测试/迁移/文档；本节的「默认不写」不得用于削减这些既有要求。
+- **临时验证脚本/探针**：通过后删除、不提交；确需长期保留时转成正式回归测试并说明覆盖点。
+
+命名与落点：
+
+- 主测试文件与源文件同名：`x.go` → `x_test.go`；优先**追加到已有同名测试**（表驱动），不为每个用例新建文件。
+- MySQL 门禁集成测试沿用 `x_mysql_test.go` 后缀（与现有约定一致，见「安装与测试风险」），与主测试文件并存。
+- 跨文件/端到端测试可用语义化文件名（如 `closure_e2e_test.go`），文件头说明覆盖范围；不为凑「一对一」拆分或改名既有测试。
+
+### 验证
+
+默认执行一次「快速验证」：
+
+```bash
+gofmt -l <changed files>        # 无输出（只检查本次改动文件）
+go build ./...                  # 后端编译
+go test ./<affected packages> -run '<related tests>'
+```
+
+- 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm typecheck`、`pnpm build`。
+- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI，仓库也没有 CI 或已配置的 Go linter。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
+- 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
+- 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。
+- 每次验证后如实报告：执行的命令、耗时、PASS/FAIL/SKIP/未运行及失败项。失败先给定位，不只报总数。
 
 ## 常用命令
 
@@ -107,7 +148,7 @@ pnpm build                             # emits web/dist/
 
 - 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
-- 不要求默认运行 `go test ./...` 或 `go vet`；按影响范围选择测试，因为部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow 或已配置的 Go linter；根目录 `Makefile` 只服务于部署镜像构建，不是开发任务运行器。
+- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow 或已配置的 Go linter；根目录 `Makefile` 只服务于部署镜像构建，不是开发任务运行器。
 
 ## CRUD 模块生成（AI 驱动）
 
