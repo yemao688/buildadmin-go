@@ -6,6 +6,7 @@ import { loadAndMergeMessages } from '/@/lang/index'
 import staticRoutes from '/@/router/static'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useConfig } from '/@/stores/config'
+import { ensureRouteAppDomain } from '/@/utils/appMode'
 import { loading } from '/@/utils/loading'
 
 const router = createRouter({
@@ -14,6 +15,9 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+    // 应用域在启动时已固定（Element Plus 与语言域按域加载），文档内跨域必须整页重载
+    if (!ensureRouteAppDomain(to.fullPath)) return false
+
     NProgress.configure({ showSpinner: false })
     NProgress.start()
     if (!window.existLoading) {

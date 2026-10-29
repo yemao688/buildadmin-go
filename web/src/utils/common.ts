@@ -1,4 +1,3 @@
-import * as elIcons from '@element-plus/icons-vue'
 import { useTitle } from '@vueuse/core'
 import type { FormInstance } from 'element-plus'
 import { isArray, isNull, trim, trimStart } from 'lodash-es'
@@ -9,25 +8,18 @@ import { i18n } from '../lang'
 import { useSiteConfig } from '../stores/siteConfig'
 import { getUrl } from './axios'
 import Icon from '/@/components/icon/index.vue'
+import { getAppMode, isAdminPath } from '/@/utils/appMode'
 import router from '/@/router/index'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useNavTabs } from '/@/stores/navTabs'
 
+/**
+ * 全局注册 Icon 组件。
+ * Element Plus 图标不在这里注册（图标 barrel 会进首屏），后台域见 utils/elementIcons。
+ * 使用方式: <Icon name="name" size="size" color="color" />
+ */
 export function registerIcons(app: App) {
-    /*
-     * 全局注册 Icon
-     * 使用方式: <Icon name="name" size="size" color="color" />
-     * 详见<待完善>
-     */
     app.component('Icon', Icon)
-
-    /*
-     * 全局注册element Plus的icon
-     */
-    const icons = elIcons as any
-    for (const i in icons) {
-        app.component(`el-icon-${icons[i].name}`, icons[i])
-    }
 }
 
 /**
@@ -152,18 +144,14 @@ export const buildJsonToElTreeData = (data: any): ElTreeData[] => {
 }
 
 /**
- * 是否在后台应用内
- * @param path 不传递则通过当前路由 path 检查
+ * 是否在后台应用内。
+ * 不传 path 时返回本次文档启动时固定的应用域——Element Plus 与语言域都按该域加载，
+ * 运行中不能用“当前路由”改变域判定（跨域导航由 router 守卫整页重载，见 utils/appMode）。
+ * @param path 传入时仅按该路径判断所属域（不受启动域影响）
  */
 export const isAdminApp = (path = '') => {
-    const regex = new RegExp(`^${adminBaseRoutePath}`)
-    if (path) {
-        return regex.test(path)
-    }
-    if (regex.test(getCurrentRoutePath())) {
-        return true
-    }
-    return false
+    if (path) return isAdminPath(path)
+    return getAppMode() === 'admin'
 }
 
 /**

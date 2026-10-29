@@ -1,24 +1,15 @@
 import { createApp } from 'vue'
-import axios from 'axios'
-import App from './App.vue'
-import router from './router'
-import { loadLang } from '/@/lang/index'
-import { indexUrl } from '/@/api/frontend'
-import { getUrl } from '/@/utils/axios'
-import { isAdminApp, registerIcons } from '/@/utils/common'
-import { refreshTokenRequest } from '/@/utils/axios'
-import ElementPlus from 'element-plus'
 import mitt from 'mitt'
+import App from './App.vue'
 import pinia from '/@/stores/index'
+import router from '/@/router'
+import { refreshTokenRequest } from '/@/utils/axios'
+import { registerTokenProvider } from '/@/utils/tokenProvider'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useBaAccount } from '/@/stores/baAccount'
-import { useConfig } from '/@/stores/config'
 import { useUserInfo } from '/@/stores/userInfo'
-import { directives } from '/@/utils/directives'
-import { registerTokenProvider } from '/@/utils/tokenProvider'
 import { resetChunkReloadCounter, setupChunkReloadWatchdog } from '/@/utils/chunkReload'
-import 'element-plus/dist/index.css'
-import 'element-plus/theme-chalk/display.css'
+import { resolveAppMode, setAppMode } from '/@/utils/appMode'
 import 'font-awesome/css/font-awesome.min.css'
 import '/@/styles/index.scss'
 // modules import mark, Please do not remove.
@@ -49,52 +40,23 @@ registerTokenProvider({
     refresher: ({ provider, lang, refreshToken, token }) => refreshTokenRequest(provider, lang, refreshToken, token),
 })
 
+/**
+ * 入口只做与域名无关的启动：固定应用域、注册 chunk 看门狗、创建应用与 pinia，
+ * 其余依赖按域分流到 bootstrap/admin 或 bootstrap/portal 动态加载，
+ * 避免后台专用的 Element Plus / 图标 barrel 进入门户首屏静态导入图。
+ */
 async function start() {
+    const mode = resolveAppMode()
+    setAppMode(mode)
+
+    // 看门狗必须先于域 bootstrap 的动态 import 注册：该 import 自身 404 时也要能自愈
+    setupChunkReloadWatchdog(router)
+
     const app = createApp(App)
     app.use(pinia)
 
-    const config = useConfig()
-
-    // 门户应用入口：先请求后端默认语言（/api/index/index 返回的 default_language，后端并行线提供），
-    // 在 loadLang 之前完成 initPortalLang，保证首帧渲染语言正确；失败或字段缺失时保持默认 'zh-cn'，
-    // 不阻塞启动。此请求在 vue-i18n 挂载前发出，响应消息无需翻译；
-    // think-lang 此时为 portalLang 当前值（默认 zh-cn），不影响。
-    if (!isAdminApp()) {
-        try {
-            const res = await axios.get(getUrl() + indexUrl + 'index')
-            const data = res?.data?.data
-            const defaultLang = data?.default_language
-            if (defaultLang) config.initPortalLang(defaultLang)
-
-            // 同一请求一并返回 currency 数组（按 weigh DESC 排序，第一项为后端默认货币）：
-            // 对称 initPortalLang，写入默认货币与货币列表。列表（currencyArray/currencyRates）
-            // 是数据，始终以最新后端列表为准；默认货币仅在用户显式选择前写入（initPortalCurrency 内部判断）。
-            const currencyList = data?.currency
-            if (Array.isArray(currencyList) && currencyList.length > 0) {
-                config.initPortalCurrency(
-                    currencyList[0].code,
-                    currencyList.map((item) => ({ code: item.code, name: item.name, symbol: item.symbol })),
-                    Object.fromEntries(currencyList.map((item) => [item.code, Number(item.rate) || 1]))
-                )
-            }
-        } catch (e) {
-            console.warn('[i18n] 获取门户默认语言/货币失败，使用默认 zh-cn / CNY', e)
-        }
-    }
-
-    // chunk 加载失败自愈看门狗（须在 loadLang 之前注册：初始语言包 chunk
-    // 404 时 loadLang 抛错会中断后续代码，未注册的看门狗无法兜底该失败）
-    setupChunkReloadWatchdog(router)
-
-    // 全局语言包加载
-    await loadLang(app)
-
-    app.use(router)
-    app.use(ElementPlus)
-
-    // 全局注册
-    directives(app) // 指令
-    registerIcons(app) // icons
+    const { default: bootstrap } = mode === 'admin' ? await import('./bootstrap/admin') : await import('./bootstrap/portal')
+    await bootstrap(app)
 
     app.mount('#app')
 

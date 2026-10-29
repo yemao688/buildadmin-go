@@ -36,7 +36,8 @@
 ```
 web/
 ├── src/
-│   ├── main.ts               # 入口：pinia/router/ElementPlus/指令/Icon/token provider 注册
+│   ├── main.ts               # 入口：应用域判定 + pinia/token provider 注册，按域动态加载 bootstrap/
+│   ├── bootstrap/            # admin.ts（完整 ElementPlus+图标+后台样式）· portal.ts（组件白名单）
 │   ├── App.vue
 │   ├── api/                  # 所有网络请求函数（backend/、frontend/、common.ts）
 │   ├── assets/               # 静态资源（bg、logo、qr 等）
@@ -51,7 +52,7 @@ web/
 │   ├── router/               # index.ts（含门户语言目录注册表 portalLangDirs）
 │   │   └── static/           # 静态路由：adminBase.ts、homePlaceholder.ts（删除即接管 /）
 │   ├── stores/               # Pinia 商店（constant/ 缓存键名、interface/ 类型）
-│   ├── styles/               # SCSS：app/index/element/loading/var/dark/mixins
+│   ├── styles/               # SCSS：app/index/element/portal/admin/loading/var/dark/mixins
 │   ├── utils/                # axios/baTable/common/directives/iconfont/tokenProvider/validate 等
 │   └── views/                # backend/（后台）· frontend/（前台门户）· common/
 ├── types/tableRenderer.d.ts  # pnpm dev 自动生成（fieldRender 文件名 → TableRenderer 联合类型）
@@ -66,7 +67,7 @@ web/
 | 前缀 | 来源 | 示例 |
 |---|---|---|
 | `fa `（带空格） | font-awesome 4.7.0（已默认加载，`utils/iconfont.ts` 的 `cssUrls`） | `<Icon name="fa fa-pencil" />` |
-| `el-icon-` | @element-plus/icons-vue（main.ts 的 `registerIcons` 已全局注册） | `<Icon name="el-icon-Close" color="#8595F4" size="20" />` |
+| `el-icon-` | @element-plus/icons-vue（后台由 `bootstrap/admin.ts` 全局注册；门户首次使用时按需加载，见 §13.6） | `<Icon name="el-icon-Close" color="#8595F4" size="20" />` |
 | `local-` | `/web/src/assets/icons` 内 SVG，文件名即后缀；新增需重新编译 | `<Icon name="local-logo" />` |
 | `iconfont `（带空格） | 阿里 iconfont Font class 链接（`utils/iconfont.ts` 的 `cssUrls`） | `<Icon name="iconfont icon-user" />` |
 
@@ -552,6 +553,41 @@ registerTokenProvider({
 刷新通道（对齐 `internal/migrations/business` 与 `internal/cron` 的 Register
 模式，零改框架）。前端 `refreshType` 与后端类型名必须一致，否则
 `/api/common/refreshToken` 返回 "Invalid token"。
+
+### 13.6 门户运行时预算（入口分流与 Element Plus 白名单）
+
+门户与后台共用同一个 HTML 入口（hash 路由），但**应用域在文档启动时固定**
+（`web/src/utils/appMode.ts` 的 `setAppMode`/`getAppMode`，`isAdminApp()` 不再读当前路由）。
+两域依赖不同，由入口按域动态加载：
+
+| 文件 | 内容 | 谁加载 |
+|---|---|---|
+| `web/src/main.ts` | 应用域判定、token provider、chunk 看门狗、pinia、mount | 两域 |
+| `web/src/bootstrap/admin.ts` | 完整 Element Plus + 后台图标 barrel + font-awesome + 后台样式 | 仅 `/admin` |
+| `web/src/bootstrap/portal.ts` | 组件白名单 + 按组件样式 + 门户样式 | 仅门户 |
+
+规范：
+
+- **门户侧代码不得静态 `import 'element-plus'` 或 `@element-plus/icons-vue`**，也不得从
+  组件库根 barrel 取组件——根 barrel 与后台的完整插件是同一模块，会把整个组件库
+  （含 490KB 图标）重新拉回门户首屏。门户需要组件时，在 `bootstrap/portal.ts` 的白名单
+  追加一行组件（从 `element-plus/es/components/<name>/index` 深导入）并补一行
+  `element-plus/es/components/<name>/style/css`。
+- 门户大量使用组件库时，可改用 `installFullElementPlus(app)`（逃生口，代价是首屏回到完整
+  组件库）。白名单实际用到的是 `ElConfigProvider`/`ElCard`/`ElDropdown*`/`ElButton*`/`ElIcon`。
+- **不要靠过滤 `modulepreload` 优化首屏**：HTML 里的预加载是入口静态导入闭包的传递全集，
+  删链接只是把并行发现变成串行瀑布，字节数不变。
+- **不要在门户代码里用 `resolveComponent('el-' + type)` 这类运行期字符串**：编译期无法解析。
+  框架内 `baInput`/`formItem` 依赖后台的全局注册（后台域保持完整插件，行为不变）；门户自定义
+  组件请显式引入组件后 `h(ElXxx)`。
+- `<Icon name="el-icon-*" />` 两域都可用：后台由图标 barrel 全局注册，门户首次使用时按需加载
+  该图标 chunk（`components/icon/index.vue`）。
+- 跨域跳转（门户 → `/admin/*` 或反向）由 `router/index.ts` 的守卫整页重载一次完成，文档内
+  不会切换应用域；业务不要绕过守卫直接用 `history.pushState` 改 hash。
+
+**下游升级注意**：本版把 Element Plus 全量注册从入口移到了后台域。业务门户若用到白名单
+以外的组件（`<el-table>` 等），升级后会渲染为未知元素且生产环境无告警——把组件追加到
+`bootstrap/portal.ts` 白名单，或调用 `installFullElementPlus(app)` 整体接管。
 
 ## 14. WEB 终端组件（terminal）
 

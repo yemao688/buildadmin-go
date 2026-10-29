@@ -1,6 +1,7 @@
 import type { AxiosRequestConfig, Method } from 'axios'
 import axios from 'axios'
-import { ElLoading, ElNotification, type LoadingOptions } from 'element-plus'
+import type { LoadingOptions } from 'element-plus'
+import { notify, openLoading } from '/@/utils/elementFeedback'
 import { refreshToken } from '/@/api/common'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
@@ -186,7 +187,16 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
             if (options.loading) {
                 loadingInstance.count++
                 if (loadingInstance.count === 1) {
-                    loadingInstance.target = ElLoading.service(loading)
+                    // 组件库按需加载：loading 实例到达时若请求已结束则不打开，避免残留；
+                    // 若已有实例（连续两批请求跨越 chunk 加载窗口）则丢弃本次打开的实例
+                    void openLoading(loading, () => loadingInstance.count > 0).then((instance) => {
+                        if (!instance) return
+                        if (loadingInstance.target) {
+                            instance.close()
+                            return
+                        }
+                        loadingInstance.target = instance
+                    })
                 }
             }
 
@@ -275,7 +285,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                         }
                     }
                     if (options.showCodeMessage) {
-                        ElNotification({
+                        notify({
                             type: 'error',
                             message: response.data.msg,
                             zIndex: SYSTEM_ZINDEX,
@@ -310,7 +320,7 @@ function createAxios<Data = any, T = ApiPromise<Data>>(axiosConfig: AxiosRequest
                     // code不等于1, 页面then内的具体逻辑就不执行了
                     return Promise.reject(response.data)
                 } else if (options.showSuccessMessage && response.data && response.data.code == 1) {
-                    ElNotification({
+                    notify({
                         message: response.data.msg ? response.data.msg : i18n.global.t('axios.Operation successful'),
                         type: 'success',
                         zIndex: SYSTEM_ZINDEX,
@@ -393,7 +403,7 @@ function httpErrorStatusHandle(error: any) {
     if (error.message.includes('Network'))
         message = window.navigator.onLine ? i18n.global.t('axios.Server exception!') : i18n.global.t('axios.You are disconnected!')
 
-    ElNotification({
+    notify({
         type: 'error',
         message,
         zIndex: SYSTEM_ZINDEX,
@@ -406,7 +416,7 @@ function httpErrorStatusHandle(error: any) {
 function closeLoading(options: Options) {
     if (options.loading && loadingInstance.count > 0) loadingInstance.count--
     if (loadingInstance.count === 0) {
-        loadingInstance.target.close()
+        loadingInstance.target?.close()
         loadingInstance.target = null
     }
 }
@@ -476,7 +486,7 @@ export function requestPayload(method: Method, data: anyObj) {
 }
 
 interface LoadingInstance {
-    target: any
+    target: { close: () => void } | null
     count: number
 }
 export interface Options {
