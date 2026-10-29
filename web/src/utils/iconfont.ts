@@ -1,6 +1,5 @@
 import { nextTick } from 'vue'
 import { loadCss, loadJs } from './common'
-import * as elIcons from '@element-plus/icons-vue'
 import { getUrl } from '/@/utils/axios'
 
 /**
@@ -151,19 +150,24 @@ export function getIconfontNames() {
 
 /*
  * 获取element plus 自带的图标
+ * 图标 barrel 未压缩约 490KB，属后台图标选择器专用：动态导入，避免进入门户首屏静态图
  */
 export function getElementPlusIconfontNames() {
     return new Promise<string[]>((resolve, reject) => {
-        nextTick(() => {
-            const iconfonts = []
-            const icons = elIcons as any
-            for (const i in icons) {
-                iconfonts.push(`el-icon-${icons[i].name}`)
-            }
-            if (iconfonts.length > 0) {
-                resolve(iconfonts)
-            } else {
-                reject('No ElementPlus Icons')
+        nextTick(async () => {
+            try {
+                const iconfonts = []
+                const icons = (await import('@element-plus/icons-vue')) as any
+                for (const i in icons) {
+                    iconfonts.push(`el-icon-${icons[i].name}`)
+                }
+                if (iconfonts.length > 0) {
+                    resolve(iconfonts)
+                } else {
+                    reject('No ElementPlus Icons')
+                }
+            } catch (e) {
+                reject(e)
             }
         })
     })

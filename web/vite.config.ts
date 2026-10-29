@@ -32,7 +32,17 @@ const viteConfig = ({ mode }: ConfigEnv): UserConfig => {
             open: VITE_OPEN != 'false',
         },
         build: {
-            cssCodeSplit: false,
+            // 按需拆 CSS：门户只加载自己的样式，element-plus 样式跟随后台 chunk
+            cssCodeSplit: true,
+            rolldownOptions: {
+                output: {
+                    // 首屏共享模块合并成一个 chunk：只捕获 $initial（入口静态依赖链）
+                    // 内的 src 工具模块，避免把懒加载或后台专用模块并进门户首屏
+                    codeSplitting: {
+                        groups: [{ name: 'initial-shared', tags: ['$initial'], test: /src[\\/](utils|lang|api|stores)[\\/]/, priority: 10 }],
+                    },
+                },
+            },
             sourcemap: false,
             outDir: VITE_OUT_DIR,
             emptyOutDir: true,

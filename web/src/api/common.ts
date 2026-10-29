@@ -1,7 +1,8 @@
 import createAxios, { getUrl, type Options } from '/@/utils/axios'
 import { isAdminApp, checkFileMimetype } from '/@/utils/common'
 import { useAdminInfo } from '/@/stores/adminInfo'
-import { ElNotification, type UploadRawFile } from 'element-plus'
+import type { UploadRawFile } from 'element-plus'
+import { notify } from '/@/utils/elementFeedback'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { state as uploadExpandState, fileUpload as uploadExpand } from '/@/components/mixins/baUpload'
 import type { AxiosRequestConfig } from 'axios'
@@ -57,7 +58,7 @@ export function fileUpload(fd: FormData, params: anyObj = {}, forceLocal = false
     }
     if (errorMsg) {
         return new Promise((resolve, reject) => {
-            ElNotification({
+            notify({
                 type: 'error',
                 message: errorMsg,
                 zIndex: SYSTEM_ZINDEX,
