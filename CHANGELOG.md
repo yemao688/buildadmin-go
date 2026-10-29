@@ -2,16 +2,16 @@
 
 ## v3.3.0
 
-> 门户首屏瘦身（issue #11）：门户与后台共用同一 HTML 入口时，后台专用的 Element Plus 全量插件、图标 barrel 与后台样式不再进入门户首屏静态图；应用域在文档启动时固定，跨域跳转整页重载。实测（gzip，manifest 精确闭包）门户首屏 551.6 KB → 272.8 KB（34 → 16 个请求），后台 551.6 KB → 535.7 KB。
+> 门户首屏瘦身（issue #11）：门户与后台共用同一 HTML 入口时，后台专用的 Element Plus 全量插件、图标 barrel 与后台样式不再进入门户首屏静态图；应用域在文档启动时固定，跨域跳转整页重载。实测（gzip，manifest 精确闭包）门户首屏 551.6 KB → 272.8 KB（34 → 16 个请求），后台 551.6 KB → 535.7 KB；完整 Element Plus 主题 CSS 进一步移出入口（入口 CSS 575 KB → 204 KB，gzip 97 KB → 47 KB）。
 
 - **Changed (issue #11，下游必读):** `web/src/main.ts` 收薄为调度器，按应用域动态加载 `bootstrap/admin`（完整 Element Plus + 图标 barrel + font-awesome + 后台样式）或 `bootstrap/portal`（组件白名单 + 按组件样式）。应用域由 `utils/appMode` 在启动时固定，`isAdminApp()` 不再读当前路由；文档内跨域导航由 `router/index.ts` 守卫整页重载一次（带一次性标记防循环）。**下游门户若使用白名单外的 `<el-*>`，升级后会渲染为未知元素且生产环境无告警**——把组件追加到 `bootstrap/portal.ts` 白名单，或调用 `installFullElementPlus(app)` 整体接管。约定见 `docs/framework-web.md` §13.6。
 - **Changed:** `@element-plus/icons-vue` 不再随入口全局注册：后台由 `utils/elementIcons` 注册，门户由 `components/icon/index.vue` 首次用到时按需加载该图标 chunk；图标选择器的图标名列表改为动态导入。
-- **Fixed:** 后台域 Element Plus 覆盖样式顺序——`element-plus/dist/index.css` 与 `styles/admin.scss` 被拆成两个 CSS 文件且覆盖在前，同权重规则（`.el-card` 边框、`.el-table` 边框色、`.el-menu` user-select）被组件库基样式反超。改为在 `styles/admin.scss` 内 `@use 'element-plus/theme-chalk/src/index.scss'` 同源编译，顺序恒定。
+- **Fixed:** 后台域 Element Plus 覆盖样式顺序——基样式与覆盖文件被拆开且覆盖在前，同权重规则（`.el-card` 边框、`.el-table` 边框色、`.el-menu` user-select）被组件库基样式反超。改为 `bootstrap/admin` 以 `?inline` 依次注入完整主题（`element-plus/dist/index.css`）与覆盖样式（`styles/admin.scss`），顺序恒定且完整主题不进入入口 CSS（Vite 8/Rolldown 会把普通异步 CSS 并入入口）。
 - **Fixed:** `utils/axios.ts` 的请求 Loading 在组件库 chunk 加载窗口内可能残留一个无法关闭的遮罩（两个请求跨越加载窗口时各开一个实例，只关掉后一个）；改为实例回填时若已存在实例则关闭新实例。
 - **Fixed:** `utils/iconfont.ts` 的 `getElementPlusIconfontNames` 在图标 chunk 加载失败时 Promise 永不 settle（异常逃出 Promise executor）；改为 try/catch → reject。
-- **Performance:** `utils/axios.ts` / `api/common.ts` 的 `ElLoading` / `ElNotification` 改为按需深路径导入（门户首次提示从拉取整套组件库 267 KB gzip 降到 4 KB chunk）；`vite.config.ts` 开启 `cssCodeSplit`，并按 Rolldown `codeSplitting.groups`（`tags: ['$initial']`）合并首屏共享模块。
+- **Performance:** `utils/axios.ts` / `api/common.ts` 的 `ElLoading` / `ElNotification` 改为按需深路径导入（门户首次提示从拉取整套组件库 267 KB gzip 降到 4 KB chunk）；`vite.config.ts` 开启 `cssCodeSplit`，并按 Rolldown `codeSplitting.groups`（`tags: ['$initial']`）合并首屏共享模块；完整 Element Plus 主题与 `elementPlusFull` 逃生口改用 `?inline`，入口 CSS 575 KB → 204 KB（gzip 97 KB → 47 KB）。
 - **Docs:** `docs/framework-web.md` 新增 §13.6「门户运行时预算（入口分流与 Element Plus 白名单）」，更新目录树与图标来源说明，并补充下游升级提示。
-- **Verified:** `pnpm typecheck` / `pnpm lint`（0 error，warning 均为既有）/ `pnpm build`；产物静态托管与 `pnpm dev` 下门户首页、后台登录页均正常渲染；门户首屏网络请求确认不含 `es-*` / `display-*` / `admin-*`；`.el-card` 覆盖与 `.el-input__inner` 行高在浏览器计算样式上生效；语言包实测按「当前语言 + 当前路由」加载。未覆盖登录后的后台界面（需 MySQL 与后端）。
+- **Verified:** `pnpm typecheck` / `pnpm lint`（0 error，warning 均为既有）/ `pnpm build`；产物静态托管与 `pnpm dev` 下门户首页、后台登录页均正常渲染；门户初始 HTML 不预加载 `es-*` / `display-*` / `admin-*`（完整主题仅在后台或调用 `installFullElementPlus` 时加载）；`.el-card` 覆盖与 `.el-input__inner` 行高在浏览器计算样式上生效；语言包实测按「当前语言 + 当前路由」加载。未覆盖登录后的后台界面（需 MySQL 与后端）。
 
 ## v3.2.7
 

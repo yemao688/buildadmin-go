@@ -563,7 +563,7 @@ registerTokenProvider({
 | 文件 | 内容 | 谁加载 |
 |---|---|---|
 | `web/src/main.ts` | 应用域判定、token provider、chunk 看门狗、pinia、mount | 两域 |
-| `web/src/bootstrap/admin.ts` | 完整 Element Plus + 后台图标 barrel + font-awesome + 后台样式 | 仅 `/admin` |
+| `web/src/bootstrap/admin.ts` | 完整 Element Plus + 后台图标 barrel + font-awesome + 后台样式（主题/覆盖以 `?inline` 注入） | 仅 `/admin` |
 | `web/src/bootstrap/portal.ts` | 组件白名单 + 按组件样式 + 门户样式 | 仅门户 |
 
 规范：
@@ -573,6 +573,10 @@ registerTokenProvider({
   （含 490KB 图标）重新拉回门户首屏。门户需要组件时，在 `bootstrap/portal.ts` 的白名单
   追加一行组件（从 `element-plus/es/components/<name>/index` 深导入）并补一行
   `element-plus/es/components/<name>/style/css`。
+- **完整主题 CSS 不进入入口**：`element-plus/dist/index.css` 与 `styles/admin.scss` 由
+  `bootstrap/admin` 以 `?inline` 注入，`elementPlusFull` 逃生口同样使用 `?inline`。
+  Vite 8/Rolldown 会把普通异步 CSS 并入入口，完整主题不能用普通 `import '...css'`，
+  否则门户首屏仍会下载整套组件样式。入口 CSS 只保留门户白名单组件样式与公共样式。
 - 门户大量使用组件库时，可改用 `installFullElementPlus(app)`（逃生口，代价是首屏回到完整
   组件库）。白名单实际用到的是 `ElConfigProvider`/`ElCard`/`ElDropdown*`/`ElButton*`/`ElIcon`。
 - **不要靠过滤 `modulepreload` 优化首屏**：HTML 里的预加载是入口静态导入闭包的传递全集，

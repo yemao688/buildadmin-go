@@ -1,10 +1,4 @@
-// 后台域样式：只由 bootstrap/admin 引入。
-// 组件库基样式经 SCSS 源码编译进本文件，而不是引入 element-plus/dist/index.css——
-// 后者会被打进独立的 CSS 文件，与覆盖文件之间的加载顺序由打包器决定（实测覆盖在前、
-// 基样式在后，同权重规则会被反超）。同源编译保证“基样式 → 覆盖”的顺序恒定。
-
-// Element Plus 全量基样式（含 CSS 变量）
-@use 'element-plus/theme-chalk/src/index.scss';
-
-// 框架对组件库的同权重覆盖（如 .el-card 去边框）
+// 后台域覆盖样式：由 bootstrap/admin 以 ?inline 注入，排在 element-plus 基样式之后。
+// 基样式（element-plus/dist/index.css）同样以 ?inline 注入，二者都不进入入口 CSS
+// （Vite 8/Rolldown 会把普通异步 chunk 的 CSS 并入入口）。
 @use '/@/styles/element';

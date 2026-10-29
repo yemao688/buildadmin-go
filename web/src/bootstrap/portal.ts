@@ -36,7 +36,12 @@ const portalComponents = [ElConfigProvider, ElCard, ElDropdown, ElDropdownMenu, 
  * 逃生口：门户整包引入 Element Plus（含完整样式），供大量使用组件库的下游门户使用
  */
 export async function installFullElementPlus(app: App): Promise<void> {
-    const { default: ElementPlus } = await import('./elementPlusFull')
+    const { default: ElementPlus, elementPlusCss, displayCss } = await import('./elementPlusFull')
+    for (const css of [elementPlusCss, displayCss]) {
+        const style = document.createElement('style')
+        style.textContent = css
+        document.head.appendChild(style)
+    }
     app.use(ElementPlus)
 }
 

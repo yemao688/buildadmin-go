@@ -32,8 +32,8 @@ const viteConfig = ({ mode }: ConfigEnv): UserConfig => {
             open: VITE_OPEN != 'false',
         },
         build: {
-            // cssCodeSplit 已开启，但 Vite 8/Rolldown 当前仍会把异步 chunk 的 CSS
-            // 并入入口 CSS——门户实际仍会加载完整 element-plus 主题，CSS 拆分待后续修复。
+            // cssCodeSplit 已开启。注意 Vite 8/Rolldown 会把普通异步 CSS 并入入口；
+            // 完整 Element Plus 主题由 bootstrap/admin 以 ?inline 注入，不进入入口 CSS。
             cssCodeSplit: true,
             rolldownOptions: {
                 output: {
