@@ -67,9 +67,9 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 			"recordNumber": basicConfig["record_number"],
 			"cdnUrlParams": h.config.App.CdnUrlParams,
 		},
-		"userInfo": userInfo,
-		"language": languages,
+		"userInfo":         userInfo,
+		"language":         languages,
 		"default_language": defaultLan,
-		"currency": currencies,
+		"currency":         currencies,
 	})
 }

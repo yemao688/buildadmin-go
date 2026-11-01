@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/migrations/internal/core"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/migrations/internal/core"
 
 	"gorm.io/gorm"
 )

@@ -1,8 +1,8 @@
 package token
 
 import (
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
 	"time"
 
 	"github.com/gin-contrib/cache/persistence"
@@ -43,7 +43,7 @@ func (d MysqlDriver) Set(token string, t string, user_id int32, expire int64) er
 	var stamp = time.Now().Unix()
 	err = store.Get("last_cache_cleanup_time", lastCacheCleanupTime)
 	if err != nil || lastCacheCleanupTime < stamp-172800 {
-		store.Set("", stamp, 172800)
+		_ = store.Set("", stamp, 172800)
 		d.sqlDB.Where("expire_time < ? AND expire_time > 0 ", stamp).Delete(&Token{})
 	}
 	return nil

@@ -230,7 +230,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 	if err != nil {
 		return nil, err
 	}
-	defer fileReader.Close()
+	defer func() { _ = fileReader.Close() }()
 
 	var buffer bytes.Buffer
 	_, err = io.Copy(&buffer, fileReader)
@@ -330,7 +330,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 	if err != nil {
 		return nil, err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	// 将上传的文件内容写入到目标文件
 	_, err = io.Copy(out, bytes.NewReader(buffer.Bytes()))

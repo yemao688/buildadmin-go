@@ -1,10 +1,10 @@
 package migrations
 
 import (
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/pkg/testutil"
+	"fmt"
 	"strings"
 	"testing"
 

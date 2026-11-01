@@ -83,7 +83,7 @@ func TestValidateInheritParent(t *testing.T) {
 }
 
 // TestValidateInheritParentRealUser 使用仓库真实 crud_specs/ 与手写 user repo
-//（registerOnly 登记 + 锚点块）验证通过路径——重装后 crud_log 为空也能通过。
+// （registerOnly 登记 + 锚点块）验证通过路径——重装后 crud_log 为空也能通过。
 func TestValidateInheritParentRealUser(t *testing.T) {
 	require.NoError(t, validateInheritParent(DefaultSpecsDir(), "user"))
 }

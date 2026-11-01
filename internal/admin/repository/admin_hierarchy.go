@@ -64,7 +64,9 @@ func (h *AdminHierarchy) lockHierarchy(tx *gorm.DB) error {
 	var anchorID int32
 	result := tx.Raw("SELECT id FROM " + quoteIdentifier(h.adminTable()) + " ORDER BY id LIMIT 1 FOR UPDATE").Scan(&anchorID)
 	if result.Error != nil {
-		return fmt.Errorf("%w: hierarchy anchor lock failed: %v", ErrHierarchyIntegrity, result.Error)
+		// 结果错误只作日志文本：对外唯一可判定的原因必须保持 ErrHierarchyIntegrity，
+		// 避免调用方的 errors.Is 误命中底层驱动错误。
+		return fmt.Errorf("%w: hierarchy anchor lock failed: %v", ErrHierarchyIntegrity, result.Error) //nolint:errorlint // 见上
 	}
 	if result.RowsAffected != 1 {
 		return fmt.Errorf("%w: hierarchy anchor lock failed: anchor row missing", ErrHierarchyIntegrity)

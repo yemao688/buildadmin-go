@@ -1,12 +1,14 @@
 # 当前源码的本地开发覆盖配置。
 services:
   buildadmin-go:
-    image: ${DEPLOY_IMAGE_NAME:-buildadmin-go}:dev
+    image: ${COMPOSE_PROJECT_NAME:-buildadmin-go}:dev
     pull_policy: never
     build:
       context: .
       args:
-        VERSION: ${VERSION}
-        GIT_SHA: ${GIT_SHA}
-        BUILD_TS: ${BUILD_TS}
+        # 构建期加速与版本字段；未注入时用 dev/unknown 兜底，插值不依赖 .env。
+        BUILD_BASE_REGISTRY: ${BUILD_BASE_REGISTRY:-docker.m.daocloud.io/}
+        VERSION: ${VERSION:-dev}
+        GIT_SHA: ${GIT_SHA:-unknown}
+        BUILD_TS: ${BUILD_TS:-unknown}
     restart: no

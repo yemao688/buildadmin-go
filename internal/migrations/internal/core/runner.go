@@ -2,11 +2,12 @@ package core
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
-	"buildadmin-go/internal/pkg/advisorylock"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/advisorylock"
 	"gorm.io/gorm"
 )
 
@@ -110,7 +111,7 @@ func RunOfficialMigrations(db *gorm.DB, config *conf.Configuration, list []Offic
 	for _, migration := range list {
 		var record MigrationRecord
 		result := db.Table(TableName(config, "migrations")).Where("version = ?", migration.Key.Version).First(&record)
-		if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
+		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return count, fmt.Errorf("query official %s: %w", migration.Key.Name, result.Error)
 		}
 		exists := result.Error == nil

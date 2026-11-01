@@ -1,6 +1,9 @@
 package tree
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type Leaf struct {
 	Id       int
@@ -9,12 +12,18 @@ type Leaf struct {
 	Children []*Leaf
 }
 
-func (l *Leaf) GetId() int                       { return l.Id }
-func (l *Leaf) GetPid() int                      { return l.Pid }
-func (l *Leaf) GetTitle() string                 { return l.Title }
-func (l *Leaf) GetChildren() interface{}         { return l.Children }
-func (l *Leaf) SetTitle(title string)            { l.Title = title }
-func (l *Leaf) SetChildren(children interface{}) { l.Children = children.([]*Leaf) }
+func (l *Leaf) GetId() int               { return l.Id }
+func (l *Leaf) GetPid() int              { return l.Pid }
+func (l *Leaf) GetTitle() string         { return l.Title }
+func (l *Leaf) GetChildren() interface{} { return l.Children }
+func (l *Leaf) SetTitle(title string)    { l.Title = title }
+func (l *Leaf) SetChildren(children interface{}) {
+	cast, ok := children.([]*Leaf)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", children))
+	}
+	l.Children = cast
+}
 
 var icon []string = []string{"│", "├", "└"}
 
@@ -25,6 +34,17 @@ type TreeNode interface {
 	GetChildren() interface{}
 	SetTitle(title string)
 	SetChildren(children interface{})
+}
+
+// childrenOf 取节点携带的子节点列表。GetChildren 的契约是返回该节点自身的
+// []T，类型不符视为实现违约，保持调用方原有的 panic 语义。
+func childrenOf[T TreeNode](v T) []T {
+	got := v.GetChildren()
+	children, ok := got.([]T)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", got))
+	}
+	return children
 }
 
 // 将数组某个字段渲染为树状,需自备children children可通过$this->assembleChild()方法组装
@@ -48,8 +68,8 @@ func GetTreeArray[T TreeNode](data []T, level int, superiorEnd bool) []T {
 			data[key].SetTitle(strings.Repeat(" ", 4) + str + strings.Repeat(" ", (level-2)*4) + prefix + v.GetTitle())
 		}
 
-		if len(v.GetChildren().([]T)) > 0 {
-			data[key].SetChildren(GetTreeArray(v.GetChildren().([]T), level, number == total))
+		if children := childrenOf(v); len(children) > 0 {
+			data[key].SetChildren(GetTreeArray(children, level, number == total))
 		}
 		number++
 	}
@@ -60,7 +80,7 @@ func GetTreeArray[T TreeNode](data []T, level int, superiorEnd bool) []T {
 func AssembleTree[T TreeNode](data []T) []T {
 	result := []T{}
 	for _, v := range data {
-		children := v.GetChildren().([]T)
+		children := childrenOf(v)
 		v.SetChildren([]T{})
 		result = append(result, v)
 		if len(children) > 0 {

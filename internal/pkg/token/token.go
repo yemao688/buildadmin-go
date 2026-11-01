@@ -1,13 +1,13 @@
 package token
 
 import (
+	"buildadmin-go/internal/conf"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"buildadmin-go/internal/conf"
 	"hash"
 	"time"
 

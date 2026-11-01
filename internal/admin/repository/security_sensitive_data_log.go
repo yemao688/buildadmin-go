@@ -1,11 +1,11 @@
 package repository
 
 import (
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
+	"fmt"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -101,7 +101,7 @@ func (s *SecuritySensitiveDataLogRepository) ResolveTarget(tx *gorm.DB, dataTabl
 // SensitiveRuleByIDTx loads the historical rule that governs a log entry.
 func (s *SecuritySensitiveDataLogRepository) SensitiveRuleByIDTx(tx *gorm.DB, id int32) (model.SecuritySensitiveData, error) {
 	var rule model.SecuritySensitiveData
-	if err := tx.Table(s.config.Database.Prefix + "security_sensitive_data").Where("id=?", id).Take(&rule).Error; err != nil {
+	if err := tx.Table(s.config.Database.Prefix+"security_sensitive_data").Where("id=?", id).Take(&rule).Error; err != nil {
 		return rule, err
 	}
 	return rule, nil

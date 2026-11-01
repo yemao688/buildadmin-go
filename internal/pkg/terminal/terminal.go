@@ -131,7 +131,10 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 	commandKey := ctx.Query("command")
 
 	// 保持连接开放
-	flusher := ctx.Writer.(http.Flusher)
+	flusher, ok := ctx.Writer.(http.Flusher)
+	if !ok {
+		panic(fmt.Sprintf("unexpected gin response writer type %T, want http.Flusher", ctx.Writer))
+	}
 
 	output := func(data string) {
 		data = t.OutputFilter(data)
@@ -143,7 +146,7 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 		}
 		content, _ := json.Marshal(outData)
 		sseContent := fmt.Sprintf("data: %s\n\n", content)
-		ctx.Writer.Write([]byte(sseContent))
+		_, _ = ctx.Writer.Write([]byte(sseContent))
 		flusher.Flush()
 	}
 
@@ -265,7 +268,7 @@ func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, ext
 // 执行前埋点
 func (t *Terminal) BeforeExecution(commandKey string) {
 	if commandKey == "web-install.pnpm" {
-		os.Remove(filepath.Join(util.RootPath(), "web/pnpm-lock.yaml"))
+		_ = os.Remove(filepath.Join(util.RootPath(), "web/pnpm-lock.yaml"))
 	}
 }
 

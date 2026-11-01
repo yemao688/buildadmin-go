@@ -177,7 +177,7 @@ func GetDatabases(cfg Database) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	return listDatabases(db)
 }
 
@@ -187,7 +187,7 @@ func listDatabases(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return databases, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var dbName string
@@ -212,7 +212,7 @@ func CreateDatabase(cfg Database) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	databases, err := listDatabases(db)
 	if err != nil {

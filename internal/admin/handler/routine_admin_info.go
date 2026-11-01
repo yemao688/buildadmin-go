@@ -103,7 +103,10 @@ func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
 		}
 	}
 
-	copier.Copy(&admin, params)
+	if err := copier.Copy(&admin, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err = h.adminM.SelfEdit(ctx, admin, []string{"nickname", "email", "mobile", "motto"})
 	if err != nil {
 		response.FailByErr(ctx, err)

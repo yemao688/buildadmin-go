@@ -44,10 +44,18 @@ func (s *Config) SetValueAttr(value any, t string) string {
 			return "0"
 		}
 	} else if t == "time" {
-		return value.(string)
+		text, ok := value.(string)
+		if !ok {
+			panic(fmt.Sprintf("unexpected %T for time value", value))
+		}
+		return text
 	} else if t == "city" || t == "remoteSelects" {
+		list, ok := value.([]interface{})
+		if !ok {
+			panic(fmt.Sprintf("unexpected %T for %s value", value, t))
+		}
 		cityIds := []string{}
-		for _, v := range value.([]interface{}) {
+		for _, v := range list {
 			cityIds = append(cityIds, fmt.Sprintf("%v", v))
 		}
 		return strings.Join(cityIds, ",")

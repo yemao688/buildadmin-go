@@ -17,12 +17,12 @@ func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
 		{Name: "end_time", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "created_at", Type: "datetime", DataType: "datetime", DesignType: "datetime"},
 	}
-	analysed := make([]crudmodel.Field, len(fields))
+	analyzed := make([]crudmodel.Field, len(fields))
 	for i, field := range fields {
-		analysed[i] = analyseField(field)
+		analyzed[i] = analyseField(field)
 	}
 	modelTypes := buildModelFieldTypeOverrides(fields)
-	paramTypes := buildHandlerParamTypeOverrides(analysed)
+	paramTypes := buildHandlerParamTypeOverrides(analyzed)
 	for _, name := range []string{"create_time", "createtime", "update_time", "updatetime"} {
 		if _, ok := modelTypes[name]; ok {
 			t.Fatalf("canonical model override %s should be skipped, got %q", name, modelTypes[name])

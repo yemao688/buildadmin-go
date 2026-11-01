@@ -25,12 +25,12 @@ func writeSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 // 过滤与失败关闭路径，不依赖 crud_log 数据。
 func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 	tests := []struct {
-		name     string
-		specs    map[string]string // 文件名 → dataScope YAML（写为合法 spec）
-		broken   string            // 若非空，写入一个非法 spec 文件（触发 LoadSpec 失败）
-		want     []CascadeJob
-		wantErr  bool
-		errPart  string
+		name    string
+		specs   map[string]string // 文件名 → dataScope YAML（写为合法 spec）
+		broken  string            // 若非空，写入一个非法 spec 文件（触发 LoadSpec 失败）
+		want    []CascadeJob
+		wantErr bool
+		errPart string
 	}{
 		{
 			name: "反向聚合：两个子表 inheritFrom 同一主表 → 1 job 含 2 children",
@@ -48,7 +48,7 @@ func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 		{
 			name: "不同主表的子表产出多个 job",
 			specs: map[string]string{
-				"user_money_log":  "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
+				"user_money_log":   "dataScope:\n  mode: auto\n  inheritFrom:\n    table: user\n    byColumn: user_id\n",
 				"seller_money_log": "dataScope:\n  mode: auto\n  inheritFrom:\n    table: seller_user\n    byColumn: seller_id\n",
 			},
 			want: []CascadeJob{

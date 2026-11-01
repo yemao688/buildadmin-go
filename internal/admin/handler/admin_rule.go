@@ -9,6 +9,7 @@ import (
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/tree"
 	"buildadmin-go/internal/pkg/validator"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -64,18 +65,18 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 }
 
 type AdminRule struct {
-	Pid       int32  `json:"pid"`
-	Type      string `json:"type"`
-	Title     string `json:"title"  binding:"required"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Icon      string `json:"icon"`
-	MenuType  string `json:"menu_type"`
-	URL       string `json:"url"`
-	Component string `json:"component"`
-	Keepalive int32  `json:"keepalive"`
-	Extend    string `json:"extend"`
-	Remark    string `json:"remark"`
+	Pid       int32                `json:"pid"`
+	Type      string               `json:"type"`
+	Title     string               `json:"title"  binding:"required"`
+	Name      string               `json:"name"`
+	Path      string               `json:"path"`
+	Icon      string               `json:"icon"`
+	MenuType  string               `json:"menu_type"`
+	URL       string               `json:"url"`
+	Component string               `json:"component"`
+	Keepalive int32                `json:"keepalive"`
+	Extend    string               `json:"extend"`
+	Remark    string               `json:"remark"`
 	Weigh     int32                `json:"weigh"`
 	Status    validator.FlexStatus `json:"status"`
 }
@@ -214,14 +215,18 @@ func (l *AdminRuleExpend) GetTitle() string         { return l.Title }
 func (l *AdminRuleExpend) GetChildren() interface{} { return l.Children }
 func (l *AdminRuleExpend) SetTitle(title string)    { l.Title = title }
 func (l *AdminRuleExpend) SetChildren(children interface{}) {
-	l.Children = children.([]*AdminRuleExpend)
+	list, ok := children.([]*AdminRuleExpend)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", children))
+	}
+	l.Children = list
 }
 
 func (h *AdminRuleHandler) AssembleChild(list []model.AdminRule) []*AdminRuleExpend {
 	expendList := []*AdminRuleExpend{}
 	for _, v := range list {
 		temp := AdminRuleExpend{}
-		copier.Copy(&temp, v)
+		_ = copier.Copy(&temp, v)
 		expendList = append(expendList, &temp)
 	}
 	return tree.AssembleChild(expendList)

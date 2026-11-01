@@ -2,6 +2,7 @@ package country
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -115,7 +116,7 @@ func (s *Service) Get(ctx context.Context, lan, group, key string) (string, erro
 	var content LanguageContent
 	if err := s.findContent(ctx, lan, group, key, &content); err == nil {
 		return content.Value, nil
-	} else if err != gorm.ErrRecordNotFound {
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", err
 	}
 	defaultLan, err := s.DefaultLan(ctx)
@@ -127,7 +128,7 @@ func (s *Service) Get(ctx context.Context, lan, group, key string) (string, erro
 	}
 	if err := s.findContent(ctx, defaultLan, group, key, &content); err == nil {
 		return content.Value, nil
-	} else if err != gorm.ErrRecordNotFound {
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", err
 	}
 	return "", gorm.ErrRecordNotFound

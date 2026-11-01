@@ -110,6 +110,7 @@ func scopeActor(t *testing.T, ctx *gin.Context) data_scope.Actor {
 }
 
 func (f *scopeFixture) addUser(t *testing.T, ctx *gin.Context, adminID int32, name string) model.User {
+	t.Helper()
 	u := model.User{AdminID: adminID, Username: name, Nickname: name, Password: "p", Status: "enable"}
 	require.NoError(t, f.db.Create(&u).Error)
 	f.users[u.ID] = u
@@ -260,14 +261,14 @@ func TestUserEditAndAddRollbackWithActiveRequestTransaction(t *testing.T) {
 	var got model.User
 	require.NoError(t, f.db.Session(&gorm.Session{NewDB: true}).First(&got, u.ID).Error)
 	require.Equal(t, "atomic", got.Nickname)
-	copy := u
-	copy.Nickname = "changed"
-	require.NoError(t, f.userSvc.Edit(ctx.Request.Context(), copy.ID, userParams(copy), actor))
+	dup := u
+	dup.Nickname = "changed"
+	require.NoError(t, f.userSvc.Edit(ctx.Request.Context(), dup.ID, userParams(dup), actor))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
 	require.Equal(t, "changed", got.Nickname)
 	other := f.addUser(t, ctx, 20, "existing")
-	copy.Username = other.Username
-	require.Error(t, f.userSvc.Edit(ctx.Request.Context(), copy.ID, userParams(copy), actor))
+	dup.Username = other.Username
+	require.Error(t, f.userSvc.Edit(ctx.Request.Context(), dup.ID, userParams(dup), actor))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
 	require.Equal(t, "changed", got.Nickname)
 }

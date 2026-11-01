@@ -1,8 +1,8 @@
 package terminal
 
 import (
-	"buildadmin-go/internal/pkg/token"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/token"
 	"net/http"
 	"net/http/httptest"
 	"os"

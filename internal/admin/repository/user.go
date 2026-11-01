@@ -318,7 +318,7 @@ func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int3
 			continue
 		}
 		var logs []struct{ AdminID *int32 }
-		if err := tx.Table(s.config.Database.Prefix + table).Clauses(clause.Locking{Strength: "UPDATE"}).Select(ownerColumn).Where(byColumn+" = ?", userID).Find(&logs).Error; err != nil {
+		if err := tx.Table(s.config.Database.Prefix+table).Clauses(clause.Locking{Strength: "UPDATE"}).Select(ownerColumn).Where(byColumn+" = ?", userID).Find(&logs).Error; err != nil {
 			return err
 		}
 		for _, log := range logs {
@@ -359,7 +359,7 @@ func (s *UserRepository) syncUserLogOwners(tx *gorm.DB, userID, ownerID int32) e
 		if !tx.Migrator().HasTable(s.config.Database.Prefix + table) {
 			continue
 		}
-		if err := tx.Table(s.config.Database.Prefix + table).Where(byColumn+" = ?", userID).Update(ownerColumn, ownerID).Error; err != nil {
+		if err := tx.Table(s.config.Database.Prefix+table).Where(byColumn+" = ?", userID).Update(ownerColumn, ownerID).Error; err != nil {
 			return err
 		}
 	}

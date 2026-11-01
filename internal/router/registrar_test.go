@@ -203,6 +203,7 @@ func countryRoutes() []string {
 }
 
 func uniqueRoutes(t *testing.T, routes []gin.RouteInfo) map[string]struct{} {
+	t.Helper()
 	result := make(map[string]struct{}, len(routes))
 	for _, route := range routes {
 		key := routeKey(route.Method, route.Path)
@@ -215,6 +216,7 @@ func uniqueRoutes(t *testing.T, routes []gin.RouteInfo) map[string]struct{} {
 }
 
 func uniqueCollectedRoutes(t *testing.T, routes []routepkg.Route) map[string]struct{} {
+	t.Helper()
 	result := make(map[string]struct{}, len(routes))
 	for _, route := range routes {
 		key := routeKey(route.Method, route.Path)

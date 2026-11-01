@@ -34,7 +34,8 @@ func TestRandPosition(t *testing.T) {
 	}
 }
 
-func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {	t.Helper()
+func newCheckTestCaptcha(t *testing.T, pointCount int) *ClickCaptcha {
+	t.Helper()
 
 	db, err := gorm.Open(sqlite.Open("file:clickcaptcha-"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},

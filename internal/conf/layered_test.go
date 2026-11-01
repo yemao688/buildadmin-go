@@ -25,7 +25,11 @@ func TestMergeConfigMapsDeepMergeAndListReplacement(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("merged config = %#v, want %#v", got, want)
 	}
-	if base["app"].(map[string]any)["port"] != 9900 {
+	baseApp, ok := base["app"].(map[string]any)
+	if !ok {
+		t.Fatalf("base app = %#v, want map", base["app"])
+	}
+	if baseApp["port"] != 9900 {
 		t.Fatal("merge mutated base config")
 	}
 }
@@ -125,10 +129,18 @@ func TestWriteConfigOverridesPreservesExistingOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	merged := MergeConfigMaps(nil, data)
-	if merged["app"].(map[string]any)["env"] != "release" {
+	mergedApp, ok := merged["app"].(map[string]any)
+	if !ok {
+		t.Fatalf("merged app = %#v, want map", merged["app"])
+	}
+	if mergedApp["env"] != "release" {
 		t.Error("existing app override was lost")
 	}
-	if merged["mysql"].(map[string]any)["host"] != "db.internal" {
+	mergedMySQL, ok := merged["mysql"].(map[string]any)
+	if !ok {
+		t.Fatalf("merged mysql = %#v, want map", merged["mysql"])
+	}
+	if mergedMySQL["host"] != "db.internal" {
 		t.Error("installation mysql override was not written")
 	}
 }

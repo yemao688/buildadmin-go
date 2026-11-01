@@ -172,11 +172,22 @@ func TestAdminLogAddSanitizesNestedParamsAndTruncates(t *testing.T) {
 	if err := json.Unmarshal([]byte(row.Data), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["Password"] != "***" || got["profile"].(map[string]interface{})["access_token"] != "***" {
+	profile, ok := got["profile"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("profile = %#v, want object", got["profile"])
+	}
+	if got["Password"] != "***" || profile["access_token"] != "***" {
 		t.Fatalf("sensitive values were not sanitized: %#v", got)
 	}
-	items := got["profile"].(map[string]interface{})["items"].([]interface{})
-	if items[0].(map[string]interface{})["saltValue"] != "salt-secret" {
+	items, ok := profile["items"].([]interface{})
+	if !ok {
+		t.Fatalf("items = %#v, want array", profile["items"])
+	}
+	firstItem, ok := items[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("items[0] = %#v, want object", items[0])
+	}
+	if firstItem["saltValue"] != "salt-secret" {
 		t.Fatalf("removed salt field was sanitized: %#v", got)
 	}
 }

@@ -12,8 +12,8 @@ import (
 func ServerError(c *gin.Context, err interface{}) {
 	msg := "Internal Server Error"
 	if gin.Mode() != gin.ReleaseMode {
-		if _, ok := err.(error); ok {
-			msg = err.(error).Error()
+		if e, ok := err.(error); ok {
+			msg = e.Error()
 		}
 	}
 	msg = util.Lang(c, msg, nil)

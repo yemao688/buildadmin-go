@@ -1,11 +1,11 @@
 package repository
 
 import (
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

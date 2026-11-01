@@ -49,7 +49,10 @@ func (h *CountryCurrencyHandler) Add(ctx *gin.Context) {
 		return
 	}
 	var data model.CountryCurrency
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err := h.countryCurrencyM.Add(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -83,7 +86,10 @@ func (h *CountryCurrencyHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err = h.countryCurrencyM.Edit(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)

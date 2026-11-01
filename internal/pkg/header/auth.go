@@ -1,6 +1,10 @@
 package header
 
-import "github.com/gin-gonic/gin"
+import (
+	"fmt"
+
+	"github.com/gin-gonic/gin"
+)
 
 const adminAuthKey = "AdminAuth"
 
@@ -17,7 +21,11 @@ type AdminAuth struct {
 func GetAdminAuth(c *gin.Context) (adminAuth AdminAuth) {
 	v, _ := c.Get(adminAuthKey)
 	if v != nil {
-		adminAuth = v.(AdminAuth)
+		cast, ok := v.(AdminAuth)
+		if !ok {
+			panic(fmt.Sprintf("unexpected %s value type %T", adminAuthKey, v))
+		}
+		adminAuth = cast
 	}
 	return adminAuth
 }
@@ -37,7 +45,11 @@ type UserAuth struct {
 func GetUserAuth(c *gin.Context) (userAuth UserAuth) {
 	v, _ := c.Get("UserAuth")
 	if v != nil {
-		userAuth = v.(UserAuth)
+		cast, ok := v.(UserAuth)
+		if !ok {
+			panic(fmt.Sprintf("unexpected UserAuth value type %T", v))
+		}
+		userAuth = cast
 	}
 	return userAuth
 }

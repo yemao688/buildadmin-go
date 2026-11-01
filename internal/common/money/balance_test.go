@@ -37,6 +37,7 @@ func newFixture(t *testing.T) *fixture {
 
 // addUser inserts a user and returns it.
 func (f *fixture) addUser(t *testing.T, owner int32, name string) model.User {
+	t.Helper()
 	u := model.User{AdminID: owner, Username: name, Nickname: name, Password: "p", Status: "enable"}
 	require.NoError(t, f.db.Create(&u).Error)
 	return u

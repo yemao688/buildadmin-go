@@ -40,7 +40,6 @@ func Build(t string, length int) string {
 		return shuffledPool[:length]
 	case "unique":
 	case "md5":
-		rand.Seed(time.Now().UnixNano()) // 确保随机性
 		randomNum := rand.Intn(1000000)
 		randomNumStr := strconv.Itoa(randomNum)
 		// 获取当前时间戳并添加随机数以增加唯一性
@@ -54,7 +53,6 @@ func Build(t string, length int) string {
 	case "encrypt":
 	case "sha1":
 		// 生成随机数并转换为字符串
-		rand.Seed(time.Now().UnixNano()) // 确保随机性
 		randomNum := rand.Int63()
 		randomNumStr := strconv.FormatInt(randomNum, 10)
 		// 获取当前时间戳，并附加随机数和额外的唯一性（true 对应的在PHP中是添加微秒）
@@ -71,7 +69,6 @@ func Build(t string, length int) string {
 }
 
 func shuffleString(s string) string {
-	rand.Seed(time.Now().UnixNano())
 	runes := []rune(s)
 	for i := len(runes) - 1; i > 0; i-- {
 		j := rand.Intn(i + 1)

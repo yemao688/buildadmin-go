@@ -131,7 +131,10 @@ func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 	}
 
 	result := Result{}
-	copier.Copy(&result, sensitiveData)
+	if err := copier.Copy(&result, sensitiveData); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	fields, err := h.svc.UnmarshalFields(sensitiveData.DataFields)
 	if err != nil {
 		response.FailByErr(ctx, err)

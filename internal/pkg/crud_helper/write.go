@@ -4,6 +4,7 @@ import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -208,7 +209,7 @@ func getGenerateStruct(db *gorm.DB, fullTableName string, structName string, fie
 var generatedIDFieldRE = regexp.MustCompile(`(?m)^(\s*)([A-Za-z][A-Za-z0-9]*)Ids(\s+)`)
 
 // applySpecDefaultTags 把 spec 字段声明的 default（EMPTY STRING/INPUT）映射进
-// 生成 struct 的 gorm tag。gorm/gen 从数据库 introspection 生成时，对 DEFAULT ''
+// 生成 struct 的 gorm tag。gorm/gen 从数据库 introspection 生成时，对 DEFAULT ”
 // （string 零值）和 DEFAULT 0（int 零值）不产出 default tag（needDefaultTag
 // 语义），导致生成 model 与 spec 不一致、全新库 apply 被 default 差异阻塞。
 // 此函数按 spec 补齐；gen 已产出的（非零值）保持原样不重复插入。
@@ -227,7 +228,7 @@ func applySpecDefaultTags(structContent string, fields []crudmodel.Field) string
 }
 
 // specDefaultGormTag 把 spec 字段的 default 声明映射为 gorm tag 片段。
-// 数值类型不加引号（default:0），字符串类型加单引号（default:''）。
+// 数值类型不加引号（default:0），字符串类型加单引号（default:”）。
 func specDefaultGormTag(field crudmodel.Field) string {
 	switch field.DefaultType {
 	case "EMPTY STRING":
@@ -955,7 +956,8 @@ func formatGoCode(code string) (string, error) {
 	// 获取输出
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 			return "", fmt.Errorf("gofmt: %s; code=%q", strings.TrimSpace(string(exitErr.Stderr)), code)
 		}
 		return "", err
@@ -976,7 +978,7 @@ func writeFile(path string, content string) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0644); err != nil {
 		_ = tmp.Close()
 		return err

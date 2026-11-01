@@ -1,7 +1,6 @@
 package service_test
 
 import (
-	"net/http/httptest"
 	"strconv"
 	"sync"
 	"testing"
@@ -12,17 +11,10 @@ import (
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
-
-func concurrencyTestContext() *gin.Context {
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/", nil)
-	return ctx
-}
 
 type refreshRaceTokenDriver struct {
 	token.Driver
@@ -79,7 +71,9 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 		_, err := authModel.RefreshUserAccessToken(refreshToken)
 		refreshDone <- err
 	}()
-	<-tokenHelper.Driver.(*refreshRaceTokenDriver).getStarted
+	raceDriver, ok := tokenHelper.Driver.(*refreshRaceTokenDriver)
+	require.True(t, ok, "driver type = %T", tokenHelper.Driver)
+	<-raceDriver.getStarted
 
 	// Simulate a password-change transaction clearing sessions while refresh waits
 	// for the same user row lock.

@@ -94,15 +94,15 @@ func MySQLDSN(configuration conf.MysqlTest, database string) string {
 }
 
 func withMySQLTestDatabase(configuration *conf.Configuration, database string) *conf.Configuration {
-	copy := *configuration
-	copy.Database.Driver = "mysql"
-	copy.Database.Host = copy.MysqlTest.Host
-	copy.Database.Port = copy.MysqlTest.Port
-	copy.Database.Database = database
-	copy.Database.UserName = copy.MysqlTest.UserName
-	copy.Database.Password = copy.MysqlTest.Password
-	copy.Database.Charset = copy.MysqlTest.Charset
-	return &copy
+	dup := *configuration
+	dup.Database.Driver = "mysql"
+	dup.Database.Host = dup.MysqlTest.Host
+	dup.Database.Port = dup.MysqlTest.Port
+	dup.Database.Database = database
+	dup.Database.UserName = dup.MysqlTest.UserName
+	dup.Database.Password = dup.MysqlTest.Password
+	dup.Database.Charset = dup.MysqlTest.Charset
+	return &dup
 }
 
 func openMySQL(configuration conf.MysqlTest, database, tablePrefix string) (*gorm.DB, error) {

@@ -152,7 +152,7 @@ func sameIndexDefinition(actual actualIndex, spec crudmodel.IndexSpec) bool {
 	return true
 }
 
-// quoteIndexColumn 渲染索引列引用：普通列 `` `note` ``，前缀索引列 `` `note`(64) ``。
+// quoteIndexColumn 渲染索引列引用：普通列 “ `note` “，前缀索引列 “ `note`(64) “。
 func quoteIndexColumn(col string) string {
 	if i := strings.IndexByte(col, '('); i >= 0 {
 		return "`" + col[:i] + "`" + col[i:]

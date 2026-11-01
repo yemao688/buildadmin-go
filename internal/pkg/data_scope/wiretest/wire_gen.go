@@ -7,8 +7,8 @@
 package wiretest
 
 import (
-	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
 )
 
 // Injectors from wire.go:

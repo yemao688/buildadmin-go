@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	cErr "buildadmin-go/internal/pkg/error"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	cErr "buildadmin-go/internal/pkg/error"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

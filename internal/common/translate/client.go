@@ -116,7 +116,7 @@ func (c *Client) TranslateMulti(ctx context.Context, from string, tos []string, 
 	if err != nil {
 		return nil, fmt.Errorf("translate: request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(resp.Body)

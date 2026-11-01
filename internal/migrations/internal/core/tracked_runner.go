@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"buildadmin-go/internal/conf"
@@ -37,7 +38,7 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 		}
 		q := selectRecord().Where("version = ?", m.Version).First(&record)
 		exists := q.Error == nil
-		if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
+		if q.Error != nil && !errors.Is(q.Error, gorm.ErrRecordNotFound) {
 			return count, q.Error
 		}
 		if exists && record.MigrationName != m.MigrationName {
@@ -48,10 +49,10 @@ func RunTrackedMigrations(db *gorm.DB, config *conf.Configuration, tableName str
 			if q.Error == nil && record.Version != m.Version {
 				return count, fmt.Errorf("%s migration %s collision", trackName, m.MigrationName)
 			}
-			if q.Error != nil && q.Error != gorm.ErrRecordNotFound {
+			if q.Error != nil && !errors.Is(q.Error, gorm.ErrRecordNotFound) {
 				return count, q.Error
 			}
-			if q.Error == gorm.ErrRecordNotFound {
+			if errors.Is(q.Error, gorm.ErrRecordNotFound) {
 				if err := InsertPendingTrackedMigration(db, config, tableName, m); err != nil {
 					return count, err
 				}

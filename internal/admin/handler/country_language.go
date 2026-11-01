@@ -3,9 +3,9 @@ package handler
 import (
 	dto "buildadmin-go/internal/admin/dto"
 	repository "buildadmin-go/internal/admin/repository"
-	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/common/country"
 	"buildadmin-go/internal/common/translate"
+	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/validator"
@@ -51,7 +51,10 @@ func (h *CountryLanguageHandler) Add(ctx *gin.Context) {
 		return
 	}
 	var data model.CountryLanguage
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err := h.countryLanguageM.Add(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -85,7 +88,10 @@ func (h *CountryLanguageHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err = h.countryLanguageM.Edit(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)

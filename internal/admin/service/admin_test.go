@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"testing"
 
 	"buildadmin-go/internal/pkg/data_scope"
@@ -122,7 +123,8 @@ func TestValidateAccountStatusValue(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%v should be rejected", value)
 		}
-		if _, ok := err.(*cErr.Error); !ok {
+		var domainErr *cErr.Error
+		if !errors.As(err, &domainErr) {
 			t.Fatalf("%v error type = %T", value, err)
 		}
 	}

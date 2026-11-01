@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"buildadmin-go/internal/conf"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 

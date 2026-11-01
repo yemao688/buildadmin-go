@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"database/sql"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
+	"database/sql"
 	"slices"
 	"strings"
 

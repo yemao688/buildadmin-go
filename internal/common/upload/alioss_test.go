@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"

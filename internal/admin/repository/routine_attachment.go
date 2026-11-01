@@ -34,7 +34,7 @@ func NewAttachmentRepository(sqlDB *gorm.DB, config *conf.Configuration, enforce
 func (s *AttachmentRepository) scoped(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 	if s.enforcer == nil {
 		tx := db.Session(&gorm.Session{})
-		tx.AddError(data_scope.ErrScopedAccessDenied)
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
 		return tx
 	}
 	return s.enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: "attachment", Column: "admin_id"})
@@ -165,7 +165,7 @@ func (s *AttachmentRepository) LockScopedWithActor(ctx context.Context, tx *gorm
 func (s *AttachmentRepository) scopedWithActor(ctx context.Context, db *gorm.DB, actor data_scope.Actor) *gorm.DB {
 	if s.enforcer == nil {
 		tx := db.Session(&gorm.Session{})
-		tx.AddError(data_scope.ErrScopedAccessDenied)
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
 		return tx
 	}
 	enforcer, ok := s.enforcer.(interface {
@@ -173,7 +173,7 @@ func (s *AttachmentRepository) scopedWithActor(ctx context.Context, db *gorm.DB,
 	})
 	if !ok {
 		tx := db.Session(&gorm.Session{})
-		tx.AddError(data_scope.ErrScopedAccessDenied)
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
 		return tx
 	}
 	return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: "attachment", Column: "admin_id"})

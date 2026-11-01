@@ -6,8 +6,8 @@ import (
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/middleware"
-	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	helper "buildadmin-go/internal/pkg/crud_helper"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/filesystem"
@@ -282,7 +282,11 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 			response.FailByErr(ctx, cErr.BadRequest("Record not found"))
 			return
 		} else {
-			comment = info[0]["TABLE_COMMENT"].(string)
+			tableComment, ok := info[0]["TABLE_COMMENT"].(string)
+			if !ok {
+				panic(fmt.Sprintf("unexpected TABLE_COMMENT type %T", info[0]["TABLE_COMMENT"]))
+			}
+			comment = tableComment
 		}
 		empty, _ := h.tableM.IsHasData(tableName)
 

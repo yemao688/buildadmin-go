@@ -2,18 +2,16 @@ package service
 
 import (
 	"errors"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -48,12 +46,6 @@ func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
 	return NewMemberService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
-}
-
-func authTestContext() *gin.Context {
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/", nil)
-	return ctx
 }
 
 func hashForTest(t *testing.T, plain string) string {
@@ -118,7 +110,8 @@ func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 
 	result, err := m.Login("203.0.113.9", user.Username, "password", false)
 	require.NoError(t, err)
-	data := result.(map[string]any)
+	data, ok := result.(map[string]any)
+	require.True(t, ok, "result type = %T", result)
 	require.Equal(t, "203.0.113.9", data["last_login_ip"])
 	require.NotZero(t, data["last_login_time"])
 }

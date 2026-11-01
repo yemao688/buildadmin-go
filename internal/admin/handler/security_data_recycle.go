@@ -103,7 +103,10 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 
 	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
 	var data model.SecurityDataRecycle
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	if err := h.svc.Add(ctx.Request.Context(), data); err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -148,7 +151,10 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		return
 	}
 	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	if err := h.svc.Edit(ctx.Request.Context(), data); err != nil {
 		response.FailByErr(ctx, err)
 		return

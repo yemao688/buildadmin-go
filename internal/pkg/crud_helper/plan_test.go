@@ -1,9 +1,9 @@
 package crud_helper
 
 import (
-	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"os"
 	"path/filepath"
 	"strings"

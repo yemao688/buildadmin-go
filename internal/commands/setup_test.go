@@ -9,6 +9,7 @@ import (
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -327,6 +328,13 @@ func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 }
 
 func TestSetupCommandEnvFlagRejectsInvalidValues(t *testing.T) {
+	// 前序用例一旦调用过 Execute()，initConfig 就常驻在 cobra 的全局 OnInitialize 里，
+	// 会对随后任何命令的 Execute 生效；它按 os.Args 判定是否 setup 流程，缺配置时
+	// 打印安装指引并退出。这里补上真实调用形态（argv 含 setup），否则本用例在整包运行时退出。
+	originalArgs := os.Args
+	t.Cleanup(func() { os.Args = originalArgs })
+	os.Args = []string{"buildadmin-go", "setup", "--env", "local"}
+
 	command := newSetupCommand()
 	command.SetArgs([]string{"--env", "local"})
 	err := command.Execute()
@@ -394,7 +402,7 @@ func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 		newDB: func(installer.Database) (*gorm.DB, error) {
 			return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 		},
-		getDatabases:   func(installer.Database) ([]string, error) { return []string{"buildadmin"}, nil },
+		getDatabases:    func(installer.Database) ([]string, error) { return []string{"buildadmin"}, nil },
 		writeBaseConfig: installer.WriteBaseConfig,
 		runMigrations: func(_ *gorm.DB, _ *conf.Configuration) (migrations.Report, error) {
 			return migrations.Report{}, nil
@@ -571,7 +579,7 @@ func TestBuildSetupFrontendDegradesToSkipWhenArtifactExists(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	err := buildSetupFrontend(root, out, &conf.Configuration{})
-	if err != errSetupFrontendSkipped {
+	if !errors.Is(err, errSetupFrontendSkipped) {
 		t.Fatalf("expected errSetupFrontendSkipped, got %v", err)
 	}
 	if !strings.Contains(out.String(), "退化为跳过前端构建") {

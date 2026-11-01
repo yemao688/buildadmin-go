@@ -1,11 +1,11 @@
 package token
 
 import (
+	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
 	"context"
 	"encoding/json"
 	"errors"
-	cErr "buildadmin-go/internal/pkg/error"
-	"buildadmin-go/internal/conf"
 	"time"
 
 	"github.com/go-redis/redis/v8"

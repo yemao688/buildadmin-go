@@ -1023,6 +1023,7 @@ func TestResolveDataScope_InheritFrom(t *testing.T) {
 			cfg:    inherit("user", "user_id"),
 			fields: fields,
 			check: func(t *testing.T, resolved ResolvedDataScope) {
+				t.Helper()
 				require.False(t, resolved.Policy.Reassignable)
 				require.NotNil(t, resolved.Policy.InheritFrom)
 				assert.Equal(t, &data_scope.InheritRef{Table: "user", ByColumn: "user_id"}, resolved.Policy.InheritFrom)
