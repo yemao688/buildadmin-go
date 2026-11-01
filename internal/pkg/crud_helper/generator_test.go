@@ -62,6 +62,35 @@ func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 	}
 }
 
+// copier.Copy 的返回值必须检查（errcheck 门禁）：Add/Edit 各一处，reassignable
+// 开关只追加归属恢复逻辑，不得退回未检查形态。
+func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
+	for _, reassignable := range []bool{false, true} {
+		content, err := renderHandler(HandlerData{
+			Namespace:       "handler",
+			ClassName:       "Demo",
+			ModelNamespace:  "model",
+			ModelImportPath: "buildadmin-go/internal/model",
+			ModelName:       "Demo",
+			ModelVar:        "demo",
+			PkGoType:        "int32",
+			PkJSONName:      "id",
+			Reassignable:    reassignable,
+			OwnerGoField:    "AdminID",
+		})
+		if err != nil {
+			t.Fatalf("reassignable=%v: %v", reassignable, err)
+		}
+		checked := "if err := copier.Copy(&data, params); err != nil {\n\t\tresponse.FailByErr(ctx, err)\n\t\treturn\n\t}"
+		if got := strings.Count(content, checked); got != 2 {
+			t.Fatalf("reassignable=%v: checked copier.Copy count = %d, want 2 (Add and Edit):\n%s", reassignable, got, content)
+		}
+		if strings.Contains(content, "\tcopier.Copy(&data, params)\n") {
+			t.Fatalf("reassignable=%v: generated handler keeps an unchecked copier.Copy:\n%s", reassignable, content)
+		}
+	}
+}
+
 // 对齐上游:type=create 对已存在的数据表直接删表重建(前端 generateCheck
 // 已弹窗确认),服务端仅校验生成类型本身。
 func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {

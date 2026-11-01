@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.3.3
+
+> 生成器修复（issue #15）：CRUD 生成的 admin handler 不再丢弃 `copier.Copy` 返回值，业务 fork 重新生成模块后可通过框架自带的 errcheck 门禁。无运行时契约变化。
+
+- **Fixed:** `internal/pkg/crud_helper` 的 `handlerTemp` 在 Add/Edit 中直接丢弃 `copier.Copy(&data, params)` 的返回值。框架自带 handler（`admin_group.go`、`country_language.go` 等）早已逐处检查，模板未同步，导致业务 fork 用 `crud:generate` 生成的全部 admin handler（Add/Edit 各一处）命中 `.golangci.yml` 档 B 的 `errcheck`；`exclusions.generated: lax` 不覆盖这类产物（生成文件没有 `Code generated ... DO NOT EDIT.` 头）。改为 `if err := copier.Copy(...); err != nil { response.FailByErr(ctx, err); return }`，copier 失败按 400（`cErr.DefaultError`）返回，与仓库既有 handler 口径一致；reassignable 的归属恢复逻辑保持在 copy 成功之后。
+- **Added:** `TestHandlerTemplateChecksCopierCopyErrors` 分别渲染 `Reassignable` 两种形态，断言检查形态恰好在 Add/Edit 各出现一次且不存在裸调用，防止模板回退到未检查形态。
+- **Downstream:** 已生成的业务 handler 不会自动更新——重新 `crud:generate`（按双提交工作流对照 `git diff` 回补定制），或按上述四行形态手工补 Add/Edit（issue 命中示例：`goods_product.go:109,141`、`lottery_*.go`、`ops_*.go`、`order_prize.go:49,81`、`user_address.go:49,81`）。
+- **Verified:** `gofmt -l` 改动文件为空；`go build ./...` 通过；`go test ./internal/pkg/crud_helper/ -count=1` 全绿（含 reassignable 编译夹具）；`golangci-lint run ./internal/admin/handler/... ./internal/pkg/crud_helper/...` 0 issues。
+
 ## v3.3.2
 
 > 发布流水线触发与守门修正：框架仓库的 `frame-v*` tag 不再触发镜像构建，push 触发 glob 收紧为业务版本形态，未配置发布能力的仓库跳过发布 job。框架发版只打 tag，不再留红色 run。
