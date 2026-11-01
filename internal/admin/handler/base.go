@@ -401,7 +401,6 @@ func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction 
 		weigh := targetRow.Weigh
 		updateMethod := "inc"
 		if orderDirection == "desc" {
-			updateMethod = "inc"
 			if direction == "up" {
 				updateMethod = "dec"
 			}

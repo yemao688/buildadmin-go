@@ -1,0 +1,18 @@
+# golangci-lint 配置（v1 语法，对应 golangci-lint v1.64.x）。
+#
+# 只启用当前代码已全部通过的检查集：门禁一上线就是绿的。新增检查前先在本地
+# 跑一遍看命中数，不要直接把存量问题塞进流水线（否则没人会看这个红牌）。
+#
+# 暂缓的两组，存量问题数已实测，需要单独决策后再开：
+#   - errcheck   28 条：多是 ResponseWriter 写、tx.AddError、s.Cleanup 这类
+#                约定俗成的忽略。真问题约 5 处：copier.Copy 未检查（3 处）、
+#                tokenHelper.Clear/Set、store.Set/Get、users.UpdateLoginMeta。
+#   - staticcheck 8 条：rand.Seed 已废弃（3 处，修它要动随机数实现）、
+#                SA1029 用 string 作 context key（5 处，属仓库既定约定）。
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - ineffassign
+    - unused
+    - gosimple

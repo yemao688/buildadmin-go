@@ -148,7 +148,7 @@ pnpm build                             # emits web/dist/
 
 - 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
-- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。根目录 `Makefile` 仍只服务于部署镜像构建，不是开发任务运行器；CI 有两个 GitHub workflow（`ci.yml` 手动触发的全量门禁，`release-image.yml` tag 触发的镜像发布），且仓库仍无已配置的 Go linter。
+- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。根目录 `Makefile` 仍只服务于部署镜像构建，不是开发任务运行器；CI 有两个 GitHub workflow（`ci.yml` 手动触发的全量门禁，`release-image.yml` tag 触发的镜像发布），Go 静态检查配置在 `.golangci.yml`（只开 govet/ineffassign/unused/gosimple，开新检查前先实测命中数）。
 
 ## 部署变量与 CI 约定
 
@@ -160,6 +160,7 @@ pnpm build                             # emits web/dist/
 - `BUILD_BASE_REGISTRY` 结尾必须带 `/`（拼在镜像名前）；海外构建机传空值回官方 Docker Hub，不要写成无斜杠前缀。
 - `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
 - gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
+- `.golangci.yml` 只启用 govet/ineffassign/unused/gosimple 四组（errcheck 28 条、staticcheck 8 条存量未清，见文件头注释）；新增 linter 前先本地 `golangci-lint run -c .golangci.yml ./...` 看命中数，不要把存量问题直接塞进 CI。
 - `release-image.yml` 只做 gofmt（全仓）/`go build`/`go vet` 快校验，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 只推 GitHub 侧 registry，基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 
 ## CRUD 模块生成（AI 驱动）

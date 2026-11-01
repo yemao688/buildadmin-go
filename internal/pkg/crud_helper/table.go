@@ -512,15 +512,15 @@ func getTableColumnsDataType(column model.Column) string {
 		typeBool := true
 		suffixBool := true
 		columnTypeBool := true
-		if v.Type != nil && len(v.Type) > 0 && !slices.Contains(v.Type, column.DATA_TYPE) {
+		if len(v.Type) > 0 && !slices.Contains(v.Type, column.DATA_TYPE) {
 			typeBool = false
 		}
 
-		if v.Suffix != nil && len(v.Suffix) > 0 {
+		if len(v.Suffix) > 0 {
 			suffixBool = isMatchSuffix(column.COLUMN_NAME, v.Suffix)
 		}
 
-		if v.ColumnType != nil && len(v.ColumnType) > 0 && !slices.Contains(v.ColumnType, column.COLUMN_TYPE) {
+		if len(v.ColumnType) > 0 && !slices.Contains(v.ColumnType, column.COLUMN_TYPE) {
 			columnTypeBool = false
 		}
 

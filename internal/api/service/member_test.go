@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -48,12 +46,6 @@ func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
 	return NewMemberService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
-}
-
-func authTestContext() *gin.Context {
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/", nil)
-	return ctx
 }
 
 func hashForTest(t *testing.T, plain string) string {

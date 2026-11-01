@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   gate:
-    name: gate (gofmt/build/vet)
+    name: gate (gofmt/lint/build/vet)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -66,6 +66,11 @@ jobs:
             echo "::error::以下文件未格式化(gofmt -l);本地执行 gofmt -w 后重新打 tag"
             exit 1
           fi
+
+      # .golangci.yml 只开当前全绿的四组检查；新增检查前先本地跑看命中数。
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
 
       - run: go build ./...
 
