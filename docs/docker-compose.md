@@ -74,10 +74,10 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm builda
 
 ### 两条等价发布路径
 
-两条路径打出的镜像 tag 形态一致（`FULL_TAG=<version>-<git-sha>-<build-ts>`、`<version>`、`latest`），任选其一。区别只在 `<version>` 的来源：本地 `make push` 读根目录 `VERSION` 文件，CI 取 tag 名去掉 `v` 前缀（不校验 `VERSION`）。
+两条路径打出的镜像 tag 形态一致（`FULL_TAG=<version>-<git-sha>-<build-ts>`、`<version>`、`latest`），任选其一。区别只在 `<version>` 的来源：本地 `make push` 读根目录 `VERSION` 文件；CI 取 tag 名去掉前缀的部分——框架发布的 `frame-v3.3.0` 得到 `3.3.0`，业务 fork 的 `v1.0.0` 得到 `1.0.0`（不校验 `VERSION`/`VERSION_FRAMEWORK`）。
 
 1. **发布机自建自推**：`make frontend` → `make push`（下一小节）。
-2. **推 tag 交给 GitHub Actions**：`git tag v1.0.0 && git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.COMPOSE_PROJECT_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
+2. **推 tag 交给 GitHub Actions**：业务仓库 `git tag v1.0.0`、框架仓库 `git tag frame-v3.3.0`，`git push origin <tag>` 后 `.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。镜像版本号完全取自 tag 名（去掉 `frame-v` 或 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、golangci-lint、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.COMPOSE_PROJECT_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
 
 **镜像不含前端产物**：两条路径发布前都仍需在发布机执行 `make frontend`，并把 `public/` 一起放到生产机由 bind mount 提供。
 
