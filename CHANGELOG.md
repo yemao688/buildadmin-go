@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.3.1
+
+> CI 与部署工具链发布（无业务逻辑回归）：引入 GitHub Actions 全量门禁与 tag 触发的多架构镜像发布，部署变量统一为无 `DEPLOY_` 前缀的 canonical 命名，Dockerfile 修复多架构产物、compose 只读硬化；全仓 gofmt 一次性格式化并登记 `.git-blame-ignore-revs`。框架发布 tag 自本次起改用 `frame-v$VERSION_FRAMEWORK`，与业务仓库的 `v$VERSION` 区分。
+
+- **Breaking (下游部署必读):** 部署变量全部改名，废弃 `DEPLOY_*` 与无前缀 `BASE_REGISTRY`，**不留兼容别名**：`DEPLOY_REGISTRY`→`REGISTRY`、`DEPLOY_IMAGE_NAME`→`COMPOSE_PROJECT_NAME`、`DEPLOY_IMAGE_TAG`→`COMPOSE_IMAGE_TAG`、`DEPLOY_PLATFORMS`→`BUILD_PLATFORMS`、`DEPLOY_REGISTRY_USER/PASSWORD`→`REGISTRY_USER/PASSWORD`、`BASE_REGISTRY`→`BUILD_BASE_REGISTRY`，新增 `APP_PORT`/`APP_TIME_ZONE`/`COMPOSE_MEM_LIMIT`/`REGISTRY_NAMESPACE`。旧 `.env` 中的旧名会被**静默忽略**并回落到默认值（`registry.example.com/buildadmin-go:latest`），不影响容器启动但会拉到错误镜像；迁移清单见 `docs/docker-compose.md`。
+- **Fixed:** `Dockerfile` 构建阶段原为硬编码 `GOOS=linux` 且无 `GOARCH`，多架构推送时两个架构产物实际都是构建机架构；改为 `FROM --platform=$BUILDPLATFORM` + 无默认值的 `TARGETOS`/`TARGETARCH`。运行时阶段 `FROM alpine` 按目标架构执行 `RUN apk add`，故 `release-image.yml` 的 image job 在 `docker/setup-buildx-action` 前注册 `docker/setup-qemu-action`（arm64），否则 GitHub 托管 runner 上多架构推送必然 `exec format error`。
+- **Fixed:** `docker-compose.yaml` 硬化：`read_only` 根文件系统 + tmpfs `/tmp` + `cap_drop: ALL` + `no-new-privileges` + `init` + `mem_limit` + json-file 日志轮转 + `stop_grace_period: 30s`；三个 bind mount（`configs`/`runtime`/`public`）保持可写，容器内端口固定 9900（`APP_PORT` 只映射宿主侧）。
+- **Added:** `.github/workflows/ci.yml` 手动触发的全量门禁（全仓 `gofmt -l .`、golangci-lint、`go build`、`go vet`、`go test`）；`.github/workflows/release-image.yml` 在 `frame-v[0-9]*` / `v[0-9]*` tag 与手动触发时先过 gate，再构建多架构并推送 `FULL_TAG`/`VERSION`/`latest` 三个 tag（`provenance`/`sbom` 关闭）。仓库需配 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.COMPOSE_PROJECT_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`，缺失时配置校验 step 报错退出而非静默发错镜像。
+- **Added:** 引入 golangci-lint v2.15.0（`.golangci.yml`，v2 语法）。档 A（govet/ineffassign/unused/staticcheck）与档 B（errcheck/errorlint/nilerr/forcetypeassert/misspell/predeclared/errname/thelper）全绿；档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo，约 3137 条存量）连同理据写在配置文件末尾，清空前不得打开。本机 v1.x 二进制无法解析该配置。
+- **Changed (轻微行为):** `api/service/member.go` 的登录失败计数、SSO 清 token、refresh token 写入不再静默忽略失败（原为吞错后继续返回成功）。注意密码错误分支若 DB 写入失败会返回 500 而非 400「密码错误」。
+- **Changed (轻微行为):** `pkg/clickcaptcha` 的 `DrawString` 失败改为返回 error（原先忽略后仍返回验证码图）；`pkg/querybuilder`、`pkg/tree`、树形 `SetChildren` 的类型断言改为显式 `panic(fmt.Sprintf(...))`，保留原有「不变量破坏即 panic」语义，**没有**退化成零值（静默退化会让 RANGE/LIKE 过滤失效、树节点静默丢子节点）；删除 6 处 `rand.Seed`（Go 1.20 起全局随机源自动播种，1.24 起 `rand.Seed` 本身已是 no-op）。
+- **Style:** 全仓 gofmt 格式化 93 个存量文件（行为零变化），该提交登记在 `.git-blame-ignore-revs`。新 clone 需执行 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 才会在本地 `git blame` 中跳过（GitHub 网页端自动识别）。
+- **Docs:** `AGENTS.md` 新增「部署变量与 CI 约定」章节并更新验证策略；`docs/docker-compose.md` 补变量迁移与两种推镜像路径；`docs/framework-maintenance.md` 发布 tag 改 `frame-v` 前缀；`README.md` 部署命令对齐新变量。
+- **Verified:** `gofmt -l .` 空；`go build ./...`、`go vet ./...`、`go mod verify` 通过；`go test ./... -count=1` 全绿（MySQL 门禁用例 49 条 SKIP）；`docker compose config`（默认与 dev overlay）通过；`make -n build`/`make -n push` 平台分离正确；`/healthz`、SIGTERM 优雅退出与三个可写挂载点已对照代码路径核对。未验证：`docker build` 的多架构实产物（需 registry，`release-image.yml` 发布后用 `buildx imagetools inspect` 核对）。
+
 ## v3.3.0
 
 > 门户首屏瘦身（issue #11）：门户与后台共用同一 HTML 入口时，后台专用的 Element Plus 全量插件、图标 barrel 与后台样式不再进入门户首屏静态图；应用域在文档启动时固定，跨域跳转整页重载。实测（gzip，manifest 精确闭包）门户首屏 551.6 KB → 272.8 KB（34 → 16 个请求），后台 551.6 KB → 535.7 KB；完整 Element Plus 主题 CSS 进一步移出入口（入口 CSS 575 KB → 204 KB，gzip 97 KB → 47 KB）。
