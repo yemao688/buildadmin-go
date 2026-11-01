@@ -140,6 +140,11 @@ jobs:
             echo "image=${image}"
           } >> "$GITHUB_OUTPUT"
 
+      # 运行时阶段(RUN apk add)按目标架构执行,arm64 依赖 binfmt 注册。
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
