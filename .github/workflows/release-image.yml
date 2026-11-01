@@ -1,9 +1,10 @@
 # 打 tag 即发布多架构镜像,构建并推 3 个 tag,与本地 make push 形态一致
 # (同三个 tag、同关闭 attestation)。只推 GitHub 仓库。
 #
-# tag 约定(两种前缀都触发,版本号取自 tag 名,不读 VERSION/VERSION_FRAMEWORK):
-#   frame-v3.3.0  框架发布 tag(本仓库),版本 = 3.3.0,对应 VERSION_FRAMEWORK;
+# 触发约定(只认业务发布 tag,版本号取自 tag 名,不读 VERSION/VERSION_FRAMEWORK):
 #   v1.0.0        业务发布 tag(业务 fork),版本 = 1.0.0,对应 VERSION。
+# 框架仓库的 frame-v$VERSION_FRAMEWORK tag 只作发布标记,不触发本流水线——
+# 框架自身不发镜像;本文件随框架下发,供业务 fork 继承使用。
 # 不做 tag 与版本文件的一致性校验:tag 打成什么版本,镜像就是什么版本。
 #
 # 基础镜像/Go 模块/apk 显式走官方源(国内加速前缀在海外反而慢)。
@@ -23,12 +24,12 @@ name: release-image
 on:
   push:
     tags:
-      - "frame-v[0-9]*" # 框架发布 tag(本仓库)
-      - "v[0-9]*"       # 业务发布 tag(业务 fork)
+      # 只匹配 v<major>.<minor>... 形态;裸 v3 / v2 与分支同名,误推会发 version=3 并覆盖 latest。
+      - "v[0-9]*.[0-9]*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "已存在的发布 tag(框架 frame-v3.3.0 / 业务 v1.0.0)"
+        description: "已存在的业务发布 tag(如 v1.0.0)"
         required: true
         type: string
       platforms:
@@ -83,6 +84,9 @@ jobs:
   image:
     name: build & push
     needs: gate
+    # 未配置发布能力的仓库(框架源仓库默认如此)直接跳过,不留红 run;secrets 不能在 job 级 if 引用,
+    # 仍由下面「配置校验」step 兜住。
+    if: vars.REGISTRY != '' && vars.COMPOSE_PROJECT_NAME != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -116,10 +120,8 @@ jobs:
         run: |
           set -eu
           ref="${{ inputs.tag || github.ref_name }}"
-          # 框架发布 tag 带 frame-v 前缀,业务 fork 是 v 前缀;先剥更长的那个。
           case "$ref" in
-            frame-v*) version="${ref#frame-v}" ;;
-            v*)       version="${ref#v}" ;;
+            v*) version="${ref#v}" ;;
             *) echo "::error::无法从 tag 名解析版本:$ref"; exit 1 ;;
           esac
           git_sha="$(git rev-parse --short HEAD)"

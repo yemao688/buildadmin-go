@@ -161,7 +161,8 @@ pnpm build                             # emits web/dist/
 - `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
 - gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
 - `.golangci.yml` 用 v2 语法分档启用：档 A（govet/ineffassign/unused/staticcheck）与档 B（errcheck/errorlint/nilerr/forcetypeassert/misspell/predeclared/errname/thelper）必须保持全绿；档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo）连同理据写在配置文件末尾，未清空前不得打开。新增 linter 前先本地 `golangci-lint run ./...` 看命中数。
-- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（如 `frame-v3.3.0`，版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 两种前缀都触发，镜像版本号取 tag 名去掉前缀的部分；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
+- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（如 `frame-v3.3.1`，版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
+- `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.COMPOSE_PROJECT_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
 - `release-image.yml` 的 gate 只做全仓 gofmt/golangci-lint/`go build`/`go vet`，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 只推 GitHub 侧 registry，基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 
 ## CRUD 模块生成（AI 驱动）

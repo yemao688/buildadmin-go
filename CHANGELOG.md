@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.3.2
+
+> 发布流水线触发与守门修正：框架仓库的 `frame-v*` tag 不再触发镜像构建，push 触发 glob 收紧为业务版本形态，未配置发布能力的仓库跳过发布 job。框架发版只打 tag，不再留红色 run。
+
+- **Changed:** `release-image.yml` 的 push 触发去掉 `frame-v[0-9]*`，只保留 `v[0-9]*.[0-9]*`。框架 source 仓库自身不发镜像（该 workflow 随框架下发给业务 fork 继承），`frame-v$VERSION_FRAMEWORK` tag 仅作发布标记；同时避免裸 `v3`/`v2`（与分支同名）误触发发版并覆盖 `latest`。手动触发的 `tag` 入参同步收敛为业务 tag。
+- **Fixed:** `image` job 增加 `if: vars.REGISTRY != '' && vars.COMPOSE_PROJECT_NAME != ''` 守门，未配置发布能力的仓库直接 skipped（此前每个 `frame-v*` tag 都会跑起 image job 并在配置校验处 `exit 1`，留下一条红色 run）。`secrets` 上下文不可用于 job 级 `if`，`secrets.REGISTRY_USER/PASSWORD` 仍由「配置校验」step 拦截，配了 vars 漏配 secrets 依然报错而非静默跳过。
+- **Docs:** `AGENTS.md`、`README.md`、`docs/docker-compose.md`、`docs/framework-maintenance.md` 同步触发语义（框架 tag 不触发镜像发布、业务 tag 形态、守门条件）。
+
 ## v3.3.1
 
 > CI 与部署工具链发布（无业务逻辑回归）：引入 GitHub Actions 全量门禁与 tag 触发的多架构镜像发布，部署变量统一为无 `DEPLOY_` 前缀的 canonical 命名，Dockerfile 修复多架构产物、compose 只读硬化；全仓 gofmt 一次性格式化并登记 `.git-blame-ignore-revs`。框架发布 tag 自本次起改用 `frame-v$VERSION_FRAMEWORK`，与业务仓库的 `v$VERSION` 区分。
