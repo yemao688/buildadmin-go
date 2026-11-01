@@ -64,18 +64,18 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 }
 
 type AdminRule struct {
-	Pid       int32  `json:"pid"`
-	Type      string `json:"type"`
-	Title     string `json:"title"  binding:"required"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Icon      string `json:"icon"`
-	MenuType  string `json:"menu_type"`
-	URL       string `json:"url"`
-	Component string `json:"component"`
-	Keepalive int32  `json:"keepalive"`
-	Extend    string `json:"extend"`
-	Remark    string `json:"remark"`
+	Pid       int32                `json:"pid"`
+	Type      string               `json:"type"`
+	Title     string               `json:"title"  binding:"required"`
+	Name      string               `json:"name"`
+	Path      string               `json:"path"`
+	Icon      string               `json:"icon"`
+	MenuType  string               `json:"menu_type"`
+	URL       string               `json:"url"`
+	Component string               `json:"component"`
+	Keepalive int32                `json:"keepalive"`
+	Extend    string               `json:"extend"`
+	Remark    string               `json:"remark"`
 	Weigh     int32                `json:"weigh"`
 	Status    validator.FlexStatus `json:"status"`
 }

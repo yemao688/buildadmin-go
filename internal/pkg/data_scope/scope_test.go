@@ -7,10 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"buildadmin-go/internal/conf"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"

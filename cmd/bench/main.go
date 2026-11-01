@@ -72,12 +72,12 @@ func main() {
 	}
 
 	var (
-		start    = time.Now()
-		wg       sync.WaitGroup
+		start     = time.Now()
+		wg        sync.WaitGroup
 		durations = make([]time.Duration, 0, *requests)
-		mu       sync.Mutex
-		success  atomic.Int64
-		failed   atomic.Int64
+		mu        sync.Mutex
+		success   atomic.Int64
+		failed    atomic.Int64
 	)
 	perWorker := (*requests + *concurr - 1) / *concurr
 
@@ -147,7 +147,7 @@ func main() {
 	fmt.Printf("elapsed  : %s\n", elapsedTotal.Round(time.Millisecond))
 	fmt.Printf("rps      : %.1f req/s\n", rps)
 	fmt.Printf("latency  : avg %s | p50 %s | p95 %s | p99 %s | max %s\n",
-		(accumulate(durations)/time.Duration(total)).Round(time.Microsecond),
+		(accumulate(durations) / time.Duration(total)).Round(time.Microsecond),
 		pct(0.50).Round(time.Microsecond),
 		pct(0.95).Round(time.Microsecond),
 		pct(0.99).Round(time.Microsecond),

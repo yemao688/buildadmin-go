@@ -4,13 +4,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

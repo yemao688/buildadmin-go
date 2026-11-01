@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -114,5 +114,3 @@ func TestAttachmentListAliossSettingsBatchedOnce(t *testing.T) {
 		require.Equal(t, ref.Suffix, v.Suffix, "row %d (%s)", v.ID, v.URL)
 	}
 }
-
-

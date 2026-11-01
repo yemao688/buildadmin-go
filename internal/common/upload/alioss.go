@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"buildadmin-go/internal/conf"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/gin-gonic/gin"
-	"buildadmin-go/internal/conf"
 	"gorm.io/gorm"
 )
 

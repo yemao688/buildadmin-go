@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/conf"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

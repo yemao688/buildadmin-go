@@ -1,8 +1,8 @@
 package token
 
 import (
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/conf"
+	cErr "buildadmin-go/internal/pkg/error"
 	"time"
 
 	"github.com/gin-contrib/cache/persistence"

@@ -28,7 +28,7 @@ func New(httpCode, errorCode int, errorMsg string) *Error {
 	}
 }
 
-//错误请求链接地址
+// 错误请求链接地址
 func BadRequest(errorMsg string, errorCode ...int) *Error {
 	errCode := http.StatusBadRequest
 	if len(errorCode) > 0 {
@@ -37,7 +37,7 @@ func BadRequest(errorMsg string, errorCode ...int) *Error {
 	return New(http.StatusOK, errCode, errorMsg)
 }
 
-//未授权的
+// 未授权的
 func Unauthorized(errorMsg string, errorCode ...int) *Error {
 	errCode := http.StatusUnauthorized
 	if len(errorCode) > 0 {
@@ -46,7 +46,7 @@ func Unauthorized(errorMsg string, errorCode ...int) *Error {
 	return New(http.StatusOK, errCode, errorMsg)
 }
 
-//阻止请求的
+// 阻止请求的
 func ForbiddenRequest(errorMsg string, errorCode ...int) *Error {
 	errCode := http.StatusForbidden
 	if len(errorCode) > 0 {
@@ -55,13 +55,13 @@ func ForbiddenRequest(errorMsg string, errorCode ...int) *Error {
 	return New(http.StatusOK, errCode, errorMsg)
 }
 
-//数据不存在
+// 数据不存在
 func NotFound(errorMsg string) *Error {
 	errCode := http.StatusNotFound
 	return New(http.StatusOK, errCode, errorMsg)
 }
 
-//内部错误 sql错误等
+// 内部错误 sql错误等
 func InternalServer(errorMsg string) *Error {
 	return New(http.StatusInternalServerError, ServerError, errorMsg)
 }

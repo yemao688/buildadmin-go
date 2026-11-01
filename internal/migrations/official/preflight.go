@@ -1,9 +1,9 @@
 package official
 
 import (
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/internal/core"
+	"fmt"
 
 	"gorm.io/gorm"
 )

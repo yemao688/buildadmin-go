@@ -3,8 +3,8 @@ package migrations
 import (
 	"testing"
 
-	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"

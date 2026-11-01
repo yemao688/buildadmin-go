@@ -217,28 +217,28 @@ func TestAPINamingDetectsViolations(t *testing.T) {
 		wantMsg  string
 	}{
 		{
-			file:   "repository/user.go",
-			source: "package repository\n\ntype UserRepo struct{}\n",
+			file:    "repository/user.go",
+			source:  "package repository\n\ntype UserRepo struct{}\n",
 			wantMsg: "non-canonical suffix",
 		},
 		{
-			file:   "repository/member.go",
-			source: "package repository\n\ntype UserRepository struct{}\n",
+			file:    "repository/member.go",
+			source:  "package repository\n\ntype UserRepository struct{}\n",
 			wantMsg: "must live in user.go",
 		},
 		{
-			file:   "service/member.go",
-			source: "package service\n\ntype MemberSvc struct{}\n",
+			file:    "service/member.go",
+			source:  "package service\n\ntype MemberSvc struct{}\n",
 			wantMsg: "non-canonical suffix",
 		},
 		{
-			file:   "handler/auth.go",
-			source: "package handler\n\ntype UserController struct{}\n",
+			file:    "handler/auth.go",
+			source:  "package handler\n\ntype UserController struct{}\n",
 			wantMsg: "non-canonical suffix",
 		},
 		{
-			file:   "router/user.go",
-			source: "package router\n\ntype UserRoute struct{}\n",
+			file:    "router/user.go",
+			source:  "package router\n\ntype UserRoute struct{}\n",
 			wantMsg: "non-canonical suffix",
 		},
 	}

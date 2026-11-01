@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/testutil"
-	"buildadmin-go/internal/conf"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

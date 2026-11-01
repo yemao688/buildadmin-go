@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/migrations"
 	"buildadmin-go/internal/infra/db"
+	"buildadmin-go/internal/migrations"
 	helper "buildadmin-go/internal/pkg/crud_helper"
 
 	"github.com/spf13/cobra"

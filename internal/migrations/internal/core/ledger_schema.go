@@ -17,16 +17,16 @@ type ledgerColumn struct {
 }
 
 type ledgerColumnSpec struct {
-	Name                 string
-	Type                 string
-	Nullable             string
-	Precision            int
-	CheckPrecision       bool
-	RequireNoDefault     bool
+	Name                         string
+	Type                         string
+	Nullable                     string
+	Precision                    int
+	CheckPrecision               bool
+	RequireNoDefault             bool
 	AllowCurrentTimestampDefault bool
-	AcceptUnsigned       bool
-	RequireAutoIncrement bool
-	ExpectedDefault      *string
+	AcceptUnsigned               bool
+	RequireAutoIncrement         bool
+	ExpectedDefault              *string
 }
 
 type ledgerColumnMismatch struct {

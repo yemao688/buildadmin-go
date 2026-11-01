@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/conf"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

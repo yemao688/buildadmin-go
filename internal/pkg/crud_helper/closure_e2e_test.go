@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/pkg/data_scope"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGeneratedCRUDClosureMySQL(t *testing.T) {
@@ -641,12 +641,12 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (st
 	return "", nil, "id ASC", 100, 0, nil
 }
 `,
-		"internal/model/user.go":        userEntity,
-		"internal/model/child.go":       childEntity,
-		"internal/model/child2.go":      child2Entity,
-		"internal/admin/repository/user_gen.go":  userRepo,
-		"internal/admin/repository/child_gen.go": childRepo,
-		"internal/admin/repository/child2_gen.go": child2Repo,
+		"internal/model/user.go":                        userEntity,
+		"internal/model/child.go":                       childEntity,
+		"internal/model/child2.go":                      child2Entity,
+		"internal/admin/repository/user_gen.go":         userRepo,
+		"internal/admin/repository/child_gen.go":        childRepo,
+		"internal/admin/repository/child2_gen.go":       child2Repo,
 		"internal/admin/repository/cascade_e2e_test.go": childTest,
 	}
 	for name, body := range files {
@@ -718,10 +718,10 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (st
 	return "", nil, "id ASC", 100, 0, nil
 }
 `,
-		"internal/model/scopeitems.go": autoEntity,
-		"internal/model/banner.go":     globalEntity,
-		"internal/admin/repository/scopeitem_gen.go": autoRepo,
-		"internal/admin/repository/banner_gen.go":     globalRepo,
+		"internal/model/scopeitems.go":                  autoEntity,
+		"internal/model/banner.go":                      globalEntity,
+		"internal/admin/repository/scopeitem_gen.go":    autoRepo,
+		"internal/admin/repository/banner_gen.go":       globalRepo,
 		"internal/admin/repository/closure_e2e_test.go": childTest,
 	}
 	// handler 级运行时测试所需的生成 handler、DTO 与契约替身；既有（纯 repo）

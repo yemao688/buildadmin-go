@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"buildadmin-go/internal/pkg/token"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

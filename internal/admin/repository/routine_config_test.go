@@ -4,11 +4,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"

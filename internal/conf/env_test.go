@@ -63,7 +63,8 @@ func TestLoadEnvFileToleratesMissingFile(t *testing.T) {
 	}
 }
 
-func TestLoadEnvFileDoesNotOverrideExistingEnvironment(t *testing.T) {	root := t.TempDir()
+func TestLoadEnvFileDoesNotOverrideExistingEnvironment(t *testing.T) {
+	root := t.TempDir()
 	path := filepath.Join(root, EnvFileName)
 	if err := os.WriteFile(path, []byte("BA_TEST_EXISTING=file\nBA_TEST_FROM_FILE=value\n"), 0600); err != nil {
 		t.Fatal(err)

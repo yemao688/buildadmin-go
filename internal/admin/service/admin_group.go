@@ -30,6 +30,7 @@ func NewAdminGroupService(adminGroupM *adminmodel.AdminGroupRepository, adminRul
 //   - 提交全部规则且操作者为超管 → 超管级分组（rules="*"）；
 //   - 否则禁止"拥有自己全部权限"的分组（防复制自己的权限集）；
 //   - 非超管提交的分组权限不得超出自己可分配的范围（array_diff 语义）。
+//
 // 重复 ID 在序列化前先保序去重，避免重复项扭曲 repository 侧的 len 比较
 // （"全部权限+额外权限"误判）。
 func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, operatorID int32, isSuperAdmin bool) (string, error) {

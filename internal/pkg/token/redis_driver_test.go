@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/conf"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/require"
-	"buildadmin-go/internal/conf"
 )
 
 type failIndexRemoveOnceHook struct {

@@ -300,10 +300,6 @@ func TestAdminAddDuplicateUsernameReturnsFriendlyError(t *testing.T) {
 	require.ErrorContains(t, m.AddWithActor(ctx.Request.Context(), model.Admin{Username: admin.Username, Nickname: "second", Status: "enable"}, nil, actorForContext(t, ctx)), "username already exists")
 }
 
-
-
-
-
 func TestRestrictedHierarchyWritersRejectRoot(t *testing.T) {
 	db := prepareAdminModelMySQL(t)
 	actorAdmin := createAdminForHierarchy(t, db, "actor")
@@ -436,8 +432,6 @@ func TestSwitchStatusScoped(t *testing.T) {
 		t.Fatalf("restricted actor should switch its own status: %v", err)
 	}
 }
-
-
 
 func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
 	db := openMySQLAdminTestDB(t, "ba_")

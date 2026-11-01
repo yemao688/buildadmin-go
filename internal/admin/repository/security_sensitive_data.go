@@ -1,13 +1,13 @@
 package repository
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
+	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"

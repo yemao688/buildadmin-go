@@ -394,7 +394,7 @@ func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 		newDB: func(installer.Database) (*gorm.DB, error) {
 			return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 		},
-		getDatabases:   func(installer.Database) ([]string, error) { return []string{"buildadmin"}, nil },
+		getDatabases:    func(installer.Database) ([]string, error) { return []string{"buildadmin"}, nil },
 		writeBaseConfig: installer.WriteBaseConfig,
 		runMigrations: func(_ *gorm.DB, _ *conf.Configuration) (migrations.Report, error) {
 			return migrations.Report{}, nil

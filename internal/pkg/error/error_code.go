@@ -1,6 +1,6 @@
 package error
 
-//自定错误类型
+// 自定错误类型
 const (
 	DefaultError      = 400 // 默认错误
 	ServerError       = 500 // 服务器错误

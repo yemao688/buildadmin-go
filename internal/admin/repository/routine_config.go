@@ -1,14 +1,14 @@
 package repository
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"github.com/gin-gonic/gin"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
 	cErr "buildadmin-go/internal/pkg/error"
 	persistence "buildadmin-go/internal/pkg/persistence"
+	"context"
+	"errors"
+	"fmt"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -113,7 +113,6 @@ func (s *ConfigRepository) ensureNameAvailable(tx *gorm.DB, name string, id int3
 		return err
 	}
 }
-
 
 func (s *ConfigRepository) Del(ctx *gin.Context, ids interface{}) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {

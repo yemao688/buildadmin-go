@@ -1,12 +1,12 @@
 package crud_helper
 
 import (
-	"bytes"
-	"fmt"
-	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	model "buildadmin-go/internal/admin/repository"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
+	"bytes"
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
