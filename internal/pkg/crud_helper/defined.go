@@ -368,7 +368,10 @@ func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
 		return
 	}
 	var data model.{{.ClassName}}
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err := h.{{.ModelVar}}M.Add(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -402,7 +405,10 @@ func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
 	{{if .Reassignable}}
 	originalOwner := data.{{.OwnerGoField}}
 	{{end}}
-	copier.Copy(&data, params){{if .Reassignable -}}
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}{{if .Reassignable}}
 	// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
 	if params.{{.OwnerGoField}} == 0 {
 		data.{{.OwnerGoField}} = originalOwner
