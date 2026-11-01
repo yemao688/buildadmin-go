@@ -94,7 +94,8 @@ func RollbackResponse(c *gin.Context, err error) bool {
 }
 
 func errorOutcome(err error) requesttx.Outcome {
-	if v, ok := err.(*cErr.Error); ok {
+	var v *cErr.Error
+	if errors.As(err, &v) {
 		return requesttx.Outcome{HTTPCode: v.HttpCode(), BusinessCode: v.ErrorCode(), Message: v.Error()}
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, driver.ErrBadConn) {
@@ -128,8 +129,8 @@ func Fail(c *gin.Context, httpCode int, code int, msg string) {
 
 // FailByErrWithData 返回携带附加数据的失败响应（api 渠道入口）。
 func FailByErrWithData(c *gin.Context, err error, data interface{}) {
-	v, ok := err.(*cErr.Error)
-	if !ok {
+	var v *cErr.Error
+	if !errors.As(err, &v) {
 		FailByErr(c, err)
 		return
 	}

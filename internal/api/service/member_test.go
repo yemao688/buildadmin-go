@@ -110,7 +110,8 @@ func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 
 	result, err := m.Login("203.0.113.9", user.Username, "password", false)
 	require.NoError(t, err)
-	data := result.(map[string]any)
+	data, ok := result.(map[string]any)
+	require.True(t, ok, "result type = %T", result)
 	require.Equal(t, "203.0.113.9", data["last_login_ip"])
 	require.NotZero(t, data["last_login_time"])
 }

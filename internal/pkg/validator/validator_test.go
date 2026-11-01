@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -31,11 +32,19 @@ func TestTime(t *testing.T) {
 	err := validate.Struct(&testTime)
 	// fmt.Println(err)
 	NotEqual(t, err, nil)
-	AssertError(t, err.(validator.ValidationErrors), "TestTime.Time", "TestTime.Time", "Time", "Time", "required")
+	var validErrs validator.ValidationErrors
+	if !errors.As(err, &validErrs) {
+		t.Fatalf("got %T, want validator.ValidationErrors", err)
+	}
+	AssertError(t, validErrs, "TestTime.Time", "TestTime.Time", "Time", "Time", "required")
 }
 
 func AssertError(t *testing.T, err error, nsKey, structNsKey, field, structField, expectedTag string) {
-	errs := err.(validator.ValidationErrors)
+	t.Helper()
+	var errs validator.ValidationErrors
+	if !errors.As(err, &errs) {
+		t.Fatalf("got %T, want validator.ValidationErrors", err)
+	}
 
 	found := false
 	var fe validator.FieldError

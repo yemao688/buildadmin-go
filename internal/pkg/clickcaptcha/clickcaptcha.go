@@ -42,6 +42,7 @@ var fontPaths []string = []string{
 
 // 验证点 Icon 映射表
 var iconDict map[string]string = map[string]string{
+	//nolint:misspell // 这是图标资源文件名（public/static/images/captcha/click/icons/aeroplane.png），改名会破坏素材查找
 	"aeroplane": "飞机",
 	"apple":     "苹果",
 	"banana":    "香蕉",
@@ -117,7 +118,6 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 		// 不可用（验证点要落库）；直接报错而非空指针 panic。
 		return nil, errors.New("database is not connected")
 	}
-	rand.Seed(time.Now().UnixNano())
 	randIndex := rand.Intn(len(bgPaths) - 1)
 	imagePath := bgPaths[randIndex]
 	bgImg, err := loadImage(filepath.Join(util.RootPath(), imagePath))
@@ -198,7 +198,9 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 			// fctx.SetSrc(image.NewUniform(color.White))
 			fctx.SetSrc(image.NewUniform(color.RGBA{128, 128, 128, 128}))
 			fctx.SetHinting(font.HintingFull)
-			fctx.DrawString(v.Text, pt)
+			if _, err := fctx.DrawString(v.Text, pt); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -377,7 +379,6 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 // 随机生成验证点元素
 func (c *ClickCaptcha) randPoints(length int) []string {
 	arr := []string{}
-	rand.Seed(time.Now().UnixNano())
 	if strings.Contains(c.config.Mode, "text") {
 		runes := []rune(c.config.ZhSet)
 		for i := 0; i < length; i++ {
@@ -406,7 +407,6 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 
 // 随机生成位置布局
 func (c *ClickCaptcha) RandPosition(poinArr []*Point, imgW int, imgH int, w int, h int, isIcon bool) (x, y int) {
-	rand.Seed(time.Now().UnixNano())
 	x = rand.Intn(imgW - w)
 	y = rand.Intn(imgH-2*h) + h
 

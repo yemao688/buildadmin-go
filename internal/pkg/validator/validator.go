@@ -2,6 +2,7 @@ package validator
 
 import (
 	cErr "buildadmin-go/internal/pkg/error"
+	"errors"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -15,8 +16,8 @@ type ValidatorMessages map[string]string
 // GetError 获取验证错误。request 结构体实现 Validator 接口时可按字段+规则
 // 返回自定义错误文案；否则返回首条校验错误原文。
 func GetError(data interface{}, err error) *cErr.Error {
-	validErrs, ok := err.(validator.ValidationErrors)
-	if !ok {
+	var validErrs validator.ValidationErrors
+	if !errors.As(err, &validErrs) {
 		return cErr.BadRequest(err.Error())
 	}
 

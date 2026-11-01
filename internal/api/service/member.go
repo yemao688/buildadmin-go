@@ -200,18 +200,26 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 	}
 
 	if err := password.Compare(user.Password, plainPassword); err != nil {
-		s.users.UpdateLoginMeta(user.ID, user.LoginFailure+1, time.Now().Unix(), ip)
+		if err := s.users.UpdateLoginMeta(user.ID, user.LoginFailure+1, time.Now().Unix(), ip); err != nil {
+			return nil, err
+		}
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
 	if s.config.App.UserSso {
-		s.tokenHelper.Clear("user", user.ID)
-		s.tokenHelper.Clear("user-refresh", user.ID)
+		if err := s.tokenHelper.Clear("user", user.ID); err != nil {
+			return nil, err
+		}
+		if err := s.tokenHelper.Clear("user-refresh", user.ID); err != nil {
+			return nil, err
+		}
 	}
 	refreshToken := ""
 	if keep {
 		refreshToken = random.Uuid()
-		s.tokenHelper.Set(refreshToken, "user-refresh", user.ID, 2592000)
+		if err := s.tokenHelper.Set(refreshToken, "user-refresh", user.ID, 2592000); err != nil {
+			return nil, err
+		}
 	}
 	tokenStr := random.Uuid()
 	if err := s.tokenHelper.Set(tokenStr, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {

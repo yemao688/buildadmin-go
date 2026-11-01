@@ -71,9 +71,9 @@ func AtomicRouteCapability(c *gin.Context) (AtomicRoute, bool) {
 	if !ok {
 		return AtomicRoute{}, false
 	}
-	cap := AtomicRoute{Route: route, Action: action, Method: c.Request.Method}
+	capability := AtomicRoute{Route: route, Action: action, Method: c.Request.Method}
 	atomicRoutesMu.RLock()
-	_, ok = atomicRoutes[cap]
+	_, ok = atomicRoutes[capability]
 	atomicRoutesMu.RUnlock()
-	return cap, ok
+	return capability, ok
 }

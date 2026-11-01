@@ -40,8 +40,10 @@ func TestRefreshTokenUsesRegisteredRefreshType(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 	require.Equal(t, 1, resp.Code)
-	require.Equal(t, "seller-refresh", resp.Data.(map[string]interface{})["type"])
-	require.Equal(t, "seller-access", resp.Data.(map[string]interface{})["token"])
+	data, ok := resp.Data.(map[string]interface{})
+	require.True(t, ok, "resp.Data type = %T", resp.Data)
+	require.Equal(t, "seller-refresh", data["type"])
+	require.Equal(t, "seller-access", data["token"])
 	require.Equal(t, "seller-refresh-token", gotRefreshToken)
 	require.Equal(t, int32(42), gotUserID)
 	require.Zero(t, driver.setCount)

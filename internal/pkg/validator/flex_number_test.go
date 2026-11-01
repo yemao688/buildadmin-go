@@ -258,16 +258,28 @@ func TestFlexNumbers(t *testing.T) {
 			}
 			switch want := test.want.(type) {
 			case FlexInt32:
-				if *got.(*FlexInt32) != want {
-					t.Fatalf("got %v, want %v", *got.(*FlexInt32), want)
+				value, ok := got.(*FlexInt32)
+				if !ok {
+					t.Fatalf("got %T, want *FlexInt32", got)
+				}
+				if *value != want {
+					t.Fatalf("got %v, want %v", *value, want)
 				}
 			case FlexInt64:
-				if *got.(*FlexInt64) != want {
-					t.Fatalf("got %v, want %v", *got.(*FlexInt64), want)
+				value, ok := got.(*FlexInt64)
+				if !ok {
+					t.Fatalf("got %T, want *FlexInt64", got)
+				}
+				if *value != want {
+					t.Fatalf("got %v, want %v", *value, want)
 				}
 			case FlexFloat64:
-				if *got.(*FlexFloat64) != want {
-					t.Fatalf("got %v, want %v", *got.(*FlexFloat64), want)
+				value, ok := got.(*FlexFloat64)
+				if !ok {
+					t.Fatalf("got %T, want *FlexFloat64", got)
+				}
+				if *value != want {
+					t.Fatalf("got %v, want %v", *value, want)
 				}
 			}
 		})

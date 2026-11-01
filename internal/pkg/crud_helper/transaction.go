@@ -134,7 +134,7 @@ func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
 		entry := snapshotEntry{path: path}
 		if statErr == nil {
 			if !info.Mode().IsRegular() {
-				s.Cleanup()
+				_ = s.Cleanup()
 				return nil, fmt.Errorf("snapshot target is not a regular file: %s", path)
 			}
 			entry.existed = true
@@ -142,15 +142,15 @@ func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
 			entry.backup = filepath.Join(dir, fmt.Sprintf("%06d.bak", i))
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
-				s.Cleanup()
+				_ = s.Cleanup()
 				return nil, readErr
 			}
 			if writeErr := os.WriteFile(entry.backup, data, entry.mode); writeErr != nil {
-				s.Cleanup()
+				_ = s.Cleanup()
 				return nil, writeErr
 			}
 		} else if !os.IsNotExist(statErr) {
-			s.Cleanup()
+			_ = s.Cleanup()
 			return nil, statErr
 		}
 		s.entries = append(s.entries, entry)
@@ -291,7 +291,7 @@ func atomicRestore(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(mode); err != nil {
 		_ = tmp.Close()
 		return err
@@ -321,7 +321,7 @@ func atomicRestore(path string, data []byte, mode os.FileMode) error {
 	}
 	if err := os.Rename(tmpName, path); err != nil {
 		if rollbackErr := os.Rename(rollbackName, path); rollbackErr != nil {
-			return fmt.Errorf("replace %s: %w; rollback failed: %v", path, err, rollbackErr)
+			return fmt.Errorf("replace %s: %w; rollback failed: %w", path, err, rollbackErr)
 		}
 		return err
 	}

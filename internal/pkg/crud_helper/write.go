@@ -4,6 +4,7 @@ import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -955,7 +956,8 @@ func formatGoCode(code string) (string, error) {
 	// 获取输出
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && len(exitErr.Stderr) > 0 {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 			return "", fmt.Errorf("gofmt: %s; code=%q", strings.TrimSpace(string(exitErr.Stderr)), code)
 		}
 		return "", err
@@ -976,7 +978,7 @@ func writeFile(path string, content string) error {
 		return err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if err := tmp.Chmod(0644); err != nil {
 		_ = tmp.Close()
 		return err

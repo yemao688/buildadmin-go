@@ -239,7 +239,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		if search[i].Render == "datetime" {
 			isNativeDatetime := GetFieldType(search[i].Field, fieldTypeMap, table) == "datetime"
 			if search[i].Operator == "RANGE" {
-				datetimeArr := strings.Split(search[i].Val.(string), ",")
+				datetimeArr := strings.Split(searchStringValue(search[i].Val), ",")
 				if len(datetimeArr) != 2 {
 					continue
 				}
@@ -272,7 +272,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 				// int unix 时间戳列：转 unix 后再比较（原实现直传原始字符串，
 				// MySQL 会把 '2024-01-01 12:00' 强转成 2024 导致错乱匹配）
 				whereS += " AND " + Backquote(field) + " = ? "
-				whereP = append(whereP, parseDatetimeValue(search[i].Val.(string), false))
+				whereP = append(whereP, parseDatetimeValue(searchStringValue(search[i].Val), false))
 			}
 			continue
 		}
@@ -280,27 +280,27 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		//范围查询
 		if search[i].Operator == "RANGE" || search[i].Operator == "NOT RANGE" {
 			// 重新确定操作符
-			if strings.HasPrefix(search[i].Val.(string), ",") {
+			if strings.HasPrefix(searchStringValue(search[i].Val), ",") {
 				if search[i].Operator == "RANGE" {
 					whereS += " AND " + Backquote(field) + " <= ?"
 				} else {
 					whereS += " AND " + Backquote(field) + " > "
 				}
-				whereP = append(whereP, strings.Trim(search[i].Val.(string), ","))
-			} else if strings.HasSuffix(search[i].Val.(string), ",") {
+				whereP = append(whereP, strings.Trim(searchStringValue(search[i].Val), ","))
+			} else if strings.HasSuffix(searchStringValue(search[i].Val), ",") {
 				if search[i].Operator == "RANGE" {
 					whereS += " AND " + Backquote(field) + " >= ?"
 				} else {
 					whereS += " AND " + Backquote(field) + " < "
 				}
-				whereP = append(whereP, strings.Trim(search[i].Val.(string), ","))
+				whereP = append(whereP, strings.Trim(searchStringValue(search[i].Val), ","))
 			} else {
 				if search[i].Operator == "RANGE" {
 					whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
 				} else {
 					whereS += " AND " + Backquote(field) + " NOT BETWEEN ? AND ? "
 				}
-				dataArr := strings.Split(search[i].Val.(string), ",")
+				dataArr := strings.Split(searchStringValue(search[i].Val), ",")
 				whereP = append(whereP, dataArr[0], dataArr[1])
 			}
 			continue
@@ -316,7 +316,7 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 			fallthrough
 		case "NOT LIKE":
 			whereS += " AND " + Backquote(field) + " " + operater + " ? "
-			whereP = append(whereP, "%"+strings.Replace(search[i].Val.(string), "%", "\\%", -1)+"%")
+			whereP = append(whereP, "%"+strings.Replace(searchStringValue(search[i].Val), "%", "\\%", -1)+"%")
 		case ">":
 			fallthrough
 		case ">=":
@@ -366,6 +366,16 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 		whereS = whereS[5:]
 	}
 	return
+}
+
+// searchStringValue 取搜索值并断言为字符串。RANGE/LIKE 等分支的载荷按契约
+// 是字符串；类型不符属调用方违约，保持原有 panic 语义而非静默生成无过滤条件。
+func searchStringValue(value any) string {
+	str, ok := value.(string)
+	if !ok {
+		panic(fmt.Sprintf("unexpected search value type %T", value))
+	}
+	return str
 }
 
 // buildSearchJoinExists 为点号关联字段搜索（"alias.field"，如
@@ -424,7 +434,7 @@ func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilte
 		return exists(joinColumn + " " + operater + " ?"), []interface{}{filter.Val}, nil
 	case "LIKE", "NOT LIKE":
 		return exists(joinColumn + " " + operater + " ?"), []interface{}{
-			"%" + strings.Replace(filter.Val.(string), "%", "\\%", -1) + "%",
+			"%" + strings.Replace(searchStringValue(filter.Val), "%", "\\%", -1) + "%",
 		}, nil
 	case "IN", "NOT IN":
 		// 与主表 IN 分支一致的参数形态：逗号串拆成 []string，数组原样绑定
@@ -436,7 +446,7 @@ func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilte
 		// 逗号前后缀语义与主表 RANGE 分支一致：",x" 开区间（RANGE <= x /
 		// NOT RANGE > x）、"x," 闭区间（RANGE >= x / NOT RANGE < x）、
 		// 双值 BETWEEN / NOT BETWEEN
-		valStr := filter.Val.(string)
+		valStr := searchStringValue(filter.Val)
 		if strings.HasPrefix(valStr, ",") {
 			if operater == "RANGE" {
 				return exists(joinColumn + " <= ?"), []interface{}{strings.Trim(valStr, ",")}, nil

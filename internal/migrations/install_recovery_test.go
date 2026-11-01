@@ -23,23 +23,28 @@ func TestInstallRecoveryDecisionFourStates(t *testing.T) {
 	}{
 		{"fresh", func(*testing.T, *gorm.DB, *conf.Configuration) {}, InstallFresh, false},
 		{"ledger_only", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+			t.Helper()
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 		}, InstallInterrupted, false},
 		{"pending_partial", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+			t.Helper()
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			require.NoError(t, MarkSeedPending(db, cfg))
 			require.NoError(t, db.Exec("CREATE TABLE `"+tableName(cfg, "admin")+"` (id INT PRIMARY KEY)").Error)
 		}, InstallInterrupted, false},
 		{"snapshot_complete_pending", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+			t.Helper()
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			require.NoError(t, MarkSeedPending(db, cfg))
 			db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
 			require.NoError(t, db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...))
 		}, InstallInterrupted, false},
 		{"ordinary_upgrade", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+			t.Helper()
 			require.NoError(t, db.Exec("CREATE TABLE `"+tableName(cfg, "admin")+"` (id INT PRIMARY KEY)").Error)
 		}, InstallStrictUpgrade, false},
 		{"completed_marker_ledger_only", func(t *testing.T, db *gorm.DB, cfg *conf.Configuration) {
+			t.Helper()
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			require.NoError(t, MarkSeedPending(db, cfg))
 			require.NoError(t, MarkSeedCompleted(db, cfg))

@@ -167,7 +167,9 @@ func seedUploadConfig(db *gorm.DB, config *conf.Configuration) error {
 func appendUploadConfigGroup(value string) (bool, string, error) {
 	var items []map[string]string
 	if err := json.Unmarshal([]byte(value), &items); err != nil {
-		return false, value, nil
+		// 存量 config_group 不是 JSON 数组（空值或早期手写）时无法追加分组项，
+		// 保留原值即视为「无需变更」，不能让迁移因此失败。
+		return false, value, nil //nolint:nilerr // 反序列化失败表示该值不可追加分组项，刻意保持原值
 	}
 	for _, item := range items {
 		if item["key"] == "upload" {

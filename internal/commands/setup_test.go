@@ -9,6 +9,7 @@ import (
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -578,7 +579,7 @@ func TestBuildSetupFrontendDegradesToSkipWhenArtifactExists(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	err := buildSetupFrontend(root, out, &conf.Configuration{})
-	if err != errSetupFrontendSkipped {
+	if !errors.Is(err, errSetupFrontendSkipped) {
 		t.Fatalf("expected errSetupFrontendSkipped, got %v", err)
 	}
 	if !strings.Contains(out.String(), "退化为跳过前端构建") {

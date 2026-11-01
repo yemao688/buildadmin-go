@@ -67,9 +67,9 @@ func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 	c.Request = req
 	r.HandleContext(c)
 
-	cap, ok := middlewarecore.AtomicRouteCapability(c)
-	if !ok || cap.Route != "auth/admin" || cap.Action != "edit" {
-		t.Fatalf("unexpected atomic capability: %#v, %v", cap, ok)
+	capability, ok := middlewarecore.AtomicRouteCapability(c)
+	if !ok || capability.Route != "auth/admin" || capability.Action != "edit" {
+		t.Fatalf("unexpected atomic capability: %#v, %v", capability, ok)
 	}
 }
 

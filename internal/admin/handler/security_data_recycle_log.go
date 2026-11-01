@@ -64,7 +64,10 @@ func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	}
 
 	result := Result{}
-	copier.Copy(&result, dataRecycleLog)
+	if err := copier.Copy(&result, dataRecycleLog); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	if err := json.Unmarshal([]byte(dataRecycleLog.Data), &result.Data); err != nil {
 		response.FailByErr(ctx, err)
 		return

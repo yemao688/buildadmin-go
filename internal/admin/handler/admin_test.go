@@ -18,6 +18,16 @@ import (
 
 func ptr(v int32) *int32 { return &v }
 
+// mustType 断言测试数据的动态类型，不符即终止用例。
+func mustType[T any](t *testing.T, v any) T {
+	t.Helper()
+	typed, ok := v.(T)
+	if !ok {
+		t.Fatalf("unexpected type %T, want %T", v, *new(T))
+	}
+	return typed
+}
+
 func TestBuildAdminTreeOptions(t *testing.T) {
 	admins := []*model.Admin{
 		{ID: 1, Nickname: "Root", Username: "root_user"},
@@ -31,10 +41,10 @@ func TestBuildAdminTreeOptions(t *testing.T) {
 
 	seen := map[int]bool{}
 	for _, o := range opts {
-		id := o["id"].(int)
+		id := mustType[int](t, o["id"])
 		seen[id] = true
-		text := o["nickname"].(string)
-		username := o["username"].(string)
+		text := mustType[string](t, o["nickname"])
+		username := mustType[string](t, o["username"])
 		if id == 1 && strings.Contains(text, "├") {
 			t.Errorf("root option should not be prefixed: %s", text)
 		}
@@ -67,13 +77,13 @@ func TestBuildFlatAdminOptions(t *testing.T) {
 	if len(opts) != 1 {
 		t.Fatalf("len = %d, want 1", len(opts))
 	}
-	if opts[0]["id"].(int32) != 3 {
+	if mustType[int32](t, opts[0]["id"]) != 3 {
 		t.Fatalf("id = %v", opts[0]["id"])
 	}
-	if opts[0]["nickname"].(string) != "A(ID:3)" {
+	if mustType[string](t, opts[0]["nickname"]) != "A(ID:3)" {
 		t.Fatalf("nickname = %s", opts[0]["nickname"])
 	}
-	if opts[0]["username"].(string) != "alpha(ID:3)" {
+	if mustType[string](t, opts[0]["username"]) != "alpha(ID:3)" {
 		t.Fatalf("username = %s", opts[0]["username"])
 	}
 }
@@ -126,11 +136,11 @@ func TestAdminTableTreeLeafAssemble(t *testing.T) {
 	if root.GetId() != 1 || root.Username != "root" {
 		t.Fatalf("root leaf = %+v", root)
 	}
-	children := root.GetChildren().([]*adminTableTreeLeaf)
+	children := mustType[[]*adminTableTreeLeaf](t, root.GetChildren())
 	if len(children) != 1 || children[0].GetId() != 2 {
 		t.Fatalf("root children = %+v", children)
 	}
-	grand := children[0].GetChildren().([]*adminTableTreeLeaf)
+	grand := mustType[[]*adminTableTreeLeaf](t, children[0].GetChildren())
 	if len(grand) != 1 || grand[0].GetId() != 3 {
 		t.Fatalf("agent children = %+v", grand)
 	}

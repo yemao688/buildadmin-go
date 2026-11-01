@@ -92,7 +92,10 @@ func (h *AttachmentHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&attachment, params)
+	if err := copier.Copy(&attachment, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err = h.attachmentM.Edit(ctx, attachment)
 	if err != nil {
 		response.FailByErr(ctx, err)

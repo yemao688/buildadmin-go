@@ -136,11 +136,11 @@ func typeParts(value string) (base string, args []string) {
 		return value, nil
 	}
 	base = strings.TrimSpace(value[:open])
-	close := strings.LastIndexByte(value, ')')
-	if close < open {
+	closeIdx := strings.LastIndexByte(value, ')')
+	if closeIdx < open {
 		return base, nil
 	}
-	for _, arg := range strings.Split(value[open+1:close], ",") {
+	for _, arg := range strings.Split(value[open+1:closeIdx], ",") {
 		args = append(args, strings.Trim(strings.TrimSpace(arg), "'"))
 	}
 	return base, args

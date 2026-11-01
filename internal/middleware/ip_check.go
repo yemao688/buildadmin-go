@@ -16,7 +16,7 @@ func IpCheck() gin.HandlerFunc {
 		store := persistence.NewInMemoryStore(time.Minute)
 
 		var noAccessIp string
-		store.Get("no_access_ip", noAccessIp)
+		_ = store.Get("no_access_ip", noAccessIp)
 		if noAccessIp != "" && strings.Contains(noAccessIp, clientIP) {
 			msg := util.Lang(c, "No permission request", nil)
 			c.JSON(http.StatusOK, map[string]interface{}{

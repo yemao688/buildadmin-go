@@ -83,10 +83,10 @@ func version201(db *gorm.DB, config *conf.Configuration) error {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return err
 	}
-	rows.Close()
+	_ = rows.Close()
 	for _, idx := range indexes {
 		if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(t) + " DROP INDEX " + core.QuoteIdentifier(idx)).Error; err != nil {
 			return err

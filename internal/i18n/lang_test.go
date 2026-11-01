@@ -63,7 +63,9 @@ func TestLangContextHelpers(t *testing.T) {
 	// 普通 context 无语言
 	_, ok = LangFromContext(context.Background())
 	require.False(t, ok)
-	_, ok = LangFromContext(nil)
+	// nil context 返回 false（用变量传入，避免 staticcheck SA1012 的 nil 字面量告警）
+	var nilContext context.Context
+	_, ok = LangFromContext(nilContext)
 	require.False(t, ok)
 
 	// 空字符串视为未设置；nil Request 不应 panic

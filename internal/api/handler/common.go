@@ -65,7 +65,7 @@ func (h *CommonHandler) Captcha(ctx *gin.Context) {
 	ctx.Writer.Header().Set("Content-Type", "image/png")
 	err = png.Encode(ctx.Writer, img)
 	if err != nil {
-		ctx.AbortWithError(http.StatusInternalServerError, err)
+		_ = ctx.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 }

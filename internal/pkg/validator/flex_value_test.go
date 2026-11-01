@@ -132,7 +132,11 @@ func TestFlexTimes(t *testing.T) {
 				return
 			}
 			value := flexTimeValue(got)
-			if !value.Equal(test.want.(time.Time)) {
+			want, ok := test.want.(time.Time)
+			if !ok {
+				t.Fatalf("got %T, want time.Time", test.want)
+			}
+			if !value.Equal(want) {
 				t.Fatalf("got %v, want %v", value, test.want)
 			}
 		})

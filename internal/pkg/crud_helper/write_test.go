@@ -281,7 +281,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 			field := analyseField(crudmodel.Field{Name: tc.name, DesignType: tc.designType, Type: tc.typeName, DataType: tc.dataType, Length: tc.length, DefaultType: tc.defaultTyp, Default: tc.defaultVal})
 			got := buildHandlerParamTypeOverrides([]crudmodel.Field{field})
 			if got[tc.name] != tc.want {
-				t.Fatalf("override = %q, want %q (analysed field: %+v)", got[tc.name], tc.want, field)
+				t.Fatalf("override = %q, want %q (analyzed field: %+v)", got[tc.name], tc.want, field)
 			}
 		})
 	}
@@ -305,11 +305,11 @@ func TestNumericFlexOverridesFollowEntityGoTypes(t *testing.T) {
 		{Name: "published_at", Type: "datetime", DesignType: "datetime"}, // → FlexDateTime
 		{Name: "birth_year", Type: "year", DesignType: "year"},           // → FlexYear
 	}
-	analysed := make([]crudmodel.Field, len(fields))
+	analyzed := make([]crudmodel.Field, len(fields))
 	for i, field := range fields {
-		analysed[i] = analyseField(field)
+		analyzed[i] = analyseField(field)
 	}
-	overrides := buildHandlerParamTypeOverrides(analysed)
+	overrides := buildHandlerParamTypeOverrides(analyzed)
 	want := map[string]string{
 		"user_id":      "validator.FlexInt64",
 		"count":        "validator.FlexInt32",

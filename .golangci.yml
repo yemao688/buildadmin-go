@@ -1,18 +1,84 @@
-# golangci-lint 配置（v1 语法，对应 golangci-lint v1.64.x）。
+# golangci-lint v2 配置（对应 golangci-lint v2.15.x + golangci-lint-action@v9）。
 #
-# 只启用当前代码已全部通过的检查集：门禁一上线就是绿的。新增检查前先在本地
-# 跑一遍看命中数，不要直接把存量问题塞进流水线（否则没人会看这个红牌）。
+# 分档策略：门禁只跑"当前代码已全部通过"的档 A+B，档 C 的条目连同理据列在
+# 文件末尾注释里，需要专项战役时才逐条打开——不要把存量问题直接塞进流水线，
+# 否则这张红牌没人会看。
 #
-# 暂缓的两组，存量问题数已实测，需要单独决策后再开：
-#   - errcheck   28 条：多是 ResponseWriter 写、tx.AddError、s.Cleanup 这类
-#                约定俗成的忽略。真问题约 5 处：copier.Copy 未检查（3 处）、
-#                tokenHelper.Clear/Set、store.Set/Get、users.UpdateLoginMeta。
-#   - staticcheck 8 条：rand.Seed 已废弃（3 处，修它要动随机数实现）、
-#                SA1029 用 string 作 context key（5 处，属仓库既定约定）。
+# 档 A（正确性底座，0 条）：govet / ineffassign / unused / staticcheck 的 S 类。
+# 档 B（已清空，曾 199 条）：errcheck（默认设置）/ errorlint / nilerr /
+#   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
+
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+  modules-download-mode: readonly
+
 linters:
-  disable-all: true
+  default: none
   enable:
+    # --- 档 A ---
     - govet
     - ineffassign
     - unused
-    - gosimple
+    - staticcheck
+
+    # --- 档 B ---
+    - errcheck
+    - errorlint
+    - nilerr
+    - forcetypeassert
+    - misspell
+    - predeclared
+    - errname
+    - thelper
+
+  settings:
+    # staticcheck：保留 S/SA 类正确性检查，关掉 ST1*/QF1* 纯风格重构建议
+    # （QT 风格化、QF 快速修复在存量代码上是噪音），并豁免 SA1029
+    # （仓库约定用 string 作 context key，与 Gin / 中间件透传口径一致）。
+    staticcheck:
+      checks: ["all", "-ST1*", "-QF1*", "-SA1029"]
+
+    # 刻意不开 check-blank / check-type-assertions：本仓库大量 `_ = recordCrudError(...)`、
+    # `_ = tx.AddError(...)` 是显式忽略，开了会把 84 条推到 201 条且全是噪音。
+    errcheck: {}
+
+    misspell:
+      # 统一美式拼写，避免不同人写出两套。
+      locale: US
+      # 第三方模块路径固定为 github.com/unknwon/com，改名会破坏依赖解析。
+      ignore-rules:
+        - unknwon
+
+  exclusions:
+    # 生成器产物（handler/repository/registrar）按模板形状生成，格式问题不在这里治。
+    generated: lax
+    rules:
+      # 测试里的错误忽略（w.Write、snapshot.Cleanup 等）不强制逐条处理。
+      - path: _test\.go
+        linters:
+          - errcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+# ---------------------------------------------------------------------------
+# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 3137 条）
+#
+#   - revive         1136 条，其中 exported 1028（AGENTS.md 明确不为存量补注释）、
+#                    var-naming 107（含 PHP 继承命名如 CdnUrlParams，同时是 Vue
+#                    前端的 JSON 契约，改名即破坏 API）。
+#   - paralleltest    910 条：本仓库测试依赖全局状态（cobra OnInitialize、
+#                    configPath 全局变量），机械加 t.Parallel() 会把隐藏竞态
+#                    变成真竞态，属风险改造而非风格清理。
+#   - gocritic        773 条：style + performance 标签在存量代码上基本是改写
+#                    习惯，收益低于 review 成本。
+#   - gosec            73 条：多为框架动态路径/反射的误报，需逐条白名单，
+#                    不是开一个 linter 的事。
+#   - testifylint      67 条：断言风格统一，可跟档 B 一起做，但需改测试。
+#   - gocyclo          56 条（min-complexity 15）：集中在大函数形态的生成器，
+#                    拆函数会破坏"模板形状"约束。
+# ---------------------------------------------------------------------------

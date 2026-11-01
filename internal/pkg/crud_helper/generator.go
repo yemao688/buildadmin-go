@@ -80,7 +80,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 				result, retErr = fail("panic", panicErr)
 				if cleanupSnapshot != nil {
 					if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
-						retErr = fmt.Errorf("%w; recovery cleanup failed: %v", retErr, cleanupErr)
+						retErr = fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
 					}
 				}
 			} else {
@@ -228,7 +228,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 			if retErr == nil {
 				retErr = fmt.Errorf("recovery cleanup failed: %w", cleanupErr)
 			} else {
-				retErr = fmt.Errorf("%w; recovery cleanup failed: %v", retErr, cleanupErr)
+				retErr = fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
 			}
 		}
 	}()
@@ -956,7 +956,7 @@ func latestSuccessfulCrudLog(db *gorm.DB, cfg *conf.Configuration, table string)
 	}
 	var log model.Log
 	err := query.Order("create_time desc, id desc").Take(&log).Error
-	if err == gorm.ErrRecordNotFound {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	return &log, err
@@ -1292,7 +1292,7 @@ func buildProject() error {
 func buildAndRestoreOnFailure(snapshot *FileSnapshot, builder func() error) error {
 	if err := builder(); err != nil {
 		if restoreErr := snapshot.Restore(); restoreErr != nil {
-			return fmt.Errorf("%w; restore failed: %v", err, restoreErr)
+			return fmt.Errorf("%w; restore failed: %w", err, restoreErr)
 		}
 		return err
 	}

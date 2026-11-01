@@ -12,6 +12,7 @@ import (
 )
 
 func openEmptyTestDatabase(t *testing.T, prefix string) (*gorm.DB, *conf.Configuration) {
+	t.Helper()
 	return testutil.OpenFixtureDatabase(t, prefix)
 }
 

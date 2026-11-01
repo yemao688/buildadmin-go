@@ -46,7 +46,10 @@ func (h *CountryLanguageContentHandler) Add(ctx *gin.Context) {
 		return
 	}
 	var data model.CountryLanguageContent
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err := h.countryLanguageContentM.Add(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -78,7 +81,10 @@ func (h *CountryLanguageContentHandler) Edit(ctx *gin.Context) {
 		return
 	}
 
-	copier.Copy(&data, params)
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
 	err = h.countryLanguageContentM.Edit(ctx, data)
 	if err != nil {
 		response.FailByErr(ctx, err)

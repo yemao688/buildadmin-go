@@ -12,6 +12,7 @@ import (
 	"buildadmin-go/internal/pkg/tree"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -328,14 +329,18 @@ func (l *AdminGroupExpend) GetTitle() string         { return l.Name }
 func (l *AdminGroupExpend) GetChildren() interface{} { return l.Children }
 func (l *AdminGroupExpend) SetTitle(title string)    { l.Name = title }
 func (l *AdminGroupExpend) SetChildren(children interface{}) {
-	l.Children = children.([]*AdminGroupExpend)
+	list, ok := children.([]*AdminGroupExpend)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", children))
+	}
+	l.Children = list
 }
 
 func (h *AdminGroupHandler) AssembleChild(list []*model.AdminGroup) []*AdminGroupExpend {
 	expendList := []*AdminGroupExpend{}
 	for _, v := range list {
 		temp := AdminGroupExpend{}
-		copier.Copy(&temp, v)
+		_ = copier.Copy(&temp, v)
 		expendList = append(expendList, &temp)
 	}
 	return tree.AssembleChild(expendList)

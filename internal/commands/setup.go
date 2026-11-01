@@ -221,33 +221,33 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 
 	report, err := r.deps.runMigrations(db, configuration)
 	if err != nil {
-		fmt.Fprintf(r.out, "数据库迁移失败: %v\n", err)
+		_, _ = fmt.Fprintf(r.out, "数据库迁移失败: %v\n", err)
 		return err
 	}
-	fmt.Fprintf(r.out, "执行 %d 个迁移（official=%d, framework=%d, business=%d）", report.Official+report.Framework+report.Business, report.Official, report.Framework, report.Business)
+	_, _ = fmt.Fprintf(r.out, "执行 %d 个迁移（official=%d, framework=%d, business=%d）", report.Official+report.Framework+report.Business, report.Official, report.Framework, report.Business)
 	if report.Seeded {
-		fmt.Fprint(r.out, "，已写入初始数据")
+		_, _ = fmt.Fprint(r.out, "，已写入初始数据")
 	}
-	fmt.Fprintln(r.out)
+	_, _ = fmt.Fprintln(r.out)
 
 	results, applyErr := r.deps.runCrudApply(db, configuration)
 	if applyErr != nil {
-		fmt.Fprintf(r.out, "CRUD apply 失败: %v\n", applyErr)
+		_, _ = fmt.Fprintf(r.out, "CRUD apply 失败: %v\n", applyErr)
 		var blocked *helper.ApplyBlockedError
 		if errors.As(applyErr, &blocked) {
-			fmt.Fprintf(r.out, "hint: %s\n", blocked.Hint())
+			_, _ = fmt.Fprintf(r.out, "hint: %s\n", blocked.Hint())
 		}
 		return applyErr
 	}
 	for _, result := range results {
 		// 线外手改的列/属性不受 spec 管理，静默保留但必须告警，防止漂移无感知。
 		for _, change := range result.Unmanaged {
-			fmt.Fprintf(r.out, "CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+			_, _ = fmt.Fprintf(r.out, "CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
 		}
 		if result.Action == helper.ApplyUnchanged {
 			continue
 		}
-		fmt.Fprintf(r.out, "CRUD apply %-9s %s\n", string(result.Action), result.Table)
+		_, _ = fmt.Fprintf(r.out, "CRUD apply %-9s %s\n", string(result.Action), result.Table)
 	}
 
 	if err := r.handleFrontend(options, configuration, console); err != nil {
@@ -264,7 +264,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 	if portValue == "" {
 		portValue = "9900"
 	}
-	fmt.Fprintf(r.out, "安装完成\n登录地址: http://127.0.0.1:%s/\n管理员用户名: %s\n", portValue, input.admin)
+	_, _ = fmt.Fprintf(r.out, "安装完成\n登录地址: http://127.0.0.1:%s/\n管理员用户名: %s\n", portValue, input.admin)
 	return nil
 }
 
@@ -391,7 +391,7 @@ func (r setupRunner) handleFrontend(options setupOptions, configuration *conf.Co
 		if !setupFrontendArtifactExists(r.rootPath) {
 			return errors.New("跳过前端构建要求 public/index.html 已存在")
 		}
-		fmt.Fprintln(r.out, "已跳过前端构建")
+		_, _ = fmt.Fprintln(r.out, "已跳过前端构建")
 		return nil
 	}
 
@@ -408,19 +408,19 @@ func (r setupRunner) handleFrontend(options setupOptions, configuration *conf.Co
 		if !setupFrontendArtifactExists(r.rootPath) {
 			return errors.New("跳过前端构建要求 public/index.html 已存在")
 		}
-		fmt.Fprintln(r.out, "已跳过前端构建")
+		_, _ = fmt.Fprintln(r.out, "已跳过前端构建")
 		return nil
 	case frontendAbort:
 		return errors.New("用户中止安装")
 	case frontendBuild:
 		if err := r.deps.buildFrontend(r.rootPath, r.out, configuration); err != nil {
 			if errors.Is(err, errSetupFrontendSkipped) {
-				fmt.Fprintln(r.out, "已跳过前端构建")
+				_, _ = fmt.Fprintln(r.out, "已跳过前端构建")
 				return nil
 			}
 			return err
 		}
-		fmt.Fprintln(r.out, "前端构建完成")
+		_, _ = fmt.Fprintln(r.out, "前端构建完成")
 		return nil
 	default:
 		return fmt.Errorf("未知的前端处理选项 %q", choice)
@@ -609,7 +609,7 @@ func newSetupConsole(reader io.Reader, writer io.Writer) *setupConsole {
 
 func (c *setupConsole) line(prompt, defaultValue string) (string, error) {
 	if prompt != "" {
-		fmt.Fprint(c.out, prompt)
+		_, _ = fmt.Fprint(c.out, prompt)
 	}
 	value, err := c.reader.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -630,9 +630,9 @@ func (c *setupConsole) secret(value string, provided bool, defaultValue, prompt 
 		return defaultValue, nil
 	}
 	if file, ok := c.raw.(*os.File); ok && term.IsTerminal(int(file.Fd())) {
-		fmt.Fprint(c.out, prompt+": ")
+		_, _ = fmt.Fprint(c.out, prompt+": ")
 		password, err := term.ReadPassword(int(file.Fd()))
-		fmt.Fprintln(c.out)
+		_, _ = fmt.Fprintln(c.out)
 		if err != nil {
 			return "", err
 		}
@@ -724,27 +724,27 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 			missing = append(missing, tool)
 			continue
 		}
-		fmt.Fprintf(output, "检测到 %s %s\n", tool, toolVersion)
+		_, _ = fmt.Fprintf(output, "检测到 %s %s\n", tool, toolVersion)
 	}
 	if len(missing) > 0 {
-		fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
+		_, _ = fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
 		// Node 本身缺失（容器镜像不携带工具链）：装 node 无意义，指引宿主机
 		// 手动 make frontend 构建，再以 --skip-frontend 重跑 setup。
 		if missingNode(missing) {
-			fmt.Fprintln(output, "当前环境没有 Node 环境。请改为在宿主机手动执行：")
-			fmt.Fprintln(output, "  make frontend   # 在 web/ 构建前端并同步产物到 public/")
-			fmt.Fprintln(output, "完成后重新运行 setup 并加 --skip-frontend 跳过前端构建。")
+			_, _ = fmt.Fprintln(output, "当前环境没有 Node 环境。请改为在宿主机手动执行：")
+			_, _ = fmt.Fprintln(output, "  make frontend   # 在 web/ 构建前端并同步产物到 public/")
+			_, _ = fmt.Fprintln(output, "完成后重新运行 setup 并加 --skip-frontend 跳过前端构建。")
 			if setupFrontendArtifactExists(rootPath) {
-				fmt.Fprintln(output, "已有 public/index.html，本次退化为跳过前端构建")
+				_, _ = fmt.Fprintln(output, "已有 public/index.html，本次退化为跳过前端构建")
 				return errSetupFrontendSkipped
 			}
 			return errors.New("前端构建依赖缺失（无 Node 环境），请先在宿主机执行 make frontend，再以 --skip-frontend 重跑 setup")
 		}
 		for _, tool := range missing {
-			fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
+			_, _ = fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
 		}
 		if setupFrontendArtifactExists(rootPath) {
-			fmt.Fprintln(output, "已有 public/index.html，退化为跳过前端构建")
+			_, _ = fmt.Fprintln(output, "已有 public/index.html，退化为跳过前端构建")
 			return errSetupFrontendSkipped
 		}
 		return fmt.Errorf("前端构建依赖缺失，且 public/index.html 不存在（缺失工具: %s）", strings.Join(missing, ", "))
@@ -755,7 +755,7 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 		if !ok {
 			return fmt.Errorf("未配置前端命令 %q", key)
 		}
-		fmt.Fprintf(output, "执行: %s\n", command.Command)
+		_, _ = fmt.Fprintf(output, "执行: %s\n", command.Command)
 		process := exec.Command("sh", "-c", command.Command)
 		process.Dir = command.Cwd
 		process.Stdout = output

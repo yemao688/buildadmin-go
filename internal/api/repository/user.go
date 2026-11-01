@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+
 	"buildadmin-go/internal/model"
 
 	"gorm.io/gorm"
@@ -32,7 +34,7 @@ func (r *UserRepository) Transaction(fn func(tx *gorm.DB) error) error {
 func (r *UserRepository) GetByID(id int32) (*model.User, error) {
 	var user model.User
 	if err := r.db.Where("id=?", id).First(&user).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err

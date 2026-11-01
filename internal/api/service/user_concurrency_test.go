@@ -71,7 +71,9 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 		_, err := authModel.RefreshUserAccessToken(refreshToken)
 		refreshDone <- err
 	}()
-	<-tokenHelper.Driver.(*refreshRaceTokenDriver).getStarted
+	raceDriver, ok := tokenHelper.Driver.(*refreshRaceTokenDriver)
+	require.True(t, ok, "driver type = %T", tokenHelper.Driver)
+	<-raceDriver.getStarted
 
 	// Simulate a password-change transaction clearing sessions while refresh waits
 	// for the same user row lock.

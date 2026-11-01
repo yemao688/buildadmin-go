@@ -5,6 +5,7 @@ import (
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
@@ -125,7 +126,11 @@ func (l *adminTableTreeLeaf) SetChildren(children interface{}) {
 	if l == nil {
 		return
 	}
-	l.Children = children.([]*adminTableTreeLeaf)
+	list, ok := children.([]*adminTableTreeLeaf)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", children))
+	}
+	l.Children = list
 }
 
 // NullableParentID is a presence-aware JSON type for parent_id.
@@ -328,12 +333,18 @@ type adminTreeLeaf struct {
 	children []*adminTreeLeaf
 }
 
-func (l *adminTreeLeaf) GetId() int                       { return l.id }
-func (l *adminTreeLeaf) GetPid() int                      { return l.pid }
-func (l *adminTreeLeaf) GetTitle() string                 { return l.title }
-func (l *adminTreeLeaf) GetChildren() interface{}         { return l.children }
-func (l *adminTreeLeaf) SetTitle(title string)            { l.title = title }
-func (l *adminTreeLeaf) SetChildren(children interface{}) { l.children = children.([]*adminTreeLeaf) }
+func (l *adminTreeLeaf) GetId() int               { return l.id }
+func (l *adminTreeLeaf) GetPid() int              { return l.pid }
+func (l *adminTreeLeaf) GetTitle() string         { return l.title }
+func (l *adminTreeLeaf) GetChildren() interface{} { return l.children }
+func (l *adminTreeLeaf) SetTitle(title string)    { l.title = title }
+func (l *adminTreeLeaf) SetChildren(children interface{}) {
+	list, ok := children.([]*adminTreeLeaf)
+	if !ok {
+		panic(fmt.Sprintf("unexpected children type %T", children))
+	}
+	l.children = list
+}
 
 // Select serves the frontend getSelectData convention for the admin parent
 // selector. It returns a flat list of BuildAdmin-style prefixed options,

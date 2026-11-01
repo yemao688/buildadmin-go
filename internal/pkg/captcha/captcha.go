@@ -218,7 +218,7 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	code := []string{}
-	runes := []rune{}
+	var runes []rune
 	if captcha != "" {
 		runes = []rune(captcha)
 	} else {

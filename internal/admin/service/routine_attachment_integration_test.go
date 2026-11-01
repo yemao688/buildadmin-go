@@ -129,6 +129,7 @@ func actorOf(t *testing.T, ctx *gin.Context) data_scope.Actor {
 }
 
 func countRows(t *testing.T, db *gorm.DB, table string) int64 {
+	t.Helper()
 	var n int64
 	require.NoError(t, db.Table(table).Count(&n).Error)
 	return n

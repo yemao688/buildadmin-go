@@ -63,6 +63,7 @@ func openMySQLAdminTestDB(t *testing.T, prefix string) *gorm.DB {
 }
 
 func adminTestContext(t *testing.T, unrestricted bool) *gin.Context {
+	t.Helper()
 	return adminTestContextID(t, 5, unrestricted)
 }
 

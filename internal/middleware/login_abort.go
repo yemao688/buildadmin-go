@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 
 	cErr "buildadmin-go/internal/pkg/error"
@@ -15,9 +16,10 @@ import (
 func AbortLogin(c *gin.Context, err error) {
 	code := http.StatusUnauthorized
 	message := "Please login first"
-	if v, ok := err.(*cErr.Error); ok {
-		code = v.ErrorCode()
-		message = v.Error()
+	var apiErr *cErr.Error
+	if errors.As(err, &apiErr) {
+		code = apiErr.ErrorCode()
+		message = apiErr.Error()
 	}
 	c.JSON(http.StatusOK, map[string]interface{}{
 		"code": code,

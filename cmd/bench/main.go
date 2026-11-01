@@ -108,8 +108,8 @@ func main() {
 				failed.Add(1)
 				continue
 			}
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				success.Add(1)
 			} else {
