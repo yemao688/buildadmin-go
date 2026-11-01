@@ -1,0 +1,53 @@
+# 全量门禁:仅手动触发(gh workflow run ci.yml),不随 push/PR 跑。
+# 发布 tag 的流程在 release-image.yml(那边只做 gofmt/build/vet 快校验)。
+#
+# gofmt 是全仓硬 gate(gofmt -l .):存量漂移已在一次性的格式化提交里清空
+# (见 .git-blame-ignore-revs),所以这里不需要"只查改动文件"的例外逻辑。
+# 注意 gofmt 随 setup-go 安装的版本走(go.mod 的 1.25.x),与本地版本不同时
+# 极少数对齐规则可能不一致——发现 CI 与本地结论相反,先对齐 Go 小版本。
+
+name: ci
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: gofmt / build / vet / test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          set -eu
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "$out"
+            echo "::error::以下文件未格式化(gofmt -l);本地执行 gofmt -w 后提交"
+            exit 1
+          fi
+
+      - run: go build ./...
+
+      - run: go vet ./...
+
+      # 不加 -p 1:包间并行(go test 默认按 GOMAXPROCS 并发),墙钟取决于最慢的包。
+      # 部分测试依赖 MySQL 门禁(mysql_test.enabled),缺配置时自行 skip 属正常。
+      - name: 单元测试
+        run: go test ./... -count=1 -timeout=45m

@@ -1,0 +1,191 @@
+# 打 tag 即发布多架构镜像:v<version>(如 v1.0.0)→ 构建并推 3 个 tag,
+# 与本地 make push 形态一致(同三个 tag、同关闭 attestation)。只推 GitHub 仓库。
+# version 完全取自 tag 名(去掉 v 前缀),不读 VERSION / VERSION_FRAMEWORK,
+# 也不做一致性校验:tag 打成什么版本,镜像就是什么版本。
+#
+# 基础镜像/Go 模块/apk 显式走官方源(国内加速前缀在海外反而慢)。
+# 关闭 provenance/sbom:ACR 个人版拒收 buildx 默认附加的 OCI attestation。
+# 镜像不含前端产物(public/ 由宿主机 bind mount):发布前在发布机 make frontend
+# 同步 public/,CI 不需要 pnpm/Node。
+#
+# 仓库配置:
+#   vars    = REGISTRY / REGISTRY_NAMESPACE(可空) / COMPOSE_PROJECT_NAME /
+#             BUILD_PLATFORMS(可选,回退 linux/amd64)
+#   secrets = REGISTRY_USER / REGISTRY_PASSWORD
+# 镜像路径:<REGISTRY>[/<REGISTRY_NAMESPACE>]/<COMPOSE_PROJECT_NAME>;
+# tag:<version> / <version>-<git-sha>-<build-ts> / latest。
+
+name: release-image
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "已存在的发布 tag(如 v1.0.0)"
+        required: true
+        type: string
+      platforms:
+        description: "构建平台;留空取 vars.BUILD_PLATFORMS,再退回 linux/amd64"
+        required: false
+        default: ""
+        type: string
+
+# 同一 tag 两次触发串行;不取消在跑的(推到一半取消会留下半套 tag)。
+concurrency:
+  group: release-image-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: gate (gofmt/build/vet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          set -eu
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then
+            echo "$out"
+            echo "::error::以下文件未格式化(gofmt -l);本地执行 gofmt -w 后重新打 tag"
+            exit 1
+          fi
+
+      - run: go build ./...
+
+      - run: go vet ./...
+
+  image:
+    name: build & push
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      REGISTRY: ${{ vars.REGISTRY }}
+      REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE }}
+      COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME }}
+      PLATFORMS: ${{ inputs.platforms || vars.BUILD_PLATFORMS || 'linux/amd64' }}
+      REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - name: 配置校验
+        run: |
+          set -eu
+          missing=""
+          [ -n "$REGISTRY" ] || missing="$missing vars.REGISTRY"
+          [ -n "$COMPOSE_PROJECT_NAME" ] || missing="$missing vars.COMPOSE_PROJECT_NAME"
+          [ -n "$REGISTRY_USER" ] || missing="$missing secrets.REGISTRY_USER"
+          [ -n "$REGISTRY_PASSWORD" ] || missing="$missing secrets.REGISTRY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少仓库配置:$missing 。在仓库 Settings → Secrets and variables → Actions 配置,清单见 .github/workflows/release-image.yml 文件头"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: 计算版本与构建参数
+        id: meta
+        run: |
+          set -eu
+          ref="${{ inputs.tag || github.ref_name }}"
+          version="${ref#v}"
+          git_sha="$(git rev-parse --short HEAD)"
+          build_ts="$(date -u +%Y%m%dT%H%M%SZ)"
+          full_tag="${version}-${git_sha}-${build_ts}"
+          # namespace 可空(扁平仓库:registry/name);ACR 等需要三级路径。
+          if [ -n "${REGISTRY_NAMESPACE}" ]; then
+            image="${REGISTRY}/${REGISTRY_NAMESPACE}/${COMPOSE_PROJECT_NAME}"
+          else
+            image="${REGISTRY}/${COMPOSE_PROJECT_NAME}"
+          fi
+          {
+            echo "version=${version}"
+            echo "git_sha=${git_sha}"
+            echo "build_ts=${build_ts}"
+            echo "full_tag=${full_tag}"
+            echo "platforms=${PLATFORMS}"
+            echo "image=${image}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ steps.meta.outputs.platforms }}
+          push: true
+          # ACR 个人版拒收 OCI attestation,必须显式关闭。
+          provenance: false
+          sbom: false
+          # CI 基础镜像/模块/apk 全走官方源,BUILD_BASE_REGISTRY 传空即回官方源。
+          build-args: |
+            BUILD_BASE_REGISTRY=
+            GOPROXY=https://proxy.golang.org,direct
+            APK_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+            VERSION=${{ steps.meta.outputs.version }}
+            GIT_SHA=${{ steps.meta.outputs.git_sha }}
+            BUILD_TS=${{ steps.meta.outputs.build_ts }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.full_tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.title=buildadmin-go
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.build_ts }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 核对远端 manifest
+        run: |
+          set -eu
+          docker buildx imagetools inspect "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+
+      - name: 摘要
+        if: always()
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          IMAGE_VERSION: ${{ steps.meta.outputs.version }}
+          IMAGE_FULL_TAG: ${{ steps.meta.outputs.full_tag }}
+          IMAGE_SHA: ${{ steps.meta.outputs.git_sha }}
+          IMAGE_PLATFORMS: ${{ steps.meta.outputs.platforms }}
+          IMAGE_NAME: ${{ steps.meta.outputs.image }}
+        run: |
+          {
+            echo "### release image"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "|---|---|"
+            echo "| tag | \`${RELEASE_TAG}\` |"
+            echo "| version | \`${IMAGE_VERSION}\` |"
+            echo "| commit | \`${IMAGE_SHA}\` |"
+            echo "| platforms | \`${IMAGE_PLATFORMS}\` |"
+            echo "| image | \`${IMAGE_NAME}\` |"
+            echo "| tags | \`:${IMAGE_VERSION}\` · \`:${IMAGE_FULL_TAG}\` · \`:latest\` |"
+          } >> "$GITHUB_STEP_SUMMARY"

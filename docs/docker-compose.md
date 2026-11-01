@@ -72,16 +72,27 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm builda
 
 线上是单副本发布方案，MySQL 仍由外部提供。发布机先用 `make frontend` 构建前端并同步到仓库根 `public/`，`public/` 随部署目录一起上生产机，由 bind mount 直接服务（不进镜像）。
 
+### 两条等价发布路径
+
+两条路径打出的镜像 tag 形态一致（`FULL_TAG=<version>-<git-sha>-<build-ts>`、`<version>`、`latest`），任选其一。区别只在 `<version>` 的来源：本地 `make push` 读根目录 `VERSION` 文件，CI 取 tag 名去掉 `v` 前缀（不校验 `VERSION`）。
+
+1. **发布机自建自推**：`make frontend` → `make push`（下一小节）。
+2. **推 tag 交给 GitHub Actions**：`git tag v1.0.0 && git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.COMPOSE_PROJECT_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
+
+**镜像不含前端产物**：两条路径发布前都仍需在发布机执行 `make frontend`，并把 `public/` 一起放到生产机由 bind mount 提供。
+
 ### 发布机：构建并推送
 
 ```bash
 cp .env.example .env
-# 编辑 .env 中的 registry、镜像名、平台和 registry 凭据
+# 编辑 .env：REGISTRY / REGISTRY_NAMESPACE / REGISTRY_USER / REGISTRY_PASSWORD / BUILD_PLATFORMS 等发布变量
 make frontend   # web/ 内 pnpm install + build，产物同步到 public/
-make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG/VERSION/latest 三 tag
+make push       # stdin 登录 registry，按 BUILD_PLATFORMS 构建多架构并推 FULL_TAG/VERSION/latest 三 tag
 ```
 
-`make frontend` 会替换根 `public/assets/` 并复制 `public/index.html`，替换而非叠加可避免旧 hash 资源残留；Dockerfile 不构建前端，也不消费 `web/dist/`。`make build` 仅接受单个平台并使用 `--load`；多平台发布使用 `make push`。
+`make frontend` 会替换根 `public/assets/` 并复制 `public/index.html`，替换而非叠加可避免旧 hash 资源残留；Dockerfile 不构建前端，也不消费 `web/dist/`。
+
+`make build` 只做宿主单架构并使用 `--load`（本地验证用）；多平台发布使用 `make push`——它按 `BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）推 manifest list，并传 `--provenance=false --sbom=false`，避免 manifest list 里混入 attestation 条目。
 
 ### 静态缓存与发布窗口
 
@@ -89,26 +100,28 @@ make push       # stdin 登录 registry，多架构 buildx 构建推送 FULL_TAG
 
 #### 构建加速（国内网络）
 
-框架已为国内环境覆盖三层拉取加速，`make build`/`make push` 开箱即用（三个加速点统一由 Makefile `BUILDX_ARGS` 透传）：
+框架已为国内环境覆盖三层拉取加速，`make build`/`make push` 开箱即用（三个加速点统一由 Makefile `BUILDX_COMMON` 透传）：
 
-- **基础镜像**（本层是 buildx 独立 buildkitd 的唯一阻断点）：镜像名与版本号在 Dockerfile 维护（`FROM golang:1.25-alpine` / `FROM alpine:3.22`），构建时经 `BASE_REGISTRY` 前缀加速——默认 `docker.m.daocloud.io/`（daocloud 镜像站，全量同步 Docker Hub）。buildx 的 `docker-container` driver 不继承 daemon 的 `registry-mirrors`（`~/.docker/daemon.json` 或 OrbStack 配置对它无效），必须由构建参数注入。
+- **基础镜像**（本层是 buildx 独立 buildkitd 的唯一阻断点）：镜像名与版本号在 Dockerfile 维护（`FROM golang:1.25-alpine` / `FROM alpine:3.22`），构建时经 `BUILD_BASE_REGISTRY` 前缀加速——默认 `docker.m.daocloud.io/`（daocloud 镜像站，全量同步 Docker Hub），**结尾必须带 `/`**。buildx 的 `docker-container` driver 不继承 daemon 的 `registry-mirrors`（`~/.docker/daemon.json` 或 OrbStack 配置对它无效），必须由构建参数注入。
 - **Go 模块**：`GOPROXY` 默认 `https://goproxy.cn,direct`。
 - **apk 包**：`APK_MIRROR` 默认 `https://mirrors.aliyun.com/alpine`。
 
-海外构建机一条命令覆盖回官方源（三个加速点统一）：
+海外构建机一条命令覆盖回官方源（三个加速点统一；`BUILD_BASE_REGISTRY` 传空即回官方 Docker Hub）：
 
 ```bash
-make push BASE_REGISTRY= GOPROXY=https://proxy.golang.org,direct APK_MIRROR=https://dl-cdn.alpinelinux.org/alpine
+make push BUILD_BASE_REGISTRY= GOPROXY=https://proxy.golang.org,direct APK_MIRROR=https://dl-cdn.alpinelinux.org/alpine
 ```
 
 ### 生产机文件
 
 生产机保存：
 
-- `docker-compose.yaml`、`.env`（镜像地址、`APP_PORT`、`APP_TIME_ZONE`）
+- `docker-compose.yaml`、`.env`（`APP_PORT`、`APP_TIME_ZONE` 与发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）
 - `configs/config.defaults.yaml`（配置基座，Git 跟踪，镜像不提供、bind mount 会遮蔽镜像副本）+ `configs/config.yaml`（应用覆盖层和凭据，不能提交到 Git）
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
+
+`REGISTRY_NAMESPACE` 默认空：留空时镜像路径是 `<REGISTRY>/<name>`（GitHub Container Registry 形态）；ACR、Harbor 这类要求 registry 带项目的，填项目名后路径变成 `<REGISTRY>/<namespace>/<name>`。`COMPOSE_PROJECT_NAME` 默认 `buildadmin-go`，compose 的 project 名与镜像路径共用同一套插值——**生产机 `.env` 的这几个值必须与发布机一致**，否则 `docker compose pull` 拉的路径和刚推送的对不上。`COMPOSE_MEM_LIMIT` 默认 `1g`。
 
 `crud_specs/` **不在生产机清单里**——它随镜像同版本构建（Dockerfile 运行时阶段 COPY），不挂 volume：migrate 尾部 apply（`crud.apply_on_migrate` 默认 `true`）与业务迁移 `EnsureSpecTable` 在容器内直接使用镜像内 spec，宿主机无需也无法提供；volume 挂载会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1 → apply 漂移），违背"spec 是业务表结构唯一事实源"的部署纪律。
 
@@ -141,7 +154,30 @@ docker compose pull
 docker compose up -d
 ```
 
-升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `DEPLOY_IMAGE_TAG` 为已知 `FULL_TAG` 再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。
+升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `COMPOSE_IMAGE_TAG` 为已知 `FULL_TAG`（形如 `3.1.0-<git-sha>-<build-ts>`）再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。`COMPOSE_IMAGE_TAG` 默认空即等于 `latest`，只在回滚时 pin 精确 tag。
+
+## 容器硬化
+
+`docker-compose.yaml` 的应用容器按"根文件系统只读"运行：
+
+- `read_only: true`：镜像根文件系统不可写，镜像被攻破后无法落地任何文件。
+- `tmpfs: /tmp`（`size=64m,mode=1777`）：唯一的内存可写区，镜像 `ENV TMPDIR=/tmp` 指向它。
+- `cap_drop: ALL` + `security_opt: no-new-privileges:true`：无 Linux capability，禁止提权。
+- `init: true`：由 tini 作为 PID 1 回收僵尸进程。
+- `mem_limit: ${COMPOSE_MEM_LIMIT:-1g}`：内存上限，防止泄漏拖垮宿主机。
+- 日志 `json-file` 轮转（`max-size: 10m`、`max-file: 3`），不会无限增长撑爆磁盘。
+- `stop_grace_period: 30s`：留足优雅退出时间。
+
+**直接后果：容器内唯一可写路径是三个 bind mount 加 tmpfs `/tmp`。** 以下写入必须保持可写，缺一不可：
+
+- `configs/` —— 安装写 `configs/config.yaml`（含 `token.key`），`setup` 与运行期都在写这个目录。
+- `public/` —— 安装写 `public/install.lock`，上传写 `public/storage/<topic>/...`。
+- `runtime/` —— 应用日志写 `runtime/logs`（`log.root_dir` 建议 `/app/runtime/logs`）。
+- `/tmp` —— 临时文件、`os.CreateTemp` 一类调用；重启即清空。
+
+不要给容器新增可写挂载。需要落盘的东西一律写进上面三个目录（并按需在 `runtime/`、`public/storage/` 下再分子目录），否则运行期会报只读文件系统错误。
+
+**排查思路**：应用报 `read-only file system` 时，先看它写的是不是这三个目录之外的路径——常见来源是配置里把日志或上传目录改成了 `/app/data`、`/app/uploads`、`/var/...` 这类镜像内路径。改配置指回 `runtime/` 或 `public/storage/` 即可，不要去放开 `read_only`。
 
 ## 存储、Redis、健康检查和 HTTP
 

@@ -51,7 +51,7 @@ go install github.com/air-verse/air@latest
 
 ## Docker Compose 部署
 
-发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（包含 `APP_PORT`/`APP_TIME_ZONE` 和发布变量）、`configs/config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（`APP_PORT`/`APP_TIME_ZONE` 和发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）、`configs/config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。CI 有两个 GitHub workflow：`ci.yml` 仅手动触发（全仓 gofmt + `go build` + `go vet` + `go test` 的全量门禁），`release-image.yml` 由 `v[0-9]*` tag 或手动触发（版本号取自 tag 名，构建多架构并推镜像）。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 

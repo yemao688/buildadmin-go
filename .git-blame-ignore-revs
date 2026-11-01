@@ -1,0 +1,6 @@
+# git blame 与 GitHub 应跳过的纯格式化提交。
+# 本地启用：git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub 网页端的 blame 视图自动识别该文件。
+
+# style: gofmt 全仓格式化存量文件（行为零变化）
+70ef236daa09efb2dddfe7dde706502a9582d79b

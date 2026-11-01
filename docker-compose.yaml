@@ -1,11 +1,14 @@
-# 固定 compose project 名（默认取目录名）：容器名为 <name>_<service>_1，
-# 不随运行目录/面板注入的 project 变化；与 DEPLOY_IMAGE_NAME 一致便于识别。
-name: ${DEPLOY_IMAGE_NAME:-buildadmin-go}
+# 线上部署：cp .env.example .env 后 make push → 服务器 docker compose pull && docker compose up -d。
+# 应用 YAML 配置在 ./configs/config.yaml（不进 .env），部署变量全部走 .env。
+# 固定 compose project 名（默认取目录名）：容器名不随运行目录或面板注入的 project 变化。
+name: ${COMPOSE_PROJECT_NAME:-buildadmin-go}
 
 services:
   buildadmin-go:
-    image: ${DEPLOY_REGISTRY:-registry.example.com}/${DEPLOY_IMAGE_NAME:-buildadmin-go}:${DEPLOY_IMAGE_TAG:-latest}
+    # tag 留空 = latest；回滚时在 .env 写 COMPOSE_IMAGE_TAG=<具体 sha-tag> pin 住。
+    image: ${REGISTRY:-registry.example.com}/${REGISTRY_NAMESPACE:+${REGISTRY_NAMESPACE}/}${COMPOSE_PROJECT_NAME:-buildadmin-go}:${COMPOSE_IMAGE_TAG:-latest}
     pull_policy: always
+    # 与镜像内 USER 1000 一致，否则写不动挂载的宿主目录。
     user: "1000:1000"
     environment:
       # 容器内端口固定 9900（镜像 EXPOSE 与代码兜底一致）；APP_PORT 只作为
@@ -13,10 +16,29 @@ services:
       APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
     ports:
       - "${APP_PORT:-9900}:9900"
+    # 三个 bind mount 都必须可写：应用要写 configs/config.yaml、public/install.lock、
+    # public/storage 与 runtime/logs。
     volumes:
       - ./configs:/app/configs
       - ./runtime:/app/runtime
       - ./public:/app/public
+    # ---- 容器硬化 ----
+    # 根文件系统只读：唯一可写路径是上面三个 bind mount 与 tmpfs /tmp。
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    mem_limit: ${COMPOSE_MEM_LIMIT:-1g}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    stop_grace_period: 30s
     healthcheck:
       test:
         ["CMD", "wget", "-qO-", "http://127.0.0.1:9900/healthz"]

@@ -327,6 +327,13 @@ func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 }
 
 func TestSetupCommandEnvFlagRejectsInvalidValues(t *testing.T) {
+	// 前序用例一旦调用过 Execute()，initConfig 就常驻在 cobra 的全局 OnInitialize 里，
+	// 会对随后任何命令的 Execute 生效；它按 os.Args 判定是否 setup 流程，缺配置时
+	// 打印安装指引并退出。这里补上真实调用形态（argv 含 setup），否则本用例在整包运行时退出。
+	originalArgs := os.Args
+	t.Cleanup(func() { os.Args = originalArgs })
+	os.Args = []string{"buildadmin-go", "setup", "--env", "local"}
+
 	command := newSetupCommand()
 	command.SetArgs([]string{"--env", "local"})
 	err := command.Execute()

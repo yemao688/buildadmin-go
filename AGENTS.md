@@ -123,7 +123,7 @@ go test ./<affected packages> -run '<related tests>'
 ```
 
 - 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm typecheck`、`pnpm build`。
-- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI，仓库也没有 CI 或已配置的 Go linter。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
+- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI，仓库也没有已配置的 Go linter（`ci.yml` 是手动触发的全量门禁，不属于日常快速验证）。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
 - 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
 - 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。
 - 每次验证后如实报告：执行的命令、耗时、PASS/FAIL/SKIP/未运行及失败项。失败先给定位，不只报总数。
@@ -148,7 +148,19 @@ pnpm build                             # emits web/dist/
 
 - 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
-- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。仓库没有 CI workflow 或已配置的 Go linter；根目录 `Makefile` 只服务于部署镜像构建，不是开发任务运行器。
+- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。根目录 `Makefile` 仍只服务于部署镜像构建，不是开发任务运行器；CI 有两个 GitHub workflow（`ci.yml` 手动触发的全量门禁，`release-image.yml` tag 触发的镜像发布），且仓库仍无已配置的 Go linter。
+
+## 部署变量与 CI 约定
+
+部署相关变量的唯一事实源是 `.env`（模板 `.env.example`）与 Makefile，文档不得再引用旧名：
+
+- 变量集合：`APP_PORT`（默认 9900，仅宿主机映射端口，容器内固定 9900）、`APP_TIME_ZONE`（默认 `Asia/Shanghai`，compose 注入容器）、`COMPOSE_MEM_LIMIT`（默认 `1g`）、`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`）、`REGISTRY`（默认 `registry.example.com`）、`REGISTRY_NAMESPACE`（默认空= `<REGISTRY>/<name>`；ACR/Harbor 填项目名 → `<REGISTRY>/<namespace>/<name>`）、`REGISTRY_USER`/`REGISTRY_PASSWORD`、`BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）、`COMPOSE_IMAGE_TAG`（默认空= `latest`）、`BUILD_BASE_REGISTRY`（默认 `docker.m.daocloud.io/`）。构建加速 build args 名不变：`GOPROXY`、`APK_MIRROR`。
+- Makefile 自动计算 `VERSION`（读 `VERSION` 文件）、`GIT_SHA`、`BUILD_TS`、`FULL_TAG=<version>-<git-sha>-<build-ts>`、`REGISTRY_IMAGE`、`LOCAL_PLATFORM`，不写进 `.env`。
+- `COMPOSE_IMAGE_TAG` 留空即 `latest`；回滚时 pin 精确 `FULL_TAG`，不要依赖会移动的 `latest`。
+- `BUILD_BASE_REGISTRY` 结尾必须带 `/`（拼在镜像名前）；海外构建机传空值回官方 Docker Hub，不要写成无斜杠前缀。
+- `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
+- gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
+- `release-image.yml` 只做 gofmt（全仓）/`go build`/`go vet` 快校验，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 只推 GitHub 侧 registry，基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 
 ## CRUD 模块生成（AI 驱动）
 
