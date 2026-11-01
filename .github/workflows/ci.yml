@@ -24,14 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
+          # setup-go v6+ 默认把缓存键从 go.sum 改成 go.mod;显式保持 v5 语义。
+          cache-dependency-path: go.sum
 
       - name: gofmt
         run: |
