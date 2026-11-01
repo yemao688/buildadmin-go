@@ -9,6 +9,19 @@
 3. `origin` 指向别处、但有其它 remote（如 `upstream`）指向 `yemao688/buildadmin-go` → **业务仓库**（尚未创建 `AGENT_BUSINESS.md`），按 `docs/framework-workflow.md` 工作，并提醒用户补建 `AGENT_BUSINESS.md`。
 4. 以上都不满足（例如 remote 未配置或被改名）→ 向用户确认，不要默认。
 
+## 按任务找文档（本文只放规则速查，细节在专项文档）
+
+| 要做的事 | 先读 |
+|---|---|
+| 在业务仓库安装 / 升级 / 合并框架 | `docs/framework-workflow.md` |
+| 改框架自身（发布、迁移轨道、PHP 上游同步） | `docs/framework-maintenance.md` |
+| 改 web 前端（组件、指令、样式、表格/表单、语言、门户接入） | `docs/framework-web.md`（唯一权威） |
+| 写后台业务模块（repo/service 边界、查询纪律） | `docs/business-development.md` |
+| 用 CRUD 生成器建业务表 | `docs/crud-generation.md` |
+| 扩展业务迁移轨道 | `internal/migrations/business/README.md` |
+| 部署镜像 / compose / 端口 / 变量 | `docs/docker-compose.md` |
+| 做业务文档模块（`public/docs/`） | `public/docs/guide.html` |
+
 ## 文档所有权（框架 vs 业务）
 
 框架在 `docs/templates/` 提供业务初始化模板（目前为 `AGENT_BUSINESS.md`），业务仓库初始化时复制到仓库根目录后自行维护；框架永不发布根目录 `AGENT_BUSINESS.md`，也不要把它加入框架 `.gitignore`（否则业务仓库里该文件会被忽略）。业务仓库的 AI 协作者把业务规则、模块清单、部署笔记写进根目录 `AGENT_BUSINESS.md`，禁止改动 `AGENTS.md` 与框架级文档。
@@ -37,13 +50,15 @@
 
 ## 工具链与边界
 
-- 以 `go.mod` 为准，使用 Go 1.25.x；不要保留过期的 Go 1.21.8 要求。
-- 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。
+- 以 `go.mod` 为准使用 Go 1.25.x，不要在其它文件里另行声明版本要求。
+- 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 与 i18n Ally 语言索引，语言请改 `web/src/lang/` 下的 TypeScript 源文件；构建产物在 `web/dist/`，部署时复制到被忽略的 `public/`。
 - **web 前端框架开发与调整（组件、指令、样式、表格/表单、语言、门户接入等）必须先读 [`docs/framework-web.md`](docs/framework-web.md)**——它是 web 端唯一权威开发文档（官方 WEB 专项整理 + 本框架差异与红线 + 业务门户接入约定），修改/调整 web 框架前必须先看文档；不要再按官方 doc.buildadmin.com 零散页面或旧 `frontend-portal-guide.md` 行事（后者已并入该文档）。
-- 真实入口和 wiring 是 `cmd/server/main.go`（28 行极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。
+- 真实入口和 wiring 是 `cmd/server/main.go`（极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。
 - `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 `setup` 安装器写入（只写 MySQL 连接和生成的 `token.key`）。全新检出且没有它时，任何命令（含默认 serve）打印 setup 安装指引并等待 3 秒后退出，不会自动复制基座。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 - `/docs` 可选静态文档服务（业务图文操作指南，`public/docs/`）：默认关闭，业务配置 `app.docs_enabled` 开启；`app.docs_password` 非空（或环境变量 `DOCS_PASSWORD` 覆盖）时挂载服务端密码门，仅防随意浏览、非安全边界，实现见 `internal/router/docs.go`。**业务要做文档模块（往 `public/docs/` 发布操作指南）前，先读 `public/docs/guide.html` 引导**——它说明目录约定（根目录只放 HTML、图片按文档分目录 `images/<文档名>/`）、启用配置与密码门行为，该文件由业务仓库自行维护。
+- 构建上下文由根目录 `.dockerignore` 白名单裁剪：只保留 Go 源码 + `go.mod`/`go.sum` + `crud_specs`（后者由 Dockerfile 复制进运行镜像）；`web/`、`docs/`、`public/`、`.git`、`.env` 全部排除（镜像不含前端产物，`public/` 由宿主机 bind mount 提供）。新增"镜像内需要"的目录时，必须同步改 `.dockerignore`，否则构建期 `COPY` 拿不到文件。
+- `.cbmignore` 是 codebase-memory MCP 索引的忽略清单（与 `.gitignore` 相互独立，当前排除 `static/install`）；`.git-blame-ignore-revs` 是 `git blame` 跳过的纯格式化提交清单，新 clone 执行 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 后生效（GitHub 网页端自动识别）。
 
 ## 分层与边界（v3.0.0 架构）
 
@@ -77,7 +92,7 @@
 ## AI 开发协议
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
-- handler 只做参数绑定与响应返回：密码加密、原始 SQL、业务规则一律下沉——有真实业务时毕业到 `internal/admin/service/`（扁平、文件名=模块名；纯 CRUD 模块保持绑定→repository→响应，严禁透传 service），持久化唯一入口始终是 repository；service 方法签名用普通类型，禁止 import gin/net-http，请求上下文需要的东西（actor、clientIP、token 等）以参数传入。
+- handler / service / DTO 的角色纪律以「分层与边界」的角色规范与 repo/service 边界为准：handler 只绑定参数并返回响应（禁密码加密、原始 SQL、业务规则）；纯 CRUD 严禁透传 service；持久化唯一入口始终是 repository；请求上下文里的 actor/clientIP/token 以参数传入，不 import gin/net-http。
 - DTO 约定：一表一个 `XxxParam`（Add/Edit 复用），响应直回实体/投影；`Resp` 类型按需个案引入（先例：`internal/model/projection`、api 侧 `OutUser`）。
 - 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`configs/config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的实体、仓库、handler、registrar、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
@@ -123,7 +138,7 @@ go test ./<affected packages> -run '<related tests>'
 ```
 
 - 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm typecheck`、`pnpm build`。
-- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI，仓库也没有已配置的 Go linter（`ci.yml` 是手动触发的全量门禁，不属于日常快速验证）。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
+- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI；本机通常没有 golangci-lint v2（`.golangci.yml` 是 v2 语法），`ci.yml` 是手动触发的全量门禁——两者都不属于日常快速验证。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
 - 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
 - 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。
 - 每次验证后如实报告：执行的命令、耗时、PASS/FAIL/SKIP/未运行及失败项。失败先给定位，不只报总数。
@@ -146,9 +161,8 @@ pnpm typecheck
 pnpm build                             # emits web/dist/
 ```
 
-- 后端变更：运行受影响包的测试并执行 `go build ./...`。前端变更：在 `web/` 中依次运行 `pnpm lint`、`pnpm typecheck` 和 `pnpm build`。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`，规则是 PHP 上游 v2.3.8 `web/.eslintrc.js` 的一对一移植（较宽松，多数规则关闭，发现为 warning）。既有代码中的 warning（`vue/no-required-prop-with-default`、`no-unused-vars`、`indent`）属于 PHP 上游继承噪声，忽略即可；不要修改既有源码，也不要收紧配置来消除它们。只处理本次新改代码引入的 warning。
-- 验证策略见「编码规范（注释 / 测试 / 验证）」：默认快速验证（`gofmt` 改动文件 + `go build ./...` + 受影响包测试），不默认全量 `go test ./...`/`go vet ./...`——部分测试和生成器需要 MySQL 或依赖不完整的应用 DI。根目录 `Makefile` 仍只服务于部署镜像构建，不是开发任务运行器；CI 有两个 GitHub workflow（`ci.yml` 手动触发的全量门禁，`release-image.yml` tag 触发的镜像发布），Go 静态检查配置在 `.golangci.yml`（只开 govet/ineffassign/unused/gosimple，开新检查前先实测命中数）。
+- 验证命令与门禁见「编码规范（注释 / 测试 / 验证）」与「部署变量与 CI 约定」；根目录 `Makefile` 只服务部署镜像，不是开发任务运行器。
 
 ## 部署变量与 CI 约定
 
@@ -194,7 +208,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
 - **业务 CRUD 表的结构只由 `crud_specs` → `crud:apply` 物化**（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。禁止在 business 迁移中用 `AutoMigrate`/裸 SQL 创建或修改有 spec 的业务表：会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，常驻 `VerifySchema` 会锁死后续 `crud:delete`。唯一索引通过 spec 的 `indexes:` 声明由 `crud:generate`/`crud:apply` 物化——**禁止写"只补索引"的迁移**（迁移阶段先于 apply，全新库上表不存在会失败；即使跳过，Up 只跑一次、索引永久缺失且 VerifySchema 常驻红牌）。种子迁移需要写业务表时，Up 内先调 `EnsureSpecTable(db, config, "<表名>")` 按 spec 幂等物化依赖表再写种子（只建 schema/索引、不建菜单；`Down` 只删种子数据、不得 DROP 依赖表，所有权归 spec/apply）。迁移只写 spec/apply 表达不了的东西——`rejected` 破坏性变更、种子数据；只有**无 spec 的非 CRUD 自建表**才允许在迁移里建表（自负责最终契约）。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
-- 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；旧迁移轨道下的 gen 模型文件已随 v3.0.0 删除。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 和 i18n Ally 语言索引，应修改 `web/src/lang/` 下的 TypeScript 源文件。前端构建产物位于 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
+- 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；旧迁移轨道下的 gen 模型文件已随 v3.0.0 删除。
 
 ## 业务仓库中的框架使用最佳实践
 

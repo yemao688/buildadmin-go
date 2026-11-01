@@ -30,8 +30,7 @@ APK_MIRROR           ?= https://mirrors.aliyun.com/alpine
 BUILDER              ?= buildadmin-builder
 
 # ---- 自动计算的 tag 字段（不进 .env） ----
-VERSION ?= $(shell tr -d '[:space:]' < VERSION 2>/dev/null)
-VERSION := $(if $(VERSION),$(VERSION),dev)
+VERSION := $(or $(strip $(shell tr -d '[:space:]' < VERSION 2>/dev/null)),dev)
 GIT_SHA ?= $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
 BUILD_TS ?= $(shell date -u +%Y%m%dT%H%M%SZ)
 # FULL_TAG = <version>-<git-sha>-<build-ts>，便于把线上镜像对回 git commit。
@@ -43,28 +42,39 @@ REGISTRY_IMAGE := $(REGISTRY)/$(strip $(REGISTRY_NAMESPACE))/$(COMPOSE_PROJECT_N
 else
 REGISTRY_IMAGE := $(REGISTRY)/$(COMPOSE_PROJECT_NAME)
 endif
-# compose 拉取用的 tag：COMPOSE_IMAGE_TAG 为空 → latest。
-IMAGE_TAG := $(if $(strip $(COMPOSE_IMAGE_TAG)),$(strip $(COMPOSE_IMAGE_TAG)),latest)
+IMAGE_TAG := $(or $(strip $(COMPOSE_IMAGE_TAG)),latest)
 
-# --load 不接受逗号分隔的平台，所以 build 固定取宿主架构。
-HOST_ARCH      := $(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-LOCAL_PLATFORM ?= linux/$(HOST_ARCH)
+# --load 不接受逗号分隔的平台，所以 build 默认取宿主架构。
+LOCAL_PLATFORM ?= linux/$(shell uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 
-# build/push 共用参数：三个加速点统一透传，海外一条命令全覆盖。
 # 关闭 provenance / sbom：ACR 个人版等会拒收 buildx 默认附加的 OCI attestation。
-BUILDX_COMMON := \
-	--provenance=false --sbom=false \
-	--build-arg BUILD_BASE_REGISTRY=$(BUILD_BASE_REGISTRY) \
-	--build-arg VERSION=$(VERSION) \
-	--build-arg GIT_SHA=$(GIT_SHA) \
-	--build-arg BUILD_TS=$(BUILD_TS) \
-	--build-arg GOPROXY=$(GOPROXY) \
-	--build-arg APK_MIRROR=$(APK_MIRROR) \
-	--tag $(REGISTRY_IMAGE):$(FULL_TAG) \
-	--tag $(REGISTRY_IMAGE):$(VERSION) \
-	--tag $(REGISTRY_IMAGE):latest
+BUILDX_COMMON := --provenance=false --sbom=false \
+	--build-arg BUILD_BASE_REGISTRY=$(BUILD_BASE_REGISTRY) --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) \
+	--build-arg BUILD_TS=$(BUILD_TS) --build-arg GOPROXY=$(GOPROXY) --build-arg APK_MIRROR=$(APK_MIRROR) \
+	--tag $(REGISTRY_IMAGE):$(FULL_TAG) --tag $(REGISTRY_IMAGE):$(VERSION) --tag $(REGISTRY_IMAGE):latest
 
 .PHONY: help frontend builder login build push version run setup setup-docker run-docker run-docker-dev logs ps stop clean
+
+# 变量清单的唯一事实源：help 与 version 共用，避免两处手对齐。
+define VARIABLE_DUMP
+@echo "VERSION              = $(VERSION)"
+@echo "GIT_SHA              = $(GIT_SHA)"
+@echo "BUILD_TS             = $(BUILD_TS)"
+@echo "FULL_TAG             = $(FULL_TAG)"
+@echo "REGISTRY             = $(REGISTRY)"
+@echo "REGISTRY_NAMESPACE   = $(REGISTRY_NAMESPACE)"
+@echo "COMPOSE_PROJECT_NAME = $(COMPOSE_PROJECT_NAME)"
+@echo "COMPOSE_IMAGE_TAG    = $(IMAGE_TAG)"
+@echo "REGISTRY_IMAGE       = $(REGISTRY_IMAGE)"
+@echo "BUILD_PLATFORMS      = $(BUILD_PLATFORMS)"
+@echo "LOCAL_PLATFORM       = $(LOCAL_PLATFORM)"
+@echo "BUILD_BASE_REGISTRY  = $(BUILD_BASE_REGISTRY)"
+@echo "GOPROXY              = $(GOPROXY)"
+@echo "APK_MIRROR           = $(APK_MIRROR)"
+@echo "APP_PORT             = $(APP_PORT)"
+@echo "APP_TIME_ZONE        = $(APP_TIME_ZONE)"
+@echo "COMPOSE_MEM_LIMIT    = $(COMPOSE_MEM_LIMIT)"
+endef
 
 help:
 	@echo "buildadmin-go deployment"
@@ -86,22 +96,7 @@ help:
 	@echo "  clean          - 删除本地镜像与 buildx builder"
 	@echo ""
 	@echo "变量:"
-	@echo "  REGISTRY             = $(REGISTRY)"
-	@echo "  REGISTRY_NAMESPACE   = $(REGISTRY_NAMESPACE)"
-	@echo "  COMPOSE_PROJECT_NAME = $(COMPOSE_PROJECT_NAME)"
-	@echo "  COMPOSE_IMAGE_TAG    = $(IMAGE_TAG)"
-	@echo "  REGISTRY_IMAGE       = $(REGISTRY_IMAGE)"
-	@echo "  BUILD_PLATFORMS      = $(BUILD_PLATFORMS)"
-	@echo "  LOCAL_PLATFORM       = $(LOCAL_PLATFORM)"
-	@echo "  BUILD_BASE_REGISTRY  = $(BUILD_BASE_REGISTRY)"
-	@echo "  GOPROXY              = $(GOPROXY)"
-	@echo "  APK_MIRROR           = $(APK_MIRROR)"
-	@echo "  APP_PORT             = $(APP_PORT)"
-	@echo "  APP_TIME_ZONE        = $(APP_TIME_ZONE)"
-	@echo "  COMPOSE_MEM_LIMIT    = $(COMPOSE_MEM_LIMIT)"
-	@echo "  VERSION(VERSION 文件) = $(VERSION)"
-	@echo "  GIT_SHA              = $(GIT_SHA)"
-	@echo "  FULL_TAG             = $(FULL_TAG)"
+	$(VARIABLE_DUMP)
 
 # 确保多平台 buildkit builder 存在（docker-container driver，Docker Desktop/orbstack 默认 driver 不支持多平台）。
 builder:
@@ -138,7 +133,8 @@ login:
 	@echo "Login to $(REGISTRY) as $$REGISTRY_USER (via stdin) ..."
 	@echo "$$REGISTRY_PASSWORD" | docker login -u "$$REGISTRY_USER" --password-stdin $(REGISTRY)
 
-# 本地单架构 build（--load 不支持逗号分隔的平台，故只用 LOCAL_PLATFORM）。
+# 本地单架构 build（--load 不支持逗号分隔的平台）。
+# 校验保留：LOCAL_PLATFORM 可被 .env / 命令行覆盖成多平台，此时必须报错而非静默截断。
 build: builder
 	@case "$(LOCAL_PLATFORM)" in *,*) \
 		echo "ERROR: --load 只支持单平台，当前 LOCAL_PLATFORM=$(LOCAL_PLATFORM)"; exit 1;; \
@@ -149,16 +145,9 @@ build: builder
 # 临时单架构：BUILD_PLATFORMS=linux/arm64 make push
 push: login builder
 	docker buildx build --platform $(BUILD_PLATFORMS) $(BUILDX_COMMON) --push .
-	@echo ""
-	@echo "Pushed 3 tags:"
-	@echo "  $(REGISTRY_IMAGE):$(FULL_TAG)  (精确，git-sha 在内)"
-	@echo "  $(REGISTRY_IMAGE):$(VERSION)   (覆盖式，服务器默认拉这个)"
-	@echo "  $(REGISTRY_IMAGE):latest       (=VERSION，人肉入口)"
-	@echo ""
-	@echo "服务器拉新（本地不连 ssh）:"
-	@echo "    docker compose pull && docker compose up -d"
+	@echo "Pushed 3 tags: $(FULL_TAG)（精确，git-sha 在内）/ $(VERSION)（覆盖式，服务器默认拉这个）/ latest（=VERSION）"
+	@echo "均位于 $(REGISTRY_IMAGE)；服务器拉新（本地不连 ssh）: docker compose pull && docker compose up -d"
 
-# 本地前台运行 Go 服务。
 run:
 	go run ./cmd/server
 
@@ -169,18 +158,15 @@ setup:
 	go run ./cmd/server setup $(ARGS)
 
 # 容器内安装（本地开发镜像，--build 保证以当前源码构建）。
-# 用法: make setup-docker ARGS="--yes --db-host mysql --db-port 3306 --db-name buildadmin_go \
-#       --db-user buildadmin_go --db-password '密码' --db-prefix ba_ \
-#       --admin-name admin --admin-password '密码' --site-name '站点名' --skip-frontend"
+# 用法: make setup-docker ARGS="--yes --db-host mysql --db-name buildadmin_go --db-user buildadmin_go \
+#       --db-password '密码' --db-prefix ba_ --admin-name admin --admin-password '密码' --skip-frontend"
 # 容器镜像无 Node 工具链，前端请先在宿主机 make frontend 再以 --skip-frontend 安装。
 setup-docker:
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm --build buildadmin-go setup $(ARGS)
 
-# 使用基础 Compose 配置后台启动容器（拉 .env 指定的部署镜像）。
 run-docker:
 	docker compose up -d
 
-# 构建当前源码的本地开发镜像，并使用开发覆盖配置后台启动。
 # 显式注入构建字段，确保 Compose 插值不依赖 .env 文件。
 run-docker-dev:
 	VERSION="$(VERSION)" GIT_SHA="$(GIT_SHA)" BUILD_TS="$(BUILD_TS)" \
@@ -197,20 +183,7 @@ stop:
 	docker compose down
 
 version:
-	@echo "VERSION              = $(VERSION)"
-	@echo "GIT_SHA              = $(GIT_SHA)"
-	@echo "BUILD_TS             = $(BUILD_TS)"
-	@echo "FULL_TAG             = $(FULL_TAG)"
-	@echo "REGISTRY             = $(REGISTRY)"
-	@echo "REGISTRY_NAMESPACE   = $(REGISTRY_NAMESPACE)"
-	@echo "COMPOSE_PROJECT_NAME = $(COMPOSE_PROJECT_NAME)"
-	@echo "COMPOSE_IMAGE_TAG    = $(IMAGE_TAG)"
-	@echo "REGISTRY_IMAGE       = $(REGISTRY_IMAGE)"
-	@echo "BUILD_PLATFORMS      = $(BUILD_PLATFORMS)"
-	@echo "LOCAL_PLATFORM       = $(LOCAL_PLATFORM)"
-	@echo "BUILD_BASE_REGISTRY  = $(BUILD_BASE_REGISTRY)"
-	@echo "APP_PORT             = $(APP_PORT)"
-	@echo "APP_TIME_ZONE        = $(APP_TIME_ZONE)"
+	$(VARIABLE_DUMP)
 
 clean:
 	docker rmi -f $(REGISTRY_IMAGE):$(FULL_TAG) $(REGISTRY_IMAGE):$(VERSION) $(REGISTRY_IMAGE):latest 2>/dev/null || true

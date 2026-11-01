@@ -1,14 +1,39 @@
+# Docker 构建上下文白名单式裁剪：只需要 Go 源码 + go.mod/go.sum + crud_specs。
+# crud_specs 是业务表结构事实源，Dockerfile 会从构建阶段复制进运行镜像；
+# 前端产物不在镜像内（public/ 由宿主机 bind mount 提供），故 web/ 整个排除。
+
+# VCS / 编辑器 / 系统
 .git
 .gitignore
-.DS_Store
+.git-blame-ignore-revs
+.cbmignore
 .idea
 .vscode
+.DS_Store
+
+# 凭据与本地状态：.env 含 registry 账号密码，绝不能进上下文
 .env
+.env.*
 configs/config.yaml
 runtime
-public
-web/node_modules
-web/dist
-dist-ssr
 tmp
 *.log
+
+# 前端源码、产物与文档（镜像内无 Node 工具链，不构建前端）
+web
+public
+docs
+dist-ssr
+.slim
+
+# CI / 部署编排 / 脚手架（镜像内不需要）
+.github
+.air.toml
+.golangci.yml
+docker-compose.yaml
+docker-compose.dev.yaml
+Makefile
+*.md
+VERSION
+VERSION_FRAMEWORK
+crud_specs/*.bak
