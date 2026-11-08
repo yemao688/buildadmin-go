@@ -19,6 +19,10 @@ const (
 	docsCookieName = "ba_docs_auth"
 	// docsCookieMaxAge 是放行 cookie 的存活秒数（7 天），过期后需重新输入密码。
 	docsCookieMaxAge = 7 * 24 * 3600
+	// docsTokenQuery 是跨站 iframe 场景的无 cookie 放行参数（值同 cookie 摘要）。
+	// 第三方 cookie 被浏览器整体拦截时，请求串里带它即可放行；它会被写进
+	// 浏览器历史与上游日志，只适合"防随意浏览"这一档，不是安全边界。
+	docsTokenQuery = "docs_token"
 )
 
 // registerDocsRoute 挂载 /docs 静态文档服务（public/docs/），供业务仓库发布
@@ -27,6 +31,11 @@ const (
 //   - password 非空：挂载服务端密码门——未携带有效 cookie 的 GET/HEAD 返回
 //     密码页，POST /docs/password 校验通过后 Set-Cookie 并回跳原路径。密码
 //     可经环境变量 DOCS_PASSWORD 覆盖 YAML 配置（机密走环境，避免入库/入镜像）。
+//
+// 门禁兼容跨站 iframe 嵌入：HTTPS 下放行 cookie 用 SameSite=None + Secure +
+// Partitioned（CHIPS），第三方 cookie 被整体拦截时还可以用 `?docs_token=<摘要>`
+// 无 cookie 放行。嵌入方的 iframe 必须带 allow-forms，否则密码表单的 POST 会
+// 被 sandbox 直接拦掉。
 //
 // 两种模式统一不展示目录列表（目录请求无 index.html 时返回 404），行为与
 // /assets 等 router.Static 挂载完全一致。密码门只防随意浏览（共享密码），
@@ -89,13 +98,20 @@ func noListingStaticHandler(docsPath string) gin.HandlerFunc {
 	}
 }
 
-// docsGate 校验放行 cookie（恒定时间比较），未通过时渲染密码页；HEAD 请求
-// 返回 401 空体（预取/探测不渲染页面）。只挂载在 GET/HEAD 静态路由上，
-// 密码提交端点 /docs/password 不经过本中间件。
+// docsGate 校验放行凭据（恒定时间比较）：优先 cookie，其次是跨站 iframe 用的
+// `?docs_token=` 查询参数（命中即补写 cookie，后续子资源请求才能复用放行）。
+// 两者都不通过时渲染密码页；HEAD 请求返回 401 空体（预取/探测不渲染页面）。
+// 只挂载在 GET/HEAD 静态路由上，密码提交端点 /docs/password 不经过本中间件。
 func docsGate(expected string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if cookie, err := c.Cookie(docsCookieName); err == nil &&
 			subtle.ConstantTimeCompare([]byte(cookie), []byte(expected)) == 1 {
+			c.Next()
+			return
+		}
+		if token := c.Query(docsTokenQuery); token != "" &&
+			subtle.ConstantTimeCompare([]byte(token), []byte(expected)) == 1 {
+			setDocsCookie(c, expected)
 			c.Next()
 			return
 		}
@@ -122,7 +138,7 @@ func docsPasswordHandler(expected string) gin.HandlerFunc {
 		}
 		submitted := docsCookieValue(c.PostForm("password"))
 		if subtle.ConstantTimeCompare([]byte(submitted), []byte(expected)) == 1 {
-			c.SetCookie(docsCookieName, expected, docsCookieMaxAge, "/docs", "", false, true)
+			setDocsCookie(c, expected)
 			c.Redirect(http.StatusFound, next)
 			return
 		}
@@ -137,6 +153,38 @@ func docsPasswordHandler(expected string) gin.HandlerFunc {
 func docsCookieValue(password string) string {
 	sum := sha256.Sum256([]byte(password))
 	return hex.EncodeToString(sum[:])
+}
+
+// setDocsCookie 写入放行 cookie。HTTPS 下必须是 SameSite=None + Secure，否则
+// 跨站 iframe（第三方上下文）既存不下也带不上，表现为验密后仍停在密码页；
+// Partitioned 走 CHIPS，使该 cookie 在第三方 cookie 被默认限制的浏览器里
+// 仍按顶层站点分区可用。HTTP（本地开发）退回 SameSite=Lax，避免被浏览器
+// 直接丢弃（None 必须配 Secure）。
+func setDocsCookie(c *gin.Context, value string) {
+	cookie := &http.Cookie{
+		Name:     docsCookieName,
+		Value:    value,
+		Path:     "/docs",
+		MaxAge:   docsCookieMaxAge,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	if docsRequestIsHTTPS(c.Request) {
+		cookie.Secure = true
+		cookie.SameSite = http.SameSiteNoneMode
+		cookie.Partitioned = true
+	}
+	http.SetCookie(c.Writer, cookie)
+}
+
+// docsRequestIsHTTPS 判断外部实际协议：直连看 TLS，反向代理看
+// X-Forwarded-Proto（业务部署常见形态，未配置可信代理时该头也可能缺失，
+// 此时按 HTTP 处理并退回 Lax，不发送不安全的 SameSite=None）。
+func docsRequestIsHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // validDocsNext 只接受站内相对路径（以单个 / 开头），拒绝 // 开头的协议
@@ -182,7 +230,7 @@ func renderDocsGate(next string, showError bool) string {
   <p>请输入访问密码查看操作指南</p>
   <form method="post" action="/docs/password">
     <input type="hidden" name="next" value="` + html.EscapeString(next) + `">
-    <input type="password" name="password" placeholder="请输入密码" autocomplete="off" autofocus required>
+    <input type="password" name="password" placeholder="请输入密码" autocomplete="off" required>
     <button type="submit">进入文档</button>
     ` + errorBlock + `
   </form>

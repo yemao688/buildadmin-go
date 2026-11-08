@@ -1,6 +1,7 @@
 package router
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -186,4 +187,84 @@ func TestDocsPasswordEnvOverride(t *testing.T) {
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	engine.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusFound, recorder.Code)
+}
+
+// TestDocsCookieAttributes 验证放行 cookie 按外部协议切换属性：跨站 iframe
+// 必须 SameSite=None + Secure + Partitioned 才能存取，HTTP 只能退回 Lax。
+func TestDocsCookieAttributes(t *testing.T) {
+	const password = "s3cret"
+	engine, _ := newDocsTestEngine(t, true, password)
+
+	post := func(mutate func(*http.Request)) *http.Cookie {
+		t.Helper()
+		form := url.Values{"password": {password}, "next": {"/docs/guide.html"}}
+		request := httptest.NewRequest(http.MethodPost, "/docs/password", strings.NewReader(form.Encode()))
+		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if mutate != nil {
+			mutate(request)
+		}
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, request)
+		require.Equal(t, http.StatusFound, recorder.Code)
+		for _, cookie := range recorder.Result().Cookies() {
+			if cookie.Name == docsCookieName {
+				return cookie
+			}
+		}
+		t.Fatalf("应写入 %s cookie", docsCookieName)
+		return nil
+	}
+
+	for name, tc := range map[string]struct {
+		mutate          func(*http.Request)
+		wantSameSite    http.SameSite
+		wantSecure      bool
+		wantPartitioned bool
+	}{
+		"HTTP 直连退回 Lax": {nil, http.SameSiteLaxMode, false, false},
+		"代理转发 HTTPS":    {func(r *http.Request) { r.Header.Set("X-Forwarded-Proto", "https") }, http.SameSiteNoneMode, true, true},
+		"TLS 直连":        {func(r *http.Request) { r.TLS = &tls.ConnectionState{} }, http.SameSiteNoneMode, true, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cookie := post(tc.mutate)
+			require.Equal(t, tc.wantSameSite, cookie.SameSite)
+			require.Equal(t, tc.wantSecure, cookie.Secure)
+			require.Equal(t, tc.wantPartitioned, cookie.Partitioned)
+		})
+	}
+}
+
+// TestDocsTokenBypass 验证跨站 iframe 的无 cookie 放行：查询参数命中即出文件
+// 并补写 cookie（否则同源子资源请求仍会被门禁挡回密码页），错误 token 无效。
+func TestDocsTokenBypass(t *testing.T) {
+	const password = "s3cret"
+	engine, _ := newDocsTestEngine(t, true, password)
+	token := docsCookieValue(password)
+
+	t.Run("有效 token 放行并补写 cookie", func(t *testing.T) {
+		recorder := serve(t, engine, http.MethodGet, "/docs/guide.html?"+docsTokenQuery+"="+token, nil)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, "<h1>guide</h1>", recorder.Body.String())
+
+		var authCookie *http.Cookie
+		for _, cookie := range recorder.Result().Cookies() {
+			if cookie.Name == docsCookieName {
+				authCookie = cookie
+			}
+		}
+		require.NotNil(t, authCookie, "token 放行后应补写 cookie 供子资源复用")
+		require.Equal(t, token, authCookie.Value)
+	})
+
+	t.Run("错误 token 仍回密码页", func(t *testing.T) {
+		recorder := serve(t, engine, http.MethodGet, "/docs/guide.html?"+docsTokenQuery+"=deadbeef", nil)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Contains(t, recorder.Body.String(), `action="/docs/password"`)
+		require.NotContains(t, recorder.Body.String(), "<h1>guide</h1>")
+	})
+
+	t.Run("有效 token 的 HEAD 探测放行", func(t *testing.T) {
+		recorder := serve(t, engine, http.MethodHead, "/docs/guide.html?"+docsTokenQuery+"="+token, nil)
+		require.Equal(t, http.StatusOK, recorder.Code)
+	})
 }
