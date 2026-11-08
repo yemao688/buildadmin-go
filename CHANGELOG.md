@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.3.4
+
+> 部署与文档门禁的一次性整理：部署变量拆出 `REGISTRY_IMAGE_NAME`（镜像名与 compose 项目名解耦），`/docs` 密码门支持跨站 iframe 嵌入，CI action 全部迁到 Node 24，Makefile 与 `.dockerignore` 精简。运行时代码只有 `/docs` 门禁一处行为变化。
+
+- **Changed (下游部署必读):** 新增部署变量 `REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`），**只**决定镜像路径最后一段 `<REGISTRY>[/<REGISTRY_NAMESPACE>]/<REGISTRY_IMAGE_NAME>`；`COMPOSE_PROJECT_NAME` 从此**只**决定 compose 项目名与容器命名。旧 `.env` 不补 `REGISTRY_IMAGE_NAME` 时回退 `buildadmin-go`，与 3.3.3 行为一致；`release-image.yml` 的仓库 Variables 从 `COMPOSE_PROJECT_NAME` 改为 `REGISTRY_IMAGE_NAME`（未配置时发布 job 直接 skipped）。`docker-compose.dev.yaml` 的本地开发镜像 tag 同步为 `<REGISTRY_IMAGE_NAME>:dev`。
+- **Fixed (issue: iframe 内嵌 /docs 卡在密码页):** 放行 cookie 在 HTTPS 下改为 `SameSite=None; Secure; Partitioned`（CHIPS），此前无 SameSite 属性、浏览器按 Lax 处理，跨站 iframe 属第三方上下文，验密后 cookie 存不下也带不上，表现为密码页刷不掉；HTTP（本地开发）仍退回 Lax，避免 `None` 缺 `Secure` 被丢弃。另新增 `?docs_token=<sha256(密码)>` 无 cookie 放行（命中后补写 cookie 供子资源复用），用于第三方 cookie 被整体拦截的浏览器；密码页去掉 `autofocus`（Chrome 禁止跨源 iframe 抢焦点）。协议判定取 `r.TLS` 或 `X-Forwarded-Proto: https`，**反向代理必须透传该头**，否则仍按 HTTP 走 Lax。
+- **Added (回归测试):** `TestDocsCookieAttributes`（HTTP / 代理 HTTPS / TLS 三种情况断言 SameSite、Secure、Partitioned）与 `TestDocsTokenBypass`（有效 token 放行并补写 cookie、错误 token 回密码页、HEAD 探测）。
+- **Changed (CI):** GitHub Actions 全部升级到 Node 24 版本，消除 `Node.js 20 is deprecated` 告警：`actions/checkout` v4→v7、`actions/setup-go` v5→v7（v6+ 默认把缓存键从 `go.sum` 改为 `go.mod`，显式 `cache-dependency-path: go.sum` 保持旧语义）、`docker/setup-qemu-action` v3→v4、`docker/setup-buildx-action` v3→v4、`docker/login-action` v3→v4、`docker/build-push-action` v6→v7（`provenance`/`sbom`/`platforms`/`build-args`/`tags`/`labels` 输入名不变）；`golangci-lint-action@v9` 本就是 Node 24，未动。
+- **Changed (Makefile):** `help` 与 `version` 的变量打印合并为单一 `define VARIABLE_DUMP`，`VERSION`/`IMAGE_TAG` 改用 `$(or ...)`，`HOST_ARCH` 内联，`BUILDX_COMMON` 与 `push` 输出压缩；217 → 190 行，`make -n build` / `make -n push` 的 buildx 命令行逐字不变。
+- **Changed (构建上下文):** `.dockerignore` 改为白名单裁剪——只保留 Go 源码 + `go.mod`/`go.sum` + `crud_specs`，排除 `web/`、`docs/`、`public/`、`.git`、`.slim`、`.env` 与部署编排文件；实测 `docker buildx build --load` 通过，上下文传输降到约 2.7 MB（此前 `web/` 源码与语言包都在上传）。
+- **Changed (文档):** `.env` 与 `.env.example` 统一成 `KEY = value` 对齐 + 分节精简注释的写法（逐变量说明移到 `AGENTS.md`「部署变量与 CI 约定」与 `docs/docker-compose.md`）；`AGENTS.md` 新增「按任务找文档」索引表，修正 Go 1.21.8 遗留要求、`main.go` 行数与 `.golangci.yml` linter 档位三处过时描述，验证策略与 handler/service/DTO 纪律去重，补 `.dockerignore`、`.cbmignore`、`.git-blame-ignore-revs` 说明。
+- **Chore:** 删除 `.ignore`（只含 `!.slim/deepwork/` 反排除规则，`.slim` 不再进搜索索引）。
+- **Verified:** `gofmt -l` 空；`go build ./...`、`go vet ./...` 通过；`go test ./internal/router/ -count=1` 全绿（含新增门禁用例）；手动 `workflow_dispatch` 跑 `ci.yml` 全绿且日志中 Node 20 弃用告警为 0；`docker compose config`（默认与 dev overlay）解析出 `name: buildadmin-go` 与 `<REGISTRY>/<REGISTRY_IMAGE_NAME>:<tag>`；`make -n build` / `make -n push` 平台与 tag 分离正确；`docker buildx build --load` 实构建通过。
+
 ## v3.3.3
 
 > 生成器修复（issue #15）：CRUD 生成的 admin handler 不再丢弃 `copier.Copy` 返回值，业务 fork 重新生成模块后可通过框架自带的 errcheck 门禁。无运行时契约变化。
