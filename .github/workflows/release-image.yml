@@ -13,10 +13,10 @@
 # 同步 public/,CI 不需要 pnpm/Node。
 #
 # 仓库配置:
-#   vars    = REGISTRY / REGISTRY_NAMESPACE(可空) / COMPOSE_PROJECT_NAME /
+#   vars    = REGISTRY / REGISTRY_NAMESPACE(可空) / REGISTRY_IMAGE_NAME /
 #             BUILD_PLATFORMS(可选,回退 linux/amd64)
 #   secrets = REGISTRY_USER / REGISTRY_PASSWORD
-# 镜像路径:<REGISTRY>[/<REGISTRY_NAMESPACE>]/<COMPOSE_PROJECT_NAME>;
+# 镜像路径:<REGISTRY>[/<REGISTRY_NAMESPACE>]/<REGISTRY_IMAGE_NAME>;
 # tag:<version> / <version>-<git-sha>-<build-ts> / latest。
 
 name: release-image
@@ -88,13 +88,13 @@ jobs:
     needs: gate
     # 未配置发布能力的仓库(框架源仓库默认如此)直接跳过,不留红 run;secrets 不能在 job 级 if 引用,
     # 仍由下面「配置校验」step 兜住。
-    if: vars.REGISTRY != '' && vars.COMPOSE_PROJECT_NAME != ''
+    if: vars.REGISTRY != '' && vars.REGISTRY_IMAGE_NAME != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       REGISTRY: ${{ vars.REGISTRY }}
       REGISTRY_NAMESPACE: ${{ vars.REGISTRY_NAMESPACE }}
-      COMPOSE_PROJECT_NAME: ${{ vars.COMPOSE_PROJECT_NAME }}
+      REGISTRY_IMAGE_NAME: ${{ vars.REGISTRY_IMAGE_NAME }}
       PLATFORMS: ${{ inputs.platforms || vars.BUILD_PLATFORMS || 'linux/amd64' }}
       REGISTRY_USER: ${{ secrets.REGISTRY_USER }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
@@ -104,7 +104,7 @@ jobs:
           set -eu
           missing=""
           [ -n "$REGISTRY" ] || missing="$missing vars.REGISTRY"
-          [ -n "$COMPOSE_PROJECT_NAME" ] || missing="$missing vars.COMPOSE_PROJECT_NAME"
+          [ -n "$REGISTRY_IMAGE_NAME" ] || missing="$missing vars.REGISTRY_IMAGE_NAME"
           [ -n "$REGISTRY_USER" ] || missing="$missing secrets.REGISTRY_USER"
           [ -n "$REGISTRY_PASSWORD" ] || missing="$missing secrets.REGISTRY_PASSWORD"
           if [ -n "$missing" ]; then
@@ -131,9 +131,9 @@ jobs:
           full_tag="${version}-${git_sha}-${build_ts}"
           # namespace 可空(扁平仓库:registry/name);ACR 等需要三级路径。
           if [ -n "${REGISTRY_NAMESPACE}" ]; then
-            image="${REGISTRY}/${REGISTRY_NAMESPACE}/${COMPOSE_PROJECT_NAME}"
+            image="${REGISTRY}/${REGISTRY_NAMESPACE}/${REGISTRY_IMAGE_NAME}"
           else
-            image="${REGISTRY}/${COMPOSE_PROJECT_NAME}"
+            image="${REGISTRY}/${REGISTRY_IMAGE_NAME}"
           fi
           {
             echo "version=${version}"

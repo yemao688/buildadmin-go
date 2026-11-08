@@ -168,7 +168,7 @@ pnpm build                             # emits web/dist/
 
 部署相关变量的唯一事实源是 `.env`（模板 `.env.example`）与 Makefile，文档不得再引用旧名：
 
-- 变量集合：`APP_PORT`（默认 9900，仅宿主机映射端口，容器内固定 9900）、`APP_TIME_ZONE`（默认 `Asia/Shanghai`，compose 注入容器）、`COMPOSE_MEM_LIMIT`（默认 `1g`）、`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`）、`REGISTRY`（默认 `registry.example.com`）、`REGISTRY_NAMESPACE`（默认空= `<REGISTRY>/<name>`；ACR/Harbor 填项目名 → `<REGISTRY>/<namespace>/<name>`）、`REGISTRY_USER`/`REGISTRY_PASSWORD`、`BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）、`COMPOSE_IMAGE_TAG`（默认空= `latest`）、`BUILD_BASE_REGISTRY`（默认 `docker.m.daocloud.io/`）。构建加速 build args 名不变：`GOPROXY`、`APK_MIRROR`。
+- 变量集合：`APP_PORT`（默认 9900，仅宿主机映射端口，容器内固定 9900）、`APP_TIME_ZONE`（默认 `Asia/Shanghai`，compose 注入容器）、`COMPOSE_MEM_LIMIT`（默认 `1g`）、`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`，**只**决定 compose 项目名与容器命名）、`REGISTRY`（默认 `registry.example.com`）、`REGISTRY_NAMESPACE`（默认空= `<REGISTRY>/<name>`；ACR/Harbor 填项目名 → `<REGISTRY>/<namespace>/<name>`）、`REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`，只决定镜像路径最后一段，与 compose 项目名解耦）、`REGISTRY_USER`/`REGISTRY_PASSWORD`、`BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）、`COMPOSE_IMAGE_TAG`（默认空= `latest`）、`BUILD_BASE_REGISTRY`（默认 `docker.m.daocloud.io/`）。构建加速 build args 名不变：`GOPROXY`、`APK_MIRROR`。
 - Makefile 自动计算 `VERSION`（读 `VERSION` 文件）、`GIT_SHA`、`BUILD_TS`、`FULL_TAG=<version>-<git-sha>-<build-ts>`、`REGISTRY_IMAGE`、`LOCAL_PLATFORM`，不写进 `.env`。
 - `COMPOSE_IMAGE_TAG` 留空即 `latest`；回滚时 pin 精确 `FULL_TAG`，不要依赖会移动的 `latest`。
 - `BUILD_BASE_REGISTRY` 结尾必须带 `/`（拼在镜像名前）；海外构建机传空值回官方 Docker Hub，不要写成无斜杠前缀。
@@ -176,7 +176,7 @@ pnpm build                             # emits web/dist/
 - gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
 - `.golangci.yml` 用 v2 语法分档启用：档 A（govet/ineffassign/unused/staticcheck）与档 B（errcheck/errorlint/nilerr/forcetypeassert/misspell/predeclared/errname/thelper）必须保持全绿；档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo）连同理据写在配置文件末尾，未清空前不得打开。新增 linter 前先本地 `golangci-lint run ./...` 看命中数。
 - 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（如 `frame-v3.3.1`，版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
-- `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.COMPOSE_PROJECT_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
+- `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.REGISTRY_IMAGE_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
 - `release-image.yml` 的 gate 只做全仓 gofmt/golangci-lint/`go build`/`go vet`，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 只推 GitHub 侧 registry，基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 
 ## CRUD 模块生成（AI 驱动）

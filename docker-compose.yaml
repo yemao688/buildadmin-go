@@ -6,7 +6,7 @@ name: ${COMPOSE_PROJECT_NAME:-buildadmin-go}
 services:
   buildadmin-go:
     # tag 留空 = latest；回滚时在 .env 写 COMPOSE_IMAGE_TAG=<具体 sha-tag> pin 住。
-    image: ${REGISTRY:-registry.example.com}/${REGISTRY_NAMESPACE:+${REGISTRY_NAMESPACE}/}${COMPOSE_PROJECT_NAME:-buildadmin-go}:${COMPOSE_IMAGE_TAG:-latest}
+    image: ${REGISTRY:-registry.example.com}/${REGISTRY_NAMESPACE:+${REGISTRY_NAMESPACE}/}${REGISTRY_IMAGE_NAME:-buildadmin-go}:${COMPOSE_IMAGE_TAG:-latest}
     pull_policy: always
     # 与镜像内 USER 1000 一致，否则写不动挂载的宿主目录。
     user: "1000:1000"

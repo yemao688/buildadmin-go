@@ -77,7 +77,7 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm builda
 两条路径打出的镜像 tag 形态一致（`FULL_TAG=<version>-<git-sha>-<build-ts>`、`<version>`、`latest`），任选其一。区别只在 `<version>` 的来源：本地 `make push` 读根目录 `VERSION` 文件；CI 取业务 tag 名去掉 `v` 前缀的部分——`v1.0.0` 得到 `1.0.0`（不校验 `VERSION`）。
 
 1. **发布机自建自推**：`make frontend` → `make push`（下一小节）。
-2. **推 tag 交给 GitHub Actions**：业务仓库 `git tag v1.0.0` 后 `git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。只认业务 `v<major>.<minor>...` 形态的 tag（裸 `v3` 与分支同名，不触发），框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建；未配置 `vars.REGISTRY`/`vars.COMPOSE_PROJECT_NAME` 的仓库，发布 job 直接跳过。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、golangci-lint、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.COMPOSE_PROJECT_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
+2. **推 tag 交给 GitHub Actions**：业务仓库 `git tag v1.0.0` 后 `git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。只认业务 `v<major>.<minor>...` 形态的 tag（裸 `v3` 与分支同名，不触发），框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建；未配置 `vars.REGISTRY`/`vars.REGISTRY_IMAGE_NAME` 的仓库，发布 job 直接跳过。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、golangci-lint、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.REGISTRY_IMAGE_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
 
 **镜像不含前端产物**：两条路径发布前都仍需在发布机执行 `make frontend`，并把 `public/` 一起放到生产机由 bind mount 提供。
 
@@ -116,12 +116,12 @@ make push BUILD_BASE_REGISTRY= GOPROXY=https://proxy.golang.org,direct APK_MIRRO
 
 生产机保存：
 
-- `docker-compose.yaml`、`.env`（`APP_PORT`、`APP_TIME_ZONE` 与发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）
+- `docker-compose.yaml`、`.env`（`APP_PORT`、`APP_TIME_ZONE` 与发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_IMAGE_NAME`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）
 - `configs/config.defaults.yaml`（配置基座，Git 跟踪，镜像不提供、bind mount 会遮蔽镜像副本）+ `configs/config.yaml`（应用覆盖层和凭据，不能提交到 Git）
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
-`REGISTRY_NAMESPACE` 默认空：留空时镜像路径是 `<REGISTRY>/<name>`（GitHub Container Registry 形态）；ACR、Harbor 这类要求 registry 带项目的，填项目名后路径变成 `<REGISTRY>/<namespace>/<name>`。`COMPOSE_PROJECT_NAME` 默认 `buildadmin-go`，compose 的 project 名与镜像路径共用同一套插值——**生产机 `.env` 的这几个值必须与发布机一致**，否则 `docker compose pull` 拉的路径和刚推送的对不上。`COMPOSE_MEM_LIMIT` 默认 `1g`。
+`REGISTRY_NAMESPACE` 默认空：留空时镜像路径是 `<REGISTRY>/<name>`（GitHub Container Registry 形态）；ACR、Harbor 这类要求 registry 带项目的，填项目名后路径变成 `<REGISTRY>/<namespace>/<name>`。镜像路径的最后一段由 `REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`）决定，`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`）**只**决定 compose 项目名与容器命名，两者互不影响——**生产机 `.env` 的镜像相关值必须与发布机一致**，否则 `docker compose pull` 拉的路径和刚推送的对不上。`COMPOSE_MEM_LIMIT` 默认 `1g`。
 
 `crud_specs/` **不在生产机清单里**——它随镜像同版本构建（Dockerfile 运行时阶段 COPY），不挂 volume：migrate 尾部 apply（`crud.apply_on_migrate` 默认 `true`）与业务迁移 `EnsureSpecTable` 在容器内直接使用镜像内 spec，宿主机无需也无法提供；volume 挂载会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1 → apply 漂移），违背"spec 是业务表结构唯一事实源"的部署纪律。
 

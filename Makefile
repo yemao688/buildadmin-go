@@ -9,8 +9,9 @@ endif
 
 # ---- canonical 部署变量 ----
 REGISTRY             ?= registry.example.com
-# 可空：空 = <REGISTRY>/<COMPOSE_PROJECT_NAME>；ACR / Harbor 需填命名空间。
+# 可空：空 = <REGISTRY>/<REGISTRY_IMAGE_NAME>；ACR / Harbor 需填命名空间。
 REGISTRY_NAMESPACE   ?=
+REGISTRY_IMAGE_NAME  ?= buildadmin-go
 COMPOSE_PROJECT_NAME ?= buildadmin-go
 # 留空 = latest（覆盖式 VERSION tag）；回滚时 pin 精确的 sha-tag。
 COMPOSE_IMAGE_TAG    ?=
@@ -36,11 +37,12 @@ BUILD_TS ?= $(shell date -u +%Y%m%dT%H%M%SZ)
 # FULL_TAG = <version>-<git-sha>-<build-ts>，便于把线上镜像对回 git commit。
 FULL_TAG := $(VERSION)-$(GIT_SHA)-$(BUILD_TS)
 
-# 扁平仓库 registry/name；ACR / Harbor 需要 registry/namespace/name。
+# 扁平仓库 registry/name；ACR / Harbor 需要 registry/namespace/name。镜像名与
+# compose project 名解耦：前者只影响镜像路径，后者只影响容器/项目命名。
 ifneq (,$(strip $(REGISTRY_NAMESPACE)))
-REGISTRY_IMAGE := $(REGISTRY)/$(strip $(REGISTRY_NAMESPACE))/$(COMPOSE_PROJECT_NAME)
+REGISTRY_IMAGE := $(REGISTRY)/$(strip $(REGISTRY_NAMESPACE))/$(REGISTRY_IMAGE_NAME)
 else
-REGISTRY_IMAGE := $(REGISTRY)/$(COMPOSE_PROJECT_NAME)
+REGISTRY_IMAGE := $(REGISTRY)/$(REGISTRY_IMAGE_NAME)
 endif
 IMAGE_TAG := $(or $(strip $(COMPOSE_IMAGE_TAG)),latest)
 
@@ -63,6 +65,7 @@ define VARIABLE_DUMP
 @echo "FULL_TAG             = $(FULL_TAG)"
 @echo "REGISTRY             = $(REGISTRY)"
 @echo "REGISTRY_NAMESPACE   = $(REGISTRY_NAMESPACE)"
+@echo "REGISTRY_IMAGE_NAME  = $(REGISTRY_IMAGE_NAME)"
 @echo "COMPOSE_PROJECT_NAME = $(COMPOSE_PROJECT_NAME)"
 @echo "COMPOSE_IMAGE_TAG    = $(IMAGE_TAG)"
 @echo "REGISTRY_IMAGE       = $(REGISTRY_IMAGE)"
