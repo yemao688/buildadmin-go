@@ -58,6 +58,9 @@ func createBusinessMigration(dir, name string, versions []uint64) (string, error
 		return "", fmt.Errorf("迁移名 %q 非法：只允许字母、数字、下划线与连字符，且须以字母或数字开头", name)
 	}
 	stem := migrationFileStem(name)
+	if err := requireBusinessSourceDir(dir); err != nil {
+		return "", err
+	}
 	if existing := findMigrationFileByStem(dir, stem); existing != "" {
 		return "", fmt.Errorf("迁移名 %q 已存在: %s", name, existing)
 	}
@@ -66,9 +69,6 @@ func createBusinessMigration(dir, name string, versions []uint64) (string, error
 		return "", err
 	}
 	path := filepath.Join(dir, fmt.Sprintf("%04d_%s.go", version, stem))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
 		if os.IsExist(err) {
@@ -84,6 +84,24 @@ func createBusinessMigration(dir, name string, versions []uint64) (string, error
 		return "", err
 	}
 	return path, nil
+}
+
+// requireBusinessSourceDir 要求目标目录已是仓库内的 Go 源码目录。镜像内不含 Go
+// 源码，若像以前那样 MkdirAll 后写入，只会得到一个永远不会被编译的孤立迁移文件。
+func requireBusinessSourceDir(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("business 迁移目录不存在: %s；migrate new 必须在仓库源码检出中运行（镜像内不含 Go 源码）", dir)
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
+			return nil
+		}
+	}
+	return fmt.Errorf("business 迁移目录中没有 Go 文件: %s；migrate new 必须在仓库源码检出中运行（镜像内不含 Go 源码）", dir)
 }
 
 // findMigrationFileByStem 返回目录中已存在的 *_<stem>.go 迁移文件，用于拒绝重复迁移名

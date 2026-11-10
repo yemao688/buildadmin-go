@@ -21,7 +21,7 @@ const (
 	schemaModeCheck = "check"
 	schemaModeApply = "apply"
 
-	blockedChangeHint = "已跳过（rejected），相关模块可能报错；请用 business 迁移处理存量数据"
+	blockedChangeHint = "已跳过：rejected 需用 business 迁移处理存量数据，requires-approval 需显式 --approve"
 )
 
 // schemaModeFromConfig 解析启动结构同步模式：环境变量 > 配置 > apply。
@@ -76,23 +76,29 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 		return nil
 	}
 	results, err := helper.ApplySpecsFromDir(db, cfg, specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
-	if err != nil {
-		return err
-	}
+	// 失败前已执行的 DDL 不可回滚：先输出已发生的动作与告警，再返回错误，
+	// 否则调用方只能看到一个笼统的 apply 错误而不知道库已经改到哪一步。
 	printSchemaApplyResults(results)
-	return nil
+	return err
+}
+
+// migrationTotals 汇总各轨道的待执行与未完成迁移数，供状态行与 strict 判定共用。
+func migrationTotals(report migrations.StatusReport) (pending, incomplete int) {
+	for _, track := range report.Tracks {
+		pending += track.Pending
+		incomplete += track.Incomplete
+	}
+	return pending, incomplete
 }
 
 func printMigrationStatus(report migrations.StatusReport) {
 	parts := make([]string, 0, len(report.Tracks))
-	pending, incomplete := 0, 0
 	var pendingNames []string
 	for _, track := range report.Tracks {
 		parts = append(parts, fmt.Sprintf("%s %d/%d", track.Track, track.Applied, track.Registered))
-		pending += track.Pending
-		incomplete += track.Incomplete
 		pendingNames = append(pendingNames, track.PendingNames...)
 	}
+	pending, incomplete := migrationTotals(report)
 	if len(pendingNames) > 0 {
 		fmt.Printf("[database] 迁移: %s (pending %d: %s; incomplete %d)\n", strings.Join(parts, ", "), pending, strings.Join(pendingNames, ", "), incomplete)
 		return

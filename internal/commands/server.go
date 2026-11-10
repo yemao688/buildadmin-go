@@ -36,6 +36,8 @@ func runServer(cmd *cobra.Command, appBootstrap AppBootstrap) {
 		if !errors.Is(err, errDatabaseNotInstalled) {
 			fmt.Printf("[database] 结构同步失败: %v\n", err)
 		}
+		// os.Exit 不执行 defer，必须在退出前显式清理（此处只会清理一次）。
+		cleanup()
 		os.Exit(1)
 	}
 

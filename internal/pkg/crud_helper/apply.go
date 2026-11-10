@@ -678,17 +678,22 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 		}
 		result.MenuResults = menuReport.Results
 	}
-	logID, err := adoptCrudLog(db, cfg, spec, opts.AdminID)
-	if err != nil {
-		return nil, fmt.Errorf("crud log adopt: %w", err)
-	}
-	result.LogID = logID
+	// 完全 blocked 时没有任何 DDL 执行，物理表与 spec 不符，登记 success 会让
+	// crud:delete 等模块账本以为形状已就绪。ApplyPartial 仍登记，实际表可能少于
+	// spec，以启动日志的 WARNING 为准。
 	if len(result.Blocked) > 0 {
 		if len(result.Changes) > 0 {
 			result.Action = ApplyPartial
 		} else {
 			result.Action = ApplyBlocked
 		}
+	}
+	if result.Action != ApplyBlocked {
+		logID, err := adoptCrudLog(db, cfg, spec, opts.AdminID)
+		if err != nil {
+			return nil, fmt.Errorf("crud log adopt: %w", err)
+		}
+		result.LogID = logID
 	}
 	return result, nil
 }

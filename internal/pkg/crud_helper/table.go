@@ -54,8 +54,13 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 	comment := table.Comment
 	if db.Migrator().HasTable(fullTableName) {
 		//更新表
-		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
-			return err
+		// 注释已一致时跳过 ALTER：每次 apply 无条件改表注释会在每次启动都取一次
+		// MDL，线上大表因此出现无谓的锁等待。读不到当前注释就照常执行（fail-open，
+		// 优化不得改变行为）。
+		if !tableCommentUnchanged(db, fullTableName, comment) {
+			if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
+				return err
+			}
 		}
 		designChange := table.DesignChange
 		if len(designChange) == 0 {
@@ -165,6 +170,19 @@ func createTableDDL(fullTableName string, table crudmodel.Table, fields []crudmo
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// tableCommentUnchanged 判断表注释是否已与 spec 一致。读 information_schema 失败
+// 时返回 false，让调用方照常 ALTER（优化必须 fail-open，不能改变行为）。
+func tableCommentUnchanged(db *gorm.DB, fullTableName, comment string) bool {
+	var current string
+	if err := db.Raw(
+		"SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?",
+		fullTableName,
+	).Scan(&current).Error; err != nil {
+		return false
+	}
+	return current == comment
 }
 
 func hasColumn(db *gorm.DB, fullTableName, column string) (bool, error) {

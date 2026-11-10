@@ -175,6 +175,12 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("database is not installed (state: %s); nothing to plan", report.State)
 	}
 	printMigrationStatus(report)
+	if strict {
+		// 迁移未跑完时 spec 差量基于旧 schema，strict 计划必须先把库升到最新。
+		if pending, incomplete := migrationTotals(report); pending > 0 || incomplete > 0 {
+			return fmt.Errorf("database migrations are not up to date (pending %d, incomplete %d); run migrate before planning", pending, incomplete)
+		}
+	}
 
 	dir := helper.DefaultSpecDir()
 	if dir == "" {
