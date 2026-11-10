@@ -536,6 +536,31 @@ func primaryKeyDrift(actualPKs []string, fields []crudmodel.Field, columns []mod
 	return false, ""
 }
 
+// applyAddFieldPositions 按「执行后实际会存在的列」重写 ADD FIELD 的定位子句。
+// 宽松模式（AllowRejected）会跳过 rejected/未批准的 add-field，其 spec 前驱可能
+// 从未建立，直接用会让 ALTER ... AFTER <missing> 报 1054 并让启动直接退出。
+func applyAddFieldPositions(diffs []AlterDiff, fields []crudmodel.Field, existing map[string]bool, opts ApplyOptions) {
+	adding := make(map[string]bool, len(diffs))
+	for _, diff := range diffs {
+		if diff.Change.Type != "add-field" {
+			continue
+		}
+		if diff.Class != DiffSafeAuto && !isApprovedDiff(diff.Class, diff.Category, opts.ApprovedCategories) {
+			continue
+		}
+		adding[strings.ToLower(diff.Field.Name)] = true
+	}
+	positions := resolveAddFieldPositions(fields, adding, existing)
+	for i := range diffs {
+		if diffs[i].Change.Type != "add-field" {
+			continue
+		}
+		if after, ok := positions[diffs[i].Field.Name]; ok {
+			diffs[i].Change.After = after
+		}
+	}
+}
+
 func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepository, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
 	spec, err := LoadSpec(specPath)
 	if err != nil {
@@ -589,6 +614,13 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 			}
 		} else {
 			diffs := deriveAlterDiff(current, spec.Fields)
+			// 宽松模式会跳过 rejected/未批准的新增列，直接用 spec 前驱定位会
+			// 指向不存在的列（MySQL 1054 → 启动退出），这里按实际会存在的列重算。
+			existingColumns := make(map[string]bool, len(current))
+			for _, column := range current {
+				existingColumns[strings.ToLower(column.COLUMN_NAME)] = true
+			}
+			applyAddFieldPositions(diffs, spec.Fields, existingColumns, opts)
 			indexPlan, err = deriveIndexPlan(db, fullName, dataScopeIndexName(spec.Table, spec.Fields), spec.Table.Indexes)
 			if err != nil {
 				return nil, err

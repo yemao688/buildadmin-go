@@ -97,3 +97,72 @@ func TestPlanIndexAdditionsSkipsMissingColumns(t *testing.T) {
 		t.Fatalf("skipped class = %q, want rejected", skipped[0].Class)
 	}
 }
+
+// 宽松模式跳过 rejected 新增列后，后继列必须越过它回退到上一个确定存在的列，
+// 否则 ALTER ... AFTER <被跳过的列> 会报 1054 并让启动退出。
+func TestResolveAddFieldPositionsFallsBackPastSkippedField(t *testing.T) {
+	fields := []crudmodel.Field{{Name: "id"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}
+	existing := map[string]bool{"id": true}
+	adding := map[string]bool{"a": true, "c": true} // b 被 rejected 跳过
+
+	positions := resolveAddFieldPositions(fields, adding, existing)
+	if positions["a"] != "id" {
+		t.Fatalf("a 的定位 = %q, want id", positions["a"])
+	}
+	if positions["c"] != "a" {
+		t.Fatalf("c 的定位 = %q, want a（b 被跳过时必须越过它）", positions["c"])
+	}
+	if _, ok := positions["b"]; ok {
+		t.Fatal("被跳过的 b 不应获得定位子句")
+	}
+}
+
+// 前面没有任何确定存在的列时置表首。
+func TestResolveAddFieldPositionsFirstWhenNoPredecessor(t *testing.T) {
+	fields := []crudmodel.Field{{Name: "x"}, {Name: "y"}}
+	adding := map[string]bool{"x": true, "y": true}
+
+	positions := resolveAddFieldPositions(fields, adding, map[string]bool{})
+	if positions["x"] != firstFieldSentinel {
+		t.Fatalf("x 的定位 = %q, want %q", positions["x"], firstFieldSentinel)
+	}
+	if positions["y"] != "x" {
+		t.Fatalf("y 的定位 = %q, want x", positions["y"])
+	}
+}
+
+// 严格模式（全部新增都执行）下重算结果必须与 spec 前驱完全一致，行为不变。
+func TestResolveAddFieldPositionsMatchesSpecOrderWhenNothingSkipped(t *testing.T) {
+	fields := []crudmodel.Field{{Name: "id"}, {Name: "a"}, {Name: "b"}}
+	adding := map[string]bool{"a": true, "b": true}
+
+	positions := resolveAddFieldPositions(fields, adding, map[string]bool{"id": true})
+	for index := 1; index < len(fields); index++ {
+		want := specPredecessorField(fields, index)
+		if got := positions[fields[index].Name]; got != want {
+			t.Fatalf("%s 的定位 = %q, want %q", fields[index].Name, got, want)
+		}
+	}
+}
+
+// 只重写会执行的 add-field：被跳过的列保持原样（它根本不会被执行），
+// 其后继列则改到已执行列之后。
+func TestApplyAddFieldPositionsRewritesOnlyExecutedAddFields(t *testing.T) {
+	diffs := []AlterDiff{
+		{Change: crudmodel.ChangeField{Type: "add-field", OldName: "a", NewName: "a", After: "id"}, Field: crudmodel.Field{Name: "a"}, Class: DiffSafeAuto},
+		{Change: crudmodel.ChangeField{Type: "add-field", OldName: "b", NewName: "b", After: "a"}, Field: crudmodel.Field{Name: "b"}, Class: DiffRejected},
+		{Change: crudmodel.ChangeField{Type: "add-field", OldName: "c", NewName: "c", After: "b"}, Field: crudmodel.Field{Name: "c"}, Class: DiffSafeAuto},
+	}
+	fields := []crudmodel.Field{{Name: "id"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}
+
+	applyAddFieldPositions(diffs, fields, map[string]bool{"id": true}, ApplyOptions{})
+	if diffs[0].Change.After != "id" {
+		t.Fatalf("a 的定位 = %q, want id", diffs[0].Change.After)
+	}
+	if diffs[1].Change.After != "a" {
+		t.Fatalf("被跳过的 b 定位被改写为 %q, want a（保持原样）", diffs[1].Change.After)
+	}
+	if diffs[2].Change.After != "a" {
+		t.Fatalf("c 的定位 = %q, want a（b 未执行）", diffs[2].Change.After)
+	}
+}

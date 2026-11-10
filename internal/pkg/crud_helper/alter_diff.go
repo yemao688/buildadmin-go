@@ -410,11 +410,36 @@ func deriveAlterDiff(columns []model.Column, fields []crudmodel.Field) []AlterDi
 }
 
 // specPredecessorField 返回 spec 中指定下标字段的前驱字段名，供 ALTER ADD 定位
-// （AFTER <prev>）；首字段返回 FIRST FIELD 哨兵（置表首）。差量按 spec 顺序产出、
-// 逐条执行且 rejected 变更会先行阻断，因此前驱列在执行时必然已存在。
+// （AFTER <prev>）；首字段返回 FIRST FIELD 哨兵（置表首）。差量按 spec 顺序产出；
+// 严格模式下 rejected 变更会先行阻断、前驱列在执行时必然已存在，但宽松模式
+// （AllowRejected）会跳过这些列，定位必须改走 resolveAddFieldPositions。
 func specPredecessorField(fields []crudmodel.Field, index int) string {
 	if index <= 0 {
 		return firstFieldSentinel
 	}
 	return fields[index-1].Name
+}
+
+// resolveAddFieldPositions 计算宽松模式下 ADD FIELD 的实际定位列：被跳过的
+// rejected/未批准新增列不会真正建列，其后继字段的 spec 前驱可能不存在，必须
+// 回退到上一个确定会存在的列（前面没有则置表首），否则 MySQL 报 1054 让启动退出。
+// adding/existing 均为小写列名集合；返回值键为 spec 字段名，值为 After 子句入参。
+func resolveAddFieldPositions(fields []crudmodel.Field, adding, existing map[string]bool) map[string]string {
+	positions := make(map[string]string, len(adding))
+	last := ""
+	for _, field := range fields {
+		name := strings.ToLower(field.Name)
+		switch {
+		case existing[name]:
+			last = field.Name
+		case adding[name]:
+			if last == "" {
+				positions[field.Name] = firstFieldSentinel
+			} else {
+				positions[field.Name] = last
+			}
+			last = field.Name
+		}
+	}
+	return positions
 }
