@@ -958,25 +958,29 @@ go run ./cmd/server --conf configs/config.yaml crud:apply crud_specs/<module>.ya
 
 `--approve=<类别>` 放行需要批准的变更（`defaults`、`auto-increment`、`type-widening`、`attributes`），`--approve=all` 全选。`rejected` 变更（主键漂移、unsigned 翻转、收窄、nullable→NOT NULL 等）永不可批准，必须写业务迁移。`--allow-rebuild` 只控制主键漂移的破坏性重建，仅限可丢弃环境。
 
-`migrate` 尾部默认自动执行 apply（`crud.apply_on_migrate` 默认 `true`）——幂等同步在部署入口自动完成，漂移会以失败红牌暴露而不是静默上线；全新安装的 `setup` 尾部同样自动执行 apply（不依赖该配置项），业务表开箱即建：
+`migrate` 尾部默认自动执行 apply（`crud.apply_on_migrate` 默认 `true`），`serve` 启动在 `app.auto_migrate: apply`（默认）时同样执行——幂等同步在部署入口自动完成；启动期 spec apply 需要两者同时开启（`app.auto_migrate: apply` **且** `crud.apply_on_migrate: true`，后者是让库长期偏离 spec 的逃生口）。全新安装的 `setup` 尾部同样自动执行 apply（不依赖该配置项），业务表开箱即建：
 
 ```bash
 git pull && go run ./cmd/server --conf configs/config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate --plan    # 只读；发版前检查 rejected 的唯一事实源
+go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失败即退，CI 用
 ```
 
-需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，migrate 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以 `CRUD apply WARNING`（`column-order-drift`）提示但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
+`migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库；`migrate --strict` 在出现 `rejected` 时以失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
+
+需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，`crud:apply`/`migrate --strict` 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；启动路径与宽松 `migrate` 按「全部类别已授权」自动执行这类变更。`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以 `CRUD apply WARNING`（`column-order-drift`）提示但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
 
 **迁移与 apply 的分工**：业务表结构只由 spec → apply 物化。不要在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表——会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，且常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只负责 apply 表达不了的东西：`rejected` 破坏性变更、种子数据，以及无 spec 的非 CRUD 自建表（自负责最终契约）。唯一索引通过本表 `indexes` 声明由 apply 物化，**不要写"只补索引"的迁移**：迁移阶段先于 apply 尾部，全新库上业务表尚未创建，`ALTER TABLE ADD INDEX` 会失败；即使容忍表不存在，`Up` 只执行一次、apply 不建索引，索引会永久缺失且常驻 `VerifySchema` 永远红牌。
 
-| 场景 | 动作 |
-| --- | --- |
-| 表不存在 | 按 spec 初始建表 |
-| 表已存在，无漂移 | `unchanged`，只同步表注释 |
-| 新增 nullable 列、带合法默认值的新增列、comment-only | `safe-auto`，自动执行 |
-| 类型扩宽命中安全矩阵、默认值变更 | `requires-approval`，默认阻塞 |
-| unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键漂移 | `rejected`，拒绝并指向 business 迁移 |
+| 场景 | `crud:apply` 动作 | 启动自动迁移 / `migrate` |
+| --- | --- | --- |
+| 表不存在 | 按 spec 初始建表 | 自动执行 |
+| 表已存在，无漂移 | `unchanged`，只同步表注释 | 自动执行 |
+| 新增 nullable 列、带合法默认值的新增列、comment-only | `safe-auto`，自动执行 | 自动执行 |
+| 类型扩宽命中安全矩阵、默认值变更、自增与属性变更 | `requires-approval`，默认阻塞，需 `--approve=<类别>` | 自动执行（按全部审批类别已授权，无需 `--approve`；`migrate --strict` 同样放行） |
+| unsigned 翻转、收窄、nullable→NOT NULL、enum/set 减成员、主键漂移、扩宽矩阵外的类型变更 | `rejected`，拒绝并指向 business 迁移 | 跳过该表/列并输出 `[database] WARNING`（指名表/列/原因），永不自动执行；必须写 business 迁移 |
 
-关键约定：`type: create` 是生成时动词，不是稳态重建指令——仓库里 `create` 的 spec 在已有表上同样幂等。apply 不因该字段隐式删表。列删除不在 alter 语义内（不出现在 spec 中的列保留不动）。字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `migrate`（尾部 apply）→ 重启。
+关键约定：`type: create` 是生成时动词，不是稳态重建指令——仓库里 `create` 的 spec 在已有表上同样幂等。apply 不因该字段隐式删表。列删除不在 alter 语义内（不出现在 spec 中的列保留不动）。字段演进流程：改 spec → 开发机 `crud:generate`（alter）→ 提交 → 线上 `docker compose up -d`（启动自动迁移并执行尾部 apply）/ 或手工 `migrate` → 重启。发版前用 `migrate --plan` 确认 `rejected` 清单，按 [`framework-workflow.md`](framework-workflow.md) 的「发版前的数据影响确认（rejected）」向用户确认。
 
 ### 生成失败排查
 

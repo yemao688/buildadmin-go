@@ -45,7 +45,7 @@ curl http://127.0.0.1:9900/healthz                                    # {"status
 APP_PORT=9901 make run-docker-dev
 ```
 
-`APP_TIME_ZONE` 仍由 Compose `environment:` 注入容器（`.env` 缺失时的运行时配置）。
+`APP_TIME_ZONE` 仍由 Compose `environment:` 注入容器（`.env` 缺失时的运行时配置）。`APP_AUTO_MIGRATE` 同样由 Compose 注入（默认 `apply`），需要临时关闭或降级启动自动迁移时在 `.env` 覆盖，不必改 `configs/config.yaml`。
 
 Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
 
@@ -66,7 +66,7 @@ chown -R 1000:1000 runtime public/storage
 docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm buildadmin-go migrate
 ```
 
-这只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行安装、不创建安装锁。迁移前确认配置中的 MySQL 容器可达。三轨台账、business 断点和回滚语义见 [`internal/migrations/business/README.md`](../internal/migrations/business/README.md)。
+容器启动（`up -d`）时 `serve` 已自动执行同一套迁移与尾部 apply，这条命令用于排障、单独观察迁移输出，或需要 `migrate --plan`/`migrate --strict` 时手工触发。它只执行 schema 和已有迁移定义中的数据种子，不创建管理员、不执行安装、不创建安装锁。迁移前确认配置中的 MySQL 容器可达。三轨台账、business 断点和回滚语义见 [`internal/migrations/business/README.md`](../internal/migrations/business/README.md)。
 
 ## 二、线上发布
 
@@ -116,16 +116,16 @@ make push BUILD_BASE_REGISTRY= GOPROXY=https://proxy.golang.org,direct APK_MIRRO
 
 生产机保存：
 
-- `docker-compose.yaml`、`.env`（`APP_PORT`、`APP_TIME_ZONE` 与发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_IMAGE_NAME`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）
+- `docker-compose.yaml`、`.env`（`APP_PORT`、`APP_TIME_ZONE`、`APP_AUTO_MIGRATE` 与发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_IMAGE_NAME`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）
 - `configs/config.defaults.yaml`（配置基座，Git 跟踪，镜像不提供、bind mount 会遮蔽镜像副本）+ `configs/config.yaml`（应用覆盖层和凭据，不能提交到 Git）
 - `public/` 完整目录（`index.html`、`assets/` 前端产物 + `static/` 字体图片 + `storage/` 上传文件）
 - `runtime/`（日志）
 
 `REGISTRY_NAMESPACE` 默认空：留空时镜像路径是 `<REGISTRY>/<name>`（GitHub Container Registry 形态）；ACR、Harbor 这类要求 registry 带项目的，填项目名后路径变成 `<REGISTRY>/<namespace>/<name>`。镜像路径的最后一段由 `REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`）决定，`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`）**只**决定 compose 项目名与容器命名，两者互不影响——**生产机 `.env` 的镜像相关值必须与发布机一致**，否则 `docker compose pull` 拉的路径和刚推送的对不上。`COMPOSE_MEM_LIMIT` 默认 `1g`。
 
-`crud_specs/` **不在生产机清单里**——它随镜像同版本构建（Dockerfile 运行时阶段 COPY），不挂 volume：migrate 尾部 apply（`crud.apply_on_migrate` 默认 `true`）与业务迁移 `EnsureSpecTable` 在容器内直接使用镜像内 spec，宿主机无需也无法提供；volume 挂载会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1 → apply 漂移），违背"spec 是业务表结构唯一事实源"的部署纪律。
+`crud_specs/` **不在生产机清单里**——它随镜像同版本构建（Dockerfile 运行时阶段 COPY），不挂 volume：启动自动迁移与 `migrate` 尾部 apply（`crud.apply_on_migrate` 默认 `true`）以及业务迁移 `EnsureSpecTable` 在容器内直接使用镜像内 spec，宿主机无需也无法提供；volume 挂载会让宿主机 spec 与镜像代码脱节（代码 v2 + spec v1 → apply 漂移），违背"spec 是业务表结构唯一事实源"的部署纪律。
 
-镜像含 Go 二进制与 `crud_specs/`；`.env` 非必需（`APP_TIME_ZONE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
+镜像含 Go 二进制与 `crud_specs/`；`.env` 非必需（`APP_TIME_ZONE` 与 `APP_AUTO_MIGRATE` 由 compose `environment:` 注入，容器内端口固定 9900，代码兜底；`EnsureEnvFile`/`LoadEnvFile` 在 `.env.example` 缺失时静默跳过——容器内不生成 `.env`，宿主 dev 环境仍由仓库根 `.env.example` 自动复制）。将本地安装器生成的稀疏 `configs/config.yaml` 经安全渠道放到生产机后**编辑生产连接信息**，不要把完整基座复制成覆盖层：
 
 ```bash
 cp /path/to/installed/configs/config.yaml /path/to/release/configs/config.yaml
@@ -154,7 +154,9 @@ docker compose pull
 docker compose up -d
 ```
 
-升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `COMPOSE_IMAGE_TAG` 为已知 `FULL_TAG`（形如 `3.1.0-<git-sha>-<build-ts>`）再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。`COMPOSE_IMAGE_TAG` 默认空即等于 `latest`，只在回滚时 pin 精确 tag。
+拉取新镜像后 `docker compose up -d` 会在容器启动时完成 schema 迁移：`serve` 在绑定端口前执行三轨迁移与 `crud_specs` 尾部 apply（`app.auto_migrate` 默认 `apply`），不需要再单独 `run --rm buildadmin-go migrate`。`docker-compose.yaml` 已配置 `pull_policy: always`，`up -d` 本身会先拉取镜像，额外执行 `docker compose pull` 只是让拉取阶段独立可见，不是必需步骤。
+
+升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `COMPOSE_IMAGE_TAG` 为已知 `FULL_TAG`（形如 `3.1.0-<git-sha>-<build-ts>`）再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。`COMPOSE_IMAGE_TAG` 默认空即等于 `latest`，只在回滚时 pin 精确 tag。`rejected` 破坏性变更只告警不执行，发版前按 [`framework-workflow.md`](framework-workflow.md) 的 `migrate --plan` 检查清单确认。
 
 ## 容器硬化
 
@@ -198,6 +200,9 @@ Compose healthcheck 请求容器内固定 `GET http://127.0.0.1:9900/healthz`（
 - **端口冲突**：9900 被占用时设置 `APP_PORT=9901`（环境变量或 `.env`），宿主机映射跟随；容器内仍固定监听 9900。
 - **容器连不上 MySQL**：容器内 `127.0.0.1` 不是宿主机。macOS 用 `host.docker.internal`，Linux 用宿主机网桥 IP；确认 MySQL 用户被授权从容器所在网络连接（`root` 容器需 `MYSQL_ROOT_HOST=%` 或等价授权），并检查 `mysql_test` 段不会指向生产库。
 - **容器启动即退出并打印安装指引**：`configs/config.yaml` 缺失（未安装）。`./configs` 以可写目录挂载，缺文件不会报错——按"配置准备"一节执行 setup 完成安装后再 `docker compose up`。
+- **容器启动后反复重启（硬错误）**：日志里带 `[database]` 前缀的行给出原因——数据库不可达、迁移 `Up` 失败、锁或元数据查询失败。这类硬错误让 `serve` 以状态 1 退出，`restart: unless-stopped` 于是一直重启；先 `docker compose logs buildadmin-go | grep '\[database\]'` 定位，修好连接或迁移后再 `docker compose up -d`。
+- **服务已启动但日志出现 `[database] WARNING ... rejected`**：该表/列属于 `rejected` 破坏性变更（收窄、signed↔unsigned 翻转、nullable→NOT NULL、enum/set 减成员、主键漂移），启动自动迁移跳过它并继续服务，所以容器是 up、列还是旧结构。不要改用 `--strict` 或手改库绕过；按 [`framework-workflow.md`](framework-workflow.md) 的发版确认清单写 business 迁移清洗存量数据后再改列。
+- **启动阶段短时 `unhealthy`**：迁移在绑定端口之前执行，端口未监听时 `/healthz` 不可达，`healthcheck.start_period` 已按迁移耗时放宽。这类 `unhealthy` 是预期现象，不会触发重启（`restart` 只看进程退出码）；数据量大导致迁移超过 `start_period` 时调大它，不要缩短迁移或跳过检查。
 - **`setup` 报"系统已安装"**：`public/install.lock` 已存在（安装完成判定只认锁）。删除它后重试，并建议一并清除 `configs/config.yaml` 中的旧连接信息；安装器不会覆盖已存在的配置。
 - **前端产物缺失**：镜像不构建前端、也不包含 `public/` 内容。发布前执行 `make frontend`（或 setup 自动构建前端），确认 `public/index.html` 与 `public/assets/` 存在且非过期产物；`public/*.lock`、`public/index.html`、`public/assets` 均被 Git 忽略，只存在于本地/发布机/生产机，须随部署目录上生产。
 - **i18n 不生效或启动 panic**：语言包已 `go:embed` 进二进制，无需镜像文件；`.env` 非必需（compose 注入 `APP_TIME_ZONE`，容器内端口固定 9900，代码兜底，`.env.example` 缺失时静默跳过）。

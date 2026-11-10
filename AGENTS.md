@@ -98,6 +98,7 @@
 - 业务模块必须使用 CRUD 生成链，不得手写生成的实体、仓库、handler、registrar、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
+- 发版前必须运行 `migrate --plan` 检查 `rejected`：这些变更不会自动执行。业务 AI 必须在交付说明中逐条列出受影响的表/列、变更内容、可能受影响的数据（截断、负数变 0、NULL 变默认值、enum 值变空、主键重建），并明确询问用户是否接受该数据影响后再上线；用户确认前不得发布。正解是在 business 迁移里显式处理存量数据后再修改列。
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
 - 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 为显式豁免（handler 的 `NoNeedPermissionActions` 声明）。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。豁免机制按渠道分开、互不通用：`internal/admin/middleware` 的豁免注册表（`RegisterNoNeedLogin`/`RegisterPermissionExempt` 及 handler 声明式 `NoNeedLoginActions`/`NoNeedPermissionActions` 收集）只作用于**后台 /admin 渠道**（跳过登录/跳过规则校验，经 admin registrar 声明）；`internal/api/router` 的 `api_routes.go` public 集合是 **API /api 渠道**的免登录路由登记表（method+path 逐条，per-action 公共端点）。业务侧按目标渠道选择对应机制，不要混用。
 
@@ -151,6 +152,7 @@ air                                    # builds ./cmd/server; serves on 9900
 go build ./...
 go test ./path/to/package -run '^TestName$'
 go run ./cmd/server --conf configs/config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate --plan   # 只读：安装状态、待执行迁移、spec 差量分类
 go generate ./cmd/server                  # after provider or cmd/server/wire.go changes
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
@@ -168,7 +170,7 @@ pnpm build                             # emits web/dist/
 
 部署相关变量的唯一事实源是 `.env`（模板 `.env.example`）与 Makefile，文档不得再引用旧名：
 
-- 变量集合：`APP_PORT`（默认 9900，仅宿主机映射端口，容器内固定 9900）、`APP_TIME_ZONE`（默认 `Asia/Shanghai`，compose 注入容器）、`COMPOSE_MEM_LIMIT`（默认 `1g`）、`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`，**只**决定 compose 项目名与容器命名）、`REGISTRY`（默认 `registry.example.com`）、`REGISTRY_NAMESPACE`（默认空= `<REGISTRY>/<name>`；ACR/Harbor 填项目名 → `<REGISTRY>/<namespace>/<name>`）、`REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`，只决定镜像路径最后一段，与 compose 项目名解耦）、`REGISTRY_USER`/`REGISTRY_PASSWORD`、`BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）、`COMPOSE_IMAGE_TAG`（默认空= `latest`）、`BUILD_BASE_REGISTRY`（默认 `docker.m.daocloud.io/`）。构建加速 build args 名不变：`GOPROXY`、`APK_MIRROR`。
+- 变量集合：`APP_PORT`（默认 9900，仅宿主机映射端口，容器内固定 9900）、`APP_TIME_ZONE`（默认 `Asia/Shanghai`，compose 注入容器）、`APP_AUTO_MIGRATE`（默认 `apply`，取值 `off`/`check`/`apply`，compose 注入容器并覆盖 `app.auto_migrate`）、`COMPOSE_MEM_LIMIT`（默认 `1g`）、`COMPOSE_PROJECT_NAME`（默认 `buildadmin-go`，**只**决定 compose 项目名与容器命名）、`REGISTRY`（默认 `registry.example.com`）、`REGISTRY_NAMESPACE`（默认空= `<REGISTRY>/<name>`；ACR/Harbor 填项目名 → `<REGISTRY>/<namespace>/<name>`）、`REGISTRY_IMAGE_NAME`（默认 `buildadmin-go`，只决定镜像路径最后一段，与 compose 项目名解耦）、`REGISTRY_USER`/`REGISTRY_PASSWORD`、`BUILD_PLATFORMS`（默认 `linux/amd64,linux/arm64`）、`COMPOSE_IMAGE_TAG`（默认空= `latest`）、`BUILD_BASE_REGISTRY`（默认 `docker.m.daocloud.io/`）。构建加速 build args 名不变：`GOPROXY`、`APK_MIRROR`。
 - Makefile 自动计算 `VERSION`（读 `VERSION` 文件）、`GIT_SHA`、`BUILD_TS`、`FULL_TAG=<version>-<git-sha>-<build-ts>`、`REGISTRY_IMAGE`、`LOCAL_PLATFORM`，不写进 `.env`。
 - `COMPOSE_IMAGE_TAG` 留空即 `latest`；回滚时 pin 精确 `FULL_TAG`，不要依赖会移动的 `latest`。
 - `BUILD_BASE_REGISTRY` 结尾必须带 `/`（拼在镜像名前）；海外构建机传空值回官方 Docker Hub，不要写成无斜杠前缀。
@@ -200,13 +202,17 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ## 迁移以及生成/部署文件
 
 - 迁移系统有三条轨道：`internal/migrations/official/` 保存 PHP 上游迁移和官方安装 seed（绝不重写其身份）；`internal/migrations/framework/` 仅保存单条 `framework-final-seed-and-integrity`（仅框架维护者可改）；`internal/migrations/business/` 是由 `Register`/`init` 注册的业务仓库扩展轨道。三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；全新安装快照建立 24 张表。契约见 `internal/migrations/business/README.md`。
-- 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 都重跑的常驻不变量，判据必须兼容合法业务变更。
+- **启动自动迁移：** `app.auto_migrate` 取 `off`/`check`/`apply`，默认 `apply`，可用环境变量 `APP_AUTO_MIGRATE` 覆盖。`serve` 在绑定端口之前依次执行 installGuard（未安装或安装中断 → 打印 setup 指引并退出）、三轨迁移，以及 `crud.apply_on_migrate` 为 true（默认）时的 `crud_specs` 尾部 apply；编排顺序与 `migrate` 相同，见 `internal/migrations/business/README.md`。启动时 spec apply 需要 `app.auto_migrate: apply` **且** `crud.apply_on_migrate: true`；后者是"让库长期偏离 spec"的逃生口。
+- **启动路径按「全部审批类别已授权」处理：** `requires-approval` 变更（默认值、自增、类型扩宽、属性）在启动时自动执行，不新增也不需要 `--approve`。
+- **`rejected` 变更永不自动执行：** 收窄、unsigned↔signed 翻转、nullable→NOT NULL、enum/set 减成员、主键漂移、扩宽矩阵外的类型变更一律跳过，输出一条 `[database] WARNING` 指名表/列/原因，进程继续服务、不退出。只有硬错误（数据库不可达、迁移 `Up` 失败、锁或元数据查询失败）以状态 1 退出。
+- **CLI：** `migrate --plan` 只读输出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，绝不写库；`migrate --strict` 恢复 `rejected` 失败即退（CI 用）；不带开关的 `migrate` 与启动一样宽松。`crud:apply` 保持既有严格行为与 `--approve` 语义不变。
+- 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 和每次 `serve` 启动都重跑的常驻不变量，判据必须兼容合法业务变更。
 - 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 framework `VerifySchema`/`VerifyUpgradeData` 和 `framework.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）。
 - 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 framework/business 的 `Up` 之前执行。
 - 业务轨道支持可选 `Down` 和 `migrate rollback`；只允许回滚业务迁移，official/framework 仅前向。三轨台账不再使用 `batch`/`revision`，断点直接存放在 `{prefix}migrations_business.breakpoint`；回滚默认退最近一条已完成业务迁移，也支持 `--to-breakpoint`。完整契约见 `internal/migrations/business/README.md`。
 - 迁移编排顺序和 official/framework 维护契约仅框架维护者需要，见 `docs/framework-maintenance.md`；业务仓库只通过 business 轨道扩展迁移。
 - 每条迁移都必须前缀安全（`mysql.prefix` 可变，绝不硬编码 `ba_`）。破坏性重命名、类型变更和回填不能依赖 AutoMigrate。
-- **业务 CRUD 表的结构只由 `crud_specs` → `crud:apply` 物化**（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。禁止在 business 迁移中用 `AutoMigrate`/裸 SQL 创建或修改有 spec 的业务表：会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，常驻 `VerifySchema` 会锁死后续 `crud:delete`。唯一索引通过 spec 的 `indexes:` 声明由 `crud:generate`/`crud:apply` 物化——**禁止写"只补索引"的迁移**（迁移阶段先于 apply，全新库上表不存在会失败；即使跳过，Up 只跑一次、索引永久缺失且 VerifySchema 常驻红牌）。种子迁移需要写业务表时，Up 内先调 `EnsureSpecTable(db, config, "<表名>")` 按 spec 幂等物化依赖表再写种子（只建 schema/索引、不建菜单；`Down` 只删种子数据、不得 DROP 依赖表，所有权归 spec/apply）。迁移只写 spec/apply 表达不了的东西——`rejected` 破坏性变更、种子数据；只有**无 spec 的非 CRUD 自建表**才允许在迁移里建表（自负责最终契约）。
+- **业务 CRUD 表的结构只由 `crud_specs` → `crud:apply` 物化**（`setup` 尾部与 `migrate` 尾部自动执行，`serve` 启动在 `app.auto_migrate: apply` 且 `crud.apply_on_migrate` 为 true 时同样执行，后者默认 `true`）。禁止在 business 迁移中用 `AutoMigrate`/裸 SQL 创建或修改有 spec 的业务表：会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，常驻 `VerifySchema` 会锁死后续 `crud:delete`。唯一索引通过 spec 的 `indexes:` 声明由 `crud:generate`/`crud:apply` 物化——**禁止写"只补索引"的迁移**（迁移阶段先于 apply，全新库上表不存在会失败；即使跳过，Up 只跑一次、索引永久缺失且 VerifySchema 常驻红牌）。种子迁移需要写业务表时，Up 内先调 `EnsureSpecTable(db, config, "<表名>")` 按 spec 幂等物化依赖表再写种子（只建 schema/索引、不建菜单；`Down` 只删种子数据、不得 DROP 依赖表，所有权归 spec/apply）。迁移只写 spec/apply 表达不了的东西——`rejected` 破坏性变更、种子数据；只有**无 spec 的非 CRUD 自建表**才允许在迁移里建表（自负责最终契约）。
 - 不要手改 `cmd/server/wire_gen.go`；provider 或 `cmd/server/wire.go` 变更后运行 `go generate ./cmd/server`。
 - 全新安装快照的 AutoMigrate 由 `internal/model` 共享实体记录与各所有者实体（upload/siteconfig/token/captcha/crud）驱动——实体的 gorm tag 就是唯一 schema 映射，改 tag 即改全新安装 schema，必须对照现有表结构核验；旧迁移轨道下的 gen 模型文件已随 v3.0.0 删除。
 

@@ -141,7 +141,7 @@ go run ./cmd/server setup --yes \
 
 `configs/config.yaml` 应由安装器自动生成——它是只写 MySQL 连接、随机生成的 `token.key` 与 `--env` 选择的 `app.env` 的稀疏覆盖层；不要手写 YAML（容易漏 `token.key`、格式出错或误提交凭据），也不要把生成的 `configs/config.yaml` 提交进仓库。setup 不会覆盖已存在的 `configs/config.yaml`；重装需先删除 `public/install.lock`。
 
-**手动配置和迁移：** 创建只含目标环境覆盖值的 `configs/config.yaml`，填写数据库、密钥等值，再执行迁移。`configs/config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`configs/config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置：
+**手动配置和迁移：** 创建只含目标环境覆盖值的 `configs/config.yaml`，填写数据库、密钥等值，再执行迁移。`configs/config.defaults.yaml` 是运行时完整基座，未写入覆盖层的键由它提供；`configs/config.yaml` 不需要复制完整基座，端口和时区仍通过 `.env` 中的 `APP_PORT`/`APP_TIME_ZONE` 设置。正常启动已会自动迁移（`app.auto_migrate` 默认 `apply`），下面的手工命令用于启动前单独观察迁移输出或使用 `--plan`/`--strict`：
 
 ```bash
 go run ./cmd/server --conf configs/config.yaml migrate
@@ -203,10 +203,13 @@ git merge upstream/v3
 
 将 `YYYYMMDD` 替换为实际日期。`git merge` 产生冲突时，按下表处理；解决后检查 `git status`，逐个 `git add`，再执行 `git commit`。
 
-合并完成后，使用目标环境根目录的 `configs/config.yaml` 执行迁移。迁移有真实数据库副作用，先备份，并确认不是误连生产或其它共享数据库：
+合并完成后即可启动：`serve` 在绑定端口前自动执行三轨迁移与 `crud_specs` 尾部 apply（`app.auto_migrate` 默认 `apply`，`crud.apply_on_migrate` 默认 `true`；裸 `go run ./cmd/server` 与 `docker compose up -d` 都走同一默认值），不再需要单独执行 `migrate`。启动期 spec apply 需要 `app.auto_migrate: apply` **且** `crud.apply_on_migrate: true`，关闭后者只跳过 spec apply、迁移照常执行。迁移仍有真实数据库副作用，升级前先备份，并确认不是误连生产或其它共享数据库。
+
+手工 `migrate` 保留为排障与受控变更路径（例如需要在启动前单独观察迁移输出、或对 `rejected` 使用 `--strict` 失败即退）；它和启动路径共用同一编排：
 
 ```bash
 go run ./cmd/server --conf configs/config.yaml migrate
+go run ./cmd/server --conf configs/config.yaml migrate --plan   # 只读：安装状态、待执行迁移、spec 差量分类
 ```
 
 按改动范围验证，不把 `go test ./...` 作为默认门槛：
@@ -236,6 +239,41 @@ git push origin master
 ```
 
 保留合并提交和升级记录；不要改写 `master` 的远端历史或 force push。
+
+### 发版前的数据影响确认（rejected）
+
+`migrate --plan` 的输出是这项检查的唯一事实源：它以只读方式列出安装状态、待执行迁移的数量与名称和每个 spec 的差量分类，不写库。启动自动迁移与宽松 `migrate` 会跳过 `rejected` 变更并打印 `[database] WARNING`，进程照常服务——**跳过不等于安全**，目标列仍是旧结构，代码按新结构写入时才会暴露问题。
+
+`rejected` 是 apply 安全矩阵中永不可自动执行的破坏性变更，只能由 business 迁移显式处理：
+
+| 类别 | 具体数据风险 |
+|---|---|
+| 收窄（`varchar` 变短、整型变小、`decimal` 精度/标度降低，以及扩宽矩阵外的类型变更） | 超出新长度的值被截断、小数被四舍五入，写回后原始值不可恢复 |
+| signed ↔ unsigned 翻转 | 存量负数无法写入 unsigned 列，被拒或转为 0 |
+| nullable → NOT NULL | 存量 NULL 要么按默认值回填成 0/空串（掩盖"未填写"语义），要么变更直接失败 |
+| enum/set 减成员 | 被移除的存量值变成空串或失效值，依赖该值的分支、筛选和统计出错 |
+| 主键漂移 | 需要重建主键与相关索引，重建期间表不可写；`--allow-rebuild` 下可能丢弃冲突行 |
+
+发版检查清单（逐条写进交付说明，不能只写"有个 rejected"）：
+
+1. 在目标环境配置下运行 `migrate --plan`，抄出所有 `rejected` 的表、列、当前类型/定义、目标定义。
+2. 对每条说明存量数据会怎样：截断、负数变 0、NULL 变默认值、enum 值变空、主键重建。
+3. 列出直接读写这些列的后台模块、接口、导出与报表，标注受影响的行为。
+4. 给出 business 迁移方案：先清洗/搬迁/归档存量数据，再修改列（例如先放宽长度、回填 NULL、把被移除的 enum 值映射到保留值）；无法接受影响就不要改 spec。
+5. 备份目标库并写清回滚路径，等待用户明确确认。
+
+交给用户确认时使用下面这段（替换尖括号内容）：
+
+```text
+本次发版包含 <N> 处数据库变更，应用启动时不会自动执行，需要您确认是否接受其数据影响：
+1. 表 <表名> 列 <列名>：<当前定义> → <目标定义>，影响：<截断/负数变 0/NULL 变默认值/enum 值变空/主键重建>，
+   受影响模块：<后台模块或接口>。
+...
+处理方式：我会先写 business 迁移清洗存量数据再改列；或按您的决定放弃该变更。
+请明确回复是否接受上述影响后再上线。
+```
+
+用户确认前不得发布；确认记录与迁移一起留在仓库历史里。
 
 ## 冲突处理速查
 
