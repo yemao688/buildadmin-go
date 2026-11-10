@@ -966,7 +966,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --plan    # 只读；发�
 go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失败即退，CI 用
 ```
 
-`migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库；`migrate --strict` 在出现 `rejected` 时以失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
+`migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库；`migrate --strict` 在出现 `rejected` 时以失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`--plan` 有意不取生成锁，因此假设没有并发 DDL：容器正在 apply 时运行它可能读到混合状态；需要一致视图请在没有任何容器迁移时运行。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
 
 需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，`crud:apply`/`migrate --strict` 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；启动路径与宽松 `migrate` 按「全部类别已授权」自动执行这类变更。`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以 `CRUD apply WARNING`（`column-order-drift`）提示但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
 
