@@ -68,3 +68,33 @@ func assertRegisterPanics(t *testing.T, migration Migration) {
 	}()
 	Register(migration)
 }
+
+func TestValidateMigrations(t *testing.T) {
+	noop := func(*gorm.DB, *conf.Configuration) error { return nil }
+
+	valid := validMigration(1, "shop-orders")
+	valid.NeedsSpecTables = []string{"ops_banner", "ops_support", "user_money_log"}
+	if err := validateMigrations([]Migration{valid}); err != nil {
+		t.Fatalf("合法的 NeedsSpecTables 被拒绝: %v", err)
+	}
+
+	cases := []struct {
+		intent string
+		list   []Migration
+	}{
+		{"版本必须从 1 开始连续", []Migration{validMigration(2, "one")}},
+		{"迁移名不能为空白", []Migration{{Version: 1, MigrationName: " ", Up: noop}}},
+		{"迁移名必须唯一", []Migration{validMigration(1, "one"), validMigration(2, "one")}},
+		{"Up 不能为空", []Migration{{Version: 1, MigrationName: "one"}}},
+		{"spec 表名不能为空白", []Migration{{Version: 1, MigrationName: "one", Up: noop, NeedsSpecTables: []string{" "}}}},
+		{"spec 表名不能重复声明", []Migration{{Version: 1, MigrationName: "one", Up: noop, NeedsSpecTables: []string{"ops_banner", "ops_banner"}}}},
+		{"spec 表名不能含路径分隔符", []Migration{{Version: 1, MigrationName: "one", Up: noop, NeedsSpecTables: []string{"ops/banner"}}}},
+		{"spec 表名不能含反斜杠", []Migration{{Version: 1, MigrationName: "one", Up: noop, NeedsSpecTables: []string{`ops\banner`}}}},
+		{"spec 表名不能含上跳路径", []Migration{{Version: 1, MigrationName: "one", Up: noop, NeedsSpecTables: []string{"../ops_banner"}}}},
+	}
+	for _, tc := range cases {
+		if err := validateMigrations(tc.list); err == nil {
+			t.Errorf("%s: 未拒绝非法迁移", tc.intent)
+		}
+	}
+}

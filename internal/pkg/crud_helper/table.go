@@ -203,6 +203,14 @@ func EnsureDataScopeIndex(db *gorm.DB, fullTableName, ownerColumn, pk string) er
 	if err := ValidateIndexName(indexName); err != nil {
 		return err
 	}
+	// owner 列可能因 rejected add-field 从未建立：建索引必然 1072，跳过等形状修复。
+	ownerExists, err := hasColumn(db, fullTableName, ownerColumn)
+	if err != nil {
+		return err
+	}
+	if !ownerExists {
+		return nil
+	}
 	var sameNameFirstColumn string
 	if err := db.Raw(
 		"SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? AND SEQ_IN_INDEX = 1 LIMIT 1",

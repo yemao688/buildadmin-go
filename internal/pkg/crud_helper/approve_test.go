@@ -108,10 +108,10 @@ func TestApprovalBlockingMatrix(t *testing.T) {
 	}
 
 	approvedPlan := []ApplyTableResult{{Table: "orders", Diffs: []ApplyChange{{Field: "amount", Class: DiffRequiresApproval, Category: ApprovalDefaults, Reason: "default value change requires approval"}}}}
-	if err := planBlockingError(approvedPlan, false, approved); err != nil {
+	if err := planBlockingError(approvedPlan, false, false, approved); err != nil {
 		t.Fatalf("approved plan was blocked: %v", err)
 	}
-	if err := planBlockingError(approvedPlan, false, nil); err == nil || !strings.Contains(err.Error(), "--approve=defaults") {
+	if err := planBlockingError(approvedPlan, false, false, nil); err == nil || !strings.Contains(err.Error(), "--approve=defaults") {
 		t.Fatalf("unapproved plan error = %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestApprovalBlockingMatrix(t *testing.T) {
 		{Field: "amount", Class: DiffRequiresApproval, Category: ApprovalDefaults, Reason: "default value change requires approval"},
 		{Field: "status", Class: DiffRejected, Reason: "unsigned attribute changes are rejected"},
 	}}}
-	err := planBlockingError(mixed, false, approved)
+	err := planBlockingError(mixed, false, false, approved)
 	if err == nil || strings.Contains(err.Error(), "--approve=defaults") || !strings.Contains(err.Error(), "unsigned attribute changes are rejected") {
 		t.Fatalf("mixed plan error = %v", err)
 	}

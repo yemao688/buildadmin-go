@@ -28,7 +28,21 @@ func ValidateBusinessLedgerSchema(db *gorm.DB, config *conf.Configuration) error
 func RunBusinessMigrations(db *gorm.DB, config *conf.Configuration, list []business.Migration) (int, error) {
 	tracked := make([]core.TrackedMigration, 0, len(list))
 	for _, migration := range list {
-		tracked = append(tracked, core.TrackedMigration{Version: migration.Version, MigrationName: migration.MigrationName, Up: migration.Up, Down: migration.Down, VerifyBaseline: migration.VerifyBaseline, VerifySchema: migration.VerifySchema, VerifyUpgradeData: migration.VerifyUpgradeData})
+		up := migration.Up
+		if len(migration.NeedsSpecTables) > 0 {
+			name := migration.MigrationName
+			needs := append([]string(nil), migration.NeedsSpecTables...)
+			original := migration.Up
+			up = func(db *gorm.DB, cfg *conf.Configuration) error {
+				for _, table := range needs {
+					if err := business.EnsureSpecTable(db, cfg, table); err != nil {
+						return fmt.Errorf("business migration %q needs spec table %q: %w", name, table, err)
+					}
+				}
+				return original(db, cfg)
+			}
+		}
+		tracked = append(tracked, core.TrackedMigration{Version: migration.Version, MigrationName: migration.MigrationName, Up: up, Down: migration.Down, VerifyBaseline: migration.VerifyBaseline, VerifySchema: migration.VerifySchema, VerifyUpgradeData: migration.VerifyUpgradeData})
 	}
 	return core.RunTrackedMigrations(db, config, businessLedgerName, tracked, core.TrackedRunnerOptions{TrackName: "business"})
 }

@@ -1,0 +1,137 @@
+package commands
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/migrations"
+	helper "buildadmin-go/internal/pkg/crud_helper"
+
+	"gorm.io/gorm"
+)
+
+// errDatabaseNotInstalled 表示数据库尚未安装或安装中断，serve 不应继续启动。
+var errDatabaseNotInstalled = errors.New("database not installed")
+
+const (
+	schemaModeOff   = "off"
+	schemaModeCheck = "check"
+	schemaModeApply = "apply"
+
+	blockedChangeHint = "已跳过（rejected），相关模块可能报错；请用 business 迁移处理存量数据"
+)
+
+// schemaModeFromConfig 解析启动结构同步模式：环境变量 > 配置 > apply。
+func schemaModeFromConfig(cfg *conf.Configuration) string {
+	mode := ""
+	if env := strings.TrimSpace(os.Getenv("APP_AUTO_MIGRATE")); env != "" {
+		mode = env
+	} else if cfg != nil {
+		mode = strings.TrimSpace(cfg.App.AutoMigrate)
+	}
+	if mode == "" {
+		return schemaModeApply
+	}
+	switch strings.ToLower(mode) {
+	case schemaModeOff, schemaModeCheck, schemaModeApply:
+		return strings.ToLower(mode)
+	default:
+		fmt.Printf("[database] WARNING 未知的 auto_migrate 值 %q，按 check 处理\n", mode)
+		return schemaModeCheck
+	}
+}
+
+// ensureSchema 按 auto_migrate 模式在启动前同步数据库结构；rejected 变更只告警不阻断。
+func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
+	mode := schemaModeFromConfig(cfg)
+	if mode == schemaModeOff {
+		return nil
+	}
+
+	report, err := migrations.Status(db, cfg)
+	if err != nil {
+		return err
+	}
+	if report.State == migrations.InstallFresh || report.State == migrations.InstallInterrupted {
+		printDatabaseInstallGuidance(report.State)
+		return errDatabaseNotInstalled
+	}
+	printMigrationStatus(report)
+	if mode == schemaModeCheck {
+		return nil
+	}
+
+	if _, err := migrations.Run(db, cfg); err != nil {
+		return err
+	}
+	if cfg == nil || !cfg.Crud.ApplyOnMigrate {
+		fmt.Println("[database] spec apply 已关闭（crud.apply_on_migrate=false），仅执行迁移")
+		return nil
+	}
+	if specDir == "" {
+		fmt.Println("[database] 未找到 crud_specs 目录，跳过 spec apply")
+		return nil
+	}
+	results, err := helper.ApplySpecsFromDir(db, cfg, specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
+	if err != nil {
+		return err
+	}
+	printSchemaApplyResults(results)
+	return nil
+}
+
+func printMigrationStatus(report migrations.StatusReport) {
+	parts := make([]string, 0, len(report.Tracks))
+	pending, incomplete := 0, 0
+	var pendingNames []string
+	for _, track := range report.Tracks {
+		parts = append(parts, fmt.Sprintf("%s %d/%d", track.Track, track.Applied, track.Registered))
+		pending += track.Pending
+		incomplete += track.Incomplete
+		pendingNames = append(pendingNames, track.PendingNames...)
+	}
+	if len(pendingNames) > 0 {
+		fmt.Printf("[database] 迁移: %s (pending %d: %s; incomplete %d)\n", strings.Join(parts, ", "), pending, strings.Join(pendingNames, ", "), incomplete)
+		return
+	}
+	fmt.Printf("[database] 迁移: %s (pending %d, incomplete %d)\n", strings.Join(parts, ", "), pending, incomplete)
+}
+
+func printDatabaseInstallGuidance(state migrations.InstallRecoveryState) {
+	switch state {
+	case migrations.InstallFresh:
+		fmt.Println("[database] 数据库尚未安装，无法同步数据库结构。")
+	case migrations.InstallInterrupted:
+		fmt.Println("[database] 检测到未完成的安装，无法同步数据库结构。")
+	default:
+		fmt.Println("[database] 数据库状态异常，无法同步数据库结构。")
+	}
+	fmt.Println("请先执行安装命令（安装完成会自动创建数据库结构）：")
+	fmt.Println()
+	fmt.Println("  宿主机:")
+	fmt.Println("    go run ./cmd/server setup [--yes] ...")
+	fmt.Println()
+	fmt.Println("  容器内（docker compose）:")
+	fmt.Println("    docker compose run --rm buildadmin-go setup [同上参数]")
+}
+
+func printSchemaApplyResults(results []helper.ApplyTableResult) {
+	for _, result := range results {
+		switch result.Action {
+		case helper.ApplyCreated, helper.ApplyAltered, helper.ApplyRebuilt, helper.ApplyPartial:
+			fmt.Printf("[database] apply %s %s\n", string(result.Action), result.Table)
+			if result.Action == helper.ApplyRebuilt {
+				fmt.Printf("[database] WARNING %s: 表已删除重建，存量数据可能丢失\n", result.Table)
+			}
+		}
+		for _, change := range result.Unmanaged {
+			fmt.Printf("[database] WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+		}
+		for _, change := range result.Blocked {
+			fmt.Printf("[database] WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)
+		}
+	}
+}

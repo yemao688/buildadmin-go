@@ -70,23 +70,92 @@ type indexDiffPlan struct {
 
 // syncSpecIndexes 物化 spec 声明的缺失索引（safe-auto 补建）。在列变更之后
 // 调用（新增索引可能引用本表新列）；全新建表时 createTableDDL 已内联索引，
-// 本函数幂等（deriveIndexPlan 对已存在索引不产生 Added）。返回线外索引/定义
-// 漂移的告警文本（调用方决定是否输出；apply 与 generate 行为一致）。
-func syncSpecIndexes(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) ([]string, error) {
+// 本函数幂等（deriveIndexPlan 对已存在索引不产生 Added）。引用不存在列的索引
+// （被跳过的 rejected add-field）会以 skipped 返回而不是让建索引 1072 失败。
+// 返回线外索引/定义漂移的告警文本与跳过的索引（调用方决定是否输出）。
+func syncSpecIndexes(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) (warnings []string, skipped []ApplyChange, err error) {
 	plan, err := deriveIndexPlan(db, fullTableName, dataScopeIndexName(table, fields), table.Indexes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, change := range plan.Added {
+		missing, err := missingIndexColumn(db, fullTableName, table.Indexes, change.Field)
+		if err != nil {
+			return nil, nil, err
+		}
+		if missing != "" {
+			skipped = append(skipped, ApplyChange{
+				Field: change.Field, Type: change.Type, Class: DiffRejected,
+				Reason: fmt.Sprintf("index skipped: referenced column %q does not exist (its add-field was rejected)", missing),
+			})
+			continue
+		}
 		if err := db.Exec(change.DDL).Error; err != nil {
-			return nil, fmt.Errorf("add index %q: %w", change.Field, err)
+			return nil, nil, fmt.Errorf("add index %q: %w", change.Field, err)
 		}
 	}
-	warnings := make([]string, 0, len(plan.Unmanaged))
+	warnings = make([]string, 0, len(plan.Unmanaged))
 	for _, change := range plan.Unmanaged {
 		warnings = append(warnings, fmt.Sprintf("index %s: %s", change.Field, change.Reason))
 	}
-	return warnings, nil
+	return warnings, skipped, nil
+}
+
+// planIndexAdditions 过滤规划阶段引用了"应用后仍不存在"的列的索引，使 --plan 与
+// 实际执行（syncSpecIndexes 执行后的列检查）一致。willExist 是应用后的列名集合
+// （小写）：物理已有列 + 未被 rejected 的新增列。
+func planIndexAdditions(added []ApplyChange, indexes []crudmodel.IndexSpec, willExist map[string]bool) (kept, skipped []ApplyChange) {
+	for _, change := range added {
+		missing := ""
+		for _, idx := range indexes {
+			if idx.Name != change.Field {
+				continue
+			}
+			for _, column := range idx.Columns {
+				base := column
+				if i := strings.IndexByte(base, '('); i >= 0 {
+					base = base[:i]
+				}
+				if !willExist[strings.ToLower(base)] {
+					missing = base
+					break
+				}
+			}
+			break
+		}
+		if missing != "" {
+			skipped = append(skipped, ApplyChange{
+				Field: change.Field, Type: change.Type, Class: DiffRejected,
+				Reason: fmt.Sprintf("index skipped: referenced column %q does not exist after apply", missing),
+			})
+			continue
+		}
+		kept = append(kept, change)
+	}
+	return kept, skipped
+}
+
+// missingIndexColumn 返回索引引用但在数据库中不存在的第一列；全部存在时返回空串。
+func missingIndexColumn(db *gorm.DB, fullTableName string, indexes []crudmodel.IndexSpec, indexName string) (string, error) {
+	for _, idx := range indexes {
+		if idx.Name != indexName {
+			continue
+		}
+		for _, column := range idx.Columns {
+			base := column
+			if i := strings.IndexByte(base, '('); i >= 0 {
+				base = base[:i]
+			}
+			exists, err := hasColumn(db, fullTableName, base)
+			if err != nil {
+				return "", err
+			}
+			if !exists {
+				return base, nil
+			}
+		}
+	}
+	return "", nil
 }
 
 // deriveIndexDiffs 对比实际索引与 spec 声明（纯函数，便于测试）。

@@ -35,7 +35,8 @@ const (
 	ApplyAltered   ApplyAction = "altered"
 	ApplyUnchanged ApplyAction = "unchanged"
 	ApplyRebuilt   ApplyAction = "rebuilt"
-	ApplyBlocked   ApplyAction = "blocked"
+	ApplyBlocked   ApplyAction = "blocked" // 全部差量被跳过，未执行任何 DDL
+	ApplyPartial   ApplyAction = "partial" // safe-auto/已批准子集已执行，另有 blocked 差量被跳过
 	ApplySkipped   ApplyAction = "skipped" // registerOnly 登记 spec：仅 crud_log 登记，不建表不改表
 )
 
@@ -45,6 +46,8 @@ type ApplyOptions struct {
 	AdminID            int32
 	Plan               bool
 	ApprovedCategories map[ApprovalCategory]bool
+	ApproveAll         bool // 将所有 requires-approval 类别视为已批准（启动自动迁移使用）
+	AllowRejected      bool // rejected 差量跳过并在结果中报告，不返回 ApplyBlockedError（启动自动迁移使用）
 }
 
 type ApplyChange struct {
@@ -64,6 +67,7 @@ type ApplyTableResult struct {
 	Action      ApplyAction
 	Changes     []string
 	Diffs       []ApplyChange
+	Blocked     []ApplyChange // 被跳过、未执行的差量（rejected 或未批准），供启动日志说明"哪些没做"
 	Unmanaged   []ApplyChange
 	Destructive bool
 	MenuResults []MenuSyncResult
@@ -128,6 +132,14 @@ func ParseApprovalCategories(value string) (map[ApprovalCategory]bool, error) {
 		approved[category] = true
 	}
 	return approved, nil
+}
+
+func allApprovalCategories() map[ApprovalCategory]bool {
+	approved := make(map[ApprovalCategory]bool, len(approvalCategories))
+	for _, category := range approvalCategories {
+		approved[category] = true
+	}
+	return approved
 }
 
 func approvalCategoryNames() []string {
@@ -219,6 +231,9 @@ func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts A
 	if opts.AdminID <= 0 {
 		opts.AdminID = 1
 	}
+	if opts.ApproveAll {
+		opts.ApprovedCategories = allApprovalCategories()
+	}
 	tableM := model.NewTableRepository(cfg, db)
 	results = make([]ApplyTableResult, 0, len(specPaths))
 	for _, path := range specPaths {
@@ -237,21 +252,16 @@ func ApplySpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts A
 // PlanSpecs reads the same database state as apply but never changes schema,
 // menus, CRUD logs, files, or other data. Rejected changes are returned in the
 // plan and also produce a non-nil error so the CLI exits non-zero.
-func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts ApplyOptions) (results []ApplyTableResult, retErr error) {
+func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts ApplyOptions) (results []ApplyTableResult, err error) {
 	if db == nil || cfg == nil {
 		return nil, fmt.Errorf("crud plan requires database and configuration")
 	}
-	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
-	if err != nil {
-		return nil, err
-	}
-	db = lockedDB
-	defer func() {
-		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
-			retErr = releaseErr
-		}
-	}()
+	// 只读计划不取生成锁：线上 serve 正在 apply 时仍要能查看计划，读到中间态
+	// 不会产生任何 DDL 或写入，不影响"不写库"契约。
 	tableM := model.NewTableRepository(cfg, db)
+	if opts.ApproveAll {
+		opts.ApprovedCategories = allApprovalCategories()
+	}
 	for _, path := range specPaths {
 		result, err := planOneSpec(db, cfg, tableM, path, opts)
 		if err != nil {
@@ -259,22 +269,38 @@ func PlanSpecs(db *gorm.DB, cfg *conf.Configuration, specPaths []string, opts Ap
 		}
 		results = append(results, *result)
 	}
-	if err := planBlockingError(results, opts.AllowRebuild, opts.ApprovedCategories); err != nil {
+	if err := planBlockingError(results, opts.AllowRebuild, opts.AllowRejected, opts.ApprovedCategories); err != nil {
 		return results, err
 	}
 	return results, nil
 }
 
-func planBlockingError(results []ApplyTableResult, allowRebuild bool, approved map[ApprovalCategory]bool) error {
+func planBlockingError(results []ApplyTableResult, allowRebuild, allowRejected bool, approved map[ApprovalCategory]bool) error {
 	for _, result := range results {
 		if result.Destructive && allowRebuild {
 			continue
 		}
-		if blocked := blockedApplyChanges(result.Diffs, approved); len(blocked) > 0 {
+		blocked := blockedApplyChanges(result.Diffs, approved)
+		if allowRejected {
+			// 宽松模式只放过 rejected；未批准的 requires-approval 仍然阻止严格计划。
+			blocked = withoutRejectedChanges(blocked)
+		}
+		if len(blocked) > 0 {
 			return newApplyBlockedError(result.Table, blocked)
 		}
 	}
 	return nil
+}
+
+func withoutRejectedChanges(changes []ApplyChange) []ApplyChange {
+	kept := make([]ApplyChange, 0, len(changes))
+	for _, change := range changes {
+		if change.Class == DiffRejected {
+			continue
+		}
+		kept = append(kept, change)
+	}
+	return kept
 }
 
 func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepository, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
@@ -321,7 +347,9 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 			return result, nil
 		}
 		result.Action = ApplyBlocked
-		result.Diffs = []ApplyChange{{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: reason}}
+		blocked := ApplyChange{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: reason}
+		result.Diffs = []ApplyChange{blocked}
+		result.Blocked = []ApplyChange{blocked}
 		return result, nil
 	}
 	diffs := deriveAlterDiff(current, spec.Fields)
@@ -329,6 +357,20 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 	if err != nil {
 		return nil, err
 	}
+	// 模拟应用后的列集合：物理已有列 + 未被 rejected 的新增列；据此过滤计划中
+	// 引用不存在列的索引，避免 --plan 显示实际会被跳过的 ADD INDEX。
+	willExist := make(map[string]bool, len(current)+len(diffs))
+	for _, column := range current {
+		willExist[strings.ToLower(column.COLUMN_NAME)] = true
+	}
+	for _, diff := range diffs {
+		if diff.Class == DiffRejected || diff.Change.Type != "add-field" {
+			continue
+		}
+		willExist[strings.ToLower(diff.Field.Name)] = true
+	}
+	var skippedIndexes []ApplyChange
+	indexPlan.Added, skippedIndexes = planIndexAdditions(indexPlan.Added, spec.Table.Indexes, willExist)
 	result.Diffs = make([]ApplyChange, 0, len(diffs)+len(indexPlan.Added))
 	result.Unmanaged = unmanagedChanges(current, spec.Fields)
 	for _, diff := range diffs {
@@ -340,12 +382,17 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 	}
 	result.Diffs = append(result.Diffs, indexPlan.Added...)
 	result.Unmanaged = append(result.Unmanaged, indexPlan.Unmanaged...)
-	if len(diffs) == 0 && len(indexPlan.Added) == 0 {
+	if len(diffs) == 0 && len(indexPlan.Added) == 0 && len(skippedIndexes) == 0 {
 		result.Action = ApplyUnchanged
 	} else if firstBlockingDiff(diffs, opts.ApprovedCategories) != nil {
 		result.Action = ApplyBlocked
+		result.Blocked = blockedApplyChanges(result.Diffs, opts.ApprovedCategories)
 	} else {
 		result.Action = ApplyAltered
+	}
+	result.Blocked = append(result.Blocked, skippedIndexes...)
+	if len(skippedIndexes) > 0 && result.Action == ApplyUnchanged {
+		result.Action = ApplyBlocked
 	}
 	return result, nil
 }
@@ -489,6 +536,31 @@ func primaryKeyDrift(actualPKs []string, fields []crudmodel.Field, columns []mod
 	return false, ""
 }
 
+// applyAddFieldPositions 按「执行后实际会存在的列」重写 ADD FIELD 的定位子句。
+// 宽松模式（AllowRejected）会跳过 rejected/未批准的 add-field，其 spec 前驱可能
+// 从未建立，直接用会让 ALTER ... AFTER <missing> 报 1054 并让启动直接退出。
+func applyAddFieldPositions(diffs []AlterDiff, fields []crudmodel.Field, existing map[string]bool, opts ApplyOptions) {
+	adding := make(map[string]bool, len(diffs))
+	for _, diff := range diffs {
+		if diff.Change.Type != "add-field" {
+			continue
+		}
+		if diff.Class != DiffSafeAuto && !isApprovedDiff(diff.Class, diff.Category, opts.ApprovedCategories) {
+			continue
+		}
+		adding[strings.ToLower(diff.Field.Name)] = true
+	}
+	positions := resolveAddFieldPositions(fields, adding, existing)
+	for i := range diffs {
+		if diffs[i].Change.Type != "add-field" {
+			continue
+		}
+		if after, ok := positions[diffs[i].Field.Name]; ok {
+			diffs[i].Change.After = after
+		}
+	}
+}
+
 func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepository, specPath string, opts ApplyOptions) (*ApplyTableResult, error) {
 	spec, err := LoadSpec(specPath)
 	if err != nil {
@@ -525,9 +597,14 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 		specPK := strings.Join(specPrimaryKeys(spec.Fields), ",")
 		action, err := decideApplyAction(pkDrift, opts.AllowRebuild, spec.Table.Name, strings.Join(actualPKs, ","), specPK)
 		if err != nil {
+			blocked := ApplyChange{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: pkReason}
 			result.Action = ApplyBlocked
-			result.Diffs = []ApplyChange{{Field: "<primary key>", Type: "primary-key-drift", Class: DiffRejected, Reason: pkReason}}
-			return result, &ApplyBlockedError{Table: spec.Table.Name, Class: DiffRejected, Reasons: []string{pkReason}}
+			result.Diffs = []ApplyChange{blocked}
+			if !opts.AllowRejected {
+				return result, &ApplyBlockedError{Table: spec.Table.Name, Class: DiffRejected, Reasons: []string{pkReason}}
+			}
+			result.Blocked = []ApplyChange{blocked}
+			return result, nil
 		}
 		result.Action = action
 		result.Destructive = action == ApplyRebuilt
@@ -537,6 +614,13 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 			}
 		} else {
 			diffs := deriveAlterDiff(current, spec.Fields)
+			// 宽松模式会跳过 rejected/未批准的新增列，直接用 spec 前驱定位会
+			// 指向不存在的列（MySQL 1054 → 启动退出），这里按实际会存在的列重算。
+			existingColumns := make(map[string]bool, len(current))
+			for _, column := range current {
+				existingColumns[strings.ToLower(column.COLUMN_NAME)] = true
+			}
+			applyAddFieldPositions(diffs, spec.Fields, existingColumns, opts)
 			indexPlan, err = deriveIndexPlan(db, fullName, dataScopeIndexName(spec.Table, spec.Fields), spec.Table.Indexes)
 			if err != nil {
 				return nil, err
@@ -544,9 +628,13 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 			result.Diffs = applyChangesFromDiffs(diffs, opts.ApprovedCategories)
 			result.Diffs = append(result.Diffs, indexPlan.Added...)
 			result.Unmanaged = append(result.Unmanaged, indexPlan.Unmanaged...)
-			if blocking := firstBlockingDiff(diffs, opts.ApprovedCategories); blocking != nil {
+			if blocked := blockedApplyChanges(result.Diffs, opts.ApprovedCategories); len(blocked) > 0 {
+				result.Blocked = blocked
 				result.Action = ApplyBlocked
-				return result, newApplyBlockedError(spec.Table.Name, blockedApplyChanges(result.Diffs, opts.ApprovedCategories))
+				if !opts.AllowRejected {
+					return result, newApplyBlockedError(spec.Table.Name, blocked)
+				}
+				// 宽松模式：继续执行 safe-auto 与已批准子集，rejected 留在 Blocked 里
 			}
 			spec.Table.DesignChange = make([]crudmodel.ChangeField, 0, len(diffs))
 			for _, diff := range diffs {
@@ -557,7 +645,7 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 				spec.Table.DesignChange = append(spec.Table.DesignChange, diff.Change)
 				result.Changes = append(result.Changes, diff.Change.Type+" "+diff.Change.NewName)
 			}
-			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 && len(indexPlan.Added) == 0 {
+			if len(spec.Table.DesignChange) == 0 && len(diffs) == 0 && len(indexPlan.Added) == 0 && len(result.Blocked) == 0 {
 				result.Action = ApplyUnchanged
 			}
 		}
@@ -567,10 +655,19 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 	}
 	// 索引在列变更之后执行（新增索引可能引用本表新列）；全新建表时
 	// createTableDDL 已内联索引，此处只处理已有表场景。
-	if _, err := syncSpecIndexes(db, fullName, spec.Table, spec.Fields); err != nil {
+	_, skippedIndexes, err := syncSpecIndexes(db, fullName, spec.Table, spec.Fields)
+	if err != nil {
 		return nil, err
 	}
+	result.Blocked = append(result.Blocked, skippedIndexes...)
+	skippedIndexNames := make(map[string]bool, len(skippedIndexes))
+	for _, change := range skippedIndexes {
+		skippedIndexNames[change.Field] = true
+	}
 	for _, change := range indexPlan.Added {
+		if skippedIndexNames[change.Field] {
+			continue
+		}
 		result.Changes = append(result.Changes, change.Type+" "+change.Field)
 	}
 	if !opts.SkipMenu {
@@ -586,6 +683,13 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 		return nil, fmt.Errorf("crud log adopt: %w", err)
 	}
 	result.LogID = logID
+	if len(result.Blocked) > 0 {
+		if len(result.Changes) > 0 {
+			result.Action = ApplyPartial
+		} else {
+			result.Action = ApplyBlocked
+		}
+	}
 	return result, nil
 }
 
@@ -646,6 +750,8 @@ func applyChangeReasons(changes []ApplyChange) []string {
 
 // adoptCrudLog 确保目标库存在与当前 spec 一致的 success 记录：无则新建，
 // 有则回写最新 spec payload（manifest 随当前布局重算，保持 crud:delete 可用性）。
+// adoptCrudLog 记录 spec 期望的模块形状，供菜单/删除等模块账本使用。
+// 启动部分应用（ApplyPartial）时实际表可能少于 spec，以启动日志的 WARNING 为准。
 func adoptCrudLog(db *gorm.DB, cfg *conf.Configuration, spec *GenerateOptions, adminID int32) (int32, error) {
 	manifest, err := BuildFileManifestForFields(crudmodel.Table(spec.Table), []crudmodel.Field(spec.Fields))
 	if err != nil {

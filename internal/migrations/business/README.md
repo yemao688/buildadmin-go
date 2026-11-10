@@ -12,16 +12,19 @@ import (
 
 func init() {
 	Register(Migration{
-		Version:       1,
-		MigrationName: "shop-orders",
+		Version:         1,
+		MigrationName:   "shop-orders",
+		NeedsSpecTables: []string{"ops_banner"}, // 可选：Up 之前按 spec 物化这些表
 		Up: func(db *gorm.DB, config *conf.Configuration) error {
 			// 只创建或修改本业务迁移拥有的表。
 			return nil
 		},
+		// Down 可选：只有需要支持 migrate rollback 时才写，必须允许失败重试。
 		Down: func(db *gorm.DB, config *conf.Configuration) error {
-			// 回滚 Up；该函数必须允许失败重试。
 			return nil
 		},
+		// VerifyBaseline / VerifySchema / VerifyUpgradeData 均为可选，只在需要断言真实不变量时才写，
+		// 判据与执行时机见下文「Verify 回调默认不写」。
 		VerifyBaseline: func(db *gorm.DB, config *conf.Configuration) error {
 			return nil
 		},
@@ -37,9 +40,25 @@ func init() {
 
 `Version` 必须从 1 开始严格递增，`MigrationName` 必须唯一。`Up` 必须幂等，并按业务键判重，不能按偶然的行位置判重。不要假定表前缀是 `ba_`；构造表名时使用配置中的前缀和 `internal/migrations/internal/core.TableName`。除非数据确实由业务迁移拥有，否则不得修改 `official` 或 `framework` 表中的数据。
 
+用 `go run ./cmd/server migrate new <name>` 生成下一条版本的骨架文件（版本号按注册表与目录内文件名自动递增，不覆盖已有文件）。
+
+### 声明 Up 需要的新结构（`NeedsSpecTables`）
+
+迁移的 `Up` 依赖由 spec 物化的业务表时，在 `NeedsSpecTables` 中声明逻辑表名即可，不必在 `Up` 内手写 `EnsureSpecTable`：runner 会在该迁移的 `Up` 之前逐张物化声明的表（只建 schema 与索引，不建菜单），等价于手动调用一次 `EnsureSpecTable`。
+
+- 声明的表若在 spec 中存在被安全矩阵拒绝的差量（`rejected`），迁移会直接失败，而不是在错误形状上继续执行；
+- 做 rename、DROP 列的迁移**不要**声明该表：提前物化会先按 spec 建出目标形状，与迁移自身的意图冲突；
+- 表名不是静态已知（例如按配置拼装）时，仍在 `Up` 内调用 `EnsureSpecTable`。
+
+### `Verify` 回调默认不写
+
+三个 `Verify*` 回调是可选的，只在需要断言真实不变量时才写。`VerifySchema` 和 `VerifyUpgradeData` 是常驻检查，每次 `migrate` 与每次 `serve` 启动都会运行，判据必须廉价且兼容后续合法的业务变更；`VerifyBaseline` 只在 `Up` 成功后执行一次。
+
 ## 职责边界：spec/apply 与迁移的分工
 
-业务表的 schema 物化只有一条路径：`crud_specs/*.yaml` → `crud:apply`（`setup` 尾部与 `migrate` 尾部自动执行，`crud.apply_on_migrate` 默认 `true`）。**不要在业务迁移中用 `AutoMigrate` 或裸 SQL 创建有 spec 的业务表**，原因：
+`serve` 启动路径现在也会执行同一套 `migrations.Run` 与尾部 apply（`app.auto_migrate` 默认 `apply`，apply 另受 `crud.apply_on_migrate` 默认 `true` 控制），因此 business 迁移必须幂等、可重试；`rejected` 差量不阻断启动，只输出 `[database] WARNING`。**顺序不变**：business 迁移仍在尾部 apply 之前，`EnsureSpecTable` 规则照旧。
+
+业务表的 schema 物化只有一条路径：`crud_specs/*.yaml` → `crud:apply`（`setup` 尾部、`migrate` 尾部与 `serve` 启动自动执行，`crud.apply_on_migrate` 默认 `true`）。**不要在业务迁移中用 `AutoMigrate` 或裸 SQL 创建有 spec 的业务表**，原因：
 
 - **双重事实源**：apply 与迁移各按一份形状建表，一旦分歧，apply 会以 `safe-auto` 悄悄修正或 `rejected` 红牌阻塞，冲突难以归因；
 - **绕过安全矩阵**：`AutoMigrate` 静默建列/扩宽，没有 apply 的分类审批与拒绝机制；

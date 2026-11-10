@@ -136,7 +136,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	engine := router3.InitRouter(logger, configuration, adminRouter, apiRouter, countryService)
 	server := commands.NewHttpServer(configuration, engine)
 	cronCron := cron.NewCron(zapLogger)
-	serverApp := commands.NewServerApp(configuration, zapLogger, authorization, server, cronCron)
+	serverApp := commands.NewServerApp(configuration, zapLogger, authorization, server, cronCron, gormDB)
 	return serverApp, func() {
 	}, nil
 }

@@ -20,4 +20,5 @@ type App struct {
 	CorsRequestDomain  string `mapstructure:"cors_request_domain" json:"cors_request_domain" yaml:"cors_request_domain"`
 	DocsEnabled        bool   `mapstructure:"docs_enabled" json:"docs_enabled" yaml:"docs_enabled"`
 	DocsPassword       string `mapstructure:"docs_password" json:"docs_password" yaml:"docs_password"`
+	AutoMigrate        string `mapstructure:"auto_migrate" json:"auto_migrate" yaml:"auto_migrate"`
 }

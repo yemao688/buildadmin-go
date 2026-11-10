@@ -48,7 +48,7 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 
 新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 属于显式豁免。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由，新增非三段式路由必须在评审中显式处理；启动 debug 模式会输出未登记也未豁免的路由告警。
 
-迁移回调分为两类契约：`VerifyBaseline` 是应用迁移时的一次性基线契约，只在对应 `Up` 成功后执行；失败会随应用重试，已完成的迁移记录不再执行它，因此判据可以精确描述该迁移刚建立的基线。`VerifySchema` 与 `VerifyUpgradeData` 是 standing 运行时不变量，每次 migrate 都会执行，判据必须兼容业务仓库在基线之上的合法改造。
+迁移回调分为两类契约：`VerifyBaseline` 是应用迁移时的一次性基线契约，只在对应 `Up` 成功后执行；失败会随应用重试，已完成的迁移记录不再执行它，因此判据可以精确描述该迁移刚建立的基线。`VerifySchema` 与 `VerifyUpgradeData` 是 standing 运行时不变量，每次 migrate 与每次 serve 启动都会执行，判据必须兼容业务仓库在基线之上的合法改造。
 
 迁移编排顺序必须保持不变：
 
@@ -62,6 +62,7 @@ prefix validation → migration lock → upstream-compatible preflight
 ```
 
 - 迁移 `Up` 函数必须幂等、前缀安全（`mysql.prefix` 可变，永不硬编码 `ba_`）、按业务键判重。
+- `serve` 启动默认运行同一编排（`app.auto_migrate: apply`），因此每条迁移都必须保持幂等、可重跑；`VerifySchema`/`VerifyUpgradeData` 现在每次启动都执行，不只 `migrate`。
 - 不得用表为空或 `id=1` 检查推断官方 seed 状态；seed 拥有的写入只有在官方 seed 之后才可靠，编排器保证它在 framework/business 的 `Up` 之前运行。
 - 破坏性重命名、类型变更和回填不得依赖 AutoMigrate。
 

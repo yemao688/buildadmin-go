@@ -33,7 +33,7 @@ func TestGeneratePathSyncsMissingIndexes(t *testing.T) {
 	if err := HandleTableDesign(db, table, tableSpec, fields); err != nil {
 		t.Fatalf("HandleTableDesign: %v", err)
 	}
-	warnings, err := syncSpecIndexes(db, table, tableSpec, fields)
+	warnings, _, err := syncSpecIndexes(db, table, tableSpec, fields)
 	if err != nil {
 		t.Fatalf("syncSpecIndexes: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestGeneratePathSyncsMissingIndexes(t *testing.T) {
 	assertIndexOnDB(t, db, table, "uk_order_no", true)
 
 	// 幂等：再次同步不产生新增、不报错。
-	warnings, err = syncSpecIndexes(db, table, tableSpec, fields)
+	warnings, _, err = syncSpecIndexes(db, table, tableSpec, fields)
 	if err != nil {
 		t.Fatalf("second syncSpecIndexes: %v", err)
 	}

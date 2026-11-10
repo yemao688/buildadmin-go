@@ -14,6 +14,8 @@ services:
       # 容器内端口固定 9900（镜像 EXPOSE 与代码兜底一致）；APP_PORT 只作为
       # 宿主机映射端口（host:9900），不再注入容器。
       APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
+      # 覆盖 app.auto_migrate：off/check/apply，决定启动时是否同步库结构。
+      APP_AUTO_MIGRATE: ${APP_AUTO_MIGRATE:-apply}
     ports:
       - "${APP_PORT:-9900}:9900"
     # 三个 bind mount 都必须可写：应用要写 configs/config.yaml、public/install.lock、
@@ -45,7 +47,8 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      # 迁移在端口绑定前执行，冷启动需要更长的宽限期。
+      start_period: 120s
     restart: unless-stopped
     networks:
       - 1panel-network

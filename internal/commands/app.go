@@ -4,6 +4,7 @@ import (
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
+	helper "buildadmin-go/internal/pkg/crud_helper"
 	appVersion "buildadmin-go/internal/pkg/version"
 	"context"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 )
 
 // appStartedAt approximates process start for the "ready in" banner line.
@@ -27,6 +29,7 @@ type ServerApp struct {
 	authM   *adminMiddleware.Authorization
 	httpSrv *http.Server
 	cronSrv *cron.Cron
+	db      *gorm.DB
 	cxt     context.Context
 }
 
@@ -48,6 +51,7 @@ func NewServerApp(
 	authM *adminMiddleware.Authorization,
 	httpSrv *http.Server,
 	cronSrv *cron.Cron,
+	db *gorm.DB,
 ) *ServerApp {
 	return &ServerApp{
 		config:  config,
@@ -55,8 +59,14 @@ func NewServerApp(
 		authM:   authM,
 		httpSrv: httpSrv,
 		cronSrv: cronSrv,
+		db:      db,
 		cxt:     context.Background(),
 	}
+}
+
+// EnsureSchema 实现 App 接口：在绑定端口前按 auto_migrate 同步数据库结构。
+func (a *ServerApp) EnsureSchema() error {
+	return ensureSchema(a.db, a.config, helper.DefaultSpecDir())
 }
 
 // Run 实现 App 接口：同步绑定监听端口并启动 http/cron server，随后输出启动横幅。

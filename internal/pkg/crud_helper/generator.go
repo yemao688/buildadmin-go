@@ -305,7 +305,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions
 	}
 	// 开发库与部署库形状一致：crud:generate 同样物化 spec 声明的缺失索引
 	// （新建表时 createTableDDL 已内联，此处幂等；已有表 alter 时补建）。
-	indexWarnings, err := syncSpecIndexes(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields)
+	indexWarnings, _, err := syncSpecIndexes(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields)
 	if err != nil {
 		return fail("index sync", err)
 	}

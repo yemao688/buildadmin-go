@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.3.5
+
+> 启动自动迁移批次：`serve` 在绑定端口前执行三轨迁移与 `crud_specs` 尾部 apply，`requires-approval` 自动放行、`rejected` 只告警不阻断；新增 `migrate --plan` 只读检查与 `migrate --strict` 失败即退，并把发版前的数据影响确认写成强制纪律。
+
+- **Added (启动自动迁移):** 新配置 `app.auto_migrate`（`off`/`check`/`apply`，默认 `apply`，环境变量 `APP_AUTO_MIGRATE` 覆盖；compose 以 `${APP_AUTO_MIGRATE:-apply}` 注入）。`serve` 绑端口前依次执行 installGuard（未安装/安装中断打印 setup 指引并退出）、三轨迁移、`crud.apply_on_migrate` 为 true（默认）时的 `crud_specs` 尾部 apply；启动路径按「全部审批类别已授权」处理，`requires-approval` 变更（默认值、自增、类型扩宽、属性）自动执行，不新增也不需要 `--approve`。`rejected` 变更永不自动执行：跳过并输出 `[database] WARNING`（表/列/原因），进程继续服务；只有硬错误（数据库不可达、迁移 `Up` 失败、锁或元数据查询失败）以状态 1 退出。
+- **Fixed (启动路径的部分应用):** 被 `rejected` 跳过的 `add-field` 会让同表索引（含 data_scope 机制索引）无法建立——启动路径现在跳过这些索引并告警，表按 `apply partial` 报告已执行与未执行的差量，不再因 `1072` 让进程退出；`migrate --plan` 不取生成锁，线上 serve 正在 apply 时仍可查看计划。
+- **Fixed (宽松模式跨列定位):** 同一份 spec 里前一个新增列被 `rejected` 跳过、后一个新增列可自动执行时，后者的 `ALTER ... AFTER <prev>` 仍指向从未建立的列，MySQL 报 `1054` 让 `serve` 以状态 1 退出并陷入重启循环（`--plan` 也预测不到）。启动/宽松路径现在按「执行后实际会存在的列」重算定位：越过被跳过的列，前面没有确定存在的列时置表首；严格模式结果与原来逐字一致，不改变 `crud:apply` 语义。
+- **Added (发布纪律):** 发版前必须运行 `migrate --plan` 检查 `rejected`，逐条列出受影响的表/列、变更内容与可能的数据影响（截断、负数变 0、NULL 变默认值、enum 值变空、主键重建），明确询问用户确认后才可上线；正解是在 business 迁移里先处理存量数据再改列。检查清单与给用户的确认话术见 `docs/framework-workflow.md`「发版前的数据影响确认（rejected）」。
+- **Changed (CLI):** 新增 `migrate --plan`（只读：安装状态、待执行迁移数量、每个 spec 的差量分类，绝不写库）与 `migrate --strict`（`rejected` 失败即退，供 CI 使用）；不带开关的 `migrate` 改为与启动一致地宽松。`crud:apply` 的严格行为与 `--approve` 语义保持不变。
+- **Added (业务迁移体验):** `business.Migration.NeedsSpecTables` 让迁移声明式物化 `Up` 依赖的业务表（runner 在 `Up` 前调用 `EnsureSpecTable`，只建 schema/索引；声明即校验，rename/DROP 迁移禁止声明）；新增 `migrate new <name>` 生成带递增版本号的迁移骨架；`migrate --plan` 与启动状态行列出待执行迁移名；`crud.apply_on_migrate=false` 时明确输出 `spec apply 已关闭`；business README 标注 `Down`/`Verify*` 可选，并新增「`Verify` 回调默认不写」。
+- **Docs:** 同步 `AGENTS.md`（启动自动迁移规则、发版纪律、`migrate --plan` 常用命令、两个开关的关系）、`docs/framework-workflow.md`（升级流程改为启动自动迁移 + 新增 rejected 确认小节）、`docs/docker-compose.md`（升级即迁移、`[database]` 排查项、`APP_AUTO_MIGRATE` 注入）、`docs/crud-generation.md`（§11 安全矩阵补启动列与 `--plan`/`--strict`）、`docs/framework-maintenance.md` 与 `internal/migrations/business/README.md`（启动路径幂等要求、编排顺序不变、`NeedsSpecTables`/`migrate new`/`Verify` 可选）。
+- **Verified:** `gofmt -l`（全部改动 Go 文件）空；`go build ./...` 通过；`go generate ./cmd/server` 重生成 `wire_gen.go` 后再构建通过（重跑 diff 为空）；`migrate --help` 可见 `new` 子命令；`go test ./internal/commands/ ./internal/migrations/ ./internal/migrations/business/ ./internal/pkg/crud_helper/ ./internal/pkg/version/ ./internal/ -count=1` 全绿（0.50s / 0.21s / 0.21s / 20.6s / 0.15s / 0.13s，含 `TestImportBoundary`）。MySQL 门禁用例本机跳过（无 `configs/config.yaml`，`mysql_test` 未启用），启动路径与 `NeedsSpecTables` 的真实 DDL 场景需在启用门禁的环境补跑。
+
 ## v3.3.4
 
 > 部署与文档门禁的一次性整理：部署变量拆出 `REGISTRY_IMAGE_NAME`（镜像名与 compose 项目名解耦），`/docs` 密码门支持跨站 iframe 嵌入，CI action 全部迁到 Node 24，Makefile 与 `.dockerignore` 精简。运行时代码只有 `/docs` 门禁一处行为变化。

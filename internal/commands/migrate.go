@@ -27,6 +27,7 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 			return command.migrateH.Run(cmd, args)
 		}),
 	}
+	addMigrateRunFlags(migrateCmd)
 	runMigrateCmd := &cobra.Command{
 		Use:           "run",
 		Short:         "执行数据库迁移",
@@ -37,6 +38,7 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 			return command.migrateH.Run(cmd, args)
 		}),
 	}
+	addMigrateRunFlags(runMigrateCmd)
 	rollbackMigrateCmd := &cobra.Command{
 		Use:           "rollback [business]",
 		Short:         "回滚 business 数据库迁移",
@@ -90,8 +92,14 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		}),
 	}
 	breakpointCmd.AddCommand(breakpointSetCmd, breakpointClearCmd, breakpointListCmd)
-	migrateCmd.AddCommand(runMigrateCmd, rollbackMigrateCmd, breakpointCmd)
+	migrateCmd.AddCommand(runMigrateCmd, rollbackMigrateCmd, breakpointCmd, newMigrateNewCommand())
 	return migrateCmd
+}
+
+// addMigrateRunFlags 给 migrate 与 migrate run 挂相同的执行开关。
+func addMigrateRunFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("plan", false, "只读检查待执行的迁移与 spec 差量，不写数据库")
+	cmd.Flags().Bool("strict", false, "rejected 或未批准的差量视为失败并以非零退出")
 }
 
 type MigrateHandler struct {
@@ -109,6 +117,18 @@ func NewMigrateHandler(logger *zap.Logger, config *conf.Configuration) *MigrateH
 }
 
 func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
+	plan, err := cmd.Flags().GetBool("plan")
+	if err != nil {
+		return err
+	}
+	if plan {
+		return h.Plan(cmd, args)
+	}
+	strict, err := cmd.Flags().GetBool("strict")
+	if err != nil {
+		return err
+	}
+
 	report, err := migrations.Run(h.db, h.config)
 	if err != nil {
 		cmd.Printf("database migrate error: %v\n", err)
@@ -125,8 +145,9 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 	}
 	// 部署闭环第四阶段：crud_specs 存在时幂等应用业务表结构与菜单（alter 安全子集）
 	if dir := helper.DefaultSpecDir(); dir != "" {
-		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1})
+		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: !strict})
 		if applyErr != nil {
+			printMigrateWarnings(cmd, results)
 			cmd.Printf("CRUD apply error: %v\n", applyErr)
 			var blocked *helper.ApplyBlockedError
 			if errors.As(applyErr, &blocked) {
@@ -134,18 +155,84 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 			}
 			return applyErr
 		}
-		for _, result := range results {
-			// 线外手改的列/属性不受 spec 管理，静默保留但必须告警，防止漂移无感知。
-			for _, change := range result.Unmanaged {
-				cmd.Printf("CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
-			}
-			if result.Action == helper.ApplyUnchanged {
-				continue
-			}
-			cmd.Printf("CRUD apply %-9s %s\n", string(result.Action), result.Table)
-		}
+		printMigrateResults(cmd, results)
 	}
 	return nil
+}
+
+// Plan 只读输出安装状态、迁移进度与 spec 差量；--strict 下 blocked 差量以失败退出。
+func (h *MigrateHandler) Plan(cmd *cobra.Command, args []string) error {
+	strict, err := cmd.Flags().GetBool("strict")
+	if err != nil {
+		return err
+	}
+	report, err := migrations.Status(h.db, h.config)
+	if err != nil {
+		return err
+	}
+	if report.State != migrations.InstallStrictUpgrade {
+		printDatabaseInstallGuidance(report.State)
+		return fmt.Errorf("database is not installed (state: %s); nothing to plan", report.State)
+	}
+	printMigrationStatus(report)
+
+	dir := helper.DefaultSpecDir()
+	if dir == "" {
+		cmd.Println("[database] 未找到 crud_specs 目录，跳过 spec 差量检查")
+		return nil
+	}
+	results, planErr := helper.PlanSpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: !strict, Plan: true})
+	printPlanResults(cmd, results)
+	if planErr != nil {
+		return fmt.Errorf("CRUD plan error: %w", planErr)
+	}
+	return nil
+}
+
+// printMigrateWarnings 输出未被 spec 管理的列/属性与 blocked 差量（不阻断执行）。
+func printMigrateWarnings(cmd *cobra.Command, results []helper.ApplyTableResult) {
+	for _, result := range results {
+		for _, change := range result.Unmanaged {
+			cmd.Printf("CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+		}
+		for _, change := range result.Blocked {
+			cmd.Printf("CRUD apply WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)
+		}
+	}
+}
+
+// printMigrateResults 输出 warnings 与每张表的 apply 动作。
+func printMigrateResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
+	printMigrateWarnings(cmd, results)
+	for _, result := range results {
+		if result.Action == helper.ApplyUnchanged {
+			continue
+		}
+		cmd.Printf("CRUD apply %-9s %s\n", string(result.Action), result.Table)
+	}
+}
+
+// printPlanResults 输出每张表的计划动作、逐差量分类与告警。
+func printPlanResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
+	for _, result := range results {
+		cmd.Printf("[database] plan %-9s %s\n", string(result.Action), result.Table)
+		for _, diff := range result.Diffs {
+			line := fmt.Sprintf("[database] plan %s.%s: %s", result.Table, diff.Field, string(diff.Class))
+			if diff.Category != "" {
+				line += " (" + string(diff.Category) + ")"
+			}
+			if diff.Reason != "" {
+				line += ": " + diff.Reason
+			}
+			cmd.Println(line)
+		}
+		for _, change := range result.Unmanaged {
+			cmd.Printf("[database] WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+		}
+		for _, change := range result.Blocked {
+			cmd.Printf("[database] WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)
+		}
+	}
 }
 
 func (h *MigrateHandler) Rollback(cmd *cobra.Command, args []string) error {
