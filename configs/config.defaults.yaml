@@ -26,6 +26,9 @@ app:
   docs_password: ''        # /docs 访问密码：留空则公开访问；非空时挂载服务端密码门（cookie 放行，
                            #   仅防随意浏览，非安全边界）。可用环境变量 DOCS_PASSWORD 覆盖（机密走环境，
                            #   避免写入仓库或镜像）；docs_enabled 关闭时该值不生效
+  auto_migrate: 'apply'    # 启动时自动同步数据库结构：off=不检查，check=只检查并打印结论，
+                           #   apply=执行三轨迁移与 crud_specs 尾部 apply；rejected 变更永不自动执行，
+                           #   只告警并继续启动。环境变量 APP_AUTO_MIGRATE 可覆盖
 
 # 点选验证码配置
 click_captcha:
@@ -112,8 +115,10 @@ upload:
 
 # CRUD 生成配置（crud）
 crud:
-  # 是否在 migrate 尾部自动应用 crud_specs/*.yaml（幂等；漂移时部署以失败红牌暴露，
-  # rejected 类变更必须走 business 迁移）。需要让库长期偏离 spec 的团队可显式关闭。
+  # migrate 尾部与 serve 启动路径是否自动应用 crud_specs/*.yaml（幂等；漂移时部署以失败红牌暴露，
+  # rejected 类变更必须走 business 迁移）。两处同时受本开关控制：启动时还需 app.auto_migrate: apply
+  # 才会同步（两者都开启才有启动期 spec apply），本开关 false 时启动只跑迁移。
+  # 需要让库长期偏离 spec 的团队可显式关闭。
   apply_on_migrate: true
 
 # 终端/安装器命令配置（terminal）

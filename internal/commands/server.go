@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -15,6 +17,8 @@ import (
 type App interface {
 	Run() error
 	Stop(ctx context.Context) error
+	// EnsureSchema 在绑定端口前同步数据库结构；未安装时返回 errDatabaseNotInstalled。
+	EnsureSchema() error
 	// ReportUnprotectedRoutes 输出 debug 环境下的后台路由保护告警（启动诊断）。
 	ReportUnprotectedRoutes()
 }
@@ -27,6 +31,13 @@ func runServer(cmd *cobra.Command, appBootstrap AppBootstrap) {
 		panic(err)
 	}
 	defer cleanup()
+
+	if err := app.EnsureSchema(); err != nil {
+		if !errors.Is(err, errDatabaseNotInstalled) {
+			fmt.Printf("[database] 结构同步失败: %v\n", err)
+		}
+		os.Exit(1)
+	}
 
 	app.ReportUnprotectedRoutes()
 
