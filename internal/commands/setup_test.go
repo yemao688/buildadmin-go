@@ -307,8 +307,8 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	if !strings.Contains(output.String(), "安装完成") || !strings.Contains(output.String(), "CRUD apply created") || !strings.Contains(output.String(), "ops_banner") {
 		t.Fatalf("completion output = %q", output.String())
 	}
-	if !strings.Contains(output.String(), "CRUD apply WARNING ops_banner.legacy_idx") {
-		t.Fatalf("drift warning missing from output = %q", output.String())
+	if !strings.Contains(output.String(), "CRUD apply note ops_banner: 1 unmanaged index (legacy_idx)") {
+		t.Fatalf("drift note missing from output = %q", output.String())
 	}
 }
 

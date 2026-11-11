@@ -239,11 +239,11 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		}
 		return applyErr
 	}
+	// 线外手改的列/属性/索引不受 spec 管理，保留但以 note 说明，防止漂移无感知。
+	printUnmanagedNotes(func(format string, args ...any) {
+		_, _ = fmt.Fprintf(r.out, format, args...)
+	}, results, unmanagedNoteOptions{Prefix: "CRUD apply "})
 	for _, result := range results {
-		// 线外手改的列/属性不受 spec 管理，静默保留但必须告警，防止漂移无感知。
-		for _, change := range result.Unmanaged {
-			_, _ = fmt.Fprintf(r.out, "CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
-		}
 		if result.Action == helper.ApplyUnchanged {
 			continue
 		}

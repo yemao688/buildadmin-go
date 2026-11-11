@@ -1,6 +1,7 @@
 package crud_helper
 
 import (
+	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"os"
@@ -163,5 +164,67 @@ func TestAlterChangeDDLAddFieldPosition(t *testing.T) {
 	}
 	if !strings.Contains(ddl, " FIRST") {
 		t.Fatalf("first ddl = %q", ddl)
+	}
+}
+
+func TestUnmanagedChangesColumnAttributes(t *testing.T) {
+	field := crudmodel.Field{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"}
+	baseColumn := func() model.Column {
+		column := alterTestColumn("name", "varchar(20)", "NO", "", "", "名称")
+		column.CHARACTER_SET_NAME = "utf8mb4"
+		column.COLLATION_NAME = "utf8mb4_general_ci"
+		return column
+	}
+	cases := []struct {
+		name           string
+		tableCollation string
+		mutate         func(*model.Column)
+		want           []string
+	}{
+		{
+			name:           "collation equals table default",
+			tableCollation: "utf8mb4_general_ci",
+		},
+		{
+			name:           "collation drifts while charset matches table default",
+			tableCollation: "utf8mb4_general_ci",
+			mutate:         func(column *model.Column) { column.COLLATION_NAME = "utf8mb4_bin" },
+			want:           []string{"collation: utf8mb4_bin"},
+		},
+		{
+			name:           "unknown table collation keeps charset and collation",
+			tableCollation: "",
+			want:           []string{"charset: utf8mb4", "collation: utf8mb4_general_ci"},
+		},
+		{
+			name:           "default_generated extra is ignored",
+			tableCollation: "utf8mb4_general_ci",
+			mutate:         func(column *model.Column) { column.EXTRA = "DEFAULT_GENERATED" },
+		},
+		{
+			name:           "generated expression is reported",
+			tableCollation: "utf8mb4_general_ci",
+			mutate:         func(column *model.Column) { column.GENERATION_EXPRESSION = "upper(name)" },
+			want:           []string{"generated-expression: upper(name)"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			column := baseColumn()
+			if tc.mutate != nil {
+				tc.mutate(&column)
+			}
+			changes := unmanagedChanges([]model.Column{column}, []crudmodel.Field{field}, tc.tableCollation)
+			var got []string
+			if len(changes) > 0 {
+				if len(changes) != 1 || changes[0].Type != "unmanaged" {
+					t.Fatalf("changes = %+v", changes)
+				}
+				got = changes[0].Unmanaged
+			}
+			if strings.Join(got, "|") != strings.Join(tc.want, "|") {
+				t.Fatalf("unmanaged = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

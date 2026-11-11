@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+> 启动/迁移日志降噪（issue #20）：unmanaged 差异从逐列 `WARNING` 收敛为按表聚合的 `note`，列 charset/collation 与表默认一致时不再视为漂移；`WARNING` 只保留给有数据风险的项。
+
+- **Changed (issue #20):** `[database]` / `CRUD apply` 的 unmanaged 输出改为按表聚合的 `note`（列属性、索引、列序分开计数，索引列出名称），不再逐列刷屏也不阻断执行；`migrate`/`crud:apply`/`setup` 同步。`WARNING` 只用于 `rejected`、未批准的 `requires-approval` 与 `apply rebuilt`（删表重建）。`log.level: debug` 时启动路径逐条展开明细；`migrate --plan`/`crud:apply --plan` 始终保留完整明细，仍是只读审计路径。
+- **Fixed (issue #20):** `internal/pkg/crud_helper` 读取表默认排序规则（`information_schema.tables.TABLE_COLLATION`）：列级 charset/collation 与表默认一致时不产出 unmanaged 差量；只有列级 collation 偏离、generated expression，以及 `auto_increment`/`default_generated` 之外的 extra 才报告。`EXTRA` 中的 `default_generated` 归一化为无属性；剩余标签带实际值展示（如 `collation: utf8mb4_bin`），便于 `--plan` 与 debug 定位。
+- **Docs:** 同步 `docs/crud-generation.md`（unmanaged/列序语义、debug 展开与 `--plan` 明细、charset/collation 判据）与 `docs/framework-workflow.md`（rejected 与 unmanaged 的级别区别）。
+- **Verified:** `gofmt -l`（全部改动文件）空；`go build ./...` 通过；`go test ./internal/pkg/crud_helper/ -count=1` PASS（19.551s）、`go test ./internal/commands/ -count=1` PASS（0.741s）、`go test ./internal/ -run '^TestImportBoundary$' -count=1` PASS（0.392s）。MySQL 门禁用例本机 SKIP（`configs/config.yaml` 不存在、`mysql_test` 未启用），启动路径真实 DDL 场景需在启用门禁的环境补跑。
+
 ## v3.3.6
 
 > 根目录探测修复（issue #18）：`RootPath` 不再依赖硬编码的 macOS 缓存路径，跟随工具链实际缓存位置；`-trimpath` 构建下不再用相对路径推断根目录。

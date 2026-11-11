@@ -220,9 +220,7 @@ func printApplyResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
 				cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.Reason)
 			}
 		}
-		for _, change := range result.Unmanaged {
-			cmd.Printf("CRUD apply WARNING table=%s field=%s: %s\n", result.Table, change.Field, change.Reason)
-		}
+		printUnmanagedNotes(cmd.Printf, []helper.ApplyTableResult{result}, unmanagedNoteOptions{Prefix: "CRUD apply "})
 		for _, menu := range result.MenuResults {
 			cmd.Printf("CRUD menu  %-9s %s\n", string(menu.Action), menu.Name)
 		}
@@ -255,8 +253,10 @@ func printApplyPlan(cmd *cobra.Command, results []helper.ApplyTableResult) {
 			}
 		}
 		for _, change := range result.Unmanaged {
-			cmd.Printf("  [%s] %s: %s\n", change.Class, change.Field, change.Reason)
-			cmd.Printf("    unmanaged: %s\n", strings.Join(change.Unmanaged, ", "))
+			cmd.Printf("  note %s: %s\n", change.Field, change.Reason)
+			if details := strings.Join(change.Unmanaged, ", "); details != "" {
+				cmd.Printf("    unmanaged: %s\n", details)
+			}
 		}
 	}
 }
