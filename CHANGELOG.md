@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.3.6
+
+> 根目录探测修复（issue #18）：`RootPath` 不再依赖硬编码的 macOS 缓存路径，跟随工具链实际缓存位置；`-trimpath` 构建下不再用相对路径推断根目录。
+
+- **Fixed (issue #18):** `internal/pkg/util/path.go` 的 `isTempPath` 原先只认 `os.TempDir()` 与硬编码的 `~/Library/Caches/go-build`。Linux 默认缓存（`~/.cache/go-build`）、Windows `LocalAppData` 以及用户自定义的 `GOCACHE` 全部漏判——当二进制落在这些目录时，`computeRootPath` 不会走编译期路径回退，`findProjectRoot` 从缓存目录向上找不到 `go.mod`/`configs`/`public`，`RootPath` 返回与仓库无关的路径，拼出的 `--conf` 指向不存在的文件，命令误报"未安装"并打印 setup 指引。现在优先读 `GOCACHE`，未设置时回退 `os.UserCacheDir()/go-build`（go 自身的跨平台默认值）。
+- **Hardened:** `computeRootPath` 的编译期回退增加绝对路径守门：生产镜像以 `-trimpath` 构建时 `runtime.Caller` 只返回相对路径（`buildadmin-go/internal/...`），此前会拿它推断出垃圾根目录；现在跳过该回退，按可执行文件位置继续查找。
+- **Tests:** 新增表驱动 `TestIsTempPath`，覆盖自定义 `GOCACHE`、默认缓存目录、系统临时目录，以及普通源码目录不被误判。
+- **Verified:** `gofmt -l` 空；`go build ./...` 通过；`go test ./internal/pkg/util/ ./internal/commands/ -count=1` 全绿；A/B 实证（二进制置于自定义 `GOCACHE` 目录并设置同名环境变量）——合并前 `RootPath` 返回缓存目录，合并后返回仓库源码根。
+
 ## v3.3.5
 
 > 启动自动迁移批次：`serve` 在绑定端口前执行三轨迁移与 `crud_specs` 尾部 apply，`requires-approval` 自动放行、`rejected` 只告警不阻断；新增 `migrate --plan` 只读检查与 `migrate --strict` 失败即退，并把发版前的数据影响确认写成强制纪律。
