@@ -6,102 +6,115 @@ import (
 	"testing"
 )
 
-func TestIsTempPath(t *testing.T) {
-	sep := string(filepath.Separator)
-	// HOME/XDG_CACHE_HOME 指到临时目录之外，让 UserCacheDir 的默认缓存路径可预期
-	// （darwin 读 HOME/Library/Caches，其他平台读 XDG_CACHE_HOME 或 HOME/.cache）。
-	homeDir := filepath.Join(sep, "issue18-home")
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(homeDir, "xdg-cache"))
-
-	customCache := filepath.Join(sep, "issue18-custom-gocache")
-	defaultCache := filepath.Join(sep, "issue18-unknown-cache", "go-build")
-	if userCacheDir, err := os.UserCacheDir(); err == nil {
-		defaultCache = filepath.Join(userCacheDir, "go-build")
+// newRepoTree 构造含 go.mod 的最小仓库树，返回其根目录。
+func newRepoTree(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
+	return root
+}
 
-	tests := []struct {
-		name    string
-		gocache string
-		path    string
-		want    bool
-	}{
-		{
-			name:    "GOCACHE 下的 go run 产物",
-			gocache: customCache,
-			path:    filepath.Join(customCache, "3f", "exe"),
-			want:    true,
-		},
-		{
-			name:    "默认缓存下的 go run 产物",
-			gocache: "",
-			path:    filepath.Join(defaultCache, "ab", "exe"),
-			want:    true,
-		},
-		{
-			name:    "系统临时目录",
-			gocache: "",
-			path:    filepath.Join(os.TempDir(), "go-build-xx", "exe"),
-			want:    true,
-		},
-		{
-			name:    "普通源码目录不误判",
-			gocache: customCache,
-			path:    filepath.Join(sep, "issue18-project", "runtime", "tmp", "server"),
-			want:    false,
-		},
+// mkdirs 创建目录并返回其中最深的那个，用于拼二进制/源码路径。
+func mkdirs(t *testing.T, root string, parts ...string) string {
+	t.Helper()
+	dir := filepath.Join(append([]string{root}, parts...)...)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	return dir
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("GOCACHE", tt.gocache)
-			if got := isTempPath(tt.path); got != tt.want {
-				t.Errorf("isTempPath(%q) = %v, want %v", tt.path, got, tt.want)
+// findRootWithMarkers 认开发态与镜像态两种布局，且在没有 marker 时明确报告未命中。
+func TestFindRootWithMarkers(t *testing.T) {
+	root := newRepoTree(t)
+
+	for name, start := range map[string]string{
+		"二进制在根下一层": mkdirs(t, root, "tmp"),
+		"二进制在根下两层": mkdirs(t, root, "runtime", "tmp"),
+		"直接位于根目录":  root,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, ok := findRootWithMarkers(start)
+			if !ok || got != root {
+				t.Fatalf("findRootWithMarkers(%q) = (%q, %v), want (%q, true)", start, got, ok, root)
 			}
 		})
 	}
+
+	// 生产镜像只有 public/ 标记（/app/app -> /app）
+	imageRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(imageRoot, "public"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := findRootWithMarkers(imageRoot); !ok || got != imageRoot {
+		t.Fatalf("image layout: got (%q, %v), want (%q, true)", got, ok, imageRoot)
+	}
+
+	// 没有任何 marker 时必须报未命中，不能把猜到上一级当成根
+	plain := t.TempDir()
+	if got, ok := findRootWithMarkers(mkdirs(t, plain, "bin")); ok {
+		t.Fatalf("plain layout: got (%q, true), want (\"\", false)", got)
+	}
 }
 
-func TestFindProjectRoot(t *testing.T) {
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+// resolveRootPath 的优先级：可执行文件 → 编译期源码 → 工作目录 → 历史回退。
+func TestResolveRootPath(t *testing.T) {
+	t.Run("可执行文件位于仓库内时优先", func(t *testing.T) {
+		repo := newRepoTree(t)
+		exe := filepath.Join(mkdirs(t, repo, "runtime", "tmp"), "server")
+		otherRepo := newRepoTree(t)
 
-	// 二进制位于根下一层（历史 air 布局 tmp/main）
-	tmpDir := filepath.Join(root, "tmp")
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := findProjectRoot(tmpDir); got != root {
-		t.Errorf("tmp layout: got %q, want %q", got, root)
-	}
+		got := resolveRootPath(exe, filepath.Join(otherRepo, "internal", "pkg", "util", "path.go"), otherRepo)
+		if got != repo {
+			t.Fatalf("got %q, want %q（可执行文件所在仓库胜出）", got, repo)
+		}
+	})
 
-	// 二进制位于根下两层（现 air 布局 runtime/tmp/main）
-	nested := filepath.Join(root, "runtime", "tmp")
-	if err := os.MkdirAll(nested, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := findProjectRoot(nested); got != root {
-		t.Errorf("runtime/tmp layout: got %q, want %q", got, root)
-	}
+	t.Run("二进制在 GOCACHE 内且环境变量未导出时回退编译期源码路径", func(t *testing.T) {
+		// issue #18：`go env -w GOCACHE=…` 持久化后子进程读不到该变量，
+		// go run 缓存命中时二进制直接位于 <GOCACHE>/<xx>/<hash>-d/ 下。
+		cacheDir := t.TempDir()
+		exe := filepath.Join(mkdirs(t, cacheDir, "e6", "e6c3e565fca189ef65080b7c7fba2140fd851489e43c0ba74df261f740a29c2f-d"), "server")
+		repo := newRepoTree(t)
 
-	// 生产镜像布局：只有 public/ 标记（/app/app -> /app）
-	imgRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(imgRoot, "public"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if got := findProjectRoot(imgRoot); got != imgRoot {
-		t.Errorf("image layout: got %q, want %q", got, imgRoot)
-	}
+		got := resolveRootPath(exe, filepath.Join(repo, "internal", "pkg", "util", "path.go"), t.TempDir())
+		if got != repo {
+			t.Fatalf("got %q, want %q（缓存目录不能当根）", got, repo)
+		}
+	})
 
-	// 无标记时回退到上一级（兼容历史假设）
-	plain := t.TempDir()
-	binDir := filepath.Join(plain, "bin")
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		t.Fatal(err)
+	t.Run("-trimpath 构建的编译期路径是相对路径时回退工作目录", func(t *testing.T) {
+		repo := newRepoTree(t)
+		exe := filepath.Join(t.TempDir(), "server")
+		workDir := mkdirs(t, repo, "web")
+
+		got := resolveRootPath(exe, filepath.Join("buildadmin-go", "internal", "pkg", "util", "path.go"), workDir)
+		if got != repo {
+			t.Fatalf("got %q, want %q（相对源码路径必须跳过）", got, repo)
+		}
+	})
+
+	t.Run("三层都未命中时回退二进制上一级", func(t *testing.T) {
+		plain := t.TempDir()
+		exe := filepath.Join(mkdirs(t, plain, "bin"), "server")
+
+		got := resolveRootPath(exe, filepath.Join("buildadmin-go", "internal", "pkg", "util", "path.go"), t.TempDir())
+		if want := filepath.Dir(exe); got != want {
+			t.Fatalf("got %q, want %q（历史回退）", got, want)
+		}
+	})
+}
+
+// 真实执行环境下 computeRootPath 必须指向仓库根：任何一层猜错都会让 CLI
+// 把 configs/config.yaml 拼到不存在的目录并误报"未安装"（issue #18）。
+func TestComputeRootPathFindsRepoRoot(t *testing.T) {
+	root := computeRootPath()
+	if !PathExists(filepath.Join(root, "go.mod")) {
+		t.Fatalf("computeRootPath() = %q，不含 go.mod", root)
 	}
-	if got := findProjectRoot(binDir); got != plain {
-		t.Errorf("fallback: got %q, want %q", got, plain)
+	if !PathExists(filepath.Join(root, "internal", "pkg", "util", "path.go")) {
+		t.Fatalf("computeRootPath() = %q，不含本包源码", root)
 	}
 }
