@@ -39,10 +39,17 @@ func newIpCheckTestEngine(source NoAccessIPSource, handlerCalled *bool) *gin.Eng
 }
 
 func serveIpCheck(engine *gin.Engine, remoteAddr string) *httptest.ResponseRecorder {
+	return serveIpCheckWithHeaders(engine, remoteAddr, nil)
+}
+
+func serveIpCheckWithHeaders(engine *gin.Engine, remoteAddr string, headers map[string]string) *httptest.ResponseRecorder {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/admin/test/index", nil)
-	if remoteAddr != "" {
-		request.RemoteAddr = remoteAddr
+	// 显式指定对端地址：缺省值时 httptest 写入的是公网地址，会走进"不采信
+	// 转发头"分支，掩盖用例本意。
+	request.RemoteAddr = remoteAddr
+	for name, value := range headers {
+		request.Header.Set(name, value)
 	}
 	engine.ServeHTTP(recorder, request)
 	return recorder
@@ -166,4 +173,101 @@ func TestIpCheckMatchingRules(t *testing.T) {
 			require.True(t, called)
 		})
 	}
+}
+
+func TestIpCheckIgnoresSpoofedHeadersFromPublicPeer(t *testing.T) {
+	cases := []struct {
+		name    string
+		header  string
+		forward string
+	}{
+		{name: "X-Forwarded-For 指向黑名单地址", header: "X-Forwarded-For", forward: "192.0.2.1"},
+		{name: "X-Real-IP 指向黑名单地址", header: "X-Real-IP", forward: "192.0.2.1"},
+		{name: "CF-Connecting-IP 指向黑名单地址", header: "CF-Connecting-IP", forward: "192.0.2.1"},
+		{
+			name:    "多级 X-Forwarded-For 最左值指向黑名单地址",
+			header:  "X-Forwarded-For",
+			forward: "192.0.2.1, 203.0.113.5",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
+				return "192.0.2.1", nil
+			}, &called)
+
+			recorder := serveIpCheckWithHeaders(engine, "198.51.100.10:1234", map[string]string{
+				tc.header: tc.forward,
+			})
+
+			require.Equal(t, http.StatusNoContent, recorder.Code, "公网对端的转发头不可信，不能触发黑名单")
+			require.True(t, called)
+		})
+	}
+}
+
+func TestIpCheckBlocksPublicPeerDespiteInnocentHeaders(t *testing.T) {
+	called := false
+	engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
+		return "192.0.2.1", nil
+	}, &called)
+
+	recorder := serveIpCheckWithHeaders(engine, "192.0.2.1:1234", map[string]string{
+		"X-Forwarded-For":  "203.0.113.5",
+		"X-Real-IP":        "203.0.113.5",
+		"CF-Connecting-IP": "203.0.113.5",
+	})
+
+	require.Equal(t, http.StatusForbidden, recorder.Code, "公网对端自身命中时不能被伪造的转发头洗白")
+	require.False(t, called)
+}
+
+func TestIpCheckTrustsForwardedHeadersFromInfrastructurePeer(t *testing.T) {
+	cases := []struct {
+		name       string
+		remoteAddr string
+		header     string
+		forward    string
+	}{
+		{name: "私有网段反代 X-Forwarded-For", remoteAddr: "10.0.0.5:1234", header: "X-Forwarded-For", forward: "192.0.2.1"},
+		{name: "私有网段反代多级 X-Forwarded-For 取最左", remoteAddr: "172.16.8.9:1234", header: "X-Forwarded-For", forward: "192.0.2.1, 10.0.0.5"},
+		{name: "回环反代 CF-Connecting-IP", remoteAddr: "127.0.0.1:1234", header: "CF-Connecting-IP", forward: "192.0.2.1"},
+		{name: "回环反代 X-Real-IP", remoteAddr: "127.0.0.1:1234", header: "X-Real-IP", forward: "192.0.2.1"},
+		{name: "IPv6 回环反代 X-Forwarded-For", remoteAddr: "[::1]:1234", header: "X-Forwarded-For", forward: "192.0.2.1"},
+		{name: "IPv6 ULA 反代 X-Forwarded-For", remoteAddr: "[fd00::1]:1234", header: "X-Forwarded-For", forward: "192.0.2.1"},
+		{name: "链路本地对端 X-Forwarded-For", remoteAddr: "169.254.1.1:1234", header: "X-Forwarded-For", forward: "192.0.2.1"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
+				return "192.0.2.1", nil
+			}, &called)
+
+			recorder := serveIpCheckWithHeaders(engine, tc.remoteAddr, map[string]string{
+				tc.header: tc.forward,
+			})
+
+			require.Equal(t, http.StatusForbidden, recorder.Code, "受信对端的转发头应参与黑名单匹配")
+			require.False(t, called)
+		})
+	}
+}
+
+func TestIpCheckFallsBackWhenInfrastructurePeerSendsGarbageHeader(t *testing.T) {
+	called := false
+	engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
+		return "192.0.2.1", nil
+	}, &called)
+
+	recorder := serveIpCheckWithHeaders(engine, "10.0.0.5:1234", map[string]string{
+		"X-Forwarded-For": "not-an-ip, also-not-an-ip",
+		"X-Real-IP":       "???",
+	})
+
+	require.Equal(t, http.StatusNoContent, recorder.Code, "无法解析的转发头应回退到对端地址而不是命中黑名单")
+	require.True(t, called)
 }

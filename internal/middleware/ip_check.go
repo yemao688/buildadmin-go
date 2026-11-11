@@ -16,9 +16,17 @@ import (
 type NoAccessIPSource func(*gin.Context) (string, error)
 
 // IpCheck 按 IP 黑名单拒绝访问：命中规则即返回 403 并中止请求；配置为空或
-// 读取失败一律放行（黑名单故障不得导致站点不可用）。它不是安全边界——
-// GetClientIP 信任 CF-Connecting-IP 与 X-Forwarded-For，可被伪造，只用于
-// 挡爬虫与捣乱的 IP。source 为 nil 时同样放行。
+// 读取失败一律放行（黑名单故障不得导致站点不可用）。source 为 nil 时同样放行。
+//
+// 取址与信任模型：默认拿 TCP 对端地址（RemoteAddr）做匹配；只有当对端可证明
+// 是受信基础设施——回环、私有网段（RFC1918/ULA）或链路本地单播——才采信
+// X-Forwarded-For / X-Real-IP / CF-Connecting-IP，因此公网直连方无法用这些
+// 头冒充他人来绕过黑名单。
+//
+// 部署要求：站点位于反向代理（nginx、Cloudflare 回源等）之后时，代理自身必须
+// 落在上述私有或回环网段，并且由代理用自己解析出的客户端地址覆写
+// X-Forwarded-For / X-Real-IP（不是追加到客户端传进来的值后面）。若把公网
+// 地址的代理直接转发进来，或原样透传客户端自带的转发头，黑名单会失效。
 func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if noAccessIP == nil {
@@ -33,10 +41,10 @@ func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 			return
 		}
 
-		clientIP := util.GetClientIP(c)
+		clientIP := noAccessIPMatchAddr(c)
 		for _, rule := range rules {
 			if matchNoAccessIPRule(clientIP, rule) {
-				msg := util.Lang(c, "No permission request", nil)
+				msg := util.Lang(c, "No permission", nil)
 				c.JSON(http.StatusForbidden, map[string]interface{}{
 					"code": http.StatusForbidden,
 					"data": nil,
@@ -48,6 +56,29 @@ func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 			}
 		}
 	}
+}
+
+// noAccessIPMatchAddr 返回用于黑名单匹配的地址。只有对端被判定为受信基础设施
+// 时才取转发头解析出的客户端地址，否则直接用对端地址本身，避免伪造头改变结论。
+func noAccessIPMatchAddr(c *gin.Context) string {
+	peer, err := netip.ParseAddr(c.RemoteIP())
+	if err != nil {
+		// net/http 总会写入 RemoteAddr，解析失败基本只出现在测试或非标准
+		// transport；此时无法证明对端受信，退回对端原始字符串（通常为空，
+		// 不命中任何具体规则），也不采信转发头。
+		return c.RemoteIP()
+	}
+	peer = peer.Unmap()
+	if isTrustedPeerAddr(peer) {
+		return util.GetClientIP(c)
+	}
+	return peer.String()
+}
+
+// isTrustedPeerAddr 判断对端是否为受信基础设施：本机、内网（RFC1918/ULA）或
+// 链路本地单播。只有这些地址上的进程才可能承担反代/隧道角色，转发头才可信。
+func isTrustedPeerAddr(addr netip.Addr) bool {
+	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast()
 }
 
 // splitNoAccessIPRules 按换行（含 CRLF）、英文逗号与任意空白切分规则文本，
