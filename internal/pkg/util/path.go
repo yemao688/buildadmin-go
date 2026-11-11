@@ -29,10 +29,12 @@ func computeRootPath() string {
 	}
 
 	// go run 会将编译产物放在临时目录或 build cache 中，
-	// 此时 os.Executable() 返回的路径不在项目目录下，需要用编译期路径回退
+	// 此时 os.Executable() 返回的路径不在项目目录下，需要用编译期路径回退。
+	// 回退要求编译期路径是绝对路径：生产镜像以 -trimpath 构建，runtime.Caller
+	// 只返回相对路径（buildadmin-go/internal/...），拿它推断根目录会得到垃圾值。
 	if isTempPath(exePath) {
 		_, filename, _, ok := runtime.Caller(0)
-		if ok {
+		if ok && filepath.IsAbs(filename) {
 			return findProjectRoot(filepath.Dir(filename))
 		}
 	}
@@ -68,15 +70,27 @@ func isTempPath(path string) bool {
 	if strings.Contains(path, os.TempDir()) {
 		return true
 	}
-	// Go build cache（go run 产物在此）
-	homeDir, err := os.UserHomeDir()
-	if err == nil {
-		buildCache := filepath.Join(homeDir, "Library", "Caches", "go-build")
+	for _, buildCache := range goBuildCacheDirs() {
 		if strings.Contains(path, buildCache) {
 			return true
 		}
 	}
 	return false
+}
+
+// goBuildCacheDirs 返回 go 工具链可能存放 go run 编译产物的缓存目录。
+// GOCACHE 优先：用户可把它指到任意磁盘/CI 目录，此时产物不在默认缓存路径下；
+// 未设置时回退 os.UserCacheDir()/go-build，即 go 自身的跨平台默认值
+// （macOS ~/Library/Caches、Linux XDG_CACHE_HOME、Windows LocalAppData）。
+func goBuildCacheDirs() []string {
+	dirs := make([]string, 0, 2)
+	if gocache := os.Getenv("GOCACHE"); gocache != "" {
+		dirs = append(dirs, gocache)
+	}
+	if userCacheDir, err := os.UserCacheDir(); err == nil {
+		dirs = append(dirs, filepath.Join(userCacheDir, "go-build"))
+	}
+	return dirs
 }
 
 func PathExists(path string) bool {

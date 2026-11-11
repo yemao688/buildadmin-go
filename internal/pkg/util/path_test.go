@@ -6,6 +6,62 @@ import (
 	"testing"
 )
 
+func TestIsTempPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	// HOME/XDG_CACHE_HOME 指到临时目录之外，让 UserCacheDir 的默认缓存路径可预期
+	// （darwin 读 HOME/Library/Caches，其他平台读 XDG_CACHE_HOME 或 HOME/.cache）。
+	homeDir := filepath.Join(sep, "issue18-home")
+	t.Setenv("HOME", homeDir)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(homeDir, "xdg-cache"))
+
+	customCache := filepath.Join(sep, "issue18-custom-gocache")
+	defaultCache := filepath.Join(sep, "issue18-unknown-cache", "go-build")
+	if userCacheDir, err := os.UserCacheDir(); err == nil {
+		defaultCache = filepath.Join(userCacheDir, "go-build")
+	}
+
+	tests := []struct {
+		name    string
+		gocache string
+		path    string
+		want    bool
+	}{
+		{
+			name:    "GOCACHE 下的 go run 产物",
+			gocache: customCache,
+			path:    filepath.Join(customCache, "3f", "exe"),
+			want:    true,
+		},
+		{
+			name:    "默认缓存下的 go run 产物",
+			gocache: "",
+			path:    filepath.Join(defaultCache, "ab", "exe"),
+			want:    true,
+		},
+		{
+			name:    "系统临时目录",
+			gocache: "",
+			path:    filepath.Join(os.TempDir(), "go-build-xx", "exe"),
+			want:    true,
+		},
+		{
+			name:    "普通源码目录不误判",
+			gocache: customCache,
+			path:    filepath.Join(sep, "issue18-project", "runtime", "tmp", "server"),
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GOCACHE", tt.gocache)
+			if got := isTempPath(tt.path); got != tt.want {
+				t.Errorf("isTempPath(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindProjectRoot(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x"), 0o644); err != nil {
