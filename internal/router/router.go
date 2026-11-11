@@ -28,13 +28,15 @@ import (
 // 根装配件不再按 Group() 分派。
 // countrySvc 提供前台默认语言（country_language 第一条）供 /api/* 无
 // think-lang header 时分流取用。config 提供跨域白名单等应用配置，nil 时
-// 按空白名单处理（跨域仅自身 host 放行）。
+// 按空白名单处理（跨域仅自身 host 放行）。noAccessIP 提供 IP 黑名单配置
+// 文本，仅作用于在其后注册的 /admin/* 与 /api/* 路由。
 func InitRouter(
 	loggerWriter *lumberjack.Logger,
 	config *conf.Configuration,
 	adminR *adminRouter.AdminRouter,
 	apiR *apiRouter.ApiRouter,
 	countrySvc *country.Service,
+	noAccessIP middleware.NoAccessIPSource,
 ) *gin.Engine {
 	router := gin.New()
 	registerHealthRoute(router)
@@ -84,6 +86,10 @@ func InitRouter(
 	}
 	registerRootRoute(router, rootDir)
 	router.StaticFile("/favicon.ico", filepath.Join(rootDir, "public/favicon.ico"))
+
+	// IP 黑名单只覆盖其后注册的 /admin/* 与 /api/*：/healthz、/debug/pprof、
+	// 静态资源、/docs 与 / 均已注册完毕，天然豁免且不必每请求查配置。
+	router.Use(middleware.IpCheck(noAccessIP))
 
 	// 渠道注册器：admin 负责 /admin/*，api 负责 /api/*。
 	adminR.Register(router)

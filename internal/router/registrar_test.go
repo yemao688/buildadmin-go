@@ -124,8 +124,19 @@ func newCompleteRouter() *gin.Engine {
 }
 
 // newCompleteRouterWithMode 按指定 gin 模式构造完整路由器（中间件条件挂载
-// 与 pprof 条件注册依赖 gin.Mode()，测试需能控制该全局值）。
+// 与 pprof 条件注册依赖 gin.Mode()，测试需能控制该全局值）。IP 黑名单使用
+// 空配置桩，不拦截任何请求。
 func newCompleteRouterWithMode(mode string) *gin.Engine {
+	return newCompleteRouterWithModeAndBlacklist(mode, func(*gin.Context) (string, error) { return "", nil })
+}
+
+// newCompleteRouterWithBlacklist 用指定 IP 黑名单配置源构造完整路由器，
+// 供黑名单注册回归测试复用同一套桩装配。
+func newCompleteRouterWithBlacklist(noAccessIP middleware.NoAccessIPSource) *gin.Engine {
+	return newCompleteRouterWithModeAndBlacklist(gin.TestMode, noAccessIP)
+}
+
+func newCompleteRouterWithModeAndBlacklist(mode string, noAccessIP middleware.NoAccessIPSource) *gin.Engine {
 	gin.SetMode(mode)
 
 	return InitRouter(
@@ -150,6 +161,7 @@ func newCompleteRouterWithMode(mode string) *gin.Engine {
 		// 零值桩：i18n 回调仅在 /api/* 无 think-lang header 时才会调用
 		// DefaultLan，本测试用例不会触发该路径。
 		&country.Service{},
+		noAccessIP,
 	)
 }
 

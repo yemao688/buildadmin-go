@@ -63,6 +63,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Se
 		apiRouter.ProviderSet,
 		wire.Struct(new(apiRouter.ApiRouterDeps), "*"),
 		router.InitRouter,
+		router.NewNoAccessIPSource,
 		cron.ProviderSet,
 		commands.NewHttpServer,
 		commands.NewServerApp,

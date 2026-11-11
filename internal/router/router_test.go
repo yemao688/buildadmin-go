@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -147,6 +148,48 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 
 		require.Equal(t, http.StatusNotFound, recorder.Code)
 		require.Empty(t, recorder.Header().Get("Cache-Control"))
+	})
+}
+
+// TestIpBlacklistRegistrationScope 是注册顺序回归测试：IpCheck 必须在
+// /healthz、静态资源与 / 之后注册，只覆盖其后挂载的 /admin/* 与 /api/*。
+func TestIpBlacklistRegistrationScope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("命中黑名单时 admin 与 api 403，healthz 不受影响", func(t *testing.T) {
+		engine := newCompleteRouterWithBlacklist(func(*gin.Context) (string, error) {
+			return "0.0.0.0/0", nil
+		})
+
+		healthRecorder := httptest.NewRecorder()
+		engine.ServeHTTP(healthRecorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		require.Equal(t, http.StatusOK, healthRecorder.Code)
+
+		for _, path := range []string{"/admin/auth.Admin/index", "/api/index/index"} {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, path, nil)
+			// 带 think-lang 走 header 分支，避免 /api/* 回落到零值 country.Service
+			// 的 DefaultLan 查库（本测试只验证黑名单注册范围）。
+			request.Header.Set("think-lang", "en")
+			engine.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusForbidden, recorder.Code, path)
+
+			var response struct {
+				Code int `json:"code"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response), path)
+			require.Equal(t, http.StatusForbidden, response.Code, path)
+		}
+	})
+
+	t.Run("空配置时同一 admin 路由不再 403", func(t *testing.T) {
+		engine := newCompleteRouterWithBlacklist(func(*gin.Context) (string, error) {
+			return "", nil
+		})
+
+		recorder := httptest.NewRecorder()
+		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/admin/auth.Admin/index", nil))
+		require.NotEqual(t, http.StatusForbidden, recorder.Code)
 	})
 }
 
