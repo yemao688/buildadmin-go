@@ -55,6 +55,20 @@ func (f *adminDelFixture) createAdmin(t *testing.T, username string) model.Admin
 	return a
 }
 
+// createFrameworkOwnerTables 建立框架默认登记的两张归属表，验证删除叶子
+// 管理员时 user / user_money_log 在同一事务内被转挂到上级。
+func (f *adminDelFixture) createFrameworkOwnerTables(t *testing.T) {
+	t.Helper()
+	require.NoError(t, f.db.Exec("DROP TABLE IF EXISTS `"+f.prefix+"user`").Error)
+	require.NoError(t, f.db.Exec("DROP TABLE IF EXISTS `"+f.prefix+"user_money_log`").Error)
+	require.NoError(t, f.db.Exec("CREATE TABLE `"+f.prefix+"user` (id INT AUTO_INCREMENT PRIMARY KEY, admin_id INT NOT NULL, update_time BIGINT NULL)").Error)
+	require.NoError(t, f.db.Exec("CREATE TABLE `"+f.prefix+"user_money_log` (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, admin_id INT NOT NULL, update_time BIGINT NULL)").Error)
+	t.Cleanup(func() {
+		_ = f.db.Exec("DROP TABLE IF EXISTS `" + f.prefix + "user`").Error
+		_ = f.db.Exec("DROP TABLE IF EXISTS `" + f.prefix + "user_money_log`").Error
+	})
+}
+
 func (f *adminDelFixture) link(t *testing.T, nodeID int32, parentID *int32) {
 	t.Helper()
 	h := adminmodel.NewAdminHierarchy(f.config)
@@ -100,10 +114,12 @@ func TestRestrictedDeleteVisibleLeafAndRejectInvisibleSibling(t *testing.T) {
 
 func TestDeleteClosureFailureRollsBackAdminAndClosure(t *testing.T) {
 	f := newAdminDelFixture(t)
+	f.createFrameworkOwnerTables(t)
 	actor := f.createAdmin(t, "actor")
 	leaf := f.createAdmin(t, "leaf")
 	f.link(t, actor.ID, nil)
 	f.link(t, leaf.ID, &actor.ID)
+	require.NoError(t, f.db.Exec("INSERT INTO `"+f.prefix+"user` (admin_id, update_time) VALUES (?,0)", leaf.ID).Error)
 	trigger := "`" + f.prefix + "admin_closure_delete_block`"
 	require.NoError(t, f.db.Exec("CREATE TRIGGER "+trigger+" BEFORE DELETE ON `"+f.prefix+"admin_closure` FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'closure delete blocked'").Error)
 
@@ -113,6 +129,31 @@ func TestDeleteClosureFailureRollsBackAdminAndClosure(t *testing.T) {
 	require.Equal(t, int64(1), count, "admin delete was not rolled back")
 	f.db.Model(&model.AdminClosure{}).Where("descendant_id = ?", leaf.ID).Count(&count)
 	require.NotZero(t, count, "closure delete was not rolled back")
+	f.db.Table(f.prefix+"user").Where("admin_id = ?", leaf.ID).Count(&count)
+	require.Equal(t, int64(1), count, "owner transfer was not rolled back")
+}
+
+func TestDeleteLeafTransfersFrameworkOwnerRows(t *testing.T) {
+	f := newAdminDelFixture(t)
+	f.createFrameworkOwnerTables(t)
+	root := f.createAdmin(t, "root")
+	actor := f.createAdmin(t, "actor")
+	leaf := f.createAdmin(t, "leaf")
+	f.link(t, root.ID, nil)
+	f.link(t, actor.ID, &root.ID)
+	f.link(t, leaf.ID, &actor.ID)
+	require.NoError(t, f.db.Exec("INSERT INTO `"+f.prefix+"user` (id, admin_id, update_time) VALUES (100, ?, 0)", leaf.ID).Error)
+	require.NoError(t, f.db.Exec("INSERT INTO `"+f.prefix+"user_money_log` (user_id, admin_id, update_time) VALUES (100, ?, 0)", leaf.ID).Error)
+
+	require.NoError(t, f.svc.Del(context.Background(), []int32{leaf.ID}, adminDelActor(t, actor.ID, false)))
+
+	var userCount int64
+	f.db.Table(f.prefix+"user").Where("admin_id = ?", actor.ID).Count(&userCount)
+	require.Equal(t, int64(1), userCount, "user owner was not transferred to the parent")
+	f.db.Table(f.prefix+"user_money_log").Where("admin_id = ?", actor.ID).Count(&userCount)
+	require.Equal(t, int64(1), userCount, "user_money_log owner was not transferred with user")
+	f.db.Table(f.prefix+"user_money_log").Where("admin_id = ?", leaf.ID).Count(&userCount)
+	require.Zero(t, userCount)
 }
 
 func TestAdminModelDeleteRejectsSubordinates(t *testing.T) {

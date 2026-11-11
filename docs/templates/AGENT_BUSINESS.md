@@ -32,6 +32,7 @@ CRUD 双 commit 工作流见 `AGENTS.md` 的“业务仓库中的框架使用最
 ## 业务专属规则/约定
 
 - 权限、数据范围、命名和状态约定：
+- `admin_id` 归属表登记（删除管理员时归属数据转给直接上级）：列出 `internal/admin/repository/admin_owner_tables_business.go` 中登记的业务表；`admin_log` 等操作者/审计表不得登记。
 - 不应修改的业务边界：
 
 ## 部署与环境笔记

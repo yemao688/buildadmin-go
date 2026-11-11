@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -29,11 +31,15 @@ var (
 // contract. Every mutating method receives a caller-owned transaction and never
 // commits or rolls back.
 type AdminHierarchy struct {
-	prefix string
+	prefix      string
+	ownerTables []string
 }
 
 func NewAdminHierarchy(config *conf.Configuration) *AdminHierarchy {
-	return &AdminHierarchy{prefix: config.Database.Prefix}
+	return &AdminHierarchy{
+		prefix:      config.Database.Prefix,
+		ownerTables: data_scope.AdminOwnerTables(),
+	}
 }
 
 func (h *AdminHierarchy) adminTable() string   { return h.prefix + "admin" }
@@ -433,19 +439,52 @@ func (h *AdminHierarchy) moveSubtreeLocked(ctx context.Context, tx *gorm.DB, nod
 	return nil
 }
 
-// DeleteAdmins deletes a batch of leaf administrators under the hierarchy lock.
-// It verifies scope, rejects deletions that would orphan existing subordinates,
-// removes the corresponding closure rows, and deletes the admin rows with a
-// RowsAffected check so the operation is all-or-nothing.
+// AdminOwnerTransfer 记录某张归属表在一次删除中被转移的行数。
+type AdminOwnerTransfer struct {
+	AdminID    int32  `json:"admin_id"`
+	NewOwnerID int32  `json:"new_owner_id"`
+	Table      string `json:"table"`
+	Rows       int64  `json:"rows"`
+}
+
+// AdminDeleteResult 汇总一次批量删除，供调用方在事务提交后写审计日志。
+type AdminDeleteResult struct {
+	Deleted   []int32              `json:"deleted"`
+	Transfers []AdminOwnerTransfer `json:"transfers"`
+}
+
+type adminDeleteTarget struct {
+	id       int32
+	parentID *int32
+}
+
+// DeleteAdmins 是 DeleteAdminsWithResult 的兼容入口，只返回错误。
 func (h *AdminHierarchy) DeleteAdmins(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) error {
+	_, err := h.DeleteAdminsWithResult(ctx, tx, ids, actor, enforcer)
+	return err
+}
+
+// DeleteAdminsWithResult deletes a batch of leaf administrators under the
+// hierarchy lock. It verifies scope, rejects deletions that would orphan
+// existing subordinates, reassigns every registered owner table's rows from
+// each target to that target's parent, removes the corresponding closure rows,
+// and deletes the admin rows with a RowsAffected check so the operation is
+// all-or-nothing. The returned result carries the transfer counts for audit
+// logging by the caller after commit.
+//
+// 关系仍存在于闭包时，父级不可能与被删节点同批（否则父级有下级，早被
+// 子级检查拒绝）；这里额外拒绝"父级也在删除集合"的异常闭包，避免转移后
+// 立刻再次成为孤儿。parent_id 为空的顶层管理员必须显式指定转移目标，
+// 当前协议直接拒绝删除。
+func (h *AdminHierarchy) DeleteAdminsWithResult(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) (*AdminDeleteResult, error) {
 	if data_scope.ValidateActor(actor) != nil {
-		return data_scope.ErrScopedAccessDenied
+		return nil, data_scope.ErrScopedAccessDenied
 	}
 	unique := make([]int32, 0, len(ids))
 	seen := make(map[int32]struct{}, len(ids))
 	for _, id := range ids {
 		if id <= 0 {
-			return data_scope.ErrScopedAccessDenied
+			return nil, data_scope.ErrScopedAccessDenied
 		}
 		if _, ok := seen[id]; !ok {
 			seen[id] = struct{}{}
@@ -453,40 +492,136 @@ func (h *AdminHierarchy) DeleteAdmins(ctx context.Context, tx *gorm.DB, ids []in
 		}
 	}
 	if len(unique) == 0 {
-		return nil
+		return &AdminDeleteResult{}, nil
 	}
 
 	err := h.lockHierarchy(tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := h.verifyInScope(ctx, tx, actor, enforcer, unique...); err != nil {
-		return err
+		return nil, err
 	}
 
 	var childCount int64
 	if err := tx.WithContext(ctx).Table(h.closureTable()).
 		Where("ancestor_id IN ? AND descendant_id != ancestor_id", unique).
 		Count(&childCount).Error; err != nil {
-		return err
+		return nil, err
 	}
 	if childCount > 0 {
-		return cErr.BadRequest("cannot delete administrator with subordinates")
+		return nil, cErr.BadRequest("cannot delete administrator with subordinates")
+	}
+
+	targets, err := h.deleteTargets(ctx, tx, unique)
+	if err != nil {
+		return nil, err
+	}
+	deleting := make(map[int32]struct{}, len(targets))
+	for _, target := range targets {
+		deleting[target.id] = struct{}{}
+	}
+	for _, target := range targets {
+		if target.parentID == nil || *target.parentID <= 0 {
+			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete top-level administrator %d without a reassignment target", target.id))
+		}
+		if _, alsoDeleting := deleting[*target.parentID]; alsoDeleting {
+			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete administrator %d: its parent %d is also being deleted", target.id, *target.parentID))
+		}
+		if err := h.ensureNodeExists(ctx, tx, *target.parentID); err != nil {
+			return nil, err
+		}
+	}
+
+	slices.Sort(unique)
+	deleteResult := &AdminDeleteResult{Deleted: unique}
+	for _, target := range targets {
+		for _, table := range h.ownerTables {
+			rows, err := h.transferOwnerRows(ctx, tx, table, target.id, *target.parentID)
+			if err != nil {
+				return nil, err
+			}
+			if rows == 0 {
+				continue
+			}
+			deleteResult.Transfers = append(deleteResult.Transfers, AdminOwnerTransfer{
+				AdminID:    target.id,
+				NewOwnerID: *target.parentID,
+				Table:      table,
+				Rows:       rows,
+			})
+		}
 	}
 
 	result := tx.WithContext(ctx).Table(h.adminTable()).Where("id IN ?", unique).Delete(nil)
 	if result.Error != nil {
-		return result.Error
+		return nil, result.Error
 	}
 	if result.RowsAffected != int64(len(unique)) {
-		return cErr.BadRequest("delete failed: rows affected mismatch")
+		return nil, cErr.BadRequest("delete failed: rows affected mismatch")
 	}
 	if err := tx.WithContext(ctx).Exec(
 		"DELETE FROM "+quoteIdentifier(h.closureTable())+" WHERE descendant_id IN ?",
 		unique,
 	).Error; err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return deleteResult, nil
+}
+
+// deleteTargets 在层级锁内读取待删管理员的 parent_id。Unrestricted actor 的
+// verifyInScope 不检查存在性，因此这里同时承担"目标仍存在"的校验。
+func (h *AdminHierarchy) deleteTargets(ctx context.Context, tx *gorm.DB, ids []int32) ([]adminDeleteTarget, error) {
+	rows := make([]struct {
+		ID       int32
+		ParentID sql.NullInt32
+	}, 0, len(ids))
+	if err := tx.WithContext(ctx).Table(h.adminTable()).
+		Select("id, parent_id").Where("id IN ?", ids).Order("id").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) != len(ids) {
+		return nil, cErr.BadRequest("delete failed: rows affected mismatch")
+	}
+	targets := make([]adminDeleteTarget, 0, len(rows))
+	for _, row := range rows {
+		target := adminDeleteTarget{id: row.ID}
+		if row.ParentID.Valid {
+			parent := row.ParentID.Int32
+			target.parentID = &parent
+		}
+		targets = append(targets, target)
+	}
+	return targets, nil
+}
+
+// transferOwnerRows 把一张归属表中 adminID 的行改挂到 newOwnerID。登记表名
+// 必须是合法标识符；尚未物化的登记表直接跳过（没有行需要转移，与 cascade
+// 同步的缺失表语义一致）。update_time 仅在列存在时更新，兼容没有该列的
+// 历史表。
+func (h *AdminHierarchy) transferOwnerRows(ctx context.Context, tx *gorm.DB, table string, adminID, newOwnerID int32) (int64, error) {
+	if err := data_scope.ValidateIdentifier(table); err != nil {
+		return 0, fmt.Errorf("admin owner table %q: %w", table, err)
+	}
+	full := h.prefix + table
+	if err := data_scope.ValidateIdentifier(full); err != nil {
+		return 0, fmt.Errorf("admin owner table %q: %w", full, err)
+	}
+	if !tx.WithContext(ctx).Migrator().HasTable(full) {
+		return 0, nil
+	}
+	var updateTimeColumns int64
+	if err := tx.WithContext(ctx).Raw(
+		"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
+		full, "update_time",
+	).Scan(&updateTimeColumns).Error; err != nil {
+		return 0, err
+	}
+	updates := map[string]any{"admin_id": newOwnerID}
+	if updateTimeColumns > 0 {
+		updates["update_time"] = time.Now().Unix()
+	}
+	result := tx.WithContext(ctx).Table(full).Where("admin_id = ?", adminID).UpdateColumns(updates)
+	return result.RowsAffected, result.Error
 }
