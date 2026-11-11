@@ -155,6 +155,54 @@ func TestAdminHierarchyDeleteRejectsTopLevelAdmin(t *testing.T) {
 	require.Equal(t, int64(1), countOwnerRows(t, db, "ba_owner_c", root.ID))
 }
 
+func TestAdminHierarchyDeleteTopLevelWithoutOwnedRows(t *testing.T) {
+	db := openAdminDeleteTestDB(t)
+	root := createAdminForHierarchy(t, db, "root")
+	linkAdminForDelete(t, db, root.ID, nil)
+
+	// 升级库的 admin.parent_id 是 NULL，登记表存在但没有任何该管理员的数据。
+	createAdminOwnerTestTable(t, db, "ba_owner_e")
+
+	h := &AdminHierarchy{prefix: "ba_", ownerTables: []string{"owner_e"}}
+	result, err := deleteAdminsForTest(t, db, h, []int32{root.ID}, root.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int32{root.ID}, result.Deleted)
+	require.Empty(t, result.Transfers)
+
+	var adminCount int64
+	require.NoError(t, db.Model(&model.Admin{}).Where("id = ?", root.ID).Count(&adminCount).Error)
+	require.Zero(t, adminCount)
+	var closureCount int64
+	require.NoError(t, db.Model(&model.AdminClosure{}).Where("descendant_id = ?", root.ID).Count(&closureCount).Error)
+	require.Zero(t, closureCount)
+}
+
+func TestAdminHierarchyDeleteRejectsDisabledReassignmentTarget(t *testing.T) {
+	db := openAdminDeleteTestDB(t)
+	root := createAdminForHierarchy(t, db, "root")
+	parent := createAdminForHierarchy(t, db, "parent")
+	leaf := createAdminForHierarchy(t, db, "leaf")
+	linkAdminForDelete(t, db, root.ID, nil)
+	linkAdminForDelete(t, db, parent.ID, &root.ID)
+	linkAdminForDelete(t, db, leaf.ID, &parent.ID)
+	require.NoError(t, db.Model(&model.Admin{}).Where("id = ?", parent.ID).Update("status", "disable").Error)
+
+	createAdminOwnerTestTable(t, db, "ba_owner_f")
+	require.NoError(t, db.Exec("INSERT INTO `ba_owner_f` (admin_id) VALUES (?)", leaf.ID).Error)
+
+	h := &AdminHierarchy{prefix: "ba_", ownerTables: []string{"owner_f"}}
+	result, err := deleteAdminsForTest(t, db, h, []int32{leaf.ID}, root.ID)
+	require.Nil(t, result)
+	var businessErr *cErr.Error
+	require.ErrorAs(t, err, &businessErr)
+	require.Contains(t, err.Error(), "is not enabled")
+
+	require.Equal(t, int64(1), countOwnerRows(t, db, "ba_owner_f", leaf.ID))
+	var adminCount int64
+	require.NoError(t, db.Model(&model.Admin{}).Where("id = ?", leaf.ID).Count(&adminCount).Error)
+	require.Equal(t, int64(1), adminCount)
+}
+
 func TestAdminHierarchyDeleteRollsBackOwnerTransfer(t *testing.T) {
 	db := openAdminDeleteTestDB(t)
 	root := createAdminForHierarchy(t, db, "root")

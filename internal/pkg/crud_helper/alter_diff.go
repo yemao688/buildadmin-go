@@ -266,7 +266,10 @@ func unmanagedColumnAttributes(column model.Column) []string {
 	if column.GENERATION_EXPRESSION != "" {
 		attributes = append(attributes, "generated-expression")
 	}
-	extra := strings.TrimSpace(strings.ReplaceAll(strings.ToLower(column.EXTRA), "auto_increment", ""))
+	extra := strings.ToLower(column.EXTRA)
+	extra = strings.ReplaceAll(extra, "auto_increment", "")
+	extra = strings.ReplaceAll(extra, "default_generated", "")
+	extra = strings.Join(strings.Fields(extra), " ")
 	if extra != "" {
 		attributes = append(attributes, "extra:"+extra)
 	}

@@ -474,8 +474,10 @@ func (h *AdminHierarchy) DeleteAdmins(ctx context.Context, tx *gorm.DB, ids []in
 //
 // 关系仍存在于闭包时，父级不可能与被删节点同批（否则父级有下级，早被
 // 子级检查拒绝）；这里额外拒绝"父级也在删除集合"的异常闭包，避免转移后
-// 立刻再次成为孤儿。parent_id 为空的顶层管理员必须显式指定转移目标，
-// 当前协议直接拒绝删除。
+// 立刻再次成为孤儿。parent_id 是框架后加的列，从 PHP 上游升级的库不会回填，
+// 因此仅当管理员在已登记的归属表中确实拥有数据时才要求有效的转移目标；
+// 顶层（parent_id 为空）且无归属数据的管理员可以直接删除，转移目标还必须
+// 存在且处于启用状态。
 func (h *AdminHierarchy) DeleteAdminsWithResult(ctx context.Context, tx *gorm.DB, ids []int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) (*AdminDeleteResult, error) {
 	if data_scope.ValidateActor(actor) != nil {
 		return nil, data_scope.ErrScopedAccessDenied
@@ -521,7 +523,15 @@ func (h *AdminHierarchy) DeleteAdminsWithResult(ctx context.Context, tx *gorm.DB
 	for _, target := range targets {
 		deleting[target.id] = struct{}{}
 	}
+	reassign := make(map[int32]int32, len(targets))
 	for _, target := range targets {
+		owns, err := h.adminOwnsRows(ctx, tx, target.id)
+		if err != nil {
+			return nil, err
+		}
+		if !owns {
+			continue
+		}
 		if target.parentID == nil || *target.parentID <= 0 {
 			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete top-level administrator %d without a reassignment target", target.id))
 		}
@@ -531,13 +541,21 @@ func (h *AdminHierarchy) DeleteAdminsWithResult(ctx context.Context, tx *gorm.DB
 		if err := h.ensureNodeExists(ctx, tx, *target.parentID); err != nil {
 			return nil, err
 		}
+		if err := h.ensureReassignmentTargetEnabled(ctx, tx, *target.parentID); err != nil {
+			return nil, err
+		}
+		reassign[target.id] = *target.parentID
 	}
 
 	slices.Sort(unique)
 	deleteResult := &AdminDeleteResult{Deleted: unique}
 	for _, target := range targets {
+		newOwnerID, ok := reassign[target.id]
+		if !ok {
+			continue
+		}
 		for _, table := range h.ownerTables {
-			rows, err := h.transferOwnerRows(ctx, tx, table, target.id, *target.parentID)
+			rows, err := h.transferOwnerRows(ctx, tx, table, target.id, newOwnerID)
 			if err != nil {
 				return nil, err
 			}
@@ -546,7 +564,7 @@ func (h *AdminHierarchy) DeleteAdminsWithResult(ctx context.Context, tx *gorm.DB
 			}
 			deleteResult.Transfers = append(deleteResult.Transfers, AdminOwnerTransfer{
 				AdminID:    target.id,
-				NewOwnerID: *target.parentID,
+				NewOwnerID: newOwnerID,
 				Table:      table,
 				Rows:       rows,
 			})
@@ -594,6 +612,60 @@ func (h *AdminHierarchy) deleteTargets(ctx context.Context, tx *gorm.DB, ids []i
 		targets = append(targets, target)
 	}
 	return targets, nil
+}
+
+// adminOwnsRows 报告管理员是否在任一已登记且已物化的归属表中拥有数据。
+// 未物化的登记表视为没有数据，与 transferOwnerRows 的缺失表语义一致。
+// 只读探测，必须与删除处于同一事务，避免探测与转移之间的并发写入。
+func (h *AdminHierarchy) adminOwnsRows(ctx context.Context, tx *gorm.DB, adminID int32) (bool, error) {
+	for _, table := range h.ownerTables {
+		owned, err := h.adminOwnsRowInTable(ctx, tx, table, adminID)
+		if err != nil {
+			return false, err
+		}
+		if owned {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (h *AdminHierarchy) adminOwnsRowInTable(ctx context.Context, tx *gorm.DB, table string, adminID int32) (bool, error) {
+	if err := data_scope.ValidateIdentifier(table); err != nil {
+		return false, fmt.Errorf("admin owner table %q: %w", table, err)
+	}
+	full := h.prefix + table
+	if err := data_scope.ValidateIdentifier(full); err != nil {
+		return false, fmt.Errorf("admin owner table %q: %w", full, err)
+	}
+	if !tx.WithContext(ctx).Migrator().HasTable(full) {
+		return false, nil
+	}
+	var found int
+	result := tx.WithContext(ctx).Raw(
+		"SELECT 1 FROM "+quoteIdentifier(full)+" WHERE admin_id = ? LIMIT 1",
+		adminID,
+	).Scan(&found)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}
+
+// ensureReassignmentTargetEnabled 拒绝把归属数据转挂到不存在或已停用的管理员，
+// 否则这些行会落到一个无法登录的账号名下。
+func (h *AdminHierarchy) ensureReassignmentTargetEnabled(ctx context.Context, tx *gorm.DB, id int32) error {
+	var statuses []string
+	if err := tx.WithContext(ctx).Table(h.adminTable()).Where("id = ?", id).Limit(1).Pluck("status", &statuses).Error; err != nil {
+		return err
+	}
+	if len(statuses) == 0 {
+		return fmt.Errorf("%w: admin %d", ErrHierarchyNodeNotFound, id)
+	}
+	if statuses[0] != "enable" {
+		return cErr.BadRequest(fmt.Sprintf("reassignment target administrator %d is not enabled", id))
+	}
+	return nil
 }
 
 // transferOwnerRows 把一张归属表中 adminID 的行改挂到 newOwnerID。登记表名
