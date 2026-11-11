@@ -226,7 +226,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - **业务仓库中的 AI 不得改动框架轨道与框架级文档。** 不向 `official/`、`framework/` 添加或修改迁移；不按业务需要改写 `AGENTS.md` 与 `docs/framework-maintenance.md`。这些文件应保持与框架上游一致，以便业务仓库合并框架升级。
 - **显式设置 `columnFields` 控制列表展示。** 省略时所有字段都会进入后台列表；密码、密钥/令牌、长备注或大段 `content` 等仅表单字段只放进 `formFields`。带关系增强的 `remoteSelect`/`remoteSelects` 外键保留在 `columnFields`，原始 FK 列会自动隐藏，同时保留搜索和关系展示列。
 - **权限体系已经完整。** 使用 `admin`、`admin_group` 和 `admin.parent_id`（配合 `admin_closure`）建立超级管理员、总代理、代理、员工等层级，不要新建认证表。`admin` 字段变更必须配套 business 迁移，破坏性列变更不能依赖 AutoMigrate。
-- **删除管理员会转移归属数据，业务归属表必须显式登记。** `DeleteAdmins` 在层级锁与同一事务内把每个被删叶子的 owner 行转给其 `parent_id`，`parent_id` 为空（顶层）直接拒绝删除。`admin_id` 表示归属的业务表（含 `inheritFrom` 子表的冗余归属）必须在业务仓库的 `internal/admin/repository/admin_owner_tables_business.go` init 中调用 `data_scope.RegisterAdminOwnerTables` 登记；`admin_log`、`crud_log`、`security_*_log` 等操作者/审计表禁止登记。未登记的表会在删除代理后成为所有受限代理都看不到的孤儿数据。详见 [`docs/business-development.md`](docs/business-development.md)「管理员删除与归属转移」。
+- **删除管理员会转移归属数据，业务归属表必须显式登记。** `DeleteAdmins` 在层级锁与同一事务内把每个被删叶子的 owner 行转给其 `parent_id`；仅当该管理员在已登记归属表中确有待转移数据、且 `parent_id` 为空时才拒绝删除（`parent_id` 是框架后加列、升级库不回填，无归属数据的顶层管理员可以直接删）。`admin_id` 表示归属的业务表（含 `inheritFrom` 子表的冗余归属）必须在业务仓库的 `internal/admin/repository/admin_owner_tables_business.go` init 中调用 `data_scope.RegisterAdminOwnerTables` 登记；`admin_log`、`crud_log`、`security_*_log` 等操作者/审计表禁止登记。未登记的表会在删除代理后成为所有受限代理都看不到的孤儿数据。详见 [`docs/business-development.md`](docs/business-development.md)「管理员删除与归属转移」。
 - **`user` 表可按前台会员业务塑形。** 可以修改或删除字段，并同步调整 `web/src/views/backend/user`；同样遵守迁移纪律。
 - **前台门户可以重构，后台设计系统不要改。** `web/src/views/frontend/` 只是业务门户示例；不要重做 `web/src/views/backend/` 的样式或管理后台设计系统，业务后台页面使用 CRUD 生成器模式。
 

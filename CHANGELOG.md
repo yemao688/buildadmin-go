@@ -9,14 +9,20 @@
 - **Docs:** 同步 `docs/crud-generation.md`（unmanaged/列序语义、debug 展开与 `--plan` 明细、charset/collation 判据）与 `docs/framework-workflow.md`（rejected 与 unmanaged 的级别区别）。
 - **Verified:** `gofmt -l`（全部改动文件）空；`go build ./...` 通过；`go test ./internal/pkg/crud_helper/ -count=1` PASS（19.551s）、`go test ./internal/commands/ -count=1` PASS（0.741s）、`go test ./internal/ -run '^TestImportBoundary$' -count=1` PASS（0.392s）。MySQL 门禁用例本机 SKIP（`configs/config.yaml` 不存在、`mysql_test` 未启用），启动路径真实 DDL 场景需在启用门禁的环境补跑。
 
-> 管理员删除的数据完整性修复（issue #21）：删除叶子管理员时在同一事务内把它名下的归属数据转挂到直接上级，顶层管理员拒绝删除；归属表必须显式登记，审计日志不参与转移。
+> 管理员删除的数据完整性修复（issue #21）：删除叶子管理员时在同一事务内把它名下的归属数据转挂到直接上级；归属表必须显式登记，审计日志不参与转移。顶层管理员仅在确有归属数据时才要求有效的转移目标。
 
 - **Fixed (issue #21):** `AdminHierarchy.DeleteAdmins` 原先只删除 `admin` 与 `admin_closure` 行，`seller_user`、`user` 等表的 `admin_id` 仍指向已删除管理员；闭包行删除后受限代理的 scope 匹配不到，数据从所有代理列表里静默消失。现在在层级锁内逐个目标读取 `parent_id`，把显式登记的归属表行改挂到该目标自己的上级，再删除 admin/closure 行，全部动作处于同一事务；闭包删除失败会连同归属转移一起回滚。
-- **Breaking:** `parent_id` 为空的顶层管理员不再允许直接删除（返回 `cannot delete top-level administrator <id> without a reassignment target`）；父级不存在或父级也在本次删除集合时同样拒绝。需要清理顶层管理员时须先显式指定转移目标（后续可扩展 `--reassign-to`）。
+- **Breaking:** 删除前会逐表探测管理员是否真的拥有归属行（`parent_id` 是框架后加列、升级库不回填）：**无归属行的顶层管理员可以直接删除**；确有归属行而 `parent_id` 为空时返回 `cannot delete top-level administrator <id> without a reassignment target`。父级不存在、父级也在本次删除集合、或父级 `status` 不是 `enable` 时同样拒绝。
 - **Added:** `data_scope.RegisterAdminOwnerTables` / `AdminOwnerTables` 显式归属表注册表。框架登记 `user`、`user_money_log`；业务仓库通过 `internal/admin/repository/admin_owner_tables_business.go` 登记 `seller_*`、`order_*` 等归属表。`admin_log`、`crud_log`、`data_recycle_log`、`sensitive_data_log` 等操作者/审计表禁止登记，避免删除时改写历史操作人。登记表尚未物化时跳过；存在 `update_time` 列时一并刷新。
 - **Added:** 删除成功后 service 输出结构化审计日志（删除的管理员、每张表的转移行数、新归属）。
-- **Tests:** MySQL 门禁用例覆盖单叶子转移、不同父级批量分别转移、顶层管理员拒绝、审计表不转移、闭包删除失败时归属转移回滚，以及 `user` + `user_money_log` 同事务转移；注册表单测覆盖幂等、非法批次不半批生效与返回值隔离。
+- **Tests:** MySQL 门禁用例覆盖单叶子转移、不同父级批量分别转移、顶层管理员拒绝、审计表不转移、闭包删除失败时归属转移回滚，以及 `user` + `user_money_log` 同事务转移；另覆盖无归属行的顶层管理员可删除、转移目标未启用时拒绝。新增免 MySQL 的 `crud_specs`（`reassignable`/`inheritFrom`）与 owner 注册表一致性测试，防止业务 fork 漏登记；注册表单测覆盖幂等、非法批次不半批生效与返回值隔离。
 - **Docs:** `AGENTS.md`、`docs/business-development.md`、`docs/crud-generation.md` 增加归属表登记规则与业务仓库接入示例；`docs/templates/AGENT_BUSINESS.md` 增加业务登记清单提示。
+
+> IP 黑名单接线（issue #13）：后台「禁止访问IP」重新生效，并改为按 TCP 对端地址判定——转发头只在对端是回环/私有/链路本地时才采信。
+
+- **Fixed (issue #13):** `internal/middleware/ip_check.go` 此前因每次请求新建 store、`Get` 传值、`Set` 空 key 而恒不生效（IP 黑名单实际是死代码）。现由 `internal/router` 注入 `NoAccessIPSource`，从站点配置 `basics.no_access_ip` 读取规则（精确 IP / CIDR / `192.168.1.*`，换行或逗号分隔），命中返回 403 信封并 Abort；配置为空、读取失败或 source 为 nil 一律 fail-open，规则缓存随后台保存失效。
+- **Security (issue #13):** 匹配地址默认取 TCP 对端；只有对端是回环、RFC1918/ULA 私有网段或链路本地单播时才采信 `X-Forwarded-For`/`X-Real-IP`/`CF-Connecting-IP`。此前直接使用 `GetClientIP` 且 gin 未配置可信代理，任何调用方加一个伪造头即可绕过黑名单（实测 403 → 204）。部署要求：反向代理须位于私有/回环网段，并用自己解析的客户端地址**覆写**转发头而不是追加。
+- **Changed (issue #13):** 修正不存在的 i18n key（`No permission request` → `No permission`），中文界面不再回退显示英文原文。
 
 ## v3.3.6
 

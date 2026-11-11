@@ -187,10 +187,12 @@ func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"ind
 
 - **按目标分别转移**：批量删除的多个叶子可以属于不同父级，各自转给自己的
   直接上级；不会合并到一个统一目标。
-- **顶层管理员拒绝删除**：`parent_id` 为空的节点没有默认转移目标，返回明确
-  业务错误（`cannot delete top-level administrator <id> without a reassignment
-  target`）。父级不存在、或父级也在本次删除集合时同样拒绝，避免转移后立刻
-  再次成为孤儿。
+- **顶层管理员仅在确有归属数据时拒绝删除**：`parent_id` 是框架后加的列，从 PHP
+  上游升级的库不会回填，因此删除前先逐表探测该管理员是否真的拥有归属行；没有
+  归属行时直接删除，不要求转移目标。确有归属行而 `parent_id` 为空时返回明确业务
+  错误（`cannot delete top-level administrator <id> without a reassignment
+  target`）。父级不存在、父级已在本次删除集合、或父级 `status` 不是 `enable`
+  时同样拒绝，避免转移后立刻再次成为孤儿、或把数据挂到无法登录的账号名下。
 - **只转移显式登记的归属表**：`admin_id` 表示归属的表必须通过
   `data_scope.RegisterAdminOwnerTables` 登记；`admin_log`、`crud_log`、
   `data_recycle_log`、`sensitive_data_log` 等表示操作者/审计身份，**禁止登记**
