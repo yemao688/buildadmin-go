@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v3.3.7
 
 > 启动/迁移日志降噪（issue #20）：unmanaged 差异从逐列 `WARNING` 收敛为按表聚合的 `note`，列 charset/collation 与表默认一致时不再视为漂移；`WARNING` 只保留给有数据风险的项。
 
