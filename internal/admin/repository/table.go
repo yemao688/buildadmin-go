@@ -4,6 +4,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
 	"database/sql"
+	"errors"
 	"slices"
 	"strings"
 
@@ -199,6 +200,21 @@ func (s *TableRepository) GetColumns(tableName string) ([]Column, error) {
 		return result, err
 	}
 	return result, nil
+}
+
+// GetTableCollation 返回表的默认排序规则；表不存在时返回空串。
+func (s *TableRepository) GetTableCollation(tableName string) (string, error) {
+	var collation string
+	schemaExpr, schemaArgs := s.schemaClause()
+	args := append(schemaArgs, s.Name(tableName, true))
+	err := s.sqlDB.Raw("SELECT TABLE_COLLATION FROM information_schema.tables WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? LIMIT 1", args...).Scan(&collation).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return collation, nil
 }
 
 // 数据表是否有数据

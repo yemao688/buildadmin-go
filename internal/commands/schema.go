@@ -78,8 +78,16 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 	results, err := helper.ApplySpecsFromDir(db, cfg, specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
 	// 失败前已执行的 DDL 不可回滚：先输出已发生的动作与告警，再返回错误，
 	// 否则调用方只能看到一个笼统的 apply 错误而不知道库已经改到哪一步。
-	printSchemaApplyResults(results)
+	printSchemaApplyResults(results, schemaApplyVerbose(cfg))
 	return err
+}
+
+// schemaApplyVerbose 按配置日志级别决定 unmanaged 差异是否逐条展开；cfg 可能缺失。
+func schemaApplyVerbose(cfg *conf.Configuration) bool {
+	if cfg == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(cfg.Log.Level), "debug")
 }
 
 // migrationTotals 汇总各轨道的待执行与未完成迁移数，供状态行与 strict 判定共用。
@@ -124,7 +132,7 @@ func printDatabaseInstallGuidance(state migrations.InstallRecoveryState) {
 	fmt.Println("    docker compose run --rm buildadmin-go setup [同上参数]")
 }
 
-func printSchemaApplyResults(results []helper.ApplyTableResult) {
+func printSchemaApplyResults(results []helper.ApplyTableResult, verbose bool) {
 	for _, result := range results {
 		switch result.Action {
 		case helper.ApplyCreated, helper.ApplyAltered, helper.ApplyRebuilt, helper.ApplyPartial:
@@ -133,11 +141,11 @@ func printSchemaApplyResults(results []helper.ApplyTableResult) {
 				fmt.Printf("[database] WARNING %s: 表已删除重建，存量数据可能丢失\n", result.Table)
 			}
 		}
-		for _, change := range result.Unmanaged {
-			fmt.Printf("[database] WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
-		}
 		for _, change := range result.Blocked {
 			fmt.Printf("[database] WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)
 		}
 	}
+	printUnmanagedNotes(func(format string, args ...any) {
+		fmt.Printf(format, args...)
+	}, results, unmanagedNoteOptions{Prefix: "[database] ", Verbose: verbose})
 }

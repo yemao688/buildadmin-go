@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/infra/db"
@@ -147,7 +148,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 	if dir := helper.DefaultSpecDir(); dir != "" {
 		results, applyErr := helper.ApplySpecsFromDir(h.db, h.config, dir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: !strict})
 		if applyErr != nil {
-			printMigrateWarnings(cmd, results)
+			printMigrateDiagnostics(cmd, results)
 			cmd.Printf("CRUD apply error: %v\n", applyErr)
 			var blocked *helper.ApplyBlockedError
 			if errors.As(applyErr, &blocked) {
@@ -195,21 +196,19 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// printMigrateWarnings 输出未被 spec 管理的列/属性与 blocked 差量（不阻断执行）。
-func printMigrateWarnings(cmd *cobra.Command, results []helper.ApplyTableResult) {
+// printMigrateDiagnostics 输出未被 spec 管理的差异（note）与 blocked 差量（WARNING）；两者都不阻断执行。
+func printMigrateDiagnostics(cmd *cobra.Command, results []helper.ApplyTableResult) {
 	for _, result := range results {
-		for _, change := range result.Unmanaged {
-			cmd.Printf("CRUD apply WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
-		}
 		for _, change := range result.Blocked {
 			cmd.Printf("CRUD apply WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)
 		}
 	}
+	printUnmanagedNotes(cmd.Printf, results, unmanagedNoteOptions{Prefix: "CRUD apply "})
 }
 
-// printMigrateResults 输出 warnings 与每张表的 apply 动作。
+// printMigrateResults 输出 diagnostics 与每张表的 apply 动作。
 func printMigrateResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
-	printMigrateWarnings(cmd, results)
+	printMigrateDiagnostics(cmd, results)
 	for _, result := range results {
 		if result.Action == helper.ApplyUnchanged {
 			continue
@@ -218,7 +217,7 @@ func printMigrateResults(cmd *cobra.Command, results []helper.ApplyTableResult) 
 	}
 }
 
-// printPlanResults 输出每张表的计划动作、逐差量分类与告警。
+// printPlanResults 输出每张表的计划动作、逐差量分类与告警；--plan 是审计视图，unmanaged 保留完整明细。
 func printPlanResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
 	for _, result := range results {
 		cmd.Printf("[database] plan %-9s %s\n", string(result.Action), result.Table)
@@ -233,7 +232,11 @@ func printPlanResults(cmd *cobra.Command, results []helper.ApplyTableResult) {
 			cmd.Println(line)
 		}
 		for _, change := range result.Unmanaged {
-			cmd.Printf("[database] WARNING %s.%s: %s\n", result.Table, change.Field, change.Reason)
+			line := fmt.Sprintf("[database] note %s.%s: %s", result.Table, change.Field, change.Reason)
+			if details := strings.Join(change.Unmanaged, ", "); details != "" {
+				line += " (" + details + ")"
+			}
+			cmd.Println(line)
 		}
 		for _, change := range result.Blocked {
 			cmd.Printf("[database] WARNING %s.%s: %s；%s\n", result.Table, change.Field, change.Reason, blockedChangeHint)

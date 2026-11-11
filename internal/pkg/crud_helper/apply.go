@@ -339,6 +339,10 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 	if err != nil {
 		return nil, fmt.Errorf("read existing columns: %w", err)
 	}
+	tableCollation, err := tableM.GetTableCollation(spec.Table.Name)
+	if err != nil {
+		return nil, fmt.Errorf("read table collation: %w", err)
+	}
 	if pkDrift, reason := primaryKeyDrift(actualPKs, spec.Fields, current); pkDrift {
 		if opts.AllowRebuild {
 			result.Action = ApplyRebuilt
@@ -372,7 +376,7 @@ func planOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableReposi
 	var skippedIndexes []ApplyChange
 	indexPlan.Added, skippedIndexes = planIndexAdditions(indexPlan.Added, spec.Table.Indexes, willExist)
 	result.Diffs = make([]ApplyChange, 0, len(diffs)+len(indexPlan.Added))
-	result.Unmanaged = unmanagedChanges(current, spec.Fields)
+	result.Unmanaged = unmanagedChanges(current, spec.Fields, tableCollation)
 	for _, diff := range diffs {
 		ddl, ddlErr := alterChangeDDL(fullName, diff)
 		if ddlErr != nil {
@@ -418,7 +422,7 @@ func dataScopeIndexName(table crudmodel.Table, fields []crudmodel.Field) string 
 	return "idx_" + owner
 }
 
-func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyChange {
+func unmanagedChanges(columns []model.Column, fields []crudmodel.Field, tableCollation string) []ApplyChange {
 	byName := make(map[string]model.Column, len(columns))
 	for _, column := range columns {
 		byName[strings.ToLower(column.COLUMN_NAME)] = column
@@ -429,13 +433,62 @@ func unmanagedChanges(columns []model.Column, fields []crudmodel.Field) []ApplyC
 		if !ok || !specFieldMatchesColumn(field, column) {
 			continue
 		}
-		attributes := unmanagedColumnAttributes(column)
+		attributes := unmanagedColumnValues(filterTableDefaultAttribute(unmanagedColumnAttributes(column), column, tableCollation), column)
 		if len(attributes) == 0 {
 			continue
 		}
 		changes = append(changes, ApplyChange{Field: field.Name, Type: "unmanaged", Class: DiffUnmanaged, Reason: "database attributes are not modeled by CRUD spec", Unmanaged: attributes})
 	}
 	return append(changes, columnOrderDrift(columns, fields)...)
+}
+
+// filterTableDefaultAttribute 按表默认排序规则过滤列级 charset/collation 标签：
+// 与表默认完全一致的列不构成漂移；只有 collation 偏离而 charset 仍等于表默认
+// 字符集时只保留 collation，避免每个 varchar 列都报一条噪音；表默认未知时全部
+// 保留，不静默丢弃信息。
+func filterTableDefaultAttribute(attributes []string, column model.Column, tableCollation string) []string {
+	if tableCollation == "" {
+		return attributes
+	}
+	sameCollation := strings.EqualFold(column.COLLATION_NAME, tableCollation)
+	tableCharset := tableCollation
+	if idx := strings.IndexByte(tableCharset, '_'); idx >= 0 {
+		tableCharset = tableCharset[:idx]
+	}
+	sameCharset := strings.EqualFold(column.CHARACTER_SET_NAME, tableCharset)
+	kept := make([]string, 0, len(attributes))
+	for _, attribute := range attributes {
+		switch attribute {
+		case "collation":
+			if sameCollation {
+				continue
+			}
+		case "charset":
+			if sameCollation || sameCharset {
+				continue
+			}
+		}
+		kept = append(kept, attribute)
+	}
+	return kept
+}
+
+// unmanagedColumnValues 把内部标签展开成带实际值的展示形式，extra:<x> 原样保留。
+func unmanagedColumnValues(attributes []string, column model.Column) []string {
+	values := make([]string, 0, len(attributes))
+	for _, attribute := range attributes {
+		switch attribute {
+		case "charset":
+			values = append(values, "charset: "+column.CHARACTER_SET_NAME)
+		case "collation":
+			values = append(values, "collation: "+column.COLLATION_NAME)
+		case "generated-expression":
+			values = append(values, "generated-expression: "+column.GENERATION_EXPRESSION)
+		default:
+			values = append(values, attribute)
+		}
+	}
+	return values
 }
 
 // columnOrderDrift 在托管列（spec 中存在的列）物理顺序与 spec 字段顺序不一致时
@@ -592,7 +645,11 @@ func applyOneSpec(db *gorm.DB, cfg *conf.Configuration, tableM *model.TableRepos
 		if err != nil {
 			return nil, fmt.Errorf("read existing columns: %w", err)
 		}
-		result.Unmanaged = unmanagedChanges(current, spec.Fields)
+		tableCollation, err := tableM.GetTableCollation(spec.Table.Name)
+		if err != nil {
+			return nil, fmt.Errorf("read table collation: %w", err)
+		}
+		result.Unmanaged = unmanagedChanges(current, spec.Fields, tableCollation)
 		pkDrift, pkReason := primaryKeyDrift(actualPKs, spec.Fields, current)
 		specPK := strings.Join(specPrimaryKeys(spec.Fields), ",")
 		action, err := decideApplyAction(pkDrift, opts.AllowRebuild, spec.Table.Name, strings.Join(actualPKs, ","), specPK)

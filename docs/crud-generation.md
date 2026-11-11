@@ -107,7 +107,7 @@ fields:
 
 ### `indexes`
 
-表级索引声明，由 `crud:generate` 与 `crud:apply` 共同物化（两条路径对已有表行为一致）：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并输出 `unmanaged` 告警，不会自动删除或重建）。
+表级索引声明，由 `crud:generate` 与 `crud:apply` 共同物化（两条路径对已有表行为一致）：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并以信息性的 `unmanaged` note 提示，不会自动删除或重建，也不阻断执行）。
 
 ```yaml
 indexes:
@@ -121,7 +121,7 @@ indexes:
     columns: [note(64)]        # 前缀索引：text/varchar 长列可写 col(N) 取前 N 字符
 ```
 
-约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。长文本列（text/varchar 等）建索引必须使用 `col(N)` 前缀语法（N 为正整数），与 MySQL 前缀索引一致。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并告警）；需要删索引的破坏性变更走 business 迁移。
+约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。长文本列（text/varchar 等）建索引必须使用 `col(N)` 前缀语法（N 为正整数），与 MySQL 前缀索引一致。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并以 `unmanaged` note 提示）；需要删索引的破坏性变更走 business 迁移。
 
 ### `dataScope` 与 `menu`
 
@@ -968,7 +968,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 
 `migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库；`migrate --strict` 在出现 `rejected` 时以失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`--plan` 有意不取生成锁，因此假设没有并发 DDL：容器正在 apply 时运行它可能读到混合状态；需要一致视图请在没有任何容器迁移时运行。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
 
-需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，`crud:apply`/`migrate --strict` 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；启动路径与宽松 `migrate` 按「全部类别已授权」自动执行这类变更。`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性会被保留，并在 apply 输出中以 `CRUD apply WARNING` 提示，用于感知漂移。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以 `CRUD apply WARNING`（`column-order-drift`）提示但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
+需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，`crud:apply`/`migrate --strict` 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；启动路径与宽松 `migrate` 按「全部类别已授权」自动执行这类变更。`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性（unmanaged 差异）会被保留，并以信息性 note 提示、不阻断执行：启动/`migrate`/`crud:apply`/`setup` 默认按表聚合成一行（如 `[database] note seller_user: 13 unmanaged column attributes; run migrate --plan for details`；命令路径前缀为 `CRUD apply note`），`log.level: debug` 时启动路径逐条展开，`migrate --plan`/`crud:apply --plan` 始终保留逐条明细。`WARNING` 只用于有数据风险的 `rejected`、未批准的 `requires-approval` 与删表重建（`apply rebuilt`）。列级 charset/collation 与表默认值一致时不算 unmanaged 差异、不逐列提示；只有列级 collation 偏离表默认、generated expression，以及 `auto_increment`/`default_generated` 之外的 extra 才会被报告。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以每表一条 note 提示（如 `[database] note hotel_order: column order differs from spec field order; realign via a business migration`）但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
 
 **迁移与 apply 的分工**：业务表结构只由 spec → apply 物化。不要在 business 迁移中用 `AutoMigrate` 创建或修改有 spec 的业务表——会形成双重事实源、绕过 apply 的安全矩阵，`Down` 会 DROP 业务数据，且常驻 `VerifySchema` 会锁死后续 `crud:delete`。迁移只负责 apply 表达不了的东西：`rejected` 破坏性变更、种子数据，以及无 spec 的非 CRUD 自建表（自负责最终契约）。唯一索引通过本表 `indexes` 声明由 apply 物化，**不要写"只补索引"的迁移**：迁移阶段先于 apply 尾部，全新库上业务表尚未创建，`ALTER TABLE ADD INDEX` 会失败；即使容忍表不存在，`Up` 只执行一次、apply 不建索引，索引会永久缺失且常驻 `VerifySchema` 永远红牌。
 
