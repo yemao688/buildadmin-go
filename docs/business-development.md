@@ -180,7 +180,55 @@ func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"ind
 - 未来卖家余额按同契约毕业 `SellerBalanceService`；不要往
   `UserBalanceService` 里塞新用户域逻辑。
 
-## 6. 迁移与决策记录
+## 6. 管理员删除与归属转移
+
+删除叶子管理员时，`AdminHierarchy.DeleteAdmins` 在层级锁和同一事务内把它名下
+的归属数据转挂到该管理员自己的 `parent_id`，再删除 `admin` 与闭包行。语义：
+
+- **按目标分别转移**：批量删除的多个叶子可以属于不同父级，各自转给自己的
+  直接上级；不会合并到一个统一目标。
+- **顶层管理员拒绝删除**：`parent_id` 为空的节点没有默认转移目标，返回明确
+  业务错误（`cannot delete top-level administrator <id> without a reassignment
+  target`）。父级不存在、或父级也在本次删除集合时同样拒绝，避免转移后立刻
+  再次成为孤儿。
+- **只转移显式登记的归属表**：`admin_id` 表示归属的表必须通过
+  `data_scope.RegisterAdminOwnerTables` 登记；`admin_log`、`crud_log`、
+  `data_recycle_log`、`sensitive_data_log` 等表示操作者/审计身份，**禁止登记**
+  （删除时不能改写历史操作人）。框架已登记 `user`、`user_money_log`。
+- **同一事务、同一批更新**：主实体与其派生归属表（如 `user` 与
+  `user_money_log`）一起更新，保持 `admin_id` 一致性不变量；闭包删除失败时
+  整笔回滚。登记表尚未物化时跳过（没有行需要转移）。
+- **审计**：删除成功后 service 输出一条结构化日志（删除的管理员、每张表的
+  转移行数、新归属）。
+
+业务仓库必须为自己带归属语义的 `admin_id` 表登记，否则删除代理后这些行会
+成为孤儿：受限代理的闭包 scope 匹配不到已删除节点，数据从所有代理列表里
+静默消失。新增独立文件（不要改框架的 `admin_owner_tables.go`，避免合并框架
+升级冲突）：
+
+```go
+// internal/admin/repository/admin_owner_tables_business.go
+package repository
+
+import "buildadmin-go/internal/pkg/data_scope"
+
+func init() {
+	if err := data_scope.RegisterAdminOwnerTables(
+		"seller_user",
+		"seller_listing",
+		"seller_money_log",
+		"order_recharge",
+	); err != nil {
+		panic("register business admin owner tables: " + err.Error())
+	}
+}
+```
+
+`inheritFrom` 子表的冗余 `admin_id` 也属于归属，必须一并登记；否则主实体行
+转移了，子表流水仍指向已删除管理员。迁移前可用 `cascade:sync` 对账父表与
+子表归属。
+
+## 7. 迁移与决策记录
 
 - 新模块一律走 CRUD 生成链（`crud_specs/*.yaml`，见
   `docs/crud-generation.md`）；生成的 repo 保持原子原语形态，有业务时按

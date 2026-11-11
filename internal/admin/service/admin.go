@@ -12,6 +12,7 @@ import (
 	passwordutil "buildadmin-go/internal/pkg/password"
 
 	"github.com/jinzhu/copier"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
@@ -257,7 +258,19 @@ func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Ac
 		return data_scope.ErrScopedAccessDenied
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
-	return s.adminM.Transaction(ctx, func(tx *gorm.DB) error {
-		return adminmodel.NewAdminHierarchy(s.config).DeleteAdmins(ctx, tx, idList, actor, enforcer)
-	})
+	var result *adminmodel.AdminDeleteResult
+	if err := s.adminM.Transaction(ctx, func(tx *gorm.DB) error {
+		var txErr error
+		result, txErr = adminmodel.NewAdminHierarchy(s.config).DeleteAdminsWithResult(ctx, tx, idList, actor, enforcer)
+		return txErr
+	}); err != nil {
+		return err
+	}
+	if result != nil {
+		zap.L().Info("administrator deleted",
+			zap.Int32s("deleted_admin_ids", result.Deleted),
+			zap.Any("owner_transfers", result.Transfers),
+		)
+	}
+	return nil
 }

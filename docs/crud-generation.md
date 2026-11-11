@@ -239,6 +239,18 @@ go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对
 - **手写写入路径继承归属时必须显式 `OwnerInScopeWithActor`**：归属继承 + 数据范围校验由**生成 repo 的 Add 自动完成**，但业务自定义的手写写入路径（如 `FinanceService` 直接创建充提单、批量导入等绕过生成 repo Add 的代码）继承主实体归属后很容易漏掉 `OwnerInScopeWithActor` 校验——非超管可跨 scope 植入归属到麾外主实体的记录（与生成 Add 的 `inheritFrom` 语义不一致）。手写写入必须与生成 repo Add 对齐：事务内 `SELECT ... FOR UPDATE` 读主实体归属、显式 `data_scope.OwnerInScopeWithActor(ctx, tx, enforcer, prefix, ownerID, actor)` 校验该归属在请求者麾下，再写入。评审手写业务代码时把这条作为必查项。
 - **锁序反转（已知事项）**：Add 路径（`FOR UPDATE` 父行 → 插子行）与归属变更 Edit 路径（`FOR UPDATE` 子行 → 更新父行）并发时锁序相反，InnoDB 会 abort 其中一方（transient 500，重试即可成功）——框架设计固有，接受为已知事项，不做跨事务锁序统一。
 
+### 管理员删除与 owner 表登记（必须显式）
+
+删除叶子管理员时，框架会把该管理员名下的归属数据转挂到其 `parent_id`。转移
+范围来自 `data_scope.RegisterAdminOwnerTables` 的显式登记表清单，不会扫描
+`information_schema`：`admin_id` 表示**归属**的表（`reassignable` 主实体、
+`inheritFrom` 子表、以及所有由 actor 写入归属的业务表）必须登记；表示
+**操作者/审计**的表（`admin_log`、`crud_log`、`security_*_log`）禁止登记，
+否则删除会改写历史操作人。框架已登记 `user`、`user_money_log`；业务仓库在
+自己的 init 中登记 `seller_*`、`order_*` 等归属表（写法见
+[`business-development.md`](business-development.md)「管理员删除与归属转移」）。
+未登记的表不会转移，删除代理后会变成受限代理全部不可见的孤儿数据。
+
 ### 受保护核心表的 `registerOnly` 登记（手写父表/子表）
 
 受保护核心表（`user`、`user_money_log`、`admin` 等，见 `IsProtectedTable` 清单）不参与 CRUD 代码生成——它们的 repo/handler 由框架手写维护。业务子表经 `inheritFrom` 级联它们、`cascade:sync` 对账聚合它们时，**声明事实源是 `crud_specs/` 目录本身：spec 文件存在即登记生效**，不依赖 `crud_log` 生成历史（重新安装/全新安装后 crud_log 为空也能通过校验与对账）。`registerOnly` 标记只是声明"本 spec 仅用于登记，不生成任何产物"。

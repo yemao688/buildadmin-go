@@ -9,6 +9,15 @@
 - **Docs:** 同步 `docs/crud-generation.md`（unmanaged/列序语义、debug 展开与 `--plan` 明细、charset/collation 判据）与 `docs/framework-workflow.md`（rejected 与 unmanaged 的级别区别）。
 - **Verified:** `gofmt -l`（全部改动文件）空；`go build ./...` 通过；`go test ./internal/pkg/crud_helper/ -count=1` PASS（19.551s）、`go test ./internal/commands/ -count=1` PASS（0.741s）、`go test ./internal/ -run '^TestImportBoundary$' -count=1` PASS（0.392s）。MySQL 门禁用例本机 SKIP（`configs/config.yaml` 不存在、`mysql_test` 未启用），启动路径真实 DDL 场景需在启用门禁的环境补跑。
 
+> 管理员删除的数据完整性修复（issue #21）：删除叶子管理员时在同一事务内把它名下的归属数据转挂到直接上级，顶层管理员拒绝删除；归属表必须显式登记，审计日志不参与转移。
+
+- **Fixed (issue #21):** `AdminHierarchy.DeleteAdmins` 原先只删除 `admin` 与 `admin_closure` 行，`seller_user`、`user` 等表的 `admin_id` 仍指向已删除管理员；闭包行删除后受限代理的 scope 匹配不到，数据从所有代理列表里静默消失。现在在层级锁内逐个目标读取 `parent_id`，把显式登记的归属表行改挂到该目标自己的上级，再删除 admin/closure 行，全部动作处于同一事务；闭包删除失败会连同归属转移一起回滚。
+- **Breaking:** `parent_id` 为空的顶层管理员不再允许直接删除（返回 `cannot delete top-level administrator <id> without a reassignment target`）；父级不存在或父级也在本次删除集合时同样拒绝。需要清理顶层管理员时须先显式指定转移目标（后续可扩展 `--reassign-to`）。
+- **Added:** `data_scope.RegisterAdminOwnerTables` / `AdminOwnerTables` 显式归属表注册表。框架登记 `user`、`user_money_log`；业务仓库通过 `internal/admin/repository/admin_owner_tables_business.go` 登记 `seller_*`、`order_*` 等归属表。`admin_log`、`crud_log`、`data_recycle_log`、`sensitive_data_log` 等操作者/审计表禁止登记，避免删除时改写历史操作人。登记表尚未物化时跳过；存在 `update_time` 列时一并刷新。
+- **Added:** 删除成功后 service 输出结构化审计日志（删除的管理员、每张表的转移行数、新归属）。
+- **Tests:** MySQL 门禁用例覆盖单叶子转移、不同父级批量分别转移、顶层管理员拒绝、审计表不转移、闭包删除失败时归属转移回滚，以及 `user` + `user_money_log` 同事务转移；注册表单测覆盖幂等、非法批次不半批生效与返回值隔离。
+- **Docs:** `AGENTS.md`、`docs/business-development.md`、`docs/crud-generation.md` 增加归属表登记规则与业务仓库接入示例；`docs/templates/AGENT_BUSINESS.md` 增加业务登记清单提示。
+
 ## v3.3.6
 
 > 根目录探测修复（issue #18）：`RootPath` 不再依赖硬编码的 macOS 缓存路径，跟随工具链实际缓存位置；`-trimpath` 构建下不再用相对路径推断根目录。
