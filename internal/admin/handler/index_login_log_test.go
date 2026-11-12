@@ -104,9 +104,10 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *adminmiddl
 
 	tokenHelper := token.NewTokenHelper(config, nil, db, nil)
 	authModel := adminauth.NewAuthRepository(db, tokenHelper, config)
-	logModel := adminauth.NewAdminLogRepository(db, config, authModel)
+	logModel := adminauth.NewAdminLogRepository(db, config)
+	auditLogService := service.NewAuditLogService(logModel, adminauth.NewAdminRuleRepository(db, config), authModel)
 	authService := service.NewAuthService(config, authModel, nil, tokenHelper)
-	return db, NewIndexHandler(config, nil, authModel, nil, nil, authService), adminmiddleware.NewRecord(config, logModel)
+	return db, NewIndexHandler(config, nil, authModel, nil, nil, authService), adminmiddleware.NewRecord(config, auditLogService)
 }
 
 func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *gin.Engine {

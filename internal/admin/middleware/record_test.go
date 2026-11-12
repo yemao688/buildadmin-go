@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -8,18 +9,33 @@ import (
 	"testing"
 
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/header"
 
 	"github.com/gin-gonic/gin"
 )
 
 type recordLogSpy struct {
-	calls  int
-	params map[string]interface{}
+	calls     int
+	actor     data_scope.Actor
+	username  string
+	url       string
+	title     string
+	ip        string
+	userAgent string
+	params    map[string]interface{}
 }
 
-func (s *recordLogSpy) Add(_ *gin.Context, params map[string]interface{}) {
+func (s *recordLogSpy) Record(_ context.Context, actor data_scope.Actor, username, url, title, ip, userAgent string, params map[string]interface{}) error {
 	s.calls++
+	s.actor = actor
+	s.username = username
+	s.url = url
+	s.title = title
+	s.ip = ip
+	s.userAgent = userAgent
 	s.params = params
+	return nil
 }
 
 func TestRecordReadsBodyBeforeNextAndRecordsParams(t *testing.T) {
@@ -75,7 +91,7 @@ func TestRecordAlwaysRecordsEmptyAndInvalidJSON(t *testing.T) {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 			}
 			if spy.calls != 1 {
-				t.Fatalf("Add calls = %d, want 1", spy.calls)
+				t.Fatalf("Record calls = %d, want 1", spy.calls)
 			}
 			if spy.params == nil {
 				t.Fatal("logged params must be a non-nil map")
@@ -114,7 +130,7 @@ func TestRecordDoesNotRecordGet(t *testing.T) {
 	router.GET("/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/admin/test", nil))
 	if spy.calls != 0 {
-		t.Fatalf("Add calls = %d, want 0", spy.calls)
+		t.Fatalf("Record calls = %d, want 0", spy.calls)
 	}
 }
 
@@ -136,7 +152,7 @@ func TestRecordSkipsBodyReadWhenDisabled(t *testing.T) {
 	router.ServeHTTP(httptest.NewRecorder(), request)
 
 	if spy.calls != 0 {
-		t.Fatalf("Add calls = %d, want 0 (logging disabled)", spy.calls)
+		t.Fatalf("Record calls = %d, want 0 (logging disabled)", spy.calls)
 	}
 	if !bodyRead {
 		t.Fatal("handler must still read the body when logging is disabled")
@@ -163,7 +179,7 @@ func TestRecordSkipsOversizedBodyCollection(t *testing.T) {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 	if spy.calls != 1 {
-		t.Fatalf("Add calls = %d, want 1", spy.calls)
+		t.Fatalf("Record calls = %d, want 1", spy.calls)
 	}
 	if _, ok := spy.params["name"]; ok {
 		t.Fatalf("oversized body must not be collected into params: %#v", spy.params)
@@ -197,8 +213,58 @@ func TestRecordOnlyRecordsAdminWriteRoutes(t *testing.T) {
 				t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 			}
 			if spy.calls != test.calls {
-				t.Fatalf("Add calls = %d, want %d", spy.calls, test.calls)
+				t.Fatalf("Record calls = %d, want %d", spy.calls, test.calls)
 			}
 		})
+	}
+}
+
+func TestRecordPassesExtractedRequestContextToAuditLog(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spy := &recordLogSpy{}
+	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		header.SetAdminAuth(c, header.AdminAuth{Id: 9, Username: "root", IsSuperAdmin: true})
+		c.Set("log_title", "登录")
+	})
+	router.Use(record.Handler())
+	router.POST("/admin/auth.Admin/add", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	request := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/add", strings.NewReader(`{"name":"alice"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", "test-agent")
+	router.ServeHTTP(httptest.NewRecorder(), request)
+
+	if spy.calls != 1 {
+		t.Fatalf("Record calls = %d, want 1", spy.calls)
+	}
+	if spy.actor.AdminID != 9 || !spy.actor.Unrestricted {
+		t.Fatalf("actor = %#v, want admin 9 unrestricted", spy.actor)
+	}
+	if spy.username != "root" {
+		t.Fatalf("username = %q, want root", spy.username)
+	}
+	if spy.url != "/admin/auth.Admin/add" {
+		t.Fatalf("url = %q, want /admin/auth.Admin/add", spy.url)
+	}
+	if spy.title != "登录" {
+		t.Fatalf("title = %q, want 登录", spy.title)
+	}
+	if spy.userAgent != "test-agent" {
+		t.Fatalf("userAgent = %q, want test-agent", spy.userAgent)
+	}
+}
+
+func TestRecordSkipsAuditLogWhenWriterMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, nil)
+	router := gin.New()
+	router.Use(record.Handler())
+	router.POST("/admin/test", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/admin/test", nil))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 }

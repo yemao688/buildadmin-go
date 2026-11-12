@@ -6,6 +6,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/persistence"
 	"context"
+	"errors"
 	"strings"
 
 	"gorm.io/gorm"
@@ -38,6 +39,23 @@ func (s *AdminRuleRepository) GetOne(ctx context.Context, id int32) (adminRule m
 func (s *AdminRuleRepository) List(ctx context.Context) (list []model.AdminRule, err error) {
 	err = s.DBFor(ctx).Model(&model.AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
 	return
+}
+
+// TitleByName 按规则名读取单条规则标题，供后台操作日志反查日志标题。
+// 未命中返回 ok=false，由调用方决定回退文案。
+func (s *AdminRuleRepository) TitleByName(ctx context.Context, name string) (string, bool, error) {
+	var rule struct {
+		ID    int32
+		Title string
+	}
+	err := s.DBFor(ctx).Model(&model.AdminRule{}).Select("id, title").Where("name=?", name).Take(&rule).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return rule.Title, rule.ID != 0, nil
 }
 
 // ListForMenu 读取菜单规则列表：isSuperAdmin 或空 ruleIDs 表示不按权限 id 过滤，
