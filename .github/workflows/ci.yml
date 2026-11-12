@@ -22,7 +22,22 @@ jobs:
   test:
     name: gofmt / lint / build / vet / test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    services:
+      # MySQL 门禁测试（迁移升级、删除、审计、data_scope 等）需要真实数据库；
+      # 这里用 root 是为了让 testutil.OpenFixtureDatabase 能创建 <db>_fresh_*。
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: buildadmin_go_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - uses: actions/checkout@v7
         with:
@@ -54,10 +69,24 @@ jobs:
 
       - run: go vet ./...
 
+      # configs/config.yaml 被 gitignore；CI 在测试前写入 mysql_test 段，
+      # 让迁移/删除/审计等 MySQL 门禁用例真正执行而不是 SKIP。
+      - name: 写入 MySQL 测试配置
+        run: |
+          cat > configs/config.yaml <<'EOF'
+          mysql_test:
+              enabled: true
+              host: '127.0.0.1'
+              port: 3306
+              database: 'buildadmin_go_test'
+              username: 'root'
+              password: 'root'
+              charset: 'utf8mb4'
+          EOF
+
       # 不加 -p 1:包间并行(go test 默认按 GOMAXPROCS 并发),墙钟取决于最慢的包。
-      # 部分测试依赖 MySQL 门禁(mysql_test.enabled),缺配置时自行 skip 属正常。
-      - name: 单元测试
-        run: go test ./... -count=1 -timeout=45m
+      - name: 单元测试（含 MySQL 门禁）
+        run: go test ./... -count=1 -timeout=55m
 
   # 前端门禁:独立 job,与 Go 门禁互不阻塞(web 变更与 Go 变更通常不同时出现)。
   # 注意:web/pnpm-lock.yaml 未入库(见根 .gitignore),这里刻意不加 --frozen-lockfile
