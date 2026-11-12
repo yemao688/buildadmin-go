@@ -129,10 +129,6 @@ func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool,
 	return true
 }
 
-func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
-	return nil, false
-}
-
 func (h *Base) One(ctx *gin.Context) {
 	id := ctx.Request.FormValue(h.currentM.PrimaryKeyName())
 	row, err := h.currentM.GetOneScoped(ctx, id)

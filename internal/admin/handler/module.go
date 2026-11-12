@@ -59,9 +59,9 @@ func (h *ModuleHandler) Upload(ctx *gin.Context) {
 	response.Success(ctx, "")
 }
 
-// NoNeedPermissionActions 声明需登录但免权限的 action。index 是模块商店
-// 首屏占位接口（超管菜单可见，返回空列表），与文档声明的显式豁免一致；
-// 其余 action 为 PHP 上游兼容的桩占位。
+// NoNeedPermissionActions 声明需登录但免权限的 action。模块商店的全部动作
+// 都是 PHP 上游兼容的桩占位（Go 框架没有模块安装能力），返回成功但不执行
+// 任何安装；它们统一免 admin_rule，避免前端从商店列表点击时 403/404。
 func (h *ModuleHandler) NoNeedPermissionActions() []string {
-	return []string{"index", "state", "dependentinstallcomplete"}
+	return []string{"index", "state", "dependentinstallcomplete", "install", "uninstall", "changestate", "update", "upload"}
 }
