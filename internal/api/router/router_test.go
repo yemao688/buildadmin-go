@@ -41,7 +41,9 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	set := newAPIRouteSet(engine, engine.Group("/api/")).(*apiRouteSet)
+	rawSet := newAPIRouteSet(engine, engine.Group("/api/"))
+	set, ok := rawSet.(*apiRouteSet)
+	require.True(t, ok, "newAPIRouteSet must return *apiRouteSet")
 	NewUserRegistrar(&api.UserHandler{}).Register(set)
 	NewCommonRegistrar(&api.CommonHandler{}).Register(set)
 	NewIndexRegistrar(&api.IndexHandler{}).Register(set)
