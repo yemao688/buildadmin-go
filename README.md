@@ -9,7 +9,7 @@
 
 ## 技术栈与要求
 
-- Go：以 `go.mod` 的 `go 1.25.x` 为准。
+- Go：以 `go.mod` 的 `go 1.27.x` 为准。
 - 数据库：MySQL。
 - 前端：Vue/Vite 8；Node 使用 Vite 8 支持的当前版本，不在此额外规定最低版本。
 - 包管理：`pnpm`，不要使用 npm。

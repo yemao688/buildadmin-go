@@ -88,7 +88,7 @@ git add AGENT_BUSINESS.md && git commit -m "docs: declare project identity"
 
 ### 环境
 
-- Go 使用 `go.mod` 要求的 Go 1.25.x。
+- Go 使用 `go.mod` 要求的 Go 1.27.x。
 - 准备可连接的 MySQL。
 - 前端在 `web/` 目录使用 pnpm；不要在根目录使用 npm。
 

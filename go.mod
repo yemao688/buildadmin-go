@@ -1,6 +1,6 @@
 module buildadmin-go
 
-go 1.25.0
+go 1.27.4
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
