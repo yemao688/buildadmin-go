@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
 	"strconv"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
@@ -334,8 +337,10 @@ func (s *AdminService) SwitchStatus(ctx context.Context, id int32, status string
 }
 
 // Del runs the whole scoped administrator-deletion flow: id normalization,
-// actor validation and the hierarchy delete (scope re-verification,
-// subordinate rejection, closure cleanup) in one transaction.
+// actor validation, then one transaction that locks the hierarchy, re-verifies
+// scope, rejects targets with subordinates, resolves and validates each
+// target's reassignment parent, transfers owner rows and deletes the admin and
+// closure rows. The audit log is emitted after commit.
 func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
 	idList, err := normalizeIDs(ids, "admin", false, func(id int32) error {
 		return cErr.BadRequest("ids must be positive")
@@ -349,11 +354,12 @@ func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Ac
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
+	hierarchy := adminmodel.NewAdminHierarchy(s.config)
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	var result *adminmodel.AdminDeleteResult
 	if err := s.adminM.Transaction(ctx, func(tx *gorm.DB) error {
 		var txErr error
-		result, txErr = adminmodel.NewAdminHierarchy(s.config).DeleteAdminsWithResult(ctx, tx, idList, actor, enforcer)
+		result, txErr = s.deleteAdminsTx(ctx, tx, hierarchy, idList, actor, enforcer)
 		return txErr
 	}); err != nil {
 		return err
@@ -365,4 +371,98 @@ func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Ac
 		)
 	}
 	return nil
+}
+
+// deleteAdminsTx 是 Del 的事务编排体。关系仍存在于闭包时，父级不可能与被删
+// 节点同批（否则父级有下级，早被子级检查拒绝）；这里额外拒绝"父级也在删除
+// 集合"的异常闭包，避免转移后立刻再次成为孤儿。parent_id 是框架后加的列，
+// 从 PHP 上游升级的库不会回填，因此仅当管理员在已登记的归属表中确实拥有
+// 数据时才要求有效的转移目标；顶层且无归属数据的管理员可直接删除。所有
+// 目标的校验先于任何写入完成，避免部分转移后才发现另一目标不可删。
+func (s *AdminService) deleteAdminsTx(ctx context.Context, tx *gorm.DB, hierarchy *adminmodel.AdminHierarchy, ids []int32, actor data_scope.Actor, enforcer *data_scope.ClosureEnforcer) (*adminmodel.AdminDeleteResult, error) {
+	if err := hierarchy.LockHierarchyTx(tx); err != nil {
+		return nil, err
+	}
+	if err := hierarchy.VerifyInScopeTx(ctx, tx, actor, enforcer, ids...); err != nil {
+		return nil, err
+	}
+
+	childCount, err := hierarchy.CountSubordinatesTx(ctx, tx, ids...)
+	if err != nil {
+		return nil, err
+	}
+	if childCount > 0 {
+		return nil, cErr.BadRequest("cannot delete administrator with subordinates")
+	}
+
+	targets, err := hierarchy.DeleteTargetsTx(ctx, tx, ids)
+	if err != nil {
+		return nil, err
+	}
+	deleting := make(map[int32]struct{}, len(targets))
+	for _, target := range targets {
+		deleting[target.ID] = struct{}{}
+	}
+
+	reassign := make(map[int32]int32, len(targets))
+	for _, target := range targets {
+		owns, err := hierarchy.AdminOwnsRowsTx(ctx, tx, target.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !owns {
+			continue
+		}
+		if target.ParentID == nil || *target.ParentID <= 0 {
+			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete top-level administrator %d without a reassignment target", target.ID))
+		}
+		parentID := *target.ParentID
+		if _, alsoDeleting := deleting[parentID]; alsoDeleting {
+			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete administrator %d: its parent %d is also being deleted", target.ID, parentID))
+		}
+		if err := hierarchy.EnsureNodeExistsTx(ctx, tx, parentID); err != nil {
+			return nil, err
+		}
+		if err := hierarchy.EnsureReassignmentTargetEnabledTx(ctx, tx, parentID); err != nil {
+			if errors.Is(err, adminmodel.ErrReassignmentTargetDisabled) {
+				return nil, cErr.BadRequest(fmt.Sprintf("reassignment target administrator %d is not enabled", parentID))
+			}
+			return nil, err
+		}
+		reassign[target.ID] = parentID
+	}
+
+	sorted := slices.Clone(ids)
+	slices.Sort(sorted)
+	result := &adminmodel.AdminDeleteResult{Deleted: sorted}
+	ownerTables := hierarchy.OwnerTables()
+	for _, target := range targets {
+		newOwnerID, ok := reassign[target.ID]
+		if !ok {
+			continue
+		}
+		for _, table := range ownerTables {
+			rows, err := hierarchy.TransferOwnerRowsTx(ctx, tx, table, target.ID, newOwnerID)
+			if err != nil {
+				return nil, err
+			}
+			if rows == 0 {
+				continue
+			}
+			result.Transfers = append(result.Transfers, adminmodel.AdminOwnerTransfer{
+				AdminID:    target.ID,
+				NewOwnerID: newOwnerID,
+				Table:      table,
+				Rows:       rows,
+			})
+		}
+	}
+
+	if err := hierarchy.DeleteAdminsTx(ctx, tx, sorted); err != nil {
+		return nil, err
+	}
+	if err := hierarchy.DeleteClosureTx(ctx, tx, sorted); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
