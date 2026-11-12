@@ -633,12 +633,19 @@ func (b *BaseModel) TableInfo() TableInfo {
 import (
 	"buildadmin-go/internal/pkg/persistence"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type TableInfo = persistence.TableInfo
 
 func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (string, []interface{}, string, int, int, error) {
 	return "", nil, "id ASC", 100, 0, nil
+}
+
+type CRUDStore struct{}
+
+func NewCRUDStore(*persistence.BaseModel, func() any, func(*gin.Context, *gorm.DB) *gorm.DB) CRUDStore {
+	return CRUDStore{}
 }
 `,
 		"internal/model/user.go":                        userEntity,
@@ -710,12 +717,19 @@ func (b *BaseModel) TableInfo() TableInfo {
 import (
 	"buildadmin-go/internal/pkg/persistence"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type TableInfo = persistence.TableInfo
 
 func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (string, []interface{}, string, int, int, error) {
 	return "", nil, "id ASC", 100, 0, nil
+}
+
+type CRUDStore struct{}
+
+func NewCRUDStore(*persistence.BaseModel, func() any, func(*gin.Context, *gorm.DB) *gorm.DB) CRUDStore {
+	return CRUDStore{}
 }
 `,
 		"internal/model/scopeitems.go":                  autoEntity,
