@@ -149,14 +149,6 @@ func ValidateSecurityField(field string) error {
 	return nil
 }
 
-func ValidateRulePolicy(db *gorm.DB, prefix, logical, kind, primary string, fields []string) (string, error) {
-	resolved, err := ResolveRulePolicy(db, prefix, logical, kind, primary, fields)
-	if err != nil {
-		return "", err
-	}
-	return resolved.TableName, nil
-}
-
 // ResolveRulePolicy resolves a rule and validates its conventional admin_id
 // owner column. Static policies retain their exact behavior; generated/custom
 // tables default to admin_id and may explicitly declare another owner column.

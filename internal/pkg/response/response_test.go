@@ -98,6 +98,25 @@ func TestResponseMapsCancellationAndBadConnectionToGenericInternalFailure(t *tes
 	}
 }
 
+func TestWriteDirectBypassesFinishedRequestTransaction(t *testing.T) {
+	c, recorder := requestWithTx()
+	// 中间件消费事务结果后（TakeOutcome 置 finished）请求上下文仍绑定着事务，
+	// 此时直接写响应必须落地，不能被 Stage 吞掉。
+	require.True(t, requesttx.Stage(c.Request.Context(), requesttx.Outcome{HTTPCode: 200, BusinessCode: 1, Message: "staged"}))
+	_, ok := requesttx.TakeOutcome(c.Request.Context())
+	require.True(t, ok)
+
+	WriteDirect(c, 500, 0, "transaction failed", nil)
+
+	require.Equal(t, 500, recorder.Code)
+	var body Response
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Equal(t, 0, body.Code)
+	require.Nil(t, body.Data)
+	require.Equal(t, "transaction failed", body.Msg)
+	require.Zero(t, body.Time, "直接写出必须固定 time=0，不读 Timestamp")
+}
+
 func TestFailByErrStagesCancellationAndMySQLFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name string

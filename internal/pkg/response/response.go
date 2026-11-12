@@ -127,6 +127,15 @@ func Fail(c *gin.Context, httpCode int, code int, msg string) {
 	JsonReturn(c, httpCode, code, msg, nil)
 }
 
+// WriteDirect 直接写出统一响应壳，跳过请求事务暂存与 msg 本地化。
+//
+// 供中间件使用：此时 requesttx.Active 可能为真但事务已收尾（Stage 会拒绝并
+// 丢弃响应），且调用方已自行本地化 msg 或需要历史输出（time 固定 0、msg 原样）。
+// handler 内请使用 Success/FailByErr，让响应与事务提交保持一致。
+func WriteDirect(c *gin.Context, httpCode int, code int, msg string, data any) {
+	c.JSON(httpCode, Response{code, data, msg, 0})
+}
+
 // FailByErrWithData 返回携带附加数据的失败响应（api 渠道入口）。
 func FailByErrWithData(c *gin.Context, err error, data interface{}) {
 	var v *cErr.Error

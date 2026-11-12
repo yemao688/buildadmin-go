@@ -39,7 +39,6 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		}
 		// 自定义 Writer
 		writer = &lumberjack.Logger{
-			// Filename:   filepath.Join(logFileDir,  dbConfig.LogFilename),
 			Filename:   filepath.Join(logFileDir, "/sql", time.Now().Format("2006-01-02")+".log"),
 			MaxSize:    logConfig.MaxSize,
 			MaxBackups: logConfig.MaxBackups,

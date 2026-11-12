@@ -4,7 +4,6 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/pkg/testutil"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -35,8 +34,9 @@ func TestInstall(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...)
-	fmt.Println("生成数据表:", err)
+	if err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...); err != nil {
+		t.Fatalf("AutoMigrate core models: %v", err)
+	}
 
 	install := NewInstall(db)
 	if err := install.InsertData(); err != nil {

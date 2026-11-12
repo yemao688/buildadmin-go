@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
@@ -45,12 +46,7 @@ func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 		for _, rule := range rules {
 			if matchNoAccessIPRule(clientIP, rule) {
 				msg := util.Lang(c, "No permission", nil)
-				c.JSON(http.StatusForbidden, map[string]interface{}{
-					"code": http.StatusForbidden,
-					"data": nil,
-					"msg":  msg,
-					"time": 0,
-				})
+				response.WriteDirect(c, http.StatusForbidden, http.StatusForbidden, msg, nil)
 				c.Abort()
 				return
 			}

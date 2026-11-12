@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
@@ -21,13 +22,8 @@ func AbortLogin(c *gin.Context, err error) {
 		code = apiErr.ErrorCode()
 		message = apiErr.Error()
 	}
-	c.JSON(http.StatusOK, map[string]interface{}{
-		"code": code,
-		"data": map[string]any{
-			"type": "need login",
-		},
-		"msg":  util.Lang(c, message, nil),
-		"time": 0,
+	response.WriteDirect(c, http.StatusOK, code, util.Lang(c, message, nil), map[string]any{
+		"type": "need login",
 	})
 	c.Abort()
 }
@@ -38,11 +34,6 @@ func AbortLogin(c *gin.Context, err error) {
 // middlewares, which previously inlined this exact block.
 func AbortMissingToken(c *gin.Context) {
 	msg := util.Lang(c, "missing Authorization header", nil)
-	c.JSON(http.StatusOK, map[string]interface{}{
-		"code": http.StatusUnauthorized,
-		"data": nil,
-		"msg":  msg,
-		"time": 0,
-	})
+	response.WriteDirect(c, http.StatusOK, http.StatusUnauthorized, msg, nil)
 	c.Abort()
 }

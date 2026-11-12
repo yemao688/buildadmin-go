@@ -2,7 +2,6 @@ package validator
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,7 +29,6 @@ func TestTime(t *testing.T) {
 	var testTime TestTime
 
 	err := validate.Struct(&testTime)
-	// fmt.Println(err)
 	NotEqual(t, err, nil)
 	var validErrs validator.ValidationErrors
 	if !errors.As(err, &validErrs) {
@@ -50,19 +48,12 @@ func AssertError(t *testing.T, err error, nsKey, structNsKey, field, structField
 	var fe validator.FieldError
 
 	for i := 0; i < len(errs); i++ {
-		fmt.Println(errs[i].Namespace())
-		fmt.Println(errs[i].StructNamespace())
-
 		if errs[i].Namespace() == nsKey && errs[i].StructNamespace() == structNsKey {
 			found = true
 			fe = errs[i]
 			break
 		}
 	}
-
-	// fmt.Println(fe.Field())
-	// fmt.Println(fe.StructField())
-	// fmt.Println(fe.Tag())
 
 	EqualSkip(t, 2, found, true)
 	NotEqualSkip(t, 2, fe, nil)

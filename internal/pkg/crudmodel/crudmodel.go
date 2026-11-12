@@ -6,7 +6,7 @@
 //
 // 这些类型与 internal/model 的持久化实体（Log/AdminRule 等）分离：
 // 实体是贫血记录、驱动 schema 映射；契约类型是生成器的输入/输出形状，
-// 只被 crud_helper 与 admin handler 消费，不参与数据库 schema。
+// 只被 crudgen 与 admin handler 消费，不参与数据库 schema。
 // 下沉到 internal/pkg 层避免 internal/model 反向依赖生成器侧概念，
 // 也便于生成器在无数据库连接的纯解析场景使用。
 package crudmodel
@@ -24,26 +24,38 @@ import (
 type JSON_TABLE Table
 
 func (j *JSON_TABLE) Scan(value interface{}) error {
-	bytes, err := scanBytes(value)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(bytes, j)
+	return jsonScanner[Table]{}.scan(value, (*Table)(j))
 }
 
 func (j JSON_TABLE) Value() (driver.Value, error) {
-	bytes, err := json.Marshal(j)
-	return string(bytes), err
+	return jsonScanner[Table]{}.value(Table(j))
 }
 
 type JSON_FIELDS []Field
 
 func (j *JSON_FIELDS) Scan(value interface{}) error {
+	return jsonScanner[[]Field]{}.scan(value, (*[]Field)(j))
+}
+
+func (j JSON_FIELDS) Value() (driver.Value, error) {
+	return jsonScanner[[]Field]{}.value([]Field(j))
+}
+
+// jsonScanner 承载 TEXT 列 JSON 载体的统一 Scan/Value 实现；T 是对外类型
+// 的底层形状。nil 值仍交给 json.Unmarshal 报错，保持历史错误语义。
+type jsonScanner[T any] struct{}
+
+func (jsonScanner[T]) scan(value interface{}, target *T) error {
 	bytes, err := scanBytes(value)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(bytes, j)
+	return json.Unmarshal(bytes, target)
+}
+
+func (jsonScanner[T]) value(source T) (driver.Value, error) {
+	bytes, err := json.Marshal(source)
+	return string(bytes), err
 }
 
 // scanBytes 兼容 TEXT 列在不同驱动下的返回类型（MySQL 多为 []byte，sqlite 为 string）。
@@ -58,11 +70,6 @@ func scanBytes(value interface{}) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("cannot scan %T as JSON bytes", value)
 	}
-}
-
-func (j JSON_FIELDS) Value() (driver.Value, error) {
-	bytes, err := json.Marshal(j)
-	return string(bytes), err
 }
 
 type ChangeField struct {

@@ -36,10 +36,6 @@ export const refreshTokenUrl = '/api/common/refreshToken'
 
 // api模块(前台)
 export const apiUploadUrl = '/api/ajax/upload'
-export const apiBuildSuffixSvgUrl = '/api/ajax/buildSuffixSvg'
-export const apiAreaUrl = '/api/ajax/area'
-export const apiSendSms = '/api/Sms/send'
-export const apiSendEms = '/api/Ems/send'
 
 /**
  * 上传文件
@@ -83,6 +79,7 @@ export function fileUpload(fd: FormData, params: anyObj = {}, forceLocal = false
 
 /**
  * 生成文件后缀icon的svg图片
+ * 该路由仅后台渠道注册（门户 /api 无对应接口），故固定使用 admin 地址。
  * @param suffix 后缀名
  * @param background 背景色,如:rgb(255,255,255)
  */
@@ -90,7 +87,7 @@ export function buildSuffixSvgUrl(suffix: string, background = '') {
     const adminInfo = useAdminInfo()
     return (
         getUrl() +
-        (isAdminApp() ? adminBuildSuffixSvgUrl : apiBuildSuffixSvgUrl) +
+        adminBuildSuffixSvgUrl +
         '?batoken=' +
         adminInfo.getToken() +
         '&suffix=' +
@@ -102,6 +99,7 @@ export function buildSuffixSvgUrl(suffix: string, background = '') {
 
 /**
  * 获取地区数据
+ * 仅后台渠道提供 /ajax/area，前台渠道无对应路由，调用方（baInput 的 area 类型）只在后台使用。
  */
 export function getArea(values: number[]) {
     const params: { province?: number; city?: number; uuid?: string } = {}
@@ -113,50 +111,10 @@ export function getArea(values: number[]) {
     }
     params.uuid = uuid()
     return createAxios({
-        url: isAdminApp() ? adminAreaUrl : apiAreaUrl,
+        url: adminAreaUrl,
         method: 'GET',
         params: params,
     })
-}
-
-/**
- * 发送短信
- */
-export function sendSms(mobile: string, templateCode: string, extend: anyObj = {}) {
-    return createAxios(
-        {
-            url: apiSendSms,
-            method: 'POST',
-            data: {
-                mobile: mobile,
-                template_code: templateCode,
-                ...extend,
-            },
-        },
-        {
-            showSuccessMessage: true,
-        }
-    )
-}
-
-/**
- * 发送邮件
- */
-export function sendEms(email: string, event: string, extend: anyObj = {}) {
-    return createAxios(
-        {
-            url: apiSendEms,
-            method: 'POST',
-            data: {
-                email: email,
-                event: event,
-                ...extend,
-            },
-        },
-        {
-            showSuccessMessage: true,
-        }
-    )
 }
 
 /**

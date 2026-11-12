@@ -13,10 +13,10 @@ type Route struct {
 	Handler string
 }
 
-// RegisteredRoutes 是当前收集到的路由快照。
-var RegisteredRoutes = []Route{}
+// registeredRoutes 是当前收集到的路由快照，只在包内被 CollectRoutes 写入。
+var registeredRoutes = []Route{}
 
-// CollectRoutes 从 gin 引擎读取全部已注册路由存入 RegisteredRoutes 快照。
+// CollectRoutes 从 gin 引擎读取全部已注册路由存入包内路由快照。
 func CollectRoutes(router *gin.Engine) {
 	routesInfo := router.Routes()
 	routes := make([]Route, 0, len(routesInfo))
@@ -27,10 +27,10 @@ func CollectRoutes(router *gin.Engine) {
 			Handler: v.Handler,
 		})
 	}
-	RegisteredRoutes = routes
+	registeredRoutes = routes
 }
 
 // GetAllRoutes 返回当前路由快照。
 func GetAllRoutes() []Route {
-	return RegisteredRoutes
+	return registeredRoutes
 }
