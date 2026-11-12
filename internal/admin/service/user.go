@@ -43,7 +43,7 @@ type UserParams struct {
 // Add runs the whole user-creation flow: username uniqueness, password
 // hashing and the scoped transactional write.
 func (s *UserService) Add(ctx context.Context, p UserParams, actor data_scope.Actor) error {
-	usernameExists, err := s.userM.UsernameExists(ctx, p.Username)
+	usernameExists, err := s.userM.UsernameExists(ctx, p.Username, 0)
 	if err != nil {
 		return err
 	}
@@ -70,8 +70,9 @@ func (s *UserService) Add(ctx context.Context, p UserParams, actor data_scope.Ac
 	return s.userM.AddWithActor(ctx, &user, actor)
 }
 
-// Edit runs the whole user-update flow: reload, owner resolution, password
-// hashing (when provided) and the scoped transactional write.
+// Edit runs the whole user-update flow: reload, owner resolution, username
+// uniqueness, password hashing (when provided) and the scoped transactional
+// write.
 func (s *UserService) Edit(ctx context.Context, id int32, p UserParams, actor data_scope.Actor) error {
 	user, err := s.userM.GetOneWithActor(ctx, actor, id)
 	if err != nil {
@@ -87,7 +88,25 @@ func (s *UserService) Edit(ctx context.Context, id int32, p UserParams, actor da
 	} else {
 		user.AdminID = currentAdminID
 	}
-	return s.userM.EditWithActor(ctx, &user, p.Password, actor)
+	// 口令只在这里散列：repo 只接收散列值，不再接触明文。
+	passwordHash := ""
+	if p.Password != "" {
+		hash, hashErr := passwordutil.Hash(p.Password)
+		if hashErr != nil {
+			return hashErr
+		}
+		passwordHash = hash
+	}
+	// 用户名唯一性预检保留历史文案 "Account not exist"（语义与文案相反，
+	// 为兼容既有接口原文照搬）；并发插入由 repo 的 duplicate-key 兜底。
+	taken, err := s.userM.UsernameExists(ctx, user.Username, user.ID)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return cErr.BadRequest("Account not exist")
+	}
+	return s.userM.EditWithActor(ctx, &user, passwordHash, actor)
 }
 
 // UpdateStatus validates and applies a scoped switch-style status update.

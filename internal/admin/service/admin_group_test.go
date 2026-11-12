@@ -182,3 +182,58 @@ func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
 	_, err = svc.HandleRules(context.Background(), []int32{1, 2, 3}, 5, false)
 	require.EqualError(t, err, "Role group has all your rights, please contact the upper administrator to add or do not need to add!")
 }
+
+// TestAdminGroupServiceListForOperatorDecoratesRules 验证列表展示文本由
+// service 批量补全：超管标识、首条规则标题（多权限追加"等 N 项"）与无权限
+// 文案，且 i18n 通过 translate 回调注入。
+func TestAdminGroupServiceListForOperatorDecoratesRules(t *testing.T) {
+	svc, db := newAdminGroupServiceFixture(t)
+	createRuleFixture(t, db, 1)
+	createRuleFixture(t, db, 2)
+	createGroupFixture(t, db, "super", "*", "1")
+	createGroupFixture(t, db, "none", "", "1")
+	createGroupFixture(t, db, "single", "1", "1")
+	createGroupFixture(t, db, "multi", "1,2", "1")
+
+	list, err := svc.ListForOperator(context.Background(), GroupListQuery{OperatorID: 5, IsSuperAdmin: true}, func(messageID string) string {
+		return map[string]string{
+			"Super administrator": "超管",
+			"no permission":       "无权限",
+		}[messageID]
+	})
+	require.NoError(t, err)
+
+	rules := map[string]string{}
+	for _, group := range list {
+		rules[group.Name] = group.Rules
+	}
+	require.Equal(t, "超管", rules["super"])
+	require.Equal(t, "无权限", rules["none"])
+	require.Equal(t, "rule-1", rules["single"])
+	require.Equal(t, "rule-1等 2 项", rules["multi"])
+}
+
+// TestAdminGroupServiceListForOperatorFiltersByAuthorization 验证非超管的可见
+// 范围：普通列表合并自己所在分组，absoluteAuth 只保留有资格管理的分组。
+func TestAdminGroupServiceListForOperatorFiltersByAuthorization(t *testing.T) {
+	svc, db := newAdminGroupServiceFixture(t)
+	createRuleFixture(t, db, 1)
+	createRuleFixture(t, db, 2)
+	createGroupFixture(t, db, "super", "*", "1")
+	operator := createGroupFixture(t, db, "operator", "1,2", "1")
+	attachGroupFixture(t, db, 5, operator.ID)
+	createGroupFixture(t, db, "subset", "1", "1")
+
+	names := func(absoluteAuth bool) []string {
+		list, err := svc.ListForOperator(context.Background(), GroupListQuery{OperatorID: 5, AbsoluteAuth: absoluteAuth}, nil)
+		require.NoError(t, err)
+		result := make([]string, 0, len(list))
+		for _, group := range list {
+			result = append(result, group.Name)
+		}
+		return result
+	}
+
+	require.ElementsMatch(t, []string{"operator", "subset"}, names(false))
+	require.ElementsMatch(t, []string{"subset"}, names(true))
+}

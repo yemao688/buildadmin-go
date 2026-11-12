@@ -11,7 +11,6 @@ import (
 )
 
 type LogHandler struct {
-	Base
 	log     *zap.Logger
 	crudLog *adminauth.CrudLogRepository
 	authM   *adminauth.AuthRepository
@@ -19,7 +18,6 @@ type LogHandler struct {
 
 func NewLogHandler(log *zap.Logger, crudLog *adminauth.CrudLogRepository, authM *adminauth.AuthRepository) *LogHandler {
 	return &LogHandler{
-		Base:    NewBase(crudLog),
 		log:     log,
 		crudLog: crudLog,
 		authM:   authM,

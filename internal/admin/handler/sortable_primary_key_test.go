@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	cErr "buildadmin-go/internal/pkg/error"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -30,21 +28,6 @@ type sortableStringRow struct {
 
 func (sortableStringRow) TableName() string { return "sortable_string_rows" }
 
-type sortablePrimaryKeyModel struct {
-	db         *gorm.DB
-	table      string
-	primaryKey string
-}
-
-func (m *sortablePrimaryKeyModel) DB() *gorm.DB  { return m.db }
-func (m *sortablePrimaryKeyModel) Table() string { return m.table }
-func (m *sortablePrimaryKeyModel) PrimaryKeyName() string {
-	return m.primaryKey
-}
-func (m *sortablePrimaryKeyModel) Transaction(_ context.Context, fn func(*gorm.DB) error) error {
-	return m.db.Transaction(fn)
-}
-
 func newSortablePrimaryKeyDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:sortable-primary-key-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})
@@ -62,8 +45,8 @@ func TestSortableDoesNotTruncateInt64CustomPrimaryKey(t *testing.T) {
 		{OrderID: ids[2], Weigh: 10},
 	}).Error)
 
-	model := &sortablePrimaryKeyModel{db: db, table: "sortable_int64_rows", primaryKey: "order_id"}
-	require.NoError(t, Sortable(sortableTestContext(), model, ids[0], ids[2], "up", "weigh,desc"))
+	store := newCRUDTableAdapter(db, "sortable_int64_rows", "order_id", nil)
+	require.NoError(t, store.SortWeighScoped(sortableTestContext(), fmt.Sprint(ids[0]), fmt.Sprint(ids[2]), "up", "desc"))
 
 	var rows []sortableInt64Row
 	require.NoError(t, db.Order("order_id asc").Find(&rows).Error)
@@ -87,8 +70,8 @@ func TestSortableUsesStringCustomPrimaryKeyColumn(t *testing.T) {
 		{Token: "sibling", Weigh: 10},
 	}).Error)
 
-	model := &sortablePrimaryKeyModel{db: db, table: "sortable_string_rows", primaryKey: "token"}
-	require.NoError(t, Sortable(sortableTestContext(), model, "move", "target", "up", "weigh,desc"))
+	store := newCRUDTableAdapter(db, "sortable_string_rows", "token", nil)
+	require.NoError(t, store.SortWeighScoped(sortableTestContext(), "move", "target", "up", "desc"))
 
 	var rows []sortableStringRow
 	require.NoError(t, db.Find(&rows).Error)
@@ -115,7 +98,7 @@ func TestBaseSortablePreservesLargeJSONPrimaryKey(t *testing.T) {
 
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/admin/sortable", strings.NewReader(fmt.Sprintf(`{"move":%d,"target":%d,"direction":"up","order":"weigh,desc"}`, moveID, targetID)))
-	h := NewBase(&sortablePrimaryKeyModel{db: db, table: "sortable_int64_rows", primaryKey: "order_id"})
+	h := NewBase(newCRUDTableAdapter(db, "sortable_int64_rows", "order_id", nil))
 	h.Sortable(ctx)
 	require.Equal(t, http.StatusOK, ctx.Writer.Status())
 
@@ -125,17 +108,9 @@ func TestBaseSortablePreservesLargeJSONPrimaryKey(t *testing.T) {
 }
 
 func TestSortableRejectsUnsupportedPrimaryKeyShape(t *testing.T) {
-	db := newSortablePrimaryKeyDB(t)
-	model := &sortablePrimaryKeyModel{db: db, table: "sortable_int64_rows", primaryKey: "order_id"}
-	err := Sortable(sortableTestContext(), model, []string{"invalid"}, int64(1), "up", "weigh,desc")
-	var badRequest *cErr.Error
-	require.ErrorAs(t, err, &badRequest)
-	require.Equal(t, http.StatusBadRequest, badRequest.ErrorCode())
-	require.Contains(t, badRequest.Error(), "Invalid move primary key")
+	_, err := normalizeSortablePrimaryKey([]string{"invalid"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unsupported primary key type")
 
-	model.primaryKey = "order_id,tenant_id"
-	err = Sortable(sortableTestContext(), model, int64(1), int64(2), "up", "weigh,desc")
-	require.ErrorAs(t, err, &badRequest)
-	require.Equal(t, http.StatusBadRequest, badRequest.ErrorCode())
-	require.Contains(t, badRequest.Error(), "Unsupported primary key field")
+	require.False(t, validPrimaryKeyName("order_id,tenant_id"))
 }

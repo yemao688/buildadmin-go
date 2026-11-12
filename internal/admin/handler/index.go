@@ -41,7 +41,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
+	basicConfig, err := h.configM.GetKVByGroup(ctx.Request.Context(), "basics")
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -56,7 +56,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		languageTabs = append(languageTabs, map[string]string{"lan": language.Lan, "remark": language.Remark})
 	}
 
-	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
+	uploadConfig, err := upload.UploadSiteConfig(ctx.Request.Context(), h.configM, h.config)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

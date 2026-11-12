@@ -6,7 +6,6 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	persistence "buildadmin-go/internal/pkg/persistence"
 	"context"
-	"errors"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -49,11 +48,24 @@ func (s *ConfigRepository) List(ctx *gin.Context) (list []siteconfig.Config, err
 	return
 }
 
+// NameExists reports whether any config row already owns name. excludeID > 0
+// ignores that row (the edit-path shape); pass 0 when creating. Name uniqueness
+// is a service precheck; Add/Edit keep the duplicate-key fallback for a
+// concurrent insert.
+func (s *ConfigRepository) NameExists(ctx context.Context, name string, excludeID int32) (bool, error) {
+	query := s.DBFor(ctx).Model(&siteconfig.Config{}).Where("name = ?", name)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (s *ConfigRepository) Add(ctx context.Context, data siteconfig.Config) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := s.ensureNameAvailable(tx, data.Name, 0); err != nil {
-			return err
-		}
 		result := tx.Create(&data)
 		if result.Error != nil {
 			if isDuplicateKeyError(result.Error) {
@@ -68,11 +80,11 @@ func (s *ConfigRepository) Add(ctx context.Context, data siteconfig.Config) erro
 	})
 }
 
-func (s *ConfigRepository) Edit(ctx *gin.Context, data siteconfig.Config) error {
+// Edit saves one config row. It is transport-free so the service can call it
+// after its own name precheck; the duplicate-key fallback covers a concurrent
+// insert.
+func (s *ConfigRepository) Edit(ctx context.Context, data siteconfig.Config) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := s.ensureNameAvailable(tx, data.Name, data.ID); err != nil {
-			return err
-		}
 		result := tx.Save(&data)
 		if result.Error != nil {
 			if isDuplicateKeyError(result.Error) {
@@ -95,23 +107,6 @@ func (s *ConfigRepository) Edit(ctx *gin.Context, data siteconfig.Config) error 
 		}
 		return nil
 	})
-}
-
-func (s *ConfigRepository) ensureNameAvailable(tx *gorm.DB, name string, id int32) error {
-	query := tx.Where("name = ?", name)
-	if id > 0 {
-		query = query.Where("id <> ?", id)
-	}
-	var existing siteconfig.Config
-	err := query.Take(&existing).Error
-	switch {
-	case err == nil:
-		return cErr.BadRequest("config name already exists")
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return nil
-	default:
-		return err
-	}
 }
 
 func (s *ConfigRepository) Del(ctx *gin.Context, ids interface{}) error {
@@ -138,11 +133,13 @@ func (s *ConfigRepository) GetOneByName(ctx *gin.Context, name string) (siteconf
 	return config, err
 }
 
-func (s *ConfigRepository) GetValueByName(ctx *gin.Context, name string) (string, error) {
+// GetValueByName 读取单个配置项的值（薄转发到 siteconfig 服务，ctx 携带
+// 请求事务时读取事务连接）。
+func (s *ConfigRepository) GetValueByName(ctx context.Context, name string) (string, error) {
 	return s.service.GetValueByName(ctx, name)
 }
 
-// 获取键值对模式
-func (s *ConfigRepository) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
+// GetKVByGroup 获取键值对模式（薄转发到 siteconfig 服务）。
+func (s *ConfigRepository) GetKVByGroup(ctx context.Context, group string) (map[string]string, error) {
 	return s.service.GetKVByGroup(ctx, group)
 }

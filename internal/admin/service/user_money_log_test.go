@@ -1,15 +1,29 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 	"testing"
 
+	"buildadmin-go/internal/admin/dto"
 	"buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func TestUserMoneyLogTypeFor(t *testing.T) {
+	// 超管可指定任意类型（含空 → 交给 money 链路的缺省 system）。
+	require.Equal(t, "recharge", moneyLogTypeFor("recharge", true))
+	require.Equal(t, "withdraw", moneyLogTypeFor("withdraw", true))
+	require.Equal(t, "", moneyLogTypeFor("", true))
+	// 非超管一律强制 system，忽略请求值。
+	require.Equal(t, "system", moneyLogTypeFor("recharge", false))
+	require.Equal(t, "system", moneyLogTypeFor("extend", false))
+	require.Equal(t, "system", moneyLogTypeFor("", false))
+}
 
 func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 	f := newScopeFixture(t)
@@ -19,7 +33,7 @@ func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 	u.Money = 1.00
 	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", u.ID).Update("money", 1.00).Error)
 	spoof := &model.MoneyLog{AdminID: 40, UserID: u.ID, Money: 1.25, Memo: "one"}
-	require.NoError(t, f.moneySvc.Add(ctx.Request.Context(), MoneyLogAddInput{UserID: spoof.UserID, Delta: spoof.Money, Memo: spoof.Memo, Log: spoof, Actor: actor}))
+	require.NoError(t, f.moneySvc.add(ctx.Request.Context(), MoneyLogAddInput{UserID: spoof.UserID, Delta: spoof.Money, Memo: spoof.Memo, Log: spoof, Actor: actor}))
 	require.Equal(t, int32(20), spoof.AdminID)
 	require.Equal(t, float64(1.00), spoof.Before)
 	require.Equal(t, float64(2.25), spoof.After)
@@ -39,7 +53,7 @@ func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 	require.Equal(t, float64(2.25), got.Money)
 
 	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", u.ID).Updates(map[string]any{"money": 0}).Error)
-	require.Error(t, f.moneySvc.Add(ctx.Request.Context(), MoneyLogAddInput{UserID: u.ID, Delta: -1, Memo: "too low", Actor: actor}))
+	require.Error(t, f.moneySvc.add(ctx.Request.Context(), MoneyLogAddInput{UserID: u.ID, Delta: -1, Memo: "too low", Actor: actor}))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
 	require.Equal(t, float64(0), got.Money)
 }
@@ -55,7 +69,7 @@ func TestMoneyLogConcurrentForUpdateFormsContinuousChain(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errs <- f.moneySvc.Add(ctx.Request.Context(), MoneyLogAddInput{UserID: u.ID, Delta: 1.00, Memo: "chain", Actor: actor})
+			errs <- f.moneySvc.Add(ctx.Request.Context(), dto.UserMoneyLogParam{UserID: validator.FlexInt32(u.ID), Money: json.RawMessage(`"1.00"`), Memo: "chain"}, actor, false)
 		}()
 	}
 	wg.Wait()
@@ -83,7 +97,7 @@ func TestMoneyLogInsertFailureRollsBackBalanceAndDeleteCannotOrphan(t *testing.T
 	duplicate := model.MoneyLog{ID: 77, UserID: u.ID, AdminID: 20, Money: 1.00, Before: 0, After: 1.00, Memo: "existing"}
 	require.NoError(t, f.db.Create(&duplicate).Error)
 	carrier := &model.MoneyLog{ID: 77, UserID: u.ID, Money: 1.00, Memo: "duplicate"}
-	err := f.moneySvc.Add(ctx.Request.Context(), MoneyLogAddInput{UserID: carrier.UserID, Delta: carrier.Money, Memo: carrier.Memo, Log: carrier, Actor: actor})
+	err := f.moneySvc.add(ctx.Request.Context(), MoneyLogAddInput{UserID: carrier.UserID, Delta: carrier.Money, Memo: carrier.Memo, Log: carrier, Actor: actor})
 	require.Error(t, err)
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)

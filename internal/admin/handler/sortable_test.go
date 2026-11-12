@@ -95,7 +95,8 @@ func TestSortableBatchUpdatePreservesEqualWeightSemantics(t *testing.T) {
 	}).Error)
 
 	model := &sortableTestModel{db: db}
-	require.NoError(t, Sortable(sortableTestContext(), model, 1, 3, "up", "weigh,desc"))
+	store := newCRUDTableAdapter(db, "sortable_test_rows", "id", model.ScopeDB)
+	require.NoError(t, store.SortWeighScoped(sortableTestContext(), "1", "3", "up", "desc"))
 	selects, updates := counter.selects, counter.updates
 	require.Equal(t, map[int32]int32{
 		1: 9,
@@ -123,7 +124,8 @@ func TestSortableBatchUpdatePreservesScope(t *testing.T) {
 
 	ownerID := int32(1)
 	model := &sortableTestModel{db: db, ownerID: &ownerID}
-	require.NoError(t, Sortable(sortableTestContext(), model, 4, 1, "up", "weigh,desc"))
+	store := newCRUDTableAdapter(db, "sortable_test_rows", "id", model.ScopeDB)
+	require.NoError(t, store.SortWeighScoped(sortableTestContext(), "4", "1", "up", "desc"))
 	require.Equal(t, map[int32]int32{
 		1: 8,
 		2: 10,

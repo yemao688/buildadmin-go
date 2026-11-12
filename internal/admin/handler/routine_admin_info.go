@@ -2,29 +2,27 @@ package handler
 
 import (
 	adminmodel "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
 type AdminInfoHandler struct {
-	Base
-	log    *zap.Logger
-	adminM *adminmodel.AdminRepository
-	authM  *adminmodel.AuthRepository
+	log   *zap.Logger
+	authM *adminmodel.AuthRepository
+	svc   *service.AdminService
 }
 
-func NewAdminInfoHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository) *AdminInfoHandler {
+func NewAdminInfoHandler(log *zap.Logger, authM *adminmodel.AuthRepository, svc *service.AdminService) *AdminInfoHandler {
 	return &AdminInfoHandler{
-		Base:   NewBase(adminM),
-		log:    log,
-		adminM: adminM,
-		authM:  authM,
+		log:   log,
+		authM: authM,
+		svc:   svc,
 	}
 }
 
@@ -69,45 +67,26 @@ func (v SelfAdmin) GetMessages() validator.ValidatorMessages {
 }
 
 func (h *AdminInfoHandler) Edit(ctx *gin.Context) {
-	var params = struct {
-		SelfAdmin
-	}{}
+	var params SelfAdmin
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	adminAuth := header.GetAdminAuth(ctx)
-	admin, err := h.adminM.GetOne(ctx, adminAuth.Id)
+	actor, err := actorFromContext(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
-
-	//判读是否 只更新头像
-	if params.Avatar != nil {
-		admin.Avatar = *params.Avatar
-		err = h.adminM.SelfEdit(ctx, admin, []string{"avatar"})
-		if err != nil {
-			response.FailByErr(ctx, err)
-			return
-		}
-		response.Success(ctx, "")
-		return
-	}
-
-	if params.Password != "" {
-		if err := h.adminM.ResetPassword(ctx, admin.ID, params.Password); err != nil {
-			response.FailByErr(ctx, err)
-			return
-		}
-	}
-
-	if err := copier.Copy(&admin, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	err = h.adminM.SelfEdit(ctx, admin, []string{"nickname", "email", "mobile", "motto"})
+	adminAuth := header.GetAdminAuth(ctx)
+	err = h.svc.UpdateSelf(ctx.Request.Context(), adminAuth.Id, service.SelfAdminParams{
+		Nickname: params.Nickname,
+		Avatar:   params.Avatar,
+		Email:    params.Email,
+		Mobile:   params.Mobile,
+		Password: params.Password,
+		Motto:    params.Motto,
+	}, actor)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

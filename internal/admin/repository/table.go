@@ -3,7 +3,7 @@ package repository
 import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/data_scope"
-	"database/sql"
+	"buildadmin-go/internal/pkg/dbschema"
 	"errors"
 	"slices"
 	"strings"
@@ -139,19 +139,9 @@ func (s *TableRepository) GetTablePk(tableName string) string {
 	return columnName
 }
 
-type Column struct {
-	COLUMN_NAME           string
-	COLUMN_COMMENT        string
-	IS_NULLABLE           string
-	COLUMN_TYPE           string
-	DATA_TYPE             string
-	COLUMN_DEFAULT        sql.NullString
-	COLUMN_KEY            string
-	EXTRA                 string
-	CHARACTER_SET_NAME    string
-	COLLATION_NAME        string
-	GENERATION_EXPRESSION string
-}
+// Column 保留在 repository 包内作为兼容别名；元数据类型的事实源是
+// internal/pkg/dbschema，crudgen 直接使用后者，不再反向依赖本包。
+type Column = dbschema.Column
 
 // 获取数据表的所有字段
 func (s *TableRepository) GetTableFields(tableName string, onlyCleanComment bool) map[string]any {

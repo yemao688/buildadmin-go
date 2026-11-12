@@ -112,6 +112,38 @@ func TestIsMovingUnderSelf(t *testing.T) {
 	}
 }
 
+func TestAdminServiceSelfEditPlan(t *testing.T) {
+	nickname := "nick"
+	avatar := "/static/avatar.png"
+
+	cases := []struct {
+		name           string
+		p              SelfAdminParams
+		wantAvatarOnly bool
+		wantFields     []string
+	}{
+		{"avatar only", SelfAdminParams{Avatar: &avatar, Nickname: &nickname}, true, []string{"avatar"}},
+		{"profile without password", SelfAdminParams{Email: "a@b.c", Mobile: "13800000000"}, false, []string{"nickname", "email", "mobile", "motto"}},
+		{"profile with password", SelfAdminParams{Password: "secret"}, false, []string{"nickname", "email", "mobile", "motto", "password"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			avatarOnly, fields := selfEditPlan(tc.p)
+			if avatarOnly != tc.wantAvatarOnly {
+				t.Fatalf("avatarOnly = %v, want %v", avatarOnly, tc.wantAvatarOnly)
+			}
+			if len(fields) != len(tc.wantFields) {
+				t.Fatalf("fields = %v, want %v", fields, tc.wantFields)
+			}
+			for i := range fields {
+				if fields[i] != tc.wantFields[i] {
+					t.Fatalf("fields = %v, want %v", fields, tc.wantFields)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateAccountStatusValue(t *testing.T) {
 	for _, value := range []any{"enable", "disable"} {
 		if err := ValidateAccountStatusValue(value); err != nil {

@@ -10,22 +10,16 @@ import (
 )
 
 type AdminLogHandler struct {
-	Base
 	log       *zap.Logger
 	adminLogM *adminmodel.AdminLogRepository
 }
 
 func NewAdminLogHandler(log *zap.Logger, adminLogM *adminmodel.AdminLogRepository) *AdminLogHandler {
 	return &AdminLogHandler{
-		Base: NewBase(adminLogM),
-		log:  log, adminLogM: adminLogM}
+		log: log, adminLogM: adminLogM}
 }
 
 func (h *AdminLogHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	result, total, err := h.adminLogM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)

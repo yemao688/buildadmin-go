@@ -6,6 +6,7 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/persistence"
 	"context"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -25,12 +26,33 @@ func (s *AdminGroupRepository) GetOne(ctx context.Context, id int32) (adminGroup
 	return
 }
 
-// ListWhere executes a caller-built WHERE query against the admin_group
-// table. The condition string and parameters are assembled by the service
-// layer; persistence stays inside the repository (GORM single entry point).
-func (s *AdminGroupRepository) ListWhere(ctx context.Context, where string, params ...any) ([]*model.AdminGroup, error) {
+// GroupListFilter 描述分组列表的过滤条件。IDs 为 nil 时不按 id 过滤（超管
+// 视角），非 nil 时按该集合过滤且空集合代表无可见分组；Keyword 按空格分词
+// 后逐项 AND 匹配 QuickSearchField；Status 为空表示不限制状态。
+type GroupListFilter struct {
+	IDs     []int32
+	Keyword string
+	Status  string
+}
+
+// ListByFilter 按调用方给定的条件读取分组列表。条件在此构造成 GORM 查询，
+// 权限集合运算留在 service。
+func (s *AdminGroupRepository) ListByFilter(ctx context.Context, filter GroupListFilter) ([]*model.AdminGroup, error) {
+	query := s.DBFor(ctx).Model(&model.AdminGroup{})
+	if filter.IDs != nil {
+		query = query.Where(" id in ? ", filter.IDs)
+	}
+	if filter.Status != "" {
+		query = query.Where(" status = ? ", filter.Status)
+	}
+	if filter.Keyword != "" {
+		for _, term := range strings.Split(filter.Keyword, " ") {
+			query = query.Where(s.QuickSearchField+" LIKE ? ", "%"+strings.ReplaceAll(term, "%", "\\%")+"%")
+		}
+	}
+
 	list := []*model.AdminGroup{}
-	err := s.DBFor(ctx).Table(s.TableName).Where(where, params...).Find(&list).Error
+	err := query.Find(&list).Error
 	return list, err
 }
 

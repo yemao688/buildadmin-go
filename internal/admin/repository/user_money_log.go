@@ -10,6 +10,7 @@ import (
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/persistence"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -105,19 +106,14 @@ func (s *UserMoneyLogRepository) List(ctx *gin.Context) (list []model.MoneyLog, 
 // changes are never rolled back by log deletion (logs are append-only).
 func (s *UserMoneyLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
+	if !ok {
 		return fmt.Errorf("invalid user money log ids")
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid user money log id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	normalized, err := util.NormalizeIDs(values, "user money log", true, func(id int32) error {
+		return fmt.Errorf("invalid user money log id %d", id)
+	})
+	if err != nil {
+		return err
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []model.MoneyLog

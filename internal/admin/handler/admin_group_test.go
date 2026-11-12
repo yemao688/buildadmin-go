@@ -158,7 +158,7 @@ func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
 	newGroupListFixture(t, h, db)
 	ctx := groupListContext(5)
 
-	groups, err := h.GetGroups(ctx, nil, nil)
+	groups, err := h.GetGroups(ctx)
 	require.NoError(t, err)
 	names := map[string]bool{}
 	for _, g := range groups {
@@ -178,7 +178,7 @@ func TestAdminGroupListAbsoluteAuthOnlyQualified(t *testing.T) {
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/admin/auth.Group/index?absoluteAuth=1", nil)
 	ctx.Set("AdminAuth", header.AdminAuth{Id: 5, IsSuperAdmin: false})
 
-	groups, err := h.GetGroups(ctx, nil, nil)
+	groups, err := h.GetGroups(ctx)
 	require.NoError(t, err)
 	names := map[string]bool{}
 	for _, g := range groups {

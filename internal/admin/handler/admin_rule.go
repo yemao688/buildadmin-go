@@ -5,13 +5,12 @@ import (
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
 	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/tree"
 	"buildadmin-go/internal/pkg/validator"
 	"fmt"
-	"slices"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -41,8 +40,7 @@ func (h *AdminRuleHandler) Index(ctx *gin.Context) {
 		response.Success(ctx, data)
 		return
 	}
-	whereP := []any{}
-	list, err := h.GetMenus(ctx, []string{}, whereP)
+	list, err := h.GetMenus(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -162,9 +160,7 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 		return nil, false
 	}
 
-	whereS := []string{" type in ? ", " status=? "}
-	whereP := []any{[]string{"menu_dir", "menu"}, "1"}
-	list, err := h.GetMenus(ctx, whereS, whereP)
+	list, err := h.listMenus(ctx, []string{"menu_dir", "menu"}, "1")
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return nil, false
@@ -180,28 +176,16 @@ func (h *AdminRuleHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	return nil, false
 }
 
-// 获取菜单列表
-func (h *AdminRuleHandler) GetMenus(ctx *gin.Context, whereS []string, whereP []interface{}) ([]model.AdminRule, error) {
-	keyword := ctx.Request.FormValue("quickSearch")
-	ids, _ := h.authM.GetRuleIds(0)
-	isSuper := slices.Contains(ids, "*")
+// GetMenus 读取规则管理页的完整菜单列表（tree 装配由响应层完成）。
+func (h *AdminRuleHandler) GetMenus(ctx *gin.Context) ([]model.AdminRule, error) {
+	return h.listMenus(ctx, nil, "")
+}
 
-	if !isSuper && len(ids) > 0 {
-		whereS = append(whereS, " id in ? ")
-		whereP = append(whereP, ids)
-	}
-
-	if keyword != "" {
-		keywordArr := strings.Split(keyword, " ")
-		for _, v := range keywordArr {
-			whereS = append(whereS, h.adminRuleM.QuickSearchField+" LIKE ? ")
-			whereP = append(whereP, "%"+strings.Replace(v, "%", "\\%", -1)+"%")
-		}
-	}
-
-	list := []model.AdminRule{}
-	err := h.adminRuleM.DB().Table(h.adminRuleM.TableName).Where(strings.Join(whereS, " AND "), whereP...).Order("weigh desc,id asc").Find(&list).Error
-	return list, err
+// listMenus 按可选类型/状态过滤读取操作者可见的规则；actor 由 handler 提取
+// 后以参数传入 service，权限范围判定在 service 内完成。
+func (h *AdminRuleHandler) listMenus(ctx *gin.Context, types []string, status string) ([]model.AdminRule, error) {
+	adminAuth := header.GetAdminAuth(ctx)
+	return h.svc.Menus(ctx.Request.Context(), adminAuth.Id, ctx.Request.FormValue("quickSearch"), types, status)
 }
 
 type AdminRuleExpend struct {

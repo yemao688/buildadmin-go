@@ -11,6 +11,7 @@ import (
 	"buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
+	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/util"
 
 	"github.com/go-mail/mail"
@@ -18,8 +19,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// ConfigService 承载站点配置的业务规则：新增时的字典/扩展属性装配与
-// 测试邮件发送。编辑/删除保持绑定→repository→响应。
+// ConfigService 承载站点配置的业务规则：变量名唯一性预检、字典/扩展属性
+// 装配（新增与编辑共用）与测试邮件发送。删除保持绑定→repository→响应。
 type ConfigService struct {
 	configM *adminmodel.ConfigRepository
 }
@@ -43,11 +44,47 @@ type ConfigParams struct {
 	Weigh       int32
 }
 
-// Add 编排配置新增：按组件类型装配 content/extend 字段后落库。
+// Add 编排配置新增：按组件类型装配 content/extend 字段、校验变量名唯一后落库。
 func (s *ConfigService) Add(ctx context.Context, p ConfigParams) error {
+	config, err := prepareConfig(p)
+	if err != nil {
+		return err
+	}
+	exists, err := s.configM.NameExists(ctx, config.Name, 0)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return cErr.BadRequest("config name already exists")
+	}
+	return s.configM.Add(ctx, config)
+}
+
+// Edit 编排配置编辑：与 Add 共用同一套 content/extend 装配，并在落库前做
+// 变量名唯一性预检（排除自身）。并发插入仍由 repo 的 duplicate-key 兜底。
+func (s *ConfigService) Edit(ctx context.Context, id int32, p ConfigParams) error {
+	config, err := prepareConfig(p)
+	if err != nil {
+		return err
+	}
+	config.ID = id
+	exists, err := s.configM.NameExists(ctx, config.Name, id)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return cErr.BadRequest("config name already exists")
+	}
+	return s.configM.Edit(ctx, config)
+}
+
+// prepareConfig 把请求参数装配为待落库的配置行：字典型组件把 content 序列化
+// 为 JSON，扩展属性序列化进 extend 并标记允许删除。Add/Edit 共用，避免两条
+// 写入路径的字段形态漂移。
+func prepareConfig(p ConfigParams) (siteconfig.Config, error) {
 	var config = siteconfig.Config{}
 	if err := copier.Copy(&config, p); err != nil {
-		return err
+		return config, err
 	}
 	if p.Type == "radio" || p.Type == "checkbox" || p.Type == "select" || p.Type == "selects" {
 		contentBytes, _ := json.Marshal(util.StrAttrToArray(p.Content))
@@ -69,8 +106,7 @@ func (s *ConfigService) Add(ctx context.Context, p ConfigParams) error {
 		}
 		config.AllowDel = 1
 	}
-
-	return s.configM.Add(ctx, config)
+	return config, nil
 }
 
 // SaveAll 编排站点配置整体保存：事务内逐行装配类型化值，跳过空白的

@@ -16,8 +16,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// AdminService 承载管理员管理的业务规则：口令处理、分组/规则装配、
-// 父级解析、状态流转与删除编排。handler 只做参数绑定与响应返回。
+// AdminService 承载管理员管理的业务规则：口令处理、用户名唯一性、分组/规则
+// 装配、父级解析与可见性校验、状态流转与删除编排。handler 只做参数绑定与
+// 响应返回。
 type AdminService struct {
 	adminM *adminmodel.AdminRepository
 	authM  *adminmodel.AuthRepository
@@ -129,8 +130,23 @@ func slicesContains(list []string, v string) bool {
 	return false
 }
 
+// CheckParentInScope validates that the requested parent administrator exists
+// and is visible to the actor. Missing and out-of-scope parents collapse into
+// the same fail-closed rejection, which is why the message carries both cases.
+func (s *AdminService) CheckParentInScope(ctx context.Context, actor data_scope.Actor, parentID int32) error {
+	visible, err := s.adminM.ParentVisibleWithActor(ctx, actor, parentID)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return cErr.BadRequest("Parent administrator not found or not in scope")
+	}
+	return nil
+}
+
 // Add runs the whole administrator-creation flow: group authorization,
-// parent resolution, password hashing and the transactional write.
+// parent resolution, password hashing, username uniqueness and the
+// transactional write.
 func (s *AdminService) Add(ctx context.Context, p AdminParams, actor data_scope.Actor, operatorID int32) error {
 	if p.Password == "" {
 		return cErr.BadRequest("Please input correct password")
@@ -146,7 +162,7 @@ func (s *AdminService) Add(ctx context.Context, p AdminParams, actor data_scope.
 		return err
 	}
 	if parentID != nil {
-		if err := s.adminM.CheckParentInScopeWithActor(ctx, actor, *parentID); err != nil {
+		if err := s.CheckParentInScope(ctx, actor, *parentID); err != nil {
 			return err
 		}
 	}
@@ -162,12 +178,22 @@ func (s *AdminService) Add(ctx context.Context, p AdminParams, actor data_scope.
 	admin.Password = hash
 	admin.ParentID = parentID
 
+	// 唯一性预检在写入前完成（并发插入仍由 repo 的 duplicate-key 兜底），
+	// 保证先出现口令错误，与原先“散列在事务前、预检在事务内”的文案顺序一致。
+	exists, err := s.adminM.UsernameExists(ctx, admin.Username, 0)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return cErr.BadRequest("username already exists")
+	}
+
 	return s.adminM.AddWithActor(ctx, admin, p.GroupArr, actor)
 }
 
 // Edit runs the whole administrator-update flow: reload, self-disable guard,
-// parent resolution, group delta authorization, password hashing and the
-// transactional write.
+// parent resolution, group delta authorization, password hashing, username
+// uniqueness and the transactional write.
 func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor data_scope.Actor, operatorID int32) error {
 	admin, err := s.adminM.GetOneWithActor(ctx, actor, id)
 	if err != nil {
@@ -207,7 +233,7 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 	}
 
 	if changed && parentID != nil {
-		if err := s.adminM.CheckParentInScopeWithActor(ctx, actor, *parentID); err != nil {
+		if err := s.CheckParentInScope(ctx, actor, *parentID); err != nil {
 			return err
 		}
 	}
@@ -226,7 +252,73 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 	}
 	admin.ParentID = parentID
 
+	// 唯一性预检保留原文案 "Account exist"；并发插入由 repo 的 duplicate-key
+	// 兜底，检查放在散列之后以保持与原实现相同的错误优先级。
+	exists, err := s.adminM.UsernameExists(ctx, admin.Username, admin.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return cErr.BadRequest("Account exist")
+	}
+
 	return s.adminM.EditWithActor(ctx, admin, changed, parentID, omit, p.GroupArr, actor)
+}
+
+// SelfAdminParams 是本人资料更新的纯参数形态：头像与昵称保留"是否提交"
+// 语义，nil 表示请求未提供该字段。
+type SelfAdminParams struct {
+	Nickname *string
+	Avatar   *string
+	Email    string
+	Mobile   string
+	Password string
+	Motto    string
+}
+
+// selfEditPlan 返回本人资料更新的字段白名单：提交了头像时只写 avatar（头像
+// 更新早于且独立于其余资料，保持历史语义）；否则写资料字段，并在提供口令时
+// 追加 password 字段（散列由 UpdateSelf 完成），保证口令与资料在同一条
+// UPDATE 内落库。
+func selfEditPlan(p SelfAdminParams) (avatarOnly bool, fields []string) {
+	if p.Avatar != nil {
+		return true, []string{"avatar"}
+	}
+	fields = []string{"nickname", "email", "mobile", "motto"}
+	if p.Password != "" {
+		fields = append(fields, "password")
+	}
+	return false, fields
+}
+
+// UpdateSelf 编排本人资料更新：先按 actor 加载本人记录，再按 selfEditPlan
+// 组装字段并以单条 UPDATE 落库（提供口令时在同一条语句内写入散列值）。
+func (s *AdminService) UpdateSelf(ctx context.Context, id int32, p SelfAdminParams, actor data_scope.Actor) error {
+	admin, err := s.adminM.GetOneWithActor(ctx, actor, id)
+	if err != nil {
+		return err
+	}
+
+	avatarOnly, fields := selfEditPlan(p)
+	if avatarOnly {
+		admin.Avatar = *p.Avatar
+		return s.adminM.SelfEdit(ctx, admin, fields)
+	}
+
+	if p.Nickname != nil {
+		admin.Nickname = *p.Nickname
+	}
+	admin.Email = p.Email
+	admin.Mobile = p.Mobile
+	admin.Motto = p.Motto
+	if p.Password != "" {
+		hash, err := passwordutil.Hash(p.Password)
+		if err != nil {
+			return err
+		}
+		admin.Password = hash
+	}
+	return s.adminM.SelfEdit(ctx, admin, fields)
 }
 
 // SwitchStatus validates and performs a scoped status switch, refusing to

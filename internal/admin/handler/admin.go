@@ -23,20 +23,20 @@ import (
 )
 
 type AdminHandler struct {
-	Base
-	log    *zap.Logger
-	adminM *adminmodel.AdminRepository
-	authM  *adminmodel.AuthRepository
-	svc    *service.AdminService
+	log        *zap.Logger
+	adminM     *adminmodel.AdminRepository
+	adminRuleM *adminmodel.AdminRuleRepository
+	authM      *adminmodel.AuthRepository
+	svc        *service.AdminService
 }
 
-func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, authM *adminmodel.AuthRepository, svc *service.AdminService) *AdminHandler {
+func NewAdminHandler(log *zap.Logger, adminM *adminmodel.AdminRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository, svc *service.AdminService) *AdminHandler {
 	return &AdminHandler{
-		Base:   NewBase(adminM),
-		log:    log,
-		adminM: adminM,
-		authM:  authM,
-		svc:    svc,
+		log:        log,
+		adminM:     adminM,
+		adminRuleM: adminRuleM,
+		authM:      authM,
+		svc:        svc,
 	}
 }
 
@@ -371,7 +371,7 @@ func (h *AdminHandler) Select(ctx *gin.Context) (interface{}, bool, error) {
 
 	return map[string]interface{}{
 		"options": options,
-		"remark":  h.GetRemark(ctx),
+		"remark":  remark(ctx, h.adminRuleM),
 	}, true, nil
 }
 
