@@ -342,10 +342,6 @@ func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}
 }
 
 func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	list, total, err := h.{{.ModelVar}}M.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -449,9 +445,6 @@ type ModelData struct {
 	StructTemp       string //结构体
 
 	// 子包模型对根包 BaseModel 的限定引用；根包生成时为空，输出保持不变。
-	BaseModelQualifier string
-	BaseModelAlias     string
-	BaseModelImport    string
 
 	// FieldTypesLiteral 仓库 List 传给 QueryBuilder 的字段类型 map 字面量
 	// （由 writeModelFiles 按 spec 字段构建；为空时模板回退原
@@ -530,8 +523,6 @@ import (
 	{{if .RelationNeedsMultiNumeric}}"strconv"
 	{{end}}
 	{{if or .DataScopePolicy.Reassignable .InheritFrom}}"gorm.io/gorm/clause"
-	{{end}}
-	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
 	{{end}}
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
@@ -636,9 +627,9 @@ func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.Class
 {{if .FieldTypesLiteral}}	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
 {{end}}{{if .DefaultOrderLiteral}}	tableInfo.DefaultOrder = {{.DefaultOrderLiteral}}
 {{end}}{{if .SearchJoinLiteral}}	tableInfo.SearchJoins = {{.SearchJoinLiteral}}
-{{end}}	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
+{{end}}	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, tableInfo, nil)
 {{- else}}
-	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
 {{- end}}
 	if err != nil {
 		return nil, 0, err

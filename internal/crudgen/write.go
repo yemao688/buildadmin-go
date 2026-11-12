@@ -39,7 +39,6 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
-	applyBaseRepositoryPackageRef(&modelData, repositoryFile)
 
 	// 实体文件（扁平 internal/model/<entity>.go，包名 model）
 	entityContent, err := render(entityFile.ParseFile, entityTemp, modelData)
@@ -71,21 +70,6 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		}
 	}
 	return structContent, nil
-}
-
-// applyBaseRepositoryPackageRef 为子包仓库设置根仓库包（internal/admin/repository，
-// 提供 QueryBuilder）的限定引用；根仓库包保持空值，输出与既有写法一致。
-func applyBaseRepositoryPackageRef(modelData *ModelData, repositoryFile NameInfo) {
-	root := filepath.ToSlash(repositoryFile.RootFileName)
-	if root == "internal/admin/repository" {
-		return
-	}
-	if !strings.HasPrefix(root, "internal/admin/repository/") {
-		return
-	}
-	modelData.BaseModelImport = "buildadmin-go/internal/admin/repository"
-	modelData.BaseModelAlias = "adminmodel"
-	modelData.BaseModelQualifier = modelData.BaseModelAlias + "."
 }
 
 // buildFieldTypesLiteral 构建仓库 List 传给 QueryBuilder 的 FieldTypes map
