@@ -58,3 +58,35 @@ jobs:
       # 部分测试依赖 MySQL 门禁(mysql_test.enabled),缺配置时自行 skip 属正常。
       - name: 单元测试
         run: go test ./... -count=1 -timeout=45m
+
+  # 前端门禁:独立 job,与 Go 门禁互不阻塞(web 变更与 Go 变更通常不同时出现)。
+  # 注意:web/pnpm-lock.yaml 未入库(见根 .gitignore),这里刻意不加 --frozen-lockfile
+  # 并禁用 setup-node 的 pnpm 缓存(缓存键依赖 lockfile)。依赖版本在 package.json 全部
+  # 精确固定,但传递依赖仍由解析器决定——lockfile 入库后应改为 --frozen-lockfile + cache。
+  web:
+    name: web lint / typecheck / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # Node 版本取 Vite 8 支持的 LTS(vite 8 要求 ^20.19.0 || >=22.12.0)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: pnpm install
+        run: pnpm install --no-frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm typecheck
+
+      - run: pnpm build

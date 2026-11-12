@@ -48,7 +48,8 @@ export async function installFullElementPlus(app: App): Promise<void> {
 /**
  * 门户域首帧配置：先取后端默认语言（/api/index/index 返回的 default_language），
  * 在 loadLang 之前完成 initPortalLang，保证首帧渲染语言正确；失败或字段缺失时保持默认 'zh-cn'，
- * 不阻塞启动。此请求在 vue-i18n 挂载前发出，响应消息无需翻译；think-lang 此时为 portalLang
+ * 不阻塞启动。同一请求的 language 数组写入门户语言列表（portalLangArray，供门户语言切换组件渲染）。
+ * 此请求在 vue-i18n 挂载前发出，响应消息无需翻译；think-lang 此时为 portalLang
  * 当前值（默认 zh-cn），不影响。
  */
 async function initPortalConfig(): Promise<void> {
@@ -58,6 +59,17 @@ async function initPortalConfig(): Promise<void> {
         const data = res?.data?.data
         const defaultLang = data?.default_language
         if (defaultLang) config.initPortalLang(defaultLang)
+
+        // 启用语言列表（按 weigh DESC 排序，第一项即后端默认语言）：写入门户语言域，
+        // 与后台 lang.langArray 解耦。lan → name（语言码），name → value（展示名）。
+        const languageList = data?.language
+        if (Array.isArray(languageList) && languageList.length > 0) {
+            config.setPortalLangArray(
+                languageList
+                    .filter((item: anyObj) => item?.lan)
+                    .map((item: anyObj) => ({ name: item.lan, value: item.name || item.lan }))
+            )
+        }
 
         // 同一请求一并返回 currency 数组（按 weigh DESC 排序，第一项为后端默认货币）：
         // 对称 initPortalLang，写入默认货币与货币列表。列表（currencyArray/currencyRates）
@@ -71,7 +83,7 @@ async function initPortalConfig(): Promise<void> {
             )
         }
     } catch (e) {
-        console.warn('[i18n] 获取门户默认语言/货币失败，使用默认 zh-cn / CNY', e)
+        console.warn('[i18n] 获取门户默认语言/语言列表/货币失败，使用默认 zh-cn / CNY', e)
     }
 }
 

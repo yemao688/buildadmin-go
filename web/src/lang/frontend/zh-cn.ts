@@ -6,6 +6,7 @@
 export default {
     Welcome: '欢迎',
     Language: '语言',
+    Currency: '货币',
     'Current language': '当前语言',
     'Current money': '当前货币',
 }

@@ -53,7 +53,7 @@ web/
 │   │   └── static/           # 静态路由：adminBase.ts、homePlaceholder.ts（删除即接管 /）
 │   ├── stores/               # Pinia 商店（constant/ 缓存键名、interface/ 类型）
 │   ├── styles/               # SCSS：app/index/element/portal/admin/loading/var/dark/mixins
-│   ├── utils/                # axios/baTable/common/directives/iconfont/tokenProvider/validate 等
+│   ├── utils/                # axios/auth/baTable/common/directives/iconfont/tokenProvider/validate 等
 │   └── views/                # backend/（后台）· frontend/（前台门户）· common/
 ├── types/tableRenderer.d.ts  # pnpm dev 自动生成（fieldRender 文件名 → TableRenderer 联合类型）
 └── package.json              # v2.3.8；脚本 dev/build/lint/typecheck
@@ -359,7 +359,7 @@ const rules = reactive<FormRules>({
 
 | 函数 | 模块 | 用途 |
 |---|---|---|
-| `auth(str)` / `auth({ name, subNodeName })` | utils/common | 前端鉴权；对象形式推荐（不受当前 path 限制；检查按钮必须先查上级菜单 name 再 subNodeName，不能直接 name 查按钮） |
+| `auth(str)` / `auth({ name, subNodeName })` | utils/auth | 前端鉴权；对象形式推荐（不受当前 path 限制；检查按钮必须先查上级菜单 name 再 subNodeName，不能直接 name 查按钮）。后台专享，门户不得引用（依赖 navTabs store） |
 | `loadCss(url)` / `loadJs(url)` | utils/common | 动态加载网络 css/js |
 | `setTitle(title)` | utils/common | 设置页面标题 |
 | `isExternal(path)` | utils/common | 是否外部链接 |
@@ -417,6 +417,10 @@ const rules = reactive<FormRules>({
   （`editDefaultLang(lang, 'portal')`）持久化 `portalLangSet`，后端默认值
   不再覆盖。**`portalLang`/`portalLangSet` 全站共享同一值**，买家/卖家等
   门户间不区分（按门户独立语言属业务扩展，下游自行实现）。
+- 门户可选语言列表：同一请求的 `language` 数组（`{id,lan,name,status,weigh}`，
+  按 weigh DESC）由 `initPortalConfig` 映射为 `{name: lan, value: name}` 写入
+  `portalLangArray`（数据，始终以最新后端列表为准），供门户语言切换组件渲染；
+  后台 `config.lang.langArray` 仍是硬编码的 zh-cn/en，两域互不影响。
 - **语言切换组件**：`web/src/components/lang-switch/`（独立样式，CSS 变量
   `--lang-switch-*` 可在业务容器层级覆盖，不依赖后台设计系统）。props：
   `langArray`（语言列表）/`current`/`label`；emits：`change(name)`。组件纯

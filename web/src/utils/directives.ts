@@ -3,7 +3,7 @@ import { nextTick } from 'vue'
 import horizontalScroll from '/@/utils/horizontalScroll'
 import { useEventListener } from '@vueuse/core'
 import { isString } from 'lodash-es'
-import { auth } from '/@/utils/common'
+import { auth } from '/@/utils/auth'
 
 export function directives(app: App) {
     // 鉴权指令

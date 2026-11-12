@@ -261,7 +261,8 @@ import BaAccountDialog from '/@/layouts/backend/components/baAccount.vue'
 import { useBaAccount } from '/@/stores/baAccount'
 import { useConfig } from '/@/stores/config'
 import baTableClass from '/@/utils/baTable'
-import { auth, getArrayKey } from '/@/utils/common'
+import { auth } from '/@/utils/auth'
+import { getArrayKey } from '/@/utils/common'
 import { changeStep, state as crudState } from '/@/views/backend/crud/index'
 
 interface Props {
