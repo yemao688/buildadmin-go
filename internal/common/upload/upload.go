@@ -1,11 +1,10 @@
 // Package upload 提供本地与 AliOSS 两种存储的上传能力。包内不依赖 gin 等
 // 传输层类型：请求元数据（资源前缀、翻译、省市区参数）由调用方以普通参数传入。
-// 错误当前仍直接返回 cErr.* 业务错误，后续再收敛为领域错误。
+// 上传失败返回本包的领域错误，HTTP 业务码由调用方映射。
 package upload
 
 import (
 	"buildadmin-go/internal/conf"
-	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
@@ -150,7 +149,7 @@ func (s *UploadHelper) checkMimetype(sourceType, suffix string) error {
 	if slices.Contains(mimetypeArr, sourceTypeArr[0]+"/*") {
 		return nil
 	}
-	return cErr.BadRequest("The uploaded file format is not allowed", 10002)
+	return ErrMimetypeNotAllowed
 }
 
 // 是否是图片
@@ -164,7 +163,7 @@ func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 // 本函数不接触传输层（模板占位与现有 i18n 条目保持原样，不做额外格式化）。
 func (s *UploadHelper) checkSize(lang func(string) string, file *multipart.FileHeader) error {
 	if file.Size > int64(s.config.Upload.Maxsize)*1024*1024 {
-		return cErr.BadRequest(lang("The uploaded file is too large (%sMiB), Maximum file size:%sMiB"), 10002)
+		return &FileTooLargeError{Message: lang("The uploaded file is too large (%sMiB), Maximum file size:%sMiB")}
 	}
 	return nil
 }

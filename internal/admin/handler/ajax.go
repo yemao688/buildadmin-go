@@ -52,7 +52,11 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 		func(s string) string { return util.Lang(ctx, s, nil) },
 	)
 	if err != nil {
-		response.FailByErr(ctx, err)
+		if message, ok := upload.BusinessMessage(err); ok {
+			response.FailByErr(ctx, cErr.BadRequest(message, 10002))
+		} else {
+			response.FailByErr(ctx, err)
+		}
 		return
 	}
 	response.Success(ctx, map[string]any{
