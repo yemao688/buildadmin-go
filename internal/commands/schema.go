@@ -47,10 +47,8 @@ func schemaModeFromConfig(cfg *conf.Configuration) string {
 // ensureSchema 按 auto_migrate 模式在启动前同步数据库结构；rejected 变更只告警不阻断。
 func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 	mode := schemaModeFromConfig(cfg)
-	if mode == schemaModeOff {
-		return nil
-	}
-
+	// 安装守卫先于 off 判断：auto_migrate=off 只关闭结构同步，不能把
+	// 「未安装/安装中断」的库放进服务进程。
 	report, err := migrations.Status(db, cfg)
 	if err != nil {
 		return err
@@ -58,6 +56,9 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 	if report.State == migrations.InstallFresh || report.State == migrations.InstallInterrupted {
 		printDatabaseInstallGuidance(report.State)
 		return errDatabaseNotInstalled
+	}
+	if mode == schemaModeOff {
+		return nil
 	}
 	printMigrationStatus(report)
 	if mode == schemaModeCheck {

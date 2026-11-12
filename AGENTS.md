@@ -206,7 +206,7 @@ go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 - **启动自动迁移：** `app.auto_migrate` 取 `off`/`check`/`apply`，默认 `apply`，可用环境变量 `APP_AUTO_MIGRATE` 覆盖。`serve` 在绑定端口之前依次执行 installGuard（未安装或安装中断 → 打印 setup 指引并退出）、三轨迁移，以及 `crud.apply_on_migrate` 为 true（默认）时的 `crud_specs` 尾部 apply；编排顺序与 `migrate` 相同，见 `internal/migrations/business/README.md`。启动时 spec apply 需要 `app.auto_migrate: apply` **且** `crud.apply_on_migrate: true`；后者是"让库长期偏离 spec"的逃生口。
 - **启动路径按「全部审批类别已授权」处理：** `requires-approval` 变更（默认值、自增、类型扩宽、属性）在启动时自动执行，不新增也不需要 `--approve`。
 - **`rejected` 变更永不自动执行：** 收窄、unsigned↔signed 翻转、nullable→NOT NULL、enum/set 减成员、主键漂移、扩宽矩阵外的类型变更一律跳过，输出一条 `[database] WARNING` 指名表/列/原因，进程继续服务、不退出。只有硬错误（数据库不可达、迁移 `Up` 失败、锁或元数据查询失败）以状态 1 退出。
-- **CLI：** `migrate --plan` 只读输出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，绝不写库（有意不取生成锁，假设没有并发 DDL：容器正在 apply 时可能读到混合状态，需要一致视图请在没有任何容器迁移时运行）；`migrate --strict` 恢复 `rejected` 失败即退（CI 用）；不带开关的 `migrate` 与启动一样宽松。`crud:apply` 保持既有严格行为与 `--approve` 语义不变。
+- **CLI：** `migrate --plan` 只读输出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，绝不写库（有意不取生成锁，假设没有并发 DDL：容器正在 apply 时可能读到混合状态，需要一致视图请在没有任何容器迁移时运行），并在出现 `rejected` 时以非零退出（发版前检查的唯一事实源）；`migrate --strict` 同样在 `rejected` 时失败即退（CI 用）；不带开关的 `migrate` 与启动一样宽松。`crud:apply` 保持既有严格行为与 `--approve` 语义不变。
 - 迁移契约按执行生命周期区分：`VerifyBaseline` 在 `Up` 应用成功后执行一次，失败应用会重试，账本完成后不再运行，因此可以使用精确的基线判据；`VerifySchema` 和 `VerifyUpgradeData` 是每次 `migrate` 和每次 `serve` 启动都重跑的常驻不变量，判据必须兼容合法业务变更。
 - 业务轨道是 schema 形状的最终事实源，可以在框架基线后覆盖框架核心列，但必须负责最终契约。将金额列改为 `decimal` 属于业务域变更，必须同步修改应用 model 和全部算术逻辑，不能只改列。业务迁移后仍执行 framework `VerifySchema`/`VerifyUpgradeData` 和 `framework.VerifyCurrent`（跨表所有权、闭包表自引用行、安全 seed 身份和旧安装规则拒绝）。
 - 迁移 `Up` 必须幂等、前缀安全，并按业务键判重。不要用表为空或 `id=1` 检查推断官方 seed 状态；编排器保证官方 seed 在 framework/business 的 `Up` 之前执行。

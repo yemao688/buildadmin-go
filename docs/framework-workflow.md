@@ -242,7 +242,7 @@ git push origin master
 
 ### 发版前的数据影响确认（rejected）
 
-`migrate --plan` 的输出是这项检查的唯一事实源：它以只读方式列出安装状态、待执行迁移的数量与名称和每个 spec 的差量分类，不写库。启动自动迁移与宽松 `migrate` 会跳过 `rejected` 变更并打印 `[database] WARNING`，进程照常服务——**跳过不等于安全**，目标列仍是旧结构，代码按新结构写入时才会暴露问题。反过来，spec 未建模的线外差异（unmanaged 列属性、列序漂移）只是按表聚合的 `note` 提示，不阻断执行；需要逐条明细时看 `migrate --plan`。
+`migrate --plan` 的输出是这项检查的唯一事实源：它以只读方式列出安装状态、待执行迁移的数量与名称和每个 spec 的差量分类，不写库，并在出现 `rejected` 时以非零退出。启动自动迁移与宽松 `migrate` 会跳过 `rejected` 变更并打印 `[database] WARNING`，进程照常服务——**跳过不等于安全**，目标列仍是旧结构，代码按新结构写入时才会暴露问题。反过来，spec 未建模的线外差异（unmanaged 列属性、列序漂移）只是按表聚合的 `note` 提示，不阻断执行；需要逐条明细时看 `migrate --plan`。
 
 `rejected` 是 apply 安全矩阵中永不可自动执行的破坏性变更，只能由 business 迁移显式处理：
 
