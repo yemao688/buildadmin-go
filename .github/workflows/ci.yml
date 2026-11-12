@@ -3,7 +3,7 @@
 #
 # gofmt 是全仓硬 gate(gofmt -l .):存量漂移已在一次性的格式化提交里清空
 # (见 .git-blame-ignore-revs),所以这里不需要"只查改动文件"的例外逻辑。
-# 注意 gofmt 随 setup-go 安装的版本走(go.mod 的 1.25.x),与本地版本不同时
+# 注意 gofmt 随 setup-go 安装的版本走(go.mod 的 1.27.x),与本地版本不同时
 # 极少数对齐规则可能不一致——发现 CI 与本地结论相反,先对齐 Go 小版本。
 
 name: ci

@@ -50,7 +50,7 @@
 
 ## 工具链与边界
 
-- 以 `go.mod` 为准使用 Go 1.25.x，不要在其它文件里另行声明版本要求。
+- 以 `go.mod` 为准使用 Go 1.27.x，不要在其它文件里另行声明版本要求。
 - 本仓库包含两个项目：根目录是 Gin/GORM/Wire 后端；`web/` 是带有独立 `pnpm-lock.yaml` 的 BuildAdmin v2.3.8 Vue/Vite 8 前端。前端命令必须在 `web/` 中使用 pnpm，不要使用 npm。`pnpm dev` 会重新生成 `web/types/tableRenderer.d.ts` 与 i18n Ally 语言索引，语言请改 `web/src/lang/` 下的 TypeScript 源文件；构建产物在 `web/dist/`，部署时复制到被忽略的 `public/`。
 - **web 前端框架开发与调整（组件、指令、样式、表格/表单、语言、门户接入等）必须先读 [`docs/framework-web.md`](docs/framework-web.md)**——它是 web 端唯一权威开发文档（官方 WEB 专项整理 + 本框架差异与红线 + 业务门户接入约定），修改/调整 web 框架前必须先看文档；不要再按官方 doc.buildadmin.com 零散页面或旧 `frontend-portal-guide.md` 行事（后者已并入该文档）。
 - 真实入口和 wiring 是 `cmd/server/main.go`（极简入口，仅调用 `commands.Execute` 并注入 wire bootstrap）、`cmd/server/wire.go`、`internal/router/router.go`（纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载）与 `web/src/main.ts`；Cobra 命令位于 `internal/commands/`（`root.go` 根命令/全局 `-c`、`server.go` 子命令（裸跑默认即 server）、`crud.go`/`migrate.go`/`setup.go`/`example.go`/`config.go`/`logger.go`/`validator.go`/`command.go`）。

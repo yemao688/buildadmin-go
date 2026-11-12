@@ -2,7 +2,7 @@
 # 均可 --build-arg 覆盖回官方源（buildx 独立 buildkitd 不继承 daemon 的 registry-mirrors）。
 ARG BUILD_BASE_REGISTRY=docker.m.daocloud.io/
 
-FROM --platform=$BUILDPLATFORM ${BUILD_BASE_REGISTRY}golang:1.25-alpine AS go-build
+FROM --platform=$BUILDPLATFORM ${BUILD_BASE_REGISTRY}golang:1.27-alpine AS go-build
 WORKDIR /src
 # TARGETOS/TARGETARCH 不能带默认值，否则会覆盖 buildx 传入的 target 平台（多架构产物会退化成构建机架构）。
 ARG TARGETOS

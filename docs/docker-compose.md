@@ -12,7 +12,7 @@
 
 - Docker（含 Compose v2）。
 - 一个容器可达的 MySQL。macOS（Docker Desktop / OrbStack）用 `host.docker.internal` 访问宿主机；Linux 用宿主机网桥 IP 或单独起 MySQL 容器并发布端口。
-- 本地 Go 1.25 工具链与 pnpm（仅用于首次安装生成配置与前端产物，不进入镜像）。
+- 本地 Go 1.27 工具链与 pnpm（仅用于首次安装生成配置与前端产物，不进入镜像）。
 
 ### 配置准备（首次安装）
 
@@ -102,7 +102,7 @@ make push       # stdin 登录 registry，按 BUILD_PLATFORMS 构建多架构并
 
 框架已为国内环境覆盖三层拉取加速，`make build`/`make push` 开箱即用（三个加速点统一由 Makefile `BUILDX_COMMON` 透传）：
 
-- **基础镜像**（本层是 buildx 独立 buildkitd 的唯一阻断点）：镜像名与版本号在 Dockerfile 维护（`FROM golang:1.25-alpine` / `FROM alpine:3.22`），构建时经 `BUILD_BASE_REGISTRY` 前缀加速——默认 `docker.m.daocloud.io/`（daocloud 镜像站，全量同步 Docker Hub），**结尾必须带 `/`**。buildx 的 `docker-container` driver 不继承 daemon 的 `registry-mirrors`（`~/.docker/daemon.json` 或 OrbStack 配置对它无效），必须由构建参数注入。
+- **基础镜像**（本层是 buildx 独立 buildkitd 的唯一阻断点）：镜像名与版本号在 Dockerfile 维护（`FROM golang:1.27-alpine` / `FROM alpine:3.22`），构建时经 `BUILD_BASE_REGISTRY` 前缀加速——默认 `docker.m.daocloud.io/`（daocloud 镜像站，全量同步 Docker Hub），**结尾必须带 `/`**。buildx 的 `docker-container` driver 不继承 daemon 的 `registry-mirrors`（`~/.docker/daemon.json` 或 OrbStack 配置对它无效），必须由构建参数注入。
 - **Go 模块**：`GOPROXY` 默认 `https://goproxy.cn,direct`。
 - **apk 包**：`APK_MIRROR` 默认 `https://mirrors.aliyun.com/alpine`。
 
