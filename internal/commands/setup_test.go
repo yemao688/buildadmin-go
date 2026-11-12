@@ -3,8 +3,8 @@ package commands
 import (
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/installer"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/testutil"

@@ -1,7 +1,7 @@
 package commands
 
 import (
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/crudgen"
 	"bytes"
 	"strings"
 	"testing"

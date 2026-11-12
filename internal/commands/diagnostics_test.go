@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/crudgen"
 )
 
 func unmanagedTestResults() []helper.ApplyTableResult {

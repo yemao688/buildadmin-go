@@ -1,0 +1,910 @@
+package crudgen
+
+import (
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/dbschema"
+	"path/filepath"
+)
+
+// 内部保留词
+var reservedKeywords = []string{
+	"abstract", "and", "array", "as", "break", "callable", "case", "catch", "class", "clone",
+	"const", "continue", "declare", "default", "die", "do", "echo", "else", "elseif", "empty",
+	"enddeclare", "endfor", "endforeach", "endif", "endswitch", "endwhile", "eval", "exit", "extends",
+	"final", "for", "foreach", "function", "global", "goto", "if", "implements", "include", "include_once",
+	"instanceof", "insteadof", "interface", "isset", "list", "namespace", "new", "or", "print", "private",
+	"protected", "public", "require", "require_once", "return", "static", "switch", "throw", "trait", "try",
+	"unset", "use", "var", "while", "xor", "yield", "match", "readonly", "fn", "type", "go",
+}
+
+type Menu struct {
+	Type   string
+	Title  string
+	Name   string
+	Status string
+}
+
+// 子级菜单数组(权限节点)
+var menuChildren = []Menu{
+	{Type: "button", Title: "查看", Name: "/index", Status: "1"},
+	{Type: "button", Title: "添加", Name: "/add", Status: "1"},
+	{Type: "button", Title: "编辑", Name: "/edit", Status: "1"},
+	{Type: "button", Title: "删除", Name: "/del", Status: "1"},
+	{Type: "button", Title: "快速排序", Name: "/sortable", Status: "1"},
+}
+
+type InputRule struct {
+	Type       []string
+	Suffix     []string
+	ColumnType []string
+	Value      string
+}
+
+// 输入框类型的识别规则
+var inputTypeRule = []InputRule{
+	// 开关组件
+	{
+		Type:   []string{"tinyint", "int", "enum"},
+		Suffix: []string{"switch", "toggle"},
+		Value:  "switch",
+	},
+	{
+		ColumnType: []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"},
+		Suffix:     []string{"switch", "toggle"},
+		Value:      "switch",
+	},
+	// 富文本-识别规则和textarea重合,优先识别为富文本
+	{
+		Type:   []string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"},
+		Suffix: []string{"content", "editor"},
+		Value:  "editor",
+	},
+	// textarea
+	{
+		Type:   []string{"varchar"},
+		Suffix: []string{"textarea", "multiline", "rows"},
+		Value:  "textarea",
+	},
+	// Array
+	{
+		Suffix: []string{"array"},
+		Value:  "array",
+	},
+	// 时间选择器-字段类型为int同时以{"time", "datetime"}结尾
+	{
+		Type:   []string{"int"},
+		Suffix: []string{"time", "datetime"},
+		Value:  "timestamp",
+	},
+	{
+		Type:  []string{"datetime", "timestamp"},
+		Value: "datetime",
+	},
+	{
+		Type:  []string{"date"},
+		Value: "date",
+	},
+	{
+		Type:  []string{"year"},
+		Value: "year",
+	},
+	{
+		Type:  []string{"time"},
+		Value: "time",
+	},
+	// 单选select
+	{
+		Suffix: []string{"select", "list", "data"},
+		Value:  "select",
+	},
+	// 多选select
+	{
+		Suffix: []string{"selects", "multi", "lists"},
+		Value:  "selects",
+	},
+	// 远程select
+	{
+		Suffix: []string{"_id"},
+		Value:  "remoteSelect",
+	},
+	// 远程selects
+	{
+		Suffix: []string{"_ids"},
+		Value:  "remoteSelects",
+	},
+	// 城市选择器
+	{
+		Suffix: []string{"city"},
+		Value:  "city",
+	},
+	// 单图上传
+	{
+		Suffix: []string{"image", "avatar"},
+		Value:  "image",
+	},
+	// 多图上传
+	{
+		Suffix: []string{"images", "avatars"},
+		Value:  "images",
+	},
+	// 文件上传
+	{
+		Suffix: []string{"file"},
+		Value:  "file",
+	},
+	// 多文件上传
+	{
+		Suffix: []string{"files"},
+		Value:  "files",
+	},
+	// icon选择器
+	{
+		Suffix: []string{"icon"},
+		Value:  "icon",
+	},
+	// 单选框
+	{
+		ColumnType: []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"},
+		Suffix:     []string{"status", "state", "type"},
+		Value:      "radio",
+	},
+	// 数字输入框
+	{
+		Suffix: []string{"number", "int", "num"},
+		Value:  "number",
+	},
+	{
+		Type:  []string{"bigint", "int", "mediumint", "smallint", "tinyint", "decimal", "double", "float"},
+		Value: "number",
+	},
+	// 富文本-低权重
+	{
+		Type:  []string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"},
+		Value: "textarea",
+	},
+	// 单选框-低权重
+	{
+		Type:  []string{"enum"},
+		Value: "radio",
+	},
+	// 多选框
+	{
+		Type:  []string{"set"},
+		Value: "checkbox",
+	},
+	// 颜色选择器
+	{
+		Suffix: []string{"color"},
+		Value:  "color",
+	},
+}
+
+// 预设WEB端文件位置
+var parseWebDirPresets = map[string][]string{
+	"views/user":        {"user", "user"},
+	"views/admin":       {"auth", "admin"},
+	"views/admin_group": {"auth", "group"},
+	"views/attachment":  {"routine", "attachment"},
+	"views/admin_rule":  {"auth", "rule"},
+}
+
+type IndexVueData struct {
+	EnableDragSort        string
+	DefaultItems          []string
+	TableColumn           []string
+	DblClickNotEditColumn []string
+	OptButtons            []string
+	DefaultOrder          string
+	TablePk               string
+	WebTranslate          string
+	RouteName             string
+}
+
+type FormVueData struct {
+	BigDialog  string
+	FormFields []string
+}
+
+type WebDir struct {
+	OriginalLastName string
+	LastName         string
+	Path             []string
+	Views            string
+	Lang             []string
+}
+
+func (w WebDir) LangFile(locale string) string {
+	parts := append([]string{"web", "src", "lang", "backend", locale}, w.Path...)
+	parts = append(parts, w.LastName+".ts")
+	return filepath.Join(parts...)
+}
+
+// 当designType为以下值时: 1. 出入库字符串到数组转换,2. 默认值转数组
+var dtStringToArray = []string{"checkbox", "selects", "remoteSelects", "city", "images", "files"}
+
+type GetTableName func(string, bool) string
+type GetColumns func(string) ([]dbschema.Column, error)
+
+type NameInfo struct {
+	LastName         string
+	OriginalLastName string
+	Path             []string
+	Namespace        string
+	ParseFile        string
+	RootFileName     string
+}
+
+// 属性的类型对照表
+// var attrType = map[string]string{
+// 	"handler/preExcludeFields": "string",
+// 	"handler/quickSearchField": "string",
+// 	"handler/withJoinTable":    "array",
+// 	"handler/defaultSortField": "string",
+// }
+
+// var createTimeField = "create_time"
+// var updateTimeField = "update_time"
+
+type HandlerData struct {
+	Namespace           string //包名
+	ClassName           string //类名
+	ModelNamespace      string //实体包名（恒为 model）
+	ModelImportPath     string //实体完整导入路径（恒为 buildadmin-go/internal/model）
+	ModelName           string //实体类名
+	ModelVar            string //实体变量名
+	PkGoType            string //主键Go类型
+	PkJSONName          string //主键JSON字段名
+	RouteName           string //后台CRUD路由路径
+	RegisterAtomicRoute func(method, path string)
+	TableComment        string            //表备注
+	ValidateParam       string            //表单参数（DTO 文件内容）
+	ParamTypeOverrides  map[string]string // JSON field name to validation parameter type
+	PartialEditFields   string            // quoted switch fields for partial edits
+
+	// 仓库与 DTO 包的导入引用（子包按 <dir>model / <dir>dto 约定别名）。
+	RepoImport    string
+	RepoAlias     string
+	RepoQualifier string
+	DTOImport     string
+	DTOAlias      string
+	DTOQualifier  string
+
+	Import []string //需要引入的包名
+
+	Attr map[string]string // preExcludeFields quickSearchField withJoinTable defaultSortField
+
+	ExcludeParamFields []string // fields that must not appear in Add/Edit DTO
+	Reassignable       bool     // data-scope reassignable: Edit may change the owner column
+	OwnerGoField       string   // data-scope owner Go field (e.g. "AdminID")
+}
+
+type RegistrarData struct {
+	Namespace string
+	ClassName string
+	RouteName string
+	RoutePath string
+}
+
+const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
+package {{.Namespace}}
+
+import (
+	handler "buildadmin-go/internal/admin/handler"
+	"buildadmin-go/internal/middleware"
+
+	"github.com/gin-gonic/gin"
+)
+
+type {{.ClassName}}Registrar struct {
+	handler *handler.{{.ClassName}}Handler
+}
+
+func New{{.ClassName}}Registrar(handler *handler.{{.ClassName}}Handler) *{{.ClassName}}Registrar {
+	return &{{.ClassName}}Registrar{handler: handler}
+}
+
+const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName}}{{end}}"
+
+func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
+
+func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
+	CRUDRoutes(g, {{.RouteName}}Route, r.handler)
+}
+
+func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
+	return CRUDCapabilities({{.RouteName}}Route)
+}
+`
+
+const handlerTemp = `
+package {{.Namespace}}
+
+import (
+	model "{{.ModelImportPath}}"
+	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
+	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
+	{{end}}"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/copier"
+	"go.uber.org/zap"
+)
+
+type {{.ClassName}}Handler struct {
+	Base
+	log     *zap.Logger
+	{{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository
+}
+
+func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
+	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}
+}
+
+func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
+	if data, ok := h.Select(ctx); ok {
+		response.Success(ctx, data)
+		return
+	}
+	list, total, err := h.{{.ModelVar}}M.List(ctx)
+	if err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	response.Success(ctx, map[string]any{
+		"list":   list,
+		"total":  total,
+		"remark": "",
+	})
+}
+
+
+func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
+	var params {{.DTOQualifier}}{{.ClassName}}Param
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		response.FailByErr(ctx, validator.GetError(params, err))
+		return
+	}
+	var data model.{{.ClassName}}
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	err := h.{{.ModelVar}}M.Add(ctx, data)
+	if err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	response.Success(ctx, "")
+}
+
+func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
+	if h.MaybePartialEdit(ctx, map[string]bool{ {{.PartialEditFields}} }) {
+		return
+	}
+
+	type {{.ClassName}}IDs struct {
+		ID {{.PkGoType}} ` + "`json:\"{{.PkJSONName}}\" binding:\"required\"`" + `
+	}
+	var params = struct {
+		{{.ClassName}}IDs
+		{{.DTOQualifier}}{{.ClassName}}Param
+	}{}
+	if err := ctx.ShouldBindJSON(&params); err != nil {
+		response.FailByErr(ctx, validator.GetError(params, err))
+		return
+	}
+
+	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
+	if err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	{{if .Reassignable}}
+	originalOwner := data.{{.OwnerGoField}}
+	{{end}}
+	if err := copier.Copy(&data, params); err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}{{if .Reassignable}}
+	// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
+	if params.{{.OwnerGoField}} == 0 {
+		data.{{.OwnerGoField}} = originalOwner
+	}
+	{{- end}}
+	err = h.{{.ModelVar}}M.Edit(ctx, data)
+	if err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	response.Success(ctx, "")
+}
+
+func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
+	var param struct {
+		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
+	}
+	if err := ctx.ShouldBindQuery(&param); err != nil {
+		response.FailByErr(ctx, validator.GetError(param, err))
+		return
+	}
+	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
+	if err != nil {
+		response.FailByErr(ctx, err)
+		return
+	}
+	response.SuccessWithMessage(ctx, "Deleted successfully")
+}
+`
+
+type ModelData struct {
+	Namespace        string //包名
+	Name             string //表名
+	ClassName        string //类名
+	Pk               string //主键
+	PkGoType         string //主键Go类型
+	PkGoField        string //主键Go字段名
+	ModelVar         string //结构体变量
+	QuickSearchField string //快速搜索字段
+	StructTemp       string //结构体
+
+	// 子包模型对根包 BaseModel 的限定引用；根包生成时为空，输出保持不变。
+	BaseModelQualifier string
+	BaseModelAlias     string
+	BaseModelImport    string
+
+	// FieldTypesLiteral 仓库 List 传给 QueryBuilder 的字段类型 map 字面量
+	// （由 writeModelFiles 按 spec 字段构建；为空时模板回退原
+	// "QueryBuilder(ctx, s.TableInfo(), nil)" 形态，保证测试与旧产物逐字节一致）。
+	FieldTypesLiteral string
+
+	// DefaultOrderLiteral 仓库 List 传给 QueryBuilder 的表默认排序 Go 字符串
+	// 字面量（如 "weigh,desc"；id,desc 或空解析结果置空串）。由
+	// writeModelFiles 按 spec defaultSortField/defaultSortType 与 weigh 列
+	// 回退构建，与前端 defaultOrder 保持一致；为空时不输出赋值行。
+	DefaultOrderLiteral string
+
+	// SearchJoinLiteral 仓库 List 传给 QueryBuilder 的关联搜索 Join 字面量
+	// （remoteSelect/remoteSelects 字段推导，Table 含 mysql.prefix 的真实表
+	// 名）；为空时不输出赋值行，模板回退原形态，保证无关联字段的表零 diff。
+	SearchJoinLiteral string
+
+	ModelFieldType            map[string]string
+	CreateTime                string
+	UpdateTime                string
+	DataScopePolicy           data_scope.ResourcePolicy
+	DataScopeOwnerGoField     string
+	DataScopeOwnerGoType      string
+	InheritFrom               *data_scope.InheritRef
+	InheritByGoField          string
+	EffectiveFormFields       []string
+	EditableColumns           []string
+	EditableColumnsGo         string
+	HasCreateTime             bool
+	HasUpdateTime             bool
+	HasWeigh                  bool
+	CityTextFields            []string
+	Relations                 []RelationMetadata
+	RelationStructs           string
+	RelationFields            string
+	RelationLoaders           string
+	RelationNeedsTime         bool
+	RelationNeedsMulti        bool
+	RelationNeedsMultiNumeric bool
+}
+
+// RelationMetadata describes the deliberately small DTO generated for one
+// remoteSelect relation. It is kept separate from the remote model so list
+// responses cannot expose unrelated or sensitive remote columns.
+type RelationMetadata struct {
+	FieldName       string
+	RelationName    string
+	RelationGoField string
+	DTOName         string
+	RemoteTable     string
+	RemotePK        string
+	RemotePKGoField string
+	RemotePKType    string
+	RowDTOName      string
+	Multi           bool
+	Fields          []RelationDTOField
+	PayloadFields   []RelationDTOField
+}
+
+type RelationDTOField struct {
+	ColumnName string
+	GoName     string
+	GoType     string
+	JSONName   string
+	Nullable   bool
+}
+
+const modelTemp = `package {{.Namespace}}
+
+import (
+	"fmt"
+	{{if or .HasCreateTime .HasUpdateTime .RelationNeedsTime}}"time"
+	{{end}}
+	{{if .RelationNeedsMulti}}"strings"
+	{{end}}
+	{{if .RelationNeedsMultiNumeric}}"strconv"
+	{{end}}
+	{{if or .DataScopePolicy.Reassignable .InheritFrom}}"gorm.io/gorm/clause"
+	{{end}}
+	{{if .BaseModelImport}}{{.BaseModelAlias}} "{{.BaseModelImport}}"
+	{{end}}
+	"buildadmin-go/internal/conf"
+	model "buildadmin-go/internal/model"
+	"buildadmin-go/internal/pkg/data_scope"
+	persistence "buildadmin-go/internal/pkg/persistence"
+)
+
+type {{.ClassName}}Repository struct {
+	persistence.BaseModel
+	CRUDStore
+	Policy   data_scope.ResourcePolicy
+	Enforcer data_scope.Enforcer
+	config   *conf.Configuration
+}
+
+func (s *{{.ClassName}}Repository) NewRow() any {
+	return &model.{{.ClassName}}{}
+}
+
+func New{{.ClassName}}Repository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *{{.ClassName}}Repository {
+	s := &{{.ClassName}}Repository{
+		BaseModel: persistence.NewBaseModel(
+			config.Database.Prefix + "{{.Name}}",
+			"{{.Pk}}",
+			"{{.QuickSearchField}}",
+			sqlDB,
+		),
+		Policy: data_scope.ResourcePolicy{
+			Mode:            "{{.DataScopePolicy.Mode}}",
+			OwnerColumn:     "{{.DataScopePolicy.OwnerColumn}}",
+			ReadExtraOwners: []string{ {{range $i, $column := .DataScopePolicy.ReadExtraOwners}}{{if $i}}, {{end}}{{printf "%q" $column}}{{end}} },
+			AssignOnCreate:  {{.DataScopePolicy.AssignOnCreate}},
+			Reassignable:    {{.DataScopePolicy.Reassignable}},
+			InheritFrom:   {{if .InheritFrom}}&data_scope.InheritRef{Table: "{{.InheritFrom.Table}}", ByColumn: "{{.InheritFrom.ByColumn}}"}{{else}}nil{{end}},
+		},
+		Enforcer: enforcer,
+		config:   config,
+	}
+	s.CRUDStore = NewCRUDStore(&s.BaseModel, s.NewRow, s.scopeDB)
+	return s
+}
+
+func (s *{{.ClassName}}Repository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	if s.Policy.Mode == data_scope.ModeNone {
+		return db
+	}
+	if s.Enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	return s.Enforcer.Scope(ctx, db, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn})
+}
+
+// readScopedDB applies the primary and optional extra owner read scope.
+func (s *{{.ClassName}}Repository) readScopedDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	if s.Policy.Mode == data_scope.ModeNone {
+		return db
+	}
+	if s.Enforcer == nil {
+		tx := db.Session(&gorm.Session{})
+		_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+		return tx
+	}
+	extras := make([]data_scope.OwnerRef, 0, len(s.Policy.ReadExtraOwners))
+	for _, column := range s.Policy.ReadExtraOwners {
+		extras = append(extras, data_scope.OwnerRef{TableAlias: s.TableName, Column: column})
+	}
+	return data_scope.ScopeRead(ctx, db, s.Enforcer, data_scope.OwnerRef{TableAlias: s.TableName, Column: s.Policy.OwnerColumn}, extras)
+}
+
+// ScopeDB exposes the generated repository's data-scope application to generic CRUD handlers.
+func (s *{{.ClassName}}Repository) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
+	return s.scopeDB(ctx, db)
+}
+
+{{.RelationLoaders}}
+{{if .DataScopePolicy.Reassignable}}// CascadeOwners 由 CRUD 生成器模式维护，自定义请新增独立文件/方法。
+func (s *{{.ClassName}}Repository) CascadeOwners() []data_scope.CascadeOwner {
+	return []data_scope.CascadeOwner{
+		// @cascade:begin
+		// @cascade:end
+	}
+}
+{{end}}
+func (s *{{.ClassName}}Repository) GetOne(ctx *gin.Context, id {{.PkGoType}}) ({{.ModelVar}} model.{{.ClassName}}, err error) {
+	db := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
+	err = db.Where("{{.Pk}}=?", id).First(&{{.ModelVar}}).Error
+	{{if .Relations}}if err == nil {
+		rows := []model.{{.ClassName}}{ {{.ModelVar}} }
+		err = s.loadRelations(ctx, &rows)
+		if err == nil {
+			{{.ModelVar}} = rows[0]
+		}
+	}
+	{{end}}return
+}
+
+func (s *{{.ClassName}}Repository) List(ctx *gin.Context) (list []model.{{.ClassName}}, total int64, err error) {
+{{- if or .FieldTypesLiteral .DefaultOrderLiteral .SearchJoinLiteral}}
+	tableInfo := s.TableInfo()
+{{if .FieldTypesLiteral}}	tableInfo.FieldTypes = {{.FieldTypesLiteral}}
+{{end}}{{if .DefaultOrderLiteral}}	tableInfo.DefaultOrder = {{.DefaultOrderLiteral}}
+{{end}}{{if .SearchJoinLiteral}}	tableInfo.SearchJoins = {{.SearchJoinLiteral}}
+{{end}}	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, tableInfo, nil)
+{{- else}}
+	whereS, whereP, orderS, limit, offset, err := {{.BaseModelQualifier}}QueryBuilder(ctx, s.TableInfo(), nil)
+{{- end}}
+	if err != nil {
+		return nil, 0, err
+	}
+	countDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
+	countDB = countDB.Where(whereS, whereP...)
+	if err = countDB.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	findDB := s.readScopedDB(ctx, s.DBFor(ctx)).Table(s.TableName)
+	findDB = findDB.Where(whereS, whereP...)
+	err = findDB.Order(orderS).Limit(limit).Offset(offset).Find(&list).Error
+	{{if .Relations}}if err == nil {
+		err = s.loadRelations(ctx, &list)
+	}
+	{{end}}return
+}
+
+{{if .InheritFrom -}}
+func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		actor, err := s.Enforcer.Actor(ctx)
+		if err != nil {
+			return err
+		}
+		return s.Transaction(ctx, func(tx *gorm.DB) error {
+			// 归属继承自主实体（FOR UPDATE 防并发改归属），并校验请求者可操作该主实体
+			var inherited struct{ AdminID int32 }
+			if err := tx.Table(s.config.Database.Prefix + "{{.InheritFrom.Table}}").Clauses(clause.Locking{Strength: "UPDATE"}).Select("admin_id").Where("id = ?", {{.ModelVar}}.{{.InheritByGoField}}).Take(&inherited).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(inherited.AdminID)
+			if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+			{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+			{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+			{{end}}{{end}}
+			if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+				return err
+			}
+			{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+				if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+					return err
+				}
+				{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+			}
+			{{end}}return nil
+		})
+	}
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+		{{end}}{{end}}
+		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+			return err
+		}
+		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+		}
+		{{end}}return nil
+	})
+}
+{{- else -}}
+func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		{{if .DataScopePolicy.AssignOnCreate}}actor, err := s.Enforcer.Actor(ctx)
+		if err != nil {
+			return err
+		}
+		if s.Policy.AssignOnCreate {
+			{{if .DataScopePolicy.Reassignable}}// 超管可指定归属（必须存在且注册过层级），其余强制归属操作者。
+			if !(actor.Unrestricted && {{.ModelVar}}.{{.DataScopeOwnerGoField}} > 0) {
+				{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
+			}
+			if err := data_scope.OwnerInScopeWithActor(ctx, s.DBFor(ctx), s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			{{else}}{{.ModelVar}}.{{.DataScopeOwnerGoField}} = {{.DataScopeOwnerGoType}}(actor.AdminID)
+			{{end}}
+		}
+		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
+			return err
+		}{{end}}
+	}
+
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
+		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
+		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
+		{{end}}{{end}}
+		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+			return err
+		}
+		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
+				return err
+			}
+			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
+		}
+		{{end}}return nil
+	})
+}
+{{- end}}
+
+func (s *{{.ClassName}}Repository) Edit(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
+	{{if .DataScopePolicy.Reassignable}}var actor data_scope.Actor
+	var err error
+	{{end}}
+	if s.Policy.Mode != data_scope.ModeNone {
+		if s.Enforcer == nil {
+			return data_scope.ErrScopedAccessDenied
+		}
+		{{if .DataScopePolicy.Reassignable}}actor, err = s.Enforcer.Actor(ctx)
+		if err != nil {
+			return err
+		}
+		{{else}}if _, err := s.Enforcer.Actor(ctx); err != nil {
+			return err
+		}
+		{{end}}
+	}
+
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		tx = s.scopeDB(ctx, tx)
+		{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = time.Now().Unix()
+		{{end}}
+		{{if .DataScopePolicy.Reassignable}}// 归属变更时校验新 owner 在当前操作者麾下（自己+后代），超管可任意指定。
+		var current model.{{.ClassName}}
+		if err := tx.Table(s.TableName).Clauses(clause.Locking{Strength: "UPDATE"}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).First(&current).Error; err != nil {
+			return err
+		}
+		if current.{{.DataScopeOwnerGoField}} != {{.ModelVar}}.{{.DataScopeOwnerGoField}} {
+			if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+				return err
+			}
+			for _, c := range s.CascadeOwners() {
+				if err := data_scope.ValidateIdentifier(c.Table); err != nil {
+					return err
+				}
+				if err := data_scope.ValidateIdentifier(c.ByColumn); err != nil {
+					return err
+				}
+				if err := data_scope.ValidateIdentifier(c.OwnerColumn); err != nil {
+					return err
+				}
+				{{$bt := "` + "`" + `"}}if err := tx.Session(&gorm.Session{NewDB: true}).Table(s.config.Database.Prefix + c.Table).Where("{{$bt}}"+c.ByColumn+"{{$bt}} = ? AND {{$bt}}"+c.OwnerColumn+"{{$bt}} <> ?", {{.ModelVar}}.{{.PkGoField}}, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Update(c.OwnerColumn, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Error; err != nil {
+					return fmt.Errorf("cascade owner %q: %w", c.Table, err)
+				}
+			}
+		}
+		{{end}}
+
+	res := tx.Table(s.TableName).Model(&{{.ModelVar}}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Select({{.EditableColumnsGo}}).Updates(&{{.ModelVar}})
+	if err := res.Error; err != nil {
+		return err
+	}
+	switch res.RowsAffected {
+	case 1:
+		return nil
+	case 0:
+		var visible int64
+		if err := tx.Table(s.TableName).Model(&model.{{.ClassName}}{}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Count(&visible).Error; err != nil {
+			return err
+		}
+		if visible == 1 {
+			return nil
+		}
+		return gorm.ErrRecordNotFound
+	default:
+		return fmt.Errorf("unexpected edit rows affected: %d", res.RowsAffected)
+	}
+	})
+}
+
+func (s *{{.ClassName}}Repository) Del(ctx *gin.Context, ids interface{}) error {
+	normalizedIDs, err := normalize{{.ClassName}}IDs(ids)
+	if err != nil {
+		return err
+	}
+	if len(normalizedIDs) == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		tx = s.scopeDB(ctx, tx)
+
+	var visible int64
+	if err := tx.Table(s.TableName).Model(&model.{{.ClassName}}{}).Where("{{.Pk}} IN ?", normalizedIDs).Count(&visible).Error; err != nil {
+		return err
+	}
+	if visible != int64(len(normalizedIDs)) {
+		return gorm.ErrRecordNotFound
+	}
+
+	res := tx.Table(s.TableName).Where("{{.Pk}} IN ?", normalizedIDs).Delete(&model.{{.ClassName}}{})
+	if err := res.Error; err != nil {
+		return err
+	}
+	if res.RowsAffected != int64(len(normalizedIDs)) {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+	})
+}
+
+func normalize{{.ClassName}}IDs(ids interface{}) ([]{{.PkGoType}}, error) {
+	raw, ok := ids.([]{{.PkGoType}})
+	if !ok {
+		return nil, fmt.Errorf("invalid {{.Pk}} ids type %T", ids)
+	}
+	seen := make(map[{{.PkGoType}}]struct{}, len(raw))
+	result := make([]{{.PkGoType}}, 0, len(raw))
+	for _, id := range raw {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result, nil
+}
+`
+
+// entityTemp 渲染共享贫血实体文件（internal/model/<entity>.go）。
+// 结构体与其关系 DTO 同包输出，关系展示字段（gorm:"-"）随实体落位。
+const entityTemp = `package model
+
+{{.StructTemp}}
+
+{{.RelationStructs}}
+`
+
+// dtoTemp 渲染 admin 请求 DTO 文件（internal/admin/dto/<path>.go，包名 dto）。
+const dtoTemp = `package {{.Namespace}}
+
+{{.ValidateParam}}
+`
+
+const StructTmpl = `import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	{{range .ImportPkgPaths}}{{.}} ` + "\n" + `{{end}}
+)
+
+// {{.ModelStructName}} {{.StructComment}}
+type {{.ModelStructName}} struct {
+    {{range .Fields}}
+    {{if .MultilineComment -}}
+	/*
+{{.ColumnComment}}
+    */
+	{{end -}}
+    {{.Name}} {{.Type}} ` + "`{{.Tags}}` " +
+	"{{if not .MultilineComment}}{{if .ColumnComment}}// {{.ColumnComment}}{{end}}{{end}}" +
+	`{{end}}
+}
+`

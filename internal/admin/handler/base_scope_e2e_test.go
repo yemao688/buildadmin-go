@@ -60,13 +60,15 @@ func TestBaseScopedCRUDMySQL(t *testing.T) {
 
 	restricted := newScopeE2EModel(db, items, data_scope.ModeAuto, prefix)
 	global := newScopeE2EModel(db, items, data_scope.ModeNone, prefix)
+	restrictedStore := newCRUDTableAdapter(db, items, "id", restricted.ScopeDB)
+	globalStore := newCRUDTableAdapter(db, items, "id", global.ScopeDB)
 	actor := func() *gin.Context {
 		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 		require.NoError(t, data_scope.SetActor(ctx, data_scope.Actor{AdminID: 1}))
 		return ctx
 	}
 
-	h := &Base{currentM: restricted}
+	h := &Base{currentM: restrictedStore}
 	ctx := actor()
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/admin/items/edit?id=1", nil)
 	h.One(ctx)
@@ -91,12 +93,12 @@ func TestBaseScopedCRUDMySQL(t *testing.T) {
 	require.Equal(t, 1, status)
 
 	ctx = actor()
-	require.NoError(t, Sortable(ctx, restricted, 2, 1, "up", "weigh,desc"))
+	require.NoError(t, restrictedStore.SortWeighScoped(ctx, "2", "1", "up", "desc"))
 
 	var before3, before4 int
 	require.NoError(t, db.Raw("SELECT weigh FROM `"+items+"` WHERE id=3").Scan(&before3).Error)
 	require.NoError(t, db.Raw("SELECT weigh FROM `"+items+"` WHERE id=4").Scan(&before4).Error)
-	require.Error(t, Sortable(actor(), restricted, 1, 3, "down", "weigh,desc"))
+	require.Error(t, restrictedStore.SortWeighScoped(actor(), "1", "3", "down", "desc"))
 	var after3, after4 int
 	require.NoError(t, db.Raw("SELECT weigh FROM `"+items+"` WHERE id=3").Scan(&after3).Error)
 	require.NoError(t, db.Raw("SELECT weigh FROM `"+items+"` WHERE id=4").Scan(&after4).Error)
@@ -104,7 +106,7 @@ func TestBaseScopedCRUDMySQL(t *testing.T) {
 	require.Equal(t, before4, after4)
 
 	missingActor, _ := gin.CreateTestContext(httptest.NewRecorder())
-	globalBase := &Base{currentM: global}
+	globalBase := &Base{currentM: globalStore}
 	missingActor.Request = httptest.NewRequest(http.MethodGet, "/admin/items/edit?id=3", nil)
 	globalBase.One(missingActor)
 	require.Equal(t, http.StatusOK, missingActor.Writer.Status())
@@ -113,7 +115,7 @@ func TestBaseScopedCRUDMySQL(t *testing.T) {
 	require.True(t, globalBase.MaybePartialEdit(globalSwitch, map[string]bool{"status": true}))
 	require.Equal(t, http.StatusOK, globalSwitch.Writer.Status())
 	globalSort, _ := gin.CreateTestContext(httptest.NewRecorder())
-	require.NoError(t, Sortable(globalSort, global, 4, 3, "up", "weigh,desc"))
+	require.NoError(t, globalStore.SortWeighScoped(globalSort, "4", "3", "up", "desc"))
 }
 
 func newScopeE2EModel(db *gorm.DB, table string, mode data_scope.Mode, prefix string) *scopeE2EModel {

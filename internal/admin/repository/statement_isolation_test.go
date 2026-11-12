@@ -79,7 +79,7 @@ func newCountryRepositories(t *testing.T, db *gorm.DB) (*repository.CountryLangu
 // for issue #9: generated GetOne/List used to write db.Statement.Table on a
 // session that shares its statement pointer with the long-lived connection,
 // so every later query on that handle targeted the generated table instead of
-// the one inferred from its model. See internal/pkg/crud_helper/defined.go.
+// the one inferred from its model. See internal/crudgen/defined.go.
 func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
 	db := newDryRunDB(t)
 	ctx := newRepositoryTestContext(t)

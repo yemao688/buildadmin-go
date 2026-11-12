@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations/internal/core"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/testutil"
 
 	"gorm.io/gorm"
@@ -83,7 +83,7 @@ func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
 	}
 
 	// 3. 尾部 apply 幂等：全量 spec 应用应为 unchanged（不阻塞全新安装）。
-	results, err := helper.ApplySpecs(db, cfg, []string{filepath.Join(dir, "ops_seed_target.yaml")}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
+	results, err := helper.ApplySpecs(db, cfg, helper.NewTableStore(db, cfg), []string{filepath.Join(dir, "ops_seed_target.yaml")}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
 	if err != nil {
 		t.Fatalf("tail apply: %v", err)
 	}

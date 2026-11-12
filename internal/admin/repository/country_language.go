@@ -14,6 +14,7 @@ import (
 
 type CountryLanguageRepository struct {
 	persistence.BaseModel
+	CRUDStore
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
@@ -24,7 +25,7 @@ func (s *CountryLanguageRepository) NewRow() any {
 }
 
 func NewCountryLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryLanguageRepository {
-	return &CountryLanguageRepository{
+	s := &CountryLanguageRepository{
 		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix+"country_language",
 			"id",
@@ -40,6 +41,8 @@ func NewCountryLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, en
 		Enforcer: enforcer,
 		config:   config,
 	}
+	s.CRUDStore = NewCRUDStore(&s.BaseModel, s.NewRow, s.scopeDB)
+	return s
 }
 
 func (s *CountryLanguageRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {

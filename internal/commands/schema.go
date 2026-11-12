@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 
 	"gorm.io/gorm"
 )
@@ -75,7 +75,7 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 		fmt.Println("[database] 未找到 crud_specs 目录，跳过 spec apply")
 		return nil
 	}
-	results, err := helper.ApplySpecsFromDir(db, cfg, specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
+	results, err := helper.ApplySpecsFromDir(db, cfg, helper.NewTableStore(db, cfg), specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
 	// 失败前已执行的 DDL 不可回滚：先输出已发生的动作与告警，再返回错误，
 	// 否则调用方只能看到一个笼统的 apply 错误而不知道库已经改到哪一步。
 	printSchemaApplyResults(results, schemaApplyVerbose(cfg))
