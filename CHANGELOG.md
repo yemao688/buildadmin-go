@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.3.8
+
+> 工具链升级与模块清单对齐：Go 1.25 → 1.27.4（`go.mod`、Dockerfile 基础镜像、文档同步），并执行 `go mod tidy` 让 require 分块与 1.27 的判定一致。
+
+- **Build:** `go.mod` 的 `go 1.25.0` → `go 1.27.4`，Dockerfile 构建阶段 `golang:1.25-alpine` → `golang:1.27-alpine`；`AGENTS.md`、`README.md`、`docs/docker-compose.md`、`docs/framework-workflow.md` 与 `ci.yml` 注释同步。`golangci-lint v2.15.0`（由 go1.27.3 构建）在 1.27 目标下运行正常，无需升级。
+- **Chore:** `go mod tidy`（Go 1.27）把实际被代码直接引用的模块（imaging、gin-contrib/cache、go-mail、go-playground/assert、go-sql-driver/mysql、golang/freetype、jinzhu/copier、magiconair/properties、testify、unknwon/com）并入主 require 块并去掉错误的 `// indirect`，同时移除一条未使用的 `go.sum` 哈希（`google/subcommands`）。无依赖版本变化、无代码改动。
+- **Downstream:** 合并后本地与 CI 需要 Go 1.27.4；`GOTOOLCHAIN=auto`（默认）会在首次构建时自动下载。Docker 构建基础镜像随 Dockerfile 变化，使用 `BUILD_BASE_REGISTRY` 加速时无需额外调整。
+- **Verified:** `go build -mod=readonly ./...`、`go vet ./...`、`gofmt -l .` 全部通过；`go test ./... -count=1` **0 FAIL / 0 SKIP**（82s，MySQL 门禁用例真实执行）；`golangci-lint run ./...` 0 issues；`go generate ./cmd/server` 后 `wire_gen.go` 无 diff。
+
 ## v3.3.7
 
 > 启动/迁移日志降噪（issue #20）：unmanaged 差异从逐列 `WARNING` 收敛为按表聚合的 `note`，列 charset/collation 与表默认一致时不再视为漂移；`WARNING` 只保留给有数据风险的项。
