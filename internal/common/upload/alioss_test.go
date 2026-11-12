@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -11,7 +12,6 @@ import (
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -49,7 +49,7 @@ func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
 	// Use the concrete adapter below because UploadSiteConfig intentionally
 	// accepts ConfigModel's method shape.
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou"}
-	result, err := UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
+	result, err := UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
 func TestUploadSiteConfigCDNPriority(t *testing.T) {
 	// upload_cdn_url 配置时优先于 bucketUrl
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou", "upload_cdn_url": "https://cdn.example.com"}
-	result, err := UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
+	result, err := UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestUploadSiteConfigCDNPriority(t *testing.T) {
 
 	// 非 alioss 模式：不设置 cdn 键（与 PHP request->upload 仅在 alioss 时存在一致）
 	values = configValues{"upload_mode": "local"}
-	result, err = UploadSiteConfig(nil, values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
+	result, err = UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestUploadSiteConfigCDNPriority(t *testing.T) {
 
 type configValues map[string]string
 
-func (v configValues) GetKVByGroup(_ *gin.Context, _ string) (map[string]string, error) {
+func (v configValues) GetKVByGroup(_ context.Context, _ string) (map[string]string, error) {
 	return v, nil
 }
 

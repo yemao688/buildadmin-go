@@ -93,7 +93,14 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 			defer wg.Done()
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest("POST", "/ajax/upload", nil)
-			got, err := helper.Upload(ctx, UploadParams{File: headers[i], Topic: topics[i]}, 1, 0)
+			got, err := helper.Upload(
+				ctx.Request.Context(),
+				UploadParams{File: headers[i], Topic: topics[i]},
+				1,
+				0,
+				util.GetBaseURL(ctx),
+				func(s string) string { return util.Lang(ctx, s, nil) },
+			)
 			if err != nil {
 				results <- outcome{idx: i, err: err}
 				return

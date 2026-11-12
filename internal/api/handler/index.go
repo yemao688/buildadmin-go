@@ -27,7 +27,7 @@ func NewIndexHandler(config *conf.Configuration, configM *siteconfig.Service, co
 }
 
 func (h *IndexHandler) Index(ctx *gin.Context) {
-	basicConfig, err := h.configM.GetKVByGroup(ctx, "basics")
+	basicConfig, err := h.configM.GetKVByGroup(ctx.Request.Context(), "basics")
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -48,7 +48,7 @@ func (h *IndexHandler) Index(ctx *gin.Context) {
 		response.FailByErr(ctx, err)
 		return
 	}
-	uploadConfig, err := upload.UploadSiteConfig(ctx, h.configM, h.config)
+	uploadConfig, err := upload.UploadSiteConfig(ctx.Request.Context(), h.configM, h.config)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

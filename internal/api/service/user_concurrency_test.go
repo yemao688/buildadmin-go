@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/api/service"
 	commonmodel "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/testutil"
@@ -39,7 +40,7 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 		Driver:     token.NewMysqlDriver(db, config),
 		getStarted: make(chan struct{}),
 	}}
-	authModel := service.NewMemberService(db, tokenHelper, config)
+	authModel := service.NewMemberService(repository.NewUserRepository(db, config), tokenHelper, config)
 	username := "refresh_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	user := commonmodel.User{Username: username, Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)

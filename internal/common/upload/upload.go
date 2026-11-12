@@ -1,3 +1,6 @@
+// Package upload 提供本地与 AliOSS 两种存储的上传能力。包内不依赖 gin 等
+// 传输层类型：请求元数据（资源前缀、翻译、省市区参数）由调用方以普通参数传入。
+// 错误当前仍直接返回 cErr.* 业务错误，后续再收敛为领域错误。
 package upload
 
 import (
@@ -6,6 +9,7 @@ import (
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"html"
@@ -22,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -157,14 +160,11 @@ func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 	return slices.Contains(typeArr, sourceType) || slices.Contains(suffixArr, suffix)
 }
 
-// 检查文件大小是否允许上传
-func (s *UploadHelper) checkSize(ctx *gin.Context, file *multipart.FileHeader) error {
+// 检查文件大小是否允许上传。大小文案由调用方注入的 lang 翻译，
+// 本函数不接触传输层（模板占位与现有 i18n 条目保持原样，不做额外格式化）。
+func (s *UploadHelper) checkSize(lang func(string) string, file *multipart.FileHeader) error {
 	if file.Size > int64(s.config.Upload.Maxsize)*1024*1024 {
-		msg := util.Lang(ctx, "The uploaded file is too large (%sMiB), Maximum file size:%sMiB", map[string]string{
-			"min": fmt.Sprintf("%d", file.Size/(1024*1024)),
-			"max": fmt.Sprintf("%d", s.config.Upload.Maxsize),
-		})
-		return cErr.BadRequest(msg, 10002)
+		return cErr.BadRequest(lang("The uploaded file is too large (%sMiB), Maximum file size:%sMiB"), 10002)
 	}
 	return nil
 }
@@ -216,8 +216,11 @@ func (s *UploadHelper) getSaveName(params UploadParams, sha1 string) string {
 	return saveName
 }
 
-func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int32, userId int32) (any, error) {
-	if err := s.checkSize(ctx, params.File); err != nil {
+// Upload 处理一次上传：校验大小/类型、按 sha1 去重、落盘或写入 OSS 并返回附件记录。
+// ctx 保留为请求作用域扩展点，上传流程本身不读取传输层元数据：资源前缀由
+// baseURL 提供，大小超限文案由 lang 翻译，两者均由调用方从请求上下文取得。
+func (s *UploadHelper) Upload(ctx context.Context, params UploadParams, adminId int32, userId int32, baseURL string, lang func(string) string) (any, error) {
+	if err := s.checkSize(lang, params.File); err != nil {
 		return nil, err
 	}
 	sourceType := params.sourceType()
@@ -284,7 +287,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 			if storage == "alioss" && s.oss != nil {
 				attach.FullUrl = s.oss.URL(attach.URL)
 			} else {
-				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, "", util.GetBaseURL(ctx), "")
+				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, "", baseURL, "")
 			}
 			return attach, nil
 		}
@@ -317,7 +320,7 @@ func (s *UploadHelper) Upload(ctx *gin.Context, params UploadParams, adminId int
 		attachment.FullUrl = s.oss.URL(savePath)
 		return attachment, nil
 	}
-	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, "", util.GetBaseURL(ctx), "")
+	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, "", baseURL, "")
 
 	dirPath := filepath.Dir(util.RootPath() + "/public" + savePath)
 	// 尝试创建路径中所有不存在的目录

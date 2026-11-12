@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonModel "buildadmin-go/internal/model"
@@ -67,7 +68,7 @@ func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "middleware_user", Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 
@@ -88,7 +89,7 @@ func TestUserLoginRejectsDisabledUser(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "disabled_user", Status: "disable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 
@@ -110,7 +111,7 @@ func TestUserLoginRejectsMissingUser(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login-missing?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 

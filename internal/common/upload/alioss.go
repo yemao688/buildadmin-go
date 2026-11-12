@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -13,7 +14,6 @@ import (
 
 	"buildadmin-go/internal/conf"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -30,8 +30,9 @@ type AliossStorage struct {
 
 // UploadSiteConfig is the public PHP-compatible upload payload. Secret key is
 // intentionally used only to sign the policy and is never included in it.
-func UploadSiteConfig(ctx *gin.Context, configs interface {
-	GetKVByGroup(*gin.Context, string) (map[string]string, error)
+// configs 只需提供按分组读取配置的 GetKVByGroup，参数为传输无关的 context。
+func UploadSiteConfig(ctx context.Context, configs interface {
+	GetKVByGroup(context.Context, string) (map[string]string, error)
 }, config *conf.Configuration) (map[string]any, error) {
 	values, err := configs.GetKVByGroup(ctx, "upload")
 	if err != nil {

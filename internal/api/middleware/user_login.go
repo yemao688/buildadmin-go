@@ -50,6 +50,6 @@ func (m *UserLogin) Handler() gin.HandlerFunc {
 			core.AbortLogin(c, err)
 			return
 		}
-		c.Set("UserAuth", authParam)
+		header.SetUserAuth(c, authParam)
 	}
 }

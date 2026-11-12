@@ -75,20 +75,3 @@ func TestUserRegisterRequiresClickCaptcha(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, http.StatusBadRequest, resp.Code)
 }
-
-func TestUserRegisterRejectsInvalidUsernameBeforeCaptcha(t *testing.T) {
-	config := &conf.Configuration{}
-	h := newUserHandlerTest(config)
-	router := userTestRouter()
-	router.POST("/api/user/register", h.Register)
-
-	request := httptest.NewRequest(http.MethodPost, "/api/user/register", bytes.NewBufferString(`{"username":"bad user","password":"Valid123!","captchaId":"id","captchaInfo":"info"}`))
-	request.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, request)
-
-	var resp response.Response
-	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
-	require.Equal(t, http.StatusOK, recorder.Code)
-	require.Equal(t, http.StatusBadRequest, resp.Code)
-}

@@ -4,6 +4,7 @@ import (
 	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,7 +18,14 @@ func (h *CommonHandler) Upload(ctx *gin.Context) {
 	}
 	userAuth := header.GetUserAuth(ctx)
 
-	result, err := h.uploadHelper.Upload(ctx, upload.UploadParams{File: file}, 0, userAuth.Id)
+	result, err := h.uploadHelper.Upload(
+		ctx.Request.Context(),
+		upload.UploadParams{File: file},
+		0,
+		userAuth.Id,
+		util.GetBaseURL(ctx),
+		func(s string) string { return util.Lang(ctx, s, nil) },
+	)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

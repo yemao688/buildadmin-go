@@ -115,7 +115,9 @@ func TestGetKVByGroupCacheBypassInTransaction(t *testing.T) {
 		require.NoError(t, tx.Table("ba_config").Where("name = ?", "site_name").Update("value", "事务内值").Error)
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest(http.MethodGet, "/", nil).WithContext(requesttx.Bind(context.Background(), tx))
-		kv, err := s.GetKVByGroup(c, "basics")
+		// 请求事务绑定在 Request.Context 上；gin 默认不开启 ContextWithFallback，
+		// 因此调用方必须传请求上下文而非 *gin.Context 本身。
+		kv, err := s.GetKVByGroup(c.Request.Context(), "basics")
 		require.NoError(t, err)
 		require.Equal(t, "事务内值", kv["site_name"])
 		return errors.New("rollback")
