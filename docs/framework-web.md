@@ -21,10 +21,10 @@
   和 i18n Ally 语言索引；**语言文件只改 `web/src/lang/` 下的 TypeScript 源文件**。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`（PHP 上游 v2.3.8 规则一对一移植，
   较宽松）。既有代码中的 warning（`vue/no-required-prop-with-default`、
-  `no-unused-vars`、`indent`）是上游继承噪声，**忽略即可**；不要修改既有源码，
+  `no-unused-vars`、`indent`）是 PHP 上游继承噪声，**忽略即可**；不要修改既有源码，
   也不要收紧配置消除它们——只处理新改代码引入的 warning。
 - **后台设计系统不要改**：`web/src/views/backend/` 的样式与后台设计系统保持
-  上游一致，业务后台页面一律使用 CRUD 生成器模式（见 `docs/crud-generation.md`）。
+  与 PHP 上游一致，业务后台页面一律使用 CRUD 生成器模式（见 `docs/crud-generation.md`）。
 - 前台 `/` 是自包含占位页（`web/src/views/frontend/`），当前只提供最小
   `userInfo` store 与 `/api/user/{login,register,logout}`。
 - 构建产物在 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。

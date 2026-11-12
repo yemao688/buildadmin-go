@@ -51,7 +51,7 @@ go install github.com/air-verse/air@latest
 
 ## Docker Compose 部署
 
-发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；Docker 只打包根 `public/`，不消费 `web/dist/`。生产机保存 `docker-compose.yaml`、`.env`（`APP_PORT`/`APP_TIME_ZONE` 和发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_IMAGE_NAME`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）、`configs/config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。CI 有两个 GitHub workflow：`ci.yml` 仅手动触发（全仓 gofmt + golangci-lint + `go build` + `go vet` + `go test` 的全量门禁），`release-image.yml` 由业务发布 tag（`v[0-9]*.[0-9]*`）或手动触发（版本号取自 tag 名去掉 `v` 前缀的部分，构建多架构并推镜像）；未配置 `vars.REGISTRY`/`vars.REGISTRY_IMAGE_NAME` 的仓库跳过发布 job，框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
+发布机执行 `make frontend`（在 `web/` 构建并同步产物到根 `public/`），再执行 `make push`；镜像只含二进制与 `crud_specs`，`make frontend` 产物留在宿主 `public/`，由 compose bind mount 提供。生产机保存 `docker-compose.yaml`、`.env`（`APP_PORT`/`APP_TIME_ZONE` 和发布变量 `REGISTRY`/`REGISTRY_NAMESPACE`/`REGISTRY_IMAGE_NAME`/`REGISTRY_USER`/`REGISTRY_PASSWORD`/`COMPOSE_PROJECT_NAME`/`COMPOSE_IMAGE_TAG`/`COMPOSE_MEM_LIMIT`）、`configs/config.yaml` 和 `runtime/`，然后执行 `docker compose pull && docker compose up -d`。CI 有两个 GitHub workflow：`ci.yml` 仅手动触发（全仓 gofmt + golangci-lint + `go build` + `go vet` + `go test` 的全量门禁），`release-image.yml` 由业务发布 tag（`v[0-9]*.[0-9]*`）或手动触发（版本号取自 tag 名去掉 `v` 前缀的部分，构建多架构并推镜像）；未配置 `vars.REGISTRY`/`vars.REGISTRY_IMAGE_NAME` 的仓库跳过发布 job，框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建。首次安装在本地完成，详细流程（含本地开发镜像 `make run-docker-dev`）见 [`docs/docker-compose.md`](docs/docker-compose.md)。
 
 ## 常用命令
 
@@ -72,26 +72,26 @@ pnpm build
 
 ```text
 cmd/server/          应用入口（28 行极简 main，仅调用 commands.Execute）+ Wire wiring（wire.go/wire_gen.go）
-internal/            全部私有代码（两业务渠道 + 安装渠道 + 共享内核）
+internal/            全部私有代码（两业务渠道 + 共享内核；安装走 CLI `setup`）
   admin/             后台渠道：repository/dto/handler/router 均为单包（文件名=表名）、
                      middleware（登录/权限/安全审计）
   api/               门户/公共渠道：repository/service 均为单包（文件名=表/模块名）、
                      middleware（user_login）/dto/handler/router
   commands/           CLI 命令编排（setup 安装 / migrate / crud 生成器等）
+  crudgen/           CRUD 代码生成与 spec 物化（开发期工具层，不属于技术基建）
   model/             共享贫血实体记录层（含 projection/ 投影子包）
   common/            跨渠道领域服务（money/siteconfig/area/country/upload）
-  pkg/               技术基建（persistence/data_scope/token/captcha/crud_helper/validator 等）
+  pkg/               技术基建（persistence/data_scope/token/captcha/validator 等）
   middleware/        真·全局中间件
-  router/            纯 bootstrap：引擎/全局中间件/静态资源/三渠道挂载
+  router/            纯 bootstrap：引擎/全局中间件/静态资源/两渠道挂载
   migrations/        三轨迁移（official/framework/business）+ 内部迁移基础设施
-  commands/          Cobra CLI 命令（root/server/crud/migrate/setup 等）
   conf/ infra/ i18n/ cron/  配置、连接初始化、本地化、定时任务
 configs/config.defaults.yaml 运行基座（完整默认配置）
 configs/config.yaml          配置覆盖层（忽略，不提交）
 .env                 根目录运行环境与 Compose 变量（忽略，不提交）
 internal/i18n/locales/ 本地化资源（YAML 语言包）
 web/                 Vue/Vite 前端源码
-public/              发布到镜像中的前端和运行时静态资源
+public/              前端与运行时静态资源（`make frontend` 产物留在宿主，由 compose bind mount 提供，不进镜像）
 crud_specs/          AI CRUD 生成 YAML
 docs/                开发文档
 runtime/             运行时日志和临时文件

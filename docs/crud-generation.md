@@ -1011,8 +1011,8 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 - Official database specification: <https://doc.buildadmin.com/senior/databaseSpecification.html>
 - Official CRUD guidance: <https://doc.buildadmin.com/senior/CRUD.html>
 - Official v2.2 null/default note: <https://doc.buildadmin.com/guide/other/incompatibleUpdate/v220.html>
-- Go YAML loader: `internal/pkg/crud_helper/spec.go`
-- Go validation/path contract: `internal/pkg/crud_helper/security.go`
-- Go generation/runtime: `internal/pkg/crud_helper/helper.go`, `internal/pkg/crud_helper/table.go`
+- Go YAML loader: `internal/crudgen/spec.go`
+- Go validation/path contract: `internal/crudgen/security.go`
+- Go generation/runtime: `internal/crudgen/helper.go`, `internal/crudgen/table.go`
 
 PHP 上游的 CRUD 设计器与生成器源码路径仅框架维护者需要，见 [`framework-maintenance.md`](framework-maintenance.md)。

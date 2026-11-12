@@ -1,4 +1,4 @@
-# Docker 构建上下文白名单式裁剪：只需要 Go 源码 + go.mod/go.sum + crud_specs。
+# Docker 构建上下文排除式裁剪（黑名单）：逐条排除 VCS/凭据/前端/文档等不需要的路径。
 # crud_specs 是业务表结构事实源，Dockerfile 会从构建阶段复制进运行镜像；
 # 前端产物不在镜像内（public/ 由宿主机 bind mount 提供），故 web/ 整个排除。
 

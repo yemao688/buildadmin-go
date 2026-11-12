@@ -47,7 +47,7 @@ APP_PORT=9901 make run-docker-dev
 
 `APP_TIME_ZONE` 仍由 Compose `environment:` 注入容器（`.env` 缺失时的运行时配置）。`APP_AUTO_MIGRATE` 同样由 Compose 注入（默认 `apply`），需要临时关闭或降级启动自动迁移时在 `.env` 覆盖，不必改 `configs/config.yaml`。
 
-Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 来自镜像，覆盖层 `config.yaml` 由安装写入并持久化；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
+Compose 将 `./configs` 以**可写目录**挂载为 `/app/configs`（基座 `config.defaults.yaml` 与覆盖层 `config.yaml` 都来自宿主机 `./configs`，镜像不含 `configs`；目录在任意源码检出中均存在，不会再出现单文件挂载在文件缺失时报错的问题）；`./public` 以**可写目录**挂载为 `/app/public`（静态资源根），`./runtime/` 挂载为 `/app/runtime`（日志）。
 
 **挂载目录权限（bind mount 常见坑）**：容器以 `user: "1000:1000"` 运行，挂载点所有权来自宿主机目录——**镜像内 `chown app:app /app` 对 bind mount 不生效**。git 不跟踪空目录，`runtime/` 若不存在于宿主机，Docker 会**自动以 root 创建**它（日志 `mkdir /app/runtime/logs: permission denied` 的典型来源）。框架已用 `runtime/.gitignore` 占位文件让 git 跟踪目录本身（`git check-ignore` 忽略其实际内容），新检出 clone 后 `runtime/` 即存在且归部署用户所有，避免 Docker 自动创建。**仍需注意**：容器 uid 固定 1000，宿主机检出用户若不是 uid 1000，需对齐一次：
 
@@ -77,7 +77,7 @@ docker compose -f docker-compose.yaml -f docker-compose.dev.yaml run --rm builda
 两条路径打出的镜像 tag 形态一致（`FULL_TAG=<version>-<git-sha>-<build-ts>`、`<version>`、`latest`），任选其一。区别只在 `<version>` 的来源：本地 `make push` 读根目录 `VERSION` 文件；CI 取业务 tag 名去掉 `v` 前缀的部分——`v1.0.0` 得到 `1.0.0`（不校验 `VERSION`）。
 
 1. **发布机自建自推**：`make frontend` → `make push`（下一小节）。
-2. **推 tag 交给 GitHub Actions**：业务仓库 `git tag v1.0.0` 后 `git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。只认业务 `v<major>.<minor>...` 形态的 tag（裸 `v3` 与分支同名，不触发），框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建；未配置 `vars.REGISTRY`/`vars.REGISTRY_IMAGE_NAME` 的仓库，发布 job 直接跳过。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、golangci-lint、`go build ./...` 与 `go vet ./...`。CI 只推 GitHub 侧 registry，凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.REGISTRY_IMAGE_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
+2. **推 tag 交给 GitHub Actions**：业务仓库 `git tag v1.0.0` 后 `git push origin v1.0.0`，`.github/workflows/release-image.yml` 构建多架构并推同样的三个 tag。只认业务 `v<major>.<minor>...` 形态的 tag（裸 `v3` 与分支同名，不触发），框架仓库的 `frame-v*` tag 只作发布标记、不触发镜像构建；未配置 `vars.REGISTRY`/`vars.REGISTRY_IMAGE_NAME` 的仓库，发布 job 直接跳过。镜像版本号完全取自 tag 名（去掉 `v` 前缀），不读也不校验根目录 `VERSION`——tag 打成什么版本，镜像就是什么版本；gate 只执行全仓 `gofmt -l .`、golangci-lint、`go build ./...` 与 `go vet ./...`。CI 推到 `vars.REGISTRY` 指定的镜像仓库（GHCR、ACR、Harbor 均可），凭据来自仓库级 `vars.REGISTRY`/`vars.REGISTRY_NAMESPACE`/`vars.REGISTRY_IMAGE_NAME`/`vars.BUILD_PLATFORMS` 与 `secrets.REGISTRY_USER`/`secrets.REGISTRY_PASSWORD`；基础镜像、`GOPROXY` 和 apk 在 CI 内走官方源。
 
 **镜像不含前端产物**：两条路径发布前都仍需在发布机执行 `make frontend`，并把 `public/` 一起放到生产机由 bind mount 提供。
 
@@ -156,7 +156,7 @@ docker compose up -d
 
 拉取新镜像后 `docker compose up -d` 会在容器启动时完成 schema 迁移：`serve` 在绑定端口前执行三轨迁移与 `crud_specs` 尾部 apply（`app.auto_migrate` 默认 `apply`），不需要再单独 `run --rm buildadmin-go migrate`。`docker-compose.yaml` 已配置 `pull_policy: always`，`up -d` 本身会先拉取镜像，额外执行 `docker compose pull` 只是让拉取阶段独立可见，不是必需步骤。
 
-升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `COMPOSE_IMAGE_TAG` 为已知 `FULL_TAG`（形如 `3.1.0-<git-sha>-<build-ts>`）再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。`COMPOSE_IMAGE_TAG` 默认空即等于 `latest`，只在回滚时 pin 精确 tag。`rejected` 破坏性变更只告警不执行，发版前按 [`framework-workflow.md`](framework-workflow.md) 的 `migrate --plan` 检查清单确认。
+升级前直接备份 `configs/config.yaml`、`runtime/` 和 `public/storage/`。需要精确回滚时，在生产机 `.env` 固定 `COMPOSE_IMAGE_TAG` 为已知 `FULL_TAG`（形如 `${VERSION}-<git-sha>-<build-ts>`，当前 `VERSION=1.0.0` 即 `1.0.0-<git-sha>-<build-ts>`，实际值以 `make push` 输出的 `FULL_TAG` 为准）再 `docker compose pull && docker compose up -d`；不要依赖会移动的 `latest`。`COMPOSE_IMAGE_TAG` 默认空即等于 `latest`，只在回滚时 pin 精确 tag。`rejected` 破坏性变更只告警不执行，发版前按 [`framework-workflow.md`](framework-workflow.md) 的 `migrate --plan` 检查清单确认。
 
 ## 容器硬化
 

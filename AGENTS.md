@@ -34,8 +34,8 @@
 | 业务仓库 / 下游 | 用户 fork 出的业务项目仓库，主分支通常为 `master` |
 | PHP 上游 | BuildAdmin PHP 原版项目，仅框架维护时需要参考 |
 | 框架版本 | 根目录 `VERSION_FRAMEWORK`，框架发行 semver |
-| PHP 上游兼容版本 | PHP BuildAdmin 兼容基线，事实源为 `web/package.json` 与 `composer.json` |
-| 业务版本 | 业务仓库根 `VERSION`，框架不提供该文件 |
+| PHP 上游兼容版本 | PHP BuildAdmin 兼容基线，事实源为 `web/package.json`，并与 `internal/pkg/version.Upstream` 保持一致 |
+| 业务版本 | 业务仓库根 `VERSION`；框架仓库带 `1.0.0` 占位，业务 fork 首次发布时自行改写（Makefile 读取该文件注入镜像版本） |
 
 全仓库文档禁止裸用"上游"，必须带限定词。本文未标注读者的章节对两类仓库同时生效；标注"仅框架维护者"的内容在业务仓库中不适用。
 
@@ -57,20 +57,21 @@
 - `configs/config.defaults.yaml` 是 `configs/` 下受跟踪的完整运行基座，启动时实际加载。根目录 `configs/config.yaml` 是被忽略的稀疏配置覆盖层，由 `setup` 安装器写入（只写 MySQL 连接和生成的 `token.key`）。全新检出且没有它时，任何命令（含默认 serve）打印 setup 安装指引并等待 3 秒后退出，不会自动复制基座。不要提交安装器写入的凭据。
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 - `/docs` 可选静态文档服务（业务图文操作指南，`public/docs/`）：默认关闭，业务配置 `app.docs_enabled` 开启；`app.docs_password` 非空（或环境变量 `DOCS_PASSWORD` 覆盖）时挂载服务端密码门，仅防随意浏览、非安全边界，实现见 `internal/router/docs.go`。**业务要做文档模块（往 `public/docs/` 发布操作指南）前，先读 `public/docs/guide.html` 引导**——它说明目录约定（根目录只放 HTML、图片按文档分目录 `images/<文档名>/`）、启用配置与密码门行为，该文件由业务仓库自行维护。
-- 构建上下文由根目录 `.dockerignore` 白名单裁剪：只保留 Go 源码 + `go.mod`/`go.sum` + `crud_specs`（后者由 Dockerfile 复制进运行镜像）；`web/`、`docs/`、`public/`、`.git`、`.env` 全部排除（镜像不含前端产物，`public/` 由宿主机 bind mount 提供）。新增"镜像内需要"的目录时，必须同步改 `.dockerignore`，否则构建期 `COPY` 拿不到文件。
+- 构建上下文由根目录 `.dockerignore` 排除式裁剪（黑名单：逐目录/文件列出排除项，不是白名单）：默认只排除 `web/`、`docs/`、`public/`、`.git`、`.env` 等条目，因此**新增目录默认会被包含进构建上下文**；凭据、本地状态和体积大的新目录必须显式加入排除项。镜像内最终只含 Go 二进制与 `crud_specs`（后者由 Dockerfile 复制进运行镜像），不含前端产物（`public/` 由宿主机 bind mount 提供）。新增"镜像内需要"的目录时，必须同步确认 `.dockerignore` 未排除它，否则构建期 `COPY` 拿不到文件。
 - `.cbmignore` 是 codebase-memory MCP 索引的忽略清单（与 `.gitignore` 相互独立，当前排除 `static/install`）；`.git-blame-ignore-revs` 是 `git blame` 跳过的纯格式化提交清单，新 clone 执行 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 后生效（GitHub 网页端自动识别）。
 
 ## 分层与边界（v3.0.0 架构）
 
-后端全部私有代码位于 `internal/`，按"两业务渠道 + 安装渠道 + 共享内核"分层。admin 与 api 渠道均已拍平：`repository`、`dto`、`handler`、`router`（api 另有 `service`）均为单一 package，生成产物文件名恒等于表名/模块名，不再有子目录：
+后端全部私有代码位于 `internal/`，按"两业务渠道 + 共享内核"分层（安装由 CLI `setup` 完成，不是渠道）。admin 与 api 渠道均已拍平：`repository`、`dto`、`handler`、`router`（api 另有 `service`）均为单一 package，生成产物文件名恒等于表名/模块名，不再有子目录：
 
 | 层 | 职责 | 允许依赖 | 禁止依赖 |
 |---|---|---|---|
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
-| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、crud_helper、validator（校验适配类型与 GetError，跨渠道共用）、util（跨层工具：路径/时间/转换/数组/加密等，即原 internal/utils）等 | 外部库、conf | 渠道层 |
+| `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、validator（校验适配类型与 GetError，跨渠道共用）、util（跨层工具：路径/时间/转换/数组/加密等，即原 internal/utils）等 | 外部库、conf | 渠道层 |
+| `internal/crudgen` | 开发期代码生成工具层：CRUD spec 加载/校验、生成产物写入、spec 物化与菜单落库。不属于技术基建（pkg 不得反向依赖它），生成期可直接读 `admin/repository` 元数据；后续以端口倒置移除该依赖 | model、pkg、admin/repository（仅生成期） | 运行时路由 |
 | `internal/common` | 跨渠道领域服务：`money.UserBalanceService`（会员余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`service/`（按需毕业的业务编排，纯 CRUD 不建透传）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
-| `internal/api` | 门户/公共渠道：`service/`（单包：`member.go` 会员认证）·`middleware/`（user_login）·`dto/`（投影如 OutUser）·`repository/`（单包：`user.go` 会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
+| `internal/api` | 门户/公共渠道：`service/`（单包：`member.go` 会员认证）·`middleware/`（user_login）·`repository/`（单包：`user.go` 会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
 | `internal/middleware` | 真·全局中间件（Cors/recovery/AtomicRoute 注册表/AbortLogin） | pkg | 渠道层 |
 | `internal/router` | 纯 bootstrap：创建 gin.Engine、挂载全局中间件与静态资源、调用 admin/api 两渠道注册器完成挂载；不再持有渠道 registrar 聚合（admin 侧在 `internal/admin/router`，api 侧在 `internal/api/router`） | 全部 | 业务逻辑 |
 | `internal/commands`（setup）、`internal/pkg/installer` | 安装由 CLI `setup` 完成（交互/`--yes` 无人值守，写 configs/config.yaml、迁移、管理员配置、写 install.lock）；无 Web 安装渠道 | — | — |
@@ -93,7 +94,7 @@
 
 - 先定位现有模式、真实入口和路由边界，再修改；优先最小范围变更，禁止无关重构。
 - handler / service / DTO 的角色纪律以「分层与边界」的角色规范与 repo/service 边界为准：handler 只绑定参数并返回响应（禁密码加密、原始 SQL、业务规则）；纯 CRUD 严禁透传 service；持久化唯一入口始终是 repository；请求上下文里的 actor/clientIP/token 以参数传入，不 import gin/net-http。
-- DTO 约定：一表一个 `XxxParam`（Add/Edit 复用），响应直回实体/投影；`Resp` 类型按需个案引入（先例：`internal/model/projection`、api 侧 `OutUser`）。
+- DTO 约定：一表一个 `XxxParam`（Add/Edit 复用），响应直回实体/投影；`Resp` 类型按需个案引入（先例：`internal/model/projection`；api 侧对外字段由 `MemberService.FilterData` 白名单投影）。
 - 协助用户安装时，先向用户收齐必要信息再执行 `setup`（MySQL 连接、管理员账号等，清单见 `docs/framework-workflow.md` 首次安装一节）；`configs/config.yaml` 交给安装器自动生成（含随机 `token.key`），不要手写 YAML。
 - 业务模块必须使用 CRUD 生成链，不得手写生成的实体、仓库、handler、registrar、provider 或 Vue 脚手架。先读 `docs/crud-generation.md` 并写 `crud_specs/*.yaml`。
 - 数据库、生成器和部署命令先检查副作用。新增依赖或架构变化必须说明理由；不要把未经验证的命令、CI、lint wrapper 或全局检查加入流程。
@@ -177,9 +178,9 @@ pnpm build                             # emits web/dist/
 - `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
 - gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
 - `.golangci.yml` 用 v2 语法分档启用：档 A（govet/ineffassign/unused/staticcheck）与档 B（errcheck/errorlint/nilerr/forcetypeassert/misspell/predeclared/errname/thelper）必须保持全绿；档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo）连同理据写在配置文件末尾，未清空前不得打开。新增 linter 前先本地 `golangci-lint run ./...` 看命中数。
-- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（如 `frame-v3.3.1`，版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
+- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（如当前 `VERSION_FRAMEWORK=3.3.8` 即 `frame-v3.3.8`，版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
 - `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.REGISTRY_IMAGE_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
-- `release-image.yml` 的 gate 只做全仓 gofmt/golangci-lint/`go build`/`go vet`，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 只推 GitHub 侧 registry，基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
+- `release-image.yml` 的 gate 只做全仓 gofmt/golangci-lint/`go build`/`go vet`，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 推到 `vars.REGISTRY` 指定的镜像仓库（GHCR、ACR、Harbor 均可），基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 
 ## CRUD 模块生成（AI 驱动）
 

@@ -27,8 +27,8 @@
 - `TableRepository` — information_schema 元数据仓（CRUD 生成器使用）。
 - `AdminHierarchy` — admin_closure 闭包表写者（实现
   `data_scope.HierarchyWriter`，只收调用方事务，不提交/回滚）。
-- `AdminRuleRepository.Delete(path, recursion)` — pkg 层 CRUD 生成器
-  的菜单清理工具入口（pkg 不允许反向依赖 admin service，故保留在 repo）。
+CRUD 生成器的菜单清理已迁到 `internal/crudgen.DeleteMenuRules(db, cfg, path, recursion)`；
+`AdminRuleRepository` 只保留规则读写，不再提供生成器专用入口。
 
 ### 允许留在 repo 的方法形态
 
