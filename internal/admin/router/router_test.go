@@ -41,31 +41,6 @@ func TestAdminLogDeleteRoute(t *testing.T) {
 	}
 }
 
-// 锁定模块商店的前端契约：页面会调用
-// state/install/uninstall/changeState/dependentInstallComplete/upload，少注册
-// 任何一个都会变成 404。handler 是桩实现，但路由必须在。
-func TestModuleRegistrarCoversFrontendActions(t *testing.T) {
-	engine := gin.New()
-	NewModuleRegistrar(&admin.ModuleHandler{}).Register(engine.Group("/admin"))
-
-	registered := make(map[string]bool)
-	for _, route := range engine.Routes() {
-		registered[route.Method+" "+route.Path] = true
-	}
-	for _, want := range []string{
-		"GET /admin/module/index",
-		"GET /admin/module/state",
-		"POST /admin/module/install",
-		"POST /admin/module/uninstall",
-		"POST /admin/module/changeState",
-		"POST /admin/module/dependentInstallComplete",
-		"POST /admin/module/update",
-		"POST /admin/module/upload",
-	} {
-		require.True(t, registered[want], "module route %s is not registered", want)
-	}
-}
-
 func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 	engine := gin.New()
 	NewAdminRouter(AdminRouterDeps{

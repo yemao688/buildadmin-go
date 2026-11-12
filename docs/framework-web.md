@@ -429,7 +429,7 @@ const rules = reactive<FormRules>({
   该组件目录下的 scss 或按 README 覆盖变量。
 - 请求层按渠道传语言：`web/src/utils/axios.ts` 按 URL 前缀设置 `think-lang`
   header——`/admin/*` 用后台域语言，其余（`/api/*`、门户）用前台域语言。
-- `web/src/lang/autoload.ts`：path → 语言包路径的特例映射（如 moduleStore、
+- `web/src/lang/autoload.ts`：path → 语言包路径的特例映射（如 crud/crud、
   crud 页），按需自动加载。
 - 路由守卫按需加载语言包：`router/index.ts` 的 `portalLangDirs` 注册表
   （key=路由前缀，value=lang 目录名）：后台固定 `backend`；根门户（`/` 及

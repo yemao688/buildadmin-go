@@ -101,7 +101,7 @@
 - 新增用户可见 UI 时同步检查权限、菜单、i18n 以及前后端 API 契约。
 - 发版前必须运行 `migrate --plan` 检查 `rejected`：这些变更不会自动执行。业务 AI 必须在交付说明中逐条列出受影响的表/列、变更内容、可能受影响的数据（截断、负数变 0、NULL 变默认值、enum 值变空、主键重建），并明确询问用户是否接受该数据影响后再上线；用户确认前不得发布。正解是在 business 迁移里显式处理存量数据后再修改列。
 - 新增后台路由时同步处理权限（登记 `admin_rule` 或声明 `PermissionExempt` 豁免），启动告警会暴露欠账。
-- 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 为显式豁免（handler 的 `NoNeedPermissionActions` 声明）。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。豁免机制按渠道分开、互不通用：`internal/admin/middleware` 的豁免注册表（`RegisterNoNeedLogin`/`RegisterPermissionExempt` 及 handler 声明式 `NoNeedLoginActions`/`NoNeedPermissionActions` 收集）只作用于**后台 /admin 渠道**（跳过登录/跳过规则校验，经 admin registrar 声明）；`internal/api/router` 的 `api_routes.go` public 集合是 **API /api 渠道**的免登录路由登记表（method+path 逐条，per-action 公共端点）。业务侧按目标渠道选择对应机制，不要混用。
+- 路由边界：`/admin/*` 是后台路由，`/api/*` 是公共、用户 API（无 Web 安装渠道，安装只走 CLI `setup`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由；新增非三段式 `/admin` 路由可能绕过两者，必须在评审中显式处理。AdminLog 只记录后台 POST/DELETE，不要扩大到所有 API。豁免机制按渠道分开、互不通用：`internal/admin/middleware` 的豁免注册表（`RegisterNoNeedLogin`/`RegisterPermissionExempt` 及 handler 声明式 `NoNeedLoginActions`/`NoNeedPermissionActions` 收集）只作用于**后台 /admin 渠道**（跳过登录/跳过规则校验，经 admin registrar 声明）；`internal/api/router` 的 `api_routes.go` public 集合是 **API /api 渠道**的免登录路由登记表（method+path 逐条，per-action 公共端点）。业务侧按目标渠道选择对应机制，不要混用。
 
 ## 编码规范（注释 / 测试 / 验证）
 

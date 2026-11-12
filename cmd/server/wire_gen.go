@@ -68,7 +68,6 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableRepository, uploadHelper, terminalTerminal, configuration, authRepository, countryService, siteconfigService)
 	crudLogRepository := repository.NewCrudLogRepository(gormDB, configuration, closureEnforcer)
 	logHandler := handler.NewLogHandler(zapLogger, crudLogRepository, authRepository)
-	moduleHandler := handler.NewModuleHandler(zapLogger)
 	adminGroupRepository := repository.NewAdminGroupRepository(gormDB, configuration)
 	adminGroupService := service.NewAdminGroupService(adminGroupRepository, adminRuleRepository, authRepository)
 	adminGroupHandler := handler.NewAdminGroupHandler(zapLogger, adminGroupRepository, adminRuleRepository, authRepository, adminGroupService)
@@ -113,7 +112,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService, translateClient)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
 	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
-	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
+	v := router.ProvideRegistrars(logHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
 	adminRouterDeps := router.AdminRouterDeps{
 		LoginM:         login,
 		AuthorizationM: authorization,

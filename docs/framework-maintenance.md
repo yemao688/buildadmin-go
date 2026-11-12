@@ -46,7 +46,7 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 
 三张带配置前缀的台账分别为 `{prefix}migrations`、`{prefix}migrations_framework`、`{prefix}migrations_business`，统一使用 `version/migration_name/start_time/end_time/breakpoint` 五列；业务轨道不使用 `batch`/`revision`，也没有独立断点表。
 
-新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`；`module/index` 属于显式豁免。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由，新增非三段式路由必须在评审中显式处理；启动 debug 模式会输出未登记也未豁免的路由告警。
+新增 `/admin/*` 路由时必须二选一：(a) 通过迁移/种子登记 `admin_rule`（可授权），或 (b) 在路由注册器中用 `middleware.RegisterPermissionExempt` 声明豁免（对齐 PHP `noNeedPermission`）。当前安全 seed 覆盖 `auth/adminLog/del` 与 `routine/config/sendtestmail`。Authorization 与启动诊断只覆盖三段式 `/admin/<controller>/<action>` 路由，新增非三段式路由必须在评审中显式处理；启动 debug 模式会输出未登记也未豁免的路由告警。
 
 迁移回调分为两类契约：`VerifyBaseline` 是应用迁移时的一次性基线契约，只在对应 `Up` 成功后执行；失败会随应用重试，已完成的迁移记录不再执行它，因此判据可以精确描述该迁移刚建立的基线。`VerifySchema` 与 `VerifyUpgradeData` 是 standing 运行时不变量，每次 migrate 与每次 serve 启动都会执行，判据必须兼容业务仓库在基线之上的合法改造。
 

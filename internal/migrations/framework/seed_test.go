@@ -96,6 +96,29 @@ func TestEnsureSecuritySeedRowsSelfHealsWithoutOverwriting(t *testing.T) {
 	require.Equal(t, "自定义敏感", sensitive.Name)
 }
 
+func TestRemoveLegacyModuleStoreMenusIsIdempotent(t *testing.T) {
+	db := openSeedSQLite(t)
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
+	cfg := seedTestConfig()
+	for _, row := range []struct {
+		pid              int
+		typ, title, name string
+	}{
+		{0, "menu", "模块市场", "moduleStore/moduleStore"},
+		{1, "button", "安装", "moduleStore/moduleStore/install"},
+		{0, "menu", "CRUD代码生成", "crud/crud"},
+	} {
+		require.NoError(t, db.Exec("INSERT INTO `ba_admin_rule` (pid, type, title, name) VALUES (?, ?, ?, ?)", row.pid, row.typ, row.title, row.name).Error)
+	}
+	require.NoError(t, removeLegacyModuleStore(db, cfg))
+	var count int64
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? OR name LIKE ?", "moduleStore/moduleStore", "moduleStore/moduleStore/%").Count(&count).Error)
+	require.Zero(t, count)
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ?", "crud/crud").Count(&count).Error)
+	require.Equal(t, int64(1), count)
+	require.NoError(t, removeLegacyModuleStore(db, cfg))
+}
+
 func TestSeedCountryMenusDeduplicatesOnParentNameAndType(t *testing.T) {
 	db := openSeedSQLite(t)
 	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))

@@ -52,7 +52,7 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 func TestIsExcludedControllerFile(t *testing.T) {
 	excluded := []string{
 		"provider.go", "base.go", "common.go", "response.go", "route.go",
-		"ajax.go", "dashboard.go", "index.go", "module.go",
+		"ajax.go", "dashboard.go", "index.go",
 		"crud.go", "crud_log.go",
 		"routine_admin_info.go", "routine_config.go",
 		"security_data_recycle.go", "user.go", "user_money_log.go",

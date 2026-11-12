@@ -37,6 +37,9 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	if err := ensureSecuritySeedRows(db, config); err != nil {
 		return err
 	}
+	if err := removeLegacyModuleStore(db, config); err != nil {
+		return err
+	}
 	if err := normalizeFreshSensitiveSeed(db, config); err != nil {
 		return err
 	}
@@ -79,6 +82,17 @@ func ensureSecuritySeedRows(db *gorm.DB, config *conf.Configuration) error {
 		2, "会员数据", "user.User", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, now, now, 2,
 	).Error; err != nil {
 		return fmt.Errorf("ensure %s member seed: %w", sensitive, err)
+	}
+	return nil
+}
+
+// removeLegacyModuleStore 清理 PHP 模块市场留下的菜单/按钮规则。Go 框架没有
+// 模块安装能力，前端页面与后端桩已移除；旧库通过常驻 seed 幂等清理，避免
+// 留下指向不存在页面的 404 菜单。admin_group.rules 里的旧 id 悬空不影响鉴权。
+func removeLegacyModuleStore(db *gorm.DB, config *conf.Configuration) error {
+	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
+	if err := db.Exec("DELETE FROM "+table+" WHERE name = ? OR name LIKE ?", "moduleStore/moduleStore", "moduleStore/moduleStore/%").Error; err != nil {
+		return fmt.Errorf("remove legacy module store menus: %w", err)
 	}
 	return nil
 }

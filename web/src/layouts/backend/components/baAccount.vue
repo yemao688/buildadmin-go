@@ -1,4 +1,4 @@
-<!-- 模块市场 和 CRUD 记录页面等地方的 BuildAdmin 官方账户登录弹窗 -->
+<!-- CRUD 记录页面等地方的 BuildAdmin 官方账户登录弹窗 -->
 <template>
     <div>
         <el-dialog v-model="model" class="ba-account-dialog" width="25%" :title="t('layouts.Member information')">

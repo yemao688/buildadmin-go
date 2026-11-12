@@ -74,8 +74,8 @@ func TestInstall(t *testing.T) {
 	if err := db.Table("go_admin_rule").Count(&ruleCount).Error; err != nil {
 		t.Fatal(err)
 	}
-	if ruleCount != 96 {
-		t.Fatalf("admin rule count=%d, want 96", ruleCount)
+	if ruleCount != 90 {
+		t.Fatalf("admin rule count=%d, want 90", ruleCount)
 	}
 	var rules []struct {
 		ID    int32
