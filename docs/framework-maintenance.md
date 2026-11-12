@@ -54,9 +54,12 @@ PHP 上游源码以本地检出形式放在仓库根的 `.slim/`（该目录被 
 
 ```text
 prefix validation → migration lock → upstream-compatible preflight
-→ install/recovery decision → fresh-snapshot AutoMigrate
-→ three ledger bootstrap/validation steps → official migrations
+→ install/recovery decision
+→ 非 strict-upgrade：fresh-snapshot AutoMigrate
+  strict-upgrade：仅补建缺失的核心表（core.EnsureMissingCoreTables）
+→ three ledger bootstrap/validation steps → official migrations（冻结 DDL）
 → reconciliation → official seed (fresh/recovery only)
+→ framework seed（每次 migrate/serve 幂等补种）
 → framework migrations → business migrations
 → framework.VerifyCurrent → current schema validation
 ```
@@ -65,10 +68,14 @@ prefix validation → migration lock → upstream-compatible preflight
 - `serve` 启动默认运行同一编排（`app.auto_migrate: apply`），因此每条迁移都必须保持幂等、可重跑；`VerifySchema`/`VerifyUpgradeData` 现在每次启动都执行，不只 `migrate`。
 - 不得用表为空或 `id=1` 检查推断官方 seed 状态；seed 拥有的写入只有在官方 seed 之后才可靠，编排器保证它在 framework/business 的 `Up` 之前运行。
 - 破坏性重命名、类型变更和回填不得依赖 AutoMigrate。
+- **framework seed 常驻化**：`framework.EnsureSeed` 在每次 `migrate`/`serve` 都幂等执行 `finalSeedAndIntegrity`（安全规则会员行、国家菜单/语言、upload 配置），使 3.3.8 之后新增的 framework seed 能到达 framework 账本已完成的存量库。它必须在 `RunFrameworkMigrations` 之前运行：已记录迁移的 `VerifySchema`/`VerifyUpgradeData` 在 runner 内先于后续步骤执行，被删除的官方会员安全种子行（`security_data_recycle` id=5、`security_sensitive_data` id=2）要靠这次补种自愈，而不是让启动失败。行为影响：用户手动删除的 framework-owned 国家菜单/upload 配置会在下次启动被补回；已存在行一律不覆盖。
+- **strict-upgrade 只补缺失核心表**：`core.EnsureMissingCoreTables` 遍历 `CoreModels()`，仅对 `Migrator().HasTable` 为 false 的表执行 `AutoMigrate`（并对补建表写表注释），绝不改动已存在表的结构。旧版本或缺 `country_*` 表的库因此不会在 framework seed/verify 阶段硬失败。业务塑形过的核心列不受影响。
+- **official 迁移使用冻结 DDL**：已发布的 official 迁移不读取 `upload`/`model` 的 gorm tag，`ALTER TABLE ... MODIFY/ADD COLUMN ...` 在迁移内写死列定义（类型、默认值、注释），上游同步改 tag 不会悄悄改变历史迁移的行为；幂等检查（`HasColumn`）与历史回填逻辑保留。
 
 ## 账本与当前基线
 
 - 官方迁移身份（ID、名称、内容）一经发布永不重写；兼容问题只能用新增迁移解决。
 - 账户状态迁移由 `internal/migrations/framework/0001_final_seed_and_integrity.go` 及其 helper 负责，将历史账户值 `0/1` 转换为 `disable/enable`。
+- 常驻 `VerifySchema` 只断言国家字典的表/列/索引与 `status ∈ (0,1)`，不要求「至少一门启用语言」：后台可以合法禁用全部语言，常驻检查不能因此让全站不可启动。
 - 全新安装建立 24 张表，不包含 `test_build`、`admin_hierarchy_lock`、`user_group`、`user_rule`、`user_score_log`；管理员层级互斥使用事务内 `admin` 锚定行 `FOR UPDATE`，由 InnoDB 负责死锁检测并由 `innodb_lock_wait_timeout` 兜底超时。
 - 业务仓库首次安装按当前快照建立三张带前缀的迁移台账；业务回滚只作用于 business 轨道，默认回滚最近一条已完成迁移，也支持 `--to-breakpoint`。

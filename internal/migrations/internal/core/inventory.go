@@ -62,19 +62,70 @@ func CoreModels() []any {
 	return models
 }
 
+// EnsureMissingCoreTables 只为缺失的核心表补建 schema，已存在的表一律不动
+// （strict-upgrade 场景：旧库可能缺少后加的表，如 country_*）。
+// 返回是否发生了补建。
+func EnsureMissingCoreTables(db *gorm.DB, prefix string) (bool, error) {
+	created := false
+	for _, table := range coreTables {
+		ok, err := ensureMissingCoreTable(db, prefix, table)
+		if err != nil {
+			return created, err
+		}
+		if ok {
+			created = true
+		}
+	}
+	return created, nil
+}
+
+// ensureMissingCoreTable 只建目标表自身：GORM 的 AutoMigrate 默认会连带
+// 迁移关联模型（如 upload.Attachment 的 belongsTo 会把已有 admin/user 表
+// 补列），因此这里用独立 Config 关掉关系迁移，保证「已存在表一律不动」。
+func ensureMissingCoreTable(db *gorm.DB, prefix string, table CoreTable) (bool, error) {
+	if db.Migrator().HasTable(table.NewModel()) {
+		return false, nil
+	}
+	tx := db.Session(&gorm.Session{NewDB: true})
+	if tx.Config != nil {
+		config := *tx.Config
+		config.IgnoreRelationshipsWhenMigrating = true
+		tx.Config = &config
+	}
+	var options string
+	if tx.Dialector.Name() == "mysql" {
+		options = "ENGINE=InnoDB"
+	}
+	if err := tx.Set("gorm:table_options", options).AutoMigrate(table.NewModel()); err != nil {
+		return false, fmt.Errorf("create missing core table %s: %w", prefix+table.LogicalName, err)
+	}
+	if err := applyTableComment(db, prefix, table); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ApplyTableComments writes the table comments after the fresh snapshot,
 // since GORM AutoMigrate cannot express table-level comments from struct
 // tags. The values mirror the PHP upstream install migration.
 func ApplyTableComments(db *gorm.DB, prefix string) error {
 	for _, table := range coreTables {
-		if table.Comment == "" {
-			continue
+		if err := applyTableComment(db, prefix, table); err != nil {
+			return err
 		}
-		name := prefix + table.LogicalName
-		comment := strings.ReplaceAll(table.Comment, "'", "''")
-		if err := db.Exec("ALTER TABLE `" + name + "` COMMENT = '" + comment + "'").Error; err != nil {
-			return fmt.Errorf("set table comment %s: %w", name, err)
-		}
+	}
+	return nil
+}
+
+// applyTableComment 只写 MySQL 表注释；sqlite 等测试方言没有表注释概念。
+func applyTableComment(db *gorm.DB, prefix string, table CoreTable) error {
+	if table.Comment == "" || db.Dialector.Name() != "mysql" {
+		return nil
+	}
+	name := prefix + table.LogicalName
+	comment := strings.ReplaceAll(table.Comment, "'", "''")
+	if err := db.Exec("ALTER TABLE " + QuoteIdentifier(name) + " COMMENT = '" + comment + "'").Error; err != nil {
+		return fmt.Errorf("set table comment %s: %w", name, err)
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/business"
+	"buildadmin-go/internal/migrations/framework"
 	"buildadmin-go/internal/migrations/internal/core"
 	"gorm.io/gorm"
 )
@@ -67,6 +68,10 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 			if err := core.ApplyTableComments(pinned, config.Database.Prefix); err != nil {
 				return fmt.Errorf("core table comments: %w", err)
 			}
+		} else if _, err := core.EnsureMissingCoreTables(pinned, config.Database.Prefix); err != nil {
+			// strict-upgrade 只补建缺失的核心表（旧库可能没有 country_* 等
+			// 后加表），绝不改动已存在表的结构。
+			return fmt.Errorf("strict upgrade missing core tables: %w", err)
 		}
 		if err := BootstrapOfficialLedger(pinned, config); err != nil {
 			return fmt.Errorf("official ledger bootstrap: %w", err)
@@ -107,6 +112,14 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 				return err
 			}
 			report.Seeded = true
+		}
+		// framework 迁移账本只记录一次，其 Up 里的种子因此不会在存量库重放；
+		// 每次 migrate/serve 都幂等补种，使新版本新增的 framework seed 能到达
+		// 已完成的库。必须在 RunFrameworkMigrations 之前执行：已记录迁移的
+		// VerifySchema/VerifyUpgradeData 在 runner 内先于后续步骤运行，被删除的
+		// 安全种子行要在常驻断言之前自愈。
+		if err := framework.EnsureSeed(pinned, config); err != nil {
+			return fmt.Errorf("framework seed: %w", err)
 		}
 		report.Framework, err = RunFrameworkMigrations(pinned, config, official, frameworks)
 		if err != nil {
