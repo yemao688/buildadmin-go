@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	api "buildadmin-go/internal/api/handler"
@@ -31,6 +32,29 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 	}
 	for path, found := range want {
 		require.True(t, found, "public user route %s is not registered", path)
+	}
+}
+
+// TestPublicRouteSetHasNoOrphans 保证 api_routes.go 的 public 名单不是
+// 一份会漂移的愿望清单：名单里的每个 method+path 都必须真的注册到根引擎，
+// 否则免登录声明会静默失效（新增端点忘了注册）或留下死条目。
+func TestPublicRouteSetHasNoOrphans(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	set := newAPIRouteSet(engine, engine.Group("/api/")).(*apiRouteSet)
+	NewUserRegistrar(&api.UserHandler{}).Register(set)
+	NewCommonRegistrar(&api.CommonHandler{}).Register(set)
+	NewIndexRegistrar(&api.IndexHandler{}).Register(set)
+
+	registered := make(map[string]bool)
+	for _, route := range engine.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+	for key := range set.public {
+		method, rel, ok := strings.Cut(key, " ")
+		require.True(t, ok, "malformed public route key %q", key)
+		path := "/api/" + rel
+		require.True(t, registered[method+" "+path], "public route %s %s is declared but not registered", method, path)
 	}
 }
 

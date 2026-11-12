@@ -30,22 +30,35 @@ var adminNamingRules = []adminNamingRule{
 	{dir: "service", suffixes: []string{"Service"}},
 	{dir: "handler", suffixes: []string{"Handler"}},
 	{dir: "dto", suffixes: []string{"Param"}},
+	{dir: "repository", suffixes: []string{"Repository"}},
+	{dir: "router", suffixes: []string{"Registrar"}},
 }
 
 // legacyAdminNames 键 = "<dir>/<file>:<TypeName>"，值 = 历史原因。
 var legacyAdminNames = map[string]string{
-	"service/routine_config.go:ConfigService":                        "PHP 上游控制器名 Config（表 routine_config）",
-	"service/security_sensitive_data.go:SensitiveDataService":        "PHP 上游控制器名 SensitiveData",
-	"handler/crud_log.go:LogHandler":                                 "PHP 上游控制器名 Log（表 crud_log）",
-	"handler/routine_admin_info.go:AdminInfoHandler":                 "PHP 上游控制器名 AdminInfo",
-	"handler/routine_attachment.go:AttachmentHandler":                "PHP 上游控制器名 Attachment",
-	"handler/routine_config.go:ConfigHandler":                        "PHP 上游控制器名 Config",
-	"handler/security_data_recycle.go:DataRecycleHandler":            "PHP 上游控制器名 DataRecycle",
-	"handler/security_data_recycle_log.go:DataRecycleLogHandler":     "PHP 上游控制器名 DataRecycleLog",
-	"handler/security_sensitive_data.go:SensitiveDataHandler":        "PHP 上游控制器名 SensitiveData",
-	"handler/security_sensitive_data_log.go:SensitiveDataLogHandler": "PHP 上游控制器名 SensitiveDataLog",
-	"handler/user_money_log.go:MoneyLogHandler":                      "PHP 上游控制器名 MoneyLog",
-	"dto/routine_mail.go:MailParam":                                  "PHP 上游控制器名 Mail",
+	"service/routine_config.go:ConfigService":                         "PHP 上游控制器名 Config（表 routine_config）",
+	"service/security_sensitive_data.go:SensitiveDataService":         "PHP 上游控制器名 SensitiveData",
+	"handler/crud_log.go:LogHandler":                                  "PHP 上游控制器名 Log（表 crud_log）",
+	"handler/routine_admin_info.go:AdminInfoHandler":                  "PHP 上游控制器名 AdminInfo",
+	"handler/routine_attachment.go:AttachmentHandler":                 "PHP 上游控制器名 Attachment",
+	"handler/routine_config.go:ConfigHandler":                         "PHP 上游控制器名 Config",
+	"handler/security_data_recycle.go:DataRecycleHandler":             "PHP 上游控制器名 DataRecycle",
+	"handler/security_data_recycle_log.go:DataRecycleLogHandler":      "PHP 上游控制器名 DataRecycleLog",
+	"handler/security_sensitive_data.go:SensitiveDataHandler":         "PHP 上游控制器名 SensitiveData",
+	"handler/security_sensitive_data_log.go:SensitiveDataLogHandler":  "PHP 上游控制器名 SensitiveDataLog",
+	"handler/user_money_log.go:MoneyLogHandler":                       "PHP 上游控制器名 MoneyLog",
+	"dto/routine_mail.go:MailParam":                                   "PHP 上游控制器名 Mail",
+	"repository/routine_attachment.go:AttachmentRepository":           "PHP 上游控制器名 Attachment（表 routine_attachment）",
+	"repository/routine_config.go:ConfigRepository":                   "PHP 上游控制器名 Config（表 routine_config）",
+	"router/crud_log.go:LogRegistrar":                                 "PHP 上游控制器名 Log（表 crud_log）",
+	"router/routine_admin_info.go:AdminInfoRegistrar":                 "PHP 上游控制器名 AdminInfo",
+	"router/routine_attachment.go:AttachmentRegistrar":                "PHP 上游控制器名 Attachment",
+	"router/routine_config.go:ConfigRegistrar":                        "PHP 上游控制器名 Config",
+	"router/security_data_recycle.go:DataRecycleRegistrar":            "PHP 上游控制器名 DataRecycle",
+	"router/security_data_recycle_log.go:DataRecycleLogRegistrar":     "PHP 上游控制器名 DataRecycleLog",
+	"router/security_sensitive_data.go:SensitiveDataRegistrar":        "PHP 上游控制器名 SensitiveData",
+	"router/security_sensitive_data_log.go:SensitiveDataLogRegistrar": "PHP 上游控制器名 SensitiveDataLog",
+	"router/user_money_log.go:UserLogRegistrar":                       "PHP 上游控制器名 UserLog（表 user_money_log）",
 }
 
 type adminNamingViolation struct {
@@ -161,6 +174,11 @@ func TestAdminNamingRules(t *testing.T) {
 
 func TestAdminNamingDetectsViolations(t *testing.T) {
 	root := t.TempDir()
+	for _, rule := range adminNamingRules {
+		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	samples := []struct {
 		file   string
 		source string
