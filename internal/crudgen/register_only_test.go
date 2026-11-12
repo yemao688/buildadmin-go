@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestRegisterOnlyRejectsNonProtectedTableBeforeDependencies 验证三分支：
+// 验证三分支：
 // registerOnly + 非受保护表在依赖可用之前即被拒绝（nil db/cfg 也能给出
 // 明确错误，与受保护表拒绝的先例一致）。
 func TestRegisterOnlyRejectsNonProtectedTableBeforeDependencies(t *testing.T) {
@@ -21,7 +21,7 @@ func TestRegisterOnlyRejectsNonProtectedTableBeforeDependencies(t *testing.T) {
 	require.Contains(t, err.Error(), `"orders" is not protected`)
 }
 
-// TestRegisterOnlyFunctionLevelRejectsNonProtected 验证 registerOnlyFromSpec
+// 验证 registerOnlyFromSpec
 // 内部防御性复核（函数级调用同样 fail-closed；纯校验无需 db）。
 func TestRegisterOnlyFunctionLevelRejectsNonProtected(t *testing.T) {
 	_, err := registerOnlyFromSpec(GenerateOptions{
@@ -31,7 +31,7 @@ func TestRegisterOnlyFunctionLevelRejectsNonProtected(t *testing.T) {
 	require.Contains(t, err.Error(), "is not protected")
 }
 
-// TestRegisterOnlyRequiresDataScope 验证 registerOnly 表必须声明 reassignable
+// 验证 registerOnly 表必须声明 reassignable
 // 或 inheritFrom（否则登记无意义）。
 func TestRegisterOnlyRequiresDataScope(t *testing.T) {
 	_, err := registerOnlyFromSpec(GenerateOptions{
@@ -41,7 +41,7 @@ func TestRegisterOnlyRequiresDataScope(t *testing.T) {
 	require.Contains(t, err.Error(), "must declare dataScope.reassignable (parent registration) or dataScope.inheritFrom (child registration)")
 }
 
-// TestRegisterOnlyParentRegistration 验证父表登记（reassignable）纯校验通过，
+// 验证父表登记（reassignable）纯校验通过，
 // 不写 crud_log、不生成文件（返回空结果）。
 func TestRegisterOnlyParentRegistration(t *testing.T) {
 	result, err := registerOnlyFromSpec(GenerateOptions{
@@ -62,7 +62,7 @@ func TestRegisterOnlyParentRegistration(t *testing.T) {
 	require.Zero(t, result.LogID) // 不写 crud_log
 }
 
-// TestRegisterOnlyChildRequiresRegisteredParent 验证子表登记（inheritFrom）的
+// 验证子表登记（inheritFrom）的
 // fail-closed：父表 spec 未登记（仓库无 crud_specs/<parent>.yaml）时拒绝——
 // 用不存在的父表名验证，不依赖仓库状态。
 func TestRegisterOnlyChildRequiresRegisteredParent(t *testing.T) {
@@ -86,7 +86,7 @@ func TestRegisterOnlyChildRequiresRegisteredParent(t *testing.T) {
 	require.Contains(t, err.Error(), "inheritFrom parent")
 }
 
-// TestRegisterOnlyDataScopeConfigCarries 验证 registerOnly 标记随 spec 解析
+// 验证 registerOnly 标记随 spec 解析
 // 进入 Table（LoadSpec 解析形态），且与数据权限声明并存。
 func TestRegisterOnlyDataScopeConfigCarries(t *testing.T) {
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}

@@ -122,7 +122,7 @@ func TestQueryBuilderOrder(t *testing.T) {
 	}
 }
 
-// TestQueryBuilderDefaultOrder 验证表默认排序（生成器填充 DefaultOrder）：
+// 验证表默认排序（生成器填充 DefaultOrder）：
 // 无 order 参数时生效并追加主键 desc（orderGuarantee）；主排序本身是主键
 // 时不追加；非法默认排序静默回退主键 desc；显式 order 参数优先覆盖。
 func TestQueryBuilderDefaultOrder(t *testing.T) {
@@ -199,7 +199,7 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 	}
 }
 
-// TestQueryBuilderSearchJoinExists 验证点号关联字段搜索（对齐 PHP 上游
+// 验证点号关联字段搜索（对齐 PHP 上游
 // withJoin 语义的 Go EXISTS 落地）：LIKE/等值/IN/RANGE 生成正确的 EXISTS
 // 子查询与参数；alias 未登记、无 SearchJoins、多层点号、注入形态字段名
 // 一律 400；点号字段与主表普通字段可组合搜索。

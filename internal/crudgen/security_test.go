@@ -114,7 +114,7 @@ func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
 	}
 }
 
-// TestValidateSymlinkContainmentMissingRoot 覆盖生产容器镜像场景：root 目录
+// 覆盖生产容器镜像场景：root 目录
 // 不存在（容器里没有 internal/ 源码树，只有二进制 + crud_specs），
 // EvalSymlinks 失败时须回退原始路径参与包含性比较，不能误判逃逸
 // （修复前 resolvedRoot 为空串导致 filepath.Rel 报错 → "outside permitted

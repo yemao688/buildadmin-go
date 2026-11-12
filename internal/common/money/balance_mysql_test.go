@@ -14,8 +14,8 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// fixture opens the shared mysql_test database with an isolated per-test table
-// prefix (gated by testutil.OpenMySQL; skipped when mysql_test is disabled).
+// fixture 使用独立的每测试表前缀打开共享的 mysql_test 数据库
+// （由 testutil.OpenMySQL 门禁；mysql_test 禁用时跳过）。
 type fixture struct {
 	t   *testing.T
 	db  *gorm.DB
@@ -35,7 +35,6 @@ func newFixture(t *testing.T) *fixture {
 	return &fixture{t: t, db: db, svc: NewUserBalanceService()}
 }
 
-// addUser inserts a user and returns it.
 func (f *fixture) addUser(t *testing.T, owner int32, name string) model.User {
 	t.Helper()
 	u := model.User{AdminID: owner, Username: name, Nickname: name, Password: "p", Status: "enable"}
@@ -43,8 +42,8 @@ func (f *fixture) addUser(t *testing.T, owner int32, name string) model.User {
 	return u
 }
 
-// apply runs one balance change inside a real transaction, mirroring how
-// adapters will call the service (FOR UPDATE requires an open transaction).
+// apply 在真实事务中执行一次余额变动，模拟适配器的调用方式
+// （FOR UPDATE 需要打开的事务）。
 func (f *fixture) apply(in ApplyInput) (*model.MoneyLog, error) {
 	var (
 		log *model.MoneyLog
@@ -57,14 +56,12 @@ func (f *fixture) apply(in ApplyInput) (*model.MoneyLog, error) {
 	return log, err
 }
 
-// logs returns the money logs of a user ordered by id.
 func (f *fixture) logs(userID int32) []model.MoneyLog {
 	var logs []model.MoneyLog
 	require.NoError(f.t, f.db.Where("user_id = ?", userID).Order("id").Find(&logs).Error)
 	return logs
 }
 
-// countLogs returns the number of money logs of a user.
 func (f *fixture) countLogs(userID int32) int64 {
 	var n int64
 	require.NoError(f.t, f.db.Model(&model.MoneyLog{}).Where("user_id = ?", userID).Count(&n).Error)
@@ -78,8 +75,7 @@ func TestApplyDeltaSystemFlowSuccess(t *testing.T) {
 	log, err := f.apply(ApplyInput{UserID: u.ID, Delta: 1.25, Memo: "system", Scope: SystemScope()})
 	require.NoError(t, err)
 
-	// Log fields mirror the legacy semantics: AdminID is the target user's
-	// owner, not an operator identity.
+	// 日志字段沿用既有语义：AdminID 是目标用户的属主，不是操作者身份。
 	require.Equal(t, int32(20), log.AdminID)
 	require.Equal(t, u.ID, log.UserID)
 	require.Equal(t, float64(0), log.Before)
@@ -130,7 +126,7 @@ func TestApplyDeltaRequiresScope(t *testing.T) {
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-no-scope")
 
-	// A nil scope is rejected instead of silently meaning "unrestricted".
+	// nil scope 会被拒绝，而不是被静默当作“不受限”。
 	log, err := f.apply(ApplyInput{UserID: u.ID, Delta: 1})
 	require.ErrorIs(t, err, ErrScopeRequired)
 	require.Nil(t, log)
@@ -143,8 +139,7 @@ func TestApplyDeltaHonorsScope(t *testing.T) {
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-scoped")
 
-	// A scope that denies the owner must fail the locked read, proving the
-	// scope is applied to the balance query itself.
+	// 拒绝属主的 scope 必须让加锁读取失败，证明 scope 确实作用在余额查询本身。
 	denied := Scope(func(db *gorm.DB) *gorm.DB {
 		return db.Where("admin_id = ?", 40)
 	})
@@ -183,17 +178,17 @@ func TestApplyDeltaTypeResolution(t *testing.T) {
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-type")
 
-	// Empty Type with no Log preset defaults to "system".
+	// Type 为空且 Log 载波未预置时默认 "system"。
 	log, err := f.apply(ApplyInput{UserID: u.ID, Delta: 1, Scope: SystemScope()})
 	require.NoError(t, err)
 	require.Equal(t, "system", log.Type)
 
-	// ApplyInput.Type wins when the Log carrier does not preset it.
+	// Log 载波未预置时以 ApplyInput.Type 为准。
 	log, err = f.apply(ApplyInput{UserID: u.ID, Delta: 1, Type: "recharge", Scope: SystemScope()})
 	require.NoError(t, err)
 	require.Equal(t, "recharge", log.Type)
 
-	// A Type preset on the Log carrier wins over ApplyInput.Type.
+	// Log 载波上预置的 Type 优先于 ApplyInput.Type。
 	carrier := &model.MoneyLog{Type: "withdraw"}
 	log, err = f.apply(ApplyInput{UserID: u.ID, Delta: 1, Type: "recharge", Log: carrier, Scope: SystemScope()})
 	require.NoError(t, err)
@@ -205,9 +200,8 @@ func TestApplyDeltaConcurrentForUpdateConsistency(t *testing.T) {
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-concurrent")
 
-	// Seed balance 10, then apply +5 and -3 concurrently. FOR UPDATE must
-	// serialize the two transactions so the chain stays continuous and the
-	// final balance is exact.
+	// 先播种余额 10，再并发 +5 与 -3。FOR UPDATE 必须串行化两个事务，
+	// 使变动链保持连续且最终余额精确。
 	_, err := f.apply(ApplyInput{UserID: u.ID, Delta: 10, Scope: SystemScope()})
 	require.NoError(t, err)
 
@@ -235,8 +229,8 @@ func TestApplyDeltaConcurrentForUpdateConsistency(t *testing.T) {
 	require.Len(t, logs, 3)
 	require.Equal(t, float64(0), logs[0].Before)
 	require.Equal(t, float64(10), logs[0].After)
-	// Either credit-then-debit (10->15->12) or debit-then-credit (10->7->12);
-	// the chain must be continuous either way.
+	// 先充值后扣款（10->15->12）或先扣款后充值（10->7->12）均可，
+	// 但变动链必须连续。
 	require.Equal(t, logs[1].After, logs[2].Before)
 	require.Equal(t, float64(12), logs[2].After)
 }

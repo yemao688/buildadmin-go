@@ -64,7 +64,7 @@ func (l *attachmentConfigSQLCounter) Trace(_ context.Context, _ time.Time, fc fu
 	}
 }
 
-// TestAttachmentListAliossSettingsBatchedOnce 覆盖列表批处理路径：3 行
+// 覆盖列表批处理路径：3 行
 // alioss 附件只允许 1 次 ba_config（group='upload'）查询（原先每行 1 次 =
 // 3 次），且 FullUrl/Suffix 与单行路径 DealData 逐字段一致。
 func TestAttachmentListAliossSettingsBatchedOnce(t *testing.T) {

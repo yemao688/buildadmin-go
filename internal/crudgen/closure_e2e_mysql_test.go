@@ -47,7 +47,7 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestGeneratedClosureMySQLReassignable 验证 reassignable 生成产物的运行时语义：
+// 验证 reassignable 生成产物的运行时语义：
 // 受限操作者 Add 强制归属、Edit 只能改到自己麾下；超管 Add 可指定归属、Edit 任意。
 func TestGeneratedClosureMySQLReassignable(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
@@ -94,7 +94,7 @@ func TestGeneratedClosureMySQLReassignable(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestGeneratedClosureMySQLCascade 验证级联归属生成产物的运行时语义：
+// 验证级联归属生成产物的运行时语义：
 // 子表（inheritFrom）Add 继承主实体当前归属并校验 actor 麾下；主表
 // （reassignable + cascadeOwners）Edit 改归属时同事务级联回首子表 admin_id。
 func TestGeneratedClosureMySQLCascade(t *testing.T) {

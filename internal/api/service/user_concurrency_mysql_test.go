@@ -76,8 +76,7 @@ func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
 	require.True(t, ok, "driver type = %T", tokenHelper.Driver)
 	<-raceDriver.getStarted
 
-	// Simulate a password-change transaction clearing sessions while refresh waits
-	// for the same user row lock.
+	// 模拟改密事务清除会话：此时刷新正等待同一用户行锁。
 	require.NoError(t, tokenHelper.Clear("user-refresh", user.ID))
 	close(release)
 	require.NoError(t, <-lockDone)

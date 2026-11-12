@@ -26,8 +26,7 @@ import (
 type Admin = model.Admin
 type AdminGroup = model.AdminGroup
 
-// scopeFixture wires the repository scoped primitives and the graduated
-// services against an isolated per-test table prefix.
+// scopeFixture 以每测试独立的表前缀装配仓库 scoped 原语与已毕业的 service。
 type scopeFixture struct {
 	db       *gorm.DB
 	cfg      *conf.Configuration
@@ -101,7 +100,7 @@ func scopeCtx(t *testing.T, id int32, unrestricted bool) *gin.Context {
 	return c
 }
 
-// scopeActor returns the actor attached by scopeCtx.
+// scopeActor 返回 scopeCtx 注入的 actor。
 func scopeActor(t *testing.T, ctx *gin.Context) data_scope.Actor {
 	t.Helper()
 	a, ok := data_scope.ActorFromContext(ctx)
@@ -117,7 +116,7 @@ func (f *scopeFixture) addUser(t *testing.T, ctx *gin.Context, adminID int32, na
 	return u
 }
 
-// userParams converts a model.User into the transport-free service shape.
+// userParams 把 model.User 转成不依赖传输层的 service 形状。
 func userParams(u model.User) UserParams {
 	params := UserParams{
 		Username: u.Username,
@@ -175,7 +174,7 @@ func TestUserClosureScopeCRUDAndSelect(t *testing.T) {
 	require.Error(t, f.userSvc.Del(leaf.Request.Context(), []int32{u20.ID}, scopeActor(t, leaf)))
 	require.NoError(t, f.userSvc.Del(child.Request.Context(), []int32{u30.ID}, scopeActor(t, child)))
 	require.NoError(t, f.userSvc.Del(other.Request.Context(), []int32{u40.ID}, scopeActor(t, other)))
-	// A normal scoped list is also the select source and must never expose a sibling.
+	// 正常 scoped 列表同时是 select 数据源，绝不能暴露兄弟节点数据。
 	list, _, err = f.root.List(child)
 	require.NoError(t, err)
 	for _, row := range list {
@@ -221,7 +220,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 	disabled := model.User{AdminID: 30, Username: "disabled-owner", Nickname: "disabled-owner", Password: "p", Status: "enable"}
 	require.Error(t, f.userSvc.Add(ctx.Request.Context(), userParams(disabled), actor))
 
-	// An unchanged disabled owner must not block ordinary profile edits.
+	// 归属未变且处于禁用状态的属主不应阻塞普通资料编辑。
 	keep := f.addUser(t, ctx, 30, "keep-disabled-owner")
 	keep.Nickname = "keep-disabled-owner-renamed"
 	require.NoError(t, f.userSvc.Edit(ctx.Request.Context(), keep.ID, userParams(keep), actor))
@@ -232,8 +231,8 @@ func TestUserOwnerAssignmentInvalidTargetStates(t *testing.T) {
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
 
-	// admin_id=0 means "assign to the actor" (covered by
-	// TestUserOwnerAssignmentAndLogTransfer); only negative owners are invalid.
+	// admin_id=0 表示“归属给当前 actor”；只有负数属主非法
+	// （用例 TestUserOwnerAssignmentAndLogTransfer）。
 	for _, adminID := range []int32{-1} {
 		invalid := model.User{AdminID: adminID, Username: "invalid-owner", Nickname: "invalid-owner", Password: "p", Status: "enable"}
 		require.Error(t, f.userSvc.Add(ctx.Request.Context(), userParams(invalid), actor))
@@ -296,9 +295,9 @@ func TestUserConcurrentAddSameUsernameReturnsOneFriendlyDuplicateError(t *testin
 			successes++
 			continue
 		}
-		// Both the service pre-check ("Account exist") and the transactional
-		// duplicate guard ("username already exists") surface the friendly
-		// duplicate wording; which one wins depends on the race.
+		// service 前置检查（"Account exist"）与事务内重复守卫
+		// （"username already exists"）都会输出友好的重复提示，
+		// 最终哪个先命中取决于竞态。
 		require.Contains(t, strings.ToLower(err.Error()), "exist")
 	}
 	require.Equal(t, 1, successes)

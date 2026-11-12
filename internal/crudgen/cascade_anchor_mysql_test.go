@@ -20,7 +20,7 @@ func writeTestSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 	}
 }
 
-// TestValidateInheritParent 验证 inheritFrom 父表校验（specs 驱动）：
+// 验证 inheritFrom 父表校验（specs 驱动）：
 // 父表 spec 缺失或未声明 reassignable 时拒绝；硬契约（owner 列、主键）落实。
 // repo 落点（internal/admin/repository/<table>.go 含锚点块）检查走可注入的
 // repoRootOverride：隔离根下"仓库无该表 repo"恒成立，业务 fork 拥有
@@ -82,13 +82,13 @@ func TestValidateInheritParent(t *testing.T) {
 	require.Contains(t, err.Error(), "primary key must be exactly id")
 }
 
-// TestValidateInheritParentRealUser 使用仓库真实 crud_specs/ 与手写 user repo
+// 使用仓库真实 crud_specs/ 与手写 user repo
 // （registerOnly 登记 + 锚点块）验证通过路径——重装后 crud_log 为空也能通过。
 func TestValidateInheritParentRealUser(t *testing.T) {
 	require.NoError(t, validateInheritParent(DefaultSpecsDir(), "user"))
 }
 
-// TestFindInheritReferrers 验证 inbound inheritFrom 引用扫描（specs 驱动）：
+// 验证 inbound inheritFrom 引用扫描（specs 驱动）：
 // 无引用→空；有子表声明指向主表→列出（含多子表排序）；主实体自身 spec 不计入。
 func TestFindInheritReferrers(t *testing.T) {
 	specsDir := t.TempDir()

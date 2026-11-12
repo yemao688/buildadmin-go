@@ -39,9 +39,8 @@ func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture tables with
-	// sqlite-native DDL matching the runtime column shape.
+	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
+	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
@@ -151,7 +150,7 @@ func TestMemberRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
 	require.NotEqual(t, "Username is exist!", err.Error())
 }
 
-// TestValidateUserTokenStatusSemantics 覆盖 H6a 合并后的行为保持：账号
+// 覆盖 H6a 合并后的行为保持：账号
 // enable 通过、disable 与不存在均返回与旧 IsEnabledUser 分支一致的
 // "Please login first"（enable/disable 双态，不涉及其它状态字段）。
 func TestValidateUserTokenStatusSemantics(t *testing.T) {
@@ -169,7 +168,7 @@ func TestValidateUserTokenStatusSemantics(t *testing.T) {
 	require.EqualError(t, m.ValidateUserToken(99999, "203.0.113.9"), "Please login first")
 }
 
-// TestValidateUserTokenThrottlesLoginMetaWrites 覆盖 H6b 节流：同一 uid 在
+// 覆盖 H6b 节流：同一 uid 在
 // 60s 窗口内的第二次请求不触发写库（login 元信息保持第一次写入值），窗口
 // 过后恢复写库。时钟经 loginMetaTTL.now 注入（测试入口，不导出公开 API）。
 func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
@@ -202,7 +201,7 @@ func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
 	require.Equal(t, "198.51.100.11", third.LastLoginIP)
 }
 
-// TestLoginMetaThrottleConcurrentSafe 验证节流器并发安全（配合 go test -race
+// 验证节流器并发安全（配合 go test -race
 // 检查 map 读写均持锁）。
 func TestLoginMetaThrottleConcurrentSafe(t *testing.T) {
 	th := newLoginMetaThrottle(time.Second)

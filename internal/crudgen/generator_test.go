@@ -112,7 +112,7 @@ func TestAlterChangesOnlyAddAndModify(t *testing.T) {
 	}
 }
 
-// TestSkipManifestPathsAndFilter 验证 skip 产物路径推导与 manifest 过滤：
+// 验证 skip 产物路径推导与 manifest 过滤：
 // skip-frontend 剔除 4 个 web 产物，skip-repo 剔除 repository 文件与所在包
 // provider.go；过滤后 Generated/Shared 不含被跳过路径，且 manifestAllows 的
 // skipped 集合与 filterManifestPaths 使用的集合同源。
@@ -217,7 +217,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	}
 }
 
-// TestManifestAllowsSkippedSubset 验证双向子集语义：
+// 验证双向子集语义：
 //   - skip 方向（全量 → skip）：本次清单是上次清单剔除本次跳过路径后的
 //     等长子集，允许（跳过后重新生成不被拒）；
 //   - 恢复方向（skip → 全量）：上次清单是本次清单的子集，允许（被跳过产物

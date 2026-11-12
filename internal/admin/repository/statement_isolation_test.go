@@ -17,10 +17,9 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// newDryRunDB builds an offline GORM handle: statements are built and logged
-// without opening a MySQL connection, so these tests need no database. The
-// naming strategy mirrors internal/infra/db so model-inferred table names match
-// production (ba_country_currency, not country_currencies).
+// newDryRunDB 构造离线的 GORM handle：语句只构建并记录日志，不打开 MySQL
+// 连接，因此这些测试不需要数据库。命名策略对齐 internal/infra/db，使模型推断
+// 出的表名与生产一致（ba_country_currency，而不是 country_currencies）。
 func newDryRunDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db, err := gorm.Open(
@@ -55,8 +54,7 @@ func (c *queryCapture) last(t *testing.T) string {
 	return c.sqls[len(c.sqls)-1]
 }
 
-// captureQueries records the SQL of every query callback, which keeps the
-// generated repositories' own execution handles observable.
+// captureQueries 记录每个查询回调的 SQL，使生成仓库自身持有的执行 handle 可观测。
 func captureQueries(db *gorm.DB) *queryCapture {
 	capture := &queryCapture{}
 	err := db.Callback().Query().After("gorm:query").Register("test:capture_queries", func(tx *gorm.DB) {
@@ -75,11 +73,9 @@ func newCountryRepositories(t *testing.T, db *gorm.DB) (*repository.CountryLangu
 	return repository.NewCountryLanguageRepository(db, cfg, nil), repository.NewCountryCurrencyRepository(db, cfg, nil)
 }
 
-// TestGeneratedRepositoryReadsKeepSharedStatementClean is the regression test
-// for issue #9: generated GetOne/List used to write db.Statement.Table on a
-// session that shares its statement pointer with the long-lived connection,
-// so every later query on that handle targeted the generated table instead of
-// the one inferred from its model. See internal/crudgen/defined.go.
+// 回归测试（issue #9）：生成的 GetOne/List 曾把 db.Statement.Table 写到与
+// 长连接共享 statement 指针的 session 上，导致该 handle 后续每个查询都指向生成的
+// 表，而不是由模型推断出的表。见 internal/crudgen/defined.go。
 func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
 	db := newDryRunDB(t)
 	ctx := newRepositoryTestContext(t)
@@ -96,14 +92,14 @@ func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
 
 	require.Empty(t, db.Statement.Table, "generated reads must not write the shared statement")
 
-	// A second generated repository must still read its own table.
+	// 第二个生成的仓库仍必须读取自己的表。
 	capture.reset()
 	_, err = currency.GetOne(ctx, 1)
 	require.NoError(t, err)
 	require.Contains(t, capture.last(t), "`ba_country_currency`")
 
-	// Model-inferred queries go through GORM's Session/WithContext clone paths,
-	// which inherit whatever Table the shared statement carries.
+	// 模型推断查询走 GORM 的 Session/WithContext 克隆路径，
+	// 会继承共享 statement 上携带的 Table。
 	capture.reset()
 	var row model.CountryCurrency
 	require.NoError(t, db.WithContext(context.Background()).Model(&model.CountryCurrency{}).Where("code = ?", "USD").Take(&row).Error)
@@ -111,10 +107,8 @@ func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
 	require.NotContains(t, capture.last(t), "ba_country_language")
 }
 
-// TestGeneratedRepositoryReadsKeepRequestTransactionStatementClean covers the
-// request-transaction handle bound by the admin middleware
-// (tx.WithContext(request context), a session that shares its statement with
-// every repository read in the request).
+// 覆盖 admin 中间件绑定的请求事务 handle（tx.WithContext(请求 context)，
+// 该 session 与请求内每次仓库读取共享同一个 statement）。
 func TestGeneratedRepositoryReadsKeepRequestTransactionStatementClean(t *testing.T) {
 	db := newDryRunDB(t)
 	language, _ := newCountryRepositories(t, db)

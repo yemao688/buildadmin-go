@@ -150,7 +150,7 @@ func groupListContext(uid int32) *gin.Context {
 	return ctx
 }
 
-// TestAdminGroupListExcludesSuperGroupForNonSuper 对齐 PHP 上游 Group::getGroups：
+// 对齐 PHP 上游 Group::getGroups：
 // 非超管列表始终过滤——只能看到"自己所在组 ∪ 有资格管理的组"，看不到超管组
 // （rules="*"）。
 func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
@@ -169,7 +169,7 @@ func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
 	require.True(t, names["subset"], "non-super must see the group it is qualified to manage")
 }
 
-// TestAdminGroupListAbsoluteAuthOnlyQualified 对齐 PHP 上游：absoluteAuth=1
+// 对齐 PHP 上游：absoluteAuth=1
 // （管理员编辑页的授权下拉）时不合并自己所在组，只显示有资格管理的分组。
 func TestAdminGroupListAbsoluteAuthOnlyQualified(t *testing.T) {
 	h, db := newAdminGroupHandlerFixture(t)

@@ -44,7 +44,7 @@ func newCacheTestService(t *testing.T, dbName string) (*Service, *gorm.DB) {
 	return s, db
 }
 
-// TestEnabledLanguagesCache 验证 H2 进程内缓存：首次查库、二次走缓存、显式
+// 验证 H2 进程内缓存：首次查库、二次走缓存、显式
 // 失效后重查、TTL 过期后重查。
 func TestEnabledLanguagesCache(t *testing.T) {
 	s, db := newCacheTestService(t, "country-i18n-cache")
@@ -82,7 +82,7 @@ func TestEnabledLanguagesCache(t *testing.T) {
 	require.Equal(t, "zh-cn", lan)
 }
 
-// TestEnabledLanguagesCacheTTLExpiry 验证 TTL 过期后自动重查。
+// 验证 TTL 过期后自动重查。
 func TestEnabledLanguagesCacheTTLExpiry(t *testing.T) {
 	s, db := newCacheTestService(t, "country-i18n-cache-ttl")
 	ctx := context.Background()
@@ -122,7 +122,7 @@ func newCurrencyCacheTestService(t *testing.T, dbName string) (*Service, *gorm.D
 	return s, db
 }
 
-// TestEnabledCurrenciesCache 验证货币列表进程内缓存：首次查库、二次走缓存、
+// 验证货币列表进程内缓存：首次查库、二次走缓存、
 // 显式失效后重查、缓存命中返回副本。
 func TestEnabledCurrenciesCache(t *testing.T) {
 	s, db := newCurrencyCacheTestService(t, "country-currency-cache")
@@ -153,7 +153,7 @@ func TestEnabledCurrenciesCache(t *testing.T) {
 	require.Equal(t, "CNY", fresh[0].Code)
 }
 
-// TestEnabledCurrenciesCacheTTLExpiry 验证 TTL 过期后自动重查。
+// 验证 TTL 过期后自动重查。
 func TestEnabledCurrenciesCacheTTLExpiry(t *testing.T) {
 	s, db := newCurrencyCacheTestService(t, "country-currency-cache-ttl")
 	ctx := context.Background()
@@ -174,7 +174,7 @@ func TestEnabledCurrenciesCacheTTLExpiry(t *testing.T) {
 	require.Equal(t, "CNY", currencies[0].Code)
 }
 
-// TestGetByRequest 验证 DB 翻译串联：有请求语言/无请求语言回退默认语言、
+// 验证 DB 翻译串联：有请求语言/无请求语言回退默认语言、
 // 目标语言缺条回退默认语言、缺失 key 返回 ErrRecordNotFound。
 func TestGetByRequest(t *testing.T) {
 	s, _ := newCacheTestService(t, "country-i18n-cache-request")

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestGetColumnsFallsBackToConnectionDatabase 回归：cfg.Database 为空（如
+// 回归：cfg.Database 为空（如
 // freshMigrationDatabase 仅设 Prefix）时，GetColumns 回退 DATABASE() 而非
 // 空 schema 参数静默返回 0 列（曾导致 EnsureSpecTable 二次物化误判
 // primary key drift）。

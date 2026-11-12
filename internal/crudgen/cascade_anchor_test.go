@@ -100,7 +100,7 @@ func TestApplyCascadeAnchorMissingAnchorFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "anchor block not found")
 }
 
-// TestApplyCascadeAnchorToleratesWhitespace 覆盖空白容忍匹配（评审 MINOR：
+// 覆盖空白容忍匹配（评审 MINOR：
 // gofmt/手改的空格差异不得破坏幂等与替换判定）：手改条目带多余空格时，重新
 // 生成（同 Table 新 ByColumn）应原位替换为规范格式，而不是追加第二条。
 func TestApplyCascadeAnchorToleratesWhitespace(t *testing.T) {
@@ -126,7 +126,7 @@ func TestApplyCascadeAnchorToleratesWhitespace(t *testing.T) {
 	assert.NotContains(t, readAnchorFixture(t, path), "user_order")
 }
 
-// TestApplyCascadeAnchorConvergesDuplicates 覆盖重复条目收敛：同 Table 出现
+// 覆盖重复条目收敛：同 Table 出现
 // 两条（历史手改/旧逻辑残留）时，apply 收敛为一条规范条目，避免级联重复执行。
 func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 	path := writeAnchorFixture(t, anchorFixture("User"))
@@ -143,7 +143,7 @@ func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(out, "ByColumn: \"user_id\""))
 }
 
-// TestWritePreservingModeAtomic 覆盖原子写回：同目录临时文件 + rename，
+// 覆盖原子写回：同目录临时文件 + rename，
 // 原文件权限保留，写回后内容一致。
 func TestWritePreservingModeAtomic(t *testing.T) {
 	path := writeAnchorFixture(t, "package repository\n")
@@ -188,7 +188,7 @@ func TestRemoveCascadeAnchorIdempotentAndTolerant(t *testing.T) {
 	require.NoError(t, removeCascadeAnchor(noAnchor, "ghost"))
 }
 
-// TestCleanupStaleCascadeAnchorsNoop 验证 cleanupStaleCascadeAnchors 的空操作
+// 验证 cleanupStaleCascadeAnchors 的空操作
 // 路径：specsDir 为空、无 reassignable 父表、或父表 repo 缺失时均返回空且不
 // 报错（幂等宽容；实际清理发生在子表生成流程，由父表 repo 锚点块驱动）。
 func TestCleanupStaleCascadeAnchorsNoop(t *testing.T) {

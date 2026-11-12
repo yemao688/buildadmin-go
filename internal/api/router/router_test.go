@@ -35,7 +35,7 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 	}
 }
 
-// TestPublicRouteSetHasNoOrphans 保证 api_routes.go 的 public 名单不是
+// 保证 api_routes.go 的 public 名单不是
 // 一份会漂移的愿望清单：名单里的每个 method+path 都必须真的注册到根引擎，
 // 否则免登录声明会静默失效（新增端点忘了注册）或留下死条目。
 func TestPublicRouteSetHasNoOrphans(t *testing.T) {

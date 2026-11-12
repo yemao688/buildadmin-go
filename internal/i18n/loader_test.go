@@ -15,7 +15,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TestEmbeddedBundleResolvesKnownKeys proves the locale packs embedded in the
+// proves the locale packs embedded in the
 // binary resolve through the same middleware path the application uses.
 func TestEmbeddedBundleResolvesKnownKeys(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -54,7 +54,7 @@ func TestEmbeddedBundleResolvesKnownKeys(t *testing.T) {
 	require.Equal(t, "超級管理員", w.Body.String())
 }
 
-// TestAcceptLanguageDerivedFromLocaleFiles 验证 AcceptLanguage 与 embed 的
+// 验证 AcceptLanguage 与 embed 的
 // locales 目录 yaml 文件一一对应（语言包即事实源），新增/删除语言包后无需
 // 同步接线。
 func TestAcceptLanguageDerivedFromLocaleFiles(t *testing.T) {
@@ -80,7 +80,7 @@ func TestAcceptLanguageDerivedFromLocaleFiles(t *testing.T) {
 	}
 }
 
-// TestNewLocalePackAutoAccepted 回归：新增语言包（fr.yaml）后，think-lang=fr
+// 回归：新增语言包（fr.yaml）后，think-lang=fr
 // 应返回法语而非静默回退默认语言 zh。模拟 embed FS 外再放一个法语包，走
 // 与生产相同的 ginI18n 中间件通路。
 func TestNewLocalePackAutoAccepted(t *testing.T) {

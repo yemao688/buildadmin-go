@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBuildSearchJoinLiteral 验证 remoteSelect 字段 → QueryBuilder SearchJoins
+// 验证 remoteSelect 字段 → QueryBuilder SearchJoins
 // 字面量构建：Alias 由字段名派生（relationNameForField，admin_id → admin、
 // editor_id → editor，同表多 FK 各自独立别名）、mysql.prefix 拼接入 Table、
 // RemotePk 缺省 id、仅 remoteSelect 参与（remoteSelects 的 CSV FK 不生成）、
@@ -64,7 +64,7 @@ func TestBuildSearchJoinLiteral(t *testing.T) {
 	}
 }
 
-// TestBuildRelationSearchColumn 验证 remoteSelect 关联搜索列：prop 为点号
+// 验证 remoteSelect 关联搜索列：prop 为点号
 // 形态（alias 由字段名派生，与关联显示列 prop/语言键同源）、operator 固定
 // LIKE、语言键复用关联显示列的 relationFieldLangPrefix 约定
 // （<小写 relationName>__<字段>）。
@@ -107,7 +107,7 @@ func TestBuildRelationSearchColumn(t *testing.T) {
 	}
 }
 
-// TestModelSearchJoinLiteralRendering 验证仓库模板：有 SearchJoinLiteral 时
+// 验证仓库模板：有 SearchJoinLiteral 时
 // 生成 tableInfo.SearchJoins 赋值并自动补 querybuilder import；三者皆空时
 // 回退原 "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（无关联表产物零 diff）。
 func TestModelSearchJoinLiteralRendering(t *testing.T) {

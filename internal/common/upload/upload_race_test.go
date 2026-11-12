@@ -31,9 +31,8 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture tables with
-	// sqlite-native DDL matching the runtime column shape.
+	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
+	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
 	require.NoError(t, testutil.CreateSQLiteAttachmentTables(db, "ba_attachment", "ba_admin", "ba_user"))
 
 	cfg := &conf.Configuration{

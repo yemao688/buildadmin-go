@@ -478,7 +478,7 @@ func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 	}
 }
 
-// TestLedgerDefaultCurrentTimestampAccepted 验证显式 DEFAULT CURRENT_TIMESTAMP(6)
+// 验证显式 DEFAULT CURRENT_TIMESTAMP(6)
 // 的 start_time 通过校验（新 DDL 形态，explicit_defaults_for_timestamp 两种模式下一致）。
 func TestLedgerDefaultCurrentTimestampAccepted(t *testing.T) {
 	db := getDB(t)
@@ -496,7 +496,7 @@ func TestLedgerDefaultCurrentTimestampAccepted(t *testing.T) {
 	}
 }
 
-// TestLedgerStartTimeOnUpdateSelfHeal 模拟 explicit_defaults_for_timestamp=OFF
+// 模拟 explicit_defaults_for_timestamp=OFF
 // （阿里云 RDS 默认参数）下旧版 DDL 建出的坏表（start_time 被隐式强加
 // ON UPDATE CURRENT_TIMESTAMP(6)），验证 Bootstrap 幂等自愈并可通过校验。
 func TestLedgerStartTimeOnUpdateSelfHeal(t *testing.T) {

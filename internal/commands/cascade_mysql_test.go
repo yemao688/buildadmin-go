@@ -33,7 +33,7 @@ func writeSyncSpec(t *testing.T, specsDir, name, parent, byColumn string) {
 	}
 }
 
-// TestRunCascadeJobReconcilesMySQL 集成测试（受 mysql_test 门禁，未配置时
+// 集成测试（受 mysql_test 门禁，未配置时
 // t.Skip）：构造 parent/child 表与不一致行，验证 runCascadeJob 按规格 SQL
 // 修复、幂等且不触碰已一致/无主记录的行（归属列固定 admin_id）。
 func TestRunCascadeJobReconcilesMySQL(t *testing.T) {
@@ -99,7 +99,7 @@ func TestRunCascadeJobReconcilesMySQL(t *testing.T) {
 	}
 }
 
-// TestRunCascadeJobMissingParentMySQL 父表缺失时返回语义化错误而非裸 1146：
+// 父表缺失时返回语义化错误而非裸 1146：
 // 只建子表不建父表，runCascadeJob 必须在执行 UPDATE 之前 fail-closed 报错，
 // 错误包含 "missing"、父表名与子表名。
 func TestRunCascadeJobMissingParentMySQL(t *testing.T) {
@@ -131,7 +131,7 @@ func TestRunCascadeJobMissingParentMySQL(t *testing.T) {
 	}
 }
 
-// TestCascadeHandlerSyncInvalidTargetMySQL 验证指定 table 参数在无任何子表
+// 验证指定 table 参数在无任何子表
 // spec 声明 inheritFrom 指向它时报错退出（临时 specs 目录为空）。
 func TestCascadeHandlerSyncInvalidTargetMySQL(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
@@ -149,7 +149,7 @@ func TestCascadeHandlerSyncInvalidTargetMySQL(t *testing.T) {
 	}
 }
 
-// TestCascadeSyncSkipsMissingTablesMySQL 集成回归：specs 目录中的声明指向
+// 集成回归：specs 目录中的声明指向
 // 尚未物化（表未建）的父表/子表时，cascade:sync 语义化报错或跳过而非裸
 // 1146——父表缺失是声明悬空（fail-closed 报错），子表缺失同样明确报错。
 // 健康模块 user_ok 正常对账。
@@ -219,7 +219,7 @@ func TestCascadeSyncSkipsMissingTablesMySQL(t *testing.T) {
 	}
 }
 
-// TestCascadeSyncInheritFromAggregationMySQL 规格主场景：parent(user) +
+// 规格主场景：parent(user) +
 // child(money_log) + child2(order_recharge) 三表，两个子表都在 specs 目录中
 // 声明 inheritFrom user，带不一致行。验证：全量 cascade:sync 两个子表都
 // 修复；指定 cascade:sync user 同样修复两表；无声明表指定时报错退出。

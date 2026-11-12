@@ -112,7 +112,7 @@ func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
 	}
 }
 
-// TestGetRemoteSelectUrl 对齐上游:crud 来源时 URL 由控制器推导;Go 扁平
+// 对齐上游:crud 来源时 URL 由控制器推导;Go 扁平
 // handler 文件需通过 router.go 反查真实路由名(user.go -> user.User)。
 func TestGetRemoteSelectUrl(t *testing.T) {
 	cases := []struct {
@@ -166,7 +166,7 @@ func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
 	require.Contains(t, rawFK, `multiple: true`)
 }
 
-// TestGenerate_UsesTableDataScope verifies that prepareGenerationData reads the
+// verifies that prepareGenerationData reads the
 // data-scope configuration from the Table value and that rendering succeeds.
 func TestGenerate_UsesTableDataScope(t *testing.T) {
 	table := getTestTableData()
@@ -229,7 +229,7 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 	require.Equal(t, "id", prepared.QuickSearchField)
 }
 
-// TestBuildFieldTypesLiteral 验证 spec 字段 → QueryBuilder FieldTypes map
+// 验证 spec 字段 → QueryBuilder FieldTypes map
 // 字面量的构建：去下划线键、列类型小写、datetime/timestamp 归一为
 // "datetime"、按键排序保证可重复生成。
 func TestBuildFieldTypesLiteral(t *testing.T) {
@@ -248,7 +248,7 @@ func TestBuildFieldTypesLiteral(t *testing.T) {
 	}
 }
 
-// TestModelFieldTypesLiteralRendering 验证仓库模板：有 FieldTypesLiteral 时
+// 验证仓库模板：有 FieldTypesLiteral 时
 // 生成 tableInfo.FieldTypes 赋值并传入 QueryBuilder；为空时回退原
 // "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（与旧产物逐字节一致）。
 func TestModelFieldTypesLiteralRendering(t *testing.T) {
@@ -918,7 +918,7 @@ func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
 	}
 }
 
-// TestBuildLangTsContentDeterministic 验证语言 .ts 内容生成确定性：Go map
+// 验证语言 .ts 内容生成确定性：Go map
 // 迭代顺序由运行时随机决定，直接 range 会使每次生成的键序不同，破坏
 // "crud:delete + 重新生成逐字节一致"契约。keys 必须排序后输出，且多次调用
 // 结果恒定。

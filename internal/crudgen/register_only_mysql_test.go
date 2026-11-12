@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// TestApplySkipsRegisterOnlyMySQL 验证 apply 对 registerOnly spec 静默跳过
+// 验证 apply 对 registerOnly spec 静默跳过
 // （返回 ApplySkipped，不建表不改表）——setup/migrate 尾部 apply 扫描
 // crud_specs/ 时不会被受保护拒绝卡死。
 func TestApplySkipsRegisterOnlyMySQL(t *testing.T) {

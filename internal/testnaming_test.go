@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// TestMySQLTestFileSuffix 保证所有直接调用 MySQL 门禁
+// 保证所有直接调用 MySQL 门禁
 // （OpenMySQL/OpenFixtureDatabase）的测试文件都以 _mysql_test.go 结尾：后缀是
 // "需要 mysql_test 配置"的唯一可见标记，缺失时 MySQL 用例会混在纯逻辑测试里，
 // 无法按文件名审阅与筛选。

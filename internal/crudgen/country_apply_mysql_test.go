@@ -70,7 +70,7 @@ func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
 	}
 }
 
-// TestCountryFreshInstallApplyUnblocked 模拟全新库路径：core model 的 gorm tag
+// 模拟全新库路径：core model 的 gorm tag
 // 驱动 AutoMigrate 快照建表（与 orchestrator 全新安装一致），随后尾部 apply
 // 三张 country spec。此前 model 缺 default tag（spec 声明 EMPTY STRING/INPUT
 // default），AutoMigrate 建出的列 default 为 NULL → apply 判 requires-approval

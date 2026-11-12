@@ -46,8 +46,7 @@ func TestPostPolicyFixedTime(t *testing.T) {
 }
 
 func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
-	// Use the concrete adapter below because UploadSiteConfig intentionally
-	// accepts ConfigModel's method shape.
+	// 这里使用下方的具体适配器：UploadSiteConfig 有意接受 ConfigModel 的方法集形状。
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou"}
 	result, err := UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
 	if err != nil {
@@ -145,7 +144,7 @@ func TestURLWithConfig(t *testing.T) {
 	}
 }
 
-// TestURLWithConfigMatchesURL 断言批处理方法（传入 settings）与单行路径
+// 断言批处理方法（传入 settings）与单行路径
 // URL()（每次自读 settings）输出逐值一致——批处理前提是 settings 查询结果
 // 与行数据无关（固定 group='upload' 过滤），此处同时验证两次读取结果相同。
 func TestURLWithConfigMatchesURL(t *testing.T) {

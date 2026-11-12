@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// TestUserCascadeOwnersRegistration 验证手写 CascadeOwners() 注册表包含
+// 验证手写 CascadeOwners() 注册表包含
 // user_money_log 条目（变更归属时同步的对象），且字段契约正确（byColumn
 // user_id、ownerColumn admin_id）。注册表可扩展：业务 fork 追加子表后仍须含
 // user_money_log 且契约正确，因此不硬断言注册表长度。
@@ -36,7 +36,7 @@ func TestUserCascadeOwnersRegistration(t *testing.T) {
 	require.Fail(t, "CascadeOwners must register user_money_log")
 }
 
-// TestUserSyncCascadeOwnersMySQL 验证变更归属时按 CascadeOwners() 遍历同步
+// 验证变更归属时按 CascadeOwners() 遍历同步
 // 子表：user 的 admin_id 从 10 改为 20 后，user_money_log 中该 user 的流水
 // admin_id 全部跟随更新；同步后校验通过，未同步时校验失败。
 func TestUserSyncCascadeOwnersMySQL(t *testing.T) {

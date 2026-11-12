@@ -812,7 +812,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 	}
 }
 
-// TestPrepareGenerationData_Reassignable 验证 reassignable 时生成器不再剥离
+// 验证 reassignable 时生成器不再剥离
 // owner 列：表单保留、编辑列可写、DTO 携带 admin_id，且表单 markup 渲染为
 // admin 的远程下拉（remote-url 反查真实 registrar 常量 /admin/auth.Admin/index）。
 func TestPrepareGenerationData_Reassignable(t *testing.T) {
@@ -875,7 +875,7 @@ func TestPrepareGenerationData_Reassignable(t *testing.T) {
 	assert.Contains(t, joined, `field: 'username'`)
 }
 
-// TestGeneratedReassignableCompiles 渲染 reassignable 的模型与 handler 并编译：
+// 渲染 reassignable 的模型与 handler 并编译：
 // Add 超管可指定归属、受限强制归属 + OwnerInScopeWithActor 校验；
 // Edit 锁定当前行、归属变更时校验新 owner；handler 恢复未传(0)的归属。
 func TestGeneratedReassignableCompiles(t *testing.T) {
@@ -931,7 +931,7 @@ func TestGeneratedReassignableCompiles(t *testing.T) {
 	}
 }
 
-// TestGeneratedReassignableBigIntOwnerRejected 覆盖 bigint owner 的生成期拒绝：
+// 覆盖 bigint owner 的生成期拒绝：
 // 级联/重分配模板把 owner 以 int32(...) 传入 OwnerInScopeWithActor（admin id
 // 域），bigint 列会"先截断校验、再写入未截断值"（fail-open 缺口），因此
 // ResolveDataScope 直接拒绝（评审 MAJOR）。非 reassignable 的 bigint owner
@@ -960,7 +960,7 @@ func TestGeneratedReassignableBigIntOwnerRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "bigint owner columns are not supported")
 }
 
-// TestResolveDataScope_InheritFrom 覆盖 inheritFrom 的解析与校验矩阵：
+// 覆盖 inheritFrom 的解析与校验矩阵：
 // 与 reassignable 互斥、owner 列前置条件、标识符/自身表拒绝、byColumn 存在性、
 // 合法组合通过。
 func TestResolveDataScope_InheritFrom(t *testing.T) {
@@ -1077,7 +1077,7 @@ func TestResolveDataScope_InheritFrom(t *testing.T) {
 	}
 }
 
-// TestModelTemplate_InheritFromAdd 渲染 inheritFrom 子表的 Add：归属继承自
+// 渲染 inheritFrom 子表的 Add：归属继承自
 // 主实体（FOR UPDATE + Select("admin_id") + Take(&inherited)），校验继承值在
 // actor 麾下（校验实参硬编码 int32），无强制归属操作者/超管指定分支。
 func TestModelTemplate_InheritFromAdd(t *testing.T) {
@@ -1120,7 +1120,7 @@ func TestModelTemplate_InheritFromAdd(t *testing.T) {
 	assert.Contains(t, add, `tx.Table(s.TableName).Create(&order).Error`)
 }
 
-// TestModelTemplate_CascadeOwnersMethod 渲染 reassignable 主实体：生成
+// 渲染 reassignable 主实体：生成
 // CascadeOwners() 注册方法与锚点注释块；Edit 的级联改为运行时循环
 // （s.CascadeOwners() + ValidateIdentifier + 反引号拼接），不再静态展开。
 func TestModelTemplate_CascadeOwnersMethod(t *testing.T) {
@@ -1165,7 +1165,7 @@ func TestModelTemplate_CascadeOwnersMethod(t *testing.T) {
 	assert.Greater(t, cascade, ownerCheck)
 }
 
-// TestGeneratedInheritFromBigIntOwnerRejected 覆盖 bigint admin_id 子表 +
+// 覆盖 bigint admin_id 子表 +
 // inheritFrom 的生成期拒绝（评审 MAJOR：int32(...) 截断校验与实际写入值
 // 不一致的 fail-open 缺口；非 int32 owner 在 ResolveDataScope 直接拒绝）。
 func TestGeneratedInheritFromBigIntOwnerRejected(t *testing.T) {
@@ -1196,7 +1196,7 @@ func TestGeneratedInheritFromBigIntOwnerRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "bigint owner columns are not supported")
 }
 
-// TestGeneratedCascadeRegistryCompiles 覆盖主表 + 注册方法的编译：把生成器会
+// 覆盖主表 + 注册方法的编译：把生成器会
 // 注入的锚点条目（applyCascadeAnchor 格式）写入渲染结果的锚点块后整体编译，
 // Edit 级联循环使用列类型值（int32）不引入转换问题。
 func TestGeneratedCascadeRegistryCompiles(t *testing.T) {

@@ -115,7 +115,7 @@ func (handlerTestDialector) BindVarTo(w clause.Writer, _ *gorm.Statement, _ inte
 func (handlerTestDialector) QuoteTo(w clause.Writer, s string)           { w.WriteString("`" + s + "`") }
 func (handlerTestDialector) Explain(sql string, _ ...interface{}) string { return sql }
 
-// TestAdminTableTreeLeafAssemble 验证管理员列表树形组装：按 parent_id 组装
+// 验证管理员列表树形组装：按 parent_id 组装
 // children，顶层不含父引用孤立节点，叶子保留完整 admin 字段。
 func TestAdminTableTreeLeafAssemble(t *testing.T) {
 	admins := []*model.Admin{
@@ -146,7 +146,7 @@ func TestAdminTableTreeLeafAssemble(t *testing.T) {
 	}
 }
 
-// TestAdminTableTreeLeafOrphansStayTopLevel 验证父节点缺失时（搜索/过滤命中的
+// 验证父节点缺失时（搜索/过滤命中的
 // 子节点）孤立子节点保留为顶层，不丢失数据。
 func TestAdminTableTreeLeafOrphansStayTopLevel(t *testing.T) {
 	admins := []*model.Admin{

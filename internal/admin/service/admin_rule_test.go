@@ -31,7 +31,7 @@ func newAdminRuleServiceFixture(t *testing.T) (*AdminRuleService, *gorm.DB) {
 	return svc, db
 }
 
-// TestAdminRuleServiceMenusFollowsOperatorScope 验证 Menus 按操作者权限范围
+// 验证 Menus 按操作者权限范围
 // 过滤：超管（规则集合含 "*"）看到全部，普通管理员只看到自己规则集合内的项。
 func TestAdminRuleServiceMenusFollowsOperatorScope(t *testing.T) {
 	svc, db := newAdminRuleServiceFixture(t)

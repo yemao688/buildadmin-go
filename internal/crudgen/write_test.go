@@ -287,7 +287,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 	}
 }
 
-// TestNumericFlexOverridesFollowEntityGoTypes 验证普通数字字段（非时间戳）被改写
+// 验证普通数字字段（非时间戳）被改写
 // 为与实体 Go 类型严格对应的 Flex 类型：int 家族→FlexInt32、bigint→FlexInt64、
 // decimal/double→FlexFloat64，float（实体 float32，无 FlexFloat32）保持严格；
 // canonical 时间字段不被改写；datetime/date/year/timestamp 仍走各自分支，且

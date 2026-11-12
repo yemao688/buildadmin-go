@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// actorForContext returns the actor attached to a test context.
+// actorForContext 返回测试 context 中注入的 actor。
 func actorForContext(t *testing.T, ctx *gin.Context) data_scope.Actor {
 	t.Helper()
 	actor, ok := data_scope.ActorFromContext(ctx)

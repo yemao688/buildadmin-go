@@ -149,7 +149,7 @@ func TestPruneEmptyDirsUpTo(t *testing.T) {
 	}
 }
 
-// TestPruneFrontendEmptyDirs 验证生成/删除流程共用的前端空目录修剪：
+// 验证生成/删除流程共用的前端空目录修剪：
 // 空模块目录链向上清空（止于 views/lang 根），共享父目录中的其他模块
 // 文件必须保留，stopAt 根目录绝不删除。路径按生产推导（LangFile 的末段
 // 是文件名，模块目录是其父目录）构造，与真实残留形态一致。
@@ -214,7 +214,7 @@ func TestPruneFrontendEmptyDirs(t *testing.T) {
 	}
 }
 
-// TestRollbackPrunesEmptyFrontendDirs 复现生成失败回滚的真实序列：快照（目标
+// 复现生成失败回滚的真实序列：快照（目标
 // 文件均不存在）→ 生成写入文件并 MkdirAll 建目录 → 失败回滚 snapshot.Restore()
 // 只删文件、目录残留（修复前的 bug 形态）→ pruneFrontendEmptyDirs 清空目录链。
 // 路径全部按生产推导构造（LangFile 末段是文件名、Views 末段是模块目录）。

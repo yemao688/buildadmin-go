@@ -122,7 +122,7 @@ func TestCheckMalformedInputNeverPanics(t *testing.T) {
 	}
 }
 
-// TestNilDBNeverPanics: 安装向导模式下 DB 连接为 nil（应用以只读基座启动），
+// : 安装向导模式下 DB 连接为 nil（应用以只读基座启动），
 // 点击验证码必须报错/失败而不是空指针 panic。
 func TestNilDBNeverPanics(t *testing.T) {
 	clickCaptcha := &ClickCaptcha{}

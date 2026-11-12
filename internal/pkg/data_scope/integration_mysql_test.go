@@ -162,7 +162,7 @@ func (l *captureLogger) closureStatements() int {
 	return n
 }
 
-// TestClosureEnforcerSelfRowCacheMySQL verifies H8 behavior end to end:
+// verifies H8 behavior end to end:
 //   - without the per-request marker, every scoped construction emits a
 //     statement touching admin_closure (self-EXISTS + branch EXISTS);
 //   - with the marker set (as the login middleware does), the one-time

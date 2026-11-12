@@ -30,7 +30,7 @@ func TestHealthRoute(t *testing.T) {
 	require.JSONEq(t, `{"status":"ok"}`, recorder.Body.String())
 }
 
-// TestDebugOnlyEndpoints 验证 gin.Logger 与 /debug/pprof 仅非 release 模式挂载：
+// 验证 gin.Logger 与 /debug/pprof 仅非 release 模式挂载：
 // debug 模式有逐请求 stdout 日志与 pprof 调试端点，release 模式两者都不挂载
 // （pprof 404、全局链无 Logger），健康检查两种模式都不受影响。
 func TestDebugOnlyEndpoints(t *testing.T) {
@@ -105,7 +105,7 @@ func TestRootRouteServesIndex(t *testing.T) {
 	require.Equal(t, indexContent, recorder.Body.String())
 }
 
-// TestStaticAssetsCacheHeaders 验证 SPA 部署缓存策略：/assets/*（内容哈希
+// 验证 SPA 部署缓存策略：/assets/*（内容哈希
 // 命名）带 immutable 长缓存头，旧 hash chunk 发版删除后仍可从浏览器缓存命中；
 // index.html 带 no-cache，刷新即重新校验拿到最新 hash 引用。只复制 router.go
 // 的相关挂载片段在测试内注册，不依赖 wire 注入的渠道注册器。
@@ -151,7 +151,7 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 	})
 }
 
-// TestIpBlacklistRegistrationScope 是注册顺序回归测试：IpCheck 必须在
+// 是注册顺序回归测试：IpCheck 必须在
 // /healthz、静态资源与 / 之后注册，只覆盖其后挂载的 /admin/* 与 /api/*。
 func TestIpBlacklistRegistrationScope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -272,7 +272,7 @@ func TestResolveRequestLang(t *testing.T) {
 	})
 }
 
-// TestResolveRequestLangCachedPerRequest 验证 H1 每请求缓存：首次解析后结果
+// 验证 H1 每请求缓存：首次解析后结果
 // 写入 gin context，同一请求内后续解析直接命中缓存，不再重复查库/解析。
 func TestResolveRequestLangCachedPerRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)

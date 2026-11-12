@@ -12,10 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestAuthRepositoryHasClosureSelfRow verifies the one-time per-request
-// closure self-row verification backing H8: an admin with a self-row reports
-// true, an admin without one (or an unknown id) reports false, and the check
-// never errors on a well-formed closure table.
+// 验证支撑 H8 的「每请求一次」闭包自引用行校验：有自引用行的管理员返回 true，
+// 没有自引用行（或 id 未知）返回 false，且在结构良好的闭包表上永不报错。
 func TestAuthRepositoryHasClosureSelfRow(t *testing.T) {
 	db, _ := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("ds_h8r_%d_", os.Getpid())
@@ -37,13 +35,13 @@ func TestAuthRepositoryHasClosureSelfRow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	// Admin 3 has ancestor rows (it is 1's and 2's descendant) but no
-	// self-row: the verification must report false so scope denies.
+	// 管理员 3 有祖先行（它是 1 和 2 的后代）但没有自引用行：
+	// 校验必须返回 false，使 scope 拒绝。
 	ok, err = authM.HasClosureSelfRow(3)
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	// Unknown id: no self-row either.
+	// 未知 id：同样没有自引用行。
 	ok, err = authM.HasClosureSelfRow(99)
 	require.NoError(t, err)
 	require.False(t, ok)

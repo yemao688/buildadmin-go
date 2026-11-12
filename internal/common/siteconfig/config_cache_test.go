@@ -45,7 +45,7 @@ func cacheTestRequest(t *testing.T) *gin.Context {
 	return c
 }
 
-// TestGetKVByGroupCache 验证 H2 进程内缓存：首次查库、二次走缓存、显式
+// 验证 H2 进程内缓存：首次查库、二次走缓存、显式
 // 失效后重查、分组隔离与副本防污染。
 func TestGetKVByGroupCache(t *testing.T) {
 	s, db := newCacheTestService(t, "siteconfig-cache")
@@ -83,7 +83,7 @@ func TestGetKVByGroupCache(t *testing.T) {
 	require.Equal(t, "新站点", fresh["site_name"])
 }
 
-// TestGetKVByGroupCacheTTLExpiry 验证 TTL 过期后自动重查。
+// 验证 TTL 过期后自动重查。
 func TestGetKVByGroupCacheTTLExpiry(t *testing.T) {
 	s, db := newCacheTestService(t, "siteconfig-cache-ttl")
 
@@ -102,7 +102,7 @@ func TestGetKVByGroupCacheTTLExpiry(t *testing.T) {
 	require.Equal(t, "新站点", kv["site_name"])
 }
 
-// TestGetKVByGroupCacheBypassInTransaction 验证请求事务内的读取绕过缓存：
+// 验证请求事务内的读取绕过缓存：
 // 事务内可能看到未提交数据，不能入缓存；事务回滚后全局缓存保持旧快照。
 func TestGetKVByGroupCacheBypassInTransaction(t *testing.T) {
 	s, db := newCacheTestService(t, "siteconfig-cache-tx")

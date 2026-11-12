@@ -47,7 +47,7 @@ func serve(t *testing.T, engine *gin.Engine, method, path string, withCookie *ht
 	return recorder
 }
 
-// TestDocsRouteDisabled 验证默认关闭：docs_enabled=false 时不挂载 /docs，
+// 验证默认关闭：docs_enabled=false 时不挂载 /docs，
 // 请求 404，行为与历史版本一致（升级零冲突）。
 func TestDocsRouteDisabled(t *testing.T) {
 	engine, _ := newDocsTestEngine(t, false, "")
@@ -55,7 +55,7 @@ func TestDocsRouteDisabled(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, recorder.Code)
 }
 
-// TestDocsRoutePublic 验证公开模式：密码为空时 /docs 等价于其它静态挂载，
+// 验证公开模式：密码为空时 /docs 等价于其它静态挂载，
 // 直接出文件，/docs 精确路径 301 到 /docs/，目录请求（无 index.html）404
 // 且不展示目录列表（与 router.Static 行为一致）。
 func TestDocsRoutePublic(t *testing.T) {
@@ -81,7 +81,7 @@ func TestDocsRoutePublic(t *testing.T) {
 	require.Equal(t, "<h1>docs index</h1>", recorder.Body.String())
 }
 
-// TestDocsRouteGated 验证密码门完整流程：未带 cookie 返回密码页（不回源
+// 验证密码门完整流程：未带 cookie 返回密码页（不回源
 // 文件），密码提交成功 Set-Cookie 并回跳，带 cookie 后正常出文件，错误密码
 // 重渲页面提示，HEAD 探测返回 401 空体。
 func TestDocsRouteGated(t *testing.T) {
@@ -152,7 +152,7 @@ func TestDocsRouteGated(t *testing.T) {
 	})
 }
 
-// TestDocsNextSanitization 验证 next 回跳只接受站内相对路径：外部 URL 与
+// 验证 next 回跳只接受站内相对路径：外部 URL 与
 // 协议相对 URL 一律回退到 /docs/，防密码页被当作开放重定向器。
 func TestDocsNextSanitization(t *testing.T) {
 	engine, _ := newDocsTestEngine(t, true, "s3cret")
@@ -169,7 +169,7 @@ func TestDocsNextSanitization(t *testing.T) {
 	}
 }
 
-// TestDocsPasswordEnvOverride 验证环境变量 DOCS_PASSWORD 覆盖 YAML 密码：
+// 验证环境变量 DOCS_PASSWORD 覆盖 YAML 密码：
 // YAML 留空 + 环境变量非空时仍开启密码门，且用环境值可验密通过。
 func TestDocsPasswordEnvOverride(t *testing.T) {
 	t.Setenv("DOCS_PASSWORD", "env-s3cret")
@@ -189,7 +189,7 @@ func TestDocsPasswordEnvOverride(t *testing.T) {
 	require.Equal(t, http.StatusFound, recorder.Code)
 }
 
-// TestDocsCookieAttributes 验证放行 cookie 按外部协议切换属性：跨站 iframe
+// 验证放行 cookie 按外部协议切换属性：跨站 iframe
 // 必须 SameSite=None + Secure + Partitioned 才能存取，HTTP 只能退回 Lax。
 func TestDocsCookieAttributes(t *testing.T) {
 	const password = "s3cret"
@@ -234,7 +234,7 @@ func TestDocsCookieAttributes(t *testing.T) {
 	}
 }
 
-// TestDocsTokenBypass 验证跨站 iframe 的无 cookie 放行：查询参数命中即出文件
+// 验证跨站 iframe 的无 cookie 放行：查询参数命中即出文件
 // 并补写 cookie（否则同源子资源请求仍会被门禁挡回密码页），错误 token 无效。
 func TestDocsTokenBypass(t *testing.T) {
 	const password = "s3cret"

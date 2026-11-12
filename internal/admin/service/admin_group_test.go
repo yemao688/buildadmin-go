@@ -130,7 +130,7 @@ func TestAdminGroupServiceHandleRulesDeduplicates(t *testing.T) {
 	require.Equal(t, "1,3", rules)
 }
 
-// TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper 对齐 PHP 上游
+// 对齐 PHP 上游
 // Group::handleRules：非超管提交"拥有自己全部权限"的分组被拒绝（防止复制
 // 自己的权限集给下级）。
 func TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper(t *testing.T) {
@@ -146,7 +146,7 @@ func TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper(t *testing.T) {
 	require.EqualError(t, err, "Role group has all your rights, please contact the upper administrator to add or do not need to add!")
 }
 
-// TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper 对齐 PHP 上游：
+// 对齐 PHP 上游：
 // 非超管提交超出自己可分配范围的分组权限被拒绝。
 func TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper(t *testing.T) {
 	svc, db := newAdminGroupServiceFixture(t)
@@ -162,7 +162,7 @@ func TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper(t *testing.T) 
 	require.EqualError(t, err, "The group permission node exceeds the range that can be allocated")
 }
 
-// TestAdminGroupServiceHandleRulesAllowsSuperAdminStar 对齐 PHP 上游：仅超管
+// 对齐 PHP 上游：仅超管
 // 提交全部规则时获得超管级分组（rules="*"）；非超管即使提交全部规则也被
 // "拥有自己全部权限"规则拒绝。
 func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
@@ -183,7 +183,7 @@ func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
 	require.EqualError(t, err, "Role group has all your rights, please contact the upper administrator to add or do not need to add!")
 }
 
-// TestAdminGroupServiceListForOperatorDecoratesRules 验证列表展示文本由
+// 验证列表展示文本由
 // service 批量补全：超管标识、首条规则标题（多权限追加"等 N 项"）与无权限
 // 文案，且 i18n 通过 translate 回调注入。
 func TestAdminGroupServiceListForOperatorDecoratesRules(t *testing.T) {
@@ -213,7 +213,7 @@ func TestAdminGroupServiceListForOperatorDecoratesRules(t *testing.T) {
 	require.Equal(t, "rule-1等 2 项", rules["multi"])
 }
 
-// TestAdminGroupServiceListForOperatorFiltersByAuthorization 验证非超管的可见
+// 验证非超管的可见
 // 范围：普通列表合并自己所在分组，absoluteAuth 只保留有资格管理的分组。
 func TestAdminGroupServiceListForOperatorFiltersByAuthorization(t *testing.T) {
 	svc, db := newAdminGroupServiceFixture(t)

@@ -63,7 +63,7 @@ func TestAdminNullableParentIDFlexBinding(t *testing.T) {
 	require.Nil(t, params.ParentID.Value)
 }
 
-// TestIDSFlexBinding 验证通用 ID 结构：字符串数字 id 解码成功，
+// 验证通用 ID 结构：字符串数字 id 解码成功，
 // 且 binding:"required" 语义不回归（缺 id 仍触发校验错误）。
 func TestIDSFlexBinding(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -93,7 +93,7 @@ func TestCrudUploadCompletedFlexBinding(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"cancelSync":"yes"}`), &params))
 }
 
-// TestAdminRuleStatusFlexBinding 覆盖下游反馈回归：/admin/auth.Rule/edit
+// 覆盖下游反馈回归：/admin/auth.Rule/edit
 // 发数字 status（{"status":1}）时，string 字段严格绑定会 400；改为
 // validator.FlexStatus 后数字/字符串/布尔形态必须等价解码。
 func TestAdminRuleStatusFlexBinding(t *testing.T) {
@@ -110,7 +110,7 @@ func TestAdminRuleStatusFlexBinding(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"status":{}}`), &params))
 }
 
-// TestSecurityStatusFlexBinding 同规则覆盖 security 两个 handler 的请求结构。
+// 同规则覆盖 security 两个 handler 的请求结构。
 func TestSecurityStatusFlexBinding(t *testing.T) {
 	var recycle dto.SecurityDataRecycleParam
 	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &recycle))
