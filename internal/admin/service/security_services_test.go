@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"buildadmin-go/internal/admin/dto"
 	adminmodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -124,27 +127,77 @@ func TestSecurityRuleControllerAsCannotHaveTwoEnabledRules(t *testing.T) {
 	sensitiveSvc := NewSensitiveDataService(adminmodel.NewSecuritySensitiveDataRepository(f.db, f.config))
 	ctx := f.context().Request.Context()
 
-	require.ErrorContains(t, recycleSvc.Add(ctx, model.SecurityDataRecycle{
-		ID: 10, Name: "duplicate recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "1",
+	require.ErrorContains(t, recycleSvc.Add(ctx, dto.SecurityDataRecycleParam{
+		Name: "duplicate recycle", Controller: "user.User", DataTable: "user", PrimaryKey: "id", Status: "1",
 	}), "controller_as already has an enabled security rule")
-	require.NoError(t, recycleSvc.Add(ctx, model.SecurityDataRecycle{
-		ID: 11, Name: "disabled recycle", Controller: "user.User", ControllerAs: "user/user", DataTable: "user", PrimaryKey: "id", Status: "0",
+	require.NoError(t, recycleSvc.Add(ctx, dto.SecurityDataRecycleParam{
+		Name: "disabled recycle", Controller: "user.User", DataTable: "user", PrimaryKey: "id", Status: "0",
 	}))
-	require.ErrorContains(t, recycleSvc.UpdateStatus(ctx, 11, "1"), "controller_as already has an enabled security rule")
+	var disabledRecycle model.SecurityDataRecycle
+	require.NoError(t, f.db.Table(f.prefix+"security_data_recycle").Where("name = ?", "disabled recycle").First(&disabledRecycle).Error)
+	require.ErrorContains(t, recycleSvc.UpdateStatus(ctx, disabledRecycle.ID, "1"), "controller_as already has an enabled security rule")
 
-	require.ErrorContains(t, sensitiveSvc.Add(ctx, SensitiveDataParams{
+	require.ErrorContains(t, sensitiveSvc.Add(ctx, dto.SecuritySensitiveDataParam{
 		Name: "duplicate sensitive", Controller: "user.User", DataTable: "user", PrimaryKey: "id", Status: "1",
-		Fields: []Field{{Name: "username", Value: "username"}},
+		Fields: []dto.SensitiveField{{Name: "username", Value: "username"}},
 	}), "controller_as already has an enabled security rule")
-	require.NoError(t, sensitiveSvc.Add(ctx, SensitiveDataParams{
+	require.NoError(t, sensitiveSvc.Add(ctx, dto.SecuritySensitiveDataParam{
 		Name: "disabled sensitive", Controller: "user.User", DataTable: "user", PrimaryKey: "id", Status: "0",
-		Fields: []Field{{Name: "username", Value: "username"}},
+		Fields: []dto.SensitiveField{{Name: "username", Value: "username"}},
 	}))
 	// The params-based service assigns the id; reload the created rule.
 	var disabledSensitive model.SecuritySensitiveData
 	require.NoError(t, f.db.Table(f.prefix+"security_sensitive_data").Where("name = ?", "disabled sensitive").First(&disabledSensitive).Error)
-	require.ErrorContains(t, sensitiveSvc.Edit(ctx, disabledSensitive.ID, SensitiveDataParams{
+	require.ErrorContains(t, sensitiveSvc.Edit(ctx, disabledSensitive.ID, dto.SecuritySensitiveDataParam{
 		Name: "enabled sensitive", Controller: "user.User", DataTable: "user", PrimaryKey: "id", Status: "1",
-		Fields: []Field{{Name: "username", Value: "username"}},
+		Fields: []dto.SensitiveField{{Name: "username", Value: "username"}},
 	}), "controller_as already has an enabled security rule")
+}
+
+// newSecurityRuleSQLiteFixture 提供两张安全规则表的 sqlite 副本，用于验证
+// 删除守卫与 repo 委托，不依赖 MySQL 门禁。
+func newSecurityRuleSQLiteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open("file:security-rules?mode=memory&cache=shared"), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true},
+	})
+	require.NoError(t, err)
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS security_data_recycle",
+		"DROP TABLE IF EXISTS security_sensitive_data",
+		"CREATE TABLE security_data_recycle (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL DEFAULT '', controller TEXT NOT NULL DEFAULT '', controller_as TEXT NOT NULL DEFAULT '', data_table TEXT NOT NULL DEFAULT '', primary_key TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '1', connection TEXT NOT NULL DEFAULT '', update_time INTEGER DEFAULT NULL, create_time INTEGER DEFAULT NULL)",
+		"CREATE TABLE security_sensitive_data (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL DEFAULT '', controller TEXT NOT NULL DEFAULT '', controller_as TEXT NOT NULL DEFAULT '', data_table TEXT NOT NULL DEFAULT '', primary_key TEXT NOT NULL DEFAULT '', data_fields TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '1', connection TEXT NOT NULL DEFAULT '', update_time INTEGER DEFAULT NULL, create_time INTEGER DEFAULT NULL)",
+		"INSERT INTO security_data_recycle (id,name) VALUES (1,'custom'),(5,'会员')",
+		"INSERT INTO security_sensitive_data (id,name) VALUES (1,'custom'),(2,'会员数据')",
+	} {
+		require.NoError(t, db.Exec(stmt).Error)
+	}
+	config := &conf.Configuration{}
+	return db, config
+}
+
+func TestSecuritySeedRuleCannotBeDeleted(t *testing.T) {
+	// nil repo 也可：seed 守卫在触达 repo 之前返回。
+	require.ErrorContains(t, (&SecurityDataRecycleService{}).Del(context.Background(), []int32{1, 5}), "framework seed rule cannot be deleted")
+	require.ErrorContains(t, (&SensitiveDataService{}).Del(context.Background(), []int32{2}), "framework seed rule cannot be deleted")
+
+	db, config := newSecurityRuleSQLiteFixture(t)
+	recycleSvc := NewSecurityDataRecycleService(adminmodel.NewSecurityDataRecycleRepository(db, config))
+	sensitiveSvc := NewSensitiveDataService(adminmodel.NewSecuritySensitiveDataRepository(db, config))
+	ctx := context.Background()
+
+	require.ErrorContains(t, recycleSvc.Del(ctx, []int32{5}), "framework seed rule cannot be deleted")
+	require.NoError(t, recycleSvc.Del(ctx, []int32{1}))
+	var recycleRows, sensitiveRows int64
+	require.NoError(t, db.Table("security_data_recycle").Where("id = 5").Count(&recycleRows).Error)
+	require.Equal(t, int64(1), recycleRows)
+	require.NoError(t, db.Table("security_data_recycle").Where("id = 1").Count(&recycleRows).Error)
+	require.Zero(t, recycleRows)
+
+	require.ErrorContains(t, sensitiveSvc.Del(ctx, []int32{2}), "framework seed rule cannot be deleted")
+	require.NoError(t, sensitiveSvc.Del(ctx, []int32{1}))
+	require.NoError(t, db.Table("security_sensitive_data").Where("id = 2").Count(&sensitiveRows).Error)
+	require.Equal(t, int64(1), sensitiveRows)
+	require.NoError(t, db.Table("security_sensitive_data").Where("id = 1").Count(&sensitiveRows).Error)
+	require.Zero(t, sensitiveRows)
 }

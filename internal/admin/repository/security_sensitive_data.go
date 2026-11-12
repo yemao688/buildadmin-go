@@ -5,6 +5,7 @@ import (
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
+	"buildadmin-go/internal/pkg/util"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -162,21 +163,12 @@ func (s *SecuritySensitiveDataRepository) UpdateStatusTx(tx *gorm.DB, id int32, 
 	return nil
 }
 
-func (s *SecuritySensitiveDataRepository) Del(ctx context.Context, ids interface{}) error {
-	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
-		return fmt.Errorf("invalid security sensitive data ids")
-	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid security sensitive data id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+func (s *SecuritySensitiveDataRepository) Del(ctx context.Context, ids []int32) error {
+	normalized, err := util.NormalizeIDs(ids, "security sensitive data", true, func(id int32) error {
+		return fmt.Errorf("invalid security sensitive data id %d", id)
+	})
+	if err != nil {
+		return err
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []model.SecuritySensitiveData

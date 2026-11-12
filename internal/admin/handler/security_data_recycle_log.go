@@ -16,7 +16,6 @@ import (
 )
 
 type DataRecycleLogHandler struct {
-	Base
 	log             *zap.Logger
 	config          *conf.Configuration
 	dataRecycleLogM *securitymodel.SecurityDataRecycleLogRepository
@@ -25,7 +24,6 @@ type DataRecycleLogHandler struct {
 
 func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataRecycleLogM *securitymodel.SecurityDataRecycleLogRepository, svc *service.SecurityDataRecycleLogService) *DataRecycleLogHandler {
 	return &DataRecycleLogHandler{
-		Base:            NewBase(dataRecycleLogM),
 		log:             log,
 		config:          config,
 		dataRecycleLogM: dataRecycleLogM,
@@ -34,10 +32,6 @@ func NewDataRecycleLogHandler(log *zap.Logger, config *conf.Configuration, dataR
 }
 
 func (h *DataRecycleLogHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	result, total, err := h.dataRecycleLogM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)

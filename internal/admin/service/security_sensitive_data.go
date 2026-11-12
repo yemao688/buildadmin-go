@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"buildadmin-go/internal/admin/dto"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
@@ -23,25 +24,8 @@ func NewSensitiveDataService(sensitiveDataM *securitymodel.SecuritySensitiveData
 	return &SensitiveDataService{sensitiveDataM: sensitiveDataM}
 }
 
-// Field is the plain transport-free form of the handler's SensitiveField DTO.
-type Field struct {
-	Name  string
-	Value string
-}
-
-// SensitiveDataParams carries the plain shape of a sensitive-data rule
-// create/update request.
-type SensitiveDataParams struct {
-	Name       string
-	Controller string
-	DataTable  string
-	PrimaryKey string
-	Fields     []Field
-	Status     string
-}
-
 // MarshalFields encodes the fields payload into the DataFields JSON column.
-func (s *SensitiveDataService) MarshalFields(fields []Field) (string, error) {
+func (s *SensitiveDataService) MarshalFields(fields []dto.SensitiveField) (string, error) {
 	dateField := map[string]string{}
 	for _, v := range fields {
 		dateField[v.Name] = v.Value
@@ -64,14 +48,14 @@ func (s *SensitiveDataService) UnmarshalFields(raw string) (map[string]string, e
 
 // Add 编排敏感数据规则新增：controller_as 归一化 + fields 装配 + 事务内
 // 策略校验与唯一性约束。
-func (s *SensitiveDataService) Add(ctx context.Context, p SensitiveDataParams) error {
+func (s *SensitiveDataService) Add(ctx context.Context, p dto.SecuritySensitiveDataParam) error {
 	var sensitiveData model.SecuritySensitiveData
 	sensitiveData.Name = p.Name
 	sensitiveData.Controller = p.Controller
 	sensitiveData.ControllerAs = util.NormalizeControllerAs(p.Controller)
 	sensitiveData.DataTable = p.DataTable
 	sensitiveData.PrimaryKey = p.PrimaryKey
-	sensitiveData.Status = p.Status
+	sensitiveData.Status = string(p.Status)
 
 	dataFields, err := s.MarshalFields(p.Fields)
 	if err != nil {
@@ -109,7 +93,7 @@ func (s *SensitiveDataService) add(ctx context.Context, data model.SecuritySensi
 
 // Edit 编排敏感数据规则更新：重载 + controller_as 归一化 + fields 装配 +
 // 事务内策略校验与唯一性约束。
-func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDataParams) error {
+func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p dto.SecuritySensitiveDataParam) error {
 	data, err := s.sensitiveDataM.GetOne(ctx, id)
 	if err != nil {
 		return err
@@ -119,7 +103,7 @@ func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDa
 	data.ControllerAs = util.NormalizeControllerAs(p.Controller)
 	data.DataTable = p.DataTable
 	data.PrimaryKey = p.PrimaryKey
-	data.Status = p.Status
+	data.Status = string(p.Status)
 
 	dataFields, err := s.MarshalFields(p.Fields)
 	if err != nil {
@@ -153,6 +137,18 @@ func (s *SensitiveDataService) Edit(ctx context.Context, id int32, p SensitiveDa
 		}
 		return s.sensitiveDataM.UpdateTx(tx, data.ID, updates)
 	})
+}
+
+// Del 删除敏感数据规则。框架 seed 行（id=2）是 VerifyUpgradeData 每次
+// migrate/serve 都断言的身份行，删除后启动校验失败导致全站无法启动，因此
+// 在触达 repo 前拒绝包含该 id 的批次。
+func (s *SensitiveDataService) Del(ctx context.Context, ids []int32) error {
+	for _, id := range ids {
+		if id == 2 {
+			return cErr.BadRequest("framework seed rule cannot be deleted")
+		}
+	}
+	return s.sensitiveDataM.Del(ctx, ids)
 }
 
 // UpdateStatus 编排状态开关：启用时先校验 controller_as 唯一性，再原子

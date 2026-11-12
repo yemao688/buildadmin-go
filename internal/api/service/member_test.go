@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
@@ -45,7 +46,7 @@ func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
-	return NewMemberService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
+	return NewMemberService(repository.NewUserRepository(db, config), &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
 }
 
 func hashForTest(t *testing.T, plain string) string {
@@ -62,6 +63,17 @@ func TestMemberIsLoginRejectsAdminToken(t *testing.T) {
 	got, ok := m.IsLoginToken("admin-token")
 	require.False(t, ok)
 	require.Nil(t, got)
+}
+
+// 回归：token 有效但会员已被删除时，GetByID 返回 (nil, nil)，必须返回
+// (nil, false) 而不是解引用 nil 导致 /api/index/index 500。
+func TestMemberUserInfoByTokenMissingUser(t *testing.T) {
+	m, _ := newAuthTestModel(t)
+	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "user", UserID: 9999}}}
+
+	info, ok := m.UserInfoByToken("deleted-member-token")
+	require.False(t, ok)
+	require.Nil(t, info)
 }
 
 func TestMemberLoginMissingAccountIsNotDisabled(t *testing.T) {
@@ -114,6 +126,12 @@ func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	require.True(t, ok, "result type = %T", result)
 	require.Equal(t, "203.0.113.9", data["last_login_ip"])
 	require.NotZero(t, data["last_login_time"])
+}
+
+func TestMemberRegisterRejectsInvalidUsername(t *testing.T) {
+	m, _ := newAuthTestModel(t)
+	_, err := m.Register("203.0.113.9", "bad user", "password")
+	require.EqualError(t, err, "username invalid")
 }
 
 func TestMemberRegisterRejectsExistingUsername(t *testing.T) {
