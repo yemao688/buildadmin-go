@@ -18,8 +18,6 @@ func NewAttachmentRegistrar(handler *handler.AttachmentHandler) *AttachmentRegis
 
 const attachmentRoute = "routine.Attachment"
 
-func (r *AttachmentRegistrar) Group() string { return "admin" }
-
 func (r *AttachmentRegistrar) Register(g gin.IRoutes) {
 	g.GET(attachmentRoute+"/index", r.handler.Index)
 	g.GET(attachmentRoute+"/edit", r.handler.One)

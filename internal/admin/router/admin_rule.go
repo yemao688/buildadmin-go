@@ -18,8 +18,6 @@ func NewAdminRuleRegistrar(handler *handler.AdminRuleHandler) *AdminRuleRegistra
 
 const adminRuleRoute = "auth.Rule"
 
-func (r *AdminRuleRegistrar) Group() string { return "admin" }
-
 func (r *AdminRuleRegistrar) Register(g gin.IRoutes) {
 	CRUDRoutes(g, adminRuleRoute, r.handler)
 }

@@ -17,8 +17,6 @@ func NewCrudRegistrar(handler *handler.CrudHandler) *CrudRegistrar {
 	return &CrudRegistrar{handler: handler}
 }
 
-func (r *CrudRegistrar) Group() string { return "admin" }
-
 func (r *CrudRegistrar) Register(g gin.IRoutes) {
 	adminmiddleware.RegisterHandlerExemptions("crud/crud", r.handler)
 	g.GET("crud.Crud/databaseList", r.handler.DatabaseList)

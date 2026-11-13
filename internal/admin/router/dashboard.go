@@ -16,8 +16,6 @@ func NewDashboardRegistrar(handler *handler.DashboardHandler) *DashboardRegistra
 	return &DashboardRegistrar{handler: handler}
 }
 
-func (r *DashboardRegistrar) Group() string { return "admin" }
-
 func (r *DashboardRegistrar) Register(g gin.IRoutes) {
 	g.GET("Dashboard/index", r.handler.Index)
 }

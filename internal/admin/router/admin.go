@@ -18,8 +18,6 @@ func NewAdminRegistrar(handler *handler.AdminHandler) *AdminRegistrar {
 
 const adminRoute = "auth.Admin"
 
-func (r *AdminRegistrar) Group() string { return "admin" }
-
 func (r *AdminRegistrar) Register(g gin.IRoutes) {
 	g.GET(adminRoute+"/index", r.handler.Index)
 	g.POST(adminRoute+"/add", r.handler.Add)

@@ -20,8 +20,6 @@ func NewDataRecycleLogRegistrar(handler *handler.DataRecycleLogHandler) *DataRec
 
 const dataRecycleLogRoute = "security.DataRecycleLog"
 
-func (r *DataRecycleLogRegistrar) Group() string { return "admin" }
-
 func (r *DataRecycleLogRegistrar) Register(g gin.IRoutes) {
 	g.GET(dataRecycleLogRoute+"/index", r.handler.Index)
 	g.GET(dataRecycleLogRoute+"/info", r.handler.Info)

@@ -18,8 +18,6 @@ func NewConfigRegistrar(handler *handler.ConfigHandler) *ConfigRegistrar {
 
 const configRoute = "routine.Config"
 
-func (r *ConfigRegistrar) Group() string { return "admin" }
-
 func (r *ConfigRegistrar) Register(g gin.IRoutes) {
 	g.GET(configRoute+"/index", r.handler.Index)
 	g.POST(configRoute+"/add", r.handler.Add)

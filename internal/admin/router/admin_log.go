@@ -17,8 +17,6 @@ func NewAdminLogRegistrar(handler *handler.AdminLogHandler) *AdminLogRegistrar {
 	return &AdminLogRegistrar{handler: handler}
 }
 
-func (r *AdminLogRegistrar) Group() string { return "admin" }
-
 func (r *AdminLogRegistrar) Register(g gin.IRoutes) {
 	g.GET("auth.AdminLog/index", r.handler.Index)
 	g.DELETE("auth.AdminLog/del", r.handler.Del)

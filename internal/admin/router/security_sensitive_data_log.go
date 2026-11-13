@@ -20,8 +20,6 @@ func NewSensitiveDataLogRegistrar(handler *handler.SensitiveDataLogHandler) *Sen
 
 const sensitiveDataLogRoute = "security.SensitiveDataLog"
 
-func (r *SensitiveDataLogRegistrar) Group() string { return "admin" }
-
 func (r *SensitiveDataLogRegistrar) Register(g gin.IRoutes) {
 	g.GET(sensitiveDataLogRoute+"/index", r.handler.Index)
 	g.GET(sensitiveDataLogRoute+"/info", r.handler.Info)

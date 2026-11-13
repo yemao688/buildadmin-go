@@ -19,8 +19,6 @@ func NewLogRegistrar(handler *handler.LogHandler) *LogRegistrar {
 
 const logRoute = "crud.Log"
 
-func (r *LogRegistrar) Group() string { return "admin" }
-
 func (r *LogRegistrar) Register(g gin.IRoutes) {
 	adminmiddleware.RegisterHandlerExemptions("crud/log", r.handler)
 	g.GET(logRoute+"/index", r.handler.Index)

@@ -24,8 +24,6 @@ func NewCountryLanguageTranslateRegistrar(handler *handler.CountryLanguageHandle
 	return &CountryLanguageTranslateRegistrar{handler: handler}
 }
 
-func (r *CountryLanguageTranslateRegistrar) Group() string { return "admin" }
-
 func (r *CountryLanguageTranslateRegistrar) Register(g gin.IRoutes) {
 	// getMultTranslations 为通用翻译工具接口（不挂业务菜单），声明式豁免
 	// admin_rule 校验；CRUD 的 Index/Add/Edit/Del 仍走主文件的规则。

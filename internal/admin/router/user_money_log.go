@@ -23,8 +23,6 @@ func NewUserLogRegistrar(
 	}
 }
 
-func (r *UserLogRegistrar) Group() string { return "admin" }
-
 func (r *UserLogRegistrar) Register(g gin.IRoutes) {
 	g.GET("user.MoneyLog/index", r.moneyLogHandler.Index)
 	g.GET("user.MoneyLog/add", r.userHandler.One)
