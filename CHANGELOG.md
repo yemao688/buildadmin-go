@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.4.0
+
+> 生成器产物收敛：handler 收敛到共享泛型基类 `TableHandler[T,P,ID]`，registrar 收敛到数据驱动的 `TableRegistrar`；模块差异改为构造器注入 `TableOptions`，生成文件只剩装配代码。路由、权限与表结构不变。
+
+- **Changed（handler）:** 新增 `internal/admin/handler/table.go`：`TableHandler[T,P,ID]` 统一 `Index`/`Add`/`Edit`/`Del`，模块差异经 `TableOptions` 注入——`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）、`AfterMutation`（缓存失效等提交后动作）。生成模板只产出嵌入 `TableHandler` 的薄构造器，`NewXxxHandler` 符号与 wire 注入不变；`country_currency`/`country_language`/`country_language_content` 三个生成 handler 已迁移，`MaybePartialEdit` 仍先于整行 Edit 执行，`AfterMutation` 仍只在成功响应后触发（Switch 与非成功路径不触发）。
+- **Changed（registrar）:** 新增 `internal/admin/router/table.go` 的 `TableRegistrar`（route + CRUDHandler，固定注册 6 条标准路由并声明 `add`/`edit`/`del` 三个原子写能力）；每表 registrar 文件只剩 `const xxxRoute` 与 `func NewXxxRegistrar(h *handler.XxxHandler) *TableRegistrar`。`internal/admin/router/provider.go` 的 `ProviderSet` 收敛为 `NewAdminRouter` 与 `ProvideRegistrars`，生成器不再追加 `NewXxxRegistrar`；`ProvideRegistrars` 锚点（一行 handler 参数 + 一行返回条目）与 `const xxxRoute` 不变，`wire_gen.go` 零 diff。
+- **Changed（生成器）:** `internal/crudgen` 的 handler/registrar 模板同步收敛，生成流程不再向 router 的 `ProviderSet` 追加构造器（`writeRouterProviderEntry`/`addProviderSetEntry` 删除）；`removeProvideRegistrarsEntry` 仍能清理历史文件中的 `NewXxxRegistrar` 条目，`crud:delete` 与重新生成的对称性不变。`IsExcludedControllerFile` 增加 `table.go`，设计器控制器列表不会把共享基类当作模块。
+- **Fixed（生成产物漂移）:** 跟随当前生成器重新对齐 `country_currency`/`country_language`/`country_language_content` 的 model 与 repository（gorm tag 属性顺序、`Policy.Reassignable`/`InheritFrom` 显式值、`List` 的 `FieldTypes`、Edit 空行）。只改 tag 文本顺序与显式零值，不改变 DDL 与查询语义。
+- **Downstream（业务 fork 升级必读）:** 已有生成物无需改动即可继续编译，只有重新 `crud:generate` 才会切到新形状。重新生成会整体覆盖 handler，原本写在 handler 内的 `requesttx.InvalidateAfterMutation(ctx, ...)` 定制必须移到构造器的 `TableOptions.AfterMutation` 闭包（闭包内仍调用同一函数），否则被覆盖丢失。`internal/admin/router/provider.go` 中历史生成的 `NewXxxRegistrar` 条目可从 `ProviderSet` 删除，保留也无害。本版本不含迁移、`crud_specs` 与 web 变更，路由与权限不变。
+- **Docs:** `AGENTS.md`、`docs/crud-generation.md`（新契约与下游升级提示）、`docs/framework-workflow.md`（router provider 的冲突处理与 `ProviderSet` 收敛）同步。
+- **Verified:** CI run `43437451141`（head `2c024f6`，tree `4c636cb1` 与 squash 后 `1d2e693` 相同）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / typecheck / build）均成功。本地另跑 `go build ./...`、`gofmt -l`（改动文件）与 `go test ./internal/admin/ ./internal/admin/handler/ ./internal/admin/router/ ./internal/crudgen/ -count=1` 全部通过。
+
 ## v3.3.9
 
 > 架构整改批次：收敛分层与生成器边界（生成器独立为开发期工具层、`Base` 只依赖 `CrudTable`、写路径编排上移 service、common 去 gin）、framework seed 每次运行幂等自愈、strict-upgrade 只补缺失核心表、移除未实现的模块市场；并修复 seed 在父菜单重建后重复插入子规则的问题。
