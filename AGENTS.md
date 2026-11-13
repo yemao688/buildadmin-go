@@ -68,7 +68,7 @@
 |---|---|---|---|
 | `internal/model` | 共享实体记录：贫血 struct（gorm tag = 唯一 schema 映射），同时驱动全新安装 AutoMigrate；`projection/` 子包存放渠道投影（如 Admin/User） | 仅外部库 | 各渠道、Gin、service |
 | `internal/pkg` | 技术基建：persistence（唯一 BaseModel）、data_scope、token、captcha、validator（校验适配类型与 GetError，跨渠道共用）、util（跨层工具：路径/时间/转换/数组/加密等，即原 internal/utils）等 | 外部库、conf | 渠道层 |
-| `internal/crudgen` | 开发期代码生成工具层：CRUD spec 加载/校验、生成产物写入、spec 物化与菜单落库。不属于技术基建（pkg 不得反向依赖它），生成期可直接读 `admin/repository` 元数据；后续以端口倒置移除该依赖 | model、pkg、admin/repository（仅生成期） | 运行时路由 |
+| `internal/crudgen` | 开发期代码生成工具层：CRUD spec 加载/校验、生成产物写入、spec 物化与菜单落库。不属于技术基建（pkg 不得反向依赖它）；表元数据经本包 `TableStore` 端口（`pkg/dbschema.Store` 实现）读取，菜单/台账按表名经 GORM 写入 | model、pkg | admin、api、common、middleware（R10 机械执法） |
 | `internal/common` | 跨渠道领域服务：`money.UserBalanceService`（会员余额变动唯一事务链）、siteconfig、area、country、upload | model、pkg | 渠道层 |
 | `internal/admin` | 后台渠道（单包，文件名=表名）：`repository/`（唯一 GORM 入口，scope 注入，`XxxRepository`）·`dto/`（`XxxParam`）·`service/`（按需毕业的业务编排，纯 CRUD 不建透传）·`handler/`（薄控制器 `XxxHandler`）·`middleware/`（登录/权限/安全审计）·`router/`（每表一个 `<table>.go` registrar，`provider.go` 的 `ProvideRegistrars` 为生成器锚点，经 `AdminRouter` 挂载 /admin/*） | model、pkg、common | `internal/api` |
 | `internal/api` | 门户/公共渠道：`service/`（单包：`member.go` 会员认证）·`middleware/`（user_login）·`repository/`（单包：`user.go` 会员视角）·`handler/`·`router/`（对齐 admin 形态：`<module>.go` registrar + `provider.go` 的 `ProvideRegistrars` 锚点，经 `ApiRouter` 挂载 /api/*） | model、pkg、common | `internal/admin` |
