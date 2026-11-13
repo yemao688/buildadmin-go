@@ -157,3 +157,82 @@ func TestSeedCountryMenusDeduplicatesOnParentNameAndType(t *testing.T) {
 	require.NoError(t, db.Table("ba_admin_rule").Count(&after).Error)
 	require.Equal(t, total, after)
 }
+
+func TestSeedCountryMenusReparentsChildrenOfDeletedParent(t *testing.T) {
+	db := openSeedSQLite(t)
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
+	cfg := seedTestConfig()
+	require.NoError(t, seedCountryMenus(db, cfg))
+
+	var parent struct{ ID int32 }
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? AND type = ?", "country/languageContent", "menu").Take(&parent).Error)
+	require.NotZero(t, parent.ID)
+
+	var childIDs []int32
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", "country/languageContent/%").Order("name").Pluck("id", &childIDs).Error)
+	require.Len(t, childIDs, 5)
+
+	// 只删父菜单、保留子按钮：重建父行会拿到新自增 id，子行必须重新挂接，
+	// 不能因为 pid 过期被当成缺失而重复插入。
+	require.NoError(t, db.Exec("DELETE FROM `ba_admin_rule` WHERE id = ?", parent.ID).Error)
+	require.NoError(t, seedCountryMenus(db, cfg))
+
+	var rebuilt struct{ ID int32 }
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? AND type = ?", "country/languageContent", "menu").Take(&rebuilt).Error)
+	require.NotZero(t, rebuilt.ID)
+	require.NotEqual(t, parent.ID, rebuilt.ID)
+
+	var reparentedIDs []int32
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ?", "country/languageContent/%").Order("name").Pluck("id", &reparentedIDs).Error)
+	require.Equal(t, childIDs, reparentedIDs)
+
+	var wrongParent int64
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ? AND pid <> ?", "country/languageContent/%", rebuilt.ID).Count(&wrongParent).Error)
+	require.Zero(t, wrongParent)
+
+	var total int64
+	require.NoError(t, db.Table("ba_admin_rule").Count(&total).Error)
+	require.Equal(t, int64(19), total)
+
+	// 重跑幂等。
+	require.NoError(t, seedCountryMenus(db, cfg))
+	var again int64
+	require.NoError(t, db.Table("ba_admin_rule").Count(&again).Error)
+	require.Equal(t, total, again)
+}
+
+func TestSeedCountryMenusKeepsRuleUnderAnotherParent(t *testing.T) {
+	db := openSeedSQLite(t)
+	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
+	cfg := seedTestConfig()
+
+	// 另一父级下已有同名同类型规则（用户自建或移动过）：种子不能认领它，
+	// 仍要建立 framework 自己的目录，并把 country 子菜单挂在目录下。
+	require.NoError(t, db.Exec("INSERT INTO `ba_admin_rule` (pid, type, title, name) VALUES (0, 'menu_dir', '其它', 'ops')").Error)
+	var ops struct{ ID int32 }
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? AND type = ?", "ops", "menu_dir").Take(&ops).Error)
+	require.NotZero(t, ops.ID)
+	require.NoError(t, db.Exec("INSERT INTO `ba_admin_rule` (pid, type, title, name) VALUES (?, 'menu_dir', '冒名目录', 'country')", ops.ID).Error)
+
+	require.NoError(t, seedCountryMenus(db, cfg))
+
+	var dirs int64
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? AND type = ?", "country", "menu_dir").Count(&dirs).Error)
+	require.Equal(t, int64(2), dirs)
+
+	var frameworkDir struct {
+		ID  int32
+		Pid int32
+	}
+	require.NoError(t, db.Table("ba_admin_rule").Where("name = ? AND type = ? AND pid = 0", "country", "menu_dir").Take(&frameworkDir).Error)
+	require.NotZero(t, frameworkDir.ID)
+
+	var wrongParent int64
+	require.NoError(t, db.Table("ba_admin_rule").Where("name LIKE ? AND type = ? AND pid <> ?", "country/%", "menu", frameworkDir.ID).Count(&wrongParent).Error)
+	require.Zero(t, wrongParent)
+
+	var total int64
+	require.NoError(t, db.Table("ba_admin_rule").Count(&total).Error)
+	// 19 条 country 规则 + 1 个其它目录 + 1 条冒名规则。
+	require.Equal(t, int64(21), total)
+}
