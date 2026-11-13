@@ -96,7 +96,7 @@ func TestUserLoginRejectsDisabledUser(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-	require.Equal(t, float64(http.StatusUnauthorized), body["code"])
+	require.InDelta(t, float64(http.StatusUnauthorized), body["code"], 1e-9)
 	require.Equal(t, "Please login first", body["msg"])
 	var untouched commonModel.User
 	require.NoError(t, db.First(&untouched, 1).Error)
@@ -117,6 +117,6 @@ func TestUserLoginRejectsMissingUser(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-	require.Equal(t, float64(http.StatusUnauthorized), body["code"])
+	require.InDelta(t, float64(http.StatusUnauthorized), body["code"], 1e-9)
 	require.Equal(t, "Please login first", body["msg"])
 }

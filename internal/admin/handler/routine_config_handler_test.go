@@ -70,7 +70,7 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 		values[row.Name] = row.Value
 	}
 	require.Equal(t, "Hotel", values["site_name"])
-	require.Equal(t, "", values["no_access_ip"])
+	require.Empty(t, values["no_access_ip"])
 	require.Equal(t, "Asia/Shanghai", values["time_zone"])
 	require.Equal(t, "v1.0.0", values["version"])
 	require.Equal(t, "渝ICP备8888888号-1", values["record_number"])

@@ -7,6 +7,7 @@
 # 档 A（正确性底座，0 条）：govet / ineffassign / unused / staticcheck 的 S 类。
 # 档 B（已清空，曾 199 条）：errcheck（默认设置）/ errorlint / nilerr /
 #   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
+# 档 C 采用逐批开启：每批把 linter 挪进 enable 并清空命中，第 1 批是 testifylint。
 
 version: "2"
 
@@ -33,6 +34,9 @@ linters:
     - predeclared
     - errname
     - thelper
+
+    # --- 档 C（逐批开启）：第 1 批 testifylint ---
+    - testifylint
 
   settings:
     # staticcheck：保留 S/SA 类正确性检查，关掉 ST1*/QF1* 纯风格重构建议
@@ -66,19 +70,18 @@ issues:
   max-same-issues: 0
 
 # ---------------------------------------------------------------------------
-# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 3137 条）
+# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 2779 条）
 #
-#   - revive         1136 条，其中 exported 1028（AGENTS.md 明确不为存量补注释）、
-#                    var-naming 107（含 PHP 继承命名如 CdnUrlParams，同时是 Vue
+#   - revive         1161 条，其中 exported 887（AGENTS.md 明确不为存量补注释）、
+#                    var-naming 133（含 PHP 继承命名如 CdnUrlParams，同时是 Vue
 #                    前端的 JSON 契约，改名即破坏 API）。
-#   - paralleltest    910 条：本仓库测试依赖全局状态（cobra OnInitialize、
+#   - paralleltest   1078 条：本仓库测试依赖全局状态（cobra OnInitialize、
 #                    configPath 全局变量），机械加 t.Parallel() 会把隐藏竞态
 #                    变成真竞态，属风险改造而非风格清理。
-#   - gocritic        773 条：style + performance 标签在存量代码上基本是改写
+#   - gocritic        174 条：style + performance 标签在存量代码上基本是改写
 #                    习惯，收益低于 review 成本。
-#   - gosec            73 条：多为框架动态路径/反射的误报，需逐条白名单，
+#   - gosec           292 条：多为框架动态路径/反射的误报，需逐条白名单，
 #                    不是开一个 linter 的事。
-#   - testifylint      67 条：断言风格统一，可跟档 B 一起做，但需改测试。
-#   - gocyclo          56 条（min-complexity 15）：集中在大函数形态的生成器，
+#   - gocyclo          74 条（min-complexity 15）：集中在大函数形态的生成器，
 #                    拆函数会破坏"模板形状"约束。
 # ---------------------------------------------------------------------------

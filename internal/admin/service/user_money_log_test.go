@@ -18,7 +18,7 @@ func TestUserMoneyLogTypeFor(t *testing.T) {
 	// 超管可指定任意类型（含空 → 交给 money 链路的缺省 system）。
 	require.Equal(t, "recharge", moneyLogTypeFor("recharge", true))
 	require.Equal(t, "withdraw", moneyLogTypeFor("withdraw", true))
-	require.Equal(t, "", moneyLogTypeFor("", true))
+	require.Empty(t, moneyLogTypeFor("", true))
 	// 非超管一律强制 system，忽略请求值。
 	require.Equal(t, "system", moneyLogTypeFor("recharge", false))
 	require.Equal(t, "system", moneyLogTypeFor("extend", false))
@@ -35,12 +35,12 @@ func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 	spoof := &model.MoneyLog{AdminID: 40, UserID: u.ID, Money: 1.25, Memo: "one"}
 	require.NoError(t, f.moneySvc.add(ctx.Request.Context(), MoneyLogAddInput{UserID: spoof.UserID, Delta: spoof.Money, Memo: spoof.Memo, Log: spoof, Actor: actor}))
 	require.Equal(t, int32(20), spoof.AdminID)
-	require.Equal(t, float64(1.00), spoof.Before)
-	require.Equal(t, float64(2.25), spoof.After)
+	require.InDelta(t, float64(1.00), spoof.Before, 1e-9)
+	require.InDelta(t, float64(2.25), spoof.After, 1e-9)
 	require.Equal(t, "system", spoof.Type)
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(2.25), got.Money)
+	require.InDelta(t, float64(2.25), got.Money, 1e-9)
 	logs, total, err := f.money.List(ctx)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
@@ -50,12 +50,12 @@ func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 	require.Error(t, f.money.Del(ctx, []int32{spoof.ID + 1}))
 	require.NoError(t, f.money.Del(ctx, []int32{spoof.ID}))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(2.25), got.Money)
+	require.InDelta(t, float64(2.25), got.Money, 1e-9)
 
 	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", u.ID).Updates(map[string]any{"money": 0}).Error)
 	require.Error(t, f.moneySvc.add(ctx.Request.Context(), MoneyLogAddInput{UserID: u.ID, Delta: -1, Memo: "too low", Actor: actor}))
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(0), got.Money)
+	require.InDelta(t, float64(0), got.Money, 1e-9)
 }
 
 func TestMoneyLogConcurrentForUpdateFormsContinuousChain(t *testing.T) {
@@ -79,14 +79,14 @@ func TestMoneyLogConcurrentForUpdateFormsContinuousChain(t *testing.T) {
 	}
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(2.00), got.Money)
+	require.InDelta(t, float64(2.00), got.Money, 1e-9)
 	var logs []model.MoneyLog
 	require.NoError(t, f.db.Where("user_id = ?", u.ID).Order("id").Find(&logs).Error)
 	require.Len(t, logs, 2)
-	require.Equal(t, float64(0), logs[0].Before)
-	require.Equal(t, float64(1.00), logs[0].After)
-	require.Equal(t, float64(1.00), logs[1].Before)
-	require.Equal(t, float64(2.00), logs[1].After)
+	require.InDelta(t, float64(0), logs[0].Before, 1e-9)
+	require.InDelta(t, float64(1.00), logs[0].After, 1e-9)
+	require.InDelta(t, float64(1.00), logs[1].Before, 1e-9)
+	require.InDelta(t, float64(2.00), logs[1].After, 1e-9)
 }
 
 func TestMoneyLogInsertFailureRollsBackBalanceAndDeleteCannotOrphan(t *testing.T) {
@@ -101,7 +101,7 @@ func TestMoneyLogInsertFailureRollsBackBalanceAndDeleteCannotOrphan(t *testing.T
 	require.Error(t, err)
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(0), got.Money)
+	require.InDelta(t, float64(0), got.Money, 1e-9)
 	require.Error(t, f.userSvc.Del(ctx.Request.Context(), []int32{u.ID}, actor))
 	var count int64
 	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", u.ID).Count(&count).Error)

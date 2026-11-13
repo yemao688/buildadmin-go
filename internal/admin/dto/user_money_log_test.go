@@ -12,18 +12,18 @@ func TestUserMoneyLogParamAmountFormats(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":1.25,"memo":"x"}`), &request))
 	amount, err := request.Amount()
 	require.NoError(t, err)
-	require.Equal(t, float64(1.25), amount)
+	require.InDelta(t, float64(1.25), amount, 1e-9)
 
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":"1.25","memo":"x"}`), &request))
 	amount, err = request.Amount()
 	require.NoError(t, err)
-	require.Equal(t, float64(1.25), amount)
+	require.InDelta(t, float64(1.25), amount, 1e-9)
 
 	// 负数与零沿用历史语义：允许，不做正数限制。
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":"-2.5"}`), &request))
 	amount, err = request.Amount()
 	require.NoError(t, err)
-	require.Equal(t, float64(-2.5), amount)
+	require.InDelta(t, float64(-2.5), amount, 1e-9)
 
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":0}`), &request))
 	amount, err = request.Amount()
@@ -61,7 +61,7 @@ func TestUserMoneyLogParamMemoIsOptional(t *testing.T) {
 	// 备注可选：缺省 memo 应能正常绑定（无 binding:"required"）。
 	var request UserMoneyLogParam
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":"1.25"}`), &request))
-	require.Equal(t, "", request.Memo)
+	require.Empty(t, request.Memo)
 	// 仍接受带备注的请求。
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":"1.25","memo":"x"}`), &request))
 	require.Equal(t, "x", request.Memo)

@@ -35,7 +35,7 @@ func TestAdminLogCreateInsertsRow(t *testing.T) {
 	require.Equal(t, "root", row.Username)
 	require.Equal(t, "/admin/auth.Admin/add", row.URL)
 	require.Equal(t, "管理员-新增", row.Title)
-	require.Equal(t, `{"name":"alice"}`, row.Data)
+	require.JSONEq(t, `{"name":"alice"}`, row.Data)
 	require.Equal(t, "203.0.113.9", row.IP)
 	require.Equal(t, "test-agent", row.Useragent)
 }

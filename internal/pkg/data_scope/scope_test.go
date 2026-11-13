@@ -47,39 +47,39 @@ func openTestDB(t *testing.T) *gorm.DB {
 }
 
 func TestModeConstants(t *testing.T) {
-	assert.Equal(t, Mode("auto"), ModeAuto)
-	assert.Equal(t, Mode("required"), ModeRequired)
-	assert.Equal(t, Mode("none"), ModeNone)
+	assert.Equal(t, ModeAuto, Mode("auto"))
+	assert.Equal(t, ModeRequired, Mode("required"))
+	assert.Equal(t, ModeNone, Mode("none"))
 }
 
 func TestIdentifierValidation(t *testing.T) {
 	valid := []string{"admin_id", "a", "_hidden", "table_alias", "col1", "AdminID"}
 	for _, s := range valid {
-		assert.NoError(t, ValidateIdentifier(s), "expected %q to be valid", s)
+		require.NoError(t, ValidateIdentifier(s), "expected %q to be valid", s)
 		assert.True(t, IsValidIdentifier(s), "expected %q to be valid", s)
 	}
 
 	invalid := []string{"", "admin id", "admin.id", "admin`id", "1admin", "admin-id", "admin\"id", "'x'"}
 	for _, s := range invalid {
-		assert.Error(t, ValidateIdentifier(s), "expected %q to be invalid", s)
+		require.Error(t, ValidateIdentifier(s), "expected %q to be invalid", s)
 		assert.False(t, IsValidIdentifier(s), "expected %q to be invalid", s)
-		assert.True(t, errors.Is(ValidateIdentifier(s), ErrInvalidIdentifier))
+		assert.ErrorIs(t, ValidateIdentifier(s), ErrInvalidIdentifier)
 	}
 }
 
 func TestValidateOwnerRef(t *testing.T) {
-	assert.NoError(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "admin_id"}))
-	assert.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "", Column: "admin_id"}), ErrInvalidIdentifier)
-	assert.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "t.admin_id"}), ErrInvalidIdentifier)
+	require.NoError(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "admin_id"}))
+	require.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "", Column: "admin_id"}), ErrInvalidIdentifier)
+	require.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "t.admin_id"}), ErrInvalidIdentifier)
 	assert.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "t;drop", Column: "admin_id"}), ErrInvalidIdentifier)
 }
 
 func TestActorValidation(t *testing.T) {
 	_, err := NewActor(0)
-	assert.ErrorIs(t, err, ErrInvalidActor)
+	require.ErrorIs(t, err, ErrInvalidActor)
 
 	_, err = NewActor(-1)
-	assert.ErrorIs(t, err, ErrInvalidActor)
+	require.ErrorIs(t, err, ErrInvalidActor)
 
 	a, err := NewActor(7)
 	require.NoError(t, err)
@@ -93,8 +93,8 @@ func TestActorValidation(t *testing.T) {
 
 	// Contract: AdminID == 0 without explicit unrestricted flag is invalid.
 	// Oracle Gate: both restricted and unrestricted actors require positive AdminID.
-	assert.ErrorIs(t, ValidateActor(Actor{AdminID: 0}), ErrInvalidActor)
-	assert.ErrorIs(t, ValidateActor(Actor{AdminID: 0, Unrestricted: true}), ErrInvalidActor)
+	require.ErrorIs(t, ValidateActor(Actor{AdminID: 0}), ErrInvalidActor)
+	require.ErrorIs(t, ValidateActor(Actor{AdminID: 0, Unrestricted: true}), ErrInvalidActor)
 	assert.NoError(t, ValidateActor(Actor{AdminID: 1, Unrestricted: true}))
 }
 
@@ -152,10 +152,10 @@ func TestResolveConfig_RequiredWithAssignOnCreate(t *testing.T) {
 
 func TestResolveConfig_RequiredOwnerColumnValidation(t *testing.T) {
 	_, err := ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: ""}, false)
-	assert.ErrorIs(t, err, ErrInvalidOwnerColumn)
+	require.ErrorIs(t, err, ErrInvalidOwnerColumn)
 
 	_, err = ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: "owner.id"}, false)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrInvalidOwnerColumn) || errors.Is(err, ErrInvalidIdentifier))
 }
 
@@ -171,7 +171,7 @@ func TestResolveConfig_RequiredCustomValidator(t *testing.T) {
 
 func TestResolveConfig_NoneWithAdminIDRequiresOverride(t *testing.T) {
 	_, err := ResolveConfig(&Config{Mode: ModeNone}, true)
-	assert.ErrorIs(t, err, ErrInvalidMode)
+	require.ErrorIs(t, err, ErrInvalidMode)
 
 	r, err := ResolveConfigWithOptions(&Config{Mode: ModeNone}, true, ResolveOptions{AllowNoneWithAdminID: true})
 	require.NoError(t, err)
@@ -190,7 +190,7 @@ func TestResolveConfig_AutoAdminIDAlwaysAssignOnCreate(t *testing.T) {
 	assert.True(t, r.AssignOnCreate)
 
 	_, err = ResolveConfig(&Config{Mode: ModeAuto, AssignOnCreate: ptr(false)}, true)
-	assert.ErrorIs(t, err, ErrInvalidConfig)
+	require.ErrorIs(t, err, ErrInvalidConfig)
 
 	// nil still defaults to true.
 	r, err = ResolveConfig(&Config{Mode: ModeAuto}, true)
@@ -214,7 +214,7 @@ func TestResolveConfig_AdminIDSpecialCase(t *testing.T) {
 
 	// required + "id" + assign-on-create=true is invalid.
 	_, err = ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: "id", AssignOnCreate: ptr(true)}, false)
-	assert.ErrorIs(t, err, ErrInvalidConfig)
+	require.ErrorIs(t, err, ErrInvalidConfig)
 
 	// required + "id" + nil also resolves to false.
 	r, err = ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: "id", AssignOnCreate: nil}, false)
@@ -265,7 +265,7 @@ func TestClosureEnforcerExtraOwnerRejectsInvalidActorOrIdentifier(t *testing.T) 
 	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Set(actorContextKey, Actor{AdminID: 0})
-	assert.ErrorIs(t, e.ScopeWithExtraOwners(ctx, openTestDB(t), OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "secondary_admin_id"}}).Error, ErrScopedAccessDenied)
+	require.ErrorIs(t, e.ScopeWithExtraOwners(ctx, openTestDB(t), OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "secondary_admin_id"}}).Error, ErrScopedAccessDenied)
 	a, _ := NewActor(7)
 	ctx.Set(actorContextKey, a)
 	assert.ErrorIs(t, e.ScopeWithExtraOwners(ctx, openTestDB(t), OwnerRef{TableAlias: "t", Column: "admin_id"}, []OwnerRef{{TableAlias: "t", Column: "t.secondary_admin_id"}}).Error, ErrScopedAccessDenied)
@@ -402,7 +402,7 @@ func TestDenyAllEnforcer_ScopeRestrictedDenies(t *testing.T) {
 	scoped := enf.Scope(ctx, db, OwnerRef{TableAlias: "t", Column: "admin_id"})
 	require.NotNil(t, scoped)
 	assert.NotEqual(t, db, scoped, "restricted actor must receive a derived DB")
-	assert.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
+	require.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
 	assert.NoError(t, db.Error, "original DB must not be polluted")
 }
 
@@ -420,8 +420,8 @@ func TestDenyAllEnforcer_ScopeInvalidOwnerRefDenies(t *testing.T) {
 	scoped := enf.Scope(ctx, db, OwnerRef{TableAlias: "t", Column: "t.admin_id"})
 	require.NotNil(t, scoped)
 	assert.NotEqual(t, db, scoped, "invalid owner ref must receive a derived DB")
-	assert.ErrorIs(t, scoped.Error, ErrInvalidIdentifier)
-	assert.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
+	require.ErrorIs(t, scoped.Error, ErrInvalidIdentifier)
+	require.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
 	assert.NoError(t, db.Error, "original DB must not be polluted")
 }
 
@@ -436,8 +436,8 @@ func TestDenyAllEnforcer_ScopeInvalidActorDenies(t *testing.T) {
 	scoped := enf.Scope(ctx, db, OwnerRef{TableAlias: "t", Column: "admin_id"})
 	require.NotNil(t, scoped)
 	assert.NotEqual(t, db, scoped, "invalid actor must receive a derived DB")
-	assert.ErrorIs(t, scoped.Error, ErrInvalidActor)
-	assert.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
+	require.ErrorIs(t, scoped.Error, ErrInvalidActor)
+	require.ErrorIs(t, scoped.Error, ErrScopedAccessDenied)
 	assert.NoError(t, db.Error, "original DB must not be polluted")
 }
 
@@ -456,6 +456,6 @@ func TestDenyAllEnforcer_ScopeNilDB(t *testing.T) {
 
 func TestStubHierarchyWriter(t *testing.T) {
 	w := NewStubHierarchyWriter()
-	assert.ErrorIs(t, w.LinkNewNode(context.Background(), nil, 1, nil), ErrNotImplemented)
+	require.ErrorIs(t, w.LinkNewNode(context.Background(), nil, 1, nil), ErrNotImplemented)
 	assert.ErrorIs(t, w.MoveSubtree(context.Background(), nil, 1, nil), ErrNotImplemented)
 }

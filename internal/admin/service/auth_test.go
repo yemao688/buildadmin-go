@@ -76,7 +76,7 @@ func TestAuthServiceLoginSuccessIssuesSession(t *testing.T) {
 	require.Equal(t, int32(1), result["id"])
 	require.Equal(t, "root", result["username"])
 	require.NotEmpty(t, result["token"])
-	require.Equal(t, "", result["refresh_token"])
+	require.Empty(t, result["refresh_token"])
 
 	var updated adminLoginRow
 	require.NoError(t, db.First(&updated, 1).Error)

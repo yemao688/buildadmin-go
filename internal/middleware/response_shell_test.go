@@ -59,7 +59,7 @@ func TestAbortLoginWritesLoginShell(t *testing.T) {
 	require.True(t, aborted)
 	require.Equal(t, "application/json; charset=utf-8", recorder.Header().Get("Content-Type"))
 	body := decodeResponseShell(t, recorder)
-	require.Equal(t, float64(http.StatusUnauthorized), body["code"])
+	require.InDelta(t, float64(http.StatusUnauthorized), body["code"], 1e-9)
 	require.Equal(t, "Please login first", body["msg"])
 	require.Equal(t, map[string]any{"type": "need login"}, body["data"])
 	require.Zero(t, body["time"])
@@ -72,7 +72,7 @@ func TestAbortLoginDefaultsToUnauthorizedForPlainError(t *testing.T) {
 
 	body := decodeResponseShell(t, serveResponseShell(engine))
 
-	require.Equal(t, float64(http.StatusUnauthorized), body["code"])
+	require.InDelta(t, float64(http.StatusUnauthorized), body["code"], 1e-9)
 	require.Equal(t, "Please login first", body["msg"])
 }
 
@@ -88,7 +88,7 @@ func TestAbortMissingTokenWritesLoginShell(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.True(t, aborted)
 	body := decodeResponseShell(t, recorder)
-	require.Equal(t, float64(http.StatusUnauthorized), body["code"])
+	require.InDelta(t, float64(http.StatusUnauthorized), body["code"], 1e-9)
 	require.Nil(t, body["data"])
 	require.NotEmpty(t, body["msg"])
 	require.Zero(t, body["time"])
@@ -106,7 +106,7 @@ func TestServerErrorWritesInternalErrorShell(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	require.True(t, aborted)
 	body := decodeResponseShell(t, recorder)
-	require.Equal(t, float64(cErr.ServerError), body["code"])
+	require.InDelta(t, float64(cErr.ServerError), body["code"], 1e-9)
 	require.Equal(t, "boom", body["msg"])
 	require.Nil(t, body["data"])
 	require.Zero(t, body["time"])
