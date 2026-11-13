@@ -19,13 +19,16 @@ func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
 }
 
 func TestVersionRequested(t *testing.T) {
-	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "configs/config.yaml", "--version"}} {
+	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "configs/config.yaml", "--version"}, {"-c", "configs/config.yaml", "--version"}} {
 		if !versionRequested(args) {
 			t.Fatalf("versionRequested(%v) = false", args)
 		}
 	}
-	if versionRequested([]string{"migrate"}) {
-		t.Fatal("versionRequested(migrate) = true")
+	// 子命令的局部 --version flag（如 release --version 3.4.1）不能短路为版本请求。
+	for _, args := range [][]string{{"migrate"}, {"release", "--version", "3.4.1"}, {"migrate", "--version"}} {
+		if versionRequested(args) {
+			t.Fatalf("versionRequested(%v) = true", args)
+		}
 	}
 }
 

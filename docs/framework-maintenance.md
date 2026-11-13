@@ -16,9 +16,35 @@
 
 ## 框架发布流程
 
-1. 更新根目录 `VERSION_FRAMEWORK`、`internal/pkg/version` 中的 `version.Framework` 与 `version.Upstream`（仅在同步 PHP 上游时更新），并补充 `CHANGELOG.md`。
-2. 提交发布变更后创建 `frame-v` 前缀的 annotated tag，例如 `frame-v$VERSION_FRAMEWORK`（tag 名 = `frame-v` + `VERSION_FRAMEWORK` 的值，如 `VERSION_FRAMEWORK=3.4.0` 时为 `frame-v3.4.0`；`frame-` 用于区分框架发布与业务仓库的 `v$VERSION` tag）。框架 tag 只作发布标记，不触发 `release-image.yml`——该流水线只认业务 `v<major>.<minor>...` tag，框架自身不发镜像。
-3. PHP 上游基线版本的事实源是 `web/package.json`；同步 PHP 上游时，同时更新 `version.Upstream` 使其与之一致。
+发版由 `release` 子命令完成前置校验与版本文件写入。该命令**不会** commit、不会创建或推送 tag——提交、打 tag 与 push 始终是人工最后一步；命令会把需要执行的命令原样打印出来。
+
+1. 先人工在 `CHANGELOG.md` 增加 `## v<version>` 小节。版本号必须是 `MAJOR.MINOR.PATCH` 三段数字，且严格大于 `VERSION_FRAMEWORK` 的当前值。
+2. 只读校验（dry-run）：
+
+   ```bash
+   go run ./cmd/server release --version 3.4.1
+   ```
+
+   逐项输出 `[ok]` / `[fail]` / `[skip]`，覆盖：版本递增、`VERSION_FRAMEWORK` 与 `version.Framework` 一致、`CHANGELOG.md` 小节存在、工作区（仅允许 `VERSION_FRAMEWORK`、`internal/pkg/version/version.go`、`CHANGELOG.md` 三个文件有改动）、`frame-v<version>` tag 不存在、`gofmt -l .` 无输出、`go build ./...` 通过。任一项失败即退出码 1，并列出人工下一步命令；`gofmt` / `go build` 在结构校验失败时标记为 skip。
+3. 校验通过后写入版本文件：
+
+   ```bash
+   go run ./cmd/server release --version 3.4.1 --write
+   ```
+
+   只写根目录 `VERSION_FRAMEWORK` 与 `internal/pkg/version/version.go` 的 `version.Framework`；`CHANGELOG.md` 仍由人工维护，`version.Upstream` 只在同步 PHP 上游时人工更新（见第 5 条）。写入后如需复查，直接看 `git diff`；再次 dry-run 会因版本已写入而报「版本未递增」。
+4. 人工提交并创建 annotated tag（以命令输出为准）：
+
+   ```bash
+   git add VERSION_FRAMEWORK internal/pkg/version/version.go CHANGELOG.md
+   git commit -m "chore(release): 框架发布 3.4.1"
+   git tag -a frame-v3.4.1 -m "frame-v3.4.1"
+   git push origin v3
+   git push origin frame-v3.4.1
+   ```
+
+   tag 名 = `frame-v` + `VERSION_FRAMEWORK` 的值（`frame-` 用于区分框架发布与业务仓库的 `v$VERSION` tag）。框架 tag 只作发布标记，不触发 `release-image.yml`——该流水线只认业务 `v<major>.<minor>...` tag，框架自身不发镜像。
+5. PHP 上游基线版本的事实源是 `web/package.json`；同步 PHP 上游时，同时更新 `version.Upstream` 使其与之一致。
 
 ## PHP 上游同步原则
 

@@ -19,6 +19,7 @@ import (
 // 行为契约：
 //   - setup 以只读基座引导 CLI 安装（允许配置缺失）；
 //   - crud:validate 是纯 spec 校验，豁免缺配置检查；
+//   - release 只读写版本文件、不依赖运行配置，同样豁免；
 //   - 其余任何命令（含默认 serve）缺少真实配置时打印安装指引、等待 3 秒后
 //     退出——不再提供 Web 安装向导，安装统一走 setup。
 func initConfig() {
@@ -31,12 +32,15 @@ func initConfig() {
 	if !runtimeConfigExists {
 		setupRequested := false
 		validateRequested := false
+		releaseRequested := false
 		for _, arg := range os.Args[1:] {
 			switch arg {
 			case "setup":
 				setupRequested = true
 			case "crud:validate":
 				validateRequested = true
+			case "release":
+				releaseRequested = true
 			}
 		}
 
@@ -45,6 +49,8 @@ func initConfig() {
 			fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
 		case validateRequested:
 			// crud:validate 不依赖运行配置。
+		case releaseRequested:
+			// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
 		default:
 			printInstallGuidance(configPath)
 			// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），

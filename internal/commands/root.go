@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -79,10 +80,21 @@ func newRootCommand(appBootstrap AppBootstrap, cmdBootstrap CmdBootstrap) *cobra
 	return rootCmd
 }
 
+// versionRequested 判定命令行是否在请求版本号：`release --version 3.4.1` 这类
+// 子命令的局部 --version flag 不应短路为版本请求，因此遇到子命令 token 即停止扫描。
 func versionRequested(args []string) bool {
-	for _, arg := range args {
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
 		if arg == "--version" || arg == "-version" {
 			return true
+		}
+		// --conf/-c 的值可能以 - 开头，跳过其后的值再继续扫描。
+		if arg == "--conf" || arg == "-c" {
+			index++
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return false
 		}
 	}
 	return false
