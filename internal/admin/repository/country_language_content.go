@@ -37,6 +37,8 @@ func NewCountryLanguageContentRepository(sqlDB *gorm.DB, config *conf.Configurat
 			OwnerColumn:     "",
 			ReadExtraOwners: []string{},
 			AssignOnCreate:  false,
+			Reassignable:    false,
+			InheritFrom:     nil,
 		},
 		Enforcer: enforcer,
 		config:   config,
@@ -86,7 +88,9 @@ func (s *CountryLanguageContentRepository) GetOne(ctx *gin.Context, id int64) (c
 }
 
 func (s *CountryLanguageContentRepository) List(ctx *gin.Context) (list []model.CountryLanguageContent, total int64, err error) {
-	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, s.TableInfo(), nil)
+	tableInfo := s.TableInfo()
+	tableInfo.FieldTypes = map[string]string{"group": "varchar", "id": "bigint", "key": "varchar", "lan": "varchar", "type": "varchar", "value": "longtext"}
+	whereS, whereP, orderS, limit, offset, err := QueryBuilder(ctx, tableInfo, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -121,6 +125,7 @@ func (s *CountryLanguageContentRepository) Add(ctx *gin.Context, countryLanguage
 }
 
 func (s *CountryLanguageContentRepository) Edit(ctx *gin.Context, countryLanguageContent model.CountryLanguageContent) error {
+
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -128,6 +133,7 @@ func (s *CountryLanguageContentRepository) Edit(ctx *gin.Context, countryLanguag
 		if _, err := s.Enforcer.Actor(ctx); err != nil {
 			return err
 		}
+
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
