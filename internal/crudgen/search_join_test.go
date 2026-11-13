@@ -107,6 +107,49 @@ func TestBuildRelationSearchColumn(t *testing.T) {
 	}
 }
 
+// 验证点号 quickSearch 条目的中文标题补齐：语言键沿用
+// parseJoinData 的 relationFieldLangPrefix 约定（<小写 alias>__<column>），
+// 缺翻译回退列名；无点号条目不改变传入切片（既有产物零 diff）。
+func TestAppendQuickSearchRelationTitles(t *testing.T) {
+	langZh := map[string]string{"admin__username": "管理员名"}
+	tests := []struct {
+		name       string
+		titles     []string
+		quickField []string
+		want       []string
+	}{
+		{
+			name:       "命中翻译",
+			quickField: []string{"id", "admin.username"},
+			want:       []string{"管理员名"},
+		},
+		{
+			name:       "保留既有本表标题",
+			titles:     []string{"ID"},
+			quickField: []string{"id", "admin.username"},
+			want:       []string{"ID", "管理员名"},
+		},
+		{
+			name:       "缺翻译回退列名",
+			quickField: []string{"admin.nickname"},
+			want:       []string{"nickname"},
+		},
+		{
+			name:       "无点号条目不变",
+			titles:     []string{"ID"},
+			quickField: []string{"id", "name"},
+			want:       []string{"ID"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := appendQuickSearchRelationTitles(tt.titles, crudmodel.Table{QuickSearchField: tt.quickField}, langZh)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
 // 验证仓库模板：有 SearchJoinLiteral 时
 // 生成 tableInfo.SearchJoins 赋值并自动补 querybuilder import；三者皆空时
 // 回退原 "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（无关联表产物零 diff）。

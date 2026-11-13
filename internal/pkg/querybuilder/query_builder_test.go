@@ -332,6 +332,98 @@ func TestQueryBuilderSearchJoinExists(t *testing.T) {
 	}
 }
 
+// 验证 quickSearchField 含点号关联字段时
+// 走 SearchJoins 的 EXISTS 条件：本表字段仍按 LIKE 参数化，关联字段复用
+// searchJoinExistsCondition（无前导 AND），两者用 or 分组；% 只转义一次；
+// alias 未登记/多层点号返回 400 而非未知表 SQL 错误。
+func TestQueryBuilderQuickSearchRelationFields(t *testing.T) {
+	table := func(quickSearchField string) TableInfo {
+		return TableInfo{
+			TableName:        "items",
+			Key:              "id",
+			QuickSearchField: quickSearchField,
+			SearchJoins: []SearchJoin{
+				{Alias: "admin", Table: "ba_admin", PK: "id", FK: "admin_id"},
+			},
+		}
+	}
+	const existsCondition = "EXISTS (SELECT 1 FROM `ba_admin` WHERE `ba_admin`.`id` = `items`.`admin_id` AND `ba_admin`.`username` LIKE ?)"
+
+	tests := []struct {
+		name       string
+		table      TableInfo
+		query      string
+		wantWhere  string
+		wantParams []interface{}
+		wantError  bool
+	}{
+		{
+			name:       "本表字段与关联字段分组",
+			table:      table("id,admin.username"),
+			query:      "quickSearch=root",
+			wantWhere:  "(`id` LIKE ?   or " + existsCondition + " )",
+			wantParams: []interface{}{"%root%", "%root%"},
+		},
+		{
+			name:       "仅关联字段也走分组",
+			table:      table("admin.username"),
+			query:      "quickSearch=root",
+			wantWhere:  "(" + existsCondition + " )",
+			wantParams: []interface{}{"%root%"},
+		},
+		{
+			name:       "% 只转义一次",
+			table:      table("id,admin.username"),
+			query:      "quickSearch=50%25",
+			wantWhere:  "(`id` LIKE ?   or " + existsCondition + " )",
+			wantParams: []interface{}{"%50\\%%", "%50\\%%"},
+		},
+		{
+			name:      "alias 未登记返回 400",
+			table:     table("owner.username"),
+			query:     "quickSearch=root",
+			wantError: true,
+		},
+		{
+			name:      "两层点号返回 400",
+			table:     table("admin.username.extra"),
+			query:     "quickSearch=root",
+			wantError: true,
+		},
+		{
+			name:      "无 SearchJoins 时点号字段返回 400",
+			table:     TableInfo{TableName: "items", Key: "id", QuickSearchField: "admin.username"},
+			query:     "quickSearch=root",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			whereS, whereP, _, _, _, err := QueryBuilder(queryContext(tt.query), tt.table, nil)
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("QueryBuilder() error = nil; want bad request")
+				}
+				badRequest, ok := err.(interface{ ErrorCode() int })
+				if !ok || badRequest.ErrorCode() != http.StatusBadRequest {
+					t.Fatalf("QueryBuilder() error = %v; want bad request", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("QueryBuilder() error = %v", err)
+			}
+			if whereS != tt.wantWhere {
+				t.Fatalf("whereS = %q; want %q", whereS, tt.wantWhere)
+			}
+			if !reflect.DeepEqual(whereP, tt.wantParams) {
+				t.Fatalf("whereP = %#v; want %#v", whereP, tt.wantParams)
+			}
+		})
+	}
+}
+
 func TestQueryBuilderHelpers(t *testing.T) {
 	if got := GetFullField("name", TableInfo{TableName: "items"}); got != "items.name" {
 		t.Fatalf("GetFullField() = %q; want %q", got, "items.name")

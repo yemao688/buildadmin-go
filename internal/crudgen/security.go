@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -37,11 +38,6 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	}
 	if err := validateSQLString(table.Comment); err != nil {
 		return fmt.Errorf("invalid table comment: %w", err)
-	}
-	for _, field := range table.QuickSearchField {
-		if strings.Contains(field, ".") {
-			return fmt.Errorf("quickSearchField %q requires JOIN support for relation search; dotted relation quick search is deferred", field)
-		}
 	}
 	for _, customPath := range []string{table.ModelFile, table.ControllerFile, table.WebViewsDir, table.ValidateFile} {
 		if customPath != "" {
@@ -75,6 +71,11 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 			return err
 		}
 	}
+	// 点号快速搜索的结构校验放在字段归一化之后：alias/列白名单依赖
+	// remoteSelect 字段声明的 remoteTable 与 relationFields。
+	if err := validateQuickSearchRelationPaths(table, fields); err != nil {
+		return err
+	}
 	if len(fields) == 0 {
 		return fmt.Errorf("at least one field is required")
 	}
@@ -106,6 +107,83 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 		}
 	}
 	return nil
+}
+
+// validateQuickSearchRelationPaths 校验 quickSearchField 的点号条目
+// （alias.column）：alias 必须由某个 remoteSelect 字段名派生
+// （relationNameForField，admin_id → admin），列必须是该字段
+// relationFields 已声明的列。remoteSelects 不产生 alias，自然落在未知 alias
+// 分支。只允许一层点号；不含点号的条目由本表字段路径沿用既有行为，不在此
+// 校验。无数据库阶段只能校验声明，列在 remoteTable 中是否真实存在仍由
+// crud:generate 的 introspection 负责。
+func validateQuickSearchRelationPaths(table crudmodel.Table, fields []crudmodel.Field) error {
+	relations := map[string]map[string]bool{}
+	for _, field := range fields {
+		if field.DesignType != "remoteSelect" || field.Form.RemoteTable == "" {
+			continue
+		}
+		columns := map[string]bool{}
+		for _, name := range strings.Split(field.Form.RelationFields, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			columns[name] = true
+		}
+		relations[relationNameForField(field.Name)] = columns
+	}
+	for _, entry := range table.QuickSearchField {
+		if !strings.Contains(entry, ".") {
+			continue
+		}
+		parts := strings.Split(entry, ".")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("quickSearchField %q: expected alias.column with exactly one dot; nested relation search is not supported", entry)
+		}
+		alias, column := parts[0], parts[1]
+		if err := data_scope.ValidateIdentifier(alias); err != nil {
+			return fmt.Errorf("quickSearchField %q: invalid relation alias %q: %w", entry, alias, err)
+		}
+		if err := data_scope.ValidateIdentifier(column); err != nil {
+			return fmt.Errorf("quickSearchField %q: invalid relation column %q: %w", entry, column, err)
+		}
+		columns, ok := relations[alias]
+		if !ok {
+			return fmt.Errorf("quickSearchField %q: unknown relation alias %q (available: %s)", entry, alias, describeRelationAliases(relations))
+		}
+		if !columns[column] {
+			return fmt.Errorf("quickSearchField %q: relation column %q is not declared in relationFields of %q (declared: %s)", entry, column, alias, describeRelationColumns(columns))
+		}
+	}
+	return nil
+}
+
+// describeRelationAliases 渲染可用 alias 列表供错误信息使用；没有任何可用
+// alias 时说明原因（没有 remoteSelect 声明 remoteTable）。
+func describeRelationAliases(relations map[string]map[string]bool) string {
+	aliases := make([]string, 0, len(relations))
+	for alias := range relations {
+		aliases = append(aliases, alias)
+	}
+	if len(aliases) == 0 {
+		return "(no remoteSelect field declares remoteTable)"
+	}
+	sort.Strings(aliases)
+	return strings.Join(aliases, ", ")
+}
+
+// describeRelationColumns 渲染某个 alias 已声明的 relationFields；为空时说明
+// 该 remoteSelect 未声明 relationFields，不能参与关联快速搜索。
+func describeRelationColumns(columns map[string]bool) string {
+	names := make([]string, 0, len(columns))
+	for name := range columns {
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return "(none; the remoteSelect field declares no relationFields)"
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func validateRelationField(field crudmodel.Field) error {
