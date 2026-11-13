@@ -275,15 +275,18 @@ func TestUserEditAndAddRollbackWithActiveRequestTransaction(t *testing.T) {
 func TestUserConcurrentAddSameUsernameReturnsOneFriendlyDuplicateError(t *testing.T) {
 	f := newScopeFixture(t)
 	const username = "concurrent-username"
+	// ctx/actor 必须在主测试 goroutine 里算好再传进 goroutine：helper 内含
+	// require，只能由测试 goroutine 调用；两个并发请求本就共用同一属主身份。
+	ctx := scopeCtx(t, 20, false)
+	actor := scopeActor(t, ctx)
 	results := make(chan error, 2)
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ctx := scopeCtx(t, 20, false)
 			candidate := model.User{AdminID: 20, Username: username, Nickname: username, Password: "p", Status: "enable"}
-			results <- f.userSvc.Add(ctx.Request.Context(), userParams(candidate), scopeActor(t, ctx))
+			results <- f.userSvc.Add(ctx.Request.Context(), userParams(candidate), actor)
 		}()
 	}
 	wg.Wait()

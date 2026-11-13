@@ -86,7 +86,7 @@ func TestSearchJoinQuickSearchScope(t *testing.T) {
 
 			require.Equal(t, tt.wantCount, total)
 			require.Len(t, rows, tt.wantRowCount)
-			require.Equal(t, int(total), len(rows), "EXISTS 不应放大行数")
+			require.Len(t, rows, int(total), "EXISTS 不应放大行数")
 		})
 	}
 }

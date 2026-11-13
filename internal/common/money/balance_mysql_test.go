@@ -78,15 +78,15 @@ func TestApplyDeltaSystemFlowSuccess(t *testing.T) {
 	// 日志字段沿用既有语义：AdminID 是目标用户的属主，不是操作者身份。
 	require.Equal(t, int32(20), log.AdminID)
 	require.Equal(t, u.ID, log.UserID)
-	require.Equal(t, float64(0), log.Before)
-	require.Equal(t, float64(1.25), log.Money)
-	require.Equal(t, float64(1.25), log.After)
+	require.InDelta(t, float64(0), log.Before, 1e-9)
+	require.InDelta(t, float64(1.25), log.Money, 1e-9)
+	require.InDelta(t, float64(1.25), log.After, 1e-9)
 	require.Equal(t, "system", log.Memo)
-	require.Greater(t, log.ID, int32(0))
+	require.Positive(t, log.ID)
 
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(1.25), got.Money)
+	require.InDelta(t, float64(1.25), got.Money, 1e-9)
 }
 
 func TestApplyDeltaRejectsInsufficientBalance(t *testing.T) {
@@ -99,7 +99,7 @@ func TestApplyDeltaRejectsInsufficientBalance(t *testing.T) {
 
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(0), got.Money)
+	require.InDelta(t, float64(0), got.Money, 1e-9)
 	require.Equal(t, int64(0), f.countLogs(u.ID))
 }
 
@@ -149,7 +149,7 @@ func TestApplyDeltaHonorsScope(t *testing.T) {
 
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(0), got.Money)
+	require.InDelta(t, float64(0), got.Money, 1e-9)
 	require.Equal(t, int64(0), f.countLogs(u.ID))
 }
 
@@ -164,14 +164,14 @@ func TestApplyDeltaNegativeAndPositiveDeltas(t *testing.T) {
 
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(6), got.Money)
+	require.InDelta(t, float64(6), got.Money, 1e-9)
 
 	logs := f.logs(u.ID)
 	require.Len(t, logs, 2)
-	require.Equal(t, float64(0), logs[0].Before)
-	require.Equal(t, float64(10), logs[0].After)
-	require.Equal(t, float64(10), logs[1].Before)
-	require.Equal(t, float64(6), logs[1].After)
+	require.InDelta(t, float64(0), logs[0].Before, 1e-9)
+	require.InDelta(t, float64(10), logs[0].After, 1e-9)
+	require.InDelta(t, float64(10), logs[1].Before, 1e-9)
+	require.InDelta(t, float64(6), logs[1].After, 1e-9)
 }
 
 func TestApplyDeltaTypeResolution(t *testing.T) {
@@ -223,14 +223,14 @@ func TestApplyDeltaConcurrentForUpdateConsistency(t *testing.T) {
 
 	var got model.User
 	require.NoError(t, f.db.First(&got, u.ID).Error)
-	require.Equal(t, float64(12), got.Money)
+	require.InDelta(t, float64(12), got.Money, 1e-9)
 
 	logs := f.logs(u.ID)
 	require.Len(t, logs, 3)
-	require.Equal(t, float64(0), logs[0].Before)
-	require.Equal(t, float64(10), logs[0].After)
+	require.InDelta(t, float64(0), logs[0].Before, 1e-9)
+	require.InDelta(t, float64(10), logs[0].After, 1e-9)
 	// 先充值后扣款（10->15->12）或先扣款后充值（10->7->12）均可，
 	// 但变动链必须连续。
-	require.Equal(t, logs[1].After, logs[2].Before)
-	require.Equal(t, float64(12), logs[2].After)
+	require.InDelta(t, logs[1].After, logs[2].Before, 1e-9)
+	require.InDelta(t, float64(12), logs[2].After, 1e-9)
 }

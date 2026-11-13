@@ -8,16 +8,19 @@ import (
 
 	"buildadmin-go/internal/conf"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // serveBody 起一个返回固定 body 的翻译服务桩，并返回客户端与其 URL。
 func serveBody(t *testing.T, status int, body string) *Client {
 	t.Helper()
+	// handler 跑在 httptest 的服务端 goroutine 里，不能用 require：require 的
+	// t.FailNow 只终止当前 goroutine，测试仍会继续断言半成品响应。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/translateMulti", r.URL.Path)
-		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, "/translateMulti", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(body))
 	}))

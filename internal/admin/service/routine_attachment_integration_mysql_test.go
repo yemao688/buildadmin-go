@@ -95,7 +95,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 	require.Equal(t, int32(2), raw.AdminID)
 	require.Equal(t, int32(2), raw.UserID)
 	require.Equal(t, "/edited", raw.URL)
-	require.Equal(t, "", raw.Name)
+	require.Empty(t, raw.Name)
 	before := raw
 	require.ErrorIs(t, m.Edit(ctx(3, false), upload.Attachment{ID: 2, Name: "hijack"}), gorm.ErrRecordNotFound)
 	require.NoError(t, db.Table(attachment).Where("id=2").Take(&raw).Error)
