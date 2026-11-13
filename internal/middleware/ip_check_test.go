@@ -100,6 +100,7 @@ func TestIpCheckBlocksBlacklistedIP(t *testing.T) {
 	recorder := serveIpCheck(engine, "192.0.2.1:1234")
 
 	require.Equal(t, http.StatusForbidden, recorder.Code)
+	require.Equal(t, "application/json; charset=utf-8", recorder.Header().Get("Content-Type"))
 	require.False(t, called, "命中黑名单时 handler 不应执行")
 
 	var response struct {

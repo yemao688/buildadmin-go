@@ -1,13 +1,55 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
+	adminmodel "buildadmin-go/internal/admin/repository"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/testutil"
+
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
+
+// 变量名唯一性预检归 ConfigService（repo 只保留并发 duplicate-key 兜底），
+// 新增与编辑都必须拒绝重名，编辑还需排除自身。
+func TestConfigServiceRejectsDuplicateNames(t *testing.T) {
+	dsn := fmt.Sprintf("file:config-service-duplicate-%d?mode=memory&cache=shared", time.Now().UnixNano())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
+	})
+	require.NoError(t, err)
+	require.NoError(t, testutil.CreateSQLiteConfigTable(db, "ba_config"))
+	repo := adminmodel.NewConfigRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
+	svc := NewConfigService(repo)
+	ctx := context.Background()
+
+	require.NoError(t, svc.Add(ctx, ConfigParams{Name: "upload_mode"}))
+	require.ErrorContains(t, svc.Add(ctx, ConfigParams{Name: "upload_mode"}), "config name already exists")
+
+	require.NoError(t, svc.Add(ctx, ConfigParams{Name: "upload_bucket"}))
+	var second siteconfig.Config
+	require.NoError(t, db.Where("name = ?", "upload_bucket").First(&second).Error)
+
+	// 改成已存在的名字被拒绝。
+	err = svc.Edit(ctx, second.ID, ConfigParams{Name: "upload_mode"})
+	require.ErrorContains(t, err, "config name already exists")
+
+	// 保持自身名字的编辑不受预检影响（excludeID 生效）。
+	require.NoError(t, svc.Edit(ctx, second.ID, ConfigParams{Name: "upload_bucket", Title: "Bucket"}))
+	var renamed siteconfig.Config
+	require.NoError(t, db.First(&renamed, second.ID).Error)
+	require.Equal(t, "Bucket", renamed.Title)
+}
 
 type configJSONItem struct {
 	Key   string `json:"key"`

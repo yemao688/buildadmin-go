@@ -8,15 +8,12 @@ import (
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/response"
-	"buildadmin-go/internal/pkg/route"
 	"buildadmin-go/internal/pkg/validator"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
@@ -25,30 +22,26 @@ import (
 )
 
 type SensitiveDataHandler struct {
-	Base
 	log            *zap.Logger
 	config         *conf.Configuration
 	sensitiveDataM *securitymodel.SecuritySensitiveDataRepository
+	adminRuleM     *adminmodel.AdminRuleRepository
 	tableM         *adminmodel.TableRepository
 	svc            *service.SensitiveDataService
 }
 
-func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SecuritySensitiveDataRepository, tableM *adminmodel.TableRepository, svc *service.SensitiveDataService) *SensitiveDataHandler {
+func NewSensitiveDataHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataM *securitymodel.SecuritySensitiveDataRepository, adminRuleM *adminmodel.AdminRuleRepository, tableM *adminmodel.TableRepository, svc *service.SensitiveDataService) *SensitiveDataHandler {
 	return &SensitiveDataHandler{
-		Base:           NewBase(sensitiveDataM),
 		log:            log,
 		config:         config,
 		sensitiveDataM: sensitiveDataM,
+		adminRuleM:     adminRuleM,
 		tableM:         tableM,
 		svc:            svc,
 	}
 }
 
 func (h *SensitiveDataHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	result, total, err := h.sensitiveDataM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -57,42 +50,8 @@ func (h *SensitiveDataHandler) Index(ctx *gin.Context) {
 	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
-		"remark": h.GetRemark(ctx),
+		"remark": remark(ctx, h.adminRuleM),
 	})
-}
-
-type SensitiveField struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
-type SensitiveData struct {
-	Name         string               `json:"name"`
-	Controller   string               `json:"controller"`
-	ControllerAs string               `json:"controller_as"`
-	DataTable    string               `json:"data_table"`
-	PrimaryKey   string               `json:"primary_key"`
-	Fields       []SensitiveField     `json:"fields"`
-	Status       validator.FlexStatus `json:"status"`
-}
-
-func (v SensitiveData) GetMessages() validator.ValidatorMessages {
-	return validator.ValidatorMessages{}
-}
-
-func sensitiveDataParams(params SensitiveData) service.SensitiveDataParams {
-	fields := make([]service.Field, 0, len(params.Fields))
-	for _, f := range params.Fields {
-		fields = append(fields, service.Field{Name: f.Name, Value: f.Value})
-	}
-	return service.SensitiveDataParams{
-		Name:       params.Name,
-		Controller: params.Controller,
-		DataTable:  params.DataTable,
-		PrimaryKey: params.PrimaryKey,
-		Fields:     fields,
-		Status:     string(params.Status),
-	}
 }
 
 func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
@@ -104,13 +63,13 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var params SensitiveData
+	var params dto.SecuritySensitiveDataParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
 
-	if err := h.svc.Add(ctx.Request.Context(), sensitiveDataParams(params)); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), params); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -173,13 +132,13 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 
 	var params = struct {
 		dto.IDS
-		SensitiveData
+		dto.SecuritySensitiveDataParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), sensitiveDataParams(params.SensitiveData)); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), params.SecuritySensitiveDataParam); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -192,7 +151,7 @@ func (h *SensitiveDataHandler) Del(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if err := h.sensitiveDataM.Del(ctx, params.Ids); err != nil {
+	if err := h.svc.Del(ctx.Request.Context(), params.Ids); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -200,7 +159,7 @@ func (h *SensitiveDataHandler) Del(ctx *gin.Context) {
 }
 
 func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
-	outExcludeRoute := []string{
+	return adminRouteList([]string{
 		"addon",
 		"ajax",
 		"module",
@@ -211,27 +170,11 @@ func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
 		"user.MoneyLog",
 		"routine.Config",
 		"auth.AdminLog",
-	}
-
-	outRoutes := map[string]string{}
-	routes := route.GetAllRoutes()
-	for _, r := range routes {
-		if !strings.HasPrefix(r.Path, "/admin") {
-			continue
-		}
-		segments := strings.Split(r.Path, "/")
-		if len(segments) >= 3 {
-			path := segments[2]
-			if !slices.Contains(outExcludeRoute, path) {
-				outRoutes[path] = path
-			}
-		}
-	}
-	return outRoutes
+	})
 }
 
 func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string {
-	outExcludeTable := []string{
+	return adminDataTableList(h.tableM.GetTableList(), h.config.Database.Prefix, []string{
 		"area",
 		"token",
 		"captcha",
@@ -239,15 +182,5 @@ func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string 
 		"config",
 		"admin_log",
 		"user_money_log",
-	}
-
-	outTables := map[string]string{}
-	tables := h.tableM.GetTableList()
-	for tableName, comment := range tables {
-		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
-		if !slices.Contains(outExcludeTable, name) {
-			outTables[name] = comment
-		}
-	}
-	return outTables
+	})
 }

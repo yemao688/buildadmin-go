@@ -1,0 +1,329 @@
+package crudgen
+
+import (
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
+	"buildadmin-go/internal/pkg/util"
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+type FileManifest struct {
+	Generated []string
+	Shared    []string
+}
+
+// BuildFileManifest returns every known CRUD output plus the shared files that
+// Wire/provider updates can modify. DDL is intentionally not part of this
+// transaction: MySQL DDL cannot be rolled back reliably.
+func BuildFileManifest(table crudmodel.Table) (FileManifest, error) {
+	if err := normalizeTableConfiguration(&table); err != nil {
+		return FileManifest{}, err
+	}
+	entityFile, err := ParseEntityNameData(table.Name, table.ModelFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	repositoryFile, err := ParseRepositoryNameData(table.Name, table.ModelFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	dtoFile, err := ParseDTONameData(table.Name, table.ModelFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	handlerFile, err := ParseHandlerNameData(table.Name, table.ControllerFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	registrarFile, err := ParseRegistrarNameData(table.Name, table.ControllerFile)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	views := ParseWebDirNameData(table.Name, "views", table.WebViewsDir)
+	lang := ParseWebDirNameData(table.Name, "lang", table.WebViewsDir)
+	manifest := FileManifest{
+		Generated: []string{
+			filepath.Join(util.RootPath(), lang.LangFile("en")),
+			filepath.Join(util.RootPath(), lang.LangFile("zh-cn")),
+			filepath.Join(util.RootPath(), views.Views, "index.vue"),
+			filepath.Join(util.RootPath(), views.Views, "popupForm.vue"),
+			entityFile.ParseFile,
+			repositoryFile.ParseFile,
+			dtoFile.ParseFile,
+			handlerFile.ParseFile,
+			registrarFile.ParseFile,
+		},
+		Shared: []string{
+			// 拍平布局：构造器并入扁平包合并 ProviderSet，wire.go 不再被修改；
+			// wire_gen.go 由生成流程重新生成。
+			filepath.Join(util.RootPath(), repositoryFile.RootFileName, "provider.go"),
+			filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go"),
+			filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go"),
+			filepath.Join(util.RootPath(), "cmd", "server", "wire_gen.go"),
+		},
+	}
+	for _, path := range manifest.Generated {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal/admin/router"); err != nil {
+			return FileManifest{}, err
+		}
+	}
+	for _, path := range manifest.Shared {
+		if err := ValidateGeneratedAbsolutePath(path, "internal/admin/repository", "internal/admin/handler", "internal/admin/router", "cmd/server"); err != nil {
+			return FileManifest{}, err
+		}
+	}
+	return normalizeFileManifest(manifest)
+}
+
+func BuildFileManifestForFields(table crudmodel.Table, fields []crudmodel.Field) (FileManifest, error) {
+	manifest, err := BuildFileManifest(table)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	for _, field := range fields {
+		if field.Form.RemoteTable == "" || field.Form.RelationFields == "" {
+			continue
+		}
+		join, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
+		if err != nil {
+			return FileManifest{}, err
+		}
+		if !fileExists(join.ParseFile) {
+			manifest.Generated = append(manifest.Generated, join.ParseFile)
+		}
+		joinRepo, err := ParseRepositoryNameData(field.Form.RemoteTable, field.Form.RemoteModel)
+		if err != nil {
+			return FileManifest{}, err
+		}
+		provider := filepath.Join(util.RootPath(), joinRepo.RootFileName, "provider.go")
+		manifest.Shared = append(manifest.Shared, provider)
+	}
+	manifest, err = normalizeFileManifest(manifest)
+	if err != nil {
+		return FileManifest{}, err
+	}
+	for _, path := range append(append([]string{}, manifest.Generated...), manifest.Shared...) {
+		if err := ValidateGeneratedAbsolutePath(path, "web/src/lang", "web/src/views", "internal/model", "internal/admin/repository", "internal/admin/dto", "internal/admin/handler", "internal/admin/router", "internal", "cmd/server"); err != nil {
+			return FileManifest{}, err
+		}
+	}
+	return manifest, nil
+}
+
+type FileSnapshot struct {
+	dir     string
+	entries []snapshotEntry
+}
+
+type snapshotEntry struct {
+	path    string
+	backup  string
+	existed bool
+	mode    os.FileMode
+}
+
+func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
+	dir, err := os.MkdirTemp(util.RootPath(), ".buildadmin-crud-backup-")
+	if err != nil {
+		return nil, err
+	}
+	s := &FileSnapshot{dir: dir}
+	for i, path := range uniquePaths(paths) {
+		info, statErr := os.Stat(path)
+		entry := snapshotEntry{path: path}
+		if statErr == nil {
+			if !info.Mode().IsRegular() {
+				_ = s.Cleanup()
+				return nil, fmt.Errorf("snapshot target is not a regular file: %s", path)
+			}
+			entry.existed = true
+			entry.mode = info.Mode().Perm()
+			entry.backup = filepath.Join(dir, fmt.Sprintf("%06d.bak", i))
+			data, readErr := os.ReadFile(path)
+			if readErr != nil {
+				_ = s.Cleanup()
+				return nil, readErr
+			}
+			if writeErr := os.WriteFile(entry.backup, data, entry.mode); writeErr != nil {
+				_ = s.Cleanup()
+				return nil, writeErr
+			}
+		} else if !os.IsNotExist(statErr) {
+			_ = s.Cleanup()
+			return nil, statErr
+		}
+		s.entries = append(s.entries, entry)
+	}
+	return s, nil
+}
+
+func (s *FileSnapshot) Restore() error {
+	prepared := make([]struct {
+		entry snapshotEntry
+		data  []byte
+	}, 0, len(s.entries))
+	for _, entry := range s.entries {
+		if !entry.existed {
+			prepared = append(prepared, struct {
+				entry snapshotEntry
+				data  []byte
+			}{entry: entry})
+			continue
+		}
+		data, err := os.ReadFile(entry.backup)
+		if err != nil {
+			return fmt.Errorf("read snapshot backup %q: %w", entry.backup, err)
+		}
+		prepared = append(prepared, struct {
+			entry snapshotEntry
+			data  []byte
+		}{entry: entry, data: data})
+	}
+	var firstErr error
+	for _, item := range prepared {
+		entry := item.entry
+		if !entry.existed {
+			if err := os.Remove(entry.path); err != nil && !os.IsNotExist(err) && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if err := atomicRestore(entry.path, item.data, entry.mode); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func (s *FileSnapshot) Cleanup() error { return os.RemoveAll(s.dir) }
+
+type Quarantine struct {
+	dir     string
+	entries []quarantineEntry
+}
+
+type quarantineEntry struct{ original, quarantined string }
+
+func NewQuarantine(paths []string) (*Quarantine, error) {
+	dir, err := os.MkdirTemp(util.RootPath(), ".buildadmin-crud-quarantine-")
+	if err != nil {
+		return nil, err
+	}
+	q := &Quarantine{dir: dir}
+	for i, path := range uniquePaths(paths) {
+		if _, err := os.Stat(path); err != nil {
+			_ = q.Restore()
+			_ = q.Commit()
+			return nil, err
+		}
+		target := filepath.Join(dir, fmt.Sprintf("%06d.quarantine", i))
+		if err := os.Rename(path, target); err != nil {
+			_ = q.Restore()
+			_ = q.Commit()
+			return nil, err
+		}
+		q.entries = append(q.entries, quarantineEntry{original: path, quarantined: target})
+	}
+	return q, nil
+}
+
+func (q *Quarantine) Restore() error {
+	var firstErr error
+	for i := len(q.entries) - 1; i >= 0; i-- {
+		entry := q.entries[i]
+		if _, err := os.Stat(entry.quarantined); err == nil {
+			if err := os.Rename(entry.quarantined, entry.original); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+func (q *Quarantine) Commit() error { return os.RemoveAll(q.dir) }
+
+func uniquePaths(paths []string) []string {
+	seen := make(map[string]struct{}, len(paths))
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if _, ok := seen[path]; !ok {
+			seen[path] = struct{}{}
+			result = append(result, path)
+		}
+	}
+	return result
+}
+
+// normalizeFileManifest is the single classification boundary for manifests,
+// including manifests loaded from older CRUD logs.
+func normalizeFileManifest(manifest FileManifest) (FileManifest, error) {
+	generated := make([]string, 0, len(manifest.Generated))
+	shared := append([]string{}, manifest.Shared...)
+	for _, path := range manifest.Generated {
+		if manifestPathIsShared(path) {
+			shared = append(shared, path)
+		} else {
+			generated = append(generated, path)
+		}
+	}
+	return FileManifest{Generated: uniquePaths(generated), Shared: uniquePaths(shared)}, nil
+}
+
+func manifestPathIsShared(path string) bool {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if !filepath.IsAbs(clean) {
+		clean = filepath.Join(util.RootPath(), clean)
+	}
+	clean, _ = filepath.Abs(clean)
+	root := filepath.Clean(util.RootPath())
+	return filepath.Base(clean) == "provider.go" ||
+		clean == filepath.Join(root, "cmd", "server", "wire.go") ||
+		clean == filepath.Join(root, "cmd", "server", "wire_gen.go")
+}
+
+func atomicRestore(path string, data []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".crud-restore-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err == nil {
+		return nil
+	}
+	rollback, err := os.CreateTemp(filepath.Dir(path), ".crud-rollback-*")
+	if err != nil {
+		return err
+	}
+	rollbackName := rollback.Name()
+	if err := rollback.Close(); err != nil {
+		_ = os.Remove(rollbackName)
+		return err
+	}
+	_ = os.Remove(rollbackName)
+	if err := os.Rename(path, rollbackName); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		if rollbackErr := os.Rename(rollbackName, path); rollbackErr != nil {
+			return fmt.Errorf("replace %s: %w; rollback failed: %w", path, err, rollbackErr)
+		}
+		return err
+	}
+	return os.Remove(rollbackName)
+}

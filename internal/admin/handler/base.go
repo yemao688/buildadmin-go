@@ -1,13 +1,13 @@
 package handler
 
 import (
-	model "buildadmin-go/internal/model"
+	adminmodel "buildadmin-go/internal/admin/repository"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/route"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,33 +23,22 @@ import (
 	"gorm.io/gorm"
 )
 
-type CommonModel interface {
-	DB() *gorm.DB
+// CrudTable 是 Base 对单表持久化能力的唯一依赖。实现者：生成仓库
+// （内嵌 repository.CRUDStore）与 admin_rule 仓库。
+type CrudTable interface {
 	Table() string
-}
-
-type modelKeyInfo interface {
 	PrimaryKeyName() string
-}
-
-type rowFactory interface {
-	NewRow() any
-}
-
-type scopedModel interface {
-	ScopeDB(*gin.Context, *gorm.DB) *gorm.DB
-}
-
-type transactionalModel interface {
-	Transaction(context.Context, func(*gorm.DB) error) error
+	GetOneScoped(ctx *gin.Context, id any) (any, error)
+	UpdateFieldScoped(ctx *gin.Context, id any, field string, value any) (rows int64, visible bool, err error)
+	SortWeighScoped(ctx *gin.Context, moveID, targetID, direction, orderDirection string) error
 }
 
 type Base struct {
-	currentM CommonModel
+	currentM CrudTable
 }
 
 // NewBase 供子包生成的 handler 构造 Base；子包无法写入未导出的 currentM 字段。
-func NewBase(currentM CommonModel) Base {
+func NewBase(currentM CrudTable) Base {
 	return Base{currentM: currentM}
 }
 
@@ -122,85 +111,34 @@ func parsePartialEditRequest(ctx *gin.Context, primaryKey string,
 // allowedFields 是该表允许通过 Switch 修改的字段名集合
 // 返回 true 表示已处理（Switch 请求），false 表示不是 Switch 请求，继续走正常 Edit
 func (h *Base) MaybePartialEdit(ctx *gin.Context, allowedFields map[string]bool, validators ...PartialEditValidator) bool {
-	primaryKey := h.primaryKey()
-	idVal, _, fieldName, fieldValue, handled, failed := parsePartialEditRequest(ctx, primaryKey, allowedFields, validators...)
+	idVal, _, fieldName, fieldValue, handled, failed := parsePartialEditRequest(ctx, h.currentM.PrimaryKeyName(), allowedFields, validators...)
 	if !handled {
 		return false
 	}
 	if failed {
 		return true
 	}
-	updates := map[string]any{fieldName: fieldValue}
-	db := h.currentM.DB()
-	if scoped, ok := h.currentM.(interface {
-		DBFor(context.Context) *gorm.DB
-	}); ok {
-		db = scoped.DBFor(ctx)
-	}
-	if scoped, ok := h.currentM.(scopedModel); ok {
-		db = scoped.ScopeDB(ctx, db)
-	}
-	res := db.Table(h.currentM.Table()).
-		Where(primaryKey+" = ?", idVal).
-		Updates(updates)
-	if res.Error != nil {
-		response.FailByErr(ctx, res.Error)
-	} else if res.RowsAffected == 0 {
-		var visible int64
-		if err := db.Table(h.currentM.Table()).Where(primaryKey+" = ?", idVal).Count(&visible).Error; err != nil {
-			response.FailByErr(ctx, err)
-		} else if visible == 1 {
-			response.Success(ctx, "")
-		} else {
-			response.FailByErr(ctx, gorm.ErrRecordNotFound)
-		}
-	} else if res.RowsAffected != 1 {
-		response.FailByErr(ctx, gorm.ErrRecordNotFound)
-	} else {
+	_, visible, err := h.currentM.UpdateFieldScoped(ctx, idVal, fieldName, fieldValue)
+	if err != nil {
+		response.FailByErr(ctx, err)
+	} else if visible {
 		response.Success(ctx, "")
+	} else {
+		response.FailByErr(ctx, gorm.ErrRecordNotFound)
 	}
 	return true
 }
 
-func (h *Base) Select(ctx *gin.Context) (interface{}, bool) {
-	return nil, false
-}
-
 func (h *Base) One(ctx *gin.Context) {
-	primaryKey := h.primaryKey()
-	id := ctx.Request.FormValue(primaryKey)
-	result, scanTarget := oneRow(h.currentM)
-	db := h.currentM.DB()
-	if scoped, ok := h.currentM.(interface {
-		DBFor(context.Context) *gorm.DB
-	}); ok {
-		db = scoped.DBFor(ctx)
-	}
-	if scoped, ok := h.currentM.(scopedModel); ok {
-		db = scoped.ScopeDB(ctx, db)
-	}
-	err := db.Table(h.currentM.Table()).Where(primaryKey+"=?", id).Take(scanTarget).Error
+	id := ctx.Request.FormValue(h.currentM.PrimaryKeyName())
+	row, err := h.currentM.GetOneScoped(ctx, id)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
 	response.Success(ctx, map[string]interface{}{
-		"row": result,
+		"row": row,
 	})
-}
-
-func oneRow(m CommonModel) (result any, scanTarget any) {
-	if factory, ok := m.(rowFactory); ok {
-		if row := factory.NewRow(); row != nil {
-			return row, row
-		}
-	}
-	row := map[string]interface{}{}
-	return row, &row
-}
-
-func (h *Base) primaryKey() string {
-	return primaryKeyName(h.currentM)
 }
 
 func (h *Base) Sortable(ctx *gin.Context) {
@@ -216,18 +154,55 @@ func (h *Base) Sortable(ctx *gin.Context) {
 		return
 	}
 
-	if err := Sortable(ctx, h.currentM, params.Move, params.Target, params.Direction, params.Order); err != nil {
-		response.FailByErr(ctx, err)
+	primaryKey := h.currentM.PrimaryKeyName()
+	if !validPrimaryKeyName(primaryKey) {
+		response.FailByErr(ctx, cErr.BadRequest("Unsupported primary key field"))
+		return
+	}
+	moveID, err := normalizeSortablePrimaryKey(params.Move)
+	if err != nil {
+		response.FailByErr(ctx, cErr.BadRequest("Invalid move primary key: "+err.Error()))
+		return
+	}
+	targetID, err := normalizeSortablePrimaryKey(params.Target)
+	if err != nil {
+		response.FailByErr(ctx, cErr.BadRequest("Invalid target primary key: "+err.Error()))
+		return
+	}
+	if moveID == targetID || params.Direction == "" {
+		response.FailByErr(ctx, cErr.BadRequest("Record not found"))
+		return
+	}
+
+	orderField := "weigh"
+	orderDirection := "asc"
+	if params.Order != "" {
+		orderParts := strings.Split(params.Order, ",")
+		orderField = strings.TrimSpace(orderParts[0])
+		if len(orderParts) > 1 && strings.TrimSpace(orderParts[1]) != "" {
+			orderDirection = strings.ToLower(strings.TrimSpace(orderParts[1]))
+		}
+	}
+	if orderField != "weigh" {
+		response.FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "Please use the weigh field to sort before operating", nil)))
+		return
+	}
+	if orderDirection != "desc" {
+		orderDirection = "asc"
+	}
+
+	if err := h.currentM.SortWeighScoped(ctx, moveID, targetID, params.Direction, orderDirection); err != nil {
+		switch {
+		case errors.Is(err, adminmodel.ErrSortPrimaryKeyInvalid):
+			response.FailByErr(ctx, cErr.BadRequest("Invalid primary key value"))
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			response.FailByErr(ctx, cErr.BadRequest("Record not found"))
+		default:
+			response.FailByErr(ctx, err)
+		}
 		return
 	}
 	response.Success(ctx, "")
-}
-
-func primaryKeyName(m CommonModel) string {
-	if info, ok := m.(modelKeyInfo); ok && info.PrimaryKeyName() != "" {
-		return info.PrimaryKeyName()
-	}
-	return "id"
 }
 
 func validPrimaryKeyName(name string) bool {
@@ -327,181 +302,34 @@ func normalizeSortableFloat(value float64, bitSize int) (string, error) {
 	return strconv.FormatFloat(value, 'f', -1, bitSize), nil
 }
 
-func Sortable(ctx *gin.Context, m1 CommonModel, moveId, targetId any, direction string, orderValues ...string) error {
-	table := m1.Table()
-	pkField := primaryKeyName(m1)
-	if !validPrimaryKeyName(pkField) {
-		return cErr.BadRequest("Unsupported primary key field")
+func adminRouteList(exclude []string) map[string]string {
+	outRoutes := map[string]string{}
+	routes := route.GetAllRoutes()
+	for _, r := range routes {
+		if !strings.HasPrefix(r.Path, "/admin") {
+			continue
+		}
+		segments := strings.Split(r.Path, "/")
+		if len(segments) >= 3 {
+			path := segments[2]
+			if !slices.Contains(exclude, path) {
+				outRoutes[path] = path
+			}
+		}
 	}
-	moveID, err := normalizeSortablePrimaryKey(moveId)
-	if err != nil {
-		return cErr.BadRequest("Invalid move primary key: " + err.Error())
-	}
-	targetID, err := normalizeSortablePrimaryKey(targetId)
-	if err != nil {
-		return cErr.BadRequest("Invalid target primary key: " + err.Error())
-	}
-
-	type FullRow struct {
-		ID    string `gorm:"column:sortable_primary_key"`
-		Weigh int32
-	}
-	rowSelect := pkField + " AS sortable_primary_key, weigh"
-
-	transaction := func(fn func(*gorm.DB) error) error {
-		if m, ok := m1.(transactionalModel); ok {
-			return m.Transaction(ctx, fn)
-		}
-		return m1.DB().Transaction(fn)
-	}
-	return transaction(func(tx *gorm.DB) error {
-		scopedDB := func(db *gorm.DB) *gorm.DB {
-			if scoped, ok := m1.(scopedModel); ok {
-				return scoped.ScopeDB(ctx, db)
-			}
-			return db
-		}
-		var moveRow, targetRow FullRow
-		if err := scopedDB(tx).Table(table).Select(rowSelect).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return cErr.BadRequest("Record not found")
-			}
-			return err
-		}
-		if err := scopedDB(tx).Table(table).Select(rowSelect).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return cErr.BadRequest("Record not found")
-			}
-			return err
-		}
-		if moveRow.ID == "" || targetRow.ID == "" {
-			return cErr.BadRequest("Invalid primary key value")
-		}
-		if moveID == targetID || direction == "" {
-			return cErr.BadRequest("Record not found")
-		}
-
-		order := "weigh,desc"
-		if len(orderValues) > 0 {
-			order = orderValues[0]
-		}
-		orderParts := strings.Split(order, ",")
-		orderField := strings.TrimSpace(orderParts[0])
-		orderDirection := "asc"
-		if len(orderParts) > 1 && strings.TrimSpace(orderParts[1]) != "" {
-			orderDirection = strings.ToLower(strings.TrimSpace(orderParts[1]))
-		}
-		if orderField != "weigh" {
-			return cErr.BadRequest(util.Lang(ctx, "Please use the weigh field to sort before operating", nil))
-		}
-		if orderDirection != "desc" {
-			orderDirection = "asc"
-		}
-
-		weigh := targetRow.Weigh
-		updateMethod := "inc"
-		if orderDirection == "desc" {
-			if direction == "up" {
-				updateMethod = "dec"
-			}
-		} else if direction == "up" {
-			updateMethod = "inc"
-		} else {
-			updateMethod = "dec"
-		}
-
-		var weighRows []FullRow
-		if err := scopedDB(tx).Table(table).
-			Select(rowSelect).
-			Where("weigh = ?", weigh).
-			Order("weigh " + orderDirection + ", " + pkField + " desc").
-			Find(&weighRows).Error; err != nil {
-			return err
-		}
-		weighRowsCount := int32(len(weighRows))
-
-		shift := gorm.Expr("weigh + ?", weighRowsCount)
-		if updateMethod == "dec" {
-			shift = gorm.Expr("weigh - ?", weighRowsCount)
-		}
-		shiftQuery := scopedDB(tx).Table(table).Where(pkField+" <> ?", moveID)
-		if updateMethod == "dec" {
-			shiftQuery = shiftQuery.Where("weigh < ?", weigh)
-		} else {
-			shiftQuery = shiftQuery.Where("weigh > ?", weigh)
-		}
-		if err := shiftQuery.UpdateColumn("weigh", shift).Error; err != nil {
-			return err
-		}
-
-		if direction == "down" {
-			slices.Reverse(weighRows)
-		}
-		moveComplete := int32(0)
-		updatedWeights := make(map[string]int32, len(weighRows)+1)
-		updatedIDs := make([]string, 0, len(weighRows)+1)
-		setWeight := func(id string, weight int32) {
-			if _, ok := updatedWeights[id]; !ok {
-				updatedIDs = append(updatedIDs, id)
-			}
-			updatedWeights[id] = weight
-		}
-		for key, weighRow := range weighRows {
-			if weighRow.ID == "" {
-				return cErr.BadRequest("Invalid primary key value")
-			}
-			if weighRow.ID == moveID {
-				continue
-			}
-
-			rowWeighVal := weighRow.Weigh + int32(key)
-			if updateMethod == "dec" {
-				rowWeighVal = weighRow.Weigh - int32(key)
-			}
-			if weighRow.ID == targetID {
-				moveComplete = 1
-				moveRow.Weigh = rowWeighVal
-				setWeight(moveRow.ID, moveRow.Weigh)
-			}
-			if updateMethod == "dec" {
-				rowWeighVal -= moveComplete
-			} else {
-				rowWeighVal += moveComplete
-			}
-			setWeight(weighRow.ID, rowWeighVal)
-		}
-
-		if len(updatedIDs) > 0 {
-			caseSQL := "CASE"
-			caseArgs := make([]any, 0, len(updatedIDs)*2)
-			for _, id := range updatedIDs {
-				caseSQL += " WHEN " + pkField + " = ? THEN ?"
-				caseArgs = append(caseArgs, id, updatedWeights[id])
-			}
-			caseSQL += " ELSE weigh END"
-			if err := scopedDB(tx).Table(table).
-				Where(pkField+" in ?", updatedIDs).
-				UpdateColumn("weigh", gorm.Expr(caseSQL, caseArgs...)).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	return outRoutes
 }
 
-func (h *Base) GetRemark(ctx *gin.Context) string {
-	var rule = struct {
-		Remark string
-	}{}
-	name := ctx.Request.URL.Path
-	name = strings.Replace(name, ".", "/", -1)
-	name = strings.Replace(name, "/admin/", "", 1)
-	slashIndex := strings.LastIndex(name, "/")
-
-	nameArr := []string{name[:slashIndex], name[slashIndex+1:]}
-	err := h.currentM.DB().Model(&model.AdminRule{}).Where("name in ?", nameArr).Take(&rule).Error
-	if err != nil {
-		return ""
+// adminDataTableList 把 TableRepository 返回的「完整表名 → 注释」转换为
+// 「去库前缀的表名 → 注释」，exclude 中的表名（去前缀后）会被跳过。
+// 三个设计器调用点的差异只在 exclude 清单。
+func adminDataTableList(tables map[string]string, prefix string, exclude []string) map[string]string {
+	outTables := map[string]string{}
+	for tableName, comment := range tables {
+		name := strings.TrimPrefix(tableName, prefix)
+		if !slices.Contains(exclude, name) {
+			outTables[name] = comment
+		}
 	}
-	return util.Lang(ctx, rule.Remark, nil)
+	return outTables
 }

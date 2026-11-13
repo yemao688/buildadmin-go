@@ -7,7 +7,6 @@ import (
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/random"
-	"buildadmin-go/internal/pkg/systemroot"
 	"buildadmin-go/internal/pkg/token"
 	"fmt"
 	"regexp"
@@ -30,11 +29,16 @@ var (
 	loginPhoneRegex    = regexp.MustCompile(`^1[3-9]\d{9}$`)
 	loginEmailRegex    = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	loginUsernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{4,30}$`)
+	// registerUsernameRegex 是注册用户名的格式约束；校验属于会员领域规则，
+	// 放在 service 而不是 handler。
+	registerUsernameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`)
 )
 
-func NewMemberService(sqlDB *gorm.DB, tokenHelper *token.TokenHelper, config *conf.Configuration) *MemberService {
+// NewMemberService 构造会员领域服务；持久化一律经注入的仓库，service 不再
+// 持有数据库句柄。
+func NewMemberService(users *repository.UserRepository, tokenHelper *token.TokenHelper, config *conf.Configuration) *MemberService {
 	return &MemberService{
-		users:        repository.NewUserRepository(sqlDB),
+		users:        users,
 		tokenHelper:  tokenHelper,
 		config:       config,
 		loginMetaTTL: newLoginMetaThrottle(loginMetaWriteTTL),
@@ -144,7 +148,7 @@ func (s *MemberService) ValidateUserToken(id int32, ip string) error {
 	if user == nil {
 		return cErr.Unauthorized("Please login first")
 	}
-	if user.Status != "enable" {
+	if !util.AccountStatusEnabled(user.Status) {
 		return cErr.Unauthorized("Please login first")
 	}
 	if !s.loginMetaTTL.shouldWrite(id) {
@@ -266,49 +270,63 @@ func (s *MemberService) UserInfoByToken(tokenStr string) (map[string]any, bool) 
 		return nil, false
 	}
 	user, err := s.users.GetByID(tokenData.UserID)
-	if err != nil {
+	if err != nil || user == nil {
 		return nil, false
 	}
 	return s.FilterData(*user), true
 }
 
 // Register creates a member account and issues the access token. ip is passed
-// explicitly so the flow stays transport-free.
+// explicitly so the flow stays transport-free. Username format validation and
+// the uniqueness check live here; the handler only binds the request body.
 func (s *MemberService) Register(ip string, username string, plainPassword string) (interface{}, error) {
-	exists, err := s.accountExists("username", username)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, cErr.BadRequest("Username is exist!")
+	if !registerUsernameRegex.MatchString(username) {
+		return nil, cErr.BadRequest("username invalid")
 	}
 
 	hash, err := password.Hash(plainPassword)
 	if err != nil {
 		return nil, err
 	}
-	rootID, err := (systemroot.Resolver{
-		DB:         s.users.DB(),
-		AdminTable: s.config.Database.Prefix + "admin",
-	}).Resolve()
-	if err != nil {
-		return nil, cErr.BadRequest("system root administrator is not configured")
-	}
 
-	now := time.Now().Unix()
-	user := model.User{
-		AdminID:       rootID,
-		Username:      username,
-		Nickname:      util.MaskPhone(username),
-		Avatar:        "",
-		Password:      hash,
-		Status:        "enable",
-		LastLoginTime: now,
-		LastLoginIP:   ip,
-		JoinIP:        ip,
-		JoinTime:      now,
-	}
-	if err := s.users.Create(&user); err != nil {
+	var user model.User
+	// 唯一性校验、根管理员归属解析与写入放在同一事务里，并在 Create 上兜底
+	// 1062：并发注册时事务内未看到对方行的那一次由唯一键冲突映射为同一业务
+	// 错误。
+	err = s.users.Transaction(func(tx *gorm.DB) error {
+		existing, err := s.users.GetByAccountIn(tx, "username", username)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			return cErr.BadRequest("Username is exist!")
+		}
+		rootID, err := s.users.ResolveRootAdminID()
+		if err != nil {
+			return cErr.BadRequest("system root administrator is not configured")
+		}
+		now := time.Now().Unix()
+		user = model.User{
+			AdminID:       rootID,
+			Username:      username,
+			Nickname:      util.MaskPhone(username),
+			Avatar:        "",
+			Password:      hash,
+			Status:        "enable",
+			LastLoginTime: now,
+			LastLoginIP:   ip,
+			JoinIP:        ip,
+			JoinTime:      now,
+		}
+		if err := s.users.Create(tx, &user); err != nil {
+			if repository.IsDuplicateKeyError(err) {
+				return cErr.BadRequest("Username is exist!")
+			}
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -320,20 +338,6 @@ func (s *MemberService) Register(ip string, username string, plainPassword strin
 	userInfo["token"] = tokenStr
 	userInfo["refresh_token"] = ""
 	return userInfo, nil
-}
-
-func (s *MemberService) accountExists(field, value string) (bool, error) {
-	switch field {
-	case "username", "email", "mobile":
-	default:
-		return false, cErr.BadRequest("invalid account field")
-	}
-
-	user, err := s.users.GetByAccount(field, value)
-	if err != nil {
-		return false, err
-	}
-	return user != nil, nil
 }
 
 // Logout invalidates the refresh token and the caller's access token.

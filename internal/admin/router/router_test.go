@@ -82,8 +82,8 @@ func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 func TestAdminRouterProtectedRouteRequiresLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
-	// The Login middleware relies on the global i18n context for its abort
-	// message, mirroring the composer's global chain.
+	// Login 中间件依赖全局 i18n 上下文输出 abort 消息，
+	// 与 composer 的全局中间件链保持一致。
 	engine.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		DefaultLanguage: language.English,
 	})))
@@ -100,8 +100,8 @@ func TestAdminRouterProtectedRouteRequiresLogin(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/admin/Index/index", nil)
 	engine.ServeHTTP(recorder, request)
 
-	// The protected group must run Login before the handler; without a token
-	// Login aborts with the business 401 code.
+	// 受保护分组必须先执行 Login 再进 handler；没有 token 时
+	// Login 以业务码 401 abort。
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var response struct {
 		Code int `json:"code"`

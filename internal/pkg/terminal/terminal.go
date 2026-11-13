@@ -250,18 +250,6 @@ func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, ext
 			return false
 		}
 	}
-	// else if commandPkey == "web-install" && extend != "" {
-	// 	extendArr := strings.Split(extend, ":")
-	// 	TODO: 依赖安装
-	// 	if extendArr[0] == "module-install" && extendArr[1] != "" {
-	// 	}
-
-	// } else if commandPkey == "nuxt-install" && extend != "" {
-	// 	extendArr := strings.Split(extend, ":")
-	// 	//TODO: 依赖安装
-	// 	if extendArr[0] == "module-install" && extendArr[1] != "" {
-	// 	}
-	// }
 	return true
 }
 

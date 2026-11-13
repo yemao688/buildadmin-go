@@ -7,7 +7,7 @@ import router from '/@/router'
 import { loadLang } from '/@/lang/index'
 import { registerIcons } from '/@/utils/common'
 import { registerElementPlusIcons } from '/@/utils/elementIcons'
-import { directives } from '/@/utils/directives'
+import { adminDirectives } from '/@/utils/authDirective'
 
 /**
  * 注入后台样式。主题/覆盖样式以 ?inline 作为字符串随后台 chunk 加载，
@@ -31,7 +31,7 @@ export default async function bootstrapAdmin(app: App): Promise<void> {
     await loadLang(app)
     app.use(router)
     app.use(ElementPlus)
-    directives(app)
+    adminDirectives(app)
     registerIcons(app)
     registerElementPlusIcons(app)
 }

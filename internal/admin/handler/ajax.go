@@ -43,9 +43,20 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 	}
 	adminAuth := header.GetAdminAuth(ctx)
 
-	result, err := h.uploadHelper.Upload(ctx, upload.UploadParams{File: file}, adminAuth.Id, 0)
+	result, err := h.uploadHelper.Upload(
+		ctx.Request.Context(),
+		upload.UploadParams{File: file},
+		adminAuth.Id,
+		0,
+		util.GetBaseURL(ctx),
+		func(s string) string { return util.Lang(ctx, s, nil) },
+	)
 	if err != nil {
-		response.FailByErr(ctx, err)
+		if message, ok := upload.BusinessMessage(err); ok {
+			response.FailByErr(ctx, cErr.BadRequest(message, 10002))
+		} else {
+			response.FailByErr(ctx, err)
+		}
 		return
 	}
 	response.Success(ctx, map[string]any{
@@ -69,9 +80,13 @@ func (h *AjaxHandler) AliossCallback(ctx *gin.Context) {
 	response.Success(ctx, map[string]any{"file": result})
 }
 
-// 省份地区数据
+// 省份地区数据：province/city 从表单读取后交给领域层，响应投影保持 {value,label}
 func (h *AjaxHandler) Area(ctx *gin.Context) {
-	result, err := h.areaM.List(ctx)
+	result, err := h.areaM.List(
+		ctx.Request.Context(),
+		ctx.Request.FormValue("province"),
+		ctx.Request.FormValue("city"),
+	)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

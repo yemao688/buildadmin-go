@@ -8,6 +8,7 @@ import (
 
 	adminModel "buildadmin-go/internal/admin/repository"
 	middlewarecore "buildadmin-go/internal/api/middleware"
+	apiModel "buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonModel "buildadmin-go/internal/model"
@@ -132,7 +133,7 @@ func TestUserLoginRejectsAdminToken(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "enable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
+	authM := service.NewMemberService(apiModel.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(middlewarecore.NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -153,7 +154,7 @@ func TestUserLoginRejectsDisabledUserToken(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonModel.User{ID: 1, Status: "disable"}).Error)
 	driver := loginSecurityTokenDriver{data: &token.Token{Type: "user", UserID: 1}}
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: driver}, &conf.Configuration{})
+	authM := service.NewMemberService(apiModel.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: driver}, &conf.Configuration{})
 	router := newLoginSecurityRouter(middlewarecore.NewUserLogin(&conf.Configuration{}, &token.TokenHelper{Driver: driver}, authM).Handler())
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

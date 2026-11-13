@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"buildadmin-go/internal/admin/dto"
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/model"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/util"
 
 	"gorm.io/gorm"
 )
@@ -22,8 +24,17 @@ func NewSecurityDataRecycleService(dataRecycleM *securitymodel.SecurityDataRecyc
 	return &SecurityDataRecycleService{dataRecycleM: dataRecycleM}
 }
 
-// Add 编排回收站规则新增：主键默认值 + 事务内策略校验与唯一性约束。
-func (s *SecurityDataRecycleService) Add(ctx context.Context, data model.SecurityDataRecycle) error {
+// Add 编排回收站规则新增：controller_as 归一化、主键默认值 + 事务内策略校验
+// 与唯一性约束。
+func (s *SecurityDataRecycleService) Add(ctx context.Context, p dto.SecurityDataRecycleParam) error {
+	data := model.SecurityDataRecycle{
+		Name:         p.Name,
+		Controller:   p.Controller,
+		ControllerAs: util.NormalizeControllerAs(p.Controller),
+		DataTable:    p.DataTable,
+		PrimaryKey:   p.PrimaryKey,
+		Status:       string(p.Status),
+	}
 	if data.PrimaryKey == "" {
 		data.PrimaryKey = "id"
 	}
@@ -48,17 +59,28 @@ func (s *SecurityDataRecycleService) Add(ctx context.Context, data model.Securit
 	})
 }
 
-// Edit 编排回收站规则更新：主键默认值 + 事务内策略校验与唯一性约束。
-func (s *SecurityDataRecycleService) Edit(ctx context.Context, data model.SecurityDataRecycle) error {
-	if data.PrimaryKey == "" {
-		data.PrimaryKey = "id"
-	}
-	updates := map[string]any{
-		"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
-		"data_table": data.DataTable, "primary_key": data.PrimaryKey, "status": data.Status,
-		"connection": data.Connection,
-	}
+// Edit 编排回收站规则更新：事务内重载 + controller_as 归一化 + 主键默认值 +
+// 策略校验与唯一性约束。
+func (s *SecurityDataRecycleService) Edit(ctx context.Context, id int32, p dto.SecurityDataRecycleParam) error {
 	return s.dataRecycleM.Transaction(ctx, func(tx *gorm.DB) error {
+		data, err := s.dataRecycleM.GetByIDTx(tx, id)
+		if err != nil {
+			return err
+		}
+		data.Name = p.Name
+		data.Controller = p.Controller
+		data.ControllerAs = util.NormalizeControllerAs(p.Controller)
+		data.DataTable = p.DataTable
+		data.PrimaryKey = p.PrimaryKey
+		data.Status = string(p.Status)
+		if data.PrimaryKey == "" {
+			data.PrimaryKey = "id"
+		}
+		updates := map[string]any{
+			"name": data.Name, "controller": data.Controller, "controller_as": data.ControllerAs,
+			"data_table": data.DataTable, "primary_key": data.PrimaryKey, "status": data.Status,
+			"connection": data.Connection,
+		}
 		if _, err := s.dataRecycleM.ResolvePolicyTx(tx, data.DataTable, "recycle", data.PrimaryKey, nil); err != nil {
 			return err
 		}
@@ -73,6 +95,18 @@ func (s *SecurityDataRecycleService) Edit(ctx context.Context, data model.Securi
 		}
 		return s.dataRecycleM.UpdateTx(tx, data.ID, updates)
 	})
+}
+
+// Del 删除回收站规则。框架 seed 行（id=5）是 VerifyUpgradeData 每次 migrate/
+// serve 都断言的身份行，删除后启动校验失败导致全站无法启动，因此在触达 repo
+// 前拒绝包含该 id 的批次。
+func (s *SecurityDataRecycleService) Del(ctx context.Context, ids []int32) error {
+	for _, id := range ids {
+		if id == 5 {
+			return cErr.BadRequest("framework seed rule cannot be deleted")
+		}
+	}
+	return s.dataRecycleM.Del(ctx, ids)
 }
 
 // UpdateStatus 编排状态开关：启用时先校验 controller_as 唯一性，再原子

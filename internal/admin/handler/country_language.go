@@ -28,10 +28,6 @@ func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.Cou
 }
 
 func (h *CountryLanguageHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	list, total, err := h.countryLanguageM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)

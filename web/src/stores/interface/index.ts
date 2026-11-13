@@ -226,7 +226,7 @@ export interface SiteConfig {
     version: string
     // 内容分发网络URL
     cdnUrl: string
-    // 中心接口地址（用于请求模块市场的数据等用途）
+    // 中心接口地址（用于 CRUD 远程日志等官方 API）
     apiUrl: string
     // 上传配置
     upload: {

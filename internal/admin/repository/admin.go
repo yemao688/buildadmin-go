@@ -9,7 +9,6 @@ import (
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
-	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/persistence"
 	"buildadmin-go/internal/pkg/util"
 
@@ -258,19 +257,16 @@ func (s *AdminRepository) loadParentSummaries(ctx context.Context, db *gorm.DB, 
 }
 
 // AddWithActor writes a new administrator with its group assignments and the
-// closure link. It is the scoped write protocol: uniqueness, group writes and
-// the hierarchy link run in one caller-owned transaction.
+// closure link. It is the scoped write protocol: group writes and the hierarchy
+// link run in one caller-owned transaction. Username uniqueness is a service
+// precheck; the duplicate-key branch below only catches a concurrent insert
+// that slipped past it.
 func (s *AdminRepository) AddWithActor(ctx context.Context, admin model.Admin, groups []string, actor data_scope.Actor) error {
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := tx.Where("username=?", admin.Username).Take(&model.Admin{}).Error; err == nil {
-			return cErr.BadRequest("username already exists")
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
 		if result := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(&admin); result.Error != nil {
 			if isDuplicateKeyError(result.Error) {
 				return cErr.BadRequest("username already exists")
@@ -302,18 +298,35 @@ func isDuplicateKeyError(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
-// CheckParentInScopeWithActor verifies that the requested parent administrator
-// exists inside the actor's hierarchical scope. It fails closed: missing or
-// unauthorized parents are treated as not found.
-func (s *AdminRepository) CheckParentInScopeWithActor(ctx context.Context, actor data_scope.Actor, parentID int32) error {
-	var parent model.Admin
-	if err := s.DBFor(ctx).Scopes(s.scopedWithActor(ctx, actor)).Where("id = ?", parentID).First(&parent).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, data_scope.ErrScopedAccessDenied) {
-			return cErr.BadRequest("Parent administrator not found or not in scope")
-		}
-		return err
+// UsernameExists reports whether any administrator already owns username.
+// excludeID > 0 ignores that row, which is the edit-path shape; pass 0 when
+// creating. Uniqueness is global (admin.username carries the unique index), not
+// scope-filtered, so the answer does not depend on the caller's data scope.
+func (s *AdminRepository) UsernameExists(ctx context.Context, username string, excludeID int32) (bool, error) {
+	query := s.DBFor(ctx).Model(&model.Admin{}).Where("username=?", username)
+	if excludeID > 0 {
+		query = query.Where("id<>?", excludeID)
 	}
-	return nil
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// ParentVisibleWithActor reports whether the parent administrator id is visible
+// inside the actor's scope. A missing or out-of-scope parent both report false;
+// the business decision and its message belong to the service (fail-closed).
+func (s *AdminRepository) ParentVisibleWithActor(ctx context.Context, actor data_scope.Actor, parentID int32) (bool, error) {
+	var parent model.Admin
+	err := s.DBFor(ctx).Scopes(s.scopedWithActor(ctx, actor)).Select("id").Where("id = ?", parentID).Take(&parent).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, data_scope.ErrScopedAccessDenied) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // SelectTree returns the administrators visible to the current actor for use
@@ -339,17 +352,16 @@ func (s *AdminRepository) SelectTree(ctx *gin.Context, excludeID int32, keyword 
 }
 
 // EditWithActor updates an administrator with parent/group changes. It is
-// the scoped write protocol: uniqueness, hierarchy validation/move and group
-// re-assignment run in one caller-owned transaction.
+// the scoped write protocol: hierarchy validation/move and group re-assignment
+// run in one caller-owned transaction. Username uniqueness is a service
+// precheck, so a concurrent duplicate insert surfaces as the raw database
+// error here (same as before the precheck moved out).
 func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, changeParent bool, newParent *int32, omit []string, groups []string, actor data_scope.Actor) error {
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
 	enforcer := data_scope.NewClosureEnforcer(s.config)
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		if err := tx.Where("id<>? and username=?", admin.ID, admin.Username).Take(&model.Admin{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-			return cErr.BadRequest("Account exist")
-		}
 		if err := NewAdminHierarchy(s.config).ValidateOrMoveWithScope(ctx, tx, admin.ID, changeParent, newParent, actor, enforcer); err != nil {
 			return err
 		}
@@ -386,12 +398,10 @@ func (s *AdminRepository) EditWithActor(ctx context.Context, admin model.Admin, 
 }
 
 // SwitchStatusWithActor performs a scoped, atomic status switch for a single
-// administrator. The final UPDATE carries the closure scope predicate and
-// validates RowsAffected.
+// administrator. The status vocabulary is validated by the service
+// (ValidateAccountStatusValue); the final UPDATE carries the closure scope
+// predicate and validates RowsAffected.
 func (s *AdminRepository) SwitchStatusWithActor(ctx context.Context, id int32, status string, actor data_scope.Actor) error {
-	if status != "enable" && status != "disable" {
-		return cErr.BadRequest("status must be enable or disable")
-	}
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
@@ -417,7 +427,11 @@ func (s *AdminRepository) SwitchStatusWithActor(ctx context.Context, id int32, s
 	})
 }
 
-func (s *AdminRepository) SelfEdit(ctx *gin.Context, admin model.Admin, selectField []string) error {
+// SelfEdit writes the whitelisted profile columns for one administrator as a
+// single statement inside its own transaction. It is the transport-free
+// counterpart of the self-service update path: the caller (service) passes an
+// already-hashed password when one must change.
+func (s *AdminRepository) SelfEdit(ctx context.Context, admin model.Admin, selectField []string) error {
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		result := tx.Select(selectField).Save(&admin)
 		if result.Error != nil {
@@ -438,33 +452,4 @@ func (s *AdminRepository) SelfEdit(ctx *gin.Context, admin model.Admin, selectFi
 		}
 		return nil
 	})
-}
-
-// ResetPassword hashes and writes a new password for one administrator
-// (single-statement scoped write with an existence fallback).
-func (s *AdminRepository) ResetPassword(ctx *gin.Context, id int32, password string) error {
-	hash, err := passwordutil.Hash(password)
-	if err != nil {
-		return err
-	}
-	result := s.DBFor(ctx).Model(&model.Admin{}).Where("id=?", id).Updates(map[string]interface{}{
-		"password": hash,
-	})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		var visible int64
-		if err := s.DBFor(ctx).Model(&model.Admin{}).Where("id=?", id).Count(&visible).Error; err != nil {
-			return err
-		}
-		if visible == 1 {
-			return nil
-		}
-		return cErr.BadRequest("record not found")
-	}
-	if result.RowsAffected != 1 {
-		return cErr.BadRequest("record not found")
-	}
-	return nil
 }

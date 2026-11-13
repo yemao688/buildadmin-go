@@ -4,7 +4,7 @@ import (
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/crudgen"
 	appVersion "buildadmin-go/internal/pkg/version"
 	"context"
 	"fmt"

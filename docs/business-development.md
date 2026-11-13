@@ -27,8 +27,8 @@
 - `TableRepository` — information_schema 元数据仓（CRUD 生成器使用）。
 - `AdminHierarchy` — admin_closure 闭包表写者（实现
   `data_scope.HierarchyWriter`，只收调用方事务，不提交/回滚）。
-- `AdminRuleRepository.Delete(path, recursion)` — pkg 层 CRUD 生成器
-  的菜单清理工具入口（pkg 不允许反向依赖 admin service，故保留在 repo）。
+CRUD 生成器的菜单清理已迁到 `internal/crudgen.DeleteMenuRules(db, cfg, path, recursion)`；
+`AdminRuleRepository` 只保留规则读写，不再提供生成器专用入口。
 
 ### 允许留在 repo 的方法形态
 
@@ -182,8 +182,10 @@ func (h *IndexHandler) NoNeedPermissionActions() []string { return []string{"ind
 
 ## 6. 管理员删除与归属转移
 
-删除叶子管理员时，`AdminHierarchy.DeleteAdmins` 在层级锁和同一事务内把它名下
-的归属数据转挂到该管理员自己的 `parent_id`，再删除 `admin` 与闭包行。语义：
+删除叶子管理员时，`AdminService.Del` 在层级锁和同一事务内把它名下的归属数据
+转挂到该管理员自己的 `parent_id`，再删除 `admin` 与闭包行。编排在 service，
+repo（`AdminHierarchy`）只提供单步 Tx 原语（加锁、scope 复核、子级计数、目标
+快照、归属探测、逐表转移、admin/闭包删除）。语义：
 
 - **按目标分别转移**：批量删除的多个叶子可以属于不同父级，各自转给自己的
   直接上级；不会合并到一个统一目标。

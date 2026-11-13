@@ -81,6 +81,12 @@ export const useConfig = defineStore(
         // 老用户 localStorage 的 storeConfig_v3 中无此字段时默认 false，向后兼容。
         const portalLangSet = ref(false)
 
+        // 前台可选语言列表（数据，非选择）：由 /api/index/index 返回的 language 数组经
+        // setPortalLangArray 写入，name=语言码（country_language.lan）、value=展示名，
+        // 与 lang-switch 组件的 langArray 契约一致。与后台 lang.langArray 互相独立，
+        // 后台列表仍是硬编码的 zh-cn/en 两项，语义不受此处影响。
+        const portalLangArray = ref<Lang['langArray']>([])
+
         // 前台货币域（/api/* 与门户页）：全局一个前台默认货币（非 per-portal），
         // 默认货币 = 后端 country_currency 第一条（weigh DESC），由 /api/index/index 返回的
         // currency 数组经 initPortalCurrency 写入（后端并行线提供）；用户可在前台显式切换（setPortalCurrency）。
@@ -159,6 +165,15 @@ export const useConfig = defineStore(
         }
 
         /**
+         * 用后端返回的启用语言列表初始化前台语言列表（由 /api/index/index 的 language 数组驱动，
+         * 数组按 weigh DESC 排序、第一项为后端默认语言）。列表是数据，始终以最新后端列表为准，
+         * 不影响用户已显式选择的前台默认语言（那是 portalLang.defaultLang 的职责）。
+         */
+        function setPortalLangArray(list: Lang['langArray']) {
+            portalLangArray.value = list
+        }
+
+        /**
          * 前台货币切换（由前台货币切换入口调用，如 currency-switch 组件 change 事件）：
          * 标记为用户显式选择，此后 initPortalCurrency 不再用后端默认货币覆盖。
          */
@@ -212,11 +227,13 @@ export const useConfig = defineStore(
             crud,
             portalLang,
             portalLangSet,
+            portalLangArray,
             portalCurrency,
             menuWidth,
             setLang,
             setPortalLang,
             initPortalLang,
+            setPortalLangArray,
             setPortalCurrency,
             initPortalCurrency,
             setLayoutMode,

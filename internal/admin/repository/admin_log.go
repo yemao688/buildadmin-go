@@ -3,66 +3,23 @@ package repository
 import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/model"
-	"buildadmin-go/internal/pkg/header"
 	"buildadmin-go/internal/pkg/persistence"
 	"buildadmin-go/internal/pkg/util"
-	"encoding/json"
-	"regexp"
+	"context"
+	"errors"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-var adminLogSkipURLPattern = regexp.MustCompile(`(?i)/(select|index|logout)$`)
-var adminLogSensitiveKeyPattern = regexp.MustCompile(`(?i)(password|token)`)
-
-func skipAdminLogURL(url string) bool {
-	return adminLogSkipURLPattern.MatchString(url)
-}
-
-func sanitizeAdminLogValue(value interface{}) interface{} {
-	switch value := value.(type) {
-	case map[string]interface{}:
-		for key, nested := range value {
-			if adminLogSensitiveKeyPattern.MatchString(key) {
-				value[key] = "***"
-				continue
-			}
-			value[key] = sanitizeAdminLogValue(nested)
-		}
-	case []interface{}:
-		for i, nested := range value {
-			value[i] = sanitizeAdminLogValue(nested)
-		}
-	}
-	return value
-}
-
-func truncateAdminLogUTF8(value string, maxBytes int) string {
-	if len(value) <= maxBytes {
-		return value
-	}
-	end := 0
-	for index := range value {
-		if index > maxBytes {
-			break
-		}
-		end = index
-	}
-	return value[:end]
-}
-
 type AdminLogRepository struct {
 	persistence.BaseModel
-	authM *AuthRepository
 }
 
-func NewAdminLogRepository(sqlDB *gorm.DB, config *conf.Configuration, authM *AuthRepository) *AdminLogRepository {
+func NewAdminLogRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminLogRepository {
 	return &AdminLogRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"admin_log", "id", "title", sqlDB),
-		authM:     authM,
 	}
 }
 
@@ -78,6 +35,22 @@ func (s *AuthRepository) GetEnabledAdmin(id int32) (string, bool) {
 	}
 	err := s.sqlDB.Model(&model.Admin{}).Select("status, username").Where("id=?", id).First(&admin).Error
 	return admin.Username, err == nil && admin.Status == "enable"
+}
+
+// UsernameByID 读取管理员用户名，供操作日志记录历史操作者。这里不做账户
+// 状态过滤：日志要如实记录当次请求的实际操作者。
+func (s *AuthRepository) UsernameByID(ctx context.Context, id int32) (string, bool) {
+	if s == nil || s.sqlDB == nil || id == 0 {
+		return "", false
+	}
+	var admin struct {
+		Username string
+	}
+	err := s.sqlDB.Model(&model.Admin{}).Select("username").Where("id=?", id).Take(&admin).Error
+	if err != nil || admin.Username == "" {
+		return "", false
+	}
+	return admin.Username, true
 }
 
 // CachedRuleTitle returns a title from the administrator's permission cache.
@@ -115,81 +88,23 @@ func (s *AdminLogRepository) List(ctx *gin.Context) (list []model.AdminLog, tota
 	return
 }
 
-func (s *AdminLogRepository) Add(ctx *gin.Context, params map[string]interface{}) {
-	if s == nil || s.DB() == nil || ctx == nil || ctx.Request == nil || ctx.Request.URL == nil {
-		return
+// Create 单表插入一条后台操作日志。只做插入与 RowsAffected 完整性守卫，
+// 请求解析、业务分支与错误上报由调用方（service）负责。
+func (s *AdminLogRepository) Create(ctx context.Context, adminLog *model.AdminLog) error {
+	if s == nil || s.DB() == nil {
+		return errors.New("admin log repository database is unavailable")
 	}
-	url := ctx.Request.URL.Path
-	// 排除列表、选择器和登出请求；写入其它管理操作（包括 POST/DELETE）。
-	if skipAdminLogURL(url) {
-		return
+	if adminLog == nil {
+		return gorm.ErrInvalidData
 	}
-
-	info := header.GetAdminAuth(ctx)
-	username := ""
-	if info.Username != "" {
-		username = info.Username
-	} else if info.Id != 0 {
-		admin := model.Admin{}
-		s.DBFor(ctx).Where("id=?", info.Id).First(&admin)
-		username = admin.Username
-	} else if value, ok := params["username"].(string); ok && value != "" {
-		username = value
-	} else {
-		username = "Unknown"
+	result := s.DBFor(ctx).Create(adminLog)
+	if result.Error != nil {
+		return result.Error
 	}
-	title := ctx.GetString("log_title")
-	if title == "" {
-		name := strings.Trim(strings.TrimPrefix(url, "/admin/"), "/")
-		name = strings.ToLower(strings.ReplaceAll(name, ".", "/"))
-		action := name
-		if slashIndex := strings.LastIndex(name, "/"); slashIndex != -1 {
-			action = name[slashIndex+1:]
-		}
-		lookupRuleTitle := func(ruleName string) (string, bool) {
-			if s.authM != nil && info.Id != 0 {
-				if cachedTitle, ok := s.authM.CachedRuleTitle(info.Id, ruleName); ok {
-					return cachedTitle, true
-				}
-			}
-			rule := model.AdminRule{}
-			s.DBFor(ctx).Where("name=?", ruleName).First(&rule)
-			return rule.Title, rule.ID != 0
-		}
-		actionTitle, actionOK := lookupRuleTitle(name)
-
-		slashIndex := strings.LastIndex(name, "/")
-		if slashIndex != -1 {
-			parentTitle, parentOK := lookupRuleTitle(name[:slashIndex])
-			if actionOK && parentOK {
-				title = parentTitle + "-" + actionTitle
-			}
-		}
-		if title == "" {
-			title = "Unknown(" + action + ")"
-		}
+	if result.RowsAffected != 1 {
+		return errors.New("admin log insert affected unexpected number of rows")
 	}
-
-	if params == nil {
-		params = map[string]interface{}{}
-	}
-	sanitizeAdminLogValue(params)
-	data, err := json.Marshal(params)
-	if err != nil {
-		data = []byte("{}")
-	}
-	adminLog := model.AdminLog{
-		AdminID:   info.Id,
-		Username:  username,
-		URL:       truncateAdminLogUTF8(url, 1500),
-		Title:     title,
-		Data:      string(data),
-		IP:        util.GetClientIP(ctx),
-		Useragent: truncateAdminLogUTF8(ctx.Request.UserAgent(), 255),
-	}
-	if err := s.DBFor(ctx).Create(&adminLog).Error; err != nil {
-		zap.L().Warn("failed to create admin log", zap.Error(err))
-	}
+	return nil
 }
 
 func (s *AdminLogRepository) Del(ctx *gin.Context, ids interface{}) error {
@@ -197,16 +112,11 @@ func (s *AdminLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	if !ok || len(values) == 0 {
 		return gorm.ErrInvalidData
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return gorm.ErrInvalidData
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	normalized, err := util.NormalizeIDs(values, "admin log", false, func(int32) error {
+		return gorm.ErrInvalidData
+	})
+	if err != nil {
+		return err
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var count int64

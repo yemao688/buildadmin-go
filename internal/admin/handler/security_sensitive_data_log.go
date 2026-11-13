@@ -13,7 +13,6 @@ import (
 )
 
 type SensitiveDataLogHandler struct {
-	Base
 	log               *zap.Logger
 	config            *conf.Configuration
 	sensitiveDataLogM *securitymodel.SecuritySensitiveDataLogRepository
@@ -22,7 +21,6 @@ type SensitiveDataLogHandler struct {
 
 func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sensitiveDataLogM *securitymodel.SecuritySensitiveDataLogRepository, svc *service.SecuritySensitiveDataLogService) *SensitiveDataLogHandler {
 	return &SensitiveDataLogHandler{
-		Base:              NewBase(sensitiveDataLogM),
 		log:               log,
 		config:            config,
 		sensitiveDataLogM: sensitiveDataLogM,
@@ -31,10 +29,6 @@ func NewSensitiveDataLogHandler(log *zap.Logger, config *conf.Configuration, sen
 }
 
 func (h *SensitiveDataLogHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	result, total, err := h.sensitiveDataLogM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)

@@ -14,8 +14,8 @@ import (
 )
 
 // AdminGroupService 承载后台分组的业务规则：权限节点装配（HandleRules）、
-// 分组操作授权（CheckAuth）与增改删编排。列表/树装配仍留在 handler
-// （响应层）。
+// 分组操作授权（CheckAuth）、列表可见范围与展示文本补全，以及增改删编排。
+// 树装配仍留在 handler（响应层）。
 type AdminGroupService struct {
 	adminGroupM *adminmodel.AdminGroupRepository
 	adminRuleM  *adminmodel.AdminRuleRepository
@@ -24,6 +24,126 @@ type AdminGroupService struct {
 
 func NewAdminGroupService(adminGroupM *adminmodel.AdminGroupRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository) *AdminGroupService {
 	return &AdminGroupService{adminGroupM: adminGroupM, adminRuleM: adminRuleM, authM: authM}
+}
+
+// GroupListQuery 描述分组列表的过滤条件。AbsoluteAuth 对应管理员编辑页的
+// 授权下拉：为 true 时不合并操作者自己所在的分组。
+type GroupListQuery struct {
+	OperatorID   int32
+	IsSuperAdmin bool
+	Keyword      string
+	AbsoluteAuth bool
+	Status       string
+}
+
+// ListForOperator 读取操作者可见的分组列表，并把 Rules 替换为列表展示文本
+// （超管标识 / 首条规则标题[等 N 项] / 无权限）。授权集合运算与标题批量补全
+// 都在此完成，repo 只按给定 id 集合过滤；translate 由 handler 注入以完成 i18n。
+func (s *AdminGroupService) ListForOperator(ctx context.Context, query GroupListQuery, translate func(string) string) ([]*model.AdminGroup, error) {
+	filter := adminmodel.GroupListFilter{Keyword: query.Keyword, Status: query.Status}
+	if !query.IsSuperAdmin {
+		authGroups, err := s.authM.GetAllAuthGroups("allAuthAndOthers", query.OperatorID)
+		if err != nil {
+			return nil, err
+		}
+		// PHP 语义（Group::getGroups）：非超管始终按 authGroups 过滤。
+		// absoluteAuth=0/空（普通列表）时合并自己所在分组；
+		// absoluteAuth=1（管理员编辑页的授权下拉）时只显示有资格管理的分组。
+		if !query.AbsoluteAuth {
+			for _, gid := range s.authM.GetGroupIds(query.OperatorID) {
+				authGroups = append(authGroups, strconv.Itoa(int(gid)))
+			}
+		}
+		filter.IDs = ruleIDSet(authGroups)
+	}
+
+	list, err := s.adminGroupM.ListByFilter(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.decorateRuleText(ctx, list, translate); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// decorateRuleText 把每个分组的 Rules 替换为列表展示文本。首条规则标题用
+// 一次批量查询补全，避免逐行读取（原实现的 N+1）。
+func (s *AdminGroupService) decorateRuleText(ctx context.Context, list []*model.AdminGroup, translate func(string) string) error {
+	if translate == nil {
+		translate = func(messageID string) string { return messageID }
+	}
+
+	firstIDs := make([]int32, 0, len(list))
+	seen := make(map[int32]struct{}, len(list))
+	for _, group := range list {
+		if group.Rules == "" || strings.Contains(group.Rules, "*") {
+			continue
+		}
+		id := atoiRuleID(strings.Split(group.Rules, ",")[0])
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		firstIDs = append(firstIDs, id)
+	}
+
+	titles := make(map[int32]string, len(firstIDs))
+	if len(firstIDs) > 0 {
+		rules, err := s.adminRuleM.ListByIDs(ctx, firstIDs)
+		if err != nil {
+			return err
+		}
+		for _, rule := range rules {
+			titles[rule.ID] = rule.Title
+		}
+	}
+
+	for _, group := range list {
+		switch {
+		case group.Rules == "":
+			group.Rules = translate("no permission")
+		case strings.Contains(group.Rules, "*"):
+			group.Rules = translate("Super administrator")
+		default:
+			ruleIDs := strings.Split(group.Rules, ",")
+			title, ok := titles[atoiRuleID(ruleIDs[0])]
+			if !ok {
+				return gorm.ErrRecordNotFound
+			}
+			if len(ruleIDs) == 1 {
+				group.Rules = title
+			} else {
+				group.Rules = title + "等 " + strconv.Itoa(len(ruleIDs)) + " 项"
+			}
+		}
+	}
+	return nil
+}
+
+// ruleIDSet 把字符串 id 列表转为去重后的 int32 集合；返回值恒非 nil，空集合
+// 表示没有任何可见 id。
+func ruleIDSet(rawIDs []string) []int32 {
+	ids := make([]int32, 0, len(rawIDs))
+	seen := make(map[int32]struct{}, len(rawIDs))
+	for _, raw := range rawIDs {
+		id, err := strconv.Atoi(raw)
+		if err != nil {
+			continue
+		}
+		if _, ok := seen[int32(id)]; ok {
+			continue
+		}
+		seen[int32(id)] = struct{}{}
+		ids = append(ids, int32(id))
+	}
+	return ids
+}
+
+// atoiRuleID 解析规则 id；非法值按 0 处理，与历史展示逻辑一致。
+func atoiRuleID(raw string) int32 {
+	id, _ := strconv.Atoi(raw)
+	return int32(id)
 }
 
 // HandleRules 权限节点入库前处理（对齐 PHP 上游 Group::handleRules）：

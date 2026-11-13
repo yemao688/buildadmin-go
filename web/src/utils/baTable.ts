@@ -7,7 +7,8 @@ import { useRoute } from 'vue-router'
 import type { baTableApi } from '/@/api/common'
 import { findIndexRow } from '/@/components/table'
 import { i18n } from '/@/lang/index'
-import { auth, getArrayKey } from '/@/utils/common'
+import { auth } from '/@/utils/auth'
+import { getArrayKey } from '/@/utils/common'
 
 /**
  * 表格管家类

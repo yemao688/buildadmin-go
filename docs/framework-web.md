@@ -21,10 +21,10 @@
   和 i18n Ally 语言索引；**语言文件只改 `web/src/lang/` 下的 TypeScript 源文件**。
 - `pnpm lint` 使用扁平配置 `web/eslint.config.mjs`（PHP 上游 v2.3.8 规则一对一移植，
   较宽松）。既有代码中的 warning（`vue/no-required-prop-with-default`、
-  `no-unused-vars`、`indent`）是上游继承噪声，**忽略即可**；不要修改既有源码，
+  `no-unused-vars`、`indent`）是 PHP 上游继承噪声，**忽略即可**；不要修改既有源码，
   也不要收紧配置消除它们——只处理新改代码引入的 warning。
 - **后台设计系统不要改**：`web/src/views/backend/` 的样式与后台设计系统保持
-  上游一致，业务后台页面一律使用 CRUD 生成器模式（见 `docs/crud-generation.md`）。
+  与 PHP 上游一致，业务后台页面一律使用 CRUD 生成器模式（见 `docs/crud-generation.md`）。
 - 前台 `/` 是自包含占位页（`web/src/views/frontend/`），当前只提供最小
   `userInfo` store 与 `/api/user/{login,register,logout}`。
 - 构建产物在 `web/dist/`，部署时可能复制到被忽略的 `public/` 路径。
@@ -53,7 +53,7 @@ web/
 │   │   └── static/           # 静态路由：adminBase.ts、homePlaceholder.ts（删除即接管 /）
 │   ├── stores/               # Pinia 商店（constant/ 缓存键名、interface/ 类型）
 │   ├── styles/               # SCSS：app/index/element/portal/admin/loading/var/dark/mixins
-│   ├── utils/                # axios/baTable/common/directives/iconfont/tokenProvider/validate 等
+│   ├── utils/                # axios/auth/baTable/common/directives/iconfont/tokenProvider/validate 等
 │   └── views/                # backend/（后台）· frontend/（前台门户）· common/
 ├── types/tableRenderer.d.ts  # pnpm dev 自动生成（fieldRender 文件名 → TableRenderer 联合类型）
 └── package.json              # v2.3.8；脚本 dev/build/lint/typecheck
@@ -359,7 +359,7 @@ const rules = reactive<FormRules>({
 
 | 函数 | 模块 | 用途 |
 |---|---|---|
-| `auth(str)` / `auth({ name, subNodeName })` | utils/common | 前端鉴权；对象形式推荐（不受当前 path 限制；检查按钮必须先查上级菜单 name 再 subNodeName，不能直接 name 查按钮） |
+| `auth(str)` / `auth({ name, subNodeName })` | utils/auth | 前端鉴权；对象形式推荐（不受当前 path 限制；检查按钮必须先查上级菜单 name 再 subNodeName，不能直接 name 查按钮）。后台专享，门户不得引用（依赖 navTabs store） |
 | `loadCss(url)` / `loadJs(url)` | utils/common | 动态加载网络 css/js |
 | `setTitle(title)` | utils/common | 设置页面标题 |
 | `isExternal(path)` | utils/common | 是否外部链接 |
@@ -417,6 +417,10 @@ const rules = reactive<FormRules>({
   （`editDefaultLang(lang, 'portal')`）持久化 `portalLangSet`，后端默认值
   不再覆盖。**`portalLang`/`portalLangSet` 全站共享同一值**，买家/卖家等
   门户间不区分（按门户独立语言属业务扩展，下游自行实现）。
+- 门户可选语言列表：同一请求的 `language` 数组（`{id,lan,name,status,weigh}`，
+  按 weigh DESC）由 `initPortalConfig` 映射为 `{name: lan, value: name}` 写入
+  `portalLangArray`（数据，始终以最新后端列表为准），供门户语言切换组件渲染；
+  后台 `config.lang.langArray` 仍是硬编码的 zh-cn/en，两域互不影响。
 - **语言切换组件**：`web/src/components/lang-switch/`（独立样式，CSS 变量
   `--lang-switch-*` 可在业务容器层级覆盖，不依赖后台设计系统）。props：
   `langArray`（语言列表）/`current`/`label`；emits：`change(name)`。组件纯
@@ -425,7 +429,7 @@ const rules = reactive<FormRules>({
   该组件目录下的 scss 或按 README 覆盖变量。
 - 请求层按渠道传语言：`web/src/utils/axios.ts` 按 URL 前缀设置 `think-lang`
   header——`/admin/*` 用后台域语言，其余（`/api/*`、门户）用前台域语言。
-- `web/src/lang/autoload.ts`：path → 语言包路径的特例映射（如 moduleStore、
+- `web/src/lang/autoload.ts`：path → 语言包路径的特例映射（如 crud/crud、
   crud 页），按需自动加载。
 - 路由守卫按需加载语言包：`router/index.ts` 的 `portalLangDirs` 注册表
   （key=路由前缀，value=lang 目录名）：后台固定 `backend`；根门户（`/` 及

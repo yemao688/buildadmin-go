@@ -3,7 +3,7 @@ package commands
 import (
 	"strings"
 
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/crudgen"
 )
 
 // unmanagedNoteOptions 控制 unmanaged 差异的输出形态：Prefix 由调用方提供渠道前缀，

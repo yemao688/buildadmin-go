@@ -14,26 +14,22 @@ import (
 )
 
 type AttachmentHandler struct {
-	Base
 	log         *zap.Logger
 	attachmentM *routinemodel.AttachmentRepository
+	adminRuleM  *routinemodel.AdminRuleRepository
 	svc         *service.RoutineAttachmentService
 }
 
-func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentRepository, svc *service.RoutineAttachmentService) *AttachmentHandler {
+func NewAttachmentHandler(log *zap.Logger, attachmentM *routinemodel.AttachmentRepository, adminRuleM *routinemodel.AdminRuleRepository, svc *service.RoutineAttachmentService) *AttachmentHandler {
 	return &AttachmentHandler{
-		Base:        NewBase(attachmentM),
 		log:         log,
 		attachmentM: attachmentM,
+		adminRuleM:  adminRuleM,
 		svc:         svc,
 	}
 }
 
 func (h *AttachmentHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
 	result, total, err := h.attachmentM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -42,7 +38,7 @@ func (h *AttachmentHandler) Index(ctx *gin.Context) {
 	response.Success(ctx, map[string]any{
 		"list":   result,
 		"total":  total,
-		"remark": h.GetRemark(ctx),
+		"remark": remark(ctx, h.adminRuleM),
 	})
 }
 

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 
 	"gorm.io/gorm"
 )
@@ -47,10 +47,8 @@ func schemaModeFromConfig(cfg *conf.Configuration) string {
 // ensureSchema 按 auto_migrate 模式在启动前同步数据库结构；rejected 变更只告警不阻断。
 func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 	mode := schemaModeFromConfig(cfg)
-	if mode == schemaModeOff {
-		return nil
-	}
-
+	// 安装守卫先于 off 判断：auto_migrate=off 只关闭结构同步，不能把
+	// 「未安装/安装中断」的库放进服务进程。
 	report, err := migrations.Status(db, cfg)
 	if err != nil {
 		return err
@@ -58,6 +56,9 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 	if report.State == migrations.InstallFresh || report.State == migrations.InstallInterrupted {
 		printDatabaseInstallGuidance(report.State)
 		return errDatabaseNotInstalled
+	}
+	if mode == schemaModeOff {
+		return nil
 	}
 	printMigrationStatus(report)
 	if mode == schemaModeCheck {
@@ -75,7 +76,7 @@ func ensureSchema(db *gorm.DB, cfg *conf.Configuration, specDir string) error {
 		fmt.Println("[database] 未找到 crud_specs 目录，跳过 spec apply")
 		return nil
 	}
-	results, err := helper.ApplySpecsFromDir(db, cfg, specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
+	results, err := helper.ApplySpecsFromDir(db, cfg, helper.NewTableStore(db, cfg), specDir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: true})
 	// 失败前已执行的 DDL 不可回滚：先输出已发生的动作与告警，再返回错误，
 	// 否则调用方只能看到一个笼统的 apply 错误而不知道库已经改到哪一步。
 	printSchemaApplyResults(results, schemaApplyVerbose(cfg))

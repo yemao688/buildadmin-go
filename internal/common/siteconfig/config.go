@@ -4,14 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"buildadmin-go/internal/pkg/requesttx"
-	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"slices"
-	"strings"
 )
 
 type Config struct {
@@ -153,31 +152,25 @@ func NewService(sqlDB *gorm.DB) *Service {
 	return &Service{sqlDB: sqlDB}
 }
 
-func requestContext(ctx context.Context) context.Context {
-	if ginCtx, ok := ctx.(*gin.Context); ok && ginCtx.Request != nil {
-		return ginCtx.Request.Context()
-	}
-	return ctx
-}
-
 func (s *Service) dbFor(ctx context.Context) *gorm.DB {
-	ctx = requestContext(ctx)
 	if db := requesttx.DB(ctx); db != nil {
 		return db
 	}
 	return s.sqlDB
 }
 
-func (s *Service) GetValueByName(ctx *gin.Context, name string) (string, error) {
+// GetValueByName 读取单个配置项的值；ctx 携带请求事务时读取事务连接。
+func (s *Service) GetValueByName(ctx context.Context, name string) (string, error) {
 	var config Config
 	err := s.dbFor(ctx).Where("`name`= ? ", name).Take(&config).Error
 	return config.Value, err
 }
 
-func (s *Service) GetKVByGroup(ctx *gin.Context, group string) (map[string]string, error) {
+// GetKVByGroup 返回一个分组内的全部键值；请求事务内绕过进程内缓存直读事务。
+func (s *Service) GetKVByGroup(ctx context.Context, group string) (map[string]string, error) {
 	// 请求事务内的读可能看到未提交数据，绕过缓存直接走库（缓存只保存已提交
 	// 快照；写路径在事务提交后经 InvalidateAfterMutation 清空）。
-	if !requesttx.Active(requestContext(ctx)) {
+	if !requesttx.Active(ctx) {
 		if entry := s.loadGroupCache(group); entry != nil {
 			// 返回副本，避免调用方误改污染共享缓存
 			return cloneStringMap(entry.kv), nil
@@ -194,7 +187,7 @@ func (s *Service) GetKVByGroup(ctx *gin.Context, group string) (map[string]strin
 	for _, v := range configList {
 		data[v.Name] = v.Value
 	}
-	if !requesttx.Active(requestContext(ctx)) {
+	if !requesttx.Active(ctx) {
 		s.storeGroupCache(group, data)
 	}
 	return data, nil

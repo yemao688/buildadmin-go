@@ -21,7 +21,7 @@ func writeSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 	}
 }
 
-// TestBuildCascadeSyncJobsFromSpecs 单元测试：用临时 specs 目录覆盖反向聚合、
+// 单元测试：用临时 specs 目录覆盖反向聚合、
 // 过滤与失败关闭路径，不依赖 crud_log 数据。
 func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 	tests := []struct {
@@ -148,7 +148,7 @@ func sameJob(a, b CascadeJob) bool {
 	return true
 }
 
-// TestRunCascadeJobRejectsInvalidIdentifiers 验证 runCascadeJob 在触达数据库
+// 验证 runCascadeJob 在触达数据库
 // 之前就拒绝非法标识符：校验先行，nil db 即可证明未发生任何执行。
 func TestRunCascadeJobRejectsInvalidIdentifiers(t *testing.T) {
 	cfg := &conf.Configuration{}
@@ -172,7 +172,7 @@ func TestRunCascadeJobRejectsInvalidIdentifiers(t *testing.T) {
 	}
 }
 
-// TestValidateCascadeJob 直接验证标识符规则与 data_scope 复用。
+// 直接验证标识符规则与 data_scope 复用。
 func TestValidateCascadeJob(t *testing.T) {
 	valid := CascadeJob{ParentTable: "seller_user", Children: []ChildRef{{ChildTable: "seller_user_money_log", ByColumn: "user_id"}}}
 	if err := validateCascadeJob(valid); err != nil {

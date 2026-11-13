@@ -70,9 +70,10 @@ export default tseslint.config(
             '@typescript-eslint/no-empty-function': 'off',
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
-            // 上游 ban-types 在 v8 已移除，拆分为 no-banned-types / no-unsafe-function-type
-            // （上游 ban-types: off 当时覆盖了 Function 类型，故一并关闭）
-            '@typescript-eslint/no-banned-types': 'off',
+            // 上游 ban-types 在 v8 已移除，拆成 no-restricted-types + no-unsafe-function-type；
+            // 上游 ban-types: off 覆盖了它默认禁止的 Function/Object 等类型，故两条一并关闭，
+            // 保持与 v2.3.8 规则集同等的宽松度。
+            '@typescript-eslint/no-restricted-types': 'off',
             '@typescript-eslint/no-unsafe-function-type': 'off',
             // 上游 ban-ts-ignore 在 v8 已并入 ban-ts-comment
             '@typescript-eslint/ban-ts-comment': 'off',

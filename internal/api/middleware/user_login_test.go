@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonModel "buildadmin-go/internal/model"
@@ -61,13 +62,12 @@ func serveUserLoginRequest(t *testing.T, router *gin.Engine, remoteAddr string) 
 func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture tables with
-	// sqlite-native DDL matching the runtime column shape.
+	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
+	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "middleware_user", Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 
@@ -79,7 +79,7 @@ func TestUserLoginWritesLastLoginFields(t *testing.T) {
 	require.NotZero(t, updated.LastLoginTime)
 }
 
-// TestUserLoginRejectsDisabledUser 覆盖 H6a 合并后的行为保持：被禁用会员的
+// 覆盖 H6a 合并后的行为保持：被禁用会员的
 // 已认证请求与旧 IsEnabledUser 分支一致地返回 code=401 "Please login first"，
 // 且不写 login 元信息。
 func TestUserLoginRejectsDisabledUser(t *testing.T) {
@@ -88,7 +88,7 @@ func TestUserLoginRejectsDisabledUser(t *testing.T) {
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	user := commonModel.User{ID: 1, Username: "disabled_user", Status: "disable"}
 	require.NoError(t, db.Create(&user).Error)
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 
@@ -104,13 +104,13 @@ func TestUserLoginRejectsDisabledUser(t *testing.T) {
 	require.Empty(t, untouched.LastLoginIP)
 }
 
-// TestUserLoginRejectsMissingUser 覆盖 H6a 合并后的行为保持：token 有效但
+// 覆盖 H6a 合并后的行为保持：token 有效但
 // 账号不存在的已认证请求同样返回 code=401 "Please login first"。
 func TestUserLoginRejectsMissingUser(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:user-login-missing?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
-	authM := service.NewMemberService(db, &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
+	authM := service.NewMemberService(repository.NewUserRepository(db, &conf.Configuration{}), &token.TokenHelper{Driver: userLoginTokenDriver{}}, &conf.Configuration{})
 
 	recorder := serveUserLoginRequest(t, newUserLoginRouter(authM), "198.51.100.7:1234")
 

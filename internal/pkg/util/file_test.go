@@ -1,38 +1,27 @@
 package util
 
 import (
-	"fmt"
-	"hash/adler32"
 	"strings"
 	"testing"
-	"unicode"
 )
 
+// 直接断言生产函数的 SVG 输出，避免复制内部实现造成伪覆盖。
 func TestBuildSuffixSvg(t *testing.T) {
-	list := []struct {
-		suffix   string
-		expected int
-	}{
-		{"txt", 33751297},
+	svg := BuildSuffixSvg("txt", "")
+	if !strings.Contains(svg, ">TXT</tspan>") {
+		t.Fatalf("suffix text missing from svg: %s", svg)
 	}
-
-	// 期望值是 Go 标准 adler32（大端），与 PHP unpack 小端序解释不同；SVG 颜色仅装饰，无需对齐。
-	// 遍历测试用例并执行测试
-	for _, v := range list {
-		total := getsum(v.suffix)
-		if total != v.expected {
-			t.Errorf("result %d; want %d", total, v.expected)
-		}
+	if !strings.Contains(svg, "rgb(") {
+		t.Fatalf("derived background color missing from svg: %s", svg)
 	}
-
 }
 
-func getsum(suffix string) int {
-	suffix = strings.Map(func(r rune) rune { return unicode.ToUpper(r) }, suffix)
-	if len(suffix) > 4 {
-		suffix = suffix[0:4]
+func TestBuildSuffixSvgUsesExplicitBackgroundAndTruncates(t *testing.T) {
+	svg := BuildSuffixSvg("toooolong", "#123456")
+	if !strings.Contains(svg, "fill:#123456") {
+		t.Fatalf("explicit background missing from svg: %s", svg)
 	}
-	fmt.Println(suffix)
-	hue := adler32.Checksum([]byte(suffix))
-	return int(hue)
+	if !strings.Contains(svg, ">TOOO</tspan>") {
+		t.Fatalf("suffix should be uppercased and truncated to 4 chars: %s", svg)
+	}
 }

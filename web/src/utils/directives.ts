@@ -3,11 +3,8 @@ import { nextTick } from 'vue'
 import horizontalScroll from '/@/utils/horizontalScroll'
 import { useEventListener } from '@vueuse/core'
 import { isString } from 'lodash-es'
-import { auth } from '/@/utils/common'
 
 export function directives(app: App) {
-    // 鉴权指令
-    authDirective(app)
     // 拖动指令
     dragDirective(app)
     // 缩放指令
@@ -16,19 +13,6 @@ export function directives(app: App) {
     blurDirective(app)
     // 表格横向拖动指令
     tableLateralDragDirective(app)
-}
-
-/**
- * 页面按钮鉴权指令
- * @description v-auth="'name'"，name可以为：index,add,edit,del,...
- */
-function authDirective(app: App) {
-    app.directive('auth', {
-        mounted(el, binding) {
-            if (!binding.value) return false
-            if (!auth(binding.value)) el.parentNode.removeChild(el)
-        },
-    })
 }
 
 /**

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
@@ -33,6 +34,12 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	if err := EnsureAdminClosureSelfRows(db, config); err != nil {
 		return err
 	}
+	if err := ensureSecuritySeedRows(db, config); err != nil {
+		return err
+	}
+	if err := removeLegacyModuleStore(db, config); err != nil {
+		return err
+	}
 	if err := normalizeFreshSensitiveSeed(db, config); err != nil {
 		return err
 	}
@@ -45,6 +52,51 @@ func finalSeedAndIntegrity(db *gorm.DB, config *conf.Configuration) error {
 	return seedUploadConfig(db, config)
 }
 
+// EnsureSeed 幂等补种 framework 轨道拥有的种子数据（安全规则会员行、国家
+// 菜单与语言、upload 配置）。编排器在每次 migrate/serve 都调用它，使
+// 3.3.8 之后新增的 framework seed 也能到达账本已完成的存量库。
+//
+// 副作用：用户手动删除的 framework-owned 菜单/配置行会在下次启动被补回；
+// 已存在的行一律不覆盖。
+func EnsureSeed(db *gorm.DB, config *conf.Configuration) error {
+	return finalSeedAndIntegrity(db, config)
+}
+
+// ensureSecuritySeedRows 用幂等 INSERT ... WHERE NOT EXISTS 补回官方会员
+// 安全种子行（回收规则 id=5、敏感数据 id=2）。只插入缺失行，绝不覆盖已有
+// 行；常驻 Verify 之前执行，使被删除的种子行在下次 migrate/serve 自愈。
+func ensureSecuritySeedRows(db *gorm.DB, config *conf.Configuration) error {
+	now := time.Now().Unix()
+	recycle := core.QuoteIdentifier(core.TableName(config, "security_data_recycle"))
+	if err := db.Exec(
+		"INSERT INTO "+recycle+" (id, name, controller, controller_as, data_table, primary_key, status, connection, update_time, create_time) "+
+			"SELECT ?, ?, ?, ?, ?, ?, '1', '', ?, ? FROM (SELECT 1) AS seed_guard WHERE NOT EXISTS (SELECT 1 FROM "+recycle+" WHERE id = ?)",
+		5, "会员", "user.User", "user/user", "user", "id", now, now, 5,
+	).Error; err != nil {
+		return fmt.Errorf("ensure %s member seed: %w", recycle, err)
+	}
+	sensitive := core.QuoteIdentifier(core.TableName(config, "security_sensitive_data"))
+	if err := db.Exec(
+		"INSERT INTO "+sensitive+" (id, name, controller, controller_as, data_table, primary_key, data_fields, status, connection, update_time, create_time) "+
+			"SELECT ?, ?, ?, ?, ?, ?, ?, '1', '', ?, ? FROM (SELECT 1) AS seed_guard WHERE NOT EXISTS (SELECT 1 FROM "+sensitive+" WHERE id = ?)",
+		2, "会员数据", "user.User", "user/user", "user", "id", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`, now, now, 2,
+	).Error; err != nil {
+		return fmt.Errorf("ensure %s member seed: %w", sensitive, err)
+	}
+	return nil
+}
+
+// removeLegacyModuleStore 清理 PHP 模块市场留下的菜单/按钮规则。Go 框架没有
+// 模块安装能力，前端页面与后端桩已移除；旧库通过常驻 seed 幂等清理，避免
+// 留下指向不存在页面的 404 菜单。admin_group.rules 里的旧 id 悬空不影响鉴权。
+func removeLegacyModuleStore(db *gorm.DB, config *conf.Configuration) error {
+	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
+	if err := db.Exec("DELETE FROM "+table+" WHERE name = ? OR name LIKE ?", "moduleStore/moduleStore", "moduleStore/moduleStore/%").Error; err != nil {
+		return fmt.Errorf("remove legacy module store menus: %w", err)
+	}
+	return nil
+}
+
 func normalizeFreshSensitiveSeed(db *gorm.DB, config *conf.Configuration) error {
 	table := core.TableName(config, "security_sensitive_data")
 	if err := db.Table(table).Where("id = ? AND name = ? AND controller = ? AND controller_as = ? AND data_table = ? AND primary_key = ?", 2, "会员数据", "user.User", "user/user", "user", "id").Update("data_fields", `{"username":"用户名","mobile":"手机号","status":"状态","email":"邮箱地址"}`).Error; err != nil {
@@ -55,9 +107,41 @@ func normalizeFreshSensitiveSeed(db *gorm.DB, config *conf.Configuration) error 
 
 func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
-	ruleID := func(name string) (int32, error) {
+	// 判重键是 name+type，但只有「原父行已不存在」时才认领同名行：父菜单被删
+	// 后重建会拿到新的自增 id，幸存的子行若仍按 pid 判重会被当成缺失重复插入，
+	// 并留下指向已删父 id 的孤儿；这里把这类子行重新挂到当前父 id。记录的父级
+	// 仍存在时说明是另一父级下的同名规则（用户自建或移动过），按既有语义不合并，
+	// 继续插入 framework 自己的行。已存在行不覆盖其它字段。
+	ensure := func(pid int32, ruleType, title, name, path, menuType, component string, weigh int) (int32, error) {
+		var existing struct {
+			ID  int32
+			Pid int32
+		}
+		if err := db.Raw("SELECT id, pid FROM "+table+" WHERE name = ? AND type = ? ORDER BY id LIMIT 1", name, ruleType).Scan(&existing).Error; err != nil {
+			return 0, err
+		}
+		if existing.ID != 0 {
+			if existing.Pid == pid {
+				return existing.ID, nil
+			}
+			if existing.Pid != 0 {
+				var parentCount int64
+				if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE id = ?", existing.Pid).Scan(&parentCount).Error; err != nil {
+					return 0, err
+				}
+				if parentCount == 0 {
+					if err := db.Exec("UPDATE "+table+" SET pid = ? WHERE id = ?", pid, existing.ID).Error; err != nil {
+						return 0, fmt.Errorf("reparent country menu %s: %w", name, err)
+					}
+					return existing.ID, nil
+				}
+			}
+		}
+		if err := db.Exec("INSERT INTO "+table+" (pid, type, title, name, path, menu_type, component, weigh, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1')", pid, ruleType, title, name, path, menuType, component, weigh).Error; err != nil {
+			return 0, err
+		}
 		var id int32
-		if err := db.Raw("SELECT id FROM "+table+" WHERE name = ?", name).Scan(&id).Error; err != nil {
+		if err := db.Raw("SELECT id FROM "+table+" WHERE pid = ? AND name = ? AND type = ? ORDER BY id LIMIT 1", pid, name, ruleType).Scan(&id).Error; err != nil {
 			return 0, err
 		}
 		if id == 0 {
@@ -65,23 +149,10 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 		}
 		return id, nil
 	}
-	ensure := func(pid int32, ruleType, title, name, path, menuType, component string, weigh int) error {
-		var count int64
-		if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE name = ?", name).Scan(&count).Error; err != nil {
-			return err
-		}
-		if count != 0 {
-			return nil
-		}
-		return db.Exec("INSERT INTO "+table+" (pid, type, title, name, path, menu_type, component, weigh, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1')", pid, ruleType, title, name, path, menuType, component, weigh).Error
-	}
 
-	if err := ensure(0, "menu_dir", "国家管理", "country", "country", "", "", 0); err != nil {
-		return fmt.Errorf("seed country menu dir: %w", err)
-	}
-	countryID, err := ruleID("country")
+	countryID, err := ensure(0, "menu_dir", "国家管理", "country", "country", "", "", 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("seed country menu dir: %w", err)
 	}
 	menus := []struct {
 		title, name string
@@ -95,15 +166,12 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 		{"查看", "/index"}, {"添加", "/add"}, {"编辑", "/edit"}, {"删除", "/del"}, {"快速排序", "/sortable"},
 	}
 	for _, menu := range menus {
-		if err := ensure(countryID, "menu", menu.title, menu.name, menu.name, "tab", "/src/views/backend/"+menu.name+"/index.vue", menu.weigh); err != nil {
+		menuID, err := ensure(countryID, "menu", menu.title, menu.name, menu.name, "tab", "/src/views/backend/"+menu.name+"/index.vue", menu.weigh)
+		if err != nil {
 			return fmt.Errorf("seed country menu %s: %w", menu.name, err)
 		}
-		menuID, err := ruleID(menu.name)
-		if err != nil {
-			return err
-		}
 		for _, button := range buttons {
-			if err := ensure(menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
+			if _, err := ensure(menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
 				return fmt.Errorf("seed country menu %s%s: %w", menu.name, button.suffix, err)
 			}
 		}
@@ -349,13 +417,8 @@ func verifyCountryDictionaryContract(db *gorm.DB, config *conf.Configuration) er
 			return fmt.Errorf("%s.status contains invalid values", table)
 		}
 	}
-	var enabledLanguages int64
-	if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(core.TableName(config, "country_language")) + " WHERE status = 1").Scan(&enabledLanguages).Error; err != nil {
-		return err
-	}
-	if enabledLanguages == 0 {
-		return fmt.Errorf("%s has no enabled language", core.TableName(config, "country_language"))
-	}
+	// 不要求至少一门启用语言：后台可以合法禁用全部语言，常驻 Verify 不能
+	// 因此让全站不可启动；status 取值域仍在此断言。
 	return nil
 }
 

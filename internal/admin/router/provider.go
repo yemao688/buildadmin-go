@@ -12,7 +12,6 @@ import (
 var ProviderSet = wire.NewSet(
 	NewAdminRouter,
 	NewLogRegistrar,
-	NewModuleRegistrar,
 	NewAdminGroupRegistrar,
 	NewAdminRuleRegistrar,
 	NewConfigRegistrar,
@@ -42,7 +41,6 @@ var ProviderSet = wire.NewSet(
 // 返回 slice 中增加一行（保持"每模块一行"字面成立）。
 func ProvideRegistrars(
 	log *handler.LogHandler,
-	module *handler.ModuleHandler,
 	adminGroup *handler.AdminGroupHandler,
 	adminRule *handler.AdminRuleHandler,
 	config *handler.ConfigHandler,
@@ -64,7 +62,6 @@ func ProvideRegistrars(
 ) []Registrar {
 	return []Registrar{
 		NewLogRegistrar(log),
-		NewModuleRegistrar(module),
 		NewAdminGroupRegistrar(adminGroup),
 		NewAdminRuleRegistrar(adminRule),
 		NewConfigRegistrar(config),

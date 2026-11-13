@@ -1,0 +1,9 @@
+# Prettier 忽略清单：生成物、依赖与锁文件不参与格式化
+node_modules
+dist
+public
+types
+pnpm-lock.yaml
+
+# pnpm dev 生成的 i18n Ally 语言索引（只读产物，chmod 0444）
+src/lang/*.json

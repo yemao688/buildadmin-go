@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	persistence "buildadmin-go/internal/pkg/persistence"
 	querybuilder "buildadmin-go/internal/pkg/querybuilder"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -66,6 +68,33 @@ func (s *CrudLogRepository) GetOne(ctx *gin.Context, id int32) (crudLog model.Lo
 	return
 }
 
+// GetOneWithActor loads one scoped crud_log row for an explicit actor; the
+// service layer has no gin.Context and passes the actor as a parameter.
+func (s *CrudLogRepository) GetOneWithActor(ctx context.Context, actor data_scope.Actor, id int32) (crudLog model.Log, err error) {
+	err = s.DBFor(ctx).Model(&model.Log{}).Scopes(s.scopedWithActor(ctx, actor)).Where("id=?", id).First(&crudLog).Error
+	return
+}
+
+// scopedWithActor is the transport-free counterpart of scoped.
+func (s *CrudLogRepository) scopedWithActor(ctx context.Context, actor data_scope.Actor) func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if s.enforcer == nil {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		enforcer, ok := s.enforcer.(interface {
+			ScopeWithActor(context.Context, *gorm.DB, data_scope.Actor, data_scope.OwnerRef) *gorm.DB
+		})
+		if !ok {
+			tx := db.Session(&gorm.Session{})
+			_ = tx.AddError(data_scope.ErrScopedAccessDenied)
+			return tx
+		}
+		return enforcer.ScopeWithActor(ctx, db, actor, data_scope.OwnerRef{TableAlias: s.TableName, Column: "admin_id"})
+	}
+}
+
 func (s *CrudLogRepository) List(ctx *gin.Context) (list []model.Log, total int64, err error) {
 	whereS, whereP, orderS, limit, offset, err := querybuilder.QueryBuilder(ctx, s.TableInfo(), nil)
 	if err != nil {
@@ -81,19 +110,14 @@ func (s *CrudLogRepository) List(ctx *gin.Context) (list []model.Log, total int6
 
 func (s *CrudLogRepository) Del(ctx *gin.Context, ids interface{}) error {
 	values, ok := ids.([]int32)
-	if !ok || len(values) == 0 {
+	if !ok {
 		return fmt.Errorf("invalid crud log ids")
 	}
-	seen := make(map[int32]struct{}, len(values))
-	normalized := make([]int32, 0, len(values))
-	for _, id := range values {
-		if id <= 0 {
-			return fmt.Errorf("invalid crud log id %d", id)
-		}
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			normalized = append(normalized, id)
-		}
+	normalized, err := util.NormalizeIDs(values, "crud log", true, func(id int32) error {
+		return fmt.Errorf("invalid crud log id %d", id)
+	})
+	if err != nil {
+		return err
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		var list []model.Log

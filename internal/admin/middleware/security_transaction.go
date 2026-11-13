@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"buildadmin-go/internal/pkg/requesttx"
+	"buildadmin-go/internal/pkg/response"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -112,7 +113,11 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 		if errors.Is(txErr, errBusinessRollback) {
 			if out, ok := requesttx.TakeOutcome(c.Request.Context()); ok {
 				c.Writer = originalWriter
-				c.JSON(out.HTTPCode, gin.H{"code": out.BusinessCode, "data": out.Data, "msg": out.Message, "time": 0})
+				// 事务已收尾（TakeOutcome 置 finished），必须先解绑请求上下文，
+				// 否则直接写响应会被 Stage 判为已完成而丢弃。
+				finishRequest()
+				response.WriteDirect(c, out.HTTPCode, out.BusinessCode, out.Message, out.Data)
+				return
 			}
 			finishRequest()
 			return
@@ -123,14 +128,15 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 			m.log.Warn("[ DataSecurity ] direct response discarded after transaction failure")
 		}
 		c.Writer = originalWriter
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 0, "data": nil, "msg": "transaction failed", "time": 0})
+		response.WriteDirect(c, http.StatusInternalServerError, 0, "transaction failed", nil)
 		return
 	}
 	c.Writer = originalWriter
 	requesttx.RunAfterCommit(c.Request.Context())
 	bufferedWriter.flush()
-	if out, ok := requesttx.TakeOutcome(c.Request.Context()); ok {
-		c.JSON(out.HTTPCode, gin.H{"code": out.BusinessCode, "data": out.Data, "msg": out.Message, "time": 0})
-	}
+	out, ok := requesttx.TakeOutcome(c.Request.Context())
 	finishRequest()
+	if ok {
+		response.WriteDirect(c, out.HTTPCode, out.BusinessCode, out.Message, out.Data)
+	}
 }

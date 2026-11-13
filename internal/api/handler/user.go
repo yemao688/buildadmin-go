@@ -8,13 +8,10 @@ import (
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
-
-var usernamePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]{2,15}$`)
 
 type UserHandler struct {
 	log          *zap.Logger
@@ -89,11 +86,7 @@ func (h *UserHandler) Register(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if !usernamePattern.MatchString(params.Username) {
-		response.FailByErr(ctx, cErr.BadRequest("username invalid"))
-		return
-	}
-	if !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
+	if h.clickCaptcha == nil || !h.clickCaptcha.Check(params.CaptchaId, params.CaptchaInfo, true) {
 		response.FailByErr(ctx, cErr.BadRequest("Captcha error"))
 		return
 	}

@@ -60,6 +60,12 @@ const buildTableRendererType = () => {
 const LANG_DIR = './src/lang'
 
 /**
+ * 门户语言目录清单（与 web/src/lang/ 下的门户目录一一对应）。
+ * 新增业务门户（seller / buyer…）在此追加一行即可让 i18n Ally 索引收录其语言包。
+ */
+const PORTAL_LANG_DIRS = ['frontend', 'seller', 'buyer']
+
+/**
  * 检测支持的语言，以 src/lang/globs-{locale}.ts 为标记
  */
 function detectLocales(): string[] {
@@ -147,6 +153,27 @@ async function loadLocale(locale: string): Promise<anyObj> {
         const mod = await loadTs(file)
         const pathName = getNestedPathName(file, backendBase)
         mergeModule(messages, mod.default, pathName)
+    }
+
+    // 5. 门户语言包：每个门户一对目录（frontend / seller / buyer…），与
+    //    web/src/lang/<portal>/ 的组织方式一致：
+    //      <portal>/<locale>.ts    门户公共语言包（平铺根层）
+    //      <portal>/<locale>/**    门户页面语言包（文件路径作命名空间）
+    //    目录不存在时自动跳过；新增门户只需建目录，无需改本函数（与 loadLang/portalLangDirs 的
+    //    “新门户零框架改动”约定一致）。
+    for (const portal of PORTAL_LANG_DIRS) {
+        const portalRoot = join(LANG_DIR, portal, `${locale}.ts`)
+        if (existsSync(portalRoot)) {
+            const mod = await loadTs(portalRoot)
+            mergeModule(messages, mod.default)
+        }
+
+        const portalBase = join(LANG_DIR, portal, locale)
+        for (const file of collectTsFiles(portalBase)) {
+            const mod = await loadTs(file)
+            const pathName = getNestedPathName(file, portalBase)
+            mergeModule(messages, mod.default, pathName)
+        }
     }
 
     return messages

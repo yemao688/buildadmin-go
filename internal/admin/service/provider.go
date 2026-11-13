@@ -19,4 +19,6 @@ var ProviderSet = wire.NewSet(
 	NewSecuritySensitiveDataLogService,
 	NewSecurityDataRecycleService,
 	NewSecurityDataRecycleLogService,
+	NewCrudService,
+	NewAuditLogService,
 )

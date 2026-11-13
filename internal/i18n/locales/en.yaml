@@ -204,7 +204,6 @@ Unload module: unload module
 Update module: update module
 Change module state: change module state
 Upload install module: upload and install module
-Please login to the official website account first: please log in to the BuildAdmin official website account to access the module market first
 Account exist: account already exists
 Please delete the child element first, or use batch deletion: please delete the child element first, or use batch deletion!
 'Configuration write failed: {content}': 'configuration write failed: {{.content}}'

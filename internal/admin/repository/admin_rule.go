@@ -7,18 +7,28 @@ import (
 	"buildadmin-go/internal/pkg/persistence"
 	"context"
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
 type AdminRuleRepository struct {
 	persistence.BaseModel
+	CRUDStore
 }
 
 func NewAdminRuleRepository(sqlDB *gorm.DB, config *conf.Configuration) *AdminRuleRepository {
-	return &AdminRuleRepository{
+	s := &AdminRuleRepository{
 		BaseModel: persistence.NewBaseModel(config.Database.Prefix+"admin_rule", "id", "title", sqlDB),
 	}
+	s.CRUDStore = NewCRUDStore(&s.BaseModel, s.NewRow, nil)
+	return s
+}
+
+// NewRow 保持 admin_rule 原有的 map 输出形态（字段名来自数据库列名）。
+func (s *AdminRuleRepository) NewRow() any {
+	row := map[string]any{}
+	return &row
 }
 
 func (s *AdminRuleRepository) GetOne(ctx context.Context, id int32) (adminRule model.AdminRule, err error) {
@@ -29,6 +39,67 @@ func (s *AdminRuleRepository) GetOne(ctx context.Context, id int32) (adminRule m
 func (s *AdminRuleRepository) List(ctx context.Context) (list []model.AdminRule, err error) {
 	err = s.DBFor(ctx).Model(&model.AdminRule{}).Order("weigh desc,id desc").Find(&list).Error
 	return
+}
+
+// TitleByName 按规则名读取单条规则标题，供后台操作日志反查日志标题。
+// 未命中返回 ok=false，由调用方决定回退文案。
+func (s *AdminRuleRepository) TitleByName(ctx context.Context, name string) (string, bool, error) {
+	var rule struct {
+		ID    int32
+		Title string
+	}
+	err := s.DBFor(ctx).Model(&model.AdminRule{}).Select("id, title").Where("name=?", name).Take(&rule).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return rule.Title, rule.ID != 0, nil
+}
+
+// ListForMenu 读取菜单规则列表：isSuperAdmin 或空 ruleIDs 表示不按权限 id 过滤，
+// types/status 为空表示不限制对应列；keyword 按空格分词后逐项 AND 匹配
+// QuickSearchField。权限判定由 service 负责，本方法只按传入条件做 scoped 读。
+func (s *AdminRuleRepository) ListForMenu(ctx context.Context, isSuperAdmin bool, ruleIDs []int32, keyword string, types []string, status string) ([]model.AdminRule, error) {
+	query := s.DBFor(ctx).Model(&model.AdminRule{})
+	if len(types) > 0 {
+		query = query.Where(" type in ? ", types)
+	}
+	if status != "" {
+		query = query.Where(" status = ? ", status)
+	}
+	if !isSuperAdmin && len(ruleIDs) > 0 {
+		query = query.Where(" id in ? ", ruleIDs)
+	}
+	if keyword != "" {
+		for _, term := range strings.Split(keyword, " ") {
+			query = query.Where(s.QuickSearchField+" LIKE ? ", "%"+strings.ReplaceAll(term, "%", "\\%")+"%")
+		}
+	}
+
+	list := []model.AdminRule{}
+	err := query.Order("weigh desc,id asc").Find(&list).Error
+	return list, err
+}
+
+// ListByIDs 批量读取规则（仅 id/title），供列表展示批量补全权限标题。
+func (s *AdminRuleRepository) ListByIDs(ctx context.Context, ids []int32) ([]model.AdminRule, error) {
+	list := []model.AdminRule{}
+	err := s.DBFor(ctx).Model(&model.AdminRule{}).Select("id", "title").Where("id in ?", ids).Find(&list).Error
+	return list, err
+}
+
+// RemarkByNames 按规则名读取备注，供操作日志展示；名称由调用方从路由解析。
+func (s *AdminRuleRepository) RemarkByNames(ctx context.Context, names []string) (string, error) {
+	var rule struct{ Remark string }
+	if len(names) == 0 {
+		return "", nil
+	}
+	if err := s.DBFor(ctx).Model(&model.AdminRule{}).Where("name in ?", names).Take(&rule).Error; err != nil {
+		return "", err
+	}
+	return rule.Remark, nil
 }
 
 // CreateTx inserts one rule inside the caller's transaction (atomic write
@@ -129,58 +200,4 @@ func (s *AdminRuleRepository) GetRulePIds(ctx context.Context, ids []string) ([]
 	pids := []int32{}
 	err := s.DBFor(ctx).Model(&model.AdminRule{}).Where("id in ?", ids).Pluck("pid", &pids).Error
 	return pids, err
-}
-
-// Delete removes a menu rule by path, optionally recursing into children and
-// pruning parent directories that become childless. 对齐上游
-// Menu::delete:菜单不存在时视为已删除（幂等）。
-//
-// 保留在 repo 的例外入口：它由 pkg 层 CRUD 生成器（crud_helper）在删除
-// 业务模块时调用，pkg 层不允许反向依赖 admin 渠道 service；handler 侧的
-// 菜单删除编排已全部迁往 AdminRuleService。
-func (s *AdminRuleRepository) Delete(path string, recursion bool) error {
-	return s.Transaction(context.Background(), func(tx *gorm.DB) error {
-		var deleteRule func(string) error
-		deleteRule = func(name string) error {
-			var adminRule model.AdminRule
-			err := tx.Where(" name = ? ", name).Take(&adminRule).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			var list []model.AdminRule
-			if err := tx.Model(&model.AdminRule{}).Where(" pid = ? ", adminRule.ID).Find(&list).Error; err != nil {
-				return err
-			}
-			if recursion {
-				for _, child := range list {
-					if err := deleteRule(child.Name); err != nil {
-						return err
-					}
-				}
-			}
-			if len(list) == 0 || recursion {
-				if err := tx.Model(&model.AdminRule{}).Where(" id = ? ", adminRule.ID).Delete(nil).Error; err != nil {
-					return err
-				}
-				// 父级目录已无子级时一并删除
-				var parent model.AdminRule
-				if err := tx.Take(&parent, adminRule.Pid).Error; err == nil {
-					var childCount int64
-					if err := tx.Model(&model.AdminRule{}).Where(" pid = ? ", parent.ID).Count(&childCount).Error; err != nil {
-						return err
-					}
-					if childCount == 0 {
-						return deleteRule(parent.Name)
-					}
-				} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-					return err
-				}
-			}
-			return nil
-		}
-		return deleteRule(path)
-	})
 }

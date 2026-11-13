@@ -1,5 +1,3 @@
-// Package model provides admin model types and delegates query building to
-// internal/pkg/querybuilder for compatibility with existing callers.
 package repository
 
 import (
@@ -8,13 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type QueryParameter = querybuilder.QueryParameter
-type SearchFilter = querybuilder.SearchFilter
+// TableInfo 是 admin 列表查询使用的元数据别名，保留在 repository 包内
+// 避免每个仓库都 import querybuilder。
 type TableInfo = querybuilder.TableInfo
-
-func GetQueryParameter(ctx *gin.Context) (*QueryParameter, error) {
-	return querybuilder.GetQueryParameter(ctx)
-}
 
 func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (whereS string, whereP []interface{}, orderS string, limit int, offset int, err error) {
 	return querybuilder.QueryBuilder(ctx, table, withTables)

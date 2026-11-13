@@ -124,7 +124,7 @@ func TestPoolSettings(t *testing.T) {
 	require.Equal(t, 300*time.Second, idleTime)
 }
 
-// TestLoadPoolConfig 覆盖分层配置读取：基座 config.defaults.yaml 提供连接池
+// 覆盖分层配置读取：基座 config.defaults.yaml 提供连接池
 // 值；稀疏覆盖层 config.yaml 存在时合并生效；覆盖层不存在（全新安装早期，
 // 安装器尚未写入 config）时退化为仅基座。
 func TestLoadPoolConfig(t *testing.T) {
@@ -157,7 +157,7 @@ func TestLoadPoolConfig(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestApplyPoolConfig 验证连接池参数实际应用到 sql.DB（sql.Open 惰性，
+// 验证连接池参数实际应用到 sql.DB（sql.Open 惰性，
 // 无需真实 MySQL）。
 func TestApplyPoolConfig(t *testing.T) {
 	db, err := sql.Open("mysql", "installer:pw@tcp(127.0.0.1:1)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local")

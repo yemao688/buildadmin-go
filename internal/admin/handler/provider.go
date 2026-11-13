@@ -11,7 +11,6 @@ var ProviderSet = wire.NewSet(
 	NewAjaxHandler,
 	NewDashboardHandler,
 	NewIndexHandler,
-	NewModuleHandler,
 	NewAdminHandler,
 	NewAdminGroupHandler,
 	NewAdminRuleHandler,

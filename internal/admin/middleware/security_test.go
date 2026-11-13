@@ -1,16 +1,21 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/conf"
 	middlewarecore "buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestTransactionResponseWriterIsolatesHeaders(t *testing.T) {
@@ -119,4 +124,83 @@ func TestNormalizeAuditValueStableDriverValues(t *testing.T) {
 	if got := normalizeAuditValue(when); got != "2026-07-15T04:05:06Z" {
 		t.Fatalf("unexpected date normalization: %q", got)
 	}
+}
+
+// newTransactionShellRouter 装配走事务分支的 Security 中间件：注册 auth/admin
+// edit 的原子路由能力，security_sensitive_data 存在但无匹配规则，因此审计器
+// 直接放行到业务 handler，由 punch 决定暂存哪种结果。
+func newTransactionShellRouter(t *testing.T, punch gin.HandlerFunc) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	db, err := gorm.Open(sqlite.Open("file:security-transaction-shell?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	if err := db.Exec("CREATE TABLE IF NOT EXISTS security_sensitive_data (id INTEGER PRIMARY KEY, status TEXT, controller_as TEXT)").Error; err != nil {
+		t.Fatalf("create rule table: %v", err)
+	}
+	middlewarecore.RegisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+	t.Cleanup(func() {
+		middlewarecore.UnregisterAtomicRoute(middlewarecore.AtomicRoute{Route: "auth/admin", Action: "edit", Method: http.MethodPost})
+	})
+
+	security := NewSecurity(&conf.Configuration{}, zap.NewNop(), db, data_scope.NewDenyAllEnforcer())
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		_ = data_scope.SetActor(c, data_scope.Actor{AdminID: 1, Unrestricted: true})
+	}, security.Handler())
+	router.POST("/admin/auth.Admin/edit", punch)
+	return router
+}
+
+func serveTransactionShell(t *testing.T, router *gin.Engine) (int, map[string]any) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/edit", bytes.NewBufferString(`{"id":1}`))
+	router.ServeHTTP(recorder, request)
+	var body map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("response is not JSON: %q", recorder.Body.String())
+	}
+	return recorder.Code, body
+}
+
+// 事务回滚、提交与失败三条收尾路径都必须输出统一响应壳（time 固定 0）。
+func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
+	t.Run("业务失败回滚输出已暂存响应", func(t *testing.T) {
+		router := newTransactionShellRouter(t, func(c *gin.Context) {
+			stage(c, 0, "boom")
+		})
+		status, body := serveTransactionShell(t, router)
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want %d", status, http.StatusOK)
+		}
+		if body["code"] != float64(0) || body["msg"] != "boom" || body["data"] != nil || body["time"] != float64(0) {
+			t.Fatalf("unexpected rollback shell: %v", body)
+		}
+	})
+
+	t.Run("成功提交输出已暂存响应", func(t *testing.T) {
+		router := newTransactionShellRouter(t, func(c *gin.Context) {
+			stage(c, 1, "")
+		})
+		status, body := serveTransactionShell(t, router)
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want %d", status, http.StatusOK)
+		}
+		if body["code"] != float64(1) || body["msg"] != "" || body["time"] != float64(0) {
+			t.Fatalf("unexpected commit shell: %v", body)
+		}
+	})
+
+	t.Run("缺少暂存响应输出事务失败", func(t *testing.T) {
+		router := newTransactionShellRouter(t, func(c *gin.Context) {})
+		status, body := serveTransactionShell(t, router)
+		if status != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", status, http.StatusInternalServerError)
+		}
+		if body["code"] != float64(0) || body["msg"] != "transaction failed" || body["data"] != nil || body["time"] != float64(0) {
+			t.Fatalf("unexpected failure shell: %v", body)
+		}
+	})
 }

@@ -50,6 +50,15 @@ var boundaryRules = []boundaryRule{
 	// behind the repository/domain-service boundary.
 	{code: "R6", ownerPrefix: "admin/service/", bannedPrefixes: []string{"github.com/gin-gonic/gin", "net/http", modulePath + "/internal/infra/db"}},
 	{code: "R7", ownerPrefix: "api/service/", bannedPrefixes: []string{"github.com/gin-gonic/gin", "net/http", modulePath + "/internal/infra/db"}},
+	// pkg is technical infrastructure below every channel: it must not import a
+	// business channel, common domain services, or the global middleware layer.
+	{code: "R8", ownerPrefix: "pkg/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api", modulePath + "/internal/common", modulePath + "/internal/middleware", modulePath + "/internal/crudgen"}},
+	// common is shared domain code: gin is a transport concern and may only
+	// appear in admin/api handlers/middleware, never in common.
+	{code: "R9", ownerPrefix: "common/", bannedPrefixes: []string{"github.com/gin-gonic/gin"}},
+	// crudgen is a development-time tool layer. It may read model/pkg but must
+	// not depend on a runtime channel; metadata access goes through TableStore.
+	{code: "R10", ownerPrefix: "crudgen/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api", modulePath + "/internal/common", modulePath + "/internal/middleware"}},
 }
 
 var importBoundaryWhitelist = []whitelistEntry{}

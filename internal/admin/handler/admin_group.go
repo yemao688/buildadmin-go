@@ -14,7 +14,6 @@ import (
 	"buildadmin-go/internal/pkg/validator"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +23,6 @@ import (
 )
 
 type AdminGroupHandler struct {
-	Base
 	log         *zap.Logger
 	adminGroupM *adminmodel.AdminGroupRepository
 	adminRuleM  *adminmodel.AdminRuleRepository
@@ -34,7 +32,6 @@ type AdminGroupHandler struct {
 
 func NewAdminGroupHandler(log *zap.Logger, adminGroupM *adminmodel.AdminGroupRepository, adminRuleM *adminmodel.AdminRuleRepository, authM *adminmodel.AuthRepository, svc *service.AdminGroupService) *AdminGroupHandler {
 	return &AdminGroupHandler{
-		Base:        NewBase(adminGroupM),
 		log:         log,
 		adminGroupM: adminGroupM,
 		adminRuleM:  adminRuleM,
@@ -49,9 +46,7 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 		return
 	}
 
-	whereS := []string{}
-	whereP := []interface{}{}
-	groups, err := h.GetGroups(ctx, whereS, whereP)
+	groups, err := h.GetGroups(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -61,7 +56,7 @@ func (h *AdminGroupHandler) Index(ctx *gin.Context) {
 	result := map[string]interface{}{
 		"list":   groups,
 		"group":  h.authM.GetGroupIds(adminAuth.Id),
-		"remark": h.GetRemark(ctx),
+		"remark": remark(ctx, h.adminRuleM),
 	}
 
 	isTree := ctx.Request.FormValue("isTree")
@@ -228,9 +223,7 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 		return nil, false
 	}
 
-	whereS := []string{" status=? "}
-	whereP := []any{"1"}
-	list, err := h.GetGroups(ctx, whereS, whereP)
+	list, err := h.listGroups(ctx, "1")
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return nil, false
@@ -246,76 +239,24 @@ func (h *AdminGroupHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	return nil, false
 }
 
-// 获取分组
-func (h *AdminGroupHandler) GetGroups(ctx *gin.Context, whereS []string, whereP []interface{}) ([]*model.AdminGroup, error) {
-	absoluteAuth := ctx.Request.FormValue("absoluteAuth")
-	keyword := ctx.Request.FormValue("quickSearch")
-
-	if keyword != "" {
-		keywordArr := strings.Split(keyword, " ")
-		for _, v := range keywordArr {
-			whereS = append(whereS, h.adminGroupM.QuickSearchField+" LIKE ? ")
-			whereP = append(whereP, "%"+strings.Replace(v, "%", "\\%", -1)+"%")
-		}
-	}
-
-	adminAuth := header.GetAdminAuth(ctx)
-	if !adminAuth.IsSuperAdmin {
-		authGroups, err := h.authM.GetAllAuthGroups("allAuthAndOthers", adminAuth.Id)
-		if err != nil {
-			groupIds := h.authM.GetGroupIds(adminAuth.Id)
-			for _, v := range groupIds {
-				authGroups = append(authGroups, strconv.Itoa(int(v)))
-			}
-			return nil, err
-		}
-		// PHP 语义（Group::getGroups）：非超管始终按 authGroups 过滤。
-		// absoluteAuth=0/空（普通列表）时合并自己所在分组；
-		// absoluteAuth=1（管理员编辑页的授权下拉）时只显示有资格管理的分组。
-		if absoluteAuth != "1" {
-			for _, gid := range h.authM.GetGroupIds(adminAuth.Id) {
-				authGroups = append(authGroups, strconv.Itoa(int(gid)))
-			}
-		}
-		authGroups = util.RemoveStrDuplicates(authGroups)
-		whereS = append(whereS, " id in ? ")
-		whereP = append(whereP, authGroups)
-	}
-	list, err := h.adminGroupM.ListWhere(ctx.Request.Context(), strings.Join(whereS, " AND "), whereP...)
-	if err != nil {
-		return list, err
-	}
-
-	// 获取第一个权限的名称供列表显示-s
-	for _, v := range list {
-		if v.Rules != "" {
-			if strings.Contains(v.Rules, "*") {
-				v.Rules = util.Lang(ctx, "Super administrator", nil)
-			} else {
-				ruleIds := strings.Split(v.Rules, ",")
-				num := len(ruleIds)
-				if num > 0 {
-					rule, err := h.adminRuleM.GetOne(ctx.Request.Context(), mustRuleID(ruleIds[0]))
-					if err != nil {
-						return nil, err
-					}
-					if num == 1 {
-						v.Rules = rule.Title
-					} else {
-						v.Rules = rule.Title + "等 " + strconv.Itoa(num) + " 项"
-					}
-				}
-			}
-		} else {
-			v.Rules = util.Lang(ctx, "no permission", nil)
-		}
-	}
-	return list, nil
+// GetGroups 读取分组管理页的完整列表（tree 装配由响应层完成）。
+func (h *AdminGroupHandler) GetGroups(ctx *gin.Context) ([]*model.AdminGroup, error) {
+	return h.listGroups(ctx, "")
 }
 
-func mustRuleID(raw string) int32 {
-	id, _ := strconv.Atoi(raw)
-	return int32(id)
+// listGroups 按可选状态过滤读取操作者可见的分组；授权集合运算与规则展示
+// 文本补全在 service 内完成，i18n 通过 translate 回调注入。
+func (h *AdminGroupHandler) listGroups(ctx *gin.Context, status string) ([]*model.AdminGroup, error) {
+	adminAuth := header.GetAdminAuth(ctx)
+	return h.svc.ListForOperator(ctx.Request.Context(), service.GroupListQuery{
+		OperatorID:   adminAuth.Id,
+		IsSuperAdmin: adminAuth.IsSuperAdmin,
+		Keyword:      ctx.Request.FormValue("quickSearch"),
+		AbsoluteAuth: ctx.Request.FormValue("absoluteAuth") == "1",
+		Status:       status,
+	}, func(messageID string) string {
+		return util.Lang(ctx, messageID, nil)
+	})
 }
 
 type AdminGroupExpend struct {

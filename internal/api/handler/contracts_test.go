@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/conf"
 	commonmodel "buildadmin-go/internal/model"
@@ -87,13 +88,12 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	config.App.UserTokenKeepTime = 259200
 	db, err := gorm.Open(sqlite.Open("file:refresh-contract?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture tables with
-	// sqlite-native DDL matching the runtime column shape.
+	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
+	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	require.NoError(t, db.Create(&commonmodel.User{ID: 1, Status: "enable"}).Error)
 	tokenHelper := &token.TokenHelper{Driver: driver}
-	h := &CommonHandler{tokenHelper: tokenHelper, authM: service.NewMemberService(db, tokenHelper, config), config: config}
+	h := &CommonHandler{tokenHelper: tokenHelper, authM: service.NewMemberService(repository.NewUserRepository(db, config), tokenHelper, config), config: config}
 	router := newContractTestRouter()
 	router.POST("/", h.RefreshToken)
 	recorder := httptest.NewRecorder()

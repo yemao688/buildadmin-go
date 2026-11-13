@@ -14,6 +14,7 @@ import (
 
 type CountryCurrencyRepository struct {
 	persistence.BaseModel
+	CRUDStore
 	Policy   data_scope.ResourcePolicy
 	Enforcer data_scope.Enforcer
 	config   *conf.Configuration
@@ -24,7 +25,7 @@ func (s *CountryCurrencyRepository) NewRow() any {
 }
 
 func NewCountryCurrencyRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data_scope.Enforcer) *CountryCurrencyRepository {
-	return &CountryCurrencyRepository{
+	s := &CountryCurrencyRepository{
 		BaseModel: persistence.NewBaseModel(
 			config.Database.Prefix+"country_currency",
 			"id",
@@ -40,6 +41,8 @@ func NewCountryCurrencyRepository(sqlDB *gorm.DB, config *conf.Configuration, en
 		Enforcer: enforcer,
 		config:   config,
 	}
+	s.CRUDStore = NewCRUDStore(&s.BaseModel, s.NewRow, s.scopeDB)
+	return s
 }
 
 func (s *CountryCurrencyRepository) scopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {

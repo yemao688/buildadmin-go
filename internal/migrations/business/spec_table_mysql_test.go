@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations/internal/core"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/testutil"
 
 	"gorm.io/gorm"
@@ -37,7 +37,7 @@ fields:
 	}
 }
 
-// TestEnsureSpecTableSeedMigrationFlow 模拟"种子迁移 Up 内 EnsureSpecTable 建表
+// 模拟"种子迁移 Up 内 EnsureSpecTable 建表
 // → 写种子 → 尾部 apply unchanged"：全新库上种子迁移必须先拿到表才能写数据，
 // 且建表不得触发 requires-approval 阻塞。
 func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
@@ -83,7 +83,7 @@ func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
 	}
 
 	// 3. 尾部 apply 幂等：全量 spec 应用应为 unchanged（不阻塞全新安装）。
-	results, err := helper.ApplySpecs(db, cfg, []string{filepath.Join(dir, "ops_seed_target.yaml")}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
+	results, err := helper.ApplySpecs(db, cfg, helper.NewTableStore(db, cfg), []string{filepath.Join(dir, "ops_seed_target.yaml")}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
 	if err != nil {
 		t.Fatalf("tail apply: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
 	}
 }
 
-// TestEnsureSpecTableRejectsMissingSpec 校验：spec 不存在时直接报错（防 typo）。
+// 校验：spec 不存在时直接报错（防 typo）。
 func TestEnsureSpecTableRejectsMissingSpec(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = specTableTestPrefix
@@ -114,7 +114,7 @@ func TestEnsureSpecTableRejectsMissingSpec(t *testing.T) {
 	}
 }
 
-// TestEnsureSpecTableInsideMigrationLock 复现下游 issue：迁移编排器
+// 复现下游 issue：迁移编排器
 // WithMigrationLock（advisorylock.With）把 db pin 到单连接（ConnPool =
 // *sql.Conn），EnsureSpecTable → ApplySpecs → acquireGenerationLocks 二次
 // advisory lock 时 db.DB() 返回 ErrInvalidDB。修复：已 pin 的会话降级跳过

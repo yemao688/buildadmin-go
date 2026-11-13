@@ -2,9 +2,9 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/middleware"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/data_scope"
 	"fmt"
 	"strings"
@@ -129,7 +129,7 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		action := path[strings.LastIndex(path, "/")+1:]
 		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
 	}
-	result, err := helper.GenerateFromSpec(h.db, h.config, *opts)
+	result, err := helper.GenerateFromSpec(h.db, h.config, helper.NewTableStore(h.db, h.config), *opts)
 	if err != nil {
 		return fmt.Errorf("CRUD generation error: %w", err)
 	}
@@ -165,9 +165,9 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 			if dir == "" {
 				return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply --plan <spec.yaml...>")
 			}
-			results, err = helper.PlanSpecsFromDir(h.db, h.config, dir, opts)
+			results, err = helper.PlanSpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, opts)
 		} else {
-			results, err = helper.PlanSpecs(h.db, h.config, args, opts)
+			results, err = helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
 		}
 		printApplyPlan(cmd, results)
 		if err != nil {
@@ -181,9 +181,9 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 		if dir == "" {
 			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply <spec.yaml...>")
 		}
-		results, err = helper.ApplySpecsFromDir(h.db, h.config, dir, opts)
+		results, err = helper.ApplySpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, opts)
 	} else {
-		results, err = helper.ApplySpecs(h.db, h.config, args, opts)
+		results, err = helper.ApplySpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
 	}
 	if err != nil {
 		printApplyResults(cmd, results)

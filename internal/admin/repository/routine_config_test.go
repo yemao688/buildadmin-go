@@ -1,40 +1,22 @@
 package repository
 
 import (
-	"net/http/httptest"
+	"errors"
+	"fmt"
 	"testing"
 
-	siteconfig "buildadmin-go/internal/common/siteconfig"
-	"buildadmin-go/internal/conf"
-	"buildadmin-go/internal/pkg/testutil"
-	"github.com/gin-gonic/gin"
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/schema"
 )
 
-func TestConfigAddAndEditRejectDuplicateNames(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open("file:config-model-duplicate?mode=memory&cache=shared"), &gorm.Config{
-		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
-	})
-	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture table with
-	// sqlite-native DDL matching the runtime column shape.
-	require.NoError(t, testutil.CreateSQLiteConfigTable(db, "ba_config"))
-	m := NewConfigRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}, nil)
-	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-	ctx.Request = httptest.NewRequest("POST", "/admin/routine.config/add", nil)
-
-	require.NoError(t, m.Add(ctx, siteconfig.Config{Name: "upload_mode"}))
-	require.ErrorContains(t, m.Add(ctx, siteconfig.Config{Name: "upload_mode"}), "config name already exists")
-
-	var first siteconfig.Config
-	require.NoError(t, db.Where("name = ?", "upload_mode").First(&first).Error)
-	require.NoError(t, m.Add(ctx, siteconfig.Config{Name: "upload_bucket"}))
-	var second siteconfig.Config
-	require.NoError(t, db.Where("name = ?", "upload_bucket").First(&second).Error)
-	second.Name = first.Name
-	require.ErrorContains(t, m.Edit(ctx, second), "config name already exists")
+// 变量名/用户名唯一性预检已上移 service；repo 只保留并发插入的兜底映射，
+// 其判据必须同时识别 GORM 翻译后的哨兵与 MySQL 原生 1062。
+func TestIsDuplicateKeyErrorRecognizesUniqueViolations(t *testing.T) {
+	require.True(t, isDuplicateKeyError(gorm.ErrDuplicatedKey))
+	require.True(t, isDuplicateKeyError(fmt.Errorf("create: %w", gorm.ErrDuplicatedKey)))
+	require.True(t, isDuplicateKeyError(&mysql.MySQLError{Number: 1062, Message: "Duplicate entry"}))
+	require.False(t, isDuplicateKeyError(gorm.ErrRecordNotFound))
+	require.False(t, isDuplicateKeyError(&mysql.MySQLError{Number: 1064, Message: "syntax"}))
+	require.False(t, isDuplicateKeyError(errors.New("plain failure")))
 }

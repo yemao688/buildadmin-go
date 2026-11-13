@@ -19,14 +19,14 @@ import (
 )
 
 type UserHandler struct {
-	Base
-	log   *zap.Logger
-	userM *adminmodel.UserRepository
-	svc   *service.UserService
+	log        *zap.Logger
+	userM      *adminmodel.UserRepository
+	adminRuleM *adminmodel.AdminRuleRepository
+	svc        *service.UserService
 }
 
-func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository, svc *service.UserService) *UserHandler {
-	return &UserHandler{Base: NewBase(userM), log: log, userM: userM, svc: svc}
+func NewUserHandler(log *zap.Logger, userM *adminmodel.UserRepository, adminRuleM *adminmodel.AdminRuleRepository, svc *service.UserService) *UserHandler {
+	return &UserHandler{log: log, userM: userM, adminRuleM: adminRuleM, svc: svc}
 }
 
 func (h *UserHandler) Index(ctx *gin.Context) {
@@ -271,6 +271,6 @@ func (h *UserHandler) Select(ctx *gin.Context) (interface{}, bool) {
 	return map[string]any{
 		"list":   list,
 		"total":  total,
-		"remark": h.GetRemark(ctx),
+		"remark": remark(ctx, h.adminRuleM),
 	}, true
 }

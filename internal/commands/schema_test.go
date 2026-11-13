@@ -35,11 +35,3 @@ func TestSchemaModeFromConfig(t *testing.T) {
 		})
 	}
 }
-
-// off 模式必须在任何数据库查询前返回，nil 数据库也不应报错。
-func TestSchemaEnsureOffSkipsDatabase(t *testing.T) {
-	t.Setenv("APP_AUTO_MIGRATE", "off")
-	if err := ensureSchema(nil, &conf.Configuration{}, ""); err != nil {
-		t.Fatalf("ensureSchema(off) = %v, want nil", err)
-	}
-}

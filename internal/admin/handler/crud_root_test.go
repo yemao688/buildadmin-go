@@ -2,7 +2,8 @@ package handler
 
 import (
 	model "buildadmin-go/internal/admin/repository"
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	"buildadmin-go/internal/admin/service"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/pkg/data_scope"
 	"bytes"
 	"net/http"
@@ -13,23 +14,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func TestRequireCrudRootUsesExplicitUnrestrictedActor(t *testing.T) {
-	for _, unrestricted := range []bool{false, true} {
-		ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
-		_ = data_scope.SetActor(ctx, data_scope.Actor{AdminID: 7, Unrestricted: unrestricted})
-		err := requireCrudRoot(ctx)
-		if (err == nil) != unrestricted {
-			t.Fatalf("unrestricted=%v, error=%v", unrestricted, err)
-		}
-	}
-}
-
 func TestGenerateRejectsNonRootBeforeAnyMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/crud/generate", bytes.NewBufferString(`{"table":{"name":"orders"},"type":"create","fields":[{"name":"id","type":"int"}]}`))
-	(&CrudHandler{tableM: &model.TableRepository{}}).Generate(ctx)
+	tableM := &model.TableRepository{}
+	(&CrudHandler{tableM: tableM, crudSvc: service.NewCrudService(tableM, nil, nil)}).Generate(ctx)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusOK)
 	}
@@ -50,7 +41,8 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 	ctx, _ := gin.CreateTestContext(recorder)
 	_ = data_scope.SetActor(ctx, data_scope.Actor{AdminID: 1, Unrestricted: true})
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/crud/generate", bytes.NewBufferString(`{"table":{"name":"orders"},"type":"create","fields":[{"name":"id","type":"int"}]}`))
-	(&CrudHandler{tableM: &model.TableRepository{}}).Generate(ctx)
+	tableM := &model.TableRepository{}
+	(&CrudHandler{tableM: tableM, crudSvc: service.NewCrudService(tableM, nil, nil)}).Generate(ctx)
 	if !strings.Contains(recorder.Body.String(), "another generation is in progress") {
 		t.Fatalf("busy response = %s", recorder.Body.String())
 	}
@@ -60,7 +52,7 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 func TestIsExcludedControllerFile(t *testing.T) {
 	excluded := []string{
 		"provider.go", "base.go", "common.go", "response.go", "route.go",
-		"ajax.go", "dashboard.go", "index.go", "module.go",
+		"ajax.go", "dashboard.go", "index.go",
 		"crud.go", "crud_log.go",
 		"routine_admin_info.go", "routine_config.go",
 		"security_data_recycle.go", "user.go", "user_money_log.go",

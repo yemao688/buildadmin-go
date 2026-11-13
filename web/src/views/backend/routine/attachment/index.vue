@@ -55,7 +55,7 @@ import { defaultOptButtons } from '/@/components/table'
 import { previewRenderFormatter } from './index'
 import { baTableApi } from '/@/api/common'
 import { useI18n } from 'vue-i18n'
-import { auth } from '/@/utils/common'
+import { auth } from '/@/utils/auth'
 
 defineOptions({
     name: 'routine/attachment',

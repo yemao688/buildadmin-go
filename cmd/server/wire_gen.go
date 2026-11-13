@@ -14,6 +14,7 @@ import (
 	"buildadmin-go/internal/admin/service"
 	handler2 "buildadmin-go/internal/api/handler"
 	middleware2 "buildadmin-go/internal/api/middleware"
+	repository2 "buildadmin-go/internal/api/repository"
 	router2 "buildadmin-go/internal/api/router"
 	service2 "buildadmin-go/internal/api/service"
 	"buildadmin-go/internal/commands"
@@ -49,8 +50,10 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	login := middleware.NewLogin(configuration, tokenHelper, authRepository)
 	closureEnforcer := data_scope.NewClosureEnforcer(configuration)
 	security := middleware.NewSecurity(configuration, zapLogger, gormDB, closureEnforcer)
-	adminLogRepository := repository.NewAdminLogRepository(gormDB, configuration, authRepository)
-	record := middleware.NewRecord(configuration, adminLogRepository)
+	adminLogRepository := repository.NewAdminLogRepository(gormDB, configuration)
+	adminRuleRepository := repository.NewAdminRuleRepository(gormDB, configuration)
+	auditLogService := service.NewAuditLogService(adminLogRepository, adminRuleRepository, authRepository)
+	record := middleware.NewRecord(configuration, auditLogService)
 	siteconfigService := siteconfig.NewService(gormDB)
 	configRepository := repository.NewConfigRepository(gormDB, configuration, siteconfigService)
 	countryService := country.NewService(gormDB, configuration)
@@ -65,39 +68,38 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	ajaxHandler := handler.NewAjaxHandler(zapLogger, areaModel, tableRepository, uploadHelper, terminalTerminal, configuration, authRepository, countryService, siteconfigService)
 	crudLogRepository := repository.NewCrudLogRepository(gormDB, configuration, closureEnforcer)
 	logHandler := handler.NewLogHandler(zapLogger, crudLogRepository, authRepository)
-	moduleHandler := handler.NewModuleHandler(zapLogger)
 	adminGroupRepository := repository.NewAdminGroupRepository(gormDB, configuration)
-	adminRuleRepository := repository.NewAdminRuleRepository(gormDB, configuration)
 	adminGroupService := service.NewAdminGroupService(adminGroupRepository, adminRuleRepository, authRepository)
 	adminGroupHandler := handler.NewAdminGroupHandler(zapLogger, adminGroupRepository, adminRuleRepository, authRepository, adminGroupService)
-	adminRuleService := service.NewAdminRuleService(adminRuleRepository)
+	adminRuleService := service.NewAdminRuleService(adminRuleRepository, authRepository)
 	adminRuleHandler := handler.NewAdminRuleHandler(zapLogger, adminRuleRepository, authRepository, adminRuleService)
 	configService := service.NewConfigService(configRepository)
 	configHandler := handler.NewConfigHandler(zapLogger, configuration, configRepository, configService, siteconfigService)
 	attachmentRepository := repository.NewAttachmentRepository(gormDB, configuration, closureEnforcer)
 	routineAttachmentService := service.NewRoutineAttachmentService(attachmentRepository, configuration)
-	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentRepository, routineAttachmentService)
+	attachmentHandler := handler.NewAttachmentHandler(zapLogger, attachmentRepository, adminRuleRepository, routineAttachmentService)
 	adminRepository := repository.NewAdminRepository(gormDB, configuration)
 	adminService := service.NewAdminService(adminRepository, authRepository, configuration)
-	adminHandler := handler.NewAdminHandler(zapLogger, adminRepository, authRepository, adminService)
+	adminHandler := handler.NewAdminHandler(zapLogger, adminRepository, adminRuleRepository, authRepository, adminService)
 	userRepository := repository.NewUserRepository(gormDB, configuration, closureEnforcer)
 	userService := service.NewUserService(userRepository)
-	userHandler := handler.NewUserHandler(zapLogger, userRepository, userService)
+	userHandler := handler.NewUserHandler(zapLogger, userRepository, adminRuleRepository, userService)
 	securityDataRecycleRepository := repository.NewSecurityDataRecycleRepository(gormDB, configuration)
 	securityDataRecycleService := service.NewSecurityDataRecycleService(securityDataRecycleRepository)
-	dataRecycleHandler := handler.NewDataRecycleHandler(zapLogger, configuration, securityDataRecycleRepository, tableRepository, securityDataRecycleService)
+	dataRecycleHandler := handler.NewDataRecycleHandler(zapLogger, configuration, securityDataRecycleRepository, adminRuleRepository, tableRepository, securityDataRecycleService)
 	securityDataRecycleLogRepository := repository.NewSecurityDataRecycleLogRepository(gormDB, configuration)
 	securityDataRecycleLogService := service.NewSecurityDataRecycleLogService(securityDataRecycleLogRepository)
 	dataRecycleLogHandler := handler.NewDataRecycleLogHandler(zapLogger, configuration, securityDataRecycleLogRepository, securityDataRecycleLogService)
 	securitySensitiveDataRepository := repository.NewSecuritySensitiveDataRepository(gormDB, configuration)
 	sensitiveDataService := service.NewSensitiveDataService(securitySensitiveDataRepository)
-	sensitiveDataHandler := handler.NewSensitiveDataHandler(zapLogger, configuration, securitySensitiveDataRepository, tableRepository, sensitiveDataService)
+	sensitiveDataHandler := handler.NewSensitiveDataHandler(zapLogger, configuration, securitySensitiveDataRepository, adminRuleRepository, tableRepository, sensitiveDataService)
 	securitySensitiveDataLogRepository := repository.NewSecuritySensitiveDataLogRepository(gormDB, configuration)
 	securitySensitiveDataLogService := service.NewSecuritySensitiveDataLogService(securitySensitiveDataLogRepository)
 	sensitiveDataLogHandler := handler.NewSensitiveDataLogHandler(zapLogger, configuration, securitySensitiveDataLogRepository, securitySensitiveDataLogService)
-	adminInfoHandler := handler.NewAdminInfoHandler(zapLogger, adminRepository, authRepository)
+	adminInfoHandler := handler.NewAdminInfoHandler(zapLogger, authRepository, adminService)
 	adminLogHandler := handler.NewAdminLogHandler(zapLogger, adminLogRepository)
-	crudHandler := handler.NewCrudHandler(zapLogger, tableRepository, crudLogRepository, adminRuleRepository, configuration)
+	crudService := service.NewCrudService(tableRepository, crudLogRepository, configuration)
+	crudHandler := handler.NewCrudHandler(tableRepository, crudLogRepository, configuration, crudService)
 	dashboardHandler := handler.NewDashboardHandler(zapLogger, adminRuleRepository)
 	userMoneyLogRepository := repository.NewUserMoneyLogRepository(gormDB, configuration, closureEnforcer)
 	userBalanceService := money.NewUserBalanceService()
@@ -110,7 +112,7 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService, translateClient)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
 	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
-	v := router.ProvideRegistrars(logHandler, moduleHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
+	v := router.ProvideRegistrars(logHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
 	adminRouterDeps := router.AdminRouterDeps{
 		LoginM:         login,
 		AuthorizationM: authorization,
@@ -121,7 +123,8 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 		Registrars:     v,
 	}
 	adminRouter := router.NewAdminRouter(adminRouterDeps)
-	memberService := service2.NewMemberService(gormDB, tokenHelper, configuration)
+	repositoryUserRepository := repository2.NewUserRepository(gormDB, configuration)
+	memberService := service2.NewMemberService(repositoryUserRepository, tokenHelper, configuration)
 	userLogin := middleware2.NewUserLogin(configuration, tokenHelper, memberService)
 	captchaService := captcha.NewCaptchaService(gormDB)
 	commonHandler := handler2.NewCommonHandler(zapLogger, clickCaptcha, captchaService, tokenHelper, memberService, configuration, uploadHelper)

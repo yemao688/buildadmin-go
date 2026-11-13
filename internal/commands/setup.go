@@ -4,9 +4,9 @@ import (
 	"bufio"
 	siteconfig "buildadmin-go/internal/common/siteconfig"
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/migrations"
 	model "buildadmin-go/internal/model"
-	helper "buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/installer"
 	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/terminal"
@@ -102,7 +102,7 @@ func setupCrudApply(db *gorm.DB, configuration *conf.Configuration) ([]helper.Ap
 	if dir == "" {
 		return nil, nil
 	}
-	return helper.ApplySpecsFromDir(db, configuration, dir, helper.ApplyOptions{AdminID: 1})
+	return helper.ApplySpecsFromDir(db, configuration, helper.NewTableStore(db, configuration), dir, helper.ApplyOptions{AdminID: 1})
 }
 
 type setupRunner struct {

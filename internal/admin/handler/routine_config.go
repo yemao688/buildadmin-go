@@ -22,7 +22,6 @@ import (
 )
 
 type ConfigHandler struct {
-	Base
 	log           *zap.Logger
 	config        *conf.Configuration
 	configM       *model.ConfigRepository
@@ -50,7 +49,7 @@ func decodeConfigJSON(field, value string) ([]configJSONItem, error) {
 }
 
 func (h *ConfigHandler) configJSON(ctx *gin.Context, name string) ([]configJSONItem, error) {
-	value, err := h.configM.GetValueByName(ctx, name)
+	value, err := h.configM.GetValueByName(ctx.Request.Context(), name)
 	return decodeConfigValue(name, value, err)
 }
 
@@ -66,8 +65,7 @@ func decodeConfigValue(field, value string, err error) ([]configJSONItem, error)
 
 func NewConfigHandler(log *zap.Logger, config *conf.Configuration, configM *model.ConfigRepository, svc *service.ConfigService, siteconfigSvc *siteconfig.Service) *ConfigHandler {
 	return &ConfigHandler{
-		Base: NewBase(configM),
-		log:  log, config: config, configM: configM, svc: svc, siteconfigSvc: siteconfigSvc}
+		log: log, config: config, configM: configM, svc: svc, siteconfigSvc: siteconfigSvc}
 }
 
 func (h *ConfigHandler) Index(ctx *gin.Context) {

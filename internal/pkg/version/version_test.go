@@ -20,7 +20,7 @@ func TestFrameworkVersionFileMatchesConstant(t *testing.T) {
 	}
 }
 
-// TestChangelogCoversCurrentVersion 保证发版纪律：CHANGELOG.md 必须包含当前
+// 保证发版纪律：CHANGELOG.md 必须包含当前
 // 框架版本的条目，防止版本号提升但变更记录缺失。
 func TestChangelogCoversCurrentVersion(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(util.RootPath(), "CHANGELOG.md"))
@@ -33,7 +33,7 @@ func TestChangelogCoversCurrentVersion(t *testing.T) {
 	}
 }
 
-// TestDisplayVersion 验证展示版本语义：未注入业务版本（dev）时回退框架
+// 验证展示版本语义：未注入业务版本（dev）时回退框架
 // 版本；注入业务版本后以业务版本为主、框架版本为辅（业务镜像 ldflags
 // 注入，线上 banner/--version 显示业务版本号）。
 func TestDisplayVersion(t *testing.T) {

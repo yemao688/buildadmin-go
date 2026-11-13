@@ -5,11 +5,9 @@ import (
 	"buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
-	passwordutil "buildadmin-go/internal/pkg/password"
 	"buildadmin-go/internal/pkg/persistence"
 	"buildadmin-go/internal/pkg/util"
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/gin-gonic/gin"
@@ -130,17 +128,26 @@ func (s *UserRepository) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	return result, total, nil
 }
 
-func (s *UserRepository) UsernameExists(ctx context.Context, username string) (bool, error) {
-	err := s.DBFor(ctx).Where("username=?", username).Take(&model.User{}).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, nil
+// UsernameExists reports whether any user already owns username. excludeID > 0
+// ignores that row (the edit-path shape); pass 0 when creating. Uniqueness is
+// global (user.username carries the unique index), not scope-filtered.
+func (s *UserRepository) UsernameExists(ctx context.Context, username string, excludeID int32) (bool, error) {
+	query := s.DBFor(ctx).Model(&model.User{}).Where("username=?", username)
+	if excludeID > 0 {
+		query = query.Where("id<>?", excludeID)
 	}
-	return err == nil, err
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // AddWithActor writes a new user owned by the actor (or an explicit owner
 // inside the actor's scope). It is the scoped write protocol: hierarchy lock,
 // owner validation and the closure self-row check run in one transaction.
+// Username uniqueness is a service precheck; the duplicate-key branch below
+// only catches a concurrent insert that slipped past it.
 func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, actor data_scope.Actor) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
@@ -164,6 +171,8 @@ func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, act
 		user.AdminID = ownerID
 		// Creating a user owned by the actor only makes sense if the closure table
 		// contains the actor's self-row; otherwise the new row would be invisible.
+		// Kept inside the write transaction: the self-row is only meaningful while
+		// the hierarchy lock above is held, and the check guards this write.
 		if !actor.Unrestricted {
 			closureTable := s.config.Database.Prefix + "admin_closure"
 			var n int64
@@ -173,11 +182,6 @@ func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, act
 			if n == 0 {
 				return cErr.BadRequest("admin scope self-row missing")
 			}
-		}
-		if err := tx.Where("username=?", user.Username).Take(&model.User{}).Error; err == nil {
-			return cErr.BadRequest("username already exists")
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
 		}
 		result := tx.Omit("login_failure", "last_login_time", "last_login_ip").Create(user)
 		if result.Error != nil {
@@ -192,8 +196,10 @@ func (s *UserRepository) AddWithActor(ctx context.Context, user *model.User, act
 
 // EditWithActor is the transport-free counterpart of Edit for the service
 // layer: the actor is passed explicitly instead of being read from the
-// request context.
-func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, password string, actor data_scope.Actor) error {
+// request context, and the password arrives already hashed (the service owns
+// that rule; the repo only writes the value). Username uniqueness is likewise a
+// service precheck.
+func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, passwordHash string, actor data_scope.Actor) error {
 	if s.enforcer == nil {
 		return data_scope.ErrScopedAccessDenied
 	}
@@ -210,25 +216,21 @@ func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, pa
 		"join_time": user.JoinTime,
 		"status":    user.Status,
 	}
-	if password != "" {
-		hash, err := passwordutil.Hash(password)
-		if err != nil {
-			return err
-		}
-		updates["password"] = hash
+	if passwordHash != "" {
+		updates["password"] = passwordHash
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		err := NewAdminHierarchy(s.config).LockHierarchy(ctx, tx)
 		if err != nil {
 			return err
 		}
-		if err := tx.Where("id<>? and username=?", user.ID, user.Username).Take(&model.User{}).Error; !errors.Is(err, gorm.ErrRecordNotFound) {
-			return cErr.BadRequest("Account not exist")
-		}
 		var current model.User
 		if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
 			return err
 		}
+		// 保留在事务内：行级 FOR UPDATE 读到的当前归属与提交的归属必须成对
+		// 校验，零/负归属会让后续归属作用域与日志同步失去可比对象。拆到
+		// service 会丢失“提交值 + 锁定行”这对同一快照的原子性。
 		if current.AdminID <= 0 || user.AdminID <= 0 {
 			return cErr.BadRequest("invalid administrator owner")
 		}
@@ -271,6 +273,9 @@ func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, pa
 	})
 }
 
+// validateUserOwner 校验归属管理员在 actor 作用域内且处于启用状态。保留在
+// 写事务内：启用状态用 FOR UPDATE 读取，与归属写入共用同一把行锁，避免校验
+// 通过后被并发禁用（拆到 service 会丢掉该锁）。
 func (s *UserRepository) validateUserOwner(ctx context.Context, tx *gorm.DB, ownerID int32, actor data_scope.Actor) error {
 	if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.enforcer, s.config.Database.Prefix, ownerID, actor); err != nil {
 		return err
@@ -288,7 +293,8 @@ func (s *UserRepository) validateUserOwner(ctx context.Context, tx *gorm.DB, own
 // validateUserLogOwners 校验变更归属前所有级联子表（CascadeOwners 注册表）中
 // 该 user 的流水归属一致，防止归属迁移静默漂移。注册表遍历 + identifier 校验
 // 与 syncUserLogOwners 对称。缺失的子表（注册表指向的表尚未建/已被删）直接
-// 跳过：没有行需要校验，与 cascade:sync 的表存在性检查语义一致。
+// 跳过：没有行需要校验，与 cascade:sync 的表存在性检查语义一致。保留在写事务
+// 内：子表行以 FOR UPDATE 读取，与随后的归属同步在同一事务快照上校验。
 func (s *UserRepository) validateUserLogOwners(tx *gorm.DB, userID, ownerID int32) error {
 	for _, owner := range s.CascadeOwners() {
 		table := owner.Table

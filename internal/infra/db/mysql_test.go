@@ -8,7 +8,7 @@ import (
 	"buildadmin-go/internal/conf"
 )
 
-// TestBuildDSNIncludesTimeouts 验证 DSN 拼接包含连接/读写超时参数，防止
+// 验证 DSN 拼接包含连接/读写超时参数，防止
 // 卡死连接无限阻塞（go-sql-driver 读写超时默认 0 = 永不超时）。
 func TestBuildDSNIncludesTimeouts(t *testing.T) {
 	cfg := &conf.Database{
@@ -31,7 +31,7 @@ func TestBuildDSNIncludesTimeouts(t *testing.T) {
 	}
 }
 
-// TestConnMaxLifetimeFallback 验证未配置（0）时回退 1800s，配置生效时按秒取值。
+// 验证未配置（0）时回退 1800s，配置生效时按秒取值。
 func TestConnMaxLifetimeFallback(t *testing.T) {
 	cfg := &conf.Database{}
 	if got := connMaxLifetime(cfg); got != 1800*time.Second {
@@ -43,7 +43,7 @@ func TestConnMaxLifetimeFallback(t *testing.T) {
 	}
 }
 
-// TestConnMaxIdleTimeFallback 验证未配置（0）时回退 300s，配置生效时按秒取值。
+// 验证未配置（0）时回退 300s，配置生效时按秒取值。
 func TestConnMaxIdleTimeFallback(t *testing.T) {
 	cfg := &conf.Database{}
 	if got := connMaxIdleTime(cfg); got != 300*time.Second {

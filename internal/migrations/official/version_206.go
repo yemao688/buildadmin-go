@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"buildadmin-go/internal/common/upload"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/migrations/internal/core"
 	"buildadmin-go/internal/model"
@@ -64,36 +63,44 @@ func version206(db *gorm.DB, config *conf.Configuration) error {
 }
 
 func version222(db *gorm.DB, config *conf.Configuration) error {
-	// 列类型扩容
-	type alterSpec struct {
-		table string
-		model any
-		field string
+	if err := core.ValidatePrefix(config); err != nil {
+		return err
 	}
-	alterSpecs := []alterSpec{
-		{"attachment", &upload.Attachment{}, "Name"},
-		{"admin", &model.Admin{}, "Password"},
-		{"user", &model.User{}, "Password"},
-	}
-	for _, spec := range alterSpecs {
+	// 列类型扩容：已发布的迁移使用冻结 DDL，不读取 upload/model 的 gorm tag，
+	// 上游同步改动 tag 不会悄悄改变历史迁移的行为。列缺失时按最终契约补列。
+	for _, spec := range []struct {
+		table      string
+		column     string
+		definition string
+	}{
+		{"attachment", "name", "varchar(120) NOT NULL DEFAULT '' COMMENT '原始名称'"},
+		{"admin", "password", "varchar(255) NOT NULL DEFAULT '' COMMENT '密码'"},
+		{"user", "password", "varchar(255) NOT NULL DEFAULT '' COMMENT '密码'"},
+	} {
 		fullTable := core.TableName(config, spec.table)
-		if err := db.Table(fullTable).Migrator().AlterColumn(spec.model, spec.field); err != nil {
-			return fmt.Errorf("alter %s.%s: %w", fullTable, spec.field, err)
+		action := "MODIFY COLUMN "
+		if !core.ColumnExists(db, fullTable, spec.column) {
+			action = "ADD COLUMN "
+		}
+		if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(fullTable) + " " + action + core.QuoteIdentifier(spec.column) + " " + spec.definition).Error; err != nil {
+			return fmt.Errorf("alter %s.%s: %w", fullTable, spec.column, err)
 		}
 	}
 
 	// crud_log 新增 comment 和 sync（独立检查，幂等）
 	crudLogTable := core.TableName(config, "crud_log")
-	crudLogModel := &model.Log{}
-	crudMigrator := db.Table(crudLogTable).Migrator()
-	if !crudMigrator.HasColumn(crudLogModel, "Comment") {
-		if err := crudMigrator.AddColumn(crudLogModel, "Comment"); err != nil {
-			return fmt.Errorf("add comment column to %s: %w", crudLogTable, err)
+	for _, spec := range []struct {
+		column     string
+		definition string
+	}{
+		{"comment", "varchar(255) NOT NULL DEFAULT '' COMMENT '表注释'"},
+		{"sync", "int(11) NOT NULL DEFAULT 0 COMMENT '同步记录'"},
+	} {
+		if core.ColumnExists(db, crudLogTable, spec.column) {
+			continue
 		}
-	}
-	if !crudMigrator.HasColumn(crudLogModel, "Sync") {
-		if err := crudMigrator.AddColumn(crudLogModel, "Sync"); err != nil {
-			return fmt.Errorf("add sync column to %s: %w", crudLogTable, err)
+		if err := db.Exec("ALTER TABLE " + core.QuoteIdentifier(crudLogTable) + " ADD COLUMN " + core.QuoteIdentifier(spec.column) + " " + spec.definition).Error; err != nil {
+			return fmt.Errorf("add %s column to %s: %w", spec.column, crudLogTable, err)
 		}
 	}
 

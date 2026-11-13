@@ -2,8 +2,8 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/infra/db"
-	"buildadmin-go/internal/pkg/crud_helper"
 	"buildadmin-go/internal/pkg/data_scope"
 	"fmt"
 
@@ -49,7 +49,7 @@ func NewCascadeHandler(logger *zap.Logger, config *conf.Configuration) *CascadeH
 		logger:   logger,
 		db:       db.NewDB(config, logger),
 		config:   config,
-		specsDir: crud_helper.DefaultSpecsDir(),
+		specsDir: crudgen.DefaultSpecsDir(),
 	}
 }
 
@@ -79,7 +79,7 @@ type CascadeJob struct {
 //     名排序输出，确定性稳定；
 //   - 任何标识符（表名/列名）不合法即报错，绝不进入 SQL。
 func buildCascadeSyncJobsFromSpecs(specsDir string) ([]CascadeJob, error) {
-	decls, err := crud_helper.ScanInheritDeclarations(specsDir)
+	decls, err := crudgen.ScanInheritDeclarations(specsDir)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func tableExistsByName(db *gorm.DB, table string) (bool, error) {
 func (h *CascadeHandler) Sync(cmd *cobra.Command, args []string) error {
 	specsDir := h.specsDir
 	if specsDir == "" {
-		specsDir = crud_helper.DefaultSpecsDir()
+		specsDir = crudgen.DefaultSpecsDir()
 	}
 	jobs, err := buildCascadeSyncJobsFromSpecs(specsDir)
 	if err != nil {

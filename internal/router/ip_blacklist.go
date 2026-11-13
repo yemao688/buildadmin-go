@@ -11,7 +11,7 @@ import (
 // 取 no_access_ip（进程内缓存，后台写入后立即失效）。读取失败由中间件放行。
 func NewNoAccessIPSource(siteConfig *siteconfig.Service) middleware.NoAccessIPSource {
 	return func(c *gin.Context) (string, error) {
-		kv, err := siteConfig.GetKVByGroup(c, "basics")
+		kv, err := siteConfig.GetKVByGroup(c.Request.Context(), "basics")
 		if err != nil {
 			return "", err
 		}

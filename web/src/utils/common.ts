@@ -11,7 +11,6 @@ import Icon from '/@/components/icon/index.vue'
 import { getAppMode, isAdminPath } from '/@/utils/appMode'
 import router from '/@/router/index'
 import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { useNavTabs } from '/@/stores/navTabs'
 
 /**
  * 全局注册 Icon 组件。
@@ -170,34 +169,6 @@ export const isMobile = () => {
 export const getFileNameFromPath = (path: string) => {
     const paths = path.split('/')
     return paths[paths.length - 1]
-}
-
-export function auth(node: string): boolean
-export function auth(node: { name: string; subNodeName?: string }): boolean
-
-/**
- * 鉴权
- * 提供 string 将根据当前路由 path 自动拼接和鉴权，还可以提供路由的 name 对象进行鉴权
- * @param node
- */
-export function auth(node: string | { name: string; subNodeName?: string }) {
-    const store = useNavTabs()
-    if (typeof node === 'string') {
-        const path = getCurrentRoutePath()
-        if (store.state.authNode.has(path)) {
-            const subNodeName = path + (path == '/' ? '' : '/') + node
-            if (store.state.authNode.get(path)!.some((v: string) => v == subNodeName)) {
-                return true
-            }
-        }
-    } else {
-        // 节点列表中没有找到 name
-        if (!node.name || !store.state.authNode.has(node.name)) return false
-
-        // 无需继续检查子节点或未找到子节点
-        if (!node.subNodeName || store.state.authNode.get(node.name)?.includes(node.subNodeName)) return true
-    }
-    return false
 }
 
 /**

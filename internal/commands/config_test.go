@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TestApplyGinMode 覆盖 app.env → gin 运行模式的映射。gin mode 是包级状态，
+// 覆盖 app.env → gin 运行模式的映射。gin mode 是包级状态，
 // 测试通过 t.Cleanup 恢复原值，避免污染同包其它测试。
 func TestApplyGinMode(t *testing.T) {
 	original := gin.Mode()

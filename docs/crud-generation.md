@@ -978,7 +978,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --plan    # 只读；发�
 go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失败即退，CI 用
 ```
 
-`migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库；`migrate --strict` 在出现 `rejected` 时以失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`--plan` 有意不取生成锁，因此假设没有并发 DDL：容器正在 apply 时运行它可能读到混合状态；需要一致视图请在没有任何容器迁移时运行。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
+`migrate --plan` 只读列出安装状态、待执行迁移的数量与名称、每个 spec 的差量分类，不写库，并在出现 `rejected` 时以非零退出；`migrate --strict` 同样在出现 `rejected` 时失败退出；不带开关的 `migrate` 与启动一样宽松（跳过 `rejected` 并输出 `[database] WARNING`）。`--plan` 有意不取生成锁，因此假设没有并发 DDL：容器正在 apply 时运行它可能读到混合状态；需要一致视图请在没有任何容器迁移时运行。`crud:apply` 的严格行为与 `--approve` 语义不受影响。
 
 需要让库长期偏离 spec 的团队可在 `configs/config.yaml` 显式设置 `crud.apply_on_migrate: false` 关闭。尾部 apply 被 `requires-approval` 阻塞时，`crud:apply`/`migrate --strict` 失败并提示评审路径（`crud:apply --plan` 查看计划，`--approve=<类别>` 显式放行）；启动路径与宽松 `migrate` 按「全部类别已授权」自动执行这类变更。`rejected` 类变更永不可批准，必须写 business 迁移。线外手改库产生的 spec 未建模列/属性（unmanaged 差异）会被保留，并以信息性 note 提示、不阻断执行：启动/`migrate`/`crud:apply`/`setup` 默认按表聚合成一行（如 `[database] note seller_user: 13 unmanaged column attributes; run migrate --plan for details`；命令路径前缀为 `CRUD apply note`），`log.level: debug` 时启动路径逐条展开，`migrate --plan`/`crud:apply --plan` 始终保留逐条明细。`WARNING` 只用于有数据风险的 `rejected`、未批准的 `requires-approval` 与删表重建（`apply rebuilt`）。列级 charset/collation 与表默认值一致时不算 unmanaged 差异、不逐列提示；只有列级 collation 偏离表默认、generated expression，以及 `auto_increment`/`default_generated` 之外的 extra 才会被报告。新增列按 spec 中前驱字段定位（`ADD ... AFTER <prev>`，spec 首位用 `FIRST`），保证存量库 `crud:apply` 与全新安装 `CREATE TABLE` 的列顺序一致。既有库若因历史 apply 追加到末尾而列序漂移，会以每表一条 note 提示（如 `[database] note hotel_order: column order differs from spec field order; realign via a business migration`）但不自动重排——需要修正时用 business 迁移显式 `MODIFY ... AFTER`。注意非末尾插入在部分 MySQL 版本可能触发表重建，大表可改用 business 迁移。
 
@@ -1011,8 +1011,8 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 - Official database specification: <https://doc.buildadmin.com/senior/databaseSpecification.html>
 - Official CRUD guidance: <https://doc.buildadmin.com/senior/CRUD.html>
 - Official v2.2 null/default note: <https://doc.buildadmin.com/guide/other/incompatibleUpdate/v220.html>
-- Go YAML loader: `internal/pkg/crud_helper/spec.go`
-- Go validation/path contract: `internal/pkg/crud_helper/security.go`
-- Go generation/runtime: `internal/pkg/crud_helper/helper.go`, `internal/pkg/crud_helper/table.go`
+- Go YAML loader: `internal/crudgen/spec.go`
+- Go validation/path contract: `internal/crudgen/security.go`
+- Go generation/runtime: `internal/crudgen/helper.go`, `internal/crudgen/table.go`
 
 PHP 上游的 CRUD 设计器与生成器源码路径仅框架维护者需要，见 [`framework-maintenance.md`](framework-maintenance.md)。

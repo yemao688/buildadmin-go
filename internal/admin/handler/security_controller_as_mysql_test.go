@@ -37,7 +37,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	t.Run("data recycle add and edit", func(t *testing.T) {
-		handler := NewDataRecycleHandler(nil, config, securitymodel.NewSecurityDataRecycleRepository(db, config), nil, service.NewSecurityDataRecycleService(securitymodel.NewSecurityDataRecycleRepository(db, config)))
+		handler := NewDataRecycleHandler(nil, config, securitymodel.NewSecurityDataRecycleRepository(db, config), nil, nil, service.NewSecurityDataRecycleService(securitymodel.NewSecurityDataRecycleRepository(db, config)))
 		router := gin.New()
 		router.POST("/add", handler.Add)
 		router.POST("/edit", handler.Edit)
@@ -59,7 +59,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 
 	t.Run("sensitive data add and edit", func(t *testing.T) {
 		sensitiveRepo := securitymodel.NewSecuritySensitiveDataRepository(db, config)
-		handler := NewSensitiveDataHandler(nil, config, sensitiveRepo, nil, service.NewSensitiveDataService(sensitiveRepo))
+		handler := NewSensitiveDataHandler(nil, config, sensitiveRepo, nil, nil, service.NewSensitiveDataService(sensitiveRepo))
 		router := gin.New()
 		router.POST("/add", handler.Add)
 		router.POST("/edit", handler.Edit)

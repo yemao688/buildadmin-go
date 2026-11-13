@@ -2,105 +2,52 @@ package handler
 
 import (
 	dto "buildadmin-go/internal/admin/dto"
-	adminauth "buildadmin-go/internal/admin/repository"
 	model "buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/middleware"
-	helper "buildadmin-go/internal/pkg/crud_helper"
-	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
 	"buildadmin-go/internal/pkg/filesystem"
 	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 	"buildadmin-go/internal/pkg/validator"
-	"encoding/json"
 	"fmt"
 	"path"
-	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type CrudHandler struct {
-	log        *zap.Logger
-	tableM     *model.TableRepository
-	crudLogM   *model.CrudLogRepository
-	adminRuleM *adminauth.AdminRuleRepository
-	config     *conf.Configuration
+	tableM   *model.TableRepository
+	crudLogM *model.CrudLogRepository
+	config   *conf.Configuration
+	crudSvc  *service.CrudService
 }
 
-type crudUploadCompletedParams struct {
-	SyncIDs    validator.FlexInt32Map `json:"syncIds"`
-	CancelSync boolValue              `json:"cancelSync"`
-}
-
-type boolValue bool
-
-func (b *boolValue) UnmarshalJSON(data []byte) error {
-	var value bool
-	if err := json.Unmarshal(data, &value); err == nil {
-		*b = boolValue(value)
-		return nil
-	}
-
-	var number int
-	if err := json.Unmarshal(data, &number); err == nil && (number == 0 || number == 1) {
-		*b = boolValue(number == 1)
-		return nil
-	}
-
-	return fmt.Errorf("cancelSync must be a boolean")
-}
-
-func NewCrudHandler(log *zap.Logger, tableM *model.TableRepository, crudLogM *model.CrudLogRepository, adminRuleM *adminauth.AdminRuleRepository, config *conf.Configuration) *CrudHandler {
+func NewCrudHandler(tableM *model.TableRepository, crudLogM *model.CrudLogRepository, config *conf.Configuration, crudSvc *service.CrudService) *CrudHandler {
 	return &CrudHandler{
-		log:        log,
-		tableM:     tableM,
-		crudLogM:   crudLogM,
-		adminRuleM: adminRuleM,
-		config:     config,
+		tableM:   tableM,
+		crudLogM: crudLogM,
+		config:   config,
+		crudSvc:  crudSvc,
 	}
 }
 
 // 开始生成
 func (h *CrudHandler) Generate(ctx *gin.Context) {
-	params := struct {
-		Table  crudmodel.Table   `json:"table" binding:"required"`
-		Type   string            `json:"type" binding:"required"`
-		Fields []crudmodel.Field `json:"fields" binding:"required"`
-	}{}
-
+	var params dto.CrudGenerateParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-	if err := requireCrudRoot(ctx); err != nil {
+	actor, _ := data_scope.ActorFromContext(ctx)
+	if err := h.crudSvc.Generate(ctx, actor, params, registerAtomicRoute, unregisterAtomicRoute); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
-	actor, _ := ctx.Get(data_scope.ActorContextKey)
-	adminID := int32(0)
-	if value, ok := actor.(data_scope.Actor); ok {
-		adminID = value.AdminID
-	}
-	if _, err := helper.GenerateFromSpec(h.tableM.DB(), h.config, helper.GenerateOptions{
-		Table: params.Table, Fields: params.Fields, Type: params.Type, AdminID: adminID,
-		RegisterAtomicRoute: func(method, route string) {
-			action := route[strings.LastIndex(route, "/")+1:]
-			middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
-		},
-		UnregisterAtomicRoute: func(method, route string) {
-			action := route[strings.LastIndex(route, "/")+1:]
-			middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
-		},
-	}); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	data_scope.InvalidateBusinessIdentifierCache()
 	response.Success(ctx, map[string]interface{}{})
 }
 
@@ -142,23 +89,11 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 		response.FailByErr(ctx, validator.GetError(param, err))
 		return
 	}
-	if err := requireCrudRoot(ctx); err != nil {
+	actor, _ := data_scope.ActorFromContext(ctx)
+	if err := h.crudSvc.Delete(ctx, actor, int32(param.ID), unregisterAtomicRoute); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
-	crudLog, err := h.crudLogM.GetOne(ctx, int32(param.ID))
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	if err := helper.DeleteFromSpecWithHooks(h.tableM.DB(), h.config, crudLog.Tablename, func(method, route string) {
-		action := route[strings.LastIndex(route, "/")+1:]
-		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: route[:strings.LastIndex(route, "/")], Action: action, Method: method})
-	}); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	data_scope.InvalidateBusinessIdentifierCache()
 	response.Success(ctx, map[string]interface{}{})
 }
 
@@ -166,7 +101,7 @@ func (h *CrudHandler) Delete(ctx *gin.Context) {
 // cancellation is conditional so a newer upload cannot be cleared by an old
 // completion callback.
 func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
-	var params crudUploadCompletedParams
+	var params dto.CrudUploadCompletedParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
@@ -178,13 +113,18 @@ func (h *CrudHandler) UploadCompleted(ctx *gin.Context) {
 	response.Success(ctx, "")
 }
 
-func requireCrudRoot(ctx *gin.Context) error {
-	value, ok := ctx.Get(data_scope.ActorContextKey)
-	actor, actorOK := value.(data_scope.Actor)
-	if !ok || !actorOK || !actor.Unrestricted {
-		return cErr.ForbiddenRequest("CRUD file and schema changes require a root administrator")
-	}
-	return nil
+func registerAtomicRoute(method, route string) {
+	middleware.RegisterAtomicRoute(atomicRouteOf(method, route))
+}
+
+func unregisterAtomicRoute(method, route string) {
+	middleware.UnregisterAtomicRoute(atomicRouteOf(method, route))
+}
+
+// atomicRouteOf 把生成器回调的 "路由/动作" 拆成原子路由注册项。
+func atomicRouteOf(method, route string) middleware.AtomicRoute {
+	separator := strings.LastIndex(route, "/")
+	return middleware.AtomicRoute{Route: route[:separator], Action: route[separator+1:], Method: method}
 }
 
 // 获取文件路径数据
@@ -240,7 +180,6 @@ func (h *CrudHandler) GetFileData(ctx *gin.Context) {
 // 检查是否已有CRUD记录
 func (h *CrudHandler) CheckCrudLog(ctx *gin.Context) {
 	tableName := ctx.Query("table")
-	//ctx.Request.FormValue("table")
 	crudLog, err := h.crudLogM.GetByTableName(ctx, tableName)
 	if err != nil {
 		response.Success(ctx, map[string]interface{}{
@@ -292,7 +231,7 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 
 		columns, _ := h.tableM.GetColumns(tableName)
 		response.Success(ctx, map[string]interface{}{
-			"columns": helper.ParseTableColumns(columns, false), //TODO: 数据类型可能需要转换
+			"columns": helper.ParseTableColumns(columns, false),
 			"comment": comment,
 			"empty":   empty,
 		})
@@ -339,7 +278,7 @@ func (h *CrudHandler) GenerateCheck(ctx *gin.Context) {
 
 // 数据表
 func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
-	outExcludeTable := []string{
+	outTables := adminDataTableList(h.tableM.GetTableList(), h.config.Database.Prefix, []string{
 		// 功能表
 		"area",
 		"token",
@@ -348,16 +287,7 @@ func (h *CrudHandler) DatabaseList(ctx *gin.Context) {
 		"config",
 		"admin_log",
 		"user_money_log",
-	}
-
-	outTables := map[string]string{}
-	tables := h.tableM.GetTableList()
-	for tableName, comment := range tables {
-		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
-		if !slices.Contains(outExcludeTable, strings.TrimPrefix(name, h.config.Database.Prefix)) {
-			outTables[name] = comment
-		}
-	}
+	})
 
 	response.Success(ctx, map[string]interface{}{
 		"dbs": outTables,
@@ -373,7 +303,7 @@ func IsExcludedControllerFile(name string) bool {
 	}
 	switch name {
 	case "provider.go", "base.go", "common.go", "response.go", "route.go",
-		"ajax.go", "dashboard.go", "index.go", "module.go",
+		"ajax.go", "dashboard.go", "index.go",
 		"crud.go", "crud_log.go",
 		"routine_admin_info.go", "routine_attachment.go", "routine_config.go",
 		"security_data_recycle.go", "security_data_recycle_log.go", "security_sensitive_data.go",

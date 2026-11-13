@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"buildadmin-go/internal/api/repository"
 	"buildadmin-go/internal/conf"
 	model "buildadmin-go/internal/model"
 	"buildadmin-go/internal/pkg/password"
@@ -38,14 +39,13 @@ func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
-	// The entity carries MySQL-specific type tags (int unsigned, enum);
-	// sqlite cannot AutoMigrate them, so create the fixture tables with
-	// sqlite-native DDL matching the runtime column shape.
+	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
+	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
 	config := &conf.Configuration{}
 	config.Database.Prefix = ""
 	config.App.UserTokenKeepTime = 3600
-	return NewMemberService(db, &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
+	return NewMemberService(repository.NewUserRepository(db, config), &token.TokenHelper{Driver: authTestTokenDriver{}}, config), db
 }
 
 func hashForTest(t *testing.T, plain string) string {
@@ -62,6 +62,17 @@ func TestMemberIsLoginRejectsAdminToken(t *testing.T) {
 	got, ok := m.IsLoginToken("admin-token")
 	require.False(t, ok)
 	require.Nil(t, got)
+}
+
+// 回归：token 有效但会员已被删除时，GetByID 返回 (nil, nil)，必须返回
+// (nil, false) 而不是解引用 nil 导致 /api/index/index 500。
+func TestMemberUserInfoByTokenMissingUser(t *testing.T) {
+	m, _ := newAuthTestModel(t)
+	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "user", UserID: 9999}}}
+
+	info, ok := m.UserInfoByToken("deleted-member-token")
+	require.False(t, ok)
+	require.Nil(t, info)
 }
 
 func TestMemberLoginMissingAccountIsNotDisabled(t *testing.T) {
@@ -116,6 +127,12 @@ func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 	require.NotZero(t, data["last_login_time"])
 }
 
+func TestMemberRegisterRejectsInvalidUsername(t *testing.T) {
+	m, _ := newAuthTestModel(t)
+	_, err := m.Register("203.0.113.9", "bad user", "password")
+	require.EqualError(t, err, "username invalid")
+}
+
 func TestMemberRegisterRejectsExistingUsername(t *testing.T) {
 	m, db := newAuthTestModel(t)
 	require.NoError(t, db.Create(&model.User{Username: "existing"}).Error)
@@ -133,7 +150,7 @@ func TestMemberRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
 	require.NotEqual(t, "Username is exist!", err.Error())
 }
 
-// TestValidateUserTokenStatusSemantics 覆盖 H6a 合并后的行为保持：账号
+// 覆盖 H6a 合并后的行为保持：账号
 // enable 通过、disable 与不存在均返回与旧 IsEnabledUser 分支一致的
 // "Please login first"（enable/disable 双态，不涉及其它状态字段）。
 func TestValidateUserTokenStatusSemantics(t *testing.T) {
@@ -151,7 +168,7 @@ func TestValidateUserTokenStatusSemantics(t *testing.T) {
 	require.EqualError(t, m.ValidateUserToken(99999, "203.0.113.9"), "Please login first")
 }
 
-// TestValidateUserTokenThrottlesLoginMetaWrites 覆盖 H6b 节流：同一 uid 在
+// 覆盖 H6b 节流：同一 uid 在
 // 60s 窗口内的第二次请求不触发写库（login 元信息保持第一次写入值），窗口
 // 过后恢复写库。时钟经 loginMetaTTL.now 注入（测试入口，不导出公开 API）。
 func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
@@ -184,7 +201,7 @@ func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
 	require.Equal(t, "198.51.100.11", third.LastLoginIP)
 }
 
-// TestLoginMetaThrottleConcurrentSafe 验证节流器并发安全（配合 go test -race
+// 验证节流器并发安全（配合 go test -race
 // 检查 map 读写均持锁）。
 func TestLoginMetaThrottleConcurrentSafe(t *testing.T) {
 	th := newLoginMetaThrottle(time.Second)

@@ -1,9 +1,8 @@
 package middleware
 
 import (
-	adminauth "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/conf"
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"mime"
@@ -11,26 +10,33 @@ import (
 	"strings"
 	"time"
 
+	adminService "buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
+	"buildadmin-go/internal/pkg/header"
+	"buildadmin-go/internal/pkg/util"
+
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type Record struct {
 	config    *conf.Configuration
-	adminLogM adminLogWriter
+	auditLogM auditLogWriter
 }
 
-func NewRecord(config *conf.Configuration, adminLogM *adminauth.AdminLogRepository) *Record {
-	return newRecord(config, adminLogM)
+func NewRecord(config *conf.Configuration, auditLogM *adminService.AuditLogService) *Record {
+	return newRecord(config, auditLogM)
 }
 
-type adminLogWriter interface {
-	Add(*gin.Context, map[string]interface{})
+type auditLogWriter interface {
+	Record(context.Context, data_scope.Actor, string, string, string, string, string, map[string]interface{}) error
 }
 
-func newRecord(config *conf.Configuration, adminLogM adminLogWriter) *Record {
+func newRecord(config *conf.Configuration, auditLogM auditLogWriter) *Record {
 	return &Record{
 		config:    config,
-		adminLogM: adminLogM,
+		auditLogM: auditLogM,
 	}
 }
 
@@ -50,8 +56,13 @@ func (m *Record) Handler() gin.HandlerFunc {
 			}
 		}
 		c.Next()
-		if shouldRecord {
-			m.adminLogM.Add(c, params)
+		if !shouldRecord || m.auditLogM == nil {
+			return
+		}
+		info := header.GetAdminAuth(c)
+		actor := data_scope.Actor{AdminID: info.Id, Unrestricted: info.IsSuperAdmin}
+		if err := m.auditLogM.Record(c.Request.Context(), actor, info.Username, c.Request.URL.Path, c.GetString("log_title"), util.GetClientIP(c), c.Request.UserAgent(), params); err != nil {
+			zap.L().Warn("failed to write admin log", zap.Error(err))
 		}
 	}
 }

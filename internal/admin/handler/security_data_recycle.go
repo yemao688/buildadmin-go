@@ -1,45 +1,39 @@
 package handler
 
 import (
-	dto "buildadmin-go/internal/admin/dto"
-	adminmodel "buildadmin-go/internal/admin/repository"
-	securitymodel "buildadmin-go/internal/admin/repository"
-	"buildadmin-go/internal/admin/service"
-	"buildadmin-go/internal/conf"
-	model "buildadmin-go/internal/model"
-	"buildadmin-go/internal/pkg/response"
-	"buildadmin-go/internal/pkg/route"
-	"buildadmin-go/internal/pkg/util"
-	"buildadmin-go/internal/pkg/validator"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
-	"strings"
+
+	"buildadmin-go/internal/admin/dto"
+	"buildadmin-go/internal/admin/repository"
+	"buildadmin-go/internal/admin/service"
+	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"github.com/unknwon/com"
 	"go.uber.org/zap"
 )
 
 type DataRecycleHandler struct {
-	Base
 	log          *zap.Logger
 	config       *conf.Configuration
-	dataRecycleM *securitymodel.SecurityDataRecycleRepository
-	tableM       *adminmodel.TableRepository
+	dataRecycleM *repository.SecurityDataRecycleRepository
+	adminRuleM   *repository.AdminRuleRepository
+	tableM       *repository.TableRepository
 	svc          *service.SecurityDataRecycleService
 }
 
-func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *securitymodel.SecurityDataRecycleRepository, tableM *adminmodel.TableRepository, svc *service.SecurityDataRecycleService) *DataRecycleHandler {
+func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecycleM *repository.SecurityDataRecycleRepository, adminRuleM *repository.AdminRuleRepository, tableM *repository.TableRepository, svc *service.SecurityDataRecycleService) *DataRecycleHandler {
 	return &DataRecycleHandler{
-		Base:         NewBase(dataRecycleM),
 		log:          log,
 		config:       config,
 		dataRecycleM: dataRecycleM,
+		adminRuleM:   adminRuleM,
 		tableM:       tableM,
 		svc:          svc,
 	}
@@ -56,11 +50,6 @@ func (h *DataRecycleHandler) One(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) Index(ctx *gin.Context) {
-	if data, ok := h.Select(ctx); ok {
-		response.Success(ctx, data)
-		return
-	}
-
 	result, total, err := h.dataRecycleM.List(ctx)
 	if err != nil {
 		response.FailByErr(ctx, err)
@@ -69,21 +58,8 @@ func (h *DataRecycleHandler) Index(ctx *gin.Context) {
 	response.Success(ctx, map[string]interface{}{
 		"list":   result,
 		"total":  total,
-		"remark": h.GetRemark(ctx),
+		"remark": remark(ctx, h.adminRuleM),
 	})
-}
-
-type DataRecycle struct {
-	Name         string               `json:"name"`
-	Controller   string               `json:"controller"`
-	ControllerAs string               `json:"controller_as"`
-	DataTable    string               `json:"data_table"`
-	PrimaryKey   string               `json:"primary_key"`
-	Status       validator.FlexStatus `json:"status"`
-}
-
-func (v DataRecycle) GetMessages() validator.ValidatorMessages {
-	return validator.ValidatorMessages{}
 }
 
 func (h *DataRecycleHandler) Add(ctx *gin.Context) {
@@ -95,19 +71,12 @@ func (h *DataRecycleHandler) Add(ctx *gin.Context) {
 		return
 	}
 
-	var params DataRecycle
+	var params dto.SecurityDataRecycleParam
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-
-	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
-	var data model.SecurityDataRecycle
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	if err := h.svc.Add(ctx.Request.Context(), data); err != nil {
+	if err := h.svc.Add(ctx.Request.Context(), params); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -138,24 +107,13 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 
 	var params = struct {
 		dto.IDS
-		DataRecycle
+		dto.SecurityDataRecycleParam
 	}{}
 	if err := ctx.ShouldBindJSON(&params); err != nil {
 		response.FailByErr(ctx, validator.GetError(params, err))
 		return
 	}
-
-	data, err := h.dataRecycleM.GetOne(ctx, int32(params.ID))
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	params.ControllerAs = util.NormalizeControllerAs(params.Controller)
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	if err := h.svc.Edit(ctx.Request.Context(), data); err != nil {
+	if err := h.svc.Edit(ctx.Request.Context(), int32(params.ID), params.SecurityDataRecycleParam); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -169,7 +127,7 @@ func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 		return
 	}
 
-	if err := h.dataRecycleM.Del(ctx, params.Ids); err != nil {
+	if err := h.svc.Del(ctx.Request.Context(), params.Ids); err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
@@ -177,7 +135,7 @@ func (h *DataRecycleHandler) Del(ctx *gin.Context) {
 }
 
 func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
-	outExcludeRoute := []string{
+	return adminRouteList([]string{
 		"addon",
 		"ajax",
 		"module",
@@ -188,41 +146,15 @@ func (h *DataRecycleHandler) getRouteList(ctx *gin.Context) any {
 		"user.MoneyLog",
 		"routine.Config",
 		"auth.AdminLog",
-	}
-
-	outRoutes := map[string]string{}
-	routes := route.GetAllRoutes()
-	for _, r := range routes {
-		if !strings.HasPrefix(r.Path, "/admin") {
-			continue
-		}
-		segments := strings.Split(r.Path, "/")
-		if len(segments) >= 3 {
-			path := segments[2]
-			if !slices.Contains(outExcludeRoute, path) {
-				outRoutes[path] = path
-			}
-		}
-	}
-	return outRoutes
+	})
 }
 
 func (h *DataRecycleHandler) getTableList(ctx *gin.Context) map[string]string {
-	outExcludeTable := []string{
+	return adminDataTableList(h.tableM.GetTableList(), h.config.Database.Prefix, []string{
 		"area",
 		"token",
 		"captcha",
 		"admin_group_access",
 		"user_money_log",
-	}
-
-	outTables := map[string]string{}
-	tables := h.tableM.GetTableList()
-	for tableName, comment := range tables {
-		name := strings.TrimPrefix(tableName, h.config.Database.Prefix)
-		if !slices.Contains(outExcludeTable, name) {
-			outTables[name] = comment
-		}
-	}
-	return outTables
+	})
 }

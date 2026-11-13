@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm/schema"
 )
 
-// TestAttachmentDeleteHonorsQuoteAndRemovesLocalFileAfterLastReference
 // verifies the reference-count semantics of the delete flow: the first
 // delete drops the count, the last delete physically removes the row and the
 // local file.

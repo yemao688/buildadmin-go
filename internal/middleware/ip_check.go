@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"buildadmin-go/internal/pkg/response"
 	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
@@ -45,12 +46,7 @@ func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 		for _, rule := range rules {
 			if matchNoAccessIPRule(clientIP, rule) {
 				msg := util.Lang(c, "No permission", nil)
-				c.JSON(http.StatusForbidden, map[string]interface{}{
-					"code": http.StatusForbidden,
-					"data": nil,
-					"msg":  msg,
-					"time": 0,
-				})
+				response.WriteDirect(c, http.StatusForbidden, http.StatusForbidden, msg, nil)
 				c.Abort()
 				return
 			}
@@ -58,27 +54,10 @@ func IpCheck(noAccessIP NoAccessIPSource) gin.HandlerFunc {
 	}
 }
 
-// noAccessIPMatchAddr 返回用于黑名单匹配的地址。只有对端被判定为受信基础设施
-// 时才取转发头解析出的客户端地址，否则直接用对端地址本身，避免伪造头改变结论。
+// noAccessIPMatchAddr 返回用于黑名单匹配的地址，与登录/审计共用同一套
+// 受信代理模型（util.GetClientIP）。
 func noAccessIPMatchAddr(c *gin.Context) string {
-	peer, err := netip.ParseAddr(c.RemoteIP())
-	if err != nil {
-		// net/http 总会写入 RemoteAddr，解析失败基本只出现在测试或非标准
-		// transport；此时无法证明对端受信，退回对端原始字符串（通常为空，
-		// 不命中任何具体规则），也不采信转发头。
-		return c.RemoteIP()
-	}
-	peer = peer.Unmap()
-	if isTrustedPeerAddr(peer) {
-		return util.GetClientIP(c)
-	}
-	return peer.String()
-}
-
-// isTrustedPeerAddr 判断对端是否为受信基础设施：本机、内网（RFC1918/ULA）或
-// 链路本地单播。只有这些地址上的进程才可能承担反代/隧道角色，转发头才可信。
-func isTrustedPeerAddr(addr netip.Addr) bool {
-	return addr.IsLoopback() || addr.IsPrivate() || addr.IsLinkLocalUnicast()
+	return util.GetClientIP(c)
 }
 
 // splitNoAccessIPRules 按换行（含 CRLF）、英文逗号与任意空白切分规则文本，

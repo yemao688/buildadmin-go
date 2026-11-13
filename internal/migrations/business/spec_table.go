@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"buildadmin-go/internal/conf"
-	helper "buildadmin-go/internal/pkg/crud_helper"
+	helper "buildadmin-go/internal/crudgen"
 
 	"gorm.io/gorm"
 )
@@ -41,7 +41,7 @@ func EnsureSpecTableFrom(db *gorm.DB, config *conf.Configuration, dir, logicalNa
 		}
 		return fmt.Errorf("EnsureSpecTable(%q): cannot read spec %s: %w", logicalName, specPath, err)
 	}
-	results, err := helper.ApplySpecs(db, config, []string{specPath}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
+	results, err := helper.ApplySpecs(db, config, helper.NewTableStore(db, config), []string{specPath}, helper.ApplyOptions{AdminID: 1, SkipMenu: true})
 	if err != nil {
 		// 保留原始错误链（ApplyBlockedError 携带具体 Reasons 与可批准类别），
 		// hint 仅作附加指引。

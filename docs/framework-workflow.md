@@ -242,7 +242,7 @@ git push origin master
 
 ### 发版前的数据影响确认（rejected）
 
-`migrate --plan` 的输出是这项检查的唯一事实源：它以只读方式列出安装状态、待执行迁移的数量与名称和每个 spec 的差量分类，不写库。启动自动迁移与宽松 `migrate` 会跳过 `rejected` 变更并打印 `[database] WARNING`，进程照常服务——**跳过不等于安全**，目标列仍是旧结构，代码按新结构写入时才会暴露问题。反过来，spec 未建模的线外差异（unmanaged 列属性、列序漂移）只是按表聚合的 `note` 提示，不阻断执行；需要逐条明细时看 `migrate --plan`。
+`migrate --plan` 的输出是这项检查的唯一事实源：它以只读方式列出安装状态、待执行迁移的数量与名称和每个 spec 的差量分类，不写库，并在出现 `rejected` 时以非零退出。启动自动迁移与宽松 `migrate` 会跳过 `rejected` 变更并打印 `[database] WARNING`，进程照常服务——**跳过不等于安全**，目标列仍是旧结构，代码按新结构写入时才会暴露问题。反过来，spec 未建模的线外差异（unmanaged 列属性、列序漂移）只是按表聚合的 `note` 提示，不阻断执行；需要逐条明细时看 `migrate --plan`。
 
 `rejected` 是 apply 安全矩阵中永不可自动执行的破坏性变更，只能由 business 迁移显式处理：
 
@@ -280,8 +280,8 @@ git push origin master
 | 文件或区域 | 处理原则 |
 |---|---|
 | `VERSION_FRAMEWORK`、`CHANGELOG.md` | 框架拥有的发行版本文件和变更记录；冲突时取框架侧版本。 |
-| `VERSION` | 业务仓库自有的镜像/发布版本文件，框架永不提供；冲突时保留业务侧版本。 |
-| `internal/router/router.go` | 纯 bootstrap（引擎/全局中间件/静态资源/三渠道挂载），框架基本独有；业务不应修改，路由一律走渠道 registrar。冲突时优先采用框架版本，再补业务 registrar。 |
+| `VERSION` | 镜像/发布版本文件；框架仓库带 `1.0.0` 占位，业务 fork 首次发布时自行改写，冲突时保留业务侧版本。 |
+| `internal/router/router.go` | 纯 bootstrap（引擎/全局中间件/静态资源/两渠道挂载），框架基本独有；业务不应修改，路由一律走渠道 registrar。冲突时优先采用框架版本，再补业务 registrar。 |
 | `internal/admin/repository/provider.go`、`internal/admin/handler/provider.go` | 双方都会在 `wire.NewSet` 中追加 `NewXxxRepository`/`NewXxxHandler` 构造器；保留两边新增条目，整理后运行 `go generate ./cmd/server`。 |
 | `internal/admin/router/provider.go` | 持有合并 ProviderSet（`NewXxxRegistrar` 列表）与 `ProvideRegistrars` 锚点（每模块一行 handler 参数 + 返回条目）；冲突时两边条目都保留，来源解决后运行 `go generate ./cmd/server`。 |
 | `internal/api/router/provider.go` | api 渠道 registrar 参数和 slice 条目（`ProvideRegistrars` 锚点）；冲突时两边条目都保留，整理后运行 `go generate ./cmd/server`。 |
@@ -294,7 +294,7 @@ git push origin master
 
 ## 业务版本约定
 
-业务仓库在根目录 `VERSION` 文件维护自己的发布版本，版本格式由业务自行决定但应使用 semver。业务仓库还应在根目录 `AGENT_BUSINESS.md` 记录当前基于的框架版本，例如 `基于框架 v3.0.0`。框架仓库不提供也不维护 `VERSION` 文件。
+业务仓库在根目录 `VERSION` 文件维护自己的发布版本，版本格式由业务自行决定但应使用 semver。业务仓库还应在根目录 `AGENT_BUSINESS.md` 记录当前基于的框架版本，例如 `基于框架 v3.0.0`。框架仓库带 `1.0.0` 占位并跟踪该文件，业务 fork 首次发布时自行改写；Makefile 读取它生成镜像 tag。
 
 ## 业务代码边界
 
