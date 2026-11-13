@@ -131,20 +131,38 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	quickSearch := queryParameter.QuickSearch
 	quickSearchField := table.QuickSearchField
 	if quickSearch != "" && quickSearchField != "" {
-		if ok := strings.Contains(quickSearchField, ","); ok {
-			quickSearchFieldArr := strings.Split(quickSearchField, ",")
+		quickSearchFieldArr := strings.Split(quickSearchField, ",")
+		if len(quickSearchFieldArr) == 1 && !strings.Contains(quickSearchField, ".") {
+			// 单一本表字段：保持原输出形态（尾随空格与既有断言一致）
+			whereS += " AND " + Backquote(quickSearchField) + " LIKE ? "
+			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
+		} else {
+			// 多字段或含点号关联字段：OR 分组。点号条目复用 SearchJoins 的
+			// EXISTS 条件（不带前导 " AND "），值在条件内部按 LIKE 一次转义
+			// 与参数化，避免这里再包 % 造成双重转义。
 			whereS += " AND ("
 			for p, v := range quickSearchFieldArr {
-				whereS += Backquote(v) + " LIKE ?  "
-				if p != len(quickSearchFieldArr)-1 {
+				if p > 0 {
 					whereS += " or "
 				}
+				if strings.Contains(v, ".") {
+					condition, params, conditionErr := searchJoinExistsCondition(ctx, table, SearchFilter{
+						Field:    v,
+						Val:      quickSearch,
+						Operator: "LIKE",
+					})
+					if conditionErr != nil {
+						err = conditionErr
+						return
+					}
+					whereS += condition
+					whereP = append(whereP, params...)
+					continue
+				}
+				whereS += Backquote(v) + " LIKE ?  "
 				whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
 			}
 			whereS += " )"
-		} else {
-			whereS += " AND " + Backquote(quickSearchField) + " LIKE ? "
-			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
 		}
 	}
 	// 排序：请求参数 order 优先，为空时回退表默认排序（生成器按 spec 填充
@@ -390,6 +408,21 @@ func searchStringValue(value any) string {
 // 绑定。返回带 " AND " 前缀的完整条件与参数；多层点号、alias 未登记、
 // 关联字段名非法（注入形态）或操作符不支持时返回 BadRequest。
 func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilter) (string, []interface{}, error) {
+	condition, params, err := searchJoinExistsCondition(ctx, table, filter)
+	if err != nil {
+		return "", nil, err
+	}
+	// 空条件（FIND_IN_SET 传空 []string）沿用改造前行为：不追加任何 SQL 片段。
+	if condition == "" {
+		return "", params, nil
+	}
+	return " AND " + condition, params, nil
+}
+
+// searchJoinExistsCondition 是 buildSearchJoinExists 的主体，返回不带前导
+// " AND " 的 EXISTS 条件：quickSearch 的 OR 分组（`a` LIKE ? or EXISTS (...)）
+// 需要裸片段自行拼接。错误与参数契约与包装函数一致。
+func searchJoinExistsCondition(ctx *gin.Context, table TableInfo, filter SearchFilter) (string, []interface{}, error) {
 	// 拆分为 alias 与 fieldName；再含 "."（多层点号 a.b.c）直接拒绝
 	parts := strings.SplitN(filter.Field, ".", 2)
 	if len(parts) != 2 || strings.Contains(parts[1], ".") {
@@ -422,7 +455,7 @@ func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilte
 	// 条件只引用主表列，count 独立查询天然正确
 	joinColumn := Backquote(join.Table) + "." + Backquote(fieldName)
 	exists := func(cond string) string {
-		return " AND EXISTS (SELECT 1 FROM " + Backquote(join.Table) + " WHERE " +
+		return "EXISTS (SELECT 1 FROM " + Backquote(join.Table) + " WHERE " +
 			Backquote(join.Table) + "." + Backquote(join.PK) + " = " +
 			Backquote(table.TableName) + "." + Backquote(join.FK) + " AND " + cond + ")"
 	}
@@ -474,16 +507,16 @@ func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilte
 	case "NULL", "NOT NULL":
 		return exists(joinColumn + " IS " + operater), nil, nil
 	case "FIND_IN_SET":
-		// 与主表 FIND_IN_SET 分支一致：[]string 逐值各生成一条 EXISTS，
-		// 单值原样绑定
+		// 与主表 FIND_IN_SET 分支一致：[]string 逐值各生成一条 EXISTS（多条
+		// 之间用 AND 连接），单值原样绑定
 		if sets, ok := filter.Val.([]string); ok {
-			var cond string
-			var params []interface{}
+			conditions := make([]string, 0, len(sets))
+			params := make([]interface{}, 0, len(sets))
 			for _, v := range sets {
-				cond += exists(operater + "( ? ," + joinColumn + ")>0")
+				conditions = append(conditions, exists(operater+"( ? ,"+joinColumn+")>0"))
 				params = append(params, v)
 			}
-			return cond, params, nil
+			return strings.Join(conditions, " AND "), params, nil
 		}
 		return exists(operater + "( ? ," + joinColumn + ")>0"), []interface{}{filter.Val}, nil
 	default:

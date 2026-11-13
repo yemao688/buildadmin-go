@@ -92,7 +92,7 @@ fields:
 | `generateRelativePath` | `string`，必填 | 标准值=表名本身。Go 产物不再由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。省略时兜底默认等于表名，但 spec 不应依赖省略。 |
 | `rebuild` | `string`，默认空 | PHP 上游兼容值，通常 `No`/`Yes`。 |
 | `databaseConnection` | `string`，默认 `mysql` | 当前 Go 应用只有一条注入连接，其它值失败。 |
-| `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。 |
+| `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。支持本表字段与 `alias.column` 关联字段（点号形态）：alias 由外键字段名派生（`user_id` → `user`、`parent_admin_id` → `parentAdmin`，与关联搜索列 prop、语言键同源），列必须是该 `remoteSelect` 字段已声明的 `relationFields` 之一；仅 `remoteSelect` 支持，`remoteSelects` 不产生 alias，且只允许一层关联。 |
 | `defaultSortField` | `string`，默认空 | 默认排序字段。 |
 | `defaultSortType` | `string`，默认空 | 通常 `asc` 或 `desc`。 |
 
@@ -653,6 +653,8 @@ YAML 使用上表的驼峰键；PHP 设计器请求中的 `remote-pk` 等连字�
 
 **仅 `remoteSelect` 参与关联搜索**：`remoteSelects` 的 CSV 多选 FK（如 `"1,2,3"`）无法等值关联，既不生成关联搜索列也不生成 SearchJoins 条目（对齐 PHP `withJoinTable` 只覆盖 remoteSelect）；其显示列与后端 loader 仍照常生成。
 
+`quickSearchField` 的点号条目复用同一套 `SearchJoins` + EXISTS 设施（不是真实 `LEFT JOIN`）：公共快速搜索在多字段或含点号条目时按 OR 分组，本表字段是 `` `field` LIKE ? ``，关联条目生成 `EXISTS (SELECT 1 FROM `{remoteTable}` WHERE ...)`，值一律参数绑定、标识符经 `Backquote` 白名单转义，不做字符串拼接。`crud:validate` 在无数据库阶段校验 alias 与列是否属于该 `remoteSelect` 的 `relationFields`；`crud:generate` 仍会校验 `relationFields` 列真实存在于 `remoteTable`。主表 `data_scope` 始终生效，关联表不额外叠加 relation-side scope（与关联显示列一致），因此关联匹配到 scope 外的行不会泄露；EXISTS + 主表持 FK 的多对一形态不会放大行数，count/find 天然一致（无需 DISTINCT）。设计器 UI 的 `quickSearchField` 多选只列本表字段，点号条目需手写 YAML。
+
 ### `remoteSelects` 顺序契约
 
 `remoteSelects` 的 FK 使用 `validate.CommaJoined`，JSON 保留 CSV token 的顺序和重复项。关系对象使用 `relationNameForField` 生成的 key。每个 `relationFields` 属性都是与 FK token 一一对应的 nullable 数组，空 CSV 返回空数组，空/非法/溢出/缺失远程记录返回 `null`。这项 positional contract 有意不同于 PHP `whereIn` 后按结果顺序回填的有损行为：Go 保留输入顺序和重复项。
@@ -1000,7 +1002,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 
 1. **恰好一个主键**：`fields` 必须有且只有一个 `primaryKey: true`。
 2. **relation 列真实性**：`relationFields` 每列必须存在于 `remoteTable` 的 introspected columns；`remoteController`/`remoteModel` 指向真实文件。`remoteField` 必须等于目标 select 接口实际返回的 label key——`xxx_text` 不是默认拼接，只有对应 handler 手动构造了该键才存在（当前仅 user 表）。
-3. **quickSearch 不带点号**：`quickSearchField: [user.username]` 会被拒绝（JOIN 未实现）。
+3. **quickSearch 点号契约**：`quickSearchField` 可含 `alias.column` 关联条目——alias 由外键字段名派生（`user_id` → `user`、`parent_admin_id` → `parentAdmin`），列必须在该 `remoteSelect` 的 `relationFields` 中声明，且只能一层点号。常见错误：`unknown relation alias`（错误信息会列出可用 alias，注意 `remoteSelects` 不产生 alias）、`relation column ... is not declared in relationFields`、`user.name.first` 这类多层点号被拒绝。设计器 UI 多选不提供点号条目，需手写 YAML。
 4. **默认值配对**：`default: ""` 必须配 `defaultType: INPUT` 才表示 `DEFAULT ''`。
 5. **布尔语义**：`tinyint(1)` 的非规范值会被请求层拒绝；`char(1)` 不参与布尔兼容。
 6. **路径合法性**：路径不得含 `..`、绝对路径、Windows drive prefix、空段（`a//b`）或 `a..b`。

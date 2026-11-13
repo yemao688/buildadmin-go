@@ -59,11 +59,88 @@ func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
 	}
 }
 
-func TestValidateGenerationInputRejectsDottedRelationQuickSearch(t *testing.T) {
-	table := crudmodel.Table{Name: "orders", QuickSearchField: []string{"user.username"}}
-	fields := []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}}
-	if err := ValidateGenerationInput(table, fields); err == nil || !strings.Contains(err.Error(), "requires JOIN support") {
-		t.Fatalf("dotted relation quick search error = %v", err)
+// 覆盖 quickSearchField 点号条目（alias.column）的结构校验：合法条目透过、
+// 未知 alias（仅 remoteSelects 不产生 alias）、列未在 relationFields 声明、
+// 超过一层点号一律拒绝；不含点号的条目沿用本表字段行为。
+func TestValidateQuickSearchRelationPaths(t *testing.T) {
+	relationFields := func(designType, relationFields string) []crudmodel.Field {
+		return []crudmodel.Field{
+			{Name: "id", Type: "int", PrimaryKey: true, AutoIncrement: true, Unsigned: true},
+			{Name: "user_id", Type: "int", DesignType: designType, Form: crudmodel.FormAttr{
+				RemoteTable: "user", RemotePk: "id", RelationFields: relationFields,
+			}},
+		}
+	}
+	remoteSelects := []crudmodel.Field{
+		{Name: "id", Type: "int", PrimaryKey: true, AutoIncrement: true, Unsigned: true},
+		{Name: "admin_ids", Type: "int", DesignType: "remoteSelects", Form: crudmodel.FormAttr{
+			RemoteTable: "admin", RemotePk: "id", RelationFields: "nickname",
+		}},
+	}
+
+	tests := []struct {
+		name        string
+		quickSearch []string
+		fields      []crudmodel.Field
+		wantErr     string
+	}{
+		{
+			name:        "合法关联字段",
+			quickSearch: []string{"user.username"},
+			fields:      relationFields("remoteSelect", "username"),
+		},
+		{
+			name:        "合法混合本表字段",
+			quickSearch: []string{"id", "user.username"},
+			fields:      relationFields("remoteSelect", "username"),
+		},
+		{
+			name:        "未知 alias 列出可用 alias",
+			quickSearch: []string{"owner.username"},
+			fields:      relationFields("remoteSelect", "username"),
+			wantErr:     "available: user",
+		},
+		{
+			name:        "列未在 relationFields 声明",
+			quickSearch: []string{"user.username"},
+			fields:      relationFields("remoteSelect", "nickname"),
+			wantErr:     "relationFields",
+		},
+		{
+			name:        "超过一层点号",
+			quickSearch: []string{"user.name.first"},
+			fields:      relationFields("remoteSelect", "username"),
+			wantErr:     "exactly one dot",
+		},
+		{
+			name:        "仅 remoteSelects 时未知 alias",
+			quickSearch: []string{"admin.nickname"},
+			fields:      remoteSelects,
+			wantErr:     "unknown relation alias",
+		},
+		{
+			name:        "本表字段不含点号行为不变",
+			quickSearch: []string{"key"},
+			fields:      relationFields("remoteSelect", "username"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateGenerationInput(crudmodel.Table{Name: "orders", QuickSearchField: tt.quickSearch}, tt.fields)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateGenerationInput() error = %v; want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("ValidateGenerationInput() error = nil; want error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("ValidateGenerationInput() error = %v; want contains %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 

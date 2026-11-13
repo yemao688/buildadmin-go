@@ -292,6 +292,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	finalizeRelationMetadata(&modelData)
 
 	// 快速搜索提示
+	quickSearchFieldZhCnTitle = appendQuickSearchRelationTitles(quickSearchFieldZhCnTitle, table, langZhData)
 	langEnData["quick Search Fields"] = strings.Join(table.QuickSearchField, ",")
 	langZhData["quick Search Fields"] = strings.Join(quickSearchFieldZhCnTitle, "、")
 	handlerData.Attr["quickSearchField"] = strings.Join(table.QuickSearchField, ",")
@@ -323,6 +324,26 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
+}
+
+// appendQuickSearchRelationTitles 为点号快速搜索条目（alias.column）追加中文
+// 标题：analyseGenerationFields 只按字段定义顺序收集本表字段的标题，点号
+// 条目永远命中不了字段名，需在此补齐。语言键沿用 parseJoinData 的
+// relationFieldLangPrefix 约定（<小写 alias>__<column>，与关联搜索列 prop
+// 同源）；缺翻译时回退列名。无点号条目原样跳过，保证既有生成产物逐字节不变。
+func appendQuickSearchRelationTitles(titles []string, table crudmodel.Table, langZhData map[string]string) []string {
+	for _, entry := range table.QuickSearchField {
+		alias, column, ok := strings.Cut(entry, ".")
+		if !ok {
+			continue
+		}
+		if title, exists := langZhData[strings.ToLower(alias)+"__"+column]; exists {
+			titles = append(titles, title)
+			continue
+		}
+		titles = append(titles, column)
+	}
+	return titles
 }
 
 // initFrontendGenerationData 初始化前端生成数据：index.vue 数据（路由名/排序
