@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.3.9
+
+> 架构整改批次：收敛分层与生成器边界（生成器独立为开发期工具层、`Base` 只依赖 `CrudTable`、写路径编排上移 service、common 去 gin）、framework seed 每次运行幂等自愈、strict-upgrade 只补缺失核心表、移除未实现的模块市场；并修复 seed 在父菜单重建后重复插入子规则的问题。
+
+- **Breaking（业务 fork 升级必读）:** CRUD 生成器的产物形状变了——生成仓库现在内嵌 `repository.CRUDStore`，生成 handler 的 `Base` 只依赖 `CrudTable` 接口（`Table`/`PrimaryKeyName`/`GetOneScoped`/`UpdateFieldScoped`/`SortWeighScoped`），不再持有 `*gorm.DB`。存量业务模块必须重新 `crud:generate`（按双提交工作流对照 `git diff` 回补定制），否则无法与新版 `Base` 编译。生成器本体从 `internal/pkg/crud_helper` 迁到 `internal/crudgen`（技术基建不得反向依赖），元数据经 `internal/pkg/dbschema.TableStore` 端口读取；自写脚本若 import 旧路径需同步。
+- **Breaking（module 市场移除）:** Go 框架没有真实安装能力，保留只会产生假成功/权限豁免/死代码：后台 `module` handler/router、`web/src/views/backend/module/**`、前端 API 与路由已删除；旧库下次 `migrate`/`serve` 会删除 `moduleStore/moduleStore` 及其 5 个按钮（共 6 行），`admin_group.rules` 中的旧 id 悬空不影响鉴权。
+- **Changed（分层与写路径）:** 生成/删除编排进 `admin/service.CrudService`；repo 只保留 scoped 读、单表原子写、`RowsAffected` 守卫与事务内归属锁校验；handler 只绑定 DTO 并调用 service/repository。`common` 去 gin 依赖，统一 `context.Context`；客户端 IP 只在对端是回环/私有/链路本地时采信转发头；上传错误统一 `upload.BusinessMessage`（调用方映射业务码 10002）。
+- **Changed（迁移）:** framework seed 改为每次 `migrate`/`serve` 幂等执行（安全种子、country 菜单/语言、upload 配置、闭包自引用行），`EnsureSeed` 固定在 framework 迁移之前；strict-upgrade 只 `AutoMigrate` 整表缺失的核心表，不再补列/索引；official `Version222` 改为冻结 DDL，不再读 gorm tag；`migrate --plan` 对 `rejected` 非零退出，`auto_migrate=off` 仍执行安装守卫。
+- **Fixed:** country 菜单此前按 `pid+name+type` 判重，父菜单被删后重建会拿到新自增 id，幸存子按钮因 pid 过期被当成缺失重复插入并留下孤儿；现在按 `name+type` 定位，仅在原父行不存在时把子行重新挂到当前父 id（父级仍在的同名规则不合并，保持既有语义）。
+- **Fixed:** 会员信息空指针；`admin_rule.GetMenus` 按当前操作者规则集过滤（原 `uid=0` 不过滤）。
+- **Added（测试与 CI）:** 导入边界新增 R8/R9/R10（生成器不得被 pkg 反向依赖、渠道 handler 禁持久化直连等），白名单为空；`ci.yml` 增加 MySQL 8 service 与临时 `configs/config.yaml`，`go test ./...` 真实执行 MySQL 门禁用例；新增存量库升级自愈演练（删种子/菜单/DROP 表后必须自愈）与 MySQL 测试文件后缀防回归。
+- **Web:** 后台 `v-auth` 指令拆分，门户不再经指令拉入 `navTabs`；门户语言/货币域接线与 i18n 索引收尾。
+- **Docs:** 同步 `AGENTS.md`（分层表新增 `internal/crudgen`、DTO 投影、路由豁免）、`docs/framework-web.md`、`docs/business-development.md`、`docs/crud-generation.md`、`docs/framework-maintenance.md`、`docs/framework-workflow.md`。
+- **Verified:** CI run `43336345554`（head `6504b9e`）：Go（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / typecheck / build）均成功（web 首跑因 npm `immutable@5.2.1` tarball 瞬时 404 失败，重跑通过）。
+- **升级演练:** `frame-v3.3.8` 全新安装快照（独立 `r338_` 前缀）→ 本版本 `migrate`：`admin_rule` 96→90、moduleStore 6→0、安全种子/语言/upload 配置/闭包计数不变、24 张表不变、`migrate --plan` pending 0 且 3 张 country 表 unchanged、2 张 registerOnly skipped、`migrate` 输出 `executed 0 migrations` 且退出码 0；额外删除父菜单后子规则重挂验证 19 条、0 孤儿、0 重名。
+
 ## v3.3.8
 
 > 工具链升级与模块清单对齐：Go 1.25 → 1.27.4（`go.mod`、Dockerfile 基础镜像、文档同步），并执行 `go mod tidy` 让 require 分块与 1.27 的判定一致。
