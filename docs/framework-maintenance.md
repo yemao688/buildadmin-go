@@ -17,7 +17,7 @@
 ## 框架发布流程
 
 1. 更新根目录 `VERSION_FRAMEWORK`、`internal/pkg/version` 中的 `version.Framework` 与 `version.Upstream`（仅在同步 PHP 上游时更新），并补充 `CHANGELOG.md`。
-2. 提交发布变更后创建 `frame-v` 前缀的 annotated tag，例如 `frame-v$VERSION_FRAMEWORK`（当前 `VERSION_FRAMEWORK=3.3.8` 即 `frame-v3.3.8`；`frame-` 用于区分框架发布与业务仓库的 `v$VERSION` tag）。框架 tag 只作发布标记，不触发 `release-image.yml`——该流水线只认业务 `v<major>.<minor>...` tag，框架自身不发镜像。
+2. 提交发布变更后创建 `frame-v` 前缀的 annotated tag，例如 `frame-v$VERSION_FRAMEWORK`（tag 名 = `frame-v` + `VERSION_FRAMEWORK` 的值，如 `VERSION_FRAMEWORK=3.4.0` 时为 `frame-v3.4.0`；`frame-` 用于区分框架发布与业务仓库的 `v$VERSION` tag）。框架 tag 只作发布标记，不触发 `release-image.yml`——该流水线只认业务 `v<major>.<minor>...` tag，框架自身不发镜像。
 3. PHP 上游基线版本的事实源是 `web/package.json`；同步 PHP 上游时，同时更新 `version.Upstream` 使其与之一致。
 
 ## PHP 上游同步原则
