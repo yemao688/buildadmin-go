@@ -37,6 +37,8 @@ func NewCountryLanguageRepository(sqlDB *gorm.DB, config *conf.Configuration, en
 			OwnerColumn:     "",
 			ReadExtraOwners: []string{},
 			AssignOnCreate:  false,
+			Reassignable:    false,
+			InheritFrom:     nil,
 		},
 		Enforcer: enforcer,
 		config:   config,
@@ -130,6 +132,7 @@ func (s *CountryLanguageRepository) Add(ctx *gin.Context, countryLanguage model.
 }
 
 func (s *CountryLanguageRepository) Edit(ctx *gin.Context, countryLanguage model.CountryLanguage) error {
+
 	if s.Policy.Mode != data_scope.ModeNone {
 		if s.Enforcer == nil {
 			return data_scope.ErrScopedAccessDenied
@@ -137,6 +140,7 @@ func (s *CountryLanguageRepository) Edit(ctx *gin.Context, countryLanguage model
 		if _, err := s.Enforcer.Actor(ctx); err != nil {
 			return err
 		}
+
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {

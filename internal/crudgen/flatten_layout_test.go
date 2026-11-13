@@ -3,6 +3,7 @@ package crudgen
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"buildadmin-go/internal/pkg/util"
@@ -119,12 +120,14 @@ func ProvideRegistrars(
 	// fakeReturn 不受影响
 	require.Contains(t, added, "func fakeReturn() []Registrar {\n\treturn []Registrar{\n\t\tNewImpostorRegistrar(nil),\n\t}\n}")
 
-	// ProviderSet 追加必须验证 callee 是 wire.NewSet；fake 的 ProviderSetDup 不动
-	providerAdded, err := addProviderSetEntry(added, "E2eBannerRegistrar")
-	require.NoError(t, err)
+	// 历史上生成器还会向 ProviderSet 追加 NewXxxRegistrar；手工构造该形态，
+	// 验证 removeProvideRegistrarsEntry 仍能清理历史文件（生成器已不再追加）。
+	providerAdded := strings.Replace(added,
+		"var ProviderSet = wire.NewSet(\n\tNewAdminRouter,\n)",
+		"var ProviderSet = wire.NewSet(\n\tNewAdminRouter,\n\tNewE2eBannerRegistrar,\n)", 1)
 	require.Contains(t, providerAdded, "\tNewE2eBannerRegistrar,\n")
 	require.Contains(t, providerAdded, "var ProviderSet = wire.NewSet(\n\tNewAdminRouter,\n\tNewE2eBannerRegistrar,\n)")
-	require.NotContains(t, providerAdded, "NewImpostor,\n\tNewE2eBannerRegistrar", "ProviderSetDup must be untouched")
+	require.Contains(t, providerAdded, "var ProviderSetDup = wire.NewSet(\n\tNewImpostor,\n)", "ProviderSetDup must be untouched")
 
 	// 移除：只删 ProvideRegistrars 相关 + 真正 wire.NewSet 里的条目
 	removed, err := removeProvideRegistrarsEntry(providerAdded, "E2eBanner")

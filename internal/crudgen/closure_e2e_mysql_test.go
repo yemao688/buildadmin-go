@@ -731,6 +731,17 @@ type CRUDStore struct{}
 func NewCRUDStore(*persistence.BaseModel, func() any, func(*gin.Context, *gorm.DB) *gorm.DB) CRUDStore {
 	return CRUDStore{}
 }
+
+func (s *CRUDStore) Table() string          { return "" }
+func (s *CRUDStore) PrimaryKeyName() string { return "" }
+
+func (s *CRUDStore) GetOneScoped(*gin.Context, any) (any, error) { return nil, nil }
+
+func (s *CRUDStore) UpdateFieldScoped(*gin.Context, any, string, any) (int64, bool, error) {
+	return 0, false, nil
+}
+
+func (s *CRUDStore) SortWeighScoped(*gin.Context, string, string, string, string) error { return nil }
 `,
 		"internal/model/scopeitems.go":                  autoEntity,
 		"internal/model/banner.go":                      globalEntity,
@@ -746,17 +757,37 @@ func NewCRUDStore(*persistence.BaseModel, func() any, func(*gin.Context, *gorm.D
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-type Base struct {
-	currentM any
-	log      *zap.Logger
+type CrudTable interface {
+	Table() string
+	PrimaryKeyName() string
+	GetOneScoped(ctx *gin.Context, id any) (any, error)
+	UpdateFieldScoped(ctx *gin.Context, id any, field string, value any) (rows int64, visible bool, err error)
+	SortWeighScoped(ctx *gin.Context, moveID, targetID, direction, orderDirection string) error
 }
 
-func (b *Base) Select(ctx *gin.Context) (any, bool) { return nil, false }
+type Base struct {
+	currentM CrudTable
+}
+
+func NewBase(currentM CrudTable) Base { return Base{currentM: currentM} }
+
 func (b *Base) MaybePartialEdit(ctx *gin.Context, fields map[string]bool) bool { return false }
 `
+		files["internal/pkg/error/error.go"] = `package error
+
+type Error struct {
+	message string
+}
+
+func (e *Error) Error() string { return e.message }
+
+func BadRequest(errorMsg string, errorCode ...int) *Error { return &Error{message: errorMsg} }
+`
+		externalTable, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "admin", "handler", "table.go"))
+		require.NoError(t, err)
+		files["internal/admin/handler/table.go"] = string(externalTable)
 		files["internal/admin/dto/scopeitems.go"] = dtoCode
 		files["internal/pkg/response/response.go"] = `package response
 

@@ -51,7 +51,7 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 // F7: 设计器控制器列表不得包含框架支撑文件与测试文件。
 func TestIsExcludedControllerFile(t *testing.T) {
 	excluded := []string{
-		"provider.go", "base.go", "common.go", "response.go", "route.go",
+		"provider.go", "base.go", "table.go", "common.go", "response.go", "route.go",
 		"ajax.go", "dashboard.go", "index.go",
 		"crud.go", "crud_log.go",
 		"routine_admin_info.go", "routine_config.go",

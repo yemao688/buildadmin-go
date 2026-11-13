@@ -288,31 +288,12 @@ type RegistrarData struct {
 const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
 package {{.Namespace}}
 
-import (
-	handler "buildadmin-go/internal/admin/handler"
-	"buildadmin-go/internal/middleware"
-
-	"github.com/gin-gonic/gin"
-)
-
-type {{.ClassName}}Registrar struct {
-	handler *handler.{{.ClassName}}Handler
-}
-
-func New{{.ClassName}}Registrar(handler *handler.{{.ClassName}}Handler) *{{.ClassName}}Registrar {
-	return &{{.ClassName}}Registrar{handler: handler}
-}
+import handler "buildadmin-go/internal/admin/handler"
 
 const {{.RouteName}}Route = "{{if .RoutePath}}{{.RoutePath}}{{else}}{{.RouteName}}{{end}}"
 
-func (r *{{.ClassName}}Registrar) Group() string { return "admin" }
-
-func (r *{{.ClassName}}Registrar) Register(g gin.IRoutes) {
-	CRUDRoutes(g, {{.RouteName}}Route, r.handler)
-}
-
-func (r *{{.ClassName}}Registrar) Capabilities() []middleware.AtomicRoute {
-	return CRUDCapabilities({{.RouteName}}Route)
+func New{{.ClassName}}Registrar(h *handler.{{.ClassName}}Handler) *TableRegistrar {
+	return NewTableRegistrar({{.RouteName}}Route, h)
 }
 `
 
@@ -320,116 +301,35 @@ const handlerTemp = `
 package {{.Namespace}}
 
 import (
-	model "{{.ModelImportPath}}"
+	{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
+	{{end}}model "{{.ModelImportPath}}"
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
-	{{end}}{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
-	{{end}}"buildadmin-go/internal/pkg/response"
-	"buildadmin-go/internal/pkg/validator"
-
-	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
-	"go.uber.org/zap"
+	{{end}}"go.uber.org/zap"
 )
 
 type {{.ClassName}}Handler struct {
-	Base
-	log     *zap.Logger
+	TableHandler[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param, {{.PkGoType}}]
 	{{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository
 }
 
 func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
-	return &{{.ClassName}}Handler{Base: Base{currentM: {{.ModelVar}}M}, log: log, {{.ModelVar}}M: {{.ModelVar}}M}
-}
-
-func (h *{{.ClassName}}Handler) Index(ctx *gin.Context) {
-	list, total, err := h.{{.ModelVar}}M.List(ctx)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
+	return &{{.ClassName}}Handler{
+		TableHandler: NewTableHandler[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param, {{.PkGoType}}](
+			log,
+			{{.ModelVar}}M,
+			TableOptions[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param]{
+				PKJSONName:  "{{.PkJSONName}}",
+				PartialEdit: map[string]bool{ {{.PartialEditFields}} },{{if .Reassignable}}
+				RestoreAfterCopy: func(params {{.DTOQualifier}}{{.ClassName}}Param, row *model.{{.ClassName}}, original model.{{.ClassName}}) {
+					// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
+					if params.{{.OwnerGoField}} == 0 {
+						row.{{.OwnerGoField}} = original.{{.OwnerGoField}}
+					}
+				},{{end}}
+			},
+		),
+		{{.ModelVar}}M: {{.ModelVar}}M,
 	}
-	response.Success(ctx, map[string]any{
-		"list":   list,
-		"total":  total,
-		"remark": "",
-	})
-}
-
-
-func (h *{{.ClassName}}Handler) Add(ctx *gin.Context) {
-	var params {{.DTOQualifier}}{{.ClassName}}Param
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		response.FailByErr(ctx, validator.GetError(params, err))
-		return
-	}
-	var data model.{{.ClassName}}
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	err := h.{{.ModelVar}}M.Add(ctx, data)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.Success(ctx, "")
-}
-
-func (h *{{.ClassName}}Handler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{ {{.PartialEditFields}} }) {
-		return
-	}
-
-	type {{.ClassName}}IDs struct {
-		ID {{.PkGoType}} ` + "`json:\"{{.PkJSONName}}\" binding:\"required\"`" + `
-	}
-	var params = struct {
-		{{.ClassName}}IDs
-		{{.DTOQualifier}}{{.ClassName}}Param
-	}{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		response.FailByErr(ctx, validator.GetError(params, err))
-		return
-	}
-
-	data, err := h.{{.ModelVar}}M.GetOne(ctx, params.ID)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	{{if .Reassignable}}
-	originalOwner := data.{{.OwnerGoField}}
-	{{end}}
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}{{if .Reassignable}}
-	// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
-	if params.{{.OwnerGoField}} == 0 {
-		data.{{.OwnerGoField}} = originalOwner
-	}
-	{{- end}}
-	err = h.{{.ModelVar}}M.Edit(ctx, data)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.Success(ctx, "")
-}
-
-func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {
-	var param struct {
-		Ids []{{.PkGoType}} ` + "`form:\"ids[]\" binding:\"required\"`" + `
-	}
-	if err := ctx.ShouldBindQuery(&param); err != nil {
-		response.FailByErr(ctx, validator.GetError(param, err))
-		return
-	}
-	err := h.{{.ModelVar}}M.Del(ctx, param.Ids)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.SuccessWithMessage(ctx, "Deleted successfully")
 }
 `
 

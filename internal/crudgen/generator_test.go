@@ -48,46 +48,42 @@ func TestNormalizeGenerationType(t *testing.T) {
 	}
 }
 
+// 生成 handler 不再展开 Del：删除响应文案由共享 TableHandler 提供，
+// 模板自身只负责装配 TableOptions。
 func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
-	deleteStart := strings.Index(handlerTemp, "func (h *{{.ClassName}}Handler) Del(ctx *gin.Context) {")
-	if deleteStart < 0 {
-		t.Fatal("generated handler template is missing delete handler")
+	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
+	content, err := os.ReadFile(tablePath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	deleteTemplate := handlerTemp[deleteStart:]
-	if !strings.Contains(deleteTemplate, `response.SuccessWithMessage(ctx, "Deleted successfully")`) {
-		t.Fatal("generated delete handler must return the aligned success message")
+	if !strings.Contains(string(content), `response.SuccessWithMessage(ctx, "Deleted successfully")`) {
+		t.Fatal("shared TableHandler must return the aligned success message")
 	}
-	if strings.Contains(deleteTemplate, `response.Success(ctx, "")`) {
-		t.Fatal("generated delete handler must not use an empty success response")
+	if strings.Contains(string(content), `SuccessWithMessage(ctx, "Delete successfully")`) {
+		t.Fatal("shared TableHandler must not use the unaligned success message")
+	}
+	if strings.Contains(handlerTemp, "func (h *{{.ClassName}}Handler) Del(") {
+		t.Fatal("generated handler template must not expand Del; TableHandler provides it")
 	}
 }
 
-// copier.Copy 的返回值必须检查（errcheck 门禁）：Add/Edit 各一处，reassignable
-// 开关只追加归属恢复逻辑，不得退回未检查形态。
+// copier.Copy 的返回值必须检查（errcheck 门禁）：Add/Edit 各一处，位于共享
+// TableHandler；生成模板不得再出现 copier 调用。
 func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
-	for _, reassignable := range []bool{false, true} {
-		content, err := renderHandler(HandlerData{
-			Namespace:       "handler",
-			ClassName:       "Demo",
-			ModelNamespace:  "model",
-			ModelImportPath: "buildadmin-go/internal/model",
-			ModelName:       "Demo",
-			ModelVar:        "demo",
-			PkGoType:        "int32",
-			PkJSONName:      "id",
-			Reassignable:    reassignable,
-			OwnerGoField:    "AdminID",
-		})
-		if err != nil {
-			t.Fatalf("reassignable=%v: %v", reassignable, err)
-		}
-		checked := "if err := copier.Copy(&data, params); err != nil {\n\t\tresponse.FailByErr(ctx, err)\n\t\treturn\n\t}"
-		if got := strings.Count(content, checked); got != 2 {
-			t.Fatalf("reassignable=%v: checked copier.Copy count = %d, want 2 (Add and Edit):\n%s", reassignable, got, content)
-		}
-		if strings.Contains(content, "\tcopier.Copy(&data, params)\n") {
-			t.Fatalf("reassignable=%v: generated handler keeps an unchecked copier.Copy:\n%s", reassignable, content)
-		}
+	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
+	content, err := os.ReadFile(tablePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := "if err := copier.Copy(&data, params); err != nil {\n\t\tresponse.FailByErr(ctx, err)\n\t\treturn\n\t}"
+	if got := strings.Count(string(content), checked); got != 2 {
+		t.Fatalf("checked copier.Copy count = %d, want 2 (Add and Edit):\n%s", got, content)
+	}
+	if strings.Contains(string(content), "\tcopier.Copy(&data, params)\n") {
+		t.Fatalf("shared TableHandler keeps an unchecked copier.Copy:\n%s", content)
+	}
+	if strings.Contains(handlerTemp, "copier.Copy") {
+		t.Fatal("generated handler template must not call copier; TableHandler owns the copy")
 	}
 }
 
