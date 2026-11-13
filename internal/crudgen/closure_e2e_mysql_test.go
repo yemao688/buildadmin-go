@@ -317,7 +317,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	handler "buildadmin-go/internal/admin/handler"
 	repository "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/pkg/data_scope"
@@ -409,7 +408,7 @@ func TestGeneratedClosureReassignable(t *testing.T) {
 
 	// —— handler 级恢复语义：Edit 请求不传 admin_id / 传 0 → 归属保持原值 ——
 	// 行 3 归属 admin_id=4（actor 2 麾下 {2,4}，可见）。
-	hdl := handler.NewScopeitemsHandler(zap.NewNop(), repo)
+	hdl := handler.NewScopeitemsHandler(repo)
 	editRow := func(body string) {
 		hc, _ := gin.CreateTestContext(httptest.NewRecorder())
 		require.NoError(t, data_scope.SetActor(hc, data_scope.Actor{AdminID: 2}))

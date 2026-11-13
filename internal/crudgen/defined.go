@@ -304,18 +304,16 @@ import (
 	{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
 	{{end}}model "{{.ModelImportPath}}"
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
-	{{end}}"go.uber.org/zap"
-)
+	{{end}})
 
 type {{.ClassName}}Handler struct {
 	TableHandler[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param, {{.PkGoType}}]
 	{{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository
 }
 
-func New{{.ClassName}}Handler(log *zap.Logger, {{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
+func New{{.ClassName}}Handler({{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Repository) *{{.ClassName}}Handler {
 	return &{{.ClassName}}Handler{
 		TableHandler: NewTableHandler[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param, {{.PkGoType}}](
-			log,
 			{{.ModelVar}}M,
 			TableOptions[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param]{
 				PKJSONName:  "{{.PkJSONName}}",

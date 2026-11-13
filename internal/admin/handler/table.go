@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/jinzhu/copier"
-	"go.uber.org/zap"
 )
 
 // TableRows 是生成仓库对 TableHandler 暴露的强类型 CRUD 契约；
@@ -44,14 +43,13 @@ type TableOptions[T any, P any] struct {
 // 字段差异通过 TableOptions 注入；One/Sortable/MaybePartialEdit 继续由 Base 提供。
 type TableHandler[T any, P any, ID comparable] struct {
 	Base
-	log  *zap.Logger
 	rows TableRows[T, ID]
 	opts TableOptions[T, P]
 }
 
 // NewTableHandler 由生成器产出的每表构造器调用。
-func NewTableHandler[T any, P any, ID comparable](log *zap.Logger, rows TableRows[T, ID], opts TableOptions[T, P]) TableHandler[T, P, ID] {
-	return TableHandler[T, P, ID]{Base: NewBase(rows), log: log, rows: rows, opts: opts}
+func NewTableHandler[T any, P any, ID comparable](rows TableRows[T, ID], opts TableOptions[T, P]) TableHandler[T, P, ID] {
+	return TableHandler[T, P, ID]{Base: NewBase(rows), rows: rows, opts: opts}
 }
 
 // Index 返回列表与总数。

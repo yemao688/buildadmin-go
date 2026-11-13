@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type tableTestRow struct {
@@ -107,7 +106,7 @@ func newTableTestHandler(rows *tableTestRows, partial map[string]bool, restore b
 			}
 		}
 	}
-	h := NewTableHandler[tableTestRow, tableTestParam, int64](zap.NewNop(), rows, opts)
+	h := NewTableHandler[tableTestRow, tableTestParam, int64](rows, opts)
 	return &h, &hookCalls
 }
 

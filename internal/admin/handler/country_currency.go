@@ -8,18 +8,15 @@ import (
 	"buildadmin-go/internal/pkg/requesttx"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type CountryCurrencyHandler struct {
 	TableHandler[model.CountryCurrency, dto.CountryCurrencyParam, int64]
-	countryCurrencyM *repository.CountryCurrencyRepository
 }
 
-func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.CountryCurrencyRepository, countrySvc *country.Service) *CountryCurrencyHandler {
+func NewCountryCurrencyHandler(countryCurrencyM *repository.CountryCurrencyRepository, countrySvc *country.Service) *CountryCurrencyHandler {
 	return &CountryCurrencyHandler{
 		TableHandler: NewTableHandler[model.CountryCurrency, dto.CountryCurrencyParam, int64](
-			log,
 			countryCurrencyM,
 			TableOptions[model.CountryCurrency, dto.CountryCurrencyParam]{
 				PKJSONName:  "id",
@@ -30,6 +27,5 @@ func NewCountryCurrencyHandler(log *zap.Logger, countryCurrencyM *repository.Cou
 				},
 			},
 		),
-		countryCurrencyM: countryCurrencyM,
 	}
 }

@@ -106,12 +106,12 @@ func wireApp(configuration *conf.Configuration, logger *lumberjack.Logger, zapLo
 	userMoneyLogService := service.NewUserMoneyLogService(userMoneyLogRepository, userBalanceService)
 	moneyLogHandler := handler.NewMoneyLogHandler(zapLogger, userMoneyLogRepository, userMoneyLogService)
 	countryCurrencyRepository := repository.NewCountryCurrencyRepository(gormDB, configuration, closureEnforcer)
-	countryCurrencyHandler := handler.NewCountryCurrencyHandler(zapLogger, countryCurrencyRepository, countryService)
+	countryCurrencyHandler := handler.NewCountryCurrencyHandler(countryCurrencyRepository, countryService)
 	countryLanguageRepository := repository.NewCountryLanguageRepository(gormDB, configuration, closureEnforcer)
 	translateClient := translate.NewClient(configuration)
-	countryLanguageHandler := handler.NewCountryLanguageHandler(zapLogger, countryLanguageRepository, countryService, translateClient)
+	countryLanguageHandler := handler.NewCountryLanguageHandler(countryLanguageRepository, countryService, translateClient)
 	countryLanguageContentRepository := repository.NewCountryLanguageContentRepository(gormDB, configuration, closureEnforcer)
-	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(zapLogger, countryLanguageContentRepository)
+	countryLanguageContentHandler := handler.NewCountryLanguageContentHandler(countryLanguageContentRepository)
 	v := router.ProvideRegistrars(logHandler, adminGroupHandler, adminRuleHandler, configHandler, attachmentHandler, adminHandler, userHandler, dataRecycleHandler, dataRecycleLogHandler, sensitiveDataHandler, sensitiveDataLogHandler, adminInfoHandler, adminLogHandler, crudHandler, dashboardHandler, moneyLogHandler, countryCurrencyHandler, countryLanguageHandler, countryLanguageContentHandler)
 	adminRouterDeps := router.AdminRouterDeps{
 		LoginM:         login,

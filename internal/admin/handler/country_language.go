@@ -11,20 +11,17 @@ import (
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
 type CountryLanguageHandler struct {
 	TableHandler[model.CountryLanguage, dto.CountryLanguageParam, int64]
-	countryLanguageM *repository.CountryLanguageRepository
-	countrySvc       *country.Service
-	translate        *translate.Client
+	countrySvc *country.Service
+	translate  *translate.Client
 }
 
-func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.CountryLanguageRepository, countrySvc *country.Service, translate *translate.Client) *CountryLanguageHandler {
+func NewCountryLanguageHandler(countryLanguageM *repository.CountryLanguageRepository, countrySvc *country.Service, translate *translate.Client) *CountryLanguageHandler {
 	return &CountryLanguageHandler{
 		TableHandler: NewTableHandler[model.CountryLanguage, dto.CountryLanguageParam, int64](
-			log,
 			countryLanguageM,
 			TableOptions[model.CountryLanguage, dto.CountryLanguageParam]{
 				PKJSONName:  "id",
@@ -35,9 +32,8 @@ func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.Cou
 				},
 			},
 		),
-		countryLanguageM: countryLanguageM,
-		countrySvc:       countrySvc,
-		translate:        translate,
+		countrySvc: countrySvc,
+		translate:  translate,
 	}
 }
 
