@@ -789,7 +789,6 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 				assert.Contains(t, modelCode, `Mode:            "none"`)
 			}
 			if tc.ownerCol != "" && tc.ownerCol != "id" && !(tc.cfg != nil && tc.cfg.Mode == data_scope.ModeNone) {
-				assert.NotContains(t, handlerCode, `json:"`+tc.ownerCol+`"`)
 				assert.NotContains(t, modelData.EditableColumns, tc.ownerCol)
 			}
 			if tc.cfg == nil || tc.cfg.Mode != data_scope.ModeNone {
@@ -917,9 +916,9 @@ func TestGeneratedReassignableCompiles(t *testing.T) {
 	assert.Contains(t, edit, "if current.AdminID != test1.AdminID {")
 	assert.Contains(t, edit, "data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32(test1.AdminID), actor)")
 
-	assert.Contains(t, handlerCode, "originalOwner := data.AdminID")
+	assert.Contains(t, handlerCode, "RestoreAfterCopy:")
 	assert.Contains(t, handlerCode, "if params.AdminID == 0 {")
-	assert.Contains(t, handlerCode, "data.AdminID = originalOwner")
+	assert.Contains(t, handlerCode, "row.AdminID = original.AdminID")
 
 	if err := compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp, handlerData); err != nil {
 		debug := "/tmp/crud-debug-reassignable"
@@ -1415,6 +1414,17 @@ type CRUDStore struct{}
 func NewCRUDStore(*persistence.BaseModel, func() any, func(*gin.Context, *gorm.DB) *gorm.DB) CRUDStore {
 	return CRUDStore{}
 }
+
+func (s *CRUDStore) Table() string          { return "" }
+func (s *CRUDStore) PrimaryKeyName() string { return "" }
+
+func (s *CRUDStore) GetOneScoped(*gin.Context, any) (any, error) { return nil, nil }
+
+func (s *CRUDStore) UpdateFieldScoped(*gin.Context, any, string, any) (int64, bool, error) {
+	return 0, false, nil
+}
+
+func (s *CRUDStore) SortWeighScoped(*gin.Context, string, string, string, string) error { return nil }
 `,
 		"internal/admin/repository/provider.go": `package repository
 
@@ -1426,16 +1436,33 @@ var ProviderSet = wire.NewSet()
 
 import (
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 )
 
-type Base struct {
-	currentM any
-	log      *zap.Logger
+type CrudTable interface {
+	Table() string
+	PrimaryKeyName() string
+	GetOneScoped(ctx *gin.Context, id any) (any, error)
+	UpdateFieldScoped(ctx *gin.Context, id any, field string, value any) (rows int64, visible bool, err error)
+	SortWeighScoped(ctx *gin.Context, moveID, targetID, direction, orderDirection string) error
 }
 
-func (b *Base) Select(ctx *gin.Context) (any, bool) { return nil, false }
+type Base struct {
+	currentM CrudTable
+}
+
+func NewBase(currentM CrudTable) Base { return Base{currentM: currentM} }
+
 func (b *Base) MaybePartialEdit(ctx *gin.Context, fields map[string]bool) bool { return false }
+`,
+		"internal/pkg/error/error.go": `package error
+
+type Error struct {
+	message string
+}
+
+func (e *Error) Error() string { return e.message }
+
+func BadRequest(errorMsg string, errorCode ...int) *Error { return &Error{message: errorMsg} }
 `,
 		"internal/pkg/response/response.go": `package response
 
@@ -1475,6 +1502,16 @@ func GetError(v interface{}, err error) error { return err }
 		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
 			return err
 		}
+	}
+
+	// 生成 handler 依赖真实共享基类：直接拷贝 internal/admin/handler/table.go，
+	// 避免 fixture 用简化替身掩盖泛型契约。
+	externalTable, err := os.ReadFile(filepath.Join(root, "internal", "admin", "handler", "table.go"))
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "internal", "admin", "handler", "table.go"), externalTable, 0644); err != nil {
+		return err
 	}
 
 	entityCode, err := renderEntity(ModelData{

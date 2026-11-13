@@ -11,107 +11,34 @@ import (
 	"buildadmin-go/internal/pkg/validator"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
 	"go.uber.org/zap"
 )
 
 type CountryLanguageHandler struct {
-	Base
-	log              *zap.Logger
+	TableHandler[model.CountryLanguage, dto.CountryLanguageParam, int64]
 	countryLanguageM *repository.CountryLanguageRepository
 	countrySvc       *country.Service
 	translate        *translate.Client
 }
 
 func NewCountryLanguageHandler(log *zap.Logger, countryLanguageM *repository.CountryLanguageRepository, countrySvc *country.Service, translate *translate.Client) *CountryLanguageHandler {
-	return &CountryLanguageHandler{Base: Base{currentM: countryLanguageM}, log: log, countryLanguageM: countryLanguageM, countrySvc: countrySvc, translate: translate}
-}
-
-func (h *CountryLanguageHandler) Index(ctx *gin.Context) {
-	list, total, err := h.countryLanguageM.List(ctx)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
+	return &CountryLanguageHandler{
+		TableHandler: NewTableHandler[model.CountryLanguage, dto.CountryLanguageParam, int64](
+			log,
+			countryLanguageM,
+			TableOptions[model.CountryLanguage, dto.CountryLanguageParam]{
+				PKJSONName:  "id",
+				PartialEdit: map[string]bool{},
+				AfterMutation: func(ctx *gin.Context) {
+					// 语言列表缓存失效：响应暂存成功后登记，请求事务提交后执行；非事务请求立即执行
+					requesttx.InvalidateAfterMutation(ctx, countrySvc.InvalidateLanguageCache)
+				},
+			},
+		),
+		countryLanguageM: countryLanguageM,
+		countrySvc:       countrySvc,
+		translate:        translate,
 	}
-	response.Success(ctx, map[string]any{
-		"list":   list,
-		"total":  total,
-		"remark": "",
-	})
-}
-
-func (h *CountryLanguageHandler) Add(ctx *gin.Context) {
-	var params dto.CountryLanguageParam
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		response.FailByErr(ctx, validator.GetError(params, err))
-		return
-	}
-	var data model.CountryLanguage
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	err := h.countryLanguageM.Add(ctx, data)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.Success(ctx, "")
-	// 语言列表缓存失效：响应暂存成功后登记，请求事务提交后执行；非事务请求立即执行
-	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
-}
-
-func (h *CountryLanguageHandler) Edit(ctx *gin.Context) {
-	if h.MaybePartialEdit(ctx, map[string]bool{}) {
-		return
-	}
-
-	type CountryLanguageIDs struct {
-		ID int64 `json:"id" binding:"required"`
-	}
-	var params = struct {
-		CountryLanguageIDs
-		dto.CountryLanguageParam
-	}{}
-	if err := ctx.ShouldBindJSON(&params); err != nil {
-		response.FailByErr(ctx, validator.GetError(params, err))
-		return
-	}
-
-	data, err := h.countryLanguageM.GetOne(ctx, params.ID)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-
-	if err := copier.Copy(&data, params); err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	err = h.countryLanguageM.Edit(ctx, data)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.Success(ctx, "")
-	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
-}
-
-func (h *CountryLanguageHandler) Del(ctx *gin.Context) {
-	var param struct {
-		Ids []int64 `form:"ids[]" binding:"required"`
-	}
-	if err := ctx.ShouldBindQuery(&param); err != nil {
-		response.FailByErr(ctx, validator.GetError(param, err))
-		return
-	}
-	err := h.countryLanguageM.Del(ctx, param.Ids)
-	if err != nil {
-		response.FailByErr(ctx, err)
-		return
-	}
-	response.SuccessWithMessage(ctx, "Deleted successfully")
-	requesttx.InvalidateAfterMutation(ctx, h.countrySvc.InvalidateLanguageCache)
 }
 
 // GetMultTranslations 一键翻译多语言：接收源语言 lan 与待翻译文本 lan_value，

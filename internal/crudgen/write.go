@@ -310,12 +310,9 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
 		return err
 	}
-	// 路由注册器落 internal/admin/router/<table>.go，并接入两个锚点：
-	// 该包合并 ProviderSet 与 ProvideRegistrars（新模块一行 + handler 参数）。
+	// 路由注册器落 internal/admin/router/<table>.go：构造器经 ProvideRegistrars
+	// 锚点聚合（新模块一行 + handler 参数），不再进入该包合并 ProviderSet。
 	if err := writeRegistrarFile(handlerData, registrarFile); err != nil {
-		return err
-	}
-	if err := writeRouterProviderEntry(handlerData.ClassName); err != nil {
 		return err
 	}
 	if err := writeAdminRouterEntry(handlerData.ClassName); err != nil {
@@ -507,14 +504,14 @@ func lowerFirst(value string) string {
 }
 
 // adminRouterProviderPath 是 admin 渠道路由注册器的中心锚点文件：
-// ProviderSet（NewXxxRegistrar 列表）与 ProvideRegistrars（每模块一行 + handler 参数）。
+// ProvideRegistrars（每模块一行 + handler 参数）。ProviderSet 只保留
+// NewAdminRouter 与 ProvideRegistrars，生成器不再追加 registrar 构造器。
 func adminRouterProviderPath() string {
 	return filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go")
 }
 
 // writeAdminRouterEntry 向 internal/admin/router/provider.go 的 ProvideRegistrars
-// 增加一行 NewXxxRegistrar(xxx) 与对应 handler 参数（幂等）。ProviderSet 列表由
-// writeProvider 另行追加。
+// 增加一行 NewXxxRegistrar(xxx) 与对应 handler 参数（幂等）。
 func writeAdminRouterEntry(className string) error {
 	path := adminRouterProviderPath()
 	content, err := os.ReadFile(path)
@@ -580,7 +577,8 @@ func addProvideRegistrarsEntry(content, className string) (string, error) {
 }
 
 // removeAdminRouterEntry 从 internal/admin/router/provider.go 精确移除模块：
-// ProvideRegistrars 的 handler 参数与返回条目，以及 ProviderSet 的 NewXxxRegistrar。
+// ProvideRegistrars 的 handler 参数与返回条目（ProviderSet 已无 registrar 条目，
+// 移除逻辑对缺失条目保持幂等）。
 func removeAdminRouterEntry(className string) error {
 	path := adminRouterProviderPath()
 	content, err := os.ReadFile(path)
@@ -595,7 +593,8 @@ func removeAdminRouterEntry(className string) error {
 }
 
 // removeProvideRegistrarsEntry 从 ProvideRegistrars 精确移除模块的 handler 参数
-// 与返回 slice 条目；同时移除 ProviderSet 中的 NewXxxRegistrar 条目（幂等）。
+// 与返回 slice 条目；同时尝试移除 ProviderSet 中的 NewXxxRegistrar 条目
+// （历史文件可能仍有该条目，缺失时幂等无操作）。
 func removeProvideRegistrarsEntry(content, className string) (string, error) {
 	varName := lowerFirst(className)
 	fset := token.NewFileSet()
@@ -685,66 +684,6 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 		return "", err
 	}
 	return canonicalizeGoContent(formatted), nil
-}
-
-// writeRouterProviderEntry 向 internal/admin/router/provider.go 的
-// var ProviderSet = wire.NewSet(...) 追加 NewXxxRegistrar（幂等）。
-// 该文件还包含 ProvideRegistrars 等函数声明，不能使用 writeProvider 的
-// 行尾启发式。
-func writeRouterProviderEntry(className string) error {
-	path := adminRouterProviderPath()
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	updated, err := addProviderSetEntry(string(content), className+"Registrar")
-	if err != nil {
-		return err
-	}
-	return writeGoFile(path, updated)
-}
-
-// addProviderSetEntry 向文件内第一个 var ProviderSet = wire.NewSet(...)
-// 追加 New<name> 条目（幂等），支持文件同时包含函数声明的场景。
-func addProviderSetEntry(content, name string) (string, error) {
-	target := "New" + name
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
-	if err != nil {
-		return "", err
-	}
-	var setCall *ast.CallExpr
-	ast.Inspect(file, func(node ast.Node) bool {
-		spec, ok := node.(*ast.ValueSpec)
-		if !ok || len(spec.Names) != 1 || spec.Names[0].Name != "ProviderSet" || len(spec.Values) != 1 {
-			return true
-		}
-		call, ok := spec.Values[0].(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		// F5：callee 必须是 wire.NewSet，防止把同名调用误当 ProviderSet。
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel == nil || selector.Sel.Name != "NewSet" {
-			return true
-		}
-		xIdent, ok := selector.X.(*ast.Ident)
-		if !ok || xIdent.Name != "wire" {
-			return true
-		}
-		setCall = call
-		return false
-	})
-	if setCall == nil {
-		return "", fmt.Errorf("ProviderSet declaration not found")
-	}
-	for _, arg := range setCall.Args {
-		if ident, ok := arg.(*ast.Ident); ok && ident.Name == target {
-			return content, nil // 幂等
-		}
-	}
-	insertAt := fset.PositionFor(setCall.Rparen, false).Offset
-	return content[:insertAt] + "\t" + target + ",\n" + content[insertAt:], nil
 }
 
 func writeProvider(dir string, name string) error {

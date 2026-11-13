@@ -22,11 +22,11 @@ func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(content, `CRUDRoutes(g, demoRoute, r.handler)`) {
-		t.Fatalf("registrar route call missing:\n%s", content)
+	if !strings.Contains(content, `const demoRoute`) {
+		t.Fatalf("registrar route const missing:\n%s", content)
 	}
-	if !strings.Contains(content, `CRUDCapabilities(demoRoute)`) {
-		t.Fatalf("registrar capability call missing:\n%s", content)
+	if !strings.Contains(content, `NewTableRegistrar(demoRoute, h)`) {
+		t.Fatalf("registrar table delegation missing:\n%s", content)
 	}
 }
 
@@ -439,8 +439,8 @@ func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(content, "dto.DemoParam") != 2 {
-		t.Fatalf("expected Add and Edit to use the shared dto parameter struct:\n%s", content)
+	if strings.Count(content, "dto.DemoParam") != 3 {
+		t.Fatalf("expected TableHandler/NewTableHandler/TableOptions to reference the shared dto parameter struct:\n%s", content)
 	}
 }
 

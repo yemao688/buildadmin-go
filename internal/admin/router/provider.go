@@ -6,32 +6,12 @@ import (
 	"github.com/google/wire"
 )
 
-// ProviderSet 聚合 admin 渠道路由注册器（registrar）构造器与
-// ProvideRegistrars 聚合函数。CRUD 生成器生成的 registrar 构造器
-// 在本集合中追加。
+// ProviderSet 聚合 admin 渠道的 bootstrap 与 registrar 聚合函数。
+// registrar 构造器不再进入本集合：生成器只维护 ProvideRegistrars 的
+// 参数与返回条目，每表 registrar 在此函数内构造。
 var ProviderSet = wire.NewSet(
 	NewAdminRouter,
-	NewLogRegistrar,
-	NewAdminGroupRegistrar,
-	NewAdminRuleRegistrar,
-	NewConfigRegistrar,
-	NewAttachmentRegistrar,
-	NewAdminRegistrar,
-	NewUserRegistrar,
-	NewDataRecycleRegistrar,
-	NewDataRecycleLogRegistrar,
-	NewSensitiveDataRegistrar,
-	NewSensitiveDataLogRegistrar,
-	NewAdminInfoRegistrar,
-	NewAdminLogRegistrar,
-	NewCrudRegistrar,
-	NewDashboardRegistrar,
-	NewUserLogRegistrar,
 	ProvideRegistrars,
-	NewCountryCurrencyRegistrar,
-	NewCountryLanguageRegistrar,
-	NewCountryLanguageContentRegistrar,
-	NewCountryLanguageTranslateRegistrar,
 )
 
 // ProvideRegistrars 聚合全部 admin 模块 registrar，返回给 AdminRouter

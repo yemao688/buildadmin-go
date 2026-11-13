@@ -14,7 +14,9 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
-生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护三处共享 provider。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
+生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
+
+**下游升级提示（handler 泛型化之后）：** 重新 `crud:generate` 会整体覆盖生成 handler。旧 handler 内直接调用的 `requesttx.InvalidateAfterMutation(ctx, ...)` 属于模块定制，必须移到构造器的 `TableOptions.AfterMutation` 闭包（闭包内仍调用同一个 `requesttx.InvalidateAfterMutation`），否则重新生成后被覆盖丢失。`internal/admin/router/provider.go` 中历史生成的 `NewXxxRegistrar` 条目可以从 `ProviderSet` 删除——生成器不再追加，保留也无害（这些构造器仍在 `ProvideRegistrars` 内使用）。
 
 ### 生成跳过开关（`--skip-frontend` / `--skip-repo`）
 
@@ -703,7 +705,7 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 
 路径安全：拒绝 `..`、绝对路径、Windows drive prefix、空段、`a..b`。显式路径段保留下划线（`some_special_dir/orders` 不会拆成多层目录）。
 
-共享 provider 与锚点：仓库、handler 的合并 ProviderSet 落在 `internal/admin/{repository,handler}/provider.go`（生成器逐项追加构造器）；路由注册器经 `internal/admin/router/provider.go` 挂载——合并 ProviderSet 追加 `NewXxxRegistrar`，`ProvideRegistrars` 锚点增加一行 handler 参数与一行返回条目。生成器不再修改 `cmd/server/wire.go`。
+共享 provider 与锚点：仓库、handler 的合并 ProviderSet 落在 `internal/admin/{repository,handler}/provider.go`（生成器逐项追加构造器）；路由注册器经 `internal/admin/router/provider.go` 挂载——生成器只维护 `ProvideRegistrars` 锚点（增加一行 handler 参数与一行返回条目），不再向该文件合并 `ProviderSet` 追加 `NewXxxRegistrar`（每表 registrar 是共享 `TableRegistrar` 的薄构造器，在 `ProvideRegistrars` 内构造）。生成器不再修改 `cmd/server/wire.go`。
 
 ## 9. 最佳实践
 
