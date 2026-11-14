@@ -56,6 +56,25 @@ type atomicRouteRegistration struct {
 	path   string
 }
 
+// generateState 承载一次生成的可变状态。GenerateFromSpec 只保留锁、快照回滚
+// 与 panic 恢复的事务外壳，其余阶段以方法拆分，写入顺序与失败记账口径不变。
+type generateState struct {
+	db                *gorm.DB
+	cfg               *conf.Configuration
+	tables            TableStore
+	opts              GenerateOptions
+	manifest          FileManifest
+	parentRepoPath    string
+	oldParentRepoPath string
+	snapshot          *FileSnapshot
+	cleanupAllowed    bool
+	logID             int32
+	createdMenuIDs    []int32
+	menuSnapshot      []model.AdminRule
+	registeredRoutes  []atomicRouteRegistration
+	indexWarnings     []string
+}
+
 // GenerateFromSpec performs the complete generation transaction-like
 // orchestration. File changes are recoverable; MySQL DDL is not transactional.
 func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, opts GenerateOptions) (result *GenerateResult, retErr error) {
@@ -63,10 +82,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	if err != nil {
 		return nil, err
 	}
-	db = lockedDB
+	state := &generateState{db: lockedDB, cfg: cfg, tables: tables, opts: opts}
 	var fail func(string, error) (*GenerateResult, error)
 	var cleanupSnapshot func() error
-	registeredRoutes := []atomicRouteRegistration{}
 	defer func() {
 		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
 			retErr = releaseErr
@@ -74,295 +92,427 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			panicErr := generationPanicError(recovered)
-			if fail != nil {
-				result, retErr = fail("panic", panicErr)
-				if cleanupSnapshot != nil {
-					if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
-						retErr = fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
-					}
-				}
-			} else {
-				retErr = panicErr
-			}
+			result, retErr = state.recoverPanic(recovered, fail, cleanupSnapshot)
 		}
 	}()
-	if opts.Table.RegisterOnly {
-		if !IsProtectedTable(opts.Table.Name) {
-			return nil, fmt.Errorf("registerOnly is reserved for protected core tables; %q is not protected", opts.Table.Name)
-		}
-		return registerOnlyFromSpec(opts)
-	}
-	if IsProtectedTable(opts.Table.Name) {
-		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", opts.Table.Name)
-	}
-	if err := normalizeTableConfiguration(&opts.Table); err != nil {
+	early, err := state.prepare()
+	if err != nil {
 		return nil, err
 	}
-	if err := ValidateGenerationInput(opts.Table, opts.Fields); err != nil {
+	if early != nil {
+		return early, nil
+	}
+	if err := state.openSnapshot(); err != nil {
+		return nil, err
+	}
+	cleanupSnapshot = state.cleanupSnapshot
+	defer func() {
+		retErr = state.wrapCleanupError(retErr, cleanupSnapshot())
+	}()
+	// 生成结束（成功或失败回滚后）修剪空的前端目录链：文件级快照回滚只恢复
+	// 文件，不清理 writeFile 的 MkdirAll 创建的目录——wire/编译/菜单等阶段
+	// 失败后模块的 lang/views 目录会残留为空；skip-frontend 跳过写入或写失败
+	// 留下的残留同样在此收尾。只删空目录，止于 views/lang 根，绝不误删。
+	defer pruneFrontendEmptyDirs(state.opts.Table)
+
+	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
+	reconcileStaleGeneratingLogs(state.db, state.cfg)
+	if err := state.beginLog(); err != nil {
+		return nil, err
+	}
+	fail = state.markFailed
+	indexWarnings, err := state.designTables()
+	if err != nil {
+		return nil, err
+	}
+	state.indexWarnings = indexWarnings
+	webViewsDir, tableComment, err := state.writeFiles()
+	if err != nil {
+		return nil, err
+	}
+	if !state.opts.SkipMenu {
+		if err := state.syncMenus(webViewsDir, tableComment); err != nil {
+			return nil, err
+		}
+	}
+	if err := state.runToolchain(); err != nil {
+		return nil, err
+	}
+	state.cleanupAllowed = true
+	return &GenerateResult{Files: append(state.manifest.Generated, state.manifest.Shared...), LogID: state.logID, Warnings: state.indexWarnings}, nil
+}
+
+// wrapCleanupError 把快照清理失败并入返回值：原本成功的返回改成清理失败，
+// 原本失败的返回保留主错误并追加清理原因。
+func (s *generateState) wrapCleanupError(retErr, cleanupErr error) error {
+	if cleanupErr == nil {
+		return retErr
+	}
+	if retErr == nil {
+		return fmt.Errorf("recovery cleanup failed: %w", cleanupErr)
+	}
+	return fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
+}
+
+// recoverPanic 是 panic 恢复的唯一收尾：台账/快照已建立时走失败回滚路径，
+// 否则只把 panic 转成错误返回。
+func (s *generateState) recoverPanic(recovered any, fail func(string, error) (*GenerateResult, error), cleanupSnapshot func() error) (*GenerateResult, error) {
+	panicErr := generationPanicError(recovered)
+	if fail == nil {
+		return nil, panicErr
+	}
+	result, retErr := fail("panic", panicErr)
+	if cleanupSnapshot == nil {
+		return result, retErr
+	}
+	if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
+		retErr = fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
+	}
+	return result, retErr
+}
+
+// prepare 执行无副作用预检（spec 归一化、归属校验、manifest 冲突判定）；
+// registerOnly 的登记结果经 early 提前返回。
+func (s *generateState) prepare() (*GenerateResult, error) {
+	if early, err := s.prepareSpecInputs(); early != nil || err != nil {
+		return early, err
+	}
+	if err := s.prepareInheritance(); err != nil {
+		return nil, err
+	}
+	success, err := s.prepareDatabaseInputs()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.prepareManifest(success); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (s *generateState) prepareSpecInputs() (*GenerateResult, error) {
+	if s.opts.Table.RegisterOnly {
+		if !IsProtectedTable(s.opts.Table.Name) {
+			return nil, fmt.Errorf("registerOnly is reserved for protected core tables; %q is not protected", s.opts.Table.Name)
+		}
+		return registerOnlyFromSpec(s.opts)
+	}
+	if IsProtectedTable(s.opts.Table.Name) {
+		return nil, fmt.Errorf("crud generation is forbidden for protected table %q", s.opts.Table.Name)
+	}
+	if err := normalizeTableConfiguration(&s.opts.Table); err != nil {
+		return nil, err
+	}
+	if err := ValidateGenerationInput(s.opts.Table, s.opts.Fields); err != nil {
 		return nil, err
 	}
 	// skip-frontend 隐含 skip-menu：views 未生成时菜单组件路径悬空，菜单同步
 	// 没有意义（CLI 已做同样归一，这里兜底 API 调用方）。
-	if opts.SkipFrontend {
-		opts.SkipMenu = true
+	if s.opts.SkipFrontend {
+		s.opts.SkipMenu = true
 	}
 	// skip-repo 只允许用于已存在定制 repo 的模块重新生成：repo 文件缺失时
 	// handler 引用 NewXxxRepository 编译必挂——在生成前明确报错而不是留给
 	// wire/build 阶段（首次生成不要使用 skip-repo）。
-	if opts.SkipRepo {
-		if repo, err := ParseRepositoryNameData(opts.Table.Name, opts.Table.ModelFile); err != nil {
-			return nil, fmt.Errorf("--skip-repo: resolve repository for %q: %w", opts.Table.Name, err)
-		} else if !fileExists(repo.ParseFile) {
+	if s.opts.SkipRepo {
+		repo, err := ParseRepositoryNameData(s.opts.Table.Name, s.opts.Table.ModelFile)
+		if err != nil {
+			return nil, fmt.Errorf("--skip-repo: resolve repository for %q: %w", s.opts.Table.Name, err)
+		}
+		if !fileExists(repo.ParseFile) {
 			return nil, fmt.Errorf("--skip-repo: repository file %s does not exist; skip-repo is only for modules with an existing customized repository (first-time generation would not compile)", repo.ParseFile)
 		}
 	}
+	return nil, nil
+}
+
+func (s *generateState) prepareInheritance() error {
 	// 方案 A：inheritFrom 子表生成前校验父表 spec 已声明 reassignable（其 repo
 	// 才有 CascadeOwners() 锚点可注册），并预推导父表 repo 路径纳入快照。
-	parentRepoPath := ""
-	if opts.Table.DataScope != nil && opts.Table.DataScope.InheritFrom != nil {
+	if s.opts.Table.DataScope != nil && s.opts.Table.DataScope.InheritFrom != nil {
 		// 标识符先于路径推导校验：失败信息指向 spec 而不是文件系统错误。
 		for _, id := range []struct{ kind, value string }{
-			{"inheritFrom table", opts.Table.DataScope.InheritFrom.Table},
-			{"inheritFrom by column", opts.Table.DataScope.InheritFrom.ByColumn},
+			{"inheritFrom table", s.opts.Table.DataScope.InheritFrom.Table},
+			{"inheritFrom by column", s.opts.Table.DataScope.InheritFrom.ByColumn},
 		} {
 			if err := data_scope.ValidateIdentifier(id.value); err != nil {
-				return nil, fmt.Errorf("invalid %s %q: %w", id.kind, id.value, err)
+				return fmt.Errorf("invalid %s %q: %w", id.kind, id.value, err)
 			}
 		}
-		if err := validateInheritParent(DefaultSpecsDir(), opts.Table.DataScope.InheritFrom.Table); err != nil {
-			return nil, err
+		if err := validateInheritParent(DefaultSpecsDir(), s.opts.Table.DataScope.InheritFrom.Table); err != nil {
+			return err
 		}
-		parentRepoPath, err = parentRepositoryPath(opts.Table.DataScope.InheritFrom.Table)
+		parentRepoPath, err := parentRepositoryPath(s.opts.Table.DataScope.InheritFrom.Table)
 		if err != nil {
-			return nil, err
+			return err
 		}
+		s.parentRepoPath = parentRepoPath
 	}
 	// 子表重新生成（spec 去掉 inheritFrom 或改指向）时，旧父表锚点里的注册
 	// 条目会残留并继续级联已独立的子表——扫描 crud_specs/ 中所有 reassignable
 	// 父表的锚点块，凡含本子表条目者一律清理（幂等），并纳入快照。事实源是
 	// specs 目录与 repo 锚点块本身（crud_log 生成历史不参与）。
-	staleParentRepoPaths, err := cleanupStaleCascadeAnchors(DefaultSpecsDir(), opts.Table.Name)
+	staleParentRepoPaths, err := cleanupStaleCascadeAnchors(DefaultSpecsDir(), s.opts.Table.Name)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	oldParentRepoPath := ""
 	for _, p := range staleParentRepoPaths {
-		if p != parentRepoPath {
-			oldParentRepoPath = p
+		if p != s.parentRepoPath {
+			s.oldParentRepoPath = p
 			break
 		}
 	}
+	return nil
+}
+
+func (s *generateState) prepareDatabaseInputs() (*model.Log, error) {
 	// 业务子表自身的生成历史仍由 crud_log 维护（manifest 冲突检测、删除消费
 	// 语义）——registerOnly 的级联声明判断不参与此处。
-	success, err := latestSuccessfulCrudLog(db, cfg, opts.Table.Name)
+	success, err := latestSuccessfulCrudLog(s.db, s.cfg, s.opts.Table.Name)
 	if err != nil {
 		return nil, err
 	}
 	// 设计器曾发送的改名/删字段/排序 designChange 在后端被静默丢弃（生成代码
 	// 按新字段名产出，数据库旧列原样保留 → 数据孤儿）。框架纪律：破坏性变更
 	// 必须走 business 迁移，这里显式拒绝而不是吞掉用户操作。
-	for _, change := range opts.Table.DesignChange {
+	for _, change := range s.opts.Table.DesignChange {
 		switch change.Type {
 		case "del-field", "change-field-name", "change-field-order":
 			return nil, fmt.Errorf("design change %q on field %q is not supported by crud:generate; destructive column changes must be applied via a business migration (see docs/crud-generation.md)", change.Type, change.OldName)
 		}
 	}
-	if db == nil || cfg == nil {
+	if s.db == nil || s.cfg == nil {
 		return nil, fmt.Errorf("crud generation requires database and configuration")
 	}
-	if opts.AdminID <= 0 {
-		opts.AdminID = 1
+	if s.opts.AdminID <= 0 {
+		s.opts.AdminID = 1
 	}
 	var adminCount int64
-	if err := db.Table(cfg.Database.Prefix+"admin").Where("id=?", opts.AdminID).Count(&adminCount).Error; err != nil {
-		return nil, fmt.Errorf("validate admin-id %d: %w", opts.AdminID, err)
+	if err := s.db.Table(s.cfg.Database.Prefix+"admin").Where("id=?", s.opts.AdminID).Count(&adminCount).Error; err != nil {
+		return nil, fmt.Errorf("validate admin-id %d: %w", s.opts.AdminID, err)
 	}
 	if adminCount != 1 {
-		return nil, fmt.Errorf("admin-id %d does not exist", opts.AdminID)
+		return nil, fmt.Errorf("admin-id %d does not exist", s.opts.AdminID)
 	}
-	manifest, err := BuildFileManifestForFields(opts.Table, opts.Fields)
+	return success, nil
+}
+
+func (s *generateState) prepareManifest(success *model.Log) error {
+	manifest, err := BuildFileManifestForFields(s.opts.Table, s.opts.Fields)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// skip 产物不参与本次 manifest 记录（crud:delete 不删定制文件）、不参与
 	// 快照（未写入无需回滚），并在 manifestAllows 对比时从上次记录中剔除。
-	skippedPaths := skipManifestPaths(opts.Table, opts.SkipFrontend, opts.SkipRepo)
+	skippedPaths := skipManifestPaths(s.opts.Table, s.opts.SkipFrontend, s.opts.SkipRepo)
 	manifest = filterManifestPaths(manifest, skippedPaths)
-	opts.Type = normalizeGenerationType(opts.Type, opts.Table.Rebuild)
-	if err := validateGenerationMode(opts.Type); err != nil {
-		return nil, err
+	s.opts.Type = normalizeGenerationType(s.opts.Type, s.opts.Table.Rebuild)
+	if err := validateGenerationMode(s.opts.Type); err != nil {
+		return err
 	}
 	if !manifestAllows(manifest, success, skippedPaths) {
 		if success == nil {
-			return nil, fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
+			return fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", s.opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
 		}
-		return nil, fmt.Errorf("refusing to overwrite CRUD output for table %q: target manifest differs from the latest successful generation; use crud:delete first or keep the original paths", opts.Table.Name)
+		return fmt.Errorf("refusing to overwrite CRUD output for table %q: target manifest differs from the latest successful generation; use crud:delete first or keep the original paths", s.opts.Table.Name)
 	}
-	opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
-	opts.Table.Manifest = &crudmodel.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
-	snapshotPaths := append(append([]string{}, manifest.Generated...), manifest.Shared...)
-	if parentRepoPath != "" {
+	s.opts.Table.GeneratedFiles = append([]string(nil), append(append([]string{}, manifest.Generated...), manifest.Shared...)...)
+	s.opts.Table.Manifest = &crudmodel.CRUDFileManifest{Generated: append([]string{}, manifest.Generated...), Shared: append([]string{}, manifest.Shared...)}
+	s.manifest = manifest
+	return nil
+}
+
+// openSnapshot 为本次生成涉及的全部文件建立回滚快照。
+func (s *generateState) openSnapshot() error {
+	snapshotPaths := append(append([]string{}, s.manifest.Generated...), s.manifest.Shared...)
+	if s.parentRepoPath != "" {
 		// 主实体 repo 由锚点维护改写，纳入快照使失败回滚能恢复它；不进 manifest。
-		snapshotPaths = append(snapshotPaths, parentRepoPath)
+		snapshotPaths = append(snapshotPaths, s.parentRepoPath)
 	}
-	if oldParentRepoPath != "" {
+	if s.oldParentRepoPath != "" {
 		// 旧主实体 repo 同样纳入快照：remove 失败回滚可恢复。
-		snapshotPaths = append(snapshotPaths, oldParentRepoPath)
+		snapshotPaths = append(snapshotPaths, s.oldParentRepoPath)
 	}
 	snapshot, err := NewFileSnapshot(snapshotPaths)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	cleanupAllowed := false
-	cleanupSnapshot = func() error {
-		if !cleanupAllowed {
-			return nil
-		}
-		cleanupAllowed = false
-		return snapshot.Cleanup()
-	}
-	defer func() {
-		if cleanupErr := cleanupSnapshot(); cleanupErr != nil {
-			if retErr == nil {
-				retErr = fmt.Errorf("recovery cleanup failed: %w", cleanupErr)
-			} else {
-				retErr = fmt.Errorf("%w; recovery cleanup failed: %w", retErr, cleanupErr)
-			}
-		}
-	}()
-	// 生成结束（成功或失败回滚后）修剪空的前端目录链：文件级快照回滚只恢复
-	// 文件，不清理 writeFile 的 MkdirAll 创建的目录——wire/编译/菜单等阶段
-	// 失败后模块的 lang/views 目录会残留为空；skip-frontend 跳过写入或写失败
-	// 留下的残留同样在此收尾。只删空目录，止于 views/lang 根，绝不误删。
-	defer pruneFrontendEmptyDirs(opts.Table)
+	s.snapshot = snapshot
+	return nil
+}
 
-	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
-	reconcileStaleGeneratingLogs(db, cfg)
-	logID, err := createCrudLog(db, cfg, opts)
+// cleanupSnapshot 只在回滚成功后清理快照目录（失败恢复目录须保留取证）。
+func (s *generateState) cleanupSnapshot() error {
+	if !s.cleanupAllowed {
+		return nil
+	}
+	s.cleanupAllowed = false
+	return s.snapshot.Cleanup()
+}
+
+func (s *generateState) beginLog() error {
+	logID, err := createCrudLog(s.db, s.cfg, s.opts)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	createdMenuIDs := []int32{}
-	var menuSnapshot []model.AdminRule
-	fail = func(stage string, cause error) (*GenerateResult, error) {
-		message := fmt.Sprintf("stage=%s: %v", stage, cause)
-		if restoreErr := snapshot.Restore(); restoreErr != nil {
-			message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, snapshot.dir)
-		} else {
-			cleanupAllowed = true
-		}
-		// F4：生成会 update 既有菜单行，失败时恢复快照原值；新增行单独删除。
-		// 菜单恢复必须排在 recordCrudError 之前：台账写下后再追加 message，
-		// 失败原因只留在返回值里，不会进 crud_log。
-		if len(menuSnapshot) > 0 {
-			if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
-				message += fmt.Sprintf("; menu restore failed: %v", restoreErr)
-			}
-		}
-		_ = recordCrudError(db, cfg, logID, message)
-		if len(createdMenuIDs) > 0 {
-			_ = db.Table(cfg.Database.Prefix+"admin_rule").Where("id IN ?", createdMenuIDs).Delete(&model.AdminRule{}).Error
-		}
-		unregisterAtomicRoutes(opts.UnregisterAtomicRoute, registeredRoutes)
-		return nil, fmt.Errorf("%s: %w", stage, cause)
-	}
+	s.logID = logID
+	return nil
+}
 
-	getTableName := func(name string, full bool) string { return tables.Name(name, full) }
-	getColumns := func(name string) ([]dbschema.Column, error) { return tables.GetColumns(name) }
+// markFailed 是生成失败的唯一收尾：回滚文件与菜单、记账、注销已注册路由。
+func (s *generateState) markFailed(stage string, cause error) (*GenerateResult, error) {
+	message := fmt.Sprintf("stage=%s: %v", stage, cause)
+	if restoreErr := s.snapshot.Restore(); restoreErr != nil {
+		message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, s.snapshot.dir)
+	} else {
+		s.cleanupAllowed = true
+	}
+	// F4：生成会 update 既有菜单行，失败时恢复快照原值；新增行单独删除。
+	// 菜单恢复必须排在 recordCrudError 之前：台账写下后再追加 message，
+	// 失败原因只留在返回值里，不会进 crud_log。
+	if len(s.menuSnapshot) > 0 {
+		if restoreErr := restoreMenuRules(s.db, s.cfg, s.menuSnapshot); restoreErr != nil {
+			message += fmt.Sprintf("; menu restore failed: %v", restoreErr)
+		}
+	}
+	_ = recordCrudError(s.db, s.cfg, s.logID, message)
+	if len(s.createdMenuIDs) > 0 {
+		_ = s.db.Table(s.cfg.Database.Prefix+"admin_rule").Where("id IN ?", s.createdMenuIDs).Delete(&model.AdminRule{}).Error
+	}
+	unregisterAtomicRoutes(s.opts.UnregisterAtomicRoute, s.registeredRoutes)
+	return nil, fmt.Errorf("%s: %w", stage, cause)
+}
+
+// failErr 走同一失败路径，只返回错误值，便于阶段函数以 error 传播。
+func (s *generateState) failErr(stage string, cause error) error {
+	_, err := s.markFailed(stage, cause)
+	return err
+}
+
+// designTables 物化表结构与索引，返回索引漂移告警。
+func (s *generateState) designTables() ([]string, error) {
+	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
+	getColumns := func(name string) ([]dbschema.Column, error) { return s.tables.GetColumns(name) }
 	// 对齐上游:type=create 时若数据表已存在则先删除重建;
 	// 破坏性确认由前端 generateCheck 弹窗完成,服务端不再拒绝
-	if opts.Type == "create" && tableExists(db, cfg, opts.Table.Name) {
-		if err := tables.DelTable(opts.Table.Name); err != nil {
-			return fail("drop table", err)
+	if s.opts.Type == "create" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
+		if err := s.tables.DelTable(s.opts.Table.Name); err != nil {
+			return nil, s.failErr("drop table", err)
 		}
 	}
-	if opts.Type == "alter" && tableExists(db, cfg, opts.Table.Name) {
-		actualPKs, err := actualPrimaryKeys(db, getTableName(opts.Table.Name, true))
-		if err != nil {
-			return fail("read primary key", err)
+	if s.opts.Type == "alter" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
+		if err := s.guardAlter(getTableName, getColumns); err != nil {
+			return nil, err
 		}
-		specPKs := specPrimaryKeys(opts.Fields)
-		if !sameIdentifiers(actualPKs, specPKs) {
-			return fail("primary key drift", fmt.Errorf("alter does not support primary key changes: database=%q spec=%q; use rebuild or perform a manual migration", strings.Join(actualPKs, ","), strings.Join(specPKs, ",")))
-		}
-		current, err := getColumns(opts.Table.Name)
-		if err != nil {
-			return fail("read existing columns", err)
-		}
-		diffs := deriveAlterDiff(current, opts.Fields)
-		for _, diff := range diffs {
-			if diff.Field.PrimaryKey && diff.Class == DiffRejected {
-				return fail("primary key drift", fmt.Errorf("%s: %s", diff.Field.Name, diff.Reason))
-			}
-		}
-		opts.Table.DesignChange = deriveAlterChanges(current, opts.Fields)
 	}
-	if err := HandleTableDesign(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields); err != nil {
-		return fail("table design", err)
+	if err := HandleTableDesign(s.db, getTableName(s.opts.Table.Name, true), s.opts.Table, s.opts.Fields); err != nil {
+		return nil, s.failErr("table design", err)
 	}
 	// 开发库与部署库形状一致：crud:generate 同样物化 spec 声明的缺失索引
 	// （新建表时 createTableDDL 已内联，此处幂等；已有表 alter 时补建）。
-	indexWarnings, _, err := syncSpecIndexes(db, getTableName(opts.Table.Name, true), opts.Table, opts.Fields)
+	indexWarnings, _, err := syncSpecIndexes(s.db, getTableName(s.opts.Table.Name, true), s.opts.Table, s.opts.Fields)
 	if err != nil {
-		return fail("index sync", err)
+		return nil, s.failErr("index sync", err)
 	}
-	register := opts.RegisterAtomicRoute
-	if register != nil {
-		register = func(method, path string) {
-			registeredRoutes = append(registeredRoutes, atomicRouteRegistration{method: method, path: path})
-			opts.RegisterAtomicRoute(method, path)
+	return indexWarnings, nil
+}
+
+// guardAlter 拒绝 alter 不支持的主键漂移，并把差量写回 designChange。
+func (s *generateState) guardAlter(getTableName func(string, bool) string, getColumns func(string) ([]dbschema.Column, error)) error {
+	actualPKs, err := actualPrimaryKeys(s.db, getTableName(s.opts.Table.Name, true))
+	if err != nil {
+		return s.failErr("read primary key", err)
+	}
+	specPKs := specPrimaryKeys(s.opts.Fields)
+	if !sameIdentifiers(actualPKs, specPKs) {
+		return s.failErr("primary key drift", fmt.Errorf("alter does not support primary key changes: database=%q spec=%q; use rebuild or perform a manual migration", strings.Join(actualPKs, ","), strings.Join(specPKs, ",")))
+	}
+	current, err := getColumns(s.opts.Table.Name)
+	if err != nil {
+		return s.failErr("read existing columns", err)
+	}
+	diffs := deriveAlterDiff(current, s.opts.Fields)
+	for _, diff := range diffs {
+		if diff.Field.PrimaryKey && diff.Class == DiffRejected {
+			return s.failErr("primary key drift", fmt.Errorf("%s: %s", diff.Field.Name, diff.Reason))
 		}
 	}
-	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(opts.Table, opts.Fields, opts.Table.DataScope, getTableName, getColumns, db, register, opts.SkipFrontend, opts.SkipRepo)
+	s.opts.Table.DesignChange = deriveAlterChanges(current, s.opts.Fields)
+	return nil
+}
+
+// writeFiles 渲染并落盘全部代码产物，随后维护主实体级联锚点。
+func (s *generateState) writeFiles() (WebDir, string, error) {
+	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
+	getColumns := func(name string) ([]dbschema.Column, error) { return s.tables.GetColumns(name) }
+	register := s.wrapAtomicRoutes()
+	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(s.opts.Table, s.opts.Fields, s.opts.Table.DataScope, getTableName, getColumns, s.db, register, s.opts.SkipFrontend, s.opts.SkipRepo)
 	if err != nil {
-		return fail("file generation", err)
+		return webViewsDir, tableComment, s.failErr("file generation", err)
 	}
-	if oldParentRepoPath != "" {
+	if s.oldParentRepoPath != "" {
 		// 先清理旧主实体锚点条目（幂等宽容），再注册新指向；均在 wire/build 前。
-		if err := removeCascadeAnchor(oldParentRepoPath, opts.Table.Name); err != nil {
-			return fail("cascade anchor remove", err)
+		if err := removeCascadeAnchor(s.oldParentRepoPath, s.opts.Table.Name); err != nil {
+			return webViewsDir, tableComment, s.failErr("cascade anchor remove", err)
 		}
 	}
-	if parentRepoPath != "" {
+	if s.parentRepoPath != "" {
 		// 方案 A：子表生成成功后自动注册到主实体 repo 的 CascadeOwners() 锚点块
 		//（在 wire/build 之前，保证编译包含改写后的主实体 repo）。
-		if err := applyCascadeAnchor(parentRepoPath, opts.Table.Name, opts.Table.DataScope.InheritFrom.ByColumn); err != nil {
-			return fail("cascade anchor apply", err)
+		if err := applyCascadeAnchor(s.parentRepoPath, s.opts.Table.Name, s.opts.Table.DataScope.InheritFrom.ByColumn); err != nil {
+			return webViewsDir, tableComment, s.failErr("cascade anchor apply", err)
 		}
 	}
-	if opts.Table.DataScope != nil && opts.Table.DataScope.Reassignable && !opts.SkipRepo {
+	if s.opts.Table.DataScope != nil && s.opts.Table.DataScope.Reassignable && !s.opts.SkipRepo {
 		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
 		// 立即按 crud_specs/ 中仍声明 inheritFrom 指向本表的子表重注册（整行
 		// 幂等），消除重置窗口内的静默级联失效；其 repo 已在快照内可整体回滚。
 		// skip-repo 时跳过：repo 文件不重写（保留用户定制），锚点块不会被重置，
 		// 无需重注册；reapply 会改写用户定制的 repo 文件。
-		if err := reapplyCascadeAnchors(DefaultSpecsDir(), opts.Table.Name); err != nil {
-			return fail("cascade anchor heal", err)
+		if err := reapplyCascadeAnchors(DefaultSpecsDir(), s.opts.Table.Name); err != nil {
+			return webViewsDir, tableComment, s.failErr("cascade anchor heal", err)
 		}
 	}
-	if !opts.SkipMenu {
-		// F4：菜单同步会 update 既有行，先快照（含祖先链）供失败回滚。
-		menuSnapshot, err = snapshotMenuRules(db, cfg, GetMenuName(webViewsDir))
-		if err != nil {
-			return fail("menu snapshot", err)
-		}
-		createdMenuIDs, err = CreateMenuWithOptionsAndRecord(db, cfg, webViewsDir, tableComment, opts.Menu)
-		if err != nil {
-			return fail("menu generation", err)
-		}
+	return webViewsDir, tableComment, nil
+}
+
+// wrapAtomicRoutes 记录本次注册的路由，供回滚逐个注销。
+func (s *generateState) wrapAtomicRoutes() func(method, path string) {
+	if s.opts.RegisterAtomicRoute == nil {
+		return nil
 	}
+	return func(method, path string) {
+		s.registeredRoutes = append(s.registeredRoutes, atomicRouteRegistration{method: method, path: path})
+		s.opts.RegisterAtomicRoute(method, path)
+	}
+}
+
+func (s *generateState) syncMenus(webViewsDir WebDir, tableComment string) error {
+	// F4：菜单同步会 update 既有行，先快照（含祖先链）供失败回滚。
+	menuSnapshot, err := snapshotMenuRules(s.db, s.cfg, GetMenuName(webViewsDir))
+	s.menuSnapshot = menuSnapshot
+	if err != nil {
+		return s.failErr("menu snapshot", err)
+	}
+	createdMenuIDs, err := CreateMenuWithOptionsAndRecord(s.db, s.cfg, webViewsDir, tableComment, s.opts.Menu)
+	s.createdMenuIDs = createdMenuIDs
+	if err != nil {
+		return s.failErr("menu generation", err)
+	}
+	return nil
+}
+
+func (s *generateState) runToolchain() error {
 	if err := runWire(); err != nil {
-		return fail("wire", err)
+		return s.failErr("wire", err)
 	}
 	if err := runProjectBuild(); err != nil {
-		return fail("compile", err)
+		return s.failErr("compile", err)
 	}
-	if err := updateCrudStatus(db, cfg, logID, "success"); err != nil {
-		return fail("success log update", err)
+	if err := updateCrudStatus(s.db, s.cfg, s.logID, "success"); err != nil {
+		return s.failErr("success log update", err)
 	}
-	cleanupAllowed = true
-	return &GenerateResult{Files: append(manifest.Generated, manifest.Shared...), LogID: logID, Warnings: indexWarnings}, nil
+	return nil
 }
 
 func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {
@@ -431,12 +581,31 @@ func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) erro
 	return DeleteFromSpecWithHooks(db, cfg, tableName, nil)
 }
 
+// deleteState 承载一次删除的可变状态；DeleteFromSpecWithHooks 只保留锁、
+// 隔离/快照回滚与 panic 恢复，其余阶段以方法拆分且执行顺序不变。
+type deleteState struct {
+	db             *gorm.DB
+	cfg            *conf.Configuration
+	tableName      string
+	unregister     func(method, path string)
+	log            model.Log
+	manifest       FileManifest
+	parentRepoPath string
+	quarantine     *Quarantine
+	shared         *FileSnapshot
+	menuSnapshot   []model.AdminRule
+	menuName       string
+	handlerFile    NameInfo
+	repositoryFile NameInfo
+	className      string
+}
+
 func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName string, unregister func(method, path string)) (retErr error) {
 	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return err
 	}
-	db = lockedDB
+	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister}
 	var fail func(string, error) error
 	defer func() {
 		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
@@ -453,73 +622,121 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 			}
 		}
 	}()
-	if db == nil || cfg == nil {
+	if err := state.prepare(); err != nil {
+		return err
+	}
+	if err := state.openRecovery(); err != nil {
+		return err
+	}
+	fail = state.markFailed
+	if err := state.removeMenus(); err != nil {
+		return err
+	}
+	if err := state.removeProviders(); err != nil {
+		return err
+	}
+	if err := state.runToolchain(); err != nil {
+		return err
+	}
+	return state.finalize()
+}
+
+func (s *deleteState) prepare() error {
+	if err := s.loadLog(); err != nil {
+		return err
+	}
+	if err := s.checkReferrers(); err != nil {
+		return err
+	}
+	return s.buildManifest()
+}
+
+func (s *deleteState) loadLog() error {
+	if s.db == nil || s.cfg == nil {
 		return fmt.Errorf("crud deletion requires database and configuration")
 	}
 	// 生成锁已持有：任何仍为 start 的记录都是进程中断的残留，对账为失败
-	reconcileStaleGeneratingLogs(db, cfg)
-	logPtr, err := latestSuccessfulCrudLog(db, cfg, tableName)
+	reconcileStaleGeneratingLogs(s.db, s.cfg)
+	logPtr, err := latestSuccessfulCrudLog(s.db, s.cfg, s.tableName)
 	if err != nil {
 		return err
 	}
 	if logPtr == nil {
-		return fmt.Errorf("no successful CRUD generation manifest for table %q", tableName)
+		return fmt.Errorf("no successful CRUD generation manifest for table %q", s.tableName)
 	}
-	log := *logPtr
-	if IsProtectedTableWithPrefix(cfg.Database.Prefix, log.Tablename, log.Table.Name) {
-		return fmt.Errorf("crud deletion is forbidden for protected table %q", log.Tablename)
+	s.log = *logPtr
+	if IsProtectedTableWithPrefix(s.cfg.Database.Prefix, s.log.Tablename, s.log.Table.Name) {
+		return fmt.Errorf("crud deletion is forbidden for protected table %q", s.log.Tablename)
 	}
-	if err := ValidateGenerationInput(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields)); err != nil {
+	if err := ValidateGenerationInput(crudmodel.Table(s.log.Table), []crudmodel.Field(s.log.Fields)); err != nil {
 		return err
 	}
 	// 方案 A：子表删除时自动从主实体 repo 的 CascadeOwners() 锚点块移除注册
 	// 条目；主实体文件纳入 shared 快照（删除中途失败可恢复）。
-	parentRepoPath := ""
-	if log.Table.DataScope != nil && log.Table.DataScope.InheritFrom != nil {
-		parentRepoPath, err = parentRepositoryPath(log.Table.DataScope.InheritFrom.Table)
+	if s.log.Table.DataScope != nil && s.log.Table.DataScope.InheritFrom != nil {
+		parentRepoPath, err := parentRepositoryPath(s.log.Table.DataScope.InheritFrom.Table)
 		if err != nil {
 			return err
 		}
+		s.parentRepoPath = parentRepoPath
 	}
-	// 方案 A：删除主实体前检查 inbound inheritFrom 引用——存在声明指向本表的
-	// 子表时拒绝删除（否则子表 Add 运行时悬空、cascade:sync 被阻塞、子表也
-	// 无法重新生成）。声明事实源是 crud_specs/（主实体自身的 spec 不计入）。
-	if referrers, err := findInheritReferrers(DefaultSpecsDir(), tableName); err != nil {
+	return nil
+}
+
+// checkReferrers 拒绝删除仍被 inbound inheritFrom 声明引用的主实体表：
+// 否则子表 Add 运行时悬空、cascade:sync 被阻塞、子表也无法重新生成。
+// 声明事实源是 crud_specs/（主实体自身的 spec 不计入）。
+func (s *deleteState) checkReferrers() error {
+	referrers, err := findInheritReferrers(DefaultSpecsDir(), s.tableName)
+	if err != nil {
 		return err
-	} else if len(referrers) > 0 {
-		return fmt.Errorf("refusing to delete table %q: child table(s) %s still declare inheritFrom pointing at it; delete those child tables or regenerate them with a different inheritFrom first", tableName, strings.Join(referrers, ", "))
 	}
-	manifest, err := BuildFileManifestForFields(crudmodel.Table(log.Table), []crudmodel.Field(log.Fields))
+	if len(referrers) > 0 {
+		return fmt.Errorf("refusing to delete table %q: child table(s) %s still declare inheritFrom pointing at it; delete those child tables or regenerate them with a different inheritFrom first", s.tableName, strings.Join(referrers, ", "))
+	}
+	return nil
+}
+
+func (s *deleteState) buildManifest() error {
+	manifest, err := BuildFileManifestForFields(crudmodel.Table(s.log.Table), []crudmodel.Field(s.log.Fields))
 	if err != nil {
 		return err
 	}
 	// F2：manifest 路径必须归属本模块（或关联 remoteTable 模块），
 	// 仅通过根校验不够——构造的 manifest 可指向允许根下任意文件。
-	joinTables := remoteJoinTables([]crudmodel.Field(log.Fields))
-	if err := validateManifestOwnership(manifest, crudmodel.Table(log.Table), joinTables); err != nil {
+	joinTables := remoteJoinTables([]crudmodel.Field(s.log.Fields))
+	if err := validateManifestOwnership(manifest, crudmodel.Table(s.log.Table), joinTables); err != nil {
 		return err
 	}
-	handlerFile, err := ParseHandlerNameData(log.Table.Name, log.Table.ControllerFile)
+	handlerFile, err := ParseHandlerNameData(s.log.Table.Name, s.log.Table.ControllerFile)
 	if err != nil {
 		return err
 	}
-	repositoryFile, err := ParseRepositoryNameData(log.Table.Name, log.Table.ModelFile)
+	repositoryFile, err := ParseRepositoryNameData(s.log.Table.Name, s.log.Table.ModelFile)
 	if err != nil {
 		return err
 	}
-	className := handlerFile.LastName
-	manifest, err = prepareDeleteManifest(manifest)
+	s.handlerFile = handlerFile
+	s.repositoryFile = repositoryFile
+	s.className = handlerFile.LastName
+	prepared, err := prepareDeleteManifest(manifest)
 	if err != nil {
 		return err
 	}
-	generatedPaths := manifest.Generated
-	quarantine, err := NewQuarantine(generatedPaths)
+	s.manifest = prepared
+	return nil
+}
+
+// openRecovery 建立隔离区（generated 产物）与共享文件快照（provider 等）。
+func (s *deleteState) openRecovery() error {
+	quarantine, err := NewQuarantine(s.manifest.Generated)
 	if err != nil {
 		return err
 	}
-	sharedPaths := append([]string{}, manifest.Shared...)
-	if parentRepoPath != "" {
-		sharedPaths = append(sharedPaths, parentRepoPath)
+	s.quarantine = quarantine
+	sharedPaths := append([]string{}, s.manifest.Shared...)
+	if s.parentRepoPath != "" {
+		sharedPaths = append(sharedPaths, s.parentRepoPath)
 	}
 	shared, err := NewFileSnapshot(sharedPaths)
 	if err != nil {
@@ -527,90 +744,109 @@ func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName str
 		_ = quarantine.Commit()
 		return err
 	}
-	var menuSnapshot []model.AdminRule
-	fail = func(stage string, cause error) error {
-		message := fmt.Sprintf("stage=%s: %v", stage, cause)
-		quarantineRestoreErr := quarantine.Restore()
-		sharedRestoreErr := shared.Restore()
-		if quarantineRestoreErr != nil {
-			message += fmt.Sprintf("; quarantine restore failed: %v; recovery directory preserved: %s", quarantineRestoreErr, quarantine.dir)
-		}
-		if sharedRestoreErr != nil {
-			message += fmt.Sprintf("; shared-file restore failed: %v; recovery directory preserved: %s", sharedRestoreErr, shared.dir)
-		}
-		if quarantineRestoreErr == nil && sharedRestoreErr == nil {
-			if cleanupErr := quarantine.Commit(); cleanupErr != nil {
-				message += fmt.Sprintf("; quarantine cleanup failed: %v; recovery directory preserved: %s", cleanupErr, quarantine.dir)
-			}
-			if cleanupErr := shared.Cleanup(); cleanupErr != nil {
-				message += fmt.Sprintf("; shared cleanup failed: %v; recovery directory preserved: %s", cleanupErr, shared.dir)
-			}
-		}
-		if restoreErr := restoreMenuRules(db, cfg, menuSnapshot); restoreErr != nil {
-			message += "; menu restore failed: " + restoreErr.Error()
-		}
-		_ = recordCrudDeleteError(db, cfg, log.ID, message)
-		return fmt.Errorf("%s", message)
+	s.shared = shared
+	s.menuName = GetMenuName(ParseWebDirNameData(s.log.Table.Name, "lang", s.log.Table.WebViewsDir))
+	return nil
+}
+
+// markFailed 是删除失败的唯一收尾：恢复隔离区与共享文件、恢复菜单、记账。
+func (s *deleteState) markFailed(stage string, cause error) error {
+	message := fmt.Sprintf("stage=%s: %v", stage, cause)
+	quarantineRestoreErr := s.quarantine.Restore()
+	sharedRestoreErr := s.shared.Restore()
+	if quarantineRestoreErr != nil {
+		message += fmt.Sprintf("; quarantine restore failed: %v; recovery directory preserved: %s", quarantineRestoreErr, s.quarantine.dir)
 	}
-	menuName := GetMenuName(ParseWebDirNameData(log.Table.Name, "lang", log.Table.WebViewsDir))
-	menuSnapshot, err = snapshotMenuRules(db, cfg, menuName)
+	if sharedRestoreErr != nil {
+		message += fmt.Sprintf("; shared-file restore failed: %v; recovery directory preserved: %s", sharedRestoreErr, s.shared.dir)
+	}
+	if quarantineRestoreErr == nil && sharedRestoreErr == nil {
+		if cleanupErr := s.quarantine.Commit(); cleanupErr != nil {
+			message += fmt.Sprintf("; quarantine cleanup failed: %v; recovery directory preserved: %s", cleanupErr, s.quarantine.dir)
+		}
+		if cleanupErr := s.shared.Cleanup(); cleanupErr != nil {
+			message += fmt.Sprintf("; shared cleanup failed: %v; recovery directory preserved: %s", cleanupErr, s.shared.dir)
+		}
+	}
+	if restoreErr := restoreMenuRules(s.db, s.cfg, s.menuSnapshot); restoreErr != nil {
+		message += "; menu restore failed: " + restoreErr.Error()
+	}
+	_ = recordCrudDeleteError(s.db, s.cfg, s.log.ID, message)
+	return fmt.Errorf("%s", message)
+}
+
+func (s *deleteState) removeMenus() error {
+	menuSnapshot, err := snapshotMenuRules(s.db, s.cfg, s.menuName)
+	s.menuSnapshot = menuSnapshot
 	if err != nil {
-		return fail("menu snapshot", err)
+		return s.markFailed("menu snapshot", err)
 	}
-	if err := DeleteMenuRules(db, cfg, menuName, true); err != nil {
-		return fail("delete menu", err)
+	if err := DeleteMenuRules(s.db, s.cfg, s.menuName, true); err != nil {
+		return s.markFailed("delete menu", err)
 	}
+	return nil
+}
+
+func (s *deleteState) removeProviders() error {
 	// 移除 provider 条目与路由注册锚点（拍平布局）。
-	handlerProvider := filepath.Join(util.RootPath(), handlerFile.RootFileName, "provider.go")
-	repositoryProvider := filepath.Join(util.RootPath(), repositoryFile.RootFileName, "provider.go")
+	handlerProvider := filepath.Join(util.RootPath(), s.handlerFile.RootFileName, "provider.go")
+	repositoryProvider := filepath.Join(util.RootPath(), s.repositoryFile.RootFileName, "provider.go")
 	routerProvider := filepath.Join(util.RootPath(), "internal", "admin", "router", "provider.go")
 	guardPaths := []string{handlerProvider, repositoryProvider, routerProvider}
-	if err := RemoveProvider(handlerFile.RootFileName, className+"Handler"); err != nil {
-		return fail("remove handler provider", err)
+	if err := RemoveProvider(s.handlerFile.RootFileName, s.className+"Handler"); err != nil {
+		return s.markFailed("remove handler provider", err)
 	}
-	if err := RemoveProvider(repositoryFile.RootFileName, className+"Repository"); err != nil {
-		return fail("remove repository provider", err)
+	if err := RemoveProvider(s.repositoryFile.RootFileName, s.className+"Repository"); err != nil {
+		return s.markFailed("remove repository provider", err)
 	}
-	if err := removeAdminRouterEntry(className); err != nil {
-		return fail("remove router registrar entry", err)
+	if err := removeAdminRouterEntry(s.className); err != nil {
+		return s.markFailed("remove router registrar entry", err)
 	}
-	if err := removeAssociatedModelProviders([]crudmodel.Field(log.Fields), manifest); err != nil {
-		return fail("remove associated model providers", err)
+	if err := removeAssociatedModelProviders([]crudmodel.Field(s.log.Fields), s.manifest); err != nil {
+		return s.markFailed("remove associated model providers", err)
 	}
 	if err := parseDeleteGoFiles(guardPaths...); err != nil {
-		return fail("parse guard", err)
+		return s.markFailed("parse guard", err)
 	}
-	if parentRepoPath != "" {
+	if s.parentRepoPath != "" {
 		// 方案 A：移除子表在主实体 repo 锚点块的注册条目（幂等容忍：主实体
 		// 已删或锚点缺失时直接跳过）；在 wire/build 之前执行。
-		if err := removeCascadeAnchor(parentRepoPath, log.Table.Name); err != nil {
-			return fail("cascade anchor remove", err)
+		if err := removeCascadeAnchor(s.parentRepoPath, s.log.Table.Name); err != nil {
+			return s.markFailed("cascade anchor remove", err)
 		}
 	}
+	return nil
+}
+
+func (s *deleteState) runToolchain() error {
 	if err := runWire(); err != nil {
-		return fail("wire", err)
+		return s.markFailed("wire", err)
 	}
 	if err := runProjectBuild(); err != nil {
-		return fail("compile", err)
+		return s.markFailed("compile", err)
 	}
-	if err := shared.Cleanup(); err != nil {
-		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", shared.dir, err)
+	return nil
+}
+
+func (s *deleteState) finalize() error {
+	if err := s.shared.Cleanup(); err != nil {
+		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", s.shared.dir, err)
 	}
-	if err := quarantine.Commit(); err != nil {
-		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", quarantine.dir, err)
+	if err := s.quarantine.Commit(); err != nil {
+		return fmt.Errorf("delete committed; cleanup directory %q failed: %w", s.quarantine.dir, err)
 	}
 	// 删除后清理为空的目录链（视图、语言）；拍平根包 provider.go 是 wire
 	// 静态聚合根，永不修剪。
-	pruneFrontendEmptyDirs(crudmodel.Table(log.Table))
-	if unregister != nil {
+	pruneFrontendEmptyDirs(crudmodel.Table(s.log.Table))
+	if s.unregister != nil {
 		// 注销键与生成注册键同源：RouteName 由 generateRelativePath 推导
-		routeName := routeNameFromRelativePath(log.Table.GenerateRelativePath, handlerFile.LastName)
+		routeName := routeNameFromRelativePath(s.log.Table.GenerateRelativePath, s.handlerFile.LastName)
 		for _, route := range atomicRoutesForName(routeName) {
-			unregister(route.method, route.path)
+			s.unregister(route.method, route.path)
 		}
 	}
-	if err := updateCrudStatus(db, cfg, log.ID, "delete"); err != nil {
-		_ = recordCrudError(db, cfg, log.ID, "stage=delete log update: "+err.Error())
+	if err := updateCrudStatus(s.db, s.cfg, s.log.ID, "delete"); err != nil {
+		_ = recordCrudError(s.db, s.cfg, s.log.ID, "stage=delete log update: "+err.Error())
 		return err
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 )
 
 func TestNormalizeIDs(t *testing.T) {
+	t.Parallel()
 	invalid := func(id int32) error { return errors.New("bad id " + strconv.Itoa(int(id))) }
 
 	cases := []struct {
@@ -25,6 +26,7 @@ func TestNormalizeIDs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := NormalizeIDs(tc.ids, "widget", tc.rejectEmpty, invalid)
 			if tc.wantErr != "" {
 				if err == nil || err.Error() != tc.wantErr {

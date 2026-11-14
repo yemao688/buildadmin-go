@@ -6,6 +6,7 @@ import (
 )
 
 func TestCompareLedgerColumns(t *testing.T) {
+	t.Parallel()
 	actual := []ledgerColumn{
 		{Name: "version", Type: "bigint unsigned", Nullable: "NO"},
 		{Name: "migration_name", Type: "varchar(100)", Nullable: "YES"},
@@ -20,6 +21,7 @@ func TestCompareLedgerColumns(t *testing.T) {
 }
 
 func TestCompareTrackedLedgerColumns(t *testing.T) {
+	t.Parallel()
 	expected := []ledgerColumnSpec{{
 		Name: "start_time", Type: "timestamp(6)", Nullable: "NO",
 		Precision: 6, CheckPrecision: true, AllowCurrentTimestampDefault: true,

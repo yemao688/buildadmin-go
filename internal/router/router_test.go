@@ -19,6 +19,7 @@ import (
 
 func TestHealthRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	router := gin.New()
 	registerHealthRoute(router)
 
@@ -33,11 +34,13 @@ func TestHealthRoute(t *testing.T) {
 // 验证 gin.Logger 与 /debug/pprof 仅非 release 模式挂载：
 // debug 模式有逐请求 stdout 日志与 pprof 调试端点，release 模式两者都不挂载
 // （pprof 404、全局链无 Logger），健康检查两种模式都不受影响。
+//
+//nolint:paralleltest // 写 gin 全局运行模式，且 InitRouter 写进程级路由快照
 func TestDebugOnlyEndpoints(t *testing.T) {
 	originalMode := gin.Mode()
 	defer gin.SetMode(originalMode)
 
-	t.Run("debug 模式挂载 Logger 与 pprof", func(t *testing.T) {
+	t.Run("debug 模式挂载 Logger 与 pprof", func(t *testing.T) { //nolint:paralleltest // 写 gin 全局模式与路由快照
 		engine := newCompleteRouterWithMode(gin.DebugMode)
 
 		// 全局中间件链包含 gin.Logger（gin.LoggerWithConfig）
@@ -56,7 +59,7 @@ func TestDebugOnlyEndpoints(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code)
 	})
 
-	t.Run("release 模式不挂载 Logger 与 pprof", func(t *testing.T) {
+	t.Run("release 模式不挂载 Logger 与 pprof", func(t *testing.T) { //nolint:paralleltest // 写 gin 全局模式与路由快照
 		engine := newCompleteRouterWithMode(gin.ReleaseMode)
 
 		// 全局中间件链不包含 gin.Logger
@@ -87,6 +90,7 @@ func hasLoggerMiddleware(engine *gin.Engine) bool {
 }
 
 func TestRootRouteServesIndex(t *testing.T) {
+	t.Parallel()
 	const indexContent = "frontend index"
 
 	rootDir := t.TempDir()
@@ -111,6 +115,7 @@ func TestRootRouteServesIndex(t *testing.T) {
 // 的相关挂载片段在测试内注册，不依赖 wire 注入的渠道注册器。
 func TestStaticAssetsCacheHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	const assetContent = "console.log('cache me')"
 	const indexContent = "frontend index"
 
@@ -126,6 +131,7 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 	registerRootRoute(engine, rootDir)
 
 	t.Run("assets 带 immutable 长缓存头", func(t *testing.T) {
+		t.Parallel()
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/assets/app-hash.js", nil))
 
@@ -135,6 +141,7 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 	})
 
 	t.Run("index.html 带 no-cache", func(t *testing.T) {
+		t.Parallel()
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
 
@@ -143,6 +150,7 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 	})
 
 	t.Run("assets 404 不加缓存头（避免缓存缺失 chunk 的 404）", func(t *testing.T) {
+		t.Parallel()
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/assets/missing-hash.js", nil))
 
@@ -153,10 +161,12 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 
 // 是注册顺序回归测试：IpCheck 必须在
 // /healthz、静态资源与 / 之后注册，只覆盖其后挂载的 /admin/* 与 /api/*。
+//
+//nolint:paralleltest // InitRouter 写 pkg/route 进程级路由快照，并行会互相覆盖
 func TestIpBlacklistRegistrationScope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	t.Run("命中黑名单时 admin 与 api 403，healthz 不受影响", func(t *testing.T) {
+	t.Run("命中黑名单时 admin 与 api 403，healthz 不受影响", func(t *testing.T) { //nolint:paralleltest // 调用 InitRouter 写进程级路由快照
 		engine := newCompleteRouterWithBlacklist(func(*gin.Context) (string, error) {
 			return "0.0.0.0/0", nil
 		})
@@ -182,7 +192,7 @@ func TestIpBlacklistRegistrationScope(t *testing.T) {
 		}
 	})
 
-	t.Run("空配置时同一 admin 路由不再 403", func(t *testing.T) {
+	t.Run("空配置时同一 admin 路由不再 403", func(t *testing.T) { //nolint:paralleltest // 调用 InitRouter 写进程级路由快照
 		engine := newCompleteRouterWithBlacklist(func(*gin.Context) (string, error) {
 			return "", nil
 		})
@@ -206,11 +216,13 @@ func newLangTestContext(t *testing.T, path, thinkLang string) *gin.Context {
 
 func TestResolveRequestLang(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	defaultLanFunc := func(lan string, err error) func(ctx context.Context) (string, error) {
 		return func(context.Context) (string, error) { return lan, err }
 	}
 
 	t.Run("/api 无 header 取前台默认语言并规范化", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "")
 		// DefaultLan 返回 seed 值 zh-cn，经 NormalizeLang → zh-CN（pack key）
 		got := resolveRequestLang(c, "zh", defaultLanFunc("zh-cn", nil))
@@ -218,54 +230,63 @@ func TestResolveRequestLang(t *testing.T) {
 	})
 
 	t.Run("/api 无 header 前台默认 en 时返回 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("/api 无 header 空表兜底 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("", nil))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("/api 无 header 查询出错兜底 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("", errors.New("db down")))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("/api 有 header 时 header 优先且规范化", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "zh-cn")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
 		require.Equal(t, "zh-CN", got)
 	})
 
 	t.Run("/api 有 header zh-hant 映射到 zh-Hant", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "zh-hant")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("zh-cn", nil))
 		require.Equal(t, "zh-Hant", got)
 	})
 
 	t.Run("/admin 无 header 默认 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/admin/index/index", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("/admin 有 header en 时返回 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/admin/index/index", "en")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("zh-cn", nil))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("未知路径无 header 默认 en", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/", "")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("en", nil))
 		require.Equal(t, "en", got)
 	})
 
 	t.Run("未知语言原样返回", func(t *testing.T) {
+		t.Parallel()
 		c := newLangTestContext(t, "/api/index/index", "ja")
 		got := resolveRequestLang(c, "zh", defaultLanFunc("zh-cn", nil))
 		require.Equal(t, "ja", got)
@@ -276,6 +297,7 @@ func TestResolveRequestLang(t *testing.T) {
 // 写入 gin context，同一请求内后续解析直接命中缓存，不再重复查库/解析。
 func TestResolveRequestLangCachedPerRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	queries := 0
 	portalDefaultLang := func(context.Context) (string, error) {
 		queries++

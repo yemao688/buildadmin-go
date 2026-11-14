@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidateSpecAcceptsValidRelationsAndFiles(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: orders
 fields:
   - name: id
@@ -34,6 +35,7 @@ fields:
 }
 
 func TestValidateSpecPrimaryKeyAutoIncrementRequiresUnsigned(t *testing.T) {
+	t.Parallel()
 	signed := `name: signed_auto_increment
 fields:
   - name: id
@@ -71,6 +73,7 @@ fields:
 }
 
 func TestValidateSpecRejectsPrimaryKeyRelationAndRemoteFiles(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		yaml string
@@ -130,6 +133,7 @@ fields:
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			_, err := ValidateSpec(writeSpecTest(t, test.yaml))
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want substring %q", err, test.want)
@@ -139,6 +143,7 @@ fields:
 }
 
 func TestValidateSpecDefaultPairing(t *testing.T) {
+	t.Parallel()
 	valid := []string{
 		`name: inferred_input
 fields:
@@ -158,6 +163,7 @@ fields:
 	}
 	for index, yaml := range valid {
 		t.Run("valid_"+string(rune('a'+index)), func(t *testing.T) {
+			t.Parallel()
 			if _, err := ValidateSpec(writeSpecTest(t, yaml)); err != nil {
 				t.Errorf("valid default pairing rejected: %v", err)
 			}
@@ -189,6 +195,7 @@ fields:
 }
 
 func TestValidateSpecReportsRouteAndPathWarnings(t *testing.T) {
+	t.Parallel()
 	routeWarningPath := writeSpecTest(t, `name: route_warning
 fields:
   - {name: id, type: bigint, primaryKey: true}
@@ -233,6 +240,7 @@ fields:
 }
 
 func TestValidateSpecWarnsOnInventedTextSuffix(t *testing.T) {
+	t.Parallel()
 	nonUser := writeSpecTest(t, `name: orders
 fields:
   - name: id
@@ -281,6 +289,7 @@ fields:
 }
 
 func TestValidateSpecsAggregatesErrorsAndWarnings(t *testing.T) {
+	t.Parallel()
 	validPath := writeSpecTest(t, `name: aggregate_warning
 fields:
   - {name: id, type: bigint, primaryKey: true}

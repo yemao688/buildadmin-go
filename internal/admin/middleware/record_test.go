@@ -40,6 +40,7 @@ func (s *recordLogSpy) Record(_ context.Context, actor data_scope.Actor, usernam
 
 func TestRecordReadsBodyBeforeNextAndRecordsParams(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
@@ -70,6 +71,7 @@ func TestRecordReadsBodyBeforeNextAndRecordsParams(t *testing.T) {
 
 func TestRecordAlwaysRecordsEmptyAndInvalidJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		method string
@@ -79,6 +81,7 @@ func TestRecordAlwaysRecordsEmptyAndInvalidJSON(t *testing.T) {
 		{name: "empty", method: http.MethodDelete},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			spy := &recordLogSpy{}
 			record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 			router := gin.New()
@@ -102,6 +105,7 @@ func TestRecordAlwaysRecordsEmptyAndInvalidJSON(t *testing.T) {
 
 func TestRecordCollectsDeleteQueryArrays(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
@@ -123,6 +127,7 @@ func TestRecordCollectsDeleteQueryArrays(t *testing.T) {
 
 func TestRecordDoesNotRecordGet(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
@@ -136,6 +141,7 @@ func TestRecordDoesNotRecordGet(t *testing.T) {
 
 func TestRecordSkipsBodyReadWhenDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: false}}, spy)
 	router := gin.New()
@@ -161,6 +167,7 @@ func TestRecordSkipsBodyReadWhenDisabled(t *testing.T) {
 
 func TestRecordSkipsOversizedBodyCollection(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
@@ -188,6 +195,7 @@ func TestRecordSkipsOversizedBodyCollection(t *testing.T) {
 
 func TestRecordOnlyRecordsAdminWriteRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		method string
@@ -201,6 +209,7 @@ func TestRecordOnlyRecordsAdminWriteRoutes(t *testing.T) {
 		{name: "admin get", method: http.MethodGet, path: "/admin/test"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			spy := &recordLogSpy{}
 			record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 			router := gin.New()
@@ -221,6 +230,7 @@ func TestRecordOnlyRecordsAdminWriteRoutes(t *testing.T) {
 
 func TestRecordPassesExtractedRequestContextToAuditLog(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	spy := &recordLogSpy{}
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, spy)
 	router := gin.New()
@@ -258,6 +268,7 @@ func TestRecordPassesExtractedRequestContextToAuditLog(t *testing.T) {
 
 func TestRecordSkipsAuditLogWhenWriterMissing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	record := newRecord(&conf.Configuration{App: conf.App{AutoWriteAdminLog: true}}, nil)
 	router := gin.New()
 	router.Use(record.Handler())

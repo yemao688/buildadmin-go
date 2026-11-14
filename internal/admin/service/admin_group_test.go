@@ -64,6 +64,7 @@ func switchAuthFixture(t *testing.T, db *gorm.DB, targetRules string) (target mo
 }
 
 func TestAdminGroupServiceSwitchStatusAllowsAuthorizedOperator(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	target := switchAuthFixture(t, db, "1")
 
@@ -75,6 +76,7 @@ func TestAdminGroupServiceSwitchStatusAllowsAuthorizedOperator(t *testing.T) {
 }
 
 func TestAdminGroupServiceSwitchStatusRejectsUnauthorizedOperator(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	// The target group carries rule 3, outside the operator's rule set, so
 	// the operator is not authorized to operate it.
@@ -89,6 +91,7 @@ func TestAdminGroupServiceSwitchStatusRejectsUnauthorizedOperator(t *testing.T) 
 }
 
 func TestAdminGroupServiceSwitchStatusRejectsSelfGroup(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	target := switchAuthFixture(t, db, "1")
 	// The operator is a member of the very group it tries to switch.
@@ -103,6 +106,7 @@ func TestAdminGroupServiceSwitchStatusRejectsSelfGroup(t *testing.T) {
 }
 
 func TestAdminGroupServiceSwitchStatusAllowsSuperAdmin(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	target := switchAuthFixture(t, db, "3")
 
@@ -114,6 +118,7 @@ func TestAdminGroupServiceSwitchStatusAllowsSuperAdmin(t *testing.T) {
 }
 
 func TestAdminGroupServiceHandleRulesDeduplicates(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
@@ -134,6 +139,7 @@ func TestAdminGroupServiceHandleRulesDeduplicates(t *testing.T) {
 // Group::handleRules：非超管提交"拥有自己全部权限"的分组被拒绝（防止复制
 // 自己的权限集给下级）。
 func TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
@@ -149,6 +155,7 @@ func TestAdminGroupServiceHandleRulesRejectsAllRightsForNonSuper(t *testing.T) {
 // 对齐 PHP 上游：
 // 非超管提交超出自己可分配范围的分组权限被拒绝。
 func TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
@@ -166,6 +173,7 @@ func TestAdminGroupServiceHandleRulesRejectsOutOfRangeForNonSuper(t *testing.T) 
 // 提交全部规则时获得超管级分组（rules="*"）；非超管即使提交全部规则也被
 // "拥有自己全部权限"规则拒绝。
 func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
@@ -187,6 +195,7 @@ func TestAdminGroupServiceHandleRulesAllowsSuperAdminStar(t *testing.T) {
 // service 批量补全：超管标识、首条规则标题（多权限追加"等 N 项"）与无权限
 // 文案，且 i18n 通过 translate 回调注入。
 func TestAdminGroupServiceListForOperatorDecoratesRules(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)
@@ -216,6 +225,7 @@ func TestAdminGroupServiceListForOperatorDecoratesRules(t *testing.T) {
 // 验证非超管的可见
 // 范围：普通列表合并自己所在分组，absoluteAuth 只保留有资格管理的分组。
 func TestAdminGroupServiceListForOperatorFiltersByAuthorization(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminGroupServiceFixture(t)
 	createRuleFixture(t, db, 1)
 	createRuleFixture(t, db, 2)

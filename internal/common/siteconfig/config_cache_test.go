@@ -39,7 +39,6 @@ func newCacheTestService(t *testing.T, dbName string) (*Service, *gorm.DB) {
 
 func cacheTestRequest(t *testing.T) *gin.Context {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 	return c
@@ -48,6 +47,8 @@ func cacheTestRequest(t *testing.T) *gin.Context {
 // 验证 H2 进程内缓存：首次查库、二次走缓存、显式
 // 失效后重查、分组隔离与副本防污染。
 func TestGetKVByGroupCache(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	s, db := newCacheTestService(t, "siteconfig-cache")
 
 	kv, err := s.GetKVByGroup(cacheTestRequest(t), "basics")
@@ -84,6 +85,8 @@ func TestGetKVByGroupCache(t *testing.T) {
 }
 
 // 验证 TTL 过期后自动重查。
+//
+//nolint:paralleltest // 本用例临时改写包级 siteconfigTTL 并在 defer 恢复，并行会与其它用例的 TTL 读取竞争
 func TestGetKVByGroupCacheTTLExpiry(t *testing.T) {
 	s, db := newCacheTestService(t, "siteconfig-cache-ttl")
 
@@ -105,6 +108,8 @@ func TestGetKVByGroupCacheTTLExpiry(t *testing.T) {
 // 验证请求事务内的读取绕过缓存：
 // 事务内可能看到未提交数据，不能入缓存；事务回滚后全局缓存保持旧快照。
 func TestGetKVByGroupCacheBypassInTransaction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	s, db := newCacheTestService(t, "siteconfig-cache-tx")
 
 	// 预热缓存（旧快照）

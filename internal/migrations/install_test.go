@@ -3,6 +3,7 @@ package migrations
 import "testing"
 
 func TestMigrationRegistry(t *testing.T) {
+	t.Parallel()
 	official := OfficialMigrations()
 	if err := ValidateOfficialMigrations(official); err != nil {
 		t.Fatal(err)
@@ -19,6 +20,7 @@ func TestMigrationRegistry(t *testing.T) {
 }
 
 func TestSeedMarker(t *testing.T) {
+	t.Parallel()
 	if installDataVersion != 20230620180916 || installDataName != "InstallData" {
 		t.Fatal("unexpected install marker")
 	}

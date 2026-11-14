@@ -1,6 +1,7 @@
 package crudgen
 
 import (
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/data_scope"
 	"fmt"
 	"os"
@@ -23,6 +24,7 @@ func writeSpecTest(t *testing.T, content string) string {
 }
 
 func TestLoadSpecRejectsLegacyCascadeOwners(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: user_order
 comment: User order
 dataScope:
@@ -88,6 +90,7 @@ fields:
 }
 
 func TestLoadSpecParsesInheritFrom(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: order_item
 comment: Order item
 dataScope:
@@ -114,6 +117,7 @@ fields:
 }
 
 func TestLoadSpecDefaultsAndMenu(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: demo
 comment: Demo
 menu:
@@ -147,6 +151,7 @@ fields:
 }
 
 func TestLoadSpecBindsLowercaseRemoteRelationKeys(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: child
 fields:
   - name: id
@@ -173,6 +178,7 @@ fields:
 }
 
 func TestLoadSpecRejectsUnsafeField(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: demo
 fields:
   - name: "bad;drop"
@@ -192,6 +198,7 @@ fields:
 }
 
 func TestLoadSpecNormalizesNullKeys(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: null_keys
 fields:
   - name: id
@@ -233,6 +240,7 @@ fields:
 }
 
 func TestLoadSpecTimestampDefaultsAndFormFieldDerivation(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: timestamp_defaults
 fields:
   - name: id
@@ -276,6 +284,7 @@ fields:
 }
 
 func TestLoadSpecExplicitFormFieldsAreAuthoritative(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: explicit_form_fields
 formFields: []
 fields:
@@ -298,6 +307,7 @@ fields:
 }
 
 func TestLoadSpecDerivedColumnFieldsRetainRelationBackedFKs(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: relation_columns
 fields:
   - name: id
@@ -355,6 +365,7 @@ fields:
 }
 
 func TestLoadSpecExplicitColumnFieldsRetainRelationFK(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: explicit_relation_fk
 columnFields: [id, user_id]
 fields:
@@ -384,6 +395,7 @@ fields:
 }
 
 func TestLoadSpecCompletenessOptions(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name, yaml, wantPath, wantDB string
 		wantColumns                  int
@@ -414,6 +426,7 @@ func TestLoadSpecCompletenessOptions(t *testing.T) {
 		{"all overrides", `name: orders\ngenerateRelativePath: base/orders\nmodelFile: internal/admin/model/custom.go\ncontrollerFile: internal/admin/handler/custom.go\nwebViewsDir: web/src/views/backend/custom\nfields:\n  - {name: id, type: bigint, primaryKey: true}`, "internal/admin/model/custom.go", "internal/admin/handler/custom.go", "web/src/views/backend/custom"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			opts, err := LoadSpec(writeSpecTest(t, tc.yaml))
 			if err != nil {
 				t.Fatal(err)
@@ -426,6 +439,7 @@ func TestLoadSpecCompletenessOptions(t *testing.T) {
 }
 
 func TestLoadSpecDefaultTypesAndRemoteAlias(t *testing.T) {
+	t.Parallel()
 	yaml := `name: defaults
 fields:
   - {name: id, type: bigint, primaryKey: true}
@@ -458,6 +472,7 @@ fields:
 }
 
 func TestLoadSpecSearchInputAttrTextIsTypedAndDeterministic(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, "name: attrs\nfields:\n  - {name: id, type: bigint, primaryKey: true}\n  - name: title\n    type: varchar\n    table:\n      comSearchInputAttr: |\n        z-index=2\n        disabled=false\n        \n        placeholder=a=b\n")
 	opts, err := LoadSpec(path)
 	if err != nil {
@@ -474,6 +489,7 @@ func TestLoadSpecSearchInputAttrTextIsTypedAndDeterministic(t *testing.T) {
 }
 
 func TestLoadSpecRejectsInvalidSearchInputAttr(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, "name: attrs\nfields:\n  - {name: id, type: bigint, primaryKey: true}\n  - name: title\n    type: varchar\n    table:\n      comSearchInputAttr: |\n        invalid-entry\n")
 	if _, err := LoadSpec(path); err == nil {
 		t.Fatal("invalid search input attr accepted")
@@ -481,6 +497,7 @@ func TestLoadSpecRejectsInvalidSearchInputAttr(t *testing.T) {
 }
 
 func TestLoadSpecRejectsInvalidCompletenessOptions(t *testing.T) {
+	t.Parallel()
 	for _, yaml := range []string{
 		`name: bad\ndatabaseConnection: postgres\nfields:\n  - {name: id, type: int, primaryKey: true}`,
 		`name: bad\ngenerateRelativePath: ../escape\nfields:\n  - {name: id, type: int, primaryKey: true}`,
@@ -494,6 +511,7 @@ func TestLoadSpecRejectsInvalidCompletenessOptions(t *testing.T) {
 }
 
 func TestLoadSpecRemotePkValidation(t *testing.T) {
+	t.Parallel()
 	base := "name: orders\nfields:\n  - {name: id, type: int, primaryKey: true}\n  - name: owner_id\n    type: int\n    form:\n      remoteTable: owner\n      remotePk: %s\n"
 	for _, remotePk := range []string{"uuid", "owner.uuid"} {
 		if _, err := LoadSpec(writeSpecTest(t, fmt.Sprintf(base, remotePk))); err != nil {
@@ -508,6 +526,18 @@ func TestLoadSpecRemotePkValidation(t *testing.T) {
 }
 
 func TestLoadSpecBooleanMultiFlagsPreserveFalseAndTrue(t *testing.T) {
+	t.Parallel()
+	opts, err := loadBooleanMultiFlagsSpec(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertRemoteMultiFlags(t, opts.Fields[1], opts.Fields[2])
+	assertImageFileMultiFlags(t, opts.Fields[3], opts.Fields[4], opts.Fields[5], opts.Fields[6])
+	assertMultiFlagOverrides(t, opts.Fields)
+}
+
+func loadBooleanMultiFlagsSpec(t *testing.T) (*GenerateOptions, error) {
+	t.Helper()
 	path := writeSpecTest(t, `name: boolean_flags
 fields:
   - {name: id, type: int, primaryKey: true}
@@ -544,23 +574,32 @@ fields:
     form:
       fileMulti: true
 `)
-	opts, err := LoadSpec(path)
-	if err != nil {
-		t.Fatal(err)
+	return LoadSpec(path)
+}
+
+func assertRemoteMultiFlags(t *testing.T, single, multi crudmodel.Field) {
+	t.Helper()
+	if single.Form.SelectMulti != "" || analyseField(single).DesignType != "remoteSelect" {
+		t.Fatalf("false selectMulti promoted field: %+v", single)
 	}
-	if opts.Fields[1].Form.SelectMulti != "" || analyseField(opts.Fields[1]).DesignType != "remoteSelect" {
-		t.Fatalf("false selectMulti promoted field: %+v", opts.Fields[1])
+	if multi.Form.SelectMulti != "1" || analyseField(multi).DesignType != "remoteSelects" {
+		t.Fatalf("true selectMulti did not promote field: %+v", multi)
 	}
-	if opts.Fields[2].Form.SelectMulti != "1" || analyseField(opts.Fields[2]).DesignType != "remoteSelects" {
-		t.Fatalf("true selectMulti did not promote field: %+v", opts.Fields[2])
+}
+
+func assertImageFileMultiFlags(t *testing.T, falseImage, trueImage, falseFile, trueFile crudmodel.Field) {
+	t.Helper()
+	if falseImage.Form.ImageMulti != "" || analyseField(falseImage).DesignType != "image" || falseFile.Form.FileMulti != "" || analyseField(falseFile).DesignType != "file" {
+		t.Fatalf("false image/file flags changed design types: %+v %+v", falseImage, falseFile)
 	}
-	if opts.Fields[3].Form.ImageMulti != "" || analyseField(opts.Fields[3]).DesignType != "image" || opts.Fields[5].Form.FileMulti != "" || analyseField(opts.Fields[5]).DesignType != "file" {
-		t.Fatalf("false image/file flags changed design types: %+v %+v", opts.Fields[3], opts.Fields[5])
+	if trueImage.Form.ImageMulti != "1" || analyseField(trueImage).DesignType != "images" || trueFile.Form.FileMulti != "1" || analyseField(trueFile).DesignType != "files" {
+		t.Fatalf("true image/file flags did not promote design types: %+v %+v", trueImage, trueFile)
 	}
-	if opts.Fields[4].Form.ImageMulti != "1" || analyseField(opts.Fields[4]).DesignType != "images" || opts.Fields[6].Form.FileMulti != "1" || analyseField(opts.Fields[6]).DesignType != "files" {
-		t.Fatalf("true image/file flags did not promote design types: %+v %+v", opts.Fields[4], opts.Fields[6])
-	}
-	overrides := buildModelFieldTypeOverrides(opts.Fields)
+}
+
+func assertMultiFlagOverrides(t *testing.T, fields []crudmodel.Field) {
+	t.Helper()
+	overrides := buildModelFieldTypeOverrides(fields)
 	if _, ok := overrides["owner_id"]; ok {
 		t.Fatalf("false select flag created adapter override: %+v", overrides)
 	}
@@ -570,6 +609,7 @@ fields:
 }
 
 func TestLoadSpecPreservesFractionalNumberStep(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: fractional_step
 fields:
   - {name: id, type: int, primaryKey: true}
@@ -589,6 +629,7 @@ fields:
 }
 
 func TestLoadSpecNullDefaultNormalizesNullability(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, "name: null_defaults\nfields:\n  - {name: id, type: int, primaryKey: true}\n  - {name: nullable, type: varchar, defaultType: NULL}\n  - {name: explicit, type: varchar, defaultType: NULL, null: false}\n")
 	opts, err := LoadSpec(path)
 	if err != nil {
@@ -600,6 +641,7 @@ func TestLoadSpecNullDefaultNormalizesNullability(t *testing.T) {
 }
 
 func TestLoadSpecDefaultsDoNotOverrideExplicitAttributes(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: explicit_attrs
 fields:
   - name: id

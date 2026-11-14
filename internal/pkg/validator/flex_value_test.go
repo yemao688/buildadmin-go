@@ -10,6 +10,7 @@ import (
 )
 
 func TestCommaJoined(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -28,6 +29,7 @@ func TestCommaJoined(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got CommaJoined
 			err := json.Unmarshal([]byte(test.data), &got)
 			if test.fail {
@@ -47,6 +49,7 @@ func TestCommaJoined(t *testing.T) {
 }
 
 func TestKeyValueArray(t *testing.T) {
+	t.Parallel()
 	valid := `[ {"key":"k1","value":"v1"}, {"key":"k2","value":"v2"} ]`
 	tests := []struct {
 		name string
@@ -66,6 +69,7 @@ func TestKeyValueArray(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got KeyValueArray
 			err := json.Unmarshal([]byte(test.data), &got)
 			if test.fail {
@@ -84,6 +88,7 @@ func TestKeyValueArray(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 测试内改写进程级 time.Local，与并行用例会互相竞争
 func TestFlexTimes(t *testing.T) {
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
@@ -112,7 +117,7 @@ func TestFlexTimes(t *testing.T) {
 		{"clock rejects invalid hour", `"24:00:00"`, func() any { return new(FlexClock) }, FlexClock(""), true},
 		{"clock rejects fractional seconds", `"12:34:56.1"`, func() any { return new(FlexClock) }, FlexClock(""), true},
 	}
-	for _, test := range tests {
+	for _, test := range tests { //nolint:paralleltest // 子测试共享 time.Local 改写，必须串行
 		t.Run(test.name, func(t *testing.T) {
 			got := test.new()
 			err := json.Unmarshal([]byte(test.data), got)
@@ -154,6 +159,7 @@ func flexTimeValue(value any) time.Time {
 	}
 }
 
+//nolint:paralleltest // 测试内改写进程级 time.Local，与并行用例会互相竞争
 func TestFlexUnixTime(t *testing.T) {
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
@@ -177,7 +183,7 @@ func TestFlexUnixTime(t *testing.T) {
 		{"bool rejected", `true`, 0, true},
 		{"other format rejected", `"2026/07/25"`, 0, true},
 	}
-	for _, test := range tests {
+	for _, test := range tests { //nolint:paralleltest // 子测试共享 time.Local 改写，必须串行
 		t.Run(test.name, func(t *testing.T) {
 			var got FlexUnixTime
 			err := json.Unmarshal([]byte(test.data), &got)
@@ -197,6 +203,7 @@ func TestFlexUnixTime(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 测试内改写进程级 time.Local，与并行用例会互相竞争
 func TestFlexJSONOutput(t *testing.T) {
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
@@ -226,7 +233,7 @@ func TestFlexJSONOutput(t *testing.T) {
 		{"formatted unix zero", FlexFormattedUnixTime(0), `null`},
 		{"formatted unix value", FlexFormattedUnixTime(unix), `"2026-07-25 12:34:56"`},
 	}
-	for _, test := range tests {
+	for _, test := range tests { //nolint:paralleltest // 子测试共享 time.Local 改写，必须串行
 		t.Run(test.name, func(t *testing.T) {
 			got, err := json.Marshal(test.value)
 			if err != nil {
@@ -245,6 +252,7 @@ func TestFlexJSONOutput(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 测试内改写进程级 time.Local，与并行用例会互相竞争
 func TestFlexFormattedUnixTimeReusesUnixInputAndStorage(t *testing.T) {
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
@@ -267,13 +275,19 @@ func TestFlexFormattedUnixTimeReusesUnixInputAndStorage(t *testing.T) {
 	}
 }
 
-func TestFlexSQLScanAndValue(t *testing.T) {
+// withTestLocal 固定 time.Local 为 +08:00 并返回对应时刻，供本文件多个
+// scan/value 场景复用；恢复原值由 t.Cleanup 完成。
+func withTestLocal(t *testing.T) time.Time {
+	t.Helper()
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
 	time.Local = local
 	t.Cleanup(func() { time.Local = original })
+	return time.Date(2026, 7, 25, 12, 34, 56, 0, local)
+}
 
-	when := time.Date(2026, 7, 25, 12, 34, 56, 0, local)
+func testFlexDateTimeScan(t *testing.T, when time.Time) {
+	t.Helper()
 	var dateTime FlexDateTime
 	for _, input := range []any{when, "2026-07-25 12:34:56", []byte("2026-07-25 12:34:56"), nil} {
 		if err := dateTime.Scan(input); err != nil {
@@ -286,7 +300,10 @@ func TestFlexSQLScanAndValue(t *testing.T) {
 	if err := dateTime.Scan("2026-07-25 12:34:56"); err != nil || !time.Time(dateTime).Equal(when) {
 		t.Fatalf("FlexDateTime scan = %v, err %v", dateTime, err)
 	}
+}
 
+func testFlexSimpleTypeScans(t *testing.T) {
+	t.Helper()
 	var date FlexDate
 	if err := date.Scan([]byte("2026-07-25")); err != nil || time.Time(date).Format("2006-01-02") != "2026-07-25" {
 		t.Fatalf("FlexDate scan = %v, err %v", date, err)
@@ -299,6 +316,10 @@ func TestFlexSQLScanAndValue(t *testing.T) {
 	if err := comma.Scan([]byte("a,b")); err != nil || comma != "a,b" {
 		t.Fatalf("CommaJoined scan = %q, err %v", comma, err)
 	}
+}
+
+func testFlexKeyValueArrayScan(t *testing.T) {
+	t.Helper()
 	var options KeyValueArray
 	if err := options.Scan(`[ {"key":"k","value":"v"} ]`); err != nil {
 		t.Fatal(err)
@@ -306,6 +327,10 @@ func TestFlexSQLScanAndValue(t *testing.T) {
 	if got, _ := json.Marshal(options); string(got) != `[{"key":"k","value":"v"}]` {
 		t.Fatalf("KeyValueArray scan output = %s", got)
 	}
+}
+
+func testFlexUnixTimeScan(t *testing.T, when time.Time) {
+	t.Helper()
 	var unix FlexUnixTime
 	if err := unix.Scan(when); err != nil || unix != FlexUnixTime(when.Unix()) {
 		t.Fatalf("FlexUnixTime time scan = %d, err %v", unix, err)
@@ -313,27 +338,49 @@ func TestFlexSQLScanAndValue(t *testing.T) {
 	if err := unix.Scan([]byte("2026-07-25 12:34:56")); err != nil || unix != FlexUnixTime(when.Unix()) {
 		t.Fatalf("FlexUnixTime string scan = %d, err %v", unix, err)
 	}
+	if value, err := unix.Value(); err != nil || value != int64(when.Unix()) {
+		t.Fatalf("FlexUnixTime.Value() = %v, err %v", value, err)
+	}
+}
+
+func testFlexValueOutputs(t *testing.T) {
+	t.Helper()
+	var dateTime FlexDateTime
 	if _, err := dateTime.Value(); err != nil {
+		t.Fatal(err)
+	}
+	var date FlexDate
+	if err := date.Scan([]byte("2026-07-25")); err != nil {
 		t.Fatal(err)
 	}
 	if value, err := date.Value(); err != nil || value == nil {
 		t.Fatalf("FlexDate.Value() = %v, err %v", value, err)
 	}
+	var comma CommaJoined
+	if err := comma.Scan([]byte("a,b")); err != nil {
+		t.Fatal(err)
+	}
 	if value, err := comma.Value(); err != nil || value != "a,b" {
 		t.Fatalf("CommaJoined.Value() = %v, err %v", value, err)
+	}
+	var options KeyValueArray
+	if err := options.Scan(`[ {"key":"k","value":"v"} ]`); err != nil {
+		t.Fatal(err)
 	}
 	if value, err := options.Value(); err != nil || value != `[ {"key":"k","value":"v"} ]` {
 		t.Fatalf("KeyValueArray.Value() = %v, err %v", value, err)
 	}
+	var clock FlexClock
 	if _, err := clock.Value(); err != nil {
 		t.Fatal(err)
 	}
 	if value, err := (FlexClock("")).Value(); err != nil || value != "" {
 		t.Fatalf("empty FlexClock.Value() = %v, err %v", value, err)
 	}
-	if value, err := unix.Value(); err != nil || value != int64(when.Unix()) {
-		t.Fatalf("FlexUnixTime.Value() = %v, err %v", value, err)
-	}
+}
+
+func testFlexZeroValueOutputs(t *testing.T) {
+	t.Helper()
 	if value, err := (FlexUnixTime(0)).Value(); err != nil || value != int64(0) {
 		t.Fatalf("zero FlexUnixTime.Value() = %v, err %v", value, err)
 	}
@@ -341,9 +388,21 @@ func TestFlexSQLScanAndValue(t *testing.T) {
 	if value, err := zero.Value(); err != nil || value != nil {
 		t.Fatalf("zero FlexDateTime.Value() = %v, err %v", value, err)
 	}
+	var clock FlexClock
 	if err := clock.Scan(true); err == nil {
 		t.Fatal("unsupported clock scan type must fail")
 	}
+}
+
+//nolint:paralleltest // withTestLocal 改写进程级 time.Local，与并行用例会互相竞争
+func TestFlexSQLScanAndValue(t *testing.T) {
+	when := withTestLocal(t)
+	testFlexDateTimeScan(t, when)
+	testFlexSimpleTypeScans(t)
+	testFlexKeyValueArrayScan(t)
+	testFlexUnixTimeScan(t, when)
+	testFlexValueOutputs(t)
+	testFlexZeroValueOutputs(t)
 }
 
 type FlexValueInput struct {
@@ -366,6 +425,7 @@ type FlexValueModel struct {
 	Year     FlexYear
 }
 
+//nolint:paralleltest // 测试内改写进程级 time.Local，与并行用例会互相竞争
 func TestFlexValueCopierRoundTrip(t *testing.T) {
 	local := time.FixedZone("test-local", 8*60*60)
 	original := time.Local
@@ -423,6 +483,7 @@ func TestFlexValueCopierRoundTrip(t *testing.T) {
 }
 
 func TestFlexYearCopierPreservesAbsentAndExplicitZero(t *testing.T) {
+	t.Parallel()
 	type input struct{ Year FlexYear }
 	type output struct{ Year FlexYear }
 	for _, test := range []struct {
@@ -433,6 +494,7 @@ func TestFlexYearCopierPreservesAbsentAndExplicitZero(t *testing.T) {
 		{"explicit zero", FlexYear("0")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got output
 			if err := copier.Copy(&got, &input{Year: test.in}); err != nil {
 				t.Fatal(err)
@@ -445,6 +507,7 @@ func TestFlexYearCopierPreservesAbsentAndExplicitZero(t *testing.T) {
 }
 
 func TestFlexStatusCopierToPlainString(t *testing.T) {
+	t.Parallel()
 	// admin_rule/admin_group/security 各 handler 经 copier.Copy 把请求
 	// DTO 的 Status（FlexStatus）拷到 model.Status（string）：底层类型同为
 	// string，copier 走 ConvertibleTo 直接转换，无需显式 string() 转换。
@@ -460,6 +523,7 @@ func TestFlexStatusCopierToPlainString(t *testing.T) {
 		{"empty", FlexStatus(""), ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got output
 			if err := copier.Copy(&got, &input{Status: test.in}); err != nil {
 				t.Fatal(err)

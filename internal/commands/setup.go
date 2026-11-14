@@ -194,13 +194,8 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 	}
 	defer closeSetupDB(db)
 
-	if !configExists {
-		if err := r.deps.writeBaseConfig(r.configPath, input.database, r.deps.generateTokenKey()); err != nil {
-			return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
-		}
-		if err := r.deps.writeAppEnv(r.configPath, options.env); err != nil {
-			return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
-		}
+	if err := r.writeSetupConfig(configExists, input, options.env); err != nil {
+		return err
 	}
 
 	configuration, err := loadSetupConfiguration(r.rootPath, r.configPath)
@@ -219,6 +214,32 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		Prefix:   input.database.Prefix,
 	}
 
+	if err := r.runSetupMigrations(db, configuration); err != nil {
+		return err
+	}
+	if err := r.runSetupCrudApply(db, configuration); err != nil {
+		return err
+	}
+	return r.completeSetup(db, options, input, configuration, console)
+}
+
+// writeSetupConfig 在配置尚不存在时写入基座配置与 app.env；已存在则保持
+// 原文件不动（沿用既有连接信息）。
+func (r setupRunner) writeSetupConfig(configExists bool, input setupInput, env string) error {
+	if configExists {
+		return nil
+	}
+	if err := r.deps.writeBaseConfig(r.configPath, input.database, r.deps.generateTokenKey()); err != nil {
+		return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
+	}
+	if err := r.deps.writeAppEnv(r.configPath, env); err != nil {
+		return fmt.Errorf("写入 configs/config.yaml 失败: %w", err)
+	}
+	return nil
+}
+
+// runSetupMigrations 执行三轨迁移并输出统计行。
+func (r setupRunner) runSetupMigrations(db *gorm.DB, configuration *conf.Configuration) error {
 	report, err := r.deps.runMigrations(db, configuration)
 	if err != nil {
 		_, _ = fmt.Fprintf(r.out, "数据库迁移失败: %v\n", err)
@@ -229,7 +250,12 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		_, _ = fmt.Fprint(r.out, "，已写入初始数据")
 	}
 	_, _ = fmt.Fprintln(r.out)
+	return nil
+}
 
+// runSetupCrudApply 执行 spec 到库的 apply 并输出未受 spec 管理的列提示与
+// 每个变更表的动作行。
+func (r setupRunner) runSetupCrudApply(db *gorm.DB, configuration *conf.Configuration) error {
 	results, applyErr := r.deps.runCrudApply(db, configuration)
 	if applyErr != nil {
 		_, _ = fmt.Fprintf(r.out, "CRUD apply 失败: %v\n", applyErr)
@@ -249,7 +275,11 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 		}
 		_, _ = fmt.Fprintf(r.out, "CRUD apply %-9s %s\n", string(result.Action), result.Table)
 	}
+	return nil
+}
 
+// completeSetup 构建前端、写管理员/站点配置与完成锁，并输出登录信息。
+func (r setupRunner) completeSetup(db *gorm.DB, options setupOptions, input setupInput, configuration *conf.Configuration, console *setupConsole) error {
 	if err := r.handleFrontend(options, configuration, console); err != nil {
 		return err
 	}
@@ -437,57 +467,11 @@ func (r setupRunner) collectSetupInput(options setupOptions, existing *conf.Conf
 		}
 	}
 
-	database := installer.Database{}
-	var err error
-	database.Hostname, err = console.value(options.dbHost, options.provided["db-host"], defaults.host, "MySQL host", options.yes)
+	database, err := r.collectDatabaseInput(options, defaults, console)
 	if err != nil {
 		return setupInput{}, err
 	}
-	database.Hostport, err = console.value(options.dbPort, options.provided["db-port"], defaults.port, "MySQL port", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	if database.Hostport == "" {
-		return setupInput{}, errors.New("MySQL port 不能为空")
-	}
-	if _, err := strconv.Atoi(database.Hostport); err != nil {
-		return setupInput{}, fmt.Errorf("MySQL port 无效: %q", database.Hostport)
-	}
-	database.Database, err = console.value(options.dbName, options.provided["db-name"], defaults.database, "MySQL database", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	database.Username, err = console.value(options.dbUser, options.provided["db-user"], defaults.username, "MySQL username", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	database.Password, err = console.secret(options.dbPassword, options.provided["db-password"], defaults.password, "MySQL password", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	database.Prefix, err = console.value(options.dbPrefix, options.provided["db-prefix"], defaults.prefix, "table prefix", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-
-	adminName, err := console.value(options.adminName, options.provided["admin-name"], defaultSetupAdmin, "管理员用户名（回车使用默认 admin）", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	adminPassword, err := console.secret(options.adminPassword, options.provided["admin-password"], "", "管理员密码", options.yes)
-	if err != nil {
-		return setupInput{}, err
-	}
-	if !options.yes && !options.provided["admin-password"] {
-		confirmed, confirmErr := console.secret("", false, "", "确认管理员密码", false)
-		if confirmErr != nil {
-			return setupInput{}, confirmErr
-		}
-		if adminPassword != confirmed {
-			return setupInput{}, errors.New("两次输入的管理员密码不一致")
-		}
-	}
-	siteName, err := console.value(options.siteName, options.provided["site-name"], defaultSetupSite, "站点名称", options.yes)
+	adminName, adminPassword, siteName, err := r.collectAdminInput(options, console)
 	if err != nil {
 		return setupInput{}, err
 	}
@@ -495,6 +479,70 @@ func (r setupRunner) collectSetupInput(options setupOptions, existing *conf.Conf
 		return setupInput{}, errors.New("MySQL 用户名、MySQL 密码和管理员密码不能为空")
 	}
 	return setupInput{database: database, admin: adminName, password: adminPassword, siteName: siteName}, nil
+}
+
+// collectDatabaseInput 按固定顺序采集 MySQL 连接信息（host/port/库名/
+// 用户名/密码/表前缀），非空的 port 必须是整数。
+func (r setupRunner) collectDatabaseInput(options setupOptions, defaults setupDatabaseDefaultsValue, console *setupConsole) (installer.Database, error) {
+	database := installer.Database{}
+	var err error
+	database.Hostname, err = console.value(options.dbHost, options.provided["db-host"], defaults.host, "MySQL host", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	database.Hostport, err = console.value(options.dbPort, options.provided["db-port"], defaults.port, "MySQL port", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	if database.Hostport == "" {
+		return installer.Database{}, errors.New("MySQL port 不能为空")
+	}
+	if _, err := strconv.Atoi(database.Hostport); err != nil {
+		return installer.Database{}, fmt.Errorf("MySQL port 无效: %q", database.Hostport)
+	}
+	database.Database, err = console.value(options.dbName, options.provided["db-name"], defaults.database, "MySQL database", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	database.Username, err = console.value(options.dbUser, options.provided["db-user"], defaults.username, "MySQL username", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	database.Password, err = console.secret(options.dbPassword, options.provided["db-password"], defaults.password, "MySQL password", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	database.Prefix, err = console.value(options.dbPrefix, options.provided["db-prefix"], defaults.prefix, "table prefix", options.yes)
+	if err != nil {
+		return installer.Database{}, err
+	}
+	return database, nil
+}
+
+// collectAdminInput 采集管理员用户名/密码（交互模式下二次确认）与站点名。
+func (r setupRunner) collectAdminInput(options setupOptions, console *setupConsole) (string, string, string, error) {
+	adminName, err := console.value(options.adminName, options.provided["admin-name"], defaultSetupAdmin, "管理员用户名（回车使用默认 admin）", options.yes)
+	if err != nil {
+		return "", "", "", err
+	}
+	adminPassword, err := console.secret(options.adminPassword, options.provided["admin-password"], "", "管理员密码", options.yes)
+	if err != nil {
+		return "", "", "", err
+	}
+	if !options.yes && !options.provided["admin-password"] {
+		confirmed, confirmErr := console.secret("", false, "", "确认管理员密码", false)
+		if confirmErr != nil {
+			return "", "", "", confirmErr
+		}
+		if adminPassword != confirmed {
+			return "", "", "", errors.New("两次输入的管理员密码不一致")
+		}
+	}
+	siteName, err := console.value(options.siteName, options.provided["site-name"], defaultSetupSite, "站点名称", options.yes)
+	if err != nil {
+		return "", "", "", err
+	}
+	return adminName, adminPassword, siteName, nil
 }
 
 type setupDatabaseDefaultsValue struct {
@@ -707,47 +755,9 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 	}
 
 	terminalHelper := terminal.NewTerminal(configuration, zap.NewNop(), nil)
-	tools := []string{"npm", "node", packageManager}
-	missing := make([]string, 0)
-	seen := make(map[string]bool)
-	for _, tool := range tools {
-		if seen[tool] {
-			continue
-		}
-		seen[tool] = true
-		if _, err := exec.LookPath(tool); err != nil {
-			missing = append(missing, tool)
-			continue
-		}
-		toolVersion := version.GetVersion(terminalHelper, tool)
-		if toolVersion == "" {
-			missing = append(missing, tool)
-			continue
-		}
-		_, _ = fmt.Fprintf(output, "检测到 %s %s\n", tool, toolVersion)
-	}
+	missing := scanSetupFrontendTools(terminalHelper, packageManager, output)
 	if len(missing) > 0 {
-		_, _ = fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
-		// Node 本身缺失（容器镜像不携带工具链）：装 node 无意义，指引宿主机
-		// 手动 make frontend 构建，再以 --skip-frontend 重跑 setup。
-		if missingNode(missing) {
-			_, _ = fmt.Fprintln(output, "当前环境没有 Node 环境。请改为在宿主机手动执行：")
-			_, _ = fmt.Fprintln(output, "  make frontend   # 在 web/ 构建前端并同步产物到 public/")
-			_, _ = fmt.Fprintln(output, "完成后重新运行 setup 并加 --skip-frontend 跳过前端构建。")
-			if setupFrontendArtifactExists(rootPath) {
-				_, _ = fmt.Fprintln(output, "已有 public/index.html，本次退化为跳过前端构建")
-				return errSetupFrontendSkipped
-			}
-			return errors.New("前端构建依赖缺失（无 Node 环境），请先在宿主机执行 make frontend，再以 --skip-frontend 重跑 setup")
-		}
-		for _, tool := range missing {
-			_, _ = fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
-		}
-		if setupFrontendArtifactExists(rootPath) {
-			_, _ = fmt.Fprintln(output, "已有 public/index.html，退化为跳过前端构建")
-			return errSetupFrontendSkipped
-		}
-		return fmt.Errorf("前端构建依赖缺失，且 public/index.html 不存在（缺失工具: %s）", strings.Join(missing, ", "))
+		return reportMissingSetupFrontendTools(rootPath, missing, output)
 	}
 
 	for _, key := range []string{"web-install." + packageManager, "web-build." + packageManager} {
@@ -768,6 +778,56 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 		return errors.New("前端构建完成，但移动 web/dist 到 public 失败")
 	}
 	return nil
+}
+
+// scanSetupFrontendTools 逐个探测前端构建工具（去重、按发现顺序记录缺失）。
+func scanSetupFrontendTools(terminalHelper *terminal.Terminal, packageManager string, output io.Writer) []string {
+	tools := []string{"npm", "node", packageManager}
+	missing := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, tool := range tools {
+		if seen[tool] {
+			continue
+		}
+		seen[tool] = true
+		if _, err := exec.LookPath(tool); err != nil {
+			missing = append(missing, tool)
+			continue
+		}
+		toolVersion := version.GetVersion(terminalHelper, tool)
+		if toolVersion == "" {
+			missing = append(missing, tool)
+			continue
+		}
+		_, _ = fmt.Fprintf(output, "检测到 %s %s\n", tool, toolVersion)
+	}
+	return missing
+}
+
+// reportMissingSetupFrontendTools 输出缺失工具的安装指引；已有 public/index.html
+// 时退化为跳过前端构建（errSetupFrontendSkipped），否则返回依赖缺失错误。
+func reportMissingSetupFrontendTools(rootPath string, missing []string, output io.Writer) error {
+	_, _ = fmt.Fprintf(output, "前端构建依赖缺失：%s\n", strings.Join(missing, ", "))
+	// Node 本身缺失（容器镜像不携带工具链）：装 node 无意义，指引宿主机
+	// 手动 make frontend 构建，再以 --skip-frontend 重跑 setup。
+	if missingNode(missing) {
+		_, _ = fmt.Fprintln(output, "当前环境没有 Node 环境。请改为在宿主机手动执行：")
+		_, _ = fmt.Fprintln(output, "  make frontend   # 在 web/ 构建前端并同步产物到 public/")
+		_, _ = fmt.Fprintln(output, "完成后重新运行 setup 并加 --skip-frontend 跳过前端构建。")
+		if setupFrontendArtifactExists(rootPath) {
+			_, _ = fmt.Fprintln(output, "已有 public/index.html，本次退化为跳过前端构建")
+			return errSetupFrontendSkipped
+		}
+		return errors.New("前端构建依赖缺失（无 Node 环境），请先在宿主机执行 make frontend，再以 --skip-frontend 重跑 setup")
+	}
+	for _, tool := range missing {
+		_, _ = fmt.Fprintf(output, "  安装 %s: %s\n", tool, setupToolInstallCommand(tool))
+	}
+	if setupFrontendArtifactExists(rootPath) {
+		_, _ = fmt.Fprintln(output, "已有 public/index.html，退化为跳过前端构建")
+		return errSetupFrontendSkipped
+	}
+	return fmt.Errorf("前端构建依赖缺失，且 public/index.html 不存在（缺失工具: %s）", strings.Join(missing, ", "))
 }
 
 // missingNode 报告缺失工具列表是否包含 Node 运行时本身（node/npm 成对出现，

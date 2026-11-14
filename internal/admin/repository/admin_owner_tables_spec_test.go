@@ -17,6 +17,7 @@ import (
 // 手工维护的第二份清单，漏登记会让删除后的归属数据静默变成孤儿。本测试只用
 // yaml.v3 读取顶层 name 与 dataScope，不依赖数据库、生成器或 crud_log。
 func TestAdminOwnerTablesCoverCrudSpecs(t *testing.T) {
+	t.Parallel()
 	specDir := filepath.Join(util.RootPath(), "crud_specs")
 	entries, err := os.ReadDir(specDir)
 	require.NoError(t, err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"time"
 )
@@ -30,34 +31,7 @@ func initConfig() {
 	runtimeConfigPath := configPath
 	runtimeConfigExists := util.PathExists(runtimeConfigPath)
 	if !runtimeConfigExists {
-		setupRequested := false
-		validateRequested := false
-		releaseRequested := false
-		for _, arg := range os.Args[1:] {
-			switch arg {
-			case "setup":
-				setupRequested = true
-			case "crud:validate":
-				validateRequested = true
-			case "release":
-				releaseRequested = true
-			}
-		}
-
-		switch {
-		case setupRequested:
-			fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
-		case validateRequested:
-			// crud:validate 不依赖运行配置。
-		case releaseRequested:
-			// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
-		default:
-			printInstallGuidance(configPath)
-			// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），
-			// 然后退出；安装完成后配置存在，正常启动不再走此分支。
-			time.Sleep(3 * time.Second)
-			os.Exit(0)
-		}
+		announceMissingRuntimeConfig(runtimeConfigPath)
 	}
 
 	defaultsPath := filepath.Join(filepath.Dir(runtimeConfigPath), conf.DefaultsFileName)
@@ -93,18 +67,9 @@ func initConfig() {
 		panic(err)
 	}
 
-	var nextConfig conf.Configuration
-	if err := v.Unmarshal(&nextConfig); err != nil {
-		panic(fmt.Errorf("unmarshal config failed: %w", err))
+	if err := applyLoadedConfig(v); err != nil {
+		panic(err)
 	}
-	applyAppRuntimeEnvironment(&nextConfig)
-	if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
-		panic(fmt.Errorf("apply APP_TIME_ZONE failed: %w", err))
-	}
-	if err := applyGinMode(nextConfig.App.Env); err != nil {
-		panic(fmt.Errorf("apply config app.env failed: %w", err))
-	}
-	config = &nextConfig
 
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
@@ -115,22 +80,62 @@ func initConfig() {
 				fmt.Println(err)
 			}
 		}()
-		var nextConfig conf.Configuration
-		if err := v.Unmarshal(&nextConfig); err != nil {
-			logConfigChangeError(fmt.Errorf("unmarshal config failed: %w", err))
-			return
+		if err := applyLoadedConfig(v); err != nil {
+			logConfigChangeError(err)
 		}
-		applyAppRuntimeEnvironment(&nextConfig)
-		if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
-			logConfigChangeError(fmt.Errorf("apply APP_TIME_ZONE failed: %w", err))
-			return
-		}
-		if err := applyGinMode(nextConfig.App.Env); err != nil {
-			logConfigChangeError(fmt.Errorf("apply config app.env failed: %w", err))
-			return
-		}
-		config = &nextConfig
 	})
+}
+
+// announceMissingRuntimeConfig 在缺少运行配置时按命令行子命令分流：setup
+// 打印引导后继续（以只读基座安装），crud:validate / release 不需要运行
+// 配置而静默继续，其余命令打印安装指引并退出。
+func announceMissingRuntimeConfig(configPath string) {
+	setupRequested := false
+	validateRequested := false
+	releaseRequested := false
+	for _, arg := range os.Args[1:] {
+		switch arg {
+		case "setup":
+			setupRequested = true
+		case "crud:validate":
+			validateRequested = true
+		case "release":
+			releaseRequested = true
+		}
+	}
+
+	switch {
+	case setupRequested:
+		fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
+	case validateRequested:
+		// crud:validate 不依赖运行配置。
+	case releaseRequested:
+		// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
+	default:
+		printInstallGuidance(configPath)
+		// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），
+		// 然后退出；安装完成后配置存在，正常启动不再走此分支。
+		time.Sleep(3 * time.Second)
+		os.Exit(0)
+	}
+}
+
+// applyLoadedConfig 把 viper 值解码为运行配置并应用端口/时区/gin 模式，
+// 成功后替换包级 config。错误包装文本同时服务启动 panic 与热更新日志。
+func applyLoadedConfig(v *viper.Viper) error {
+	var nextConfig conf.Configuration
+	if err := v.Unmarshal(&nextConfig); err != nil {
+		return fmt.Errorf("unmarshal config failed: %w", err)
+	}
+	applyAppRuntimeEnvironment(&nextConfig)
+	if err := applyTimeZone(nextConfig.App.TimeZone); err != nil {
+		return fmt.Errorf("apply APP_TIME_ZONE failed: %w", err)
+	}
+	if err := applyGinMode(nextConfig.App.Env); err != nil {
+		return fmt.Errorf("apply config app.env failed: %w", err)
+	}
+	config = &nextConfig
+	return nil
 }
 
 func applyAppRuntimeEnvironment(configuration *conf.Configuration) {

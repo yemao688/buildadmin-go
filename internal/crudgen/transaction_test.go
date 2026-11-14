@@ -9,6 +9,7 @@ import (
 )
 
 func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "existing.go")
 	created := filepath.Join(dir, "created.go")
@@ -39,10 +40,12 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 }
 
 func TestQuarantineRestoresAllFiles(t *testing.T) {
+	t.Parallel()
 	assertQuarantineRestore(t)
 }
 
 func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T) {
+	t.Parallel()
 	// 拍平布局：关联仓库的 provider 即扁平根包 provider.go（wire 静态聚合）。
 	provider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
 	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/model/owner.go", RelationFields: "name"}}})
@@ -58,6 +61,7 @@ func TestBuildFileManifestForFieldsContainsExistingRelationProvider(t *testing.T
 }
 
 func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *testing.T) {
+	t.Parallel()
 	manifest, err := BuildFileManifestForFields(crudmodel.Table{Name: "orders"}, []crudmodel.Field{{Form: crudmodel.FormAttr{RemoteTable: "owner", RemoteModel: "internal/model/owner.go", RelationFields: "name"}}})
 	if err != nil {
 		t.Fatal(err)
@@ -74,6 +78,7 @@ func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *t
 }
 
 func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "existing.go")
 	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)

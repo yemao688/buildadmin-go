@@ -10,6 +10,7 @@ import (
 )
 
 func TestFrameworkVersionFileMatchesConstant(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join(util.RootPath(), "VERSION_FRAMEWORK"))
 	if err != nil {
 		t.Fatalf("read VERSION_FRAMEWORK: %v", err)
@@ -23,6 +24,7 @@ func TestFrameworkVersionFileMatchesConstant(t *testing.T) {
 // 保证发版纪律：CHANGELOG.md 必须包含当前
 // 框架版本的条目，防止版本号提升但变更记录缺失。
 func TestChangelogCoversCurrentVersion(t *testing.T) {
+	t.Parallel()
 	data, err := os.ReadFile(filepath.Join(util.RootPath(), "CHANGELOG.md"))
 	if err != nil {
 		t.Fatalf("read CHANGELOG.md: %v", err)
@@ -36,6 +38,8 @@ func TestChangelogCoversCurrentVersion(t *testing.T) {
 // 验证展示版本语义：未注入业务版本（dev）时回退框架
 // 版本；注入业务版本后以业务版本为主、框架版本为辅（业务镜像 ldflags
 // 注入，线上 banner/--version 显示业务版本号）。
+//
+//nolint:paralleltest // TestDisplayVersion 写入包级变量 Business，并行会与其它测试竞争
 func TestDisplayVersion(t *testing.T) {
 	original := Business
 	t.Cleanup(func() { Business = original })

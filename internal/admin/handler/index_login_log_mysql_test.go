@@ -29,6 +29,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+//nolint:paralleltest // newLoginLogRouter 向全局 Gin binding.Validator 单例注册 password 校验器
 func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	db, handler, record := newAdminLoginLogFixture(t)
 	admin := model.Admin{
@@ -111,7 +112,6 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *adminmiddl
 }
 
 func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *gin.Engine {
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",

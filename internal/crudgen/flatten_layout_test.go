@@ -13,6 +13,7 @@ import (
 
 // 拍平布局：文件恒为 <root>/<table>.go，历史 modelFile 前缀不再影响位置。
 func TestParseFlatNameDataLocations(t *testing.T) {
+	t.Parallel()
 	entity, err := ParseEntityNameData("country_language_content", "internal/admin/model/country/languageContent.go")
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(util.RootPath(), "internal/model/country_language_content.go"), entity.ParseFile)
@@ -43,6 +44,7 @@ func TestParseFlatNameDataLocations(t *testing.T) {
 
 // 多段 generateRelativePath 不再产生 Go 侧子目录（web views 行为不变）。
 func TestParseFlatNameDataIgnoresMultiSegmentRelativePath(t *testing.T) {
+	t.Parallel()
 	entity, err := ParseEntityNameData("ops_user_test_xxx", "internal/model/ops/user/test_xxx.go")
 	require.NoError(t, err)
 	require.Equal(t, filepath.Join(util.RootPath(), "internal/model/ops_user_test_xxx.go"), entity.ParseFile)
@@ -50,6 +52,8 @@ func TestParseFlatNameDataIgnoresMultiSegmentRelativePath(t *testing.T) {
 }
 
 // ProvideRegistrars 锚点 code-mod 往返：真实 internal/admin/router/provider.go。
+//
+//nolint:paralleltest // 改写真实 internal/admin/router/provider.go 并靠 Cleanup 写回，并行会与写同一文件的测试互相覆盖
 func TestProvideRegistrarsEntryRoundTrip(t *testing.T) {
 	path := adminRouterProviderPath()
 	original, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
@@ -81,6 +85,7 @@ func TestProvideRegistrarsEntryRoundTrip(t *testing.T) {
 // F5: 锚点 code-mod 必须精确定位 ProvideRegistrars 函数体与真正的
 // wire.NewSet ProviderSet；文件里其它同名结构不得被误操作。
 func TestAnchorEditsOnlyTouchProvideRegistrarsAndWireNewSet(t *testing.T) {
+	t.Parallel()
 	content := `package router
 
 import (

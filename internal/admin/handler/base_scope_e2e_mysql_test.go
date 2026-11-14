@@ -39,6 +39,7 @@ func (m *scopeE2EModel) ScopeDB(ctx *gin.Context, db *gorm.DB) *gorm.DB {
 }
 
 func TestBaseScopedCRUDMySQL(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("ba_base_scope_%d_", os.Getpid())
 	db.Config.NamingStrategy = schema.NamingStrategy{TablePrefix: prefix}

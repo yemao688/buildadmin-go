@@ -12,6 +12,7 @@ import (
 // 回归测试：去冗余前缀重命名后，struct 经 GORM 命名策略推导的表名
 // 必须保持指向真实业务表（前缀安全），不得退化为实体名单词表。
 func TestRenamedStructTableNames(t *testing.T) {
+	t.Parallel()
 	namer := schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"}
 	cases := map[string]any{
 		"ba_user_money_log": model.MoneyLog{},

@@ -11,6 +11,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+//nolint:paralleltest // 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -30,7 +31,7 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) { //nolint:paralleltest // 调用 cobra Execute，会触发进程级 OnInitialize
 			root := &cobra.Command{Use: "root", SilenceErrors: true, SilenceUsage: true}
 			want := errors.New("command construction failed")
 			registerCommands(root, func(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*Command, func(), error) {
@@ -45,6 +46,7 @@ func TestRegisterCommandsPropagateConstructionErrors(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestRegisterCrudApplyAcceptsPlanFlag(t *testing.T) {
 	root := &cobra.Command{Use: "root", SilenceErrors: true, SilenceUsage: true}
 	want := errors.New("command construction failed")

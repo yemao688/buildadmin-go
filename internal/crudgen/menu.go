@@ -115,12 +115,13 @@ func upsertDirectory(db *gorm.DB, pid int32, name string) (model.AdminRule, Menu
 }
 
 func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, options *MenuOptions) (model.AdminRule, MenuSyncResult, error) {
+	weigh, hasWeigh := menuWeighOption(options)
 	rule := model.AdminRule{}
 	result := menuDB(db).Where("pid=? AND name=? AND type=?", pid, name, "menu").First(&rule)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		rule = model.AdminRule{Pid: pid, Type: "menu", Title: title, Name: name, Path: name, MenuType: "tab", Component: component, Status: "1"}
-		if options != nil && options.Weigh != nil {
-			rule.Weigh = *options.Weigh
+		if hasWeigh {
+			rule.Weigh = weigh
 		}
 		if err := menuDB(db).Create(&rule).Error; err != nil {
 			return rule, MenuSyncResult{}, err
@@ -131,11 +132,11 @@ func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, optio
 		return rule, MenuSyncResult{}, result.Error
 	}
 	updates := map[string]any{"title": title, "path": name, "component": component, "menu_type": "tab"}
-	if options != nil && options.Weigh != nil {
-		updates["weigh"] = *options.Weigh
+	if hasWeigh {
+		updates["weigh"] = weigh
 	}
 	changed := rule.Title != title || rule.Path != name || rule.Component != component || rule.MenuType != "tab"
-	if options != nil && options.Weigh != nil && rule.Weigh != *options.Weigh {
+	if hasWeigh && rule.Weigh != weigh {
 		changed = true
 	}
 	if changed {
@@ -145,6 +146,15 @@ func upsertMainMenu(db *gorm.DB, pid int32, name, title, component string, optio
 		return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUpdated}, nil
 	}
 	return rule, MenuSyncResult{ID: rule.ID, Name: name, Action: MenuUnchanged}, nil
+}
+
+// menuWeighOption 解出菜单权重选项：未指定时 hasWeigh 为 false，调用方保持
+// 原权重不写回。
+func menuWeighOption(options *MenuOptions) (weigh int32, hasWeigh bool) {
+	if options == nil || options.Weigh == nil {
+		return 0, false
+	}
+	return *options.Weigh, true
 }
 
 func upsertButton(db *gorm.DB, pid int32, name string, child Menu) (model.AdminRule, MenuSyncResult, error) {

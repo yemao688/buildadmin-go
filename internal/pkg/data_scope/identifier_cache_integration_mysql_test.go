@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:paralleltest // 测试改写包级 businessIdentifierCacheNow 并操作全局标识符缓存，跨用例会互相干扰
 func TestBusinessIdentifierCacheMySQLHitExpiryAndInvalidation(t *testing.T) {
 	db, _ := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()

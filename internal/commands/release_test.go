@@ -142,6 +142,7 @@ func requireReleaseOutput(t *testing.T, output string, wants ...string) {
 	}
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseDryRunSuccess(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	snapshot := fixture.snapshot(t)
@@ -172,8 +173,9 @@ func TestReleaseDryRunSuccess(t *testing.T) {
 	fixture.assertSnapshot(t, snapshot)
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，会触发进程级 OnInitialize
 func TestReleaseRejectsNonIncreasingVersion(t *testing.T) {
-	for _, version := range []string{"3.4.0", "3.3.9"} {
+	for _, version := range []string{"3.4.0", "3.3.9"} { //nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
 		t.Run(version, func(t *testing.T) {
 			fixture := newReleaseFixture(t)
 			output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{}), "--version", version)
@@ -185,6 +187,7 @@ func TestReleaseRejectsNonIncreasingVersion(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseRejectsBrokenFrameworkVersionFile(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	fixture.writeFile(t, releaseVersionFileName, "3.x.0")
@@ -199,6 +202,8 @@ func TestReleaseRejectsBrokenFrameworkVersionFile(t *testing.T) {
 
 // TestReleaseReportsAllFailuresAtOnce 确认多项欠账在一次运行里全部报出，且工具检查降级为 skip。
 // 用「等于当前版本」制造未递增：目标 3.4.0 时 CHANGELOG 校验的是 ## v3.4.0，凑不出四条断言。
+//
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseReportsAllFailuresAtOnce(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	fixture.writeFile(t, releaseVersionFileName, "3.4.1")
@@ -224,8 +229,9 @@ func TestReleaseReportsAllFailuresAtOnce(t *testing.T) {
 	)
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，会触发进程级 OnInitialize
 func TestReleaseRejectsInvalidVersionFormat(t *testing.T) {
-	for _, version := range []string{"v3.4.1", "3.4"} {
+	for _, version := range []string{"v3.4.1", "3.4"} { //nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
 		t.Run(version, func(t *testing.T) {
 			fixture := newReleaseFixture(t)
 			output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{}), "--version", version)
@@ -237,6 +243,7 @@ func TestReleaseRejectsInvalidVersionFormat(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseRejectsFrameworkMismatch(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	mismatched := strings.Replace(releaseFixtureVersionGo, `const Framework = "3.4.0"`, `const Framework = "3.3.9"`, 1)
@@ -249,6 +256,7 @@ func TestReleaseRejectsFrameworkMismatch(t *testing.T) {
 	requireReleaseOutput(t, output, "VERSION_FRAMEWORK 与 version.Framework 不一致")
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseRejectsMissingChangelogSection(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	fixture.writeFile(t, releaseChangelogPath, "# Changelog\n\n## v3.4.0\n\n- 上一版\n")
@@ -260,6 +268,7 @@ func TestReleaseRejectsMissingChangelogSection(t *testing.T) {
 	requireReleaseOutput(t, output, "CHANGELOG", "## v3.4.1")
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，会触发进程级 OnInitialize
 func TestReleaseWorkspaceCheck(t *testing.T) {
 	releaseFilesStatus := " M VERSION_FRAMEWORK\n M internal/pkg/version/version.go\n M CHANGELOG.md\n"
 	tests := []struct {
@@ -292,7 +301,7 @@ func TestReleaseWorkspaceCheck(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) { //nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
 			fixture := newReleaseFixture(t)
 			commands := releaseFakeCommands{status: test.status}
 			if test.statusErr {
@@ -310,6 +319,7 @@ func TestReleaseWorkspaceCheck(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseRejectsExistingTag(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{tagList: "frame-v3.4.1\n"}), "--version", "3.4.1")
@@ -319,8 +329,9 @@ func TestReleaseRejectsExistingTag(t *testing.T) {
 	requireReleaseOutput(t, output, "frame-v3.4.1 已存在")
 }
 
+//nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
 func TestReleaseRejectsToolingFailures(t *testing.T) {
-	t.Run("gofmt 有输出", func(t *testing.T) {
+	t.Run("gofmt 有输出", func(t *testing.T) { //nolint:paralleltest // 调用 cobra Execute，会触发进程级 OnInitialize
 		fixture := newReleaseFixture(t)
 		output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{gofmt: "internal/foo.go\ninternal/bar.go\n"}), "--version", "3.4.1")
 		if err == nil {
@@ -329,7 +340,7 @@ func TestReleaseRejectsToolingFailures(t *testing.T) {
 		requireReleaseOutput(t, output, "gofmt", "internal/foo.go")
 	})
 
-	t.Run("go build 失败", func(t *testing.T) {
+	t.Run("go build 失败", func(t *testing.T) { //nolint:paralleltest // 调用 cobra Execute，会触发进程级 OnInitialize
 		fixture := newReleaseFixture(t)
 		output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{buildLog: "boom\n", buildErr: errors.New("exit status 1")}), "--version", "3.4.1")
 		if err == nil {
@@ -338,7 +349,7 @@ func TestReleaseRejectsToolingFailures(t *testing.T) {
 		requireReleaseOutput(t, output, "go build", "boom")
 	})
 
-	t.Run("前置失败时跳过工具检查", func(t *testing.T) {
+	t.Run("前置失败时跳过工具检查", func(t *testing.T) { //nolint:paralleltest // 调用 cobra Execute，会触发进程级 OnInitialize
 		fixture := newReleaseFixture(t)
 		calls := 0
 		deps := fixture.deps(releaseFakeCommands{})
@@ -359,6 +370,7 @@ func TestReleaseRejectsToolingFailures(t *testing.T) {
 	})
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，会触发进程级 OnInitialize
 func TestReleaseWriteDoesNotTouchFilesOnFailure(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -397,7 +409,7 @@ func TestReleaseWriteDoesNotTouchFilesOnFailure(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) { //nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
 			fixture := newReleaseFixture(t)
 			if test.prepare != nil {
 				test.prepare(t, fixture)
@@ -413,6 +425,7 @@ func TestReleaseWriteDoesNotTouchFilesOnFailure(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestReleaseWriteSuccess(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	changelogBefore := fixture.readFile(t, releaseChangelogPath)
@@ -437,6 +450,7 @@ func TestReleaseWriteSuccess(t *testing.T) {
 	)
 }
 
+//nolint:paralleltest // cobra Find 会读写全局 pflag.CommandLine，并行不安全
 func TestReleaseCommandRegisteredOnRoot(t *testing.T) {
 	fixture := newReleaseFixture(t)
 	root := &cobra.Command{Use: "root"}
@@ -460,6 +474,7 @@ func TestReleaseCommandRegisteredOnRoot(t *testing.T) {
 // TestReleaseGitCommandAgainstRealRepo 用真实 git 校验 porcelain 与 tag 解析，
 // 不触发 gofmt/go build 等工具链检查。
 func TestReleaseGitCommandAgainstRealRepo(t *testing.T) {
+	t.Parallel()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git 不可用")
 	}

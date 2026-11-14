@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
+//nolint:paralleltest // 注册/清理全局豁免与免登录注册表，并行会污染同包读取注册表的测试
 func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T) {
 	RegisterPermissionExempt("report.Exempt", "free")
 	RegisterNoNeedLogin("index", "login", "logout")
@@ -44,6 +45,7 @@ func TestCollectUnprotectedRoutesFiltersRulesExemptionsAndBypasses(t *testing.T)
 }
 
 func TestCollectUnprotectedRoutesReportsLogoutWithoutNoNeedLogin(t *testing.T) {
+	t.Parallel()
 	// logout 只靠 NoNeedLogin 注册表豁免；未注册时必须被报告（不能硬编码隐藏）。
 	routes := gin.RoutesInfo{
 		{Method: "POST", Path: "/admin/Index/logout"},
@@ -57,6 +59,7 @@ func TestCollectUnprotectedRoutesReportsLogoutWithoutNoNeedLogin(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 反注册并恢复全局免规则校验注册表，与并行读取该表的测试互斥
 func TestCollectUnprotectedRoutesReportsIndexIndexWhenNotExempt(t *testing.T) {
 	wasExempt := IsPermissionExempt("index", "index")
 	UnregisterPermissionExempt("index", "index")
@@ -77,6 +80,7 @@ func TestCollectUnprotectedRoutesReportsIndexIndexWhenNotExempt(t *testing.T) {
 }
 
 func TestReportUnprotectedRoutesSkipsNilDatabase(t *testing.T) {
+	t.Parallel()
 	authorization := NewAuthorization(adminauth.NewAuthRepository(nil, nil, nil), zap.NewNop())
 
 	defer func() {

@@ -15,6 +15,7 @@ import (
 )
 
 func TestBusinessDownRunsAndRemovesLedgerRecord(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_down_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	require.NoError(t, ValidateBusinessLedgerSchema(db, config))
@@ -46,6 +47,7 @@ func TestBusinessDownRunsAndRemovesLedgerRecord(t *testing.T) {
 }
 
 func TestBusinessRollbackUsesLatestVersionAndSteps(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_version_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 
@@ -83,6 +85,7 @@ func TestBusinessRollbackUsesLatestVersionAndSteps(t *testing.T) {
 }
 
 func TestBusinessRollbackMissingDownLeavesLedgerAndRejectsUnsupportedTracks(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_guard_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	migration := business.Migration{Version: 1, MigrationName: "missing-down", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
@@ -104,6 +107,7 @@ func TestBusinessRollbackMissingDownLeavesLedgerAndRejectsUnsupportedTracks(t *t
 }
 
 func TestBusinessBreakpointSetClearListAndRollbackTarget(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_breakpoint_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	var down []string
@@ -147,6 +151,7 @@ func requireRunCount(t *testing.T, db *gorm.DB, config *conf.Configuration, list
 }
 
 func TestBusinessRollbackReportsDownFailureProgress(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenFixtureDatabase(t, "rollback_failure_")
 	require.NoError(t, BootstrapBusinessLedger(db, config))
 	failing := business.Migration{

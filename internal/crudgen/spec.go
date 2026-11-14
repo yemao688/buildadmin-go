@@ -84,6 +84,49 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if path == "" {
 		return nil, fmt.Errorf("spec path is required")
 	}
+	raw, err := decodeSpecFile(path)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := buildSpecFields(raw.Fields)
+	if err != nil {
+		return nil, err
+	}
+	formFields := resolveSpecFormFields(raw.FormFields, fields)
+	columnFields := resolveSpecColumnFields(raw.ColumnFields, fields)
+	dataScope := resolveSpecDataScope(raw.DataScope)
+	typeName := raw.Type
+	if typeName == "" {
+		typeName = "create"
+	}
+	table := crudmodel.Table{
+		Name: raw.Name, Comment: raw.Comment, FormFields: formFields, ColumnFields: columnFields,
+		QuickSearchField: raw.QuickSearchField, DefaultSortField: raw.DefaultSortField, DefaultSortType: raw.DefaultSortType,
+		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
+		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
+		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope, RegisterOnly: raw.RegisterOnly,
+	}
+	indexes, err := parseSpecIndexes(raw.Indexes, fields)
+	if err != nil {
+		return nil, fmt.Errorf("spec %q indexes: %w", path, err)
+	}
+	table.Indexes = indexes
+	if err := normalizeTableConfiguration(&table); err != nil {
+		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
+	}
+	options := &GenerateOptions{Table: table, Fields: fields, Type: typeName}
+	if raw.Menu != nil {
+		options.Menu = &MenuOptions{Title: raw.Menu.Title, Parent: raw.Menu.Parent, Weigh: raw.Menu.Weigh}
+	}
+	if err := ValidateGenerationInput(table, fields); err != nil {
+		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
+	}
+	return options, nil
+}
+
+// decodeSpecFile 读取 spec 文件并解码为 specFile：YAML 特殊键归一化、遗留
+// cascadeOwners 检测与 Viper/mapstructure 解码的错误文本与顺序必须保持不变。
+func decodeSpecFile(path string) (*specFile, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
@@ -120,119 +163,121 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	if len(raw.Fields) == 0 {
 		return nil, fmt.Errorf("spec %q must define fields", raw.Name)
 	}
+	return &raw, nil
+}
 
-	fields := make([]crudmodel.Field, 0, len(raw.Fields))
-	for i, item := range raw.Fields {
+// buildSpecFields 按声明顺序把 spec 字段转换为实体字段，逐项保持默认值推导、
+// designType 推断与校验的原始顺序。
+func buildSpecFields(raw []specField) ([]crudmodel.Field, error) {
+	fields := make([]crudmodel.Field, 0, len(raw))
+	for i, item := range raw {
 		if item.Name == "" {
 			return nil, fmt.Errorf("field[%d] name is required", i)
 		}
-		formBuildExclude := item.FormBuildExclude != nil && *item.FormBuildExclude
-		defaultType := strings.ToUpper(strings.TrimSpace(item.DefaultType))
-		if defaultType == "" {
-			switch strings.ToLower(item.Default) {
-			case "null":
-				defaultType = "NULL"
-			case "empty string":
-				defaultType = "EMPTY STRING"
-			case "none":
-				defaultType = "NONE"
-			default:
-				if item.Default == "" {
-					defaultType = "NONE"
-				} else {
-					defaultType = "INPUT"
-				}
-			}
-		}
-		field := crudmodel.Field{
-			Name: item.Name, Title: item.Title, Type: strings.ToLower(item.Type), DataType: strings.ToLower(item.DataType),
-			Length: item.Length, Precision: item.Precision, Default: item.Default, DefaultType: defaultType, Null: item.Null,
-			PrimaryKey: item.PrimaryKey, Unsigned: item.Unsigned, AutoIncrement: item.AutoIncrement,
-			Comment: item.Comment, DesignType: item.DesignType, Form: item.Form, Table: item.Table,
-			FormBuildExclude: formBuildExclude, TableBuildExclude: item.TableBuildExclude,
-		}
-		if item.FormBuildExclude == nil && isCanonicalTimeField(field.Name) {
-			field.FormBuildExclude = true
-		}
-		if field.Type == "" {
-			field.Type = field.DataType
-		}
-		if field.Type == "" {
-			return nil, fmt.Errorf("field %q type is required", item.Name)
-		}
-		if field.DataType == "" && strings.Contains(field.Type, "(") {
-			field.DataType = field.Type
-		}
-		if field.DesignType == "" {
-			field.DesignType = inferDesignTypeForField(field)
-		}
-		applyDesignTypeDefaults(&field)
-		normalizeFieldConfiguration(&field)
-		if err := ValidateField(field); err != nil {
-			return nil, fmt.Errorf("field %q: %w", item.Name, err)
+		field, err := buildSpecField(item)
+		if err != nil {
+			return nil, err
 		}
 		fields = append(fields, field)
 	}
+	return fields, nil
+}
 
-	formFields := []string(nil)
-	if raw.FormFields != nil {
-		formFields = *raw.FormFields
+// buildSpecField 把单个 spec 字段转换为实体字段：默认值类型推导、时间字段表单
+// 排除、designType 推断与字段校验。
+func buildSpecField(item specField) (crudmodel.Field, error) {
+	formBuildExclude := item.FormBuildExclude != nil && *item.FormBuildExclude
+	field := crudmodel.Field{
+		Name: item.Name, Title: item.Title, Type: strings.ToLower(item.Type), DataType: strings.ToLower(item.DataType),
+		Length: item.Length, Precision: item.Precision, Default: item.Default, DefaultType: resolveSpecDefaultType(item), Null: item.Null,
+		PrimaryKey: item.PrimaryKey, Unsigned: item.Unsigned, AutoIncrement: item.AutoIncrement,
+		Comment: item.Comment, DesignType: item.DesignType, Form: item.Form, Table: item.Table,
+		FormBuildExclude: formBuildExclude, TableBuildExclude: item.TableBuildExclude,
 	}
-	if raw.FormFields == nil {
-		formFields = make([]string, 0, len(fields))
-		for _, field := range fields {
-			if !field.PrimaryKey && !field.FormBuildExclude {
-				formFields = append(formFields, field.Name)
-			}
+	if item.FormBuildExclude == nil && isCanonicalTimeField(field.Name) {
+		field.FormBuildExclude = true
+	}
+	if field.Type == "" {
+		field.Type = field.DataType
+	}
+	if field.Type == "" {
+		return crudmodel.Field{}, fmt.Errorf("field %q type is required", item.Name)
+	}
+	if field.DataType == "" && strings.Contains(field.Type, "(") {
+		field.DataType = field.Type
+	}
+	if field.DesignType == "" {
+		field.DesignType = inferDesignTypeForField(field)
+	}
+	applyDesignTypeDefaults(&field)
+	normalizeFieldConfiguration(&field)
+	if err := ValidateField(field); err != nil {
+		return crudmodel.Field{}, fmt.Errorf("field %q: %w", item.Name, err)
+	}
+	return field, nil
+}
+
+// resolveSpecDefaultType 推导 defaultType：显式声明优先，其次是 default 的
+// 关键字（null / empty string / none），其余非空值为 INPUT。
+func resolveSpecDefaultType(item specField) string {
+	defaultType := strings.ToUpper(strings.TrimSpace(item.DefaultType))
+	if defaultType != "" {
+		return defaultType
+	}
+	switch strings.ToLower(item.Default) {
+	case "null":
+		return "NULL"
+	case "empty string":
+		return "EMPTY STRING"
+	case "none":
+		return "NONE"
+	}
+	if item.Default == "" {
+		return "NONE"
+	}
+	return "INPUT"
+}
+
+// resolveSpecFormFields 返回 spec 显式声明的表单字段；未声明时按字段定义推导
+// （排除主键与表单排除字段）。
+func resolveSpecFormFields(raw *[]string, fields []crudmodel.Field) []string {
+	if raw != nil {
+		return *raw
+	}
+	formFields := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if !field.PrimaryKey && !field.FormBuildExclude {
+			formFields = append(formFields, field.Name)
 		}
 	}
-	columnFields := []string(nil)
-	if raw.ColumnFields != nil {
-		columnFields = *raw.ColumnFields
-	} else {
-		columnFields = make([]string, 0, len(fields))
-		for _, field := range fields {
-			columnFields = append(columnFields, field.Name)
-		}
+	return formFields
+}
+
+// resolveSpecColumnFields 返回 spec 显式声明的列表字段；未声明时使用全部字段。
+func resolveSpecColumnFields(raw *[]string, fields []crudmodel.Field) []string {
+	if raw != nil {
+		return *raw
 	}
-	dataScope := &data_scope.Config{Mode: data_scope.ModeAuto}
-	if raw.DataScope != nil {
-		dataScope = &data_scope.Config{
-			Mode:            raw.DataScope.Mode,
-			OwnerColumn:     raw.DataScope.OwnerColumn,
-			ReadExtraOwners: raw.DataScope.ReadExtraOwners,
-			AssignOnCreate:  raw.DataScope.AssignOnCreate,
-			Reassignable:    raw.DataScope.Reassignable,
-			InheritFrom:     raw.DataScope.InheritFrom,
-		}
+	columnFields := make([]string, 0, len(fields))
+	for _, field := range fields {
+		columnFields = append(columnFields, field.Name)
 	}
-	typeName := raw.Type
-	if typeName == "" {
-		typeName = "create"
+	return columnFields
+}
+
+// resolveSpecDataScope 返回 spec 的数据权限配置；未声明时使用 Auto 模式。
+func resolveSpecDataScope(raw *specDataScope) *data_scope.Config {
+	if raw == nil {
+		return &data_scope.Config{Mode: data_scope.ModeAuto}
 	}
-	table := crudmodel.Table{
-		Name: raw.Name, Comment: raw.Comment, FormFields: formFields, ColumnFields: columnFields,
-		QuickSearchField: raw.QuickSearchField, DefaultSortField: raw.DefaultSortField, DefaultSortType: raw.DefaultSortType,
-		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
-		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
-		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope, RegisterOnly: raw.RegisterOnly,
+	return &data_scope.Config{
+		Mode:            raw.Mode,
+		OwnerColumn:     raw.OwnerColumn,
+		ReadExtraOwners: raw.ReadExtraOwners,
+		AssignOnCreate:  raw.AssignOnCreate,
+		Reassignable:    raw.Reassignable,
+		InheritFrom:     raw.InheritFrom,
 	}
-	indexes, err := parseSpecIndexes(raw.Indexes, fields)
-	if err != nil {
-		return nil, fmt.Errorf("spec %q indexes: %w", path, err)
-	}
-	table.Indexes = indexes
-	if err := normalizeTableConfiguration(&table); err != nil {
-		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
-	}
-	options := &GenerateOptions{Table: table, Fields: fields, Type: typeName}
-	if raw.Menu != nil {
-		options.Menu = &MenuOptions{Title: raw.Menu.Title, Parent: raw.Menu.Parent, Weigh: raw.Menu.Weigh}
-	}
-	if err := ValidateGenerationInput(table, fields); err != nil {
-		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
-	}
-	return options, nil
 }
 
 // detectLegacyCascadeOwners 检测 spec 中遗留的 dataScope.cascadeOwners 声明：
@@ -281,62 +326,83 @@ func parseSpecIndexes(raw []specIndex, fields []crudmodel.Field) ([]crudmodel.In
 		fieldType[field.Name] = strings.ToLower(analyseFieldTypeForSpec(field))
 	}
 	for i, item := range raw {
-		name := strings.TrimSpace(item.Name)
-		if name == "" {
-			return nil, fmt.Errorf("indexes[%d] name is required", i)
+		name, err := validateSpecIndexName(i, item.Name, seen)
+		if err != nil {
+			return nil, err
 		}
-		if err := ValidateIndexName(name); err != nil {
-			return nil, fmt.Errorf("indexes[%d] name %q: %w", i, name, err)
-		}
-		// PRIMARY 是 MySQL 主键索引保留名（错误 1280），必须在校验期拒绝。
-		if strings.EqualFold(name, "PRIMARY") {
-			return nil, fmt.Errorf("indexes[%d] name %q is reserved; pick a different index name", i, name)
-		}
-		// MySQL 索引名大小写不敏感：uk_a 与 UK_A 视为重复。
-		if seen[strings.ToLower(name)] {
-			return nil, fmt.Errorf("indexes[%d] duplicate index name %q", i, name)
-		}
-		seen[strings.ToLower(name)] = true
 		if len(item.Columns) == 0 {
 			return nil, fmt.Errorf("index %q must declare at least one column", name)
 		}
-		columns := make([]string, 0, len(item.Columns))
-		columnSeen := make(map[string]bool, len(item.Columns))
-		for _, col := range item.Columns {
-			col = strings.TrimSpace(col)
-			if col == "" {
-				return nil, fmt.Errorf("index %q has an empty column", name)
-			}
-			baseName, prefix, err := parseIndexColumn(col)
-			if err != nil {
-				return nil, fmt.Errorf("index %q column %q: %w", name, col, err)
-			}
-			if !fieldNames[baseName] {
-				return nil, fmt.Errorf("index %q column %q is not a spec field", name, baseName)
-			}
-			// 重复检测按基础列名判重：note(64) 与 note 是同一列。
-			if columnSeen[baseName] {
-				return nil, fmt.Errorf("index %q declares column %q more than once", name, baseName)
-			}
-			columnSeen[baseName] = true
-			if prefix > 0 {
-				// utf8mb4 下 InnoDB 单索引键上限 3072 字节（≈768 字符）；按字符数
-				// 拒绝明显超界的前缀长度，具体字节上限仍由 MySQL 兜底。
-				if prefix > 768 {
-					return nil, fmt.Errorf("index %q column %q prefix length %d exceeds the 768-char InnoDB utf8mb4 limit", name, baseName, prefix)
-				}
-				columns = append(columns, fmt.Sprintf("%s(%d)", baseName, prefix))
-			} else {
-				// text/blob/json 家族无前缀 → MySQL 1170 拒绝；校验期必须失败。
-				if isTextFamilyType(fieldType[baseName]) {
-					return nil, fmt.Errorf("index %q column %q (%s) requires a prefix length, use col(N)", name, baseName, fieldType[baseName])
-				}
-				columns = append(columns, baseName)
-			}
+		columns, err := buildSpecIndexColumns(name, item, fieldNames, fieldType)
+		if err != nil {
+			return nil, err
 		}
 		indexes = append(indexes, crudmodel.IndexSpec{Name: name, Unique: item.Unique, Columns: columns})
 	}
 	return indexes, nil
+}
+
+// validateSpecIndexName 校验索引名：必填、合法标识符、非 MySQL 保留名，且全
+// spec 内大小写不敏感唯一。返回去空格后的索引名并登记到 seen。
+func validateSpecIndexName(index int, rawName string, seen map[string]bool) (string, error) {
+	name := strings.TrimSpace(rawName)
+	if name == "" {
+		return "", fmt.Errorf("indexes[%d] name is required", index)
+	}
+	if err := ValidateIndexName(name); err != nil {
+		return "", fmt.Errorf("indexes[%d] name %q: %w", index, name, err)
+	}
+	// PRIMARY 是 MySQL 主键索引保留名（错误 1280），必须在校验期拒绝。
+	if strings.EqualFold(name, "PRIMARY") {
+		return "", fmt.Errorf("indexes[%d] name %q is reserved; pick a different index name", index, name)
+	}
+	// MySQL 索引名大小写不敏感：uk_a 与 UK_A 视为重复。
+	if seen[strings.ToLower(name)] {
+		return "", fmt.Errorf("indexes[%d] duplicate index name %q", index, name)
+	}
+	seen[strings.ToLower(name)] = true
+	return name, nil
+}
+
+// buildSpecIndexColumns 校验并展开单个索引的列声明：列必须引用真实字段、单
+// 索引内不重复；前缀长度需为正且不超过 InnoDB utf8mb4 上限，无前缀的
+// text/blob/json 家族列必须报错。
+func buildSpecIndexColumns(name string, item specIndex, fieldNames map[string]bool, fieldType map[string]string) ([]string, error) {
+	columns := make([]string, 0, len(item.Columns))
+	columnSeen := make(map[string]bool, len(item.Columns))
+	for _, col := range item.Columns {
+		col = strings.TrimSpace(col)
+		if col == "" {
+			return nil, fmt.Errorf("index %q has an empty column", name)
+		}
+		baseName, prefix, err := parseIndexColumn(col)
+		if err != nil {
+			return nil, fmt.Errorf("index %q column %q: %w", name, col, err)
+		}
+		if !fieldNames[baseName] {
+			return nil, fmt.Errorf("index %q column %q is not a spec field", name, baseName)
+		}
+		// 重复检测按基础列名判重：note(64) 与 note 是同一列。
+		if columnSeen[baseName] {
+			return nil, fmt.Errorf("index %q declares column %q more than once", name, baseName)
+		}
+		columnSeen[baseName] = true
+		if prefix > 0 {
+			// utf8mb4 下 InnoDB 单索引键上限 3072 字节（≈768 字符）；按字符数
+			// 拒绝明显超界的前缀长度，具体字节上限仍由 MySQL 兜底。
+			if prefix > 768 {
+				return nil, fmt.Errorf("index %q column %q prefix length %d exceeds the 768-char InnoDB utf8mb4 limit", name, baseName, prefix)
+			}
+			columns = append(columns, fmt.Sprintf("%s(%d)", baseName, prefix))
+		} else {
+			// text/blob/json 家族无前缀 → MySQL 1170 拒绝；校验期必须失败。
+			if isTextFamilyType(fieldType[baseName]) {
+				return nil, fmt.Errorf("index %q column %q (%s) requires a prefix length, use col(N)", name, baseName, fieldType[baseName])
+			}
+			columns = append(columns, baseName)
+		}
+	}
+	return columns, nil
 }
 
 // isTextFamilyType 报告列类型是否属于必须前缀长度的 text/blob/json 家族。
@@ -380,36 +446,7 @@ func normalizeNullKeys(node *yaml.Node) error {
 	}
 	if node.Kind == yaml.MappingNode {
 		for i := 0; i+1 < len(node.Content); i += 2 {
-			key := node.Content[i]
-			value := node.Content[i+1]
-			if key.Kind == yaml.ScalarNode && key.Tag == "!!null" && (key.Value == "null" || key.Value == "~") {
-				key.Tag = "!!str"
-				key.Value = "null"
-			}
-			if key.Value == "defaultType" && value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
-				value.Tag = "!!str"
-				value.Value = "NULL"
-			}
-			if value.Kind == yaml.ScalarNode && value.Tag == "!!bool" && (key.Value == "selectMulti" || key.Value == "imageMulti" || key.Value == "fileMulti") {
-				value.Tag = "!!str"
-				if value.Value == "true" {
-					value.Value = "1"
-				} else {
-					value.Value = ""
-				}
-			}
-			if key.Value == "comSearchInputAttr" && value.Kind == yaml.ScalarNode {
-				attrs, err := crudmodel.ParseComSearchInputAttrs(value.Value)
-				if err != nil {
-					return err
-				}
-				encoded, _ := yaml.Marshal(attrs)
-				var replacement yaml.Node
-				if yaml.Unmarshal(encoded, &replacement) == nil && len(replacement.Content) == 1 {
-					*value = *replacement.Content[0]
-				}
-			}
-			if err := normalizeNullKeys(value); err != nil {
+			if err := normalizeNullKeyPair(node.Content[i], node.Content[i+1]); err != nil {
 				return err
 			}
 		}
@@ -423,15 +460,74 @@ func normalizeNullKeys(node *yaml.Node) error {
 	return nil
 }
 
+// normalizeNullKeyPair 归一化单个 mapping 键值对并递归其值，处理顺序不可调整。
+func normalizeNullKeyPair(key, value *yaml.Node) error {
+	normalizeNullMappingKey(key)
+	normalizeNullDefaultTypeValue(key, value)
+	normalizeBooleanMultiFlag(key, value)
+	if err := normalizeComSearchInputAttr(key, value); err != nil {
+		return err
+	}
+	return normalizeNullKeys(value)
+}
+
+// normalizeNullMappingKey 把 YAML 的 null/~ 键还原为字符串键 "null"。
+func normalizeNullMappingKey(key *yaml.Node) {
+	if key.Kind == yaml.ScalarNode && key.Tag == "!!null" && (key.Value == "null" || key.Value == "~") {
+		key.Tag = "!!str"
+		key.Value = "null"
+	}
+}
+
+// normalizeNullDefaultTypeValue 把 defaultType 的裸 null 值还原为 "NULL" 字面量。
+func normalizeNullDefaultTypeValue(key, value *yaml.Node) {
+	if key.Value == "defaultType" && value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
+		value.Tag = "!!str"
+		value.Value = "NULL"
+	}
+}
+
+// normalizeBooleanMultiFlag 把多选布尔标记的 true/false 归一为 "1"/""，
+// 避免 mapstructure 把 bool 与空串混同。
+func normalizeBooleanMultiFlag(key, value *yaml.Node) {
+	if value.Kind != yaml.ScalarNode || value.Tag != "!!bool" {
+		return
+	}
+	switch key.Value {
+	case "selectMulti", "imageMulti", "fileMulti":
+		value.Tag = "!!str"
+		if value.Value == "true" {
+			value.Value = "1"
+		} else {
+			value.Value = ""
+		}
+	}
+}
+
+// normalizeComSearchInputAttr 把 comSearchInputAttr 的字符串值编码为规范化
+// YAML 节点，保持与历史归一化结果一致的输出。
+func normalizeComSearchInputAttr(key, value *yaml.Node) error {
+	if key.Value != "comSearchInputAttr" || value.Kind != yaml.ScalarNode {
+		return nil
+	}
+	attrs, err := crudmodel.ParseComSearchInputAttrs(value.Value)
+	if err != nil {
+		return err
+	}
+	encoded, _ := yaml.Marshal(attrs)
+	var replacement yaml.Node
+	if yaml.Unmarshal(encoded, &replacement) == nil && len(replacement.Content) == 1 {
+		*value = *replacement.Content[0]
+	}
+	return nil
+}
+
 // inferDesignTypeForField follows Helper.php::$inputTypeRule in order.  The
 // order is significant: suffix rules intentionally beat broad type rules.
 func inferDesignTypeForField(field crudmodel.Field) string {
 	name := strings.ToLower(field.Name)
 	typ := strings.ToLower(analyseFieldTypeForSpec(field))
-	columnType := strings.ToLower(field.DataType)
-	if columnType == "" {
-		columnType = strings.ToLower(field.Type)
-	}
+	columnType := specFieldColumnType(field)
 	// Normalize type+length to the full column type so length:1 is treated
 	// identically to tinyint(1)/char(1): status/state/type then hit the radio
 	// rule below, switch/toggle suffixes hit switch, and neither depends on
@@ -441,93 +537,143 @@ func inferDesignTypeForField(field crudmodel.Field) string {
 		columnType = columnType + "(1)"
 	}
 
-	if field.AutoIncrement && strings.Contains(name, "id") {
-		return "pk"
+	if designType, ok := inferSpecIdentityDesignType(field, name); ok {
+		return designType
 	}
-	if name == "weigh" {
-		return "weigh"
+	if designType, ok := inferSpecWidgetDesignType(typ, columnType, name); ok {
+		return designType
 	}
-	if isCanonicalTimeField(name) {
-		return "timestamp"
+	if designType, ok := inferSpecTemporalDesignType(typ); ok {
+		return designType
 	}
-	if matchesTypeAndSuffix(typ, name, []string{"tinyint", "int", "enum"}, []string{"switch", "toggle"}) ||
-		matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"switch", "toggle"}) {
-		return "switch"
+	if designType, ok := inferSpecSuffixDesignType(name); ok {
+		return designType
 	}
-	if matchesTypeAndSuffix(typ, name, []string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, []string{"content", "editor"}) {
-		return "editor"
-	}
-	if matchesTypeAndSuffix(typ, name, []string{"varchar"}, []string{"textarea", "multiline", "rows"}) {
-		return "textarea"
-	}
-	if hasSuffix(name, []string{"array"}) {
-		return "array"
-	}
-	if matchesTypeAndSuffix(typ, name, []string{"int"}, []string{"time", "datetime"}) {
-		return "timestamp"
-	}
-	switch typ {
-	case "datetime", "timestamp":
-		return "datetime"
-	case "date":
-		return "date"
-	case "year":
-		return "year"
-	case "time":
-		return "time"
-	}
-	if hasSuffix(name, []string{"select", "list", "data"}) {
-		return "select"
-	}
-	if hasSuffix(name, []string{"selects", "multi", "lists"}) {
-		return "selects"
-	}
-	if hasSuffix(name, []string{"_ids"}) {
-		return "remoteSelects"
-	}
-	if hasSuffix(name, []string{"_id"}) {
-		return "remoteSelect"
-	}
-	if hasSuffix(name, []string{"city"}) {
-		return "city"
-	}
-	if hasSuffix(name, []string{"image", "avatar"}) {
-		return "image"
-	}
-	if hasSuffix(name, []string{"images", "avatars"}) {
-		return "images"
-	}
-	if hasSuffix(name, []string{"file"}) {
-		return "file"
-	}
-	if hasSuffix(name, []string{"files"}) {
-		return "files"
-	}
-	if hasSuffix(name, []string{"icon"}) {
-		return "icon"
-	}
-	if matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"status", "state", "type"}) {
-		return "radio"
-	}
-	if hasSuffix(name, []string{"number", "int", "num"}) {
-		return "number"
-	}
-	if slicesContains([]string{"bigint", "int", "mediumint", "smallint", "tinyint", "decimal", "double", "float"}, typ) {
-		return "number"
-	}
-	if slicesContains([]string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, typ) {
-		return "textarea"
-	}
-	if typ == "enum" {
-		return "radio"
-	}
-	if typ == "set" {
-		return "checkbox"
-	}
-	if hasSuffix(name, []string{"color"}) {
-		return "color"
+	if designType, ok := inferSpecColumnDesignType(columnType, typ, name); ok {
+		return designType
 	}
 	return "string"
+}
+
+// specFieldColumnType 返回用于 designType 推断的完整列类型（dataType 优先，
+// 缺省回退 type），统一小写。
+func specFieldColumnType(field crudmodel.Field) string {
+	columnType := strings.ToLower(field.DataType)
+	if columnType == "" {
+		columnType = strings.ToLower(field.Type)
+	}
+	return columnType
+}
+
+// inferSpecIdentityDesignType 处理主键、weigh 与规范时间字段，优先级最高。
+func inferSpecIdentityDesignType(field crudmodel.Field, name string) (string, bool) {
+	if field.AutoIncrement && strings.Contains(name, "id") {
+		return "pk", true
+	}
+	if name == "weigh" {
+		return "weigh", true
+	}
+	if isCanonicalTimeField(name) {
+		return "timestamp", true
+	}
+	return "", false
+}
+
+// inferSpecWidgetDesignType 处理依赖 db 类型与字段后缀组合的控件类型。
+func inferSpecWidgetDesignType(typ, columnType, name string) (string, bool) {
+	if matchesTypeAndSuffix(typ, name, []string{"tinyint", "int", "enum"}, []string{"switch", "toggle"}) ||
+		matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"switch", "toggle"}) {
+		return "switch", true
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, []string{"content", "editor"}) {
+		return "editor", true
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"varchar"}, []string{"textarea", "multiline", "rows"}) {
+		return "textarea", true
+	}
+	if hasSuffix(name, []string{"array"}) {
+		return "array", true
+	}
+	if matchesTypeAndSuffix(typ, name, []string{"int"}, []string{"time", "datetime"}) {
+		return "timestamp", true
+	}
+	return "", false
+}
+
+// inferSpecTemporalDesignType 把日期时间类 db 类型映射为对应控件。
+func inferSpecTemporalDesignType(typ string) (string, bool) {
+	switch typ {
+	case "datetime", "timestamp":
+		return "datetime", true
+	case "date":
+		return "date", true
+	case "year":
+		return "year", true
+	case "time":
+		return "time", true
+	}
+	return "", false
+}
+
+// inferSpecSuffixDesignType 按字段名后缀推断控件，顺序对齐 Helper.php。
+func inferSpecSuffixDesignType(name string) (string, bool) {
+	if hasSuffix(name, []string{"select", "list", "data"}) {
+		return "select", true
+	}
+	if hasSuffix(name, []string{"selects", "multi", "lists"}) {
+		return "selects", true
+	}
+	if hasSuffix(name, []string{"_ids"}) {
+		return "remoteSelects", true
+	}
+	if hasSuffix(name, []string{"_id"}) {
+		return "remoteSelect", true
+	}
+	if hasSuffix(name, []string{"city"}) {
+		return "city", true
+	}
+	if hasSuffix(name, []string{"image", "avatar"}) {
+		return "image", true
+	}
+	if hasSuffix(name, []string{"images", "avatars"}) {
+		return "images", true
+	}
+	if hasSuffix(name, []string{"file"}) {
+		return "file", true
+	}
+	if hasSuffix(name, []string{"files"}) {
+		return "files", true
+	}
+	if hasSuffix(name, []string{"icon"}) {
+		return "icon", true
+	}
+	return "", false
+}
+
+// inferSpecColumnDesignType 按列类型兜底推断控件（radio/number/textarea 等）。
+func inferSpecColumnDesignType(columnType, typ, name string) (string, bool) {
+	if matchesColumnTypeAndSuffix(columnType, name, []string{"tinyint(1)", "char(1)", "tinyint(1) unsigned"}, []string{"status", "state", "type"}) {
+		return "radio", true
+	}
+	if hasSuffix(name, []string{"number", "int", "num"}) {
+		return "number", true
+	}
+	if slicesContains([]string{"bigint", "int", "mediumint", "smallint", "tinyint", "decimal", "double", "float"}, typ) {
+		return "number", true
+	}
+	if slicesContains([]string{"longtext", "text", "mediumtext", "smalltext", "tinytext", "bigtext"}, typ) {
+		return "textarea", true
+	}
+	if typ == "enum" {
+		return "radio", true
+	}
+	if typ == "set" {
+		return "checkbox", true
+	}
+	if hasSuffix(name, []string{"color"}) {
+		return "color", true
+	}
+	return "", false
 }
 
 func analyseFieldTypeForSpec(field crudmodel.Field) string {
@@ -576,142 +722,147 @@ func isCanonicalTimeField(name string) bool {
 	}
 }
 
+// specTableDefault 是某个 designType 对应的 table 列默认配置；字段已有非零值
+// 时不覆盖。
+type specTableDefault struct {
+	Render     string
+	Operator   string
+	Sortable   string
+	Search     string
+	Width      int
+	TimeFormat string
+}
+
+var specTableDefaultsByDesignType = map[string]specTableDefault{
+	"pk":            {"", "RANGE", "custom", "", 70, ""},
+	"spk":           {"", "RANGE", "custom", "", 180, ""},
+	"weigh":         {"", "RANGE", "custom", "", 0, ""},
+	"timestamp":     {"datetime", "RANGE", "custom", "datetime", 160, "yyyy-mm-dd hh:MM:ss"},
+	"string":        {"none", "LIKE", "false", "", 0, ""},
+	"password":      {"", "false", "", "", 0, ""},
+	"number":        {"none", "RANGE", "false", "", 0, ""},
+	"float":         {"none", "RANGE", "false", "", 0, ""},
+	"radio":         {"tag", "eq", "false", "", 0, ""},
+	"checkbox":      {"tags", "FIND_IN_SET", "false", "", 0, ""},
+	"switch":        {"switch", "eq", "false", "", 0, ""},
+	"textarea":      {"", "false", "", "", 0, ""},
+	"array":         {"", "false", "", "", 0, ""},
+	"datetime":      {"", "RANGE", "custom", "datetime", 160, ""},
+	"year":          {"", "RANGE", "custom", "", 0, ""},
+	"date":          {"", "RANGE", "custom", "date", 0, ""},
+	"time":          {"", "RANGE", "custom", "time", 0, ""},
+	"select":        {"tag", "eq", "false", "", 0, ""},
+	"selects":       {"tags", "FIND_IN_SET", "false", "", 0, ""},
+	"remoteSelect":  {"tags", "LIKE", "", "string", 0, ""},
+	"remoteSelects": {"tags", "FIND_IN_SET", "", "remoteSelect", 0, ""},
+	"editor":        {"", "false", "", "", 0, ""},
+	"city":          {"", "false", "", "", 0, ""},
+	"image":         {"image", "false", "", "", 0, ""},
+	"images":        {"images", "false", "", "", 0, ""},
+	"file":          {"none", "false", "", "", 0, ""},
+	"files":         {"none", "false", "", "", 0, ""},
+	"icon":          {"icon", "false", "", "", 0, ""},
+	"color":         {"color", "false", "", "", 0, ""},
+}
+
+var specValidatorDefaultsByDesignType = map[string]string{
+	"timestamp": "date",
+	"password":  "password",
+	"number":    "number",
+	"float":     "float",
+	"datetime":  "date",
+	"year":      "date",
+	"date":      "date",
+	"editor":    "editorRequired",
+}
+
+var specStepDesignTypes = map[string]bool{"number": true, "float": true}
+
 func applyDesignTypeDefaults(field *crudmodel.Field) {
-	setTable := func(render, operator, sortable, search string, width int, timeFormat string) {
-		if field.Table.Render == "" {
-			field.Table.Render = render
-		}
-		if field.Table.Operator == "" {
-			field.Table.Operator = operator
-		}
-		if field.Table.Sortable == "" {
-			field.Table.Sortable = sortable
-		}
-		if field.Table.ComSearchRender == "" {
-			field.Table.ComSearchRender = search
-		}
-		if field.Table.Width == 0 {
-			field.Table.Width = width
-		}
-		if field.Table.TimeFormat == "" {
-			field.Table.TimeFormat = timeFormat
-		}
+	if defaults, ok := specTableDefaultsByDesignType[field.DesignType]; ok {
+		applySpecTableDefaults(field, defaults)
 	}
+	applySpecValidatorDefaults(field)
+	applySpecStepDefaults(field)
+	applySpecMultiFlagDefaults(field)
+	applySpecRemoteDefaults(field)
+	applySpecTextareaDefaults(field)
+}
+
+// applySpecTableDefaults 仅在 table 列属性为空/零值时写入 designType 默认值。
+func applySpecTableDefaults(field *crudmodel.Field, defaults specTableDefault) {
+	if field.Table.Render == "" {
+		field.Table.Render = defaults.Render
+	}
+	if field.Table.Operator == "" {
+		field.Table.Operator = defaults.Operator
+	}
+	if field.Table.Sortable == "" {
+		field.Table.Sortable = defaults.Sortable
+	}
+	if field.Table.ComSearchRender == "" {
+		field.Table.ComSearchRender = defaults.Search
+	}
+	if field.Table.Width == 0 {
+		field.Table.Width = defaults.Width
+	}
+	if field.Table.TimeFormat == "" {
+		field.Table.TimeFormat = defaults.TimeFormat
+	}
+}
+
+// applySpecValidatorDefaults 为未声明 validator 的 designType 写入默认校验器。
+func applySpecValidatorDefaults(field *crudmodel.Field) {
+	validator, ok := specValidatorDefaultsByDesignType[field.DesignType]
+	if !ok || len(field.Form.Validator) != 0 {
+		return
+	}
+	field.Form.Validator = []string{validator}
+}
+
+// applySpecStepDefaults 为 number/float 字段补默认步长 1。
+func applySpecStepDefaults(field *crudmodel.Field) {
+	if !specStepDesignTypes[field.DesignType] || field.Form.Step != 0 {
+		return
+	}
+	field.Form.Step = 1
+}
+
+// applySpecMultiFlagDefaults 为多选类 designType 打开对应的多选标记。
+func applySpecMultiFlagDefaults(field *crudmodel.Field) {
 	switch field.DesignType {
-	case "pk":
-		setTable("", "RANGE", "custom", "", 70, "")
-	case "spk":
-		setTable("", "RANGE", "custom", "", 180, "")
-	case "weigh":
-		setTable("", "RANGE", "custom", "", 0, "")
-	case "timestamp":
-		setTable("datetime", "RANGE", "custom", "datetime", 160, "yyyy-mm-dd hh:MM:ss")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"date"}
-		}
-	case "string":
-		setTable("none", "LIKE", "false", "", 0, "")
-	case "password":
-		setTable("", "false", "", "", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"password"}
-		}
-	case "number":
-		setTable("none", "RANGE", "false", "", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"number"}
-		}
-		if field.Form.Step == 0 {
-			field.Form.Step = 1
-		}
-	case "float":
-		setTable("none", "RANGE", "false", "", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"float"}
-		}
-		if field.Form.Step == 0 {
-			field.Form.Step = 1
-		}
-	case "radio":
-		setTable("tag", "eq", "false", "", 0, "")
-	case "checkbox":
-		setTable("tags", "FIND_IN_SET", "false", "", 0, "")
-	case "switch":
-		setTable("switch", "eq", "false", "", 0, "")
-	case "textarea":
-		setTable("", "false", "", "", 0, "")
-		if field.Form.Rows == 0 {
-			field.Form.Rows = 3
-		}
-	case "array":
-		setTable("", "false", "", "", 0, "")
-	case "datetime":
-		setTable("", "RANGE", "custom", "datetime", 160, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"date"}
-		}
-	case "year":
-		setTable("", "RANGE", "custom", "", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"date"}
-		}
-	case "date":
-		setTable("", "RANGE", "custom", "date", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"date"}
-		}
-	case "time":
-		setTable("", "RANGE", "custom", "time", 0, "")
-	case "select":
-		setTable("tag", "eq", "false", "", 0, "")
-	case "selects":
-		setTable("tags", "FIND_IN_SET", "false", "", 0, "")
+	case "selects", "remoteSelects":
 		if field.Form.SelectMulti == "" {
 			field.Form.SelectMulti = "1"
 		}
-	case "remoteSelect":
-		setTable("tags", "LIKE", "", "string", 0, "")
-		if field.Form.RemotePk == "" {
-			field.Form.RemotePk = "id"
-		}
-		if field.Form.RemoteField == "" {
-			field.Form.RemoteField = "name"
-		}
-	case "remoteSelects":
-		setTable("tags", "FIND_IN_SET", "", "remoteSelect", 0, "")
-		if field.Form.SelectMulti == "" {
-			field.Form.SelectMulti = "1"
-		}
-		if field.Form.RemotePk == "" {
-			field.Form.RemotePk = "id"
-		}
-		if field.Form.RemoteField == "" {
-			field.Form.RemoteField = "name"
-		}
-	case "editor":
-		setTable("", "false", "", "", 0, "")
-		if len(field.Form.Validator) == 0 {
-			field.Form.Validator = []string{"editorRequired"}
-		}
-	case "city":
-		setTable("", "false", "", "", 0, "")
-	case "image":
-		setTable("image", "false", "", "", 0, "")
 	case "images":
-		setTable("images", "false", "", "", 0, "")
 		if field.Form.ImageMulti == "" {
 			field.Form.ImageMulti = "1"
 		}
-	case "file":
-		setTable("none", "false", "", "", 0, "")
 	case "files":
-		setTable("none", "false", "", "", 0, "")
 		if field.Form.FileMulti == "" {
 			field.Form.FileMulti = "1"
 		}
-	case "icon":
-		setTable("icon", "false", "", "", 0, "")
-	case "color":
-		setTable("color", "false", "", "", 0, "")
 	}
+}
+
+// applySpecRemoteDefaults 为远程下拉字段补 pk/展示字段默认值。
+func applySpecRemoteDefaults(field *crudmodel.Field) {
+	if field.DesignType != "remoteSelect" && field.DesignType != "remoteSelects" {
+		return
+	}
+	if field.Form.RemotePk == "" {
+		field.Form.RemotePk = "id"
+	}
+	if field.Form.RemoteField == "" {
+		field.Form.RemoteField = "name"
+	}
+}
+
+// applySpecTextareaDefaults 为 textarea 字段补默认行数 3。
+func applySpecTextareaDefaults(field *crudmodel.Field) {
+	if field.DesignType != "textarea" || field.Form.Rows != 0 {
+		return
+	}
+	field.Form.Rows = 3
 }

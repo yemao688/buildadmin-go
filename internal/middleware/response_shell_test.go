@@ -20,7 +20,6 @@ import (
 // newResponseShellEngine 装配 i18n 中间件（util.Lang 依赖 context 里的 i18n
 // 实例）与单个探活 handler，用于锁定中间件响应壳的 JSON 形状。
 func newResponseShellEngine(handler gin.HandlerFunc) *gin.Engine {
-	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",
@@ -47,6 +46,8 @@ func decodeResponseShell(t *testing.T, recorder *httptest.ResponseRecorder) map[
 }
 
 func TestAbortLoginWritesLoginShell(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	var aborted bool
 	engine := newResponseShellEngine(func(c *gin.Context) {
 		AbortLogin(c, cErr.Unauthorized("Please login first"))
@@ -66,6 +67,8 @@ func TestAbortLoginWritesLoginShell(t *testing.T) {
 }
 
 func TestAbortLoginDefaultsToUnauthorizedForPlainError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	engine := newResponseShellEngine(func(c *gin.Context) {
 		AbortLogin(c, errors.New("token expired"))
 	})
@@ -77,6 +80,8 @@ func TestAbortLoginDefaultsToUnauthorizedForPlainError(t *testing.T) {
 }
 
 func TestAbortMissingTokenWritesLoginShell(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	var aborted bool
 	engine := newResponseShellEngine(func(c *gin.Context) {
 		AbortMissingToken(c)
@@ -95,6 +100,8 @@ func TestAbortMissingTokenWritesLoginShell(t *testing.T) {
 }
 
 func TestServerErrorWritesInternalErrorShell(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	var aborted bool
 	engine := newResponseShellEngine(func(c *gin.Context) {
 		ServerError(c, errors.New("boom"))

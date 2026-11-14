@@ -18,6 +18,7 @@ import (
 )
 
 func TestAdminGroupFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params AdminGroup
 	require.NoError(t, json.Unmarshal([]byte(`{"pid":"2","name":"g","rules":["1","2"]}`), &params))
 	require.Equal(t, int32(2), int32(params.Pid))
@@ -36,6 +37,7 @@ func TestAdminGroupFlexBinding(t *testing.T) {
 }
 
 func TestUserFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params User
 	require.NoError(t, json.Unmarshal([]byte(`{"admin_id":"5","join_time":"1700000000"}`), &params))
 	require.Equal(t, int32(5), int32(params.AdminID))
@@ -43,12 +45,14 @@ func TestUserFlexBinding(t *testing.T) {
 }
 
 func TestConfigFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params Config
 	require.NoError(t, json.Unmarshal([]byte(`{"weigh":"5"}`), &params))
 	require.Equal(t, int32(5), int32(params.Weigh))
 }
 
 func TestAdminNullableParentIDFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params Admin
 	require.NoError(t, json.Unmarshal([]byte(`{"parent_id":"3"}`), &params))
 	require.True(t, params.ParentID.IsSet)
@@ -66,7 +70,7 @@ func TestAdminNullableParentIDFlexBinding(t *testing.T) {
 // 验证通用 ID 结构：字符串数字 id 解码成功，
 // 且 binding:"required" 语义不回归（缺 id 仍触发校验错误）。
 func TestIDSFlexBinding(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/x", bytes.NewBufferString(`{"id":"7"}`))
 	var params dto.IDS
@@ -80,6 +84,7 @@ func TestIDSFlexBinding(t *testing.T) {
 }
 
 func TestCrudUploadCompletedFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params dto.CrudUploadCompletedParam
 	require.NoError(t, json.Unmarshal([]byte(`{"syncIds":{"1":"2","3":4}}`), &params))
 	require.Equal(t, map[int32]int{1: 2, 3: 4}, map[int32]int(params.SyncIDs))
@@ -97,6 +102,7 @@ func TestCrudUploadCompletedFlexBinding(t *testing.T) {
 // 发数字 status（{"status":1}）时，string 字段严格绑定会 400；改为
 // validator.FlexStatus 后数字/字符串/布尔形态必须等价解码。
 func TestAdminRuleStatusFlexBinding(t *testing.T) {
+	t.Parallel()
 	var params AdminRule
 	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &params))
 	require.Equal(t, validator.FlexStatus("1"), params.Status)
@@ -112,6 +118,7 @@ func TestAdminRuleStatusFlexBinding(t *testing.T) {
 
 // 同规则覆盖 security 两个 handler 的请求结构。
 func TestSecurityStatusFlexBinding(t *testing.T) {
+	t.Parallel()
 	var recycle dto.SecurityDataRecycleParam
 	require.NoError(t, json.Unmarshal([]byte(`{"status":1}`), &recycle))
 	require.Equal(t, validator.FlexStatus("1"), recycle.Status)

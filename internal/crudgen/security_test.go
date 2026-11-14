@@ -10,6 +10,7 @@ import (
 )
 
 func TestNormalizeTableConfigurationRejectsIsCommonModel(t *testing.T) {
+	t.Parallel()
 	if err := normalizeTableConfiguration(&crudmodel.Table{Name: "order_item", IsCommonModel: 1}); err == nil {
 		t.Fatal("isCommonModel=1 was accepted")
 	} else if !strings.Contains(err.Error(), "isCommonModel") {
@@ -21,6 +22,7 @@ func TestNormalizeTableConfigurationRejectsIsCommonModel(t *testing.T) {
 }
 
 func TestValidateGenerationInputRejectsInjectedIdentifiersAndTypes(t *testing.T) {
+	t.Parallel()
 	base := crudmodel.Table{Name: "orders"}
 	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "name`); DROP TABLE users;--", Type: "varchar"}}); err == nil {
 		t.Fatal("injected field name was accepted")
@@ -34,6 +36,7 @@ func TestValidateGenerationInputRejectsInjectedIdentifiersAndTypes(t *testing.T)
 }
 
 func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "title", DataType: "varchar(64)", Default: "O'Reilly", Comment: "Bob's title", PrimaryKey: true}
 	if err := ValidateGenerationInput(crudmodel.Table{Name: "orders", Comment: "customer's orders"}, []crudmodel.Field{field}); err != nil {
 		t.Fatal(err)
@@ -47,6 +50,7 @@ func TestValidateGenerationInputAllowsDesignerTypesAndEscapesSQLStrings(t *testi
 }
 
 func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
+	t.Parallel()
 	base := crudmodel.Table{Name: "orders"}
 	if err := ValidateGenerationInput(base, []crudmodel.Field{{Name: "id", Type: "int"}}); err == nil {
 		t.Fatal("missing primary key was accepted")
@@ -63,6 +67,7 @@ func TestValidateGenerationInputRequiresOneUniquePrimaryKey(t *testing.T) {
 // 未知 alias（仅 remoteSelects 不产生 alias）、列未在 relationFields 声明、
 // 超过一层点号一律拒绝；不含点号的条目沿用本表字段行为。
 func TestValidateQuickSearchRelationPaths(t *testing.T) {
+	t.Parallel()
 	relationFields := func(designType, relationFields string) []crudmodel.Field {
 		return []crudmodel.Field{
 			{Name: "id", Type: "int", PrimaryKey: true, AutoIncrement: true, Unsigned: true},
@@ -127,6 +132,7 @@ func TestValidateQuickSearchRelationPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			err := ValidateGenerationInput(crudmodel.Table{Name: "orders", QuickSearchField: tt.quickSearch}, tt.fields)
 			if tt.wantErr == "" {
 				if err != nil {
@@ -145,6 +151,7 @@ func TestValidateQuickSearchRelationPaths(t *testing.T) {
 }
 
 func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{
 		Name: "owner_id", Type: "int", Form: crudmodel.FormAttr{
 			RemoteTable: "owner", RemoteModel: "internal/admin/model/../handler/Evil.go", RelationFields: "name",
@@ -157,6 +164,7 @@ func TestValidateGenerationInputRejectsUnsafeRemoteModel(t *testing.T) {
 }
 
 func TestValidateGenerationInputRemotePkAcceptsQualifiedAndUnqualified(t *testing.T) {
+	t.Parallel()
 	for _, remotePk := range []string{"uuid", "owner.uuid"} {
 		fields := []crudmodel.Field{
 			{Name: "id", Type: "int", PrimaryKey: true},
@@ -169,6 +177,7 @@ func TestValidateGenerationInputRemotePkAcceptsQualifiedAndUnqualified(t *testin
 }
 
 func TestValidateGenerationInputRejectsMalformedRemotePk(t *testing.T) {
+	t.Parallel()
 	for _, remotePk := range []string{".uuid", "uuid.", "owner..uuid", "a.b.c", "owner.uuid;DROP TABLE users", "owner-id"} {
 		fields := []crudmodel.Field{
 			{Name: "id", Type: "int", PrimaryKey: true},
@@ -181,6 +190,7 @@ func TestValidateGenerationInputRejectsMalformedRemotePk(t *testing.T) {
 }
 
 func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
+	t.Parallel()
 	for _, path := range []string{"../outside.go", "/tmp/outside.go", `..\\outside.go`, `C:\\outside.go`, `dir//file.go`} {
 		if err := ValidatePathUnderRoots(path, "internal/admin/model"); err == nil {
 			t.Errorf("path %q was accepted", path)
@@ -197,6 +207,7 @@ func TestValidatePathUnderRootsRejectsTraversalAndAbsolutePaths(t *testing.T) {
 // （修复前 resolvedRoot 为空串导致 filepath.Rel 报错 → "outside permitted
 // roots"，阻断容器内 crud:apply/plan 部署用法）。
 func TestValidateSymlinkContainmentMissingRoot(t *testing.T) {
+	t.Parallel()
 	tmp := t.TempDir()
 	missingRoot := filepath.Join(tmp, "internal", "model")
 	// root 与 candidate 均不存在（容器场景），且 candidate 位于 root 之下
@@ -219,6 +230,7 @@ func TestValidateSymlinkContainmentMissingRoot(t *testing.T) {
 }
 
 func TestNormalizeLogicalPathSeparatorsAndUnderscores(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ input, want string }{
 		{"country.languageContent", "country/languageContent"},
 		{`country\languageContent`, "country/languageContent"},
@@ -232,6 +244,7 @@ func TestNormalizeLogicalPathSeparatorsAndUnderscores(t *testing.T) {
 }
 
 func TestNormalizeLogicalPathRejectsTraversalAbsoluteAndDrivePaths(t *testing.T) {
+	t.Parallel()
 	for _, input := range []string{"../escape", `/tmp/escape`, `C:\\escape`, `dir//file`} {
 		if _, err := normalizeLogicalPath(input); err == nil {
 			t.Errorf("path %q was accepted", input)
@@ -240,6 +253,7 @@ func TestNormalizeLogicalPathRejectsTraversalAbsoluteAndDrivePaths(t *testing.T)
 }
 
 func TestValidateDefaultTypes(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{"NONE", "NULL", "EMPTY STRING", "INPUT"} {
 		if err := ValidateField(crudmodel.Field{Name: "value", Type: "varchar", DefaultType: value}); err != nil {
 			t.Errorf("%s rejected: %v", value, err)
@@ -251,6 +265,7 @@ func TestValidateDefaultTypes(t *testing.T) {
 }
 
 func TestValidateGenerationInputRejectsUnsafeFrontendValues(t *testing.T) {
+	t.Parallel()
 	base := crudmodel.Table{Name: "orders"}
 	for _, field := range []crudmodel.Field{
 		{Name: "owner", Type: "int", Form: crudmodel.FormAttr{RemoteField: "name;alert(1)"}},
@@ -267,6 +282,7 @@ func TestValidateGenerationInputRejectsUnsafeFrontendValues(t *testing.T) {
 }
 
 func TestRenderFormFileUsesSafeJavaScriptStrings(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "name", Form: crudmodel.FormAttr{Validator: []string{"required"}, ValidatorMsg: "bad ' quote\nnext"}}}
 	content, err := renderFormFile(FormVueData{}, fields, "form.")
 	if err != nil {
@@ -281,6 +297,7 @@ func TestRenderFormFileUsesSafeJavaScriptStrings(t *testing.T) {
 }
 
 func TestBuildTableColumnKeyOnlyTrustsCompleteTranslationCalls(t *testing.T) {
+	t.Parallel()
 	legitimate := buildTableColumnKey("label", `t("orders.name")`)
 	if !strings.Contains(legitimate, `label: t("orders.name")`) {
 		t.Fatalf("legitimate translation call was quoted: %s", legitimate)

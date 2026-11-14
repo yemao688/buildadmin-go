@@ -13,6 +13,7 @@ import (
 )
 
 func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(util.RootPath(), "internal", "admin", "handler", "demo_route.go")
 	content, err := render(path, registrarTemp, RegistrarData{
 		Namespace: "handler",
@@ -31,6 +32,7 @@ func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
 }
 
 func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(util.RootPath(), "internal", "admin", "router", "country_language.go")
 	content, err := render(path, registrarTemp, RegistrarData{
 		Namespace: "router",
@@ -58,6 +60,7 @@ func assertParseableGo(t *testing.T, filename, content string) {
 }
 
 func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "provider_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	if err := writeProvider("internal/admin/model/provider_scaffold_test", "OwnerModel"); err != nil {
@@ -73,6 +76,7 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 }
 
 func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "provider_fresh_seq_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	// 首个条目写入后 gofmt 会把单参数 NewSet 折叠成单行，第二个条目必须仍能合法追加
@@ -94,12 +98,13 @@ func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
 }
 
 func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "provider_eof_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	provider := filepath.Join(dir, "provider.go")
 	base := "package provider_eof_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewExistingModel,\n)"
 	canonical := base + "\n"
-	for _, original := range []string{base, canonical, canonical + "\n\n"} {
+	for _, original := range []string{base, canonical, canonical + "\n\n"} { //nolint:paralleltest // 子测试共用同一 provider.go 夹具文件，并行会互相覆盖
 		t.Run(strings.ReplaceAll(strconv.Quote(original), "\\n", "\\\n"), func(t *testing.T) {
 			if err := os.MkdirAll(dir, 0o750); err != nil {
 				t.Fatal(err)
@@ -149,6 +154,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 }
 
 func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "registrar_provider_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	provider := filepath.Join(dir, "provider.go")
@@ -175,6 +181,7 @@ func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
 }
 
 func TestRewriteFlexNumericParamFields(t *testing.T) {
+	t.Parallel()
 	input := "type DemoParam struct {\n\tEnabled bool `json:\"enabled\"`\n\tCount int32 `json:\"count\"`\n\tTotal int64 `json:\"total\"`\n\tRate float64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
 	want := "type DemoParam struct {\n\tEnabled validator.FlexBool `json:\"enabled\"`\n\tCount validator.FlexInt32 `json:\"count\"`\n\tTotal validator.FlexInt64 `json:\"total\"`\n\tRate validator.FlexFloat64 `json:\"rate\"`\n\tName string `json:\"name\"`\n}\n"
 	if got := rewriteFlexNumericParamFields(input, nil); got != want {
@@ -183,6 +190,7 @@ func TestRewriteFlexNumericParamFields(t *testing.T) {
 }
 
 func TestRewriteHandlerParamFieldsUsesDesignTypeOverrides(t *testing.T) {
+	t.Parallel()
 	input := "type DemoParam struct {\n" +
 		"\tCount int32 `json:\"count\"`\n" +
 		"\tCheckbox []string `json:\"feature_flags\"`\n" +
@@ -244,6 +252,7 @@ func TestRewriteHandlerParamFieldsUsesDesignTypeOverrides(t *testing.T) {
 }
 
 func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		designType string
@@ -278,6 +287,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			field := analyseField(crudmodel.Field{Name: tc.name, DesignType: tc.designType, Type: tc.typeName, DataType: tc.dataType, Length: tc.length, DefaultType: tc.defaultTyp, Default: tc.defaultVal})
 			got := buildHandlerParamTypeOverrides([]crudmodel.Field{field})
 			if got[tc.name] != tc.want {
@@ -293,6 +303,7 @@ func TestHandlerParamTypeOverridesFromAnalysedFields(t *testing.T) {
 // canonical 时间字段不被改写；datetime/date/year/timestamp 仍走各自分支，且
 // 最终 DTO（buildParamStruct）得到与实体类型一致的宽松绑定。
 func TestNumericFlexOverridesFollowEntityGoTypes(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "user_id", Type: "bigint", DesignType: "number"}, // 实体 int64 → FlexInt64
 		{Name: "count", Type: "int", DesignType: "number"},      // 实体 int32 → FlexInt32
@@ -360,6 +371,7 @@ func TestNumericFlexOverridesFollowEntityGoTypes(t *testing.T) {
 }
 
 func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "enabled", Type: "tinyint", Length: 1, DesignType: "switch"},
 		{Name: "visible", Type: "tinyint", DataType: "tinyint(1)", DesignType: "radio"},
@@ -407,6 +419,7 @@ func TestModelFieldTypeOverridesMatchStorageContracts(t *testing.T) {
 }
 
 func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
+	t.Parallel()
 	structContent := "type Demo struct {\n\tFeatureFlags []string `json:\"feature_flags\"`\n}\n"
 	handlerData := HandlerData{
 		Namespace:       "admin",
@@ -445,6 +458,7 @@ func TestRenderHandlerSharesParamTypeForAddAndEdit(t *testing.T) {
 }
 
 func TestModelTemplateAddsWeighFromIntegerPrimaryKey(t *testing.T) {
+	t.Parallel()
 	withWeigh := `type Demo struct {
 	ID int32 ` + "`json:\"id\"`" + `
 	Weigh int32 ` + "`json:\"weigh\"`" + `
@@ -493,6 +507,7 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 }
 
 func TestWriteGoFileNormalizesFormattingAndEOF(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "provider.go")
 	if err := writeGoFile(path, "package provider\n\n\nvar ProviderSet = 1\n\n\n"); err != nil {
 		t.Fatal(err)
@@ -515,6 +530,7 @@ func assertExactlyOneTrailingLF(t *testing.T, content string) {
 }
 
 func TestApplySpecDefaultTags(t *testing.T) {
+	t.Parallel()
 	structContent := `type CountryLanguage struct {
 	ID     int64  ` + "`gorm:\"column:id;type:bigint unsigned;primaryKey;autoIncrement:true;comment:ID\" json:\"id\"`" + `
 	Lan    string ` + "`gorm:\"column:lan;type:varchar(20);not null;uniqueIndex:uk_country_language_lan,priority:1;comment:语言代码\" json:\"lan\"`" + `
@@ -550,6 +566,7 @@ func TestApplySpecDefaultTags(t *testing.T) {
 }
 
 func TestSpecDefaultGormTag(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		field crudmodel.Field
 		want  string

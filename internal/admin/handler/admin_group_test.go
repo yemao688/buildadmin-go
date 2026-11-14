@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
-	"time"
 
 	adminauth "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
@@ -27,7 +26,7 @@ import (
 
 func newAdminGroupHandlerFixture(t *testing.T) (*AdminGroupHandler, *gorm.DB) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:admin-group-handler-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"?mode=memory&cache=shared"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(uniqueAdminHandlerSQLiteDSN("admin-group-handler")), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true},
 	})
 	require.NoError(t, err)
@@ -42,7 +41,6 @@ func newAdminGroupHandlerFixture(t *testing.T) (*AdminGroupHandler, *gorm.DB) {
 
 func quickEditRouter(t *testing.T, h *AdminGroupHandler, uid int32) *gin.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("AdminAuth", header.AdminAuth{Id: uid, IsSuperAdmin: false})
@@ -77,6 +75,7 @@ func seedQuickEditAuth(t *testing.T, db *gorm.DB, targetRules string) (target mo
 }
 
 func TestAdminGroupQuickEditAllowsAuthorizedOperator(t *testing.T) {
+	t.Parallel()
 	h, db := newAdminGroupHandlerFixture(t)
 	target := seedQuickEditAuth(t, db, "1")
 	router := quickEditRouter(t, h, 5)
@@ -92,6 +91,7 @@ func TestAdminGroupQuickEditAllowsAuthorizedOperator(t *testing.T) {
 }
 
 func TestAdminGroupQuickEditRejectsUnauthorized(t *testing.T) {
+	t.Parallel()
 	h, db := newAdminGroupHandlerFixture(t)
 	// The target group carries rule 3, outside the operator's rule set.
 	target := seedQuickEditAuth(t, db, "3")
@@ -108,6 +108,7 @@ func TestAdminGroupQuickEditRejectsUnauthorized(t *testing.T) {
 }
 
 func TestAdminGroupQuickEditRejectsSelfGroup(t *testing.T) {
+	t.Parallel()
 	h, db := newAdminGroupHandlerFixture(t)
 	target := seedQuickEditAuth(t, db, "1")
 	// The operator is a member of the very group it tries to switch.
@@ -154,6 +155,7 @@ func groupListContext(uid int32) *gin.Context {
 // 非超管列表始终过滤——只能看到"自己所在组 ∪ 有资格管理的组"，看不到超管组
 // （rules="*"）。
 func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
+	t.Parallel()
 	h, db := newAdminGroupHandlerFixture(t)
 	newGroupListFixture(t, h, db)
 	ctx := groupListContext(5)
@@ -172,6 +174,7 @@ func TestAdminGroupListExcludesSuperGroupForNonSuper(t *testing.T) {
 // 对齐 PHP 上游：absoluteAuth=1
 // （管理员编辑页的授权下拉）时不合并自己所在组，只显示有资格管理的分组。
 func TestAdminGroupListAbsoluteAuthOnlyQualified(t *testing.T) {
+	t.Parallel()
 	h, db := newAdminGroupHandlerFixture(t)
 	newGroupListFixture(t, h, db)
 	ctx := groupListContext(5)

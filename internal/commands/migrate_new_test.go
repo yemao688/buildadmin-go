@@ -9,6 +9,7 @@ import (
 
 // 版本号取注册表与目录文件名前缀的较大值加一，避免与未编译的手工文件撞号。
 func TestNextBusinessVersion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "0003_shop_orders.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -27,6 +28,7 @@ func TestNextBusinessVersion(t *testing.T) {
 
 // 文件名用下划线，迁移名保留原样。
 func TestMigrationFileStem(t *testing.T) {
+	t.Parallel()
 	if got := migrationFileStem("Shop-Orders"); got != "shop_orders" {
 		t.Fatalf("migrationFileStem = %q, want shop_orders", got)
 	}
@@ -34,6 +36,7 @@ func TestMigrationFileStem(t *testing.T) {
 
 // 骨架必须带正确版本、迁移名与 package，业务只需填 Up；默认不生成可执行 Down。
 func TestRenderBusinessMigration(t *testing.T) {
+	t.Parallel()
 	rendered := renderBusinessMigration(7, "shop-orders")
 	for _, want := range []string{"package business", "Version:       7", `MigrationName: "shop-orders"`, "func init()", "Register(Migration{"} {
 		if !strings.Contains(rendered, want) {
@@ -47,6 +50,7 @@ func TestRenderBusinessMigration(t *testing.T) {
 
 // 非法迁移名不得落到文件系统。
 func TestCreateBusinessMigrationRejectsInvalidName(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := createBusinessMigration(dir, "../evil", nil); err == nil {
 		t.Fatal("expected invalid migration name to be rejected")
@@ -62,6 +66,7 @@ func TestCreateBusinessMigrationRejectsInvalidName(t *testing.T) {
 
 // 连续创建两条不同迁移得到递增版本号，已有文件不被覆盖。
 func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "0000_seed.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -92,6 +97,7 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 
 // 同名迁移（文件已存在但尚未重新编译）必须被拒绝，避免生成重复 MigrationName。
 func TestCreateBusinessMigrationRejectsDuplicateStem(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "0001_shop_orders.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -103,6 +109,7 @@ func TestCreateBusinessMigrationRejectsDuplicateStem(t *testing.T) {
 
 // 镜像内没有 Go 源码：目录不存在时必须报错且不创建任何目录或文件。
 func TestCreateBusinessMigrationRejectsMissingDir(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "internal", "migrations", "business")
 	if _, err := createBusinessMigration(dir, "shop-orders", nil); err == nil {
 		t.Fatal("expected missing business directory to be rejected")
@@ -114,6 +121,7 @@ func TestCreateBusinessMigrationRejectsMissingDir(t *testing.T) {
 
 // 空目录说明不是源码检出（镜像里的业务目录即使存在也没有 Go 文件），不得写入孤立迁移。
 func TestCreateBusinessMigrationRejectsEmptyDir(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	if _, err := createBusinessMigration(dir, "shop-orders", nil); err == nil {
 		t.Fatal("expected empty business directory to be rejected")

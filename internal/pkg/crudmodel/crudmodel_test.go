@@ -12,6 +12,8 @@ import (
 )
 
 func TestBoolOrStringUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name  string
 		input string
@@ -25,6 +27,7 @@ func TestBoolOrStringUnmarshal(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var f FormAttr
 			if err := json.Unmarshal([]byte(tc.input), &f); err != nil {
 				t.Fatalf("unmarshal %s: %v", tc.input, err)
@@ -37,6 +40,7 @@ func TestBoolOrStringUnmarshal(t *testing.T) {
 }
 
 func TestBoolOrStringUnmarshalInvalid(t *testing.T) {
+	t.Parallel()
 	var f FormAttr
 	if err := json.Unmarshal([]byte(`{"select-multi": 123}`), &f); err == nil {
 		t.Fatal("expected error for numeric select-multi")
@@ -44,6 +48,7 @@ func TestBoolOrStringUnmarshalInvalid(t *testing.T) {
 }
 
 func TestTableAttrUnmarshalDesignerSearchInputAttr(t *testing.T) {
+	t.Parallel()
 	var payload struct {
 		Table TableAttr `json:"table"`
 	}
@@ -61,6 +66,7 @@ func TestTableAttrUnmarshalDesignerSearchInputAttr(t *testing.T) {
 }
 
 func TestTableAttrUnmarshalObjectSearchInputAttr(t *testing.T) {
+	t.Parallel()
 	var attrs TableAttr
 	if err := json.Unmarshal([]byte(`{"comSearchInputAttr":{"size":"large","disabled":false}}`), &attrs); err != nil {
 		t.Fatal(err)
@@ -71,6 +77,7 @@ func TestTableAttrUnmarshalObjectSearchInputAttr(t *testing.T) {
 }
 
 func TestJSONColumnsSQLiteRoundTrip(t *testing.T) {
+	t.Parallel()
 	type jsonRow struct {
 		ID     int32       `gorm:"primaryKey"`
 		Table  JSON_TABLE  `gorm:"column:table_json;type:text"`
@@ -121,6 +128,8 @@ func TestJSONColumnsSQLiteRoundTrip(t *testing.T) {
 }
 
 func TestJSONColumnsScanValues(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name          string
 		value         interface{}
@@ -136,6 +145,7 @@ func TestJSONColumnsScanValues(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var table JSON_TABLE
 			assertScanErr(t, "table", table.Scan(tc.value), tc.wantTableErr)
 
@@ -159,6 +169,7 @@ func assertScanErr(t *testing.T, label string, err error, want string) {
 }
 
 func TestJSONColumnsValue(t *testing.T) {
+	t.Parallel()
 	tableValue, err := JSON_TABLE{Name: "ops_banner"}.Value()
 	if err != nil {
 		t.Fatalf("table value: %v", err)

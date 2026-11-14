@@ -30,6 +30,7 @@ func (d *refreshRaceTokenDriver) Get(value string) (*token.Token, error) {
 }
 
 func TestUserTokenClearInvalidatesConcurrentRefresh(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenMySQL(t)
 	require.NoError(t, db.AutoMigrate(&commonmodel.User{}, &token.Token{}))
 

@@ -13,6 +13,7 @@ import (
 )
 
 func TestGeneratedCRUDClosureMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -50,6 +51,7 @@ func TestGeneratedCRUDClosureMySQL(t *testing.T) {
 // 验证 reassignable 生成产物的运行时语义：
 // 受限操作者 Add 强制归属、Edit 只能改到自己麾下；超管 Add 可指定归属、Edit 任意。
 func TestGeneratedClosureMySQLReassignable(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -98,6 +100,7 @@ func TestGeneratedClosureMySQLReassignable(t *testing.T) {
 // 子表（inheritFrom）Add 继承主实体当前归属并校验 actor 麾下；主表
 // （reassignable + cascadeOwners）Edit 改归属时同事务级联回首子表 admin_id。
 func TestGeneratedClosureMySQLCascade(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -222,6 +225,7 @@ import (
 )
 
 func TestGeneratedClosureBehavior(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("GO_BUILD_ADMIN_TEST_CHILD_DSN")
 	db, err := gorm.Open(mysql.Open(dsn))
 	require.NoError(t, err)
@@ -328,6 +332,7 @@ import (
 )
 
 func TestGeneratedClosureReassignable(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("GO_BUILD_ADMIN_TEST_CHILD_DSN")
 	db, err := gorm.Open(mysql.Open(dsn))
 	require.NoError(t, err)
@@ -460,6 +465,7 @@ import (
 )
 
 func TestGeneratedCascadeBehavior(t *testing.T) {
+	t.Parallel()
 	dsn := os.Getenv("GO_BUILD_ADMIN_TEST_CHILD_DSN")
 	db, err := gorm.Open(mysql.Open(dsn))
 	require.NoError(t, err)

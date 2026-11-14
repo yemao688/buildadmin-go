@@ -16,6 +16,7 @@ import (
 // MySQL 门禁用例：验证明细表在真实 MySQL 上的插入路径（sqlite 单测覆盖不到
 // int unsigned/索引等方言差异）。未配置 mysql_test 时 SKIP。
 func TestAdminLogCreateMySQL(t *testing.T) {
+	t.Parallel()
 	prefix := fmt.Sprintf("alog_it_%d_", os.Getpid())
 	db, config := testutil.OpenMySQL(t)
 	config.Database.Prefix = prefix

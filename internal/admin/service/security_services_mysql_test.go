@@ -74,6 +74,7 @@ func (f *securityModelFixture) context() *gin.Context {
 }
 
 func TestSecurityDataScopeRestoreRollbackFailClosedAndAtomic(t *testing.T) {
+	t.Parallel()
 	f := newSecurityModelFixture(t)
 	recycleSvc := NewSecurityDataRecycleLogService(adminmodel.NewSecurityDataRecycleLogRepository(f.db, f.config))
 	sensitiveSvc := NewSecuritySensitiveDataLogService(adminmodel.NewSecuritySensitiveDataLogRepository(f.db, f.config))
@@ -120,6 +121,7 @@ func TestSecurityDataScopeRestoreRollbackFailClosedAndAtomic(t *testing.T) {
 }
 
 func TestSecurityRuleControllerAsCannotHaveTwoEnabledRules(t *testing.T) {
+	t.Parallel()
 	f := newSecurityModelFixture(t)
 	recycleSvc := NewSecurityDataRecycleService(adminmodel.NewSecurityDataRecycleRepository(f.db, f.config))
 	sensitiveSvc := NewSensitiveDataService(adminmodel.NewSecuritySensitiveDataRepository(f.db, f.config))

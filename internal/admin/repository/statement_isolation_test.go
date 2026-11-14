@@ -36,7 +36,6 @@ func newDryRunDB(t *testing.T) *gorm.DB {
 
 func newRepositoryTestContext(t *testing.T) *gin.Context {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/", nil)
 	return ctx
@@ -77,6 +76,8 @@ func newCountryRepositories(t *testing.T, db *gorm.DB) (*repository.CountryLangu
 // 长连接共享 statement 指针的 session 上，导致该 handle 后续每个查询都指向生成的
 // 表，而不是由模型推断出的表。见 internal/crudgen/defined.go。
 func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	db := newDryRunDB(t)
 	ctx := newRepositoryTestContext(t)
 	language, currency := newCountryRepositories(t, db)
@@ -110,6 +111,7 @@ func TestGeneratedRepositoryReadsKeepSharedStatementClean(t *testing.T) {
 // 覆盖 admin 中间件绑定的请求事务 handle（tx.WithContext(请求 context)，
 // 该 session 与请求内每次仓库读取共享同一个 statement）。
 func TestGeneratedRepositoryReadsKeepRequestTransactionStatementClean(t *testing.T) {
+	t.Parallel()
 	db := newDryRunDB(t)
 	language, _ := newCountryRepositories(t, db)
 

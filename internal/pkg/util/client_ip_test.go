@@ -19,6 +19,7 @@ func clientIPContext(remoteAddr string, headers map[string]string) *gin.Context 
 }
 
 func TestGetClientIPIgnoresForwardedHeadersFromPublicPeer(t *testing.T) {
+	t.Parallel()
 	ctx := clientIPContext("203.0.113.5:1234", map[string]string{
 		"CF-Connecting-IP": "198.51.100.9",
 		"X-Forwarded-For":  "198.51.100.8",
@@ -27,6 +28,7 @@ func TestGetClientIPIgnoresForwardedHeadersFromPublicPeer(t *testing.T) {
 }
 
 func TestGetClientIPTrustsForwardedHeadersFromLoopback(t *testing.T) {
+	t.Parallel()
 	ctx := clientIPContext("127.0.0.1:1234", map[string]string{
 		"CF-Connecting-IP": "198.51.100.9",
 	})
@@ -34,6 +36,7 @@ func TestGetClientIPTrustsForwardedHeadersFromLoopback(t *testing.T) {
 }
 
 func TestGetClientIPTrustsForwardedHeadersFromPrivatePeer(t *testing.T) {
+	t.Parallel()
 	ctx := clientIPContext("10.0.0.2:1234", map[string]string{
 		"X-Forwarded-For": "198.51.100.7, 10.0.0.1",
 	})
@@ -41,6 +44,7 @@ func TestGetClientIPTrustsForwardedHeadersFromPrivatePeer(t *testing.T) {
 }
 
 func TestGetClientIPHandlesMappedLoopback(t *testing.T) {
+	t.Parallel()
 	ctx := clientIPContext("[::1]:1234", map[string]string{
 		"CF-Connecting-IP": "198.51.100.11",
 	})

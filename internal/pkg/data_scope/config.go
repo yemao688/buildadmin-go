@@ -38,6 +38,50 @@ func ResolveConfig(cfg *Config, hasAdminID bool) (Resolved, error) {
 	return ResolveConfigWithOptions(cfg, hasAdminID, ResolveOptions{})
 }
 
+// applyAutoMode 落地 ModeAuto 的解析：有 admin_id 走层级归属，无则降级为
+// ModeNone。
+func applyAutoMode(resolved *Resolved, cfg *Config, hasAdminID bool) error {
+	if hasAdminID {
+		if cfg.AssignOnCreate != nil && !*cfg.AssignOnCreate {
+			return fmt.Errorf("%w: auto+admin_id requires assign-on-create=true", ErrInvalidConfig)
+		}
+		resolved.OwnerColumn = "admin_id"
+		resolved.OwnerGoField = "AdminID"
+		resolved.AssignOnCreate = true
+		resolved.Source = "auto:admin_id"
+		return nil
+	}
+	resolved.Mode = ModeNone
+	resolved.Source = "auto:none"
+	return nil
+}
+
+// applyRequiredMode 校验 ModeRequired 的归属列（标识符合法、可选外部校验、
+// admin.id 禁止创建时赋值）并写回解析结果。
+func applyRequiredMode(resolved *Resolved, cfg *Config, opts ResolveOptions) error {
+	col := cfg.OwnerColumn
+	if col == "" {
+		return fmt.Errorf("%w: owner column is required", ErrInvalidOwnerColumn)
+	}
+	if err := ValidateIdentifier(col); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidOwnerColumn, err)
+	}
+	if opts.ValidateOwnerColumn != nil {
+		if err := opts.ValidateOwnerColumn(col); err != nil {
+			return err
+		}
+	}
+	resolved.OwnerColumn = col
+	resolved.OwnerGoField = deriveGoField(col)
+	if col == "id" && cfg.AssignOnCreate != nil && *cfg.AssignOnCreate {
+		return fmt.Errorf("%w: admin.id cannot assign on create", ErrInvalidConfig)
+	}
+	if cfg.AssignOnCreate != nil {
+		resolved.AssignOnCreate = *cfg.AssignOnCreate
+	}
+	return nil
+}
+
 // ResolveConfigWithOptions is the configurable variant of ResolveConfig.
 // It implements the contract rules:
 //   - nil/empty Config => ModeAuto.
@@ -62,39 +106,13 @@ func ResolveConfigWithOptions(cfg *Config, hasAdminID bool, opts ResolveOptions)
 
 	switch mode {
 	case ModeAuto:
-		if hasAdminID {
-			if cfg.AssignOnCreate != nil && !*cfg.AssignOnCreate {
-				return Resolved{}, fmt.Errorf("%w: auto+admin_id requires assign-on-create=true", ErrInvalidConfig)
-			}
-			resolved.OwnerColumn = "admin_id"
-			resolved.OwnerGoField = "AdminID"
-			resolved.AssignOnCreate = true
-			resolved.Source = "auto:admin_id"
-		} else {
-			resolved.Mode = ModeNone
-			resolved.Source = "auto:none"
+		if err := applyAutoMode(&resolved, cfg, hasAdminID); err != nil {
+			return Resolved{}, err
 		}
 
 	case ModeRequired:
-		col := cfg.OwnerColumn
-		if col == "" {
-			return Resolved{}, fmt.Errorf("%w: owner column is required", ErrInvalidOwnerColumn)
-		}
-		if err := ValidateIdentifier(col); err != nil {
-			return Resolved{}, fmt.Errorf("%w: %w", ErrInvalidOwnerColumn, err)
-		}
-		if opts.ValidateOwnerColumn != nil {
-			if err := opts.ValidateOwnerColumn(col); err != nil {
-				return Resolved{}, err
-			}
-		}
-		resolved.OwnerColumn = col
-		resolved.OwnerGoField = deriveGoField(col)
-		if col == "id" && cfg.AssignOnCreate != nil && *cfg.AssignOnCreate {
-			return Resolved{}, fmt.Errorf("%w: admin.id cannot assign on create", ErrInvalidConfig)
-		}
-		if cfg.AssignOnCreate != nil {
-			resolved.AssignOnCreate = *cfg.AssignOnCreate
+		if err := applyRequiredMode(&resolved, cfg, opts); err != nil {
+			return Resolved{}, err
 		}
 
 	case ModeNone:

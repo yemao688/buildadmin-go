@@ -11,6 +11,7 @@ import (
 )
 
 func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
+	t.Parallel()
 	// 未注入业务版本（Business == "dev"）时 Display() 回退框架版本，
 	// 线上业务镜像经 ldflags 注入后 Version 即为业务版本 + 框架标注。
 	if Version != appVersion.Display() {
@@ -19,6 +20,7 @@ func TestVersionDefaultsToFrameworkVersion(t *testing.T) {
 }
 
 func TestVersionRequested(t *testing.T) {
+	t.Parallel()
 	for _, args := range [][]string{{"--version"}, {"-version"}, {"--conf", "configs/config.yaml", "--version"}, {"-c", "configs/config.yaml", "--version"}} {
 		if !versionRequested(args) {
 			t.Fatalf("versionRequested(%v) = false", args)
@@ -33,6 +35,7 @@ func TestVersionRequested(t *testing.T) {
 }
 
 func TestMissingConfigMessage(t *testing.T) {
+	t.Parallel()
 	if got := missingConfigMessage(true); got != "configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装" {
 		t.Fatalf("setup missing config message = %q", got)
 	}
@@ -41,6 +44,7 @@ func TestMissingConfigMessage(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 写 time.Local 进程级全局值，恢复也会与并行测试竞争
 func TestApplyTimeZone(t *testing.T) {
 	original := time.Local
 	t.Cleanup(func() { time.Local = original })
@@ -53,6 +57,7 @@ func TestApplyTimeZone(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 写 time.Local 进程级全局值，恢复也会与并行测试竞争
 func TestApplyTimeZoneInvalidDoesNotChangeLocal(t *testing.T) {
 	previous := time.Local
 	original := time.FixedZone("existing", 1234)
@@ -67,6 +72,7 @@ func TestApplyTimeZoneInvalidDoesNotChangeLocal(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 写 time.Local 进程级全局值，恢复也会与并行测试竞争
 func TestApplyTimeZoneEmptyUsesUTC(t *testing.T) {
 	original := time.Local
 	t.Cleanup(func() { time.Local = original })
@@ -101,6 +107,7 @@ func TestApplyAppRuntimeEnvironmentFallbacks(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestRootHelpListsAllCommands(t *testing.T) {
 	var output bytes.Buffer
 	root := newRootCommand(nil, nil)
@@ -117,6 +124,7 @@ func TestRootHelpListsAllCommands(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestCrudValidateHelp(t *testing.T) {
 	var output bytes.Buffer
 	root := newRootCommand(nil, nil)
@@ -131,6 +139,7 @@ func TestCrudValidateHelp(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 写 os.Args 并调用 cobra Execute，均为进程级状态
 func TestExecuteVersionShortCircuit(t *testing.T) {
 	original := os.Args
 	t.Cleanup(func() { os.Args = original })

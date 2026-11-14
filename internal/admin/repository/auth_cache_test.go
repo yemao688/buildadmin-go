@@ -39,6 +39,7 @@ func newAdminAuthCacheModel(t *testing.T) (*AuthRepository, *gorm.DB, model.Admi
 }
 
 func TestAdminAuthCacheInvalidationReloadsRules(t *testing.T) {
+	t.Parallel()
 	m, db, rule := newAdminAuthCacheModel(t)
 
 	_, err := m.GetRuleList(nil, 1)
@@ -57,6 +58,7 @@ func TestAdminAuthCacheInvalidationReloadsRules(t *testing.T) {
 }
 
 func TestAdminAuthCheckDeniesRuleOutsideGroup(t *testing.T) {
+	t.Parallel()
 	m, db, _ := newAdminAuthCacheModel(t)
 
 	// The group only grants "auth/initial"; an enabled rule that is not part of
@@ -72,6 +74,7 @@ func TestAdminAuthCheckDeniesRuleOutsideGroup(t *testing.T) {
 }
 
 func TestAdminAuthCheckNormalizesCamelCaseRuleNames(t *testing.T) {
+	t.Parallel()
 	m, db, rule := newAdminAuthCacheModel(t)
 
 	camelRule := model.AdminRule{Pid: 0, Type: "button", Title: "LanguageContent", Name: "country/languageContent/index", Status: "1", Weigh: 1}
@@ -92,6 +95,7 @@ func TestAdminAuthCheckNormalizesCamelCaseRuleNames(t *testing.T) {
 }
 
 func TestAdminAuthCheckSuperAdminWildcard(t *testing.T) {
+	t.Parallel()
 	m, db, _ := newAdminAuthCacheModel(t)
 	require.NoError(t, db.Create(&model.AdminGroup{ID: 2, Name: "super", Rules: "*", Status: "1"}).Error)
 	require.NoError(t, db.Create(&model.AdminGroupAccess{UID: 2, GroupID: 2}).Error)
@@ -105,6 +109,7 @@ func TestAdminAuthCheckSuperAdminWildcard(t *testing.T) {
 }
 
 func TestAdminAuthCheckCommaSeparatedNamesAndRelations(t *testing.T) {
+	t.Parallel()
 	m, db, rule := newAdminAuthCacheModel(t)
 	second := model.AdminRule{Pid: 0, Type: "button", Title: "Second", Name: "auth/second", Status: "1", Weigh: 2}
 	require.NoError(t, db.Create(&second).Error)
@@ -129,6 +134,7 @@ func TestAdminAuthCheckCommaSeparatedNamesAndRelations(t *testing.T) {
 }
 
 func TestAdminAuthHasRuleNameExactNormalizedMatch(t *testing.T) {
+	t.Parallel()
 	m, db, _ := newAdminAuthCacheModel(t)
 	require.NoError(t, db.Create(&model.AdminRule{Pid: 0, Type: "button", Title: "LanguageContent", Name: "country/languageContent/index", Status: "1", Weigh: 1}).Error)
 
@@ -148,6 +154,7 @@ func TestAdminAuthHasRuleNameExactNormalizedMatch(t *testing.T) {
 }
 
 func TestAdminAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
+	t.Parallel()
 	m, db, _ := newAdminAuthCacheModel(t)
 
 	groups, err := m.GetGroups(1)
@@ -172,6 +179,7 @@ func TestAdminAuthCacheCopiesGroupsAndInvalidatesGroupMembership(t *testing.T) {
 }
 
 func TestAdminAuthCacheConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	m, _, _ := newAdminAuthCacheModel(t)
 	_, err := m.GetRuleList(nil, 1)
 	require.NoError(t, err)

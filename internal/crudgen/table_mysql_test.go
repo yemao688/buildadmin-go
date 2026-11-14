@@ -13,6 +13,7 @@ import (
 )
 
 func TestHasColumnMySQL(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	tableName := fmt.Sprintf("crud_has_column_%d", time.Now().UnixNano())
 	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (id INT PRIMARY KEY, name VARCHAR(32))").Error)
@@ -27,6 +28,7 @@ func TestHasColumnMySQL(t *testing.T) {
 }
 
 func TestActualPrimaryKeyMySQL(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	tableName := fmt.Sprintf("crud_primary_key_%d", time.Now().UnixNano())
 	require.NoError(t, db.Exec("CREATE TABLE `"+tableName+"` (order_id INT PRIMARY KEY, name VARCHAR(32))").Error)
@@ -37,6 +39,7 @@ func TestActualPrimaryKeyMySQL(t *testing.T) {
 }
 
 func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = "ba_"
 	require.NoError(t, db.Table("ba_admin_rule").AutoMigrate(&model.AdminRule{}))
@@ -62,6 +65,7 @@ func TestMenuRuleSnapshotRestoreMySQL(t *testing.T) {
 }
 
 func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 
 	newTable := func(t *testing.T, suffix string) string {
@@ -74,6 +78,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	}
 
 	t.Run("single owner index proves", func(t *testing.T) {
+		t.Parallel()
 		name := newTable(t, "single")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_owner_single` ON `"+name+"` (`admin_id`)").Error)
 		ok, err := buildIndexProver(db, name)("admin_id")
@@ -82,6 +87,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	})
 
 	t.Run("owner leading composite index proves", func(t *testing.T) {
+		t.Parallel()
 		name := newTable(t, "leading")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_owner_leading` ON `"+name+"` (`admin_id`, `status`)").Error)
 		ok, err := buildIndexProver(db, name)("admin_id")
@@ -90,6 +96,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	})
 
 	t.Run("owner non-leading composite index does not prove", func(t *testing.T) {
+		t.Parallel()
 		name := newTable(t, "nonleading")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_status_owner` ON `"+name+"` (`status`, `admin_id`)").Error)
 		ok, err := buildIndexProver(db, name)("admin_id")
@@ -98,6 +105,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	})
 
 	t.Run("same deterministic index name with wrong first column errors", func(t *testing.T) {
+		t.Parallel()
 		name := newTable(t, "wrongname")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_admin_id` ON `"+name+"` (`status`)").Error)
 		err := EnsureDataScopeIndex(db, name, "admin_id", "id")
@@ -106,6 +114,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 	})
 
 	t.Run("missing owner index is created with owner as seq one", func(t *testing.T) {
+		t.Parallel()
 		name := newTable(t, "create")
 		require.NoError(t, EnsureDataScopeIndex(db, name, "admin_id", "id"))
 		var firstColumn string

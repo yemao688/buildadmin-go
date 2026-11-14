@@ -19,6 +19,7 @@ import (
 // binary resolve through the same middleware path the application uses.
 func TestEmbeddedBundleResolvesKnownKeys(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	r := gin.New()
 	r.Use(ginI18n.Localize(ginI18n.WithBundle(NewBundleCfg()), ginI18n.WithGetLngHandle(
 		func(c *gin.Context, defaultLng string) string {
@@ -58,6 +59,7 @@ func TestEmbeddedBundleResolvesKnownKeys(t *testing.T) {
 // locales 目录 yaml 文件一一对应（语言包即事实源），新增/删除语言包后无需
 // 同步接线。
 func TestAcceptLanguageDerivedFromLocaleFiles(t *testing.T) {
+	t.Parallel()
 	entries, err := localesFS.ReadDir("locales")
 	require.NoError(t, err)
 	var packFiles []string
@@ -85,6 +87,7 @@ func TestAcceptLanguageDerivedFromLocaleFiles(t *testing.T) {
 // 与生产相同的 ginI18n 中间件通路。
 func TestNewLocalePackAutoAccepted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fsys := fstest.MapFS{
 		"locales/zh-CN.yaml": {Data: []byte("Super administrator: 超级管理员\n")},
 		"locales/fr.yaml":    {Data: []byte("Super administrator: super administrateur\n")},

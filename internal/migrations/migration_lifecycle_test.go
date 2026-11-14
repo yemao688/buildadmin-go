@@ -81,78 +81,92 @@ func runMigrationLifecycle(db *gorm.DB, cfg *conf.Configuration, section *migrat
 	}
 	result.recovery = recovery
 	event("recovery")
-	if recovery != InstallStrictUpgrade {
-		event("snapshot")
-		if err := BootstrapOfficialLedger(db, cfg); err != nil {
-			return result, err
-		}
-		if err := MarkSeedPending(db, cfg); err != nil {
-			return result, err
-		}
-		if err := db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(migrationModels()...); err != nil {
-			return result, err
-		}
+	if err := runLifecycleSnapshot(db, cfg, recovery, event); err != nil {
+		return result, err
 	}
 	event("ledgers")
-	if err := BootstrapOfficialLedger(db, cfg); err != nil {
+	if err := runLifecycleLedgerBootstrap(db, cfg); err != nil {
 		return result, err
 	}
-	if err := ValidateOfficialLedgerSchema(db, cfg); err != nil {
-		return result, err
-	}
-	if err := BootstrapFrameworkLedger(db, cfg); err != nil {
-		return result, err
-	}
-	if err := ValidateFrameworkLedgerSchema(db, cfg); err != nil {
-		return result, err
-	}
-	if err := BootstrapBusinessLedger(db, cfg); err != nil {
-		return result, err
-	}
-	if err := ValidateBusinessLedgerSchema(db, cfg); err != nil {
-		return result, err
-	}
-	official, frameworks := OfficialMigrations(), FrameworkMigrations()
-	business, err := BusinessMigrations()
-	if err != nil {
-		return result, err
-	}
-	event("official")
-	result.official, err = RunOfficialMigrations(db, cfg, official)
-	if err != nil {
-		return result, err
-	}
-	event("reconcile")
-	if err := ReconcileLegacyData(db, cfg); err != nil {
-		return result, err
-	}
-	event("seed")
-	pending, err := SeedPending(db, cfg)
-	if err != nil {
-		return result, err
-	}
-	if pending {
-		result.seeded = true
-		if err := RunOfficialFreshSeed(db, cfg); err != nil {
-			return result, err
-		}
-	}
-	event("framework")
-	result.framework, err = RunFrameworkMigrations(db, cfg, official, frameworks)
-	if err != nil {
-		return result, err
-	}
-	event("business")
-	if _, err := RunBusinessMigrations(db, cfg, business); err != nil {
-		return result, err
-	}
-	if err := FrameworkVerifyCurrent(db, cfg); err != nil {
+	if err := runLifecycleStages(db, cfg, &result, event); err != nil {
 		return result, err
 	}
 	return result, nil
 }
 
+func runLifecycleSnapshot(db *gorm.DB, cfg *conf.Configuration, recovery InstallRecoveryState, event func(string)) error {
+	if recovery == InstallStrictUpgrade {
+		return nil
+	}
+	event("snapshot")
+	if err := BootstrapOfficialLedger(db, cfg); err != nil {
+		return err
+	}
+	if err := MarkSeedPending(db, cfg); err != nil {
+		return err
+	}
+	return db.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(migrationModels()...)
+}
+
+func runLifecycleLedgerBootstrap(db *gorm.DB, cfg *conf.Configuration) error {
+	if err := BootstrapOfficialLedger(db, cfg); err != nil {
+		return err
+	}
+	if err := ValidateOfficialLedgerSchema(db, cfg); err != nil {
+		return err
+	}
+	if err := BootstrapFrameworkLedger(db, cfg); err != nil {
+		return err
+	}
+	if err := ValidateFrameworkLedgerSchema(db, cfg); err != nil {
+		return err
+	}
+	if err := BootstrapBusinessLedger(db, cfg); err != nil {
+		return err
+	}
+	return ValidateBusinessLedgerSchema(db, cfg)
+}
+
+func runLifecycleStages(db *gorm.DB, cfg *conf.Configuration, result *migrationLifecycleResult, event func(string)) error {
+	official, frameworks := OfficialMigrations(), FrameworkMigrations()
+	business, err := BusinessMigrations()
+	if err != nil {
+		return err
+	}
+	event("official")
+	result.official, err = RunOfficialMigrations(db, cfg, official)
+	if err != nil {
+		return err
+	}
+	event("reconcile")
+	if err := ReconcileLegacyData(db, cfg); err != nil {
+		return err
+	}
+	event("seed")
+	pending, err := SeedPending(db, cfg)
+	if err != nil {
+		return err
+	}
+	if pending {
+		result.seeded = true
+		if err := RunOfficialFreshSeed(db, cfg); err != nil {
+			return err
+		}
+	}
+	event("framework")
+	result.framework, err = RunFrameworkMigrations(db, cfg, official, frameworks)
+	if err != nil {
+		return err
+	}
+	event("business")
+	if _, err := RunBusinessMigrations(db, cfg, business); err != nil {
+		return err
+	}
+	return FrameworkVerifyCurrent(db, cfg)
+}
+
 func TestFreshLifecycleRerunAndConcurrentLock(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("migration_fresh_%d_", time.Now().UnixNano()))
 	lock := cfg.Database.Prefix + "dual-track-migrations"

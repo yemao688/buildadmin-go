@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+//nolint:paralleltest // 替换包级 runWire/runProjectBuild 钩子并写真实仓库夹具目录，DeleteFromSpec 还取生成锁
 func TestDeleteWireFailureRestoresMenuWithSameID(t *testing.T) {
 	db, cfg, fixture := newDeleteFailureFixture(t)
 	originalWire := runWire
@@ -43,6 +44,7 @@ func TestDeleteWireFailureRestoresMenuWithSameID(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 替换包级 runWire/runProjectBuild 钩子并写真实仓库夹具目录，DeleteFromSpec 还取生成锁
 func TestDeleteMenuFailureRestoresFilesAndReportsStage(t *testing.T) {
 	db, cfg, fixture := newDeleteFailureFixture(t)
 	originalWire := runWire

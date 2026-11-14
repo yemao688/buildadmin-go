@@ -19,6 +19,7 @@ import (
 )
 
 func TestPostPolicyFixedTime(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1700000000, 0).UTC()
 	policy, signature, expires := PostPolicy(now, 10485760, "secret")
 	if expires != 1700003600 {
@@ -46,6 +47,7 @@ func TestPostPolicyFixedTime(t *testing.T) {
 }
 
 func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
+	t.Parallel()
 	// 这里使用下方的具体适配器：UploadSiteConfig 有意接受 ConfigModel 的方法集形状。
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou"}
 	result, err := UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
@@ -70,6 +72,7 @@ func TestUploadSiteConfigEmptySecretAndFields(t *testing.T) {
 }
 
 func TestUploadSiteConfigCDNPriority(t *testing.T) {
+	t.Parallel()
 	// upload_cdn_url 配置时优先于 bucketUrl
 	values := configValues{"upload_mode": "alioss", "upload_bucket": "demo", "upload_url": "oss-cn-hangzhou", "upload_cdn_url": "https://cdn.example.com"}
 	result, err := UploadSiteConfig(context.Background(), values, &conf.Configuration{Upload: conf.Upload{Maxsize: 10, Savename: "/x/{fileName}", Mimetype: "jpg,png"}})
@@ -98,6 +101,7 @@ func (v configValues) GetKVByGroup(_ context.Context, _ string) (map[string]stri
 }
 
 func TestCleanUploadNameAndCallbackURL(t *testing.T) {
+	t.Parallel()
 	name := cleanUploadName("<b>a&amp;</b>")
 	if name != "a&amp;amp;" {
 		t.Fatalf("name=%q", name)
@@ -112,6 +116,7 @@ func TestCleanUploadNameAndCallbackURL(t *testing.T) {
 }
 
 func TestURLWithConfig(t *testing.T) {
+	t.Parallel()
 	s := &AliossStorage{}
 	c := AliOSSConfig{Mode: "alioss", Bucket: "demo", URL: "oss-cn-hangzhou", CDNURL: "https://cdn.example.com"}
 
@@ -148,6 +153,7 @@ func TestURLWithConfig(t *testing.T) {
 // URL()（每次自读 settings）输出逐值一致——批处理前提是 settings 查询结果
 // 与行数据无关（固定 group='upload' 过滤），此处同时验证两次读取结果相同。
 func TestURLWithConfigMatchesURL(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:upload-alioss-parity-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})

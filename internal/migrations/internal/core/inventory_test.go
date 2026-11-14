@@ -2,8 +2,9 @@ package core
 
 import (
 	"fmt"
+	"os"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -18,9 +19,14 @@ type coreEnsureProbe struct {
 	Legacy int    `gorm:"column:legacy_marker"`
 }
 
+// probeSQLiteSeq 与 pid 组合出进程内唯一的内存库名：并行子测试与 -count=N
+// 可能在同一时钟刻度内重复调用，时间戳不足以保证唯一，重名会让两个测试共享
+// 同一个 cache=shared 内存库并互相锁表。
+var probeSQLiteSeq atomic.Uint64
+
 func openProbeSQLite(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := fmt.Sprintf("file:core-ensure-%d?mode=memory&cache=shared", time.Now().UnixNano())
+	dsn := fmt.Sprintf("file:core-ensure-%d-%d?mode=memory&cache=shared", os.Getpid(), probeSQLiteSeq.Add(1))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: "probe_"}
@@ -42,6 +48,7 @@ func hasColumn(t *testing.T, db *gorm.DB, table, column string) bool {
 }
 
 func TestEnsureMissingCoreTableCreatesOnlyAbsentTable(t *testing.T) {
+	t.Parallel()
 	table := CoreTable{
 		LogicalName: "core_ensure_probe",
 		Comment:     "探针表",
@@ -50,6 +57,7 @@ func TestEnsureMissingCoreTableCreatesOnlyAbsentTable(t *testing.T) {
 	fullTable := "probe_core_ensure_probe"
 
 	t.Run("missing table is created", func(t *testing.T) {
+		t.Parallel()
 		db := openProbeSQLite(t)
 		created, err := ensureMissingCoreTable(db, "probe_", table)
 		require.NoError(t, err)
@@ -63,6 +71,7 @@ func TestEnsureMissingCoreTableCreatesOnlyAbsentTable(t *testing.T) {
 	})
 
 	t.Run("existing table is left untouched", func(t *testing.T) {
+		t.Parallel()
 		db := openProbeSQLite(t)
 		require.NoError(t, db.Exec("CREATE TABLE `"+fullTable+"` (id INTEGER PRIMARY KEY, legacy_marker INTEGER)").Error)
 

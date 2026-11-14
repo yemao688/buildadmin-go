@@ -78,86 +78,129 @@ func PrepareUpstreamNeutralSchema(db *gorm.DB, config *conf.Configuration) error
 	if err := normalizeLegacyColumns(db, config, "admin_rule"); err != nil {
 		return err
 	}
-	admin := core.TableName(config, "admin_rule")
-	menu := core.TableName(config, "menu_rule")
-	if core.TableExists(db, menu) {
-		backup := menuRuleBackupName(config)
-		if core.TableExists(db, backup) {
-			return fmt.Errorf("backup table %s already exists while menu_rule is present; refusing to overwrite", backup)
-		}
-		if !core.TableExists(db, admin) {
-			if err := db.Exec("RENAME TABLE " + core.QuoteIdentifier(menu) + " TO " + core.QuoteIdentifier(admin)).Error; err != nil {
-				return fmt.Errorf("rename menu_rule: %w", err)
-			}
-		} else {
-			// IDs are stable and are also referenced by admin_group.rules.  Never
-			// use INSERT IGNORE here: an equal ID with different data is unsafe.
-			cols := []string{"id", "pid", "type", "title", "name", "path", "icon", "menu_type", "url", "component", "keepalive", "extend", "remark", "weigh", "status", "update_time", "create_time"}
-			var actual []string
-			if err := db.Raw("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=?", menu).Pluck("column_name", &actual).Error; err != nil {
-				return err
-			}
-			allowed := map[string]bool{}
-			for _, c := range cols {
-				allowed[c] = true
-			}
-			for _, c := range actual {
-				if !allowed[c] {
-					return fmt.Errorf("menu_rule has unknown column %s; source table retained", c)
-				}
-			}
-			for _, c := range cols {
-				if core.ColumnExists(db, menu, c) && core.ColumnExists(db, admin, c) {
-					var n int64
-					q := "SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m JOIN " + core.QuoteIdentifier(admin) + " a ON m.id=a.id WHERE NOT (m." + core.QuoteIdentifier(c) + " <=> a." + core.QuoteIdentifier(c) + ")"
-					if err := db.Raw(q).Scan(&n).Error; err != nil {
-						return err
-					}
-					if n != 0 {
-						return fmt.Errorf("menu_rule/admin_rule conflict in column %s", c)
-					}
-				}
-			}
-			var rows []map[string]any
-			if err := db.Table(menu).Find(&rows).Error; err != nil {
-				return err
-			}
-			for _, row := range rows {
-				id, ok := row["id"]
-				if !ok {
-					continue
-				}
-				var exists int64
-				if err := db.Table(admin).Where("id = ?", id).Count(&exists).Error; err != nil {
-					return err
-				}
-				if exists == 0 {
-					fields := map[string]any{}
-					for _, c := range cols {
-						if v, ok := row[c]; ok {
-							fields[c] = v
-						}
-					}
-					if err := db.Table(admin).Create(fields).Error; err != nil {
-						return fmt.Errorf("merge menu_rule id %v: %w", id, err)
-					}
-				}
-			}
-			var broken int64
-			if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m WHERE m.pid <> 0 AND NOT EXISTS (SELECT 1 FROM " + core.QuoteIdentifier(admin) + " a WHERE a.id=m.pid)").Scan(&broken).Error; err != nil {
-				return err
-			}
-			if broken != 0 {
-				return fmt.Errorf("menu_rule contains unresolved pid references")
-			}
-			if err := db.Exec("RENAME TABLE " + core.QuoteIdentifier(menu) + " TO " + core.QuoteIdentifier(backup)).Error; err != nil {
-				return fmt.Errorf("backup menu_rule: %w", err)
-			}
-		}
+	if err := preflightMergeRuleTables(db, config); err != nil {
+		return err
 	}
 	if err := normalizeLegacyColumns(db, config, ""); err != nil {
 		return err
 	}
+	return preflightWidenLegacyColumns(db, config)
+}
+
+// preflightMergeRuleTables 把历史 menu_rule 表并入 admin_rule：无 admin_rule
+// 时直接改名，两者共存时逐列比对后合并，最后把 menu_rule 改名为备份表。
+func preflightMergeRuleTables(db *gorm.DB, config *conf.Configuration) error {
+	admin := core.TableName(config, "admin_rule")
+	menu := core.TableName(config, "menu_rule")
+	if !core.TableExists(db, menu) {
+		return nil
+	}
+	backup := menuRuleBackupName(config)
+	if core.TableExists(db, backup) {
+		return fmt.Errorf("backup table %s already exists while menu_rule is present; refusing to overwrite", backup)
+	}
+	if !core.TableExists(db, admin) {
+		if err := db.Exec("RENAME TABLE " + core.QuoteIdentifier(menu) + " TO " + core.QuoteIdentifier(admin)).Error; err != nil {
+			return fmt.Errorf("rename menu_rule: %w", err)
+		}
+		return nil
+	}
+	// IDs are stable and are also referenced by admin_group.rules.  Never
+	// use INSERT IGNORE here: an equal ID with different data is unsafe.
+	cols := []string{"id", "pid", "type", "title", "name", "path", "icon", "menu_type", "url", "component", "keepalive", "extend", "remark", "weigh", "status", "update_time", "create_time"}
+	if err := preflightCheckMenuRuleColumns(db, menu, cols); err != nil {
+		return err
+	}
+	if err := preflightCompareMenuRuleColumns(db, admin, menu, cols); err != nil {
+		return err
+	}
+	if err := preflightMergeMenuRuleRows(db, admin, menu, cols); err != nil {
+		return err
+	}
+	if err := preflightCheckMenuRulePids(db, admin, menu); err != nil {
+		return err
+	}
+	if err := db.Exec("RENAME TABLE " + core.QuoteIdentifier(menu) + " TO " + core.QuoteIdentifier(backup)).Error; err != nil {
+		return fmt.Errorf("backup menu_rule: %w", err)
+	}
+	return nil
+}
+
+func preflightCheckMenuRuleColumns(db *gorm.DB, menu string, cols []string) error {
+	var actual []string
+	if err := db.Raw("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=?", menu).Pluck("column_name", &actual).Error; err != nil {
+		return err
+	}
+	allowed := map[string]bool{}
+	for _, c := range cols {
+		allowed[c] = true
+	}
+	for _, c := range actual {
+		if !allowed[c] {
+			return fmt.Errorf("menu_rule has unknown column %s; source table retained", c)
+		}
+	}
+	return nil
+}
+
+func preflightCompareMenuRuleColumns(db *gorm.DB, admin, menu string, cols []string) error {
+	for _, c := range cols {
+		if core.ColumnExists(db, menu, c) && core.ColumnExists(db, admin, c) {
+			var n int64
+			q := "SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m JOIN " + core.QuoteIdentifier(admin) + " a ON m.id=a.id WHERE NOT (m." + core.QuoteIdentifier(c) + " <=> a." + core.QuoteIdentifier(c) + ")"
+			if err := db.Raw(q).Scan(&n).Error; err != nil {
+				return err
+			}
+			if n != 0 {
+				return fmt.Errorf("menu_rule/admin_rule conflict in column %s", c)
+			}
+		}
+	}
+	return nil
+}
+
+func preflightMergeMenuRuleRows(db *gorm.DB, admin, menu string, cols []string) error {
+	var rows []map[string]any
+	if err := db.Table(menu).Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		id, ok := row["id"]
+		if !ok {
+			continue
+		}
+		var exists int64
+		if err := db.Table(admin).Where("id = ?", id).Count(&exists).Error; err != nil {
+			return err
+		}
+		if exists != 0 {
+			continue
+		}
+		fields := map[string]any{}
+		for _, c := range cols {
+			if v, ok := row[c]; ok {
+				fields[c] = v
+			}
+		}
+		if err := db.Table(admin).Create(fields).Error; err != nil {
+			return fmt.Errorf("merge menu_rule id %v: %w", id, err)
+		}
+	}
+	return nil
+}
+
+func preflightCheckMenuRulePids(db *gorm.DB, admin, menu string) error {
+	var broken int64
+	if err := db.Raw("SELECT COUNT(*) FROM " + core.QuoteIdentifier(menu) + " m WHERE m.pid <> 0 AND NOT EXISTS (SELECT 1 FROM " + core.QuoteIdentifier(admin) + " a WHERE a.id=m.pid)").Scan(&broken).Error; err != nil {
+		return err
+	}
+	if broken != 0 {
+		return fmt.Errorf("menu_rule contains unresolved pid references")
+	}
+	return nil
+}
+
+func preflightWidenLegacyColumns(db *gorm.DB, config *conf.Configuration) error {
 	for _, item := range []struct{ table, column, typ string }{
 		{"admin_log", "data", "LONGTEXT"}, {"captcha", "captcha", "TEXT"},
 	} {

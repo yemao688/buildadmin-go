@@ -15,6 +15,7 @@ import (
 )
 
 func TestAdminLogCreateInsertsRow(t *testing.T) {
+	t.Parallel()
 	db := newAdminLogTestDB(t, "admin-log-create")
 	m := NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 
@@ -42,6 +43,7 @@ func TestAdminLogCreateInsertsRow(t *testing.T) {
 
 // 仓库只做插入：nil 入参、缺库句柄都必须返回错误而不是静默或 panic。
 func TestAdminLogCreateGuardsInvalidInput(t *testing.T) {
+	t.Parallel()
 	db := newAdminLogTestDB(t, "admin-log-create-guard")
 	m := NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 

@@ -28,6 +28,7 @@ func proveAll(_ string) (bool, error)  { return true, nil }
 func proveNone(_ string) (bool, error) { return false, nil }
 
 func TestResolveDataScope_Matrix(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		cfg          *data_scope.Config
@@ -201,6 +202,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := ResolveDataScope(tc.cfg, tc.fields, DataScopeResolveOptions{
 				AllowNoneWithAdminID: tc.allowNone,
 				ProveIndex:           tc.prove,
@@ -224,6 +226,7 @@ func TestResolveDataScope_Matrix(t *testing.T) {
 }
 
 func TestResolveDataScope_NoProverFailsClosed(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false)}
 	_, err := ResolveDataScope(nil, fields, DataScopeResolveOptions{})
 	require.Error(t, err)
@@ -231,6 +234,7 @@ func TestResolveDataScope_NoProverFailsClosed(t *testing.T) {
 }
 
 func TestResolveDataScope_ReadExtraOwnersValidation(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{newField("id", "int", true), newField("admin_id", "int", false), newField("secondary_admin_id", "bigint", false)}
 	resolved, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "admin_id", ReadExtraOwners: []string{"secondary_admin_id"}, AssignOnCreate: ptr(true)}, fields, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.NoError(t, err)
@@ -243,6 +247,7 @@ func TestResolveDataScope_ReadExtraOwnersValidation(t *testing.T) {
 }
 
 func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) {
+	t.Parallel()
 	adminIDFields := []crudmodel.Field{
 		newField("id", "bigint", true),
 		newField("user_id", "bigint", false),
@@ -267,6 +272,7 @@ func TestResolveDataScope_UserOwnedSpecDefaultsToExactAdminIDOnly(t *testing.T) 
 }
 
 func TestModelTemplate_DataScopeAuto(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace:             "model",
 		Name:                  "demo",
@@ -295,6 +301,7 @@ func TestModelTemplate_DataScopeAuto(t *testing.T) {
 }
 
 func TestModelTemplate_ReadExtraOwners(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace: "model",
 		Name:      "demo",
@@ -327,6 +334,7 @@ func TestModelTemplate_ReadExtraOwners(t *testing.T) {
 }
 
 func TestModelTemplate_EditNoOpUsesGeneratedPrimaryKeyAndScopedDB(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace:         "model",
 		Name:              "order_item",
@@ -350,6 +358,7 @@ func TestModelTemplate_EditNoOpUsesGeneratedPrimaryKeyAndScopedDB(t *testing.T) 
 }
 
 func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace:         "model",
 		Name:              "order_item",
@@ -367,6 +376,7 @@ func TestModelTemplate_UsesLogicalSnakeCaseTableName(t *testing.T) {
 }
 
 func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
+	t.Parallel()
 	table := getTestTableData()
 	table.Name = "big_order"
 	table.ModelFile = "internal/admin/model/BigOrder.go"
@@ -402,6 +412,7 @@ func TestGeneratedBigIntPrimaryKeyCompiles(t *testing.T) {
 }
 
 func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{Name: "ai_gate_base", ModelFile: "internal/admin/model/AiGateBase.go", ControllerFile: "internal/admin/handler/AiGateBase.go", FormFields: []string{"name"}, ColumnFields: []string{"id", "name"}}
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
@@ -427,6 +438,7 @@ func TestRelatedModelWithIDAndNameCompilesWithEditableName(t *testing.T) {
 }
 
 func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{Name: "big_owner", ModelFile: "internal/admin/model/BigOwner.go", ControllerFile: "internal/admin/handler/BigOwner.go", FormFields: []string{"name"}}
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "int", DesignType: "pk", PrimaryKey: true, FormBuildExclude: true},
@@ -453,6 +465,7 @@ func TestBigIntOwnerUsesInt64ActorConversion(t *testing.T) {
 }
 
 func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace: "model", Name: "token", ClassName: "Token", ModelVar: "token",
 		Pk: "token", PkGoType: "string", PkGoField: "Token", DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
@@ -463,18 +476,21 @@ func TestGeneratedStringPrimaryKeyBatchDeleteUsesStrings(t *testing.T) {
 }
 
 func TestValidateGenerationInputRejectsTextPrimaryKey(t *testing.T) {
+	t.Parallel()
 	err := ValidateGenerationInput(crudmodel.Table{Name: "text_key"}, []crudmodel.Field{{Name: "token", Type: "text", PrimaryKey: true}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported primary key type")
 }
 
 func TestRelatedModelWithoutAdminIDResolvesModeNone(t *testing.T) {
+	t.Parallel()
 	resolved, err := ResolveDataScope(nil, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "name", Type: "varchar"}}, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.NoError(t, err)
 	assert.Equal(t, data_scope.ModeNone, resolved.Policy.Mode)
 }
 
 func TestCommonModelBaseSupportsRequestTransactions(t *testing.T) {
+	t.Parallel()
 	content, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "pkg", "persistence", "base.go"))
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "func (s *BaseModel) DBFor")
@@ -482,12 +498,14 @@ func TestCommonModelBaseSupportsRequestTransactions(t *testing.T) {
 }
 
 func TestRequiredOwnerWithoutAssignOnCreateIsRejected(t *testing.T) {
+	t.Parallel()
 	_, err := ResolveDataScope(&data_scope.Config{Mode: data_scope.ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(false)}, []crudmodel.Field{{Name: "id", Type: "int", PrimaryKey: true}, {Name: "owner_id", Type: "int"}}, DataScopeResolveOptions{ProveIndex: proveAll})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "assignOnCreate=true")
 }
 
 func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{
 		Name:           "order_item",
 		ModelFile:      "internal/common/model/OrderItem.go", // 历史前缀仍可解析出类名
@@ -514,6 +532,7 @@ func TestPrepareGenerationData_SharedEntityImportPath(t *testing.T) {
 }
 
 func TestModelTemplate_DataScopeNone(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace:         "model",
 		Name:              "demo",
@@ -543,6 +562,7 @@ func TestModelTemplate_DataScopeNone(t *testing.T) {
 }
 
 func TestModelTemplate_UsesRequestTransactions(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace: "model", Name: "demo", ClassName: "Demo", ModelVar: "demo",
 		Pk: "id", PkGoField: "ID", DataScopePolicy: data_scope.ResourcePolicy{Mode: data_scope.ModeNone},
@@ -557,6 +577,7 @@ func TestModelTemplate_UsesRequestTransactions(t *testing.T) {
 }
 
 func TestModelTemplate_NilEnforcerFailClosed(t *testing.T) {
+	t.Parallel()
 	out := renderModelString(t, ModelData{
 		Namespace:             "model",
 		Name:                  "demo",
@@ -573,6 +594,7 @@ func TestModelTemplate_NilEnforcerFailClosed(t *testing.T) {
 }
 
 func TestExcludeParamFields_RemovesOwnerAndId(t *testing.T) {
+	t.Parallel()
 	input := "type DemoParam struct {\n" +
 		"\tID int32 `gorm:\"column:id\" json:\"id\"`\n" +
 		"\tAdminID int32 `gorm:\"column:admin_id\" json:\"admin_id\"`\n" +
@@ -585,6 +607,7 @@ func TestExcludeParamFields_RemovesOwnerAndId(t *testing.T) {
 }
 
 func TestCrudLogTableDataScopeRoundtrip(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{
 		Mode:        data_scope.ModeRequired,
 		OwnerColumn: "operator_admin_id",
@@ -617,6 +640,7 @@ func TestCrudLogTableDataScopeRoundtrip(t *testing.T) {
 }
 
 func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name       string
 		cfg        *data_scope.Config
@@ -658,6 +682,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			table := crudmodel.Table{
 				Name:           "form_scope_test",
 				Comment:        "form scope",
@@ -698,6 +723,7 @@ func TestEffectiveFormFieldsReachPopupFormRender(t *testing.T) {
 }
 
 func TestGeneratedDataScopeCompiles(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name        string
 		cfg         *data_scope.Config
@@ -742,6 +768,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			table := getTestTableData()
 			table.DataScope = tc.cfg
 			fields := getCompileFields(tc.structOwner)
@@ -815,6 +842,7 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 // owner 列：表单保留、编辑列可写、DTO 携带 admin_id，且表单 markup 渲染为
 // admin 的远程下拉（remote-url 反查真实 registrar 常量 /admin/auth.Admin/index）。
 func TestPrepareGenerationData_Reassignable(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}
 	table := crudmodel.Table{
 		Name:           "seller_user",
@@ -878,6 +906,7 @@ func TestPrepareGenerationData_Reassignable(t *testing.T) {
 // Add 超管可指定归属、受限强制归属 + OwnerInScopeWithActor 校验；
 // Edit 锁定当前行、归属变更时校验新 owner；handler 恢复未传(0)的归属。
 func TestGeneratedReassignableCompiles(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}
 	table := getTestTableData()
 	table.DataScope = cfg
@@ -936,6 +965,7 @@ func TestGeneratedReassignableCompiles(t *testing.T) {
 // ResolveDataScope 直接拒绝（评审 MAJOR）。非 reassignable 的 bigint owner
 // 不受影响（见 TestBigIntOwnerUsesInt64ActorConversion）。
 func TestGeneratedReassignableBigIntOwnerRejected(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}
 	table := getTestTableData()
 	table.DataScope = cfg
@@ -963,6 +993,7 @@ func TestGeneratedReassignableBigIntOwnerRejected(t *testing.T) {
 // 与 reassignable 互斥、owner 列前置条件、标识符/自身表拒绝、byColumn 存在性、
 // 合法组合通过。
 func TestResolveDataScope_InheritFrom(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		newField("id", "int", true),
 		newField("admin_id", "int", false),
@@ -1060,6 +1091,7 @@ func TestResolveDataScope_InheritFrom(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			resolved, err := ResolveDataScope(tc.cfg, tc.fields, DataScopeResolveOptions{ProveIndex: proveAll, TableName: tc.tableName})
 			if tc.wantErr {
 				require.Error(t, err)
@@ -1080,6 +1112,7 @@ func TestResolveDataScope_InheritFrom(t *testing.T) {
 // 主实体（FOR UPDATE + Select("admin_id") + Take(&inherited)），校验继承值在
 // actor 麾下（校验实参硬编码 int32），无强制归属操作者/超管指定分支。
 func TestModelTemplate_InheritFromAdd(t *testing.T) {
+	t.Parallel()
 	data := ModelData{
 		Namespace: "model", Name: "order", ClassName: "Order", ModelVar: "order",
 		Pk: "id", PkGoField: "ID",
@@ -1123,6 +1156,7 @@ func TestModelTemplate_InheritFromAdd(t *testing.T) {
 // CascadeOwners() 注册方法与锚点注释块；Edit 的级联改为运行时循环
 // （s.CascadeOwners() + ValidateIdentifier + 反引号拼接），不再静态展开。
 func TestModelTemplate_CascadeOwnersMethod(t *testing.T) {
+	t.Parallel()
 	data := ModelData{
 		Namespace: "model", Name: "seller_user", ClassName: "SellerUser", ModelVar: "sellerUser",
 		Pk: "id", PkGoField: "ID",
@@ -1168,6 +1202,7 @@ func TestModelTemplate_CascadeOwnersMethod(t *testing.T) {
 // inheritFrom 的生成期拒绝（评审 MAJOR：int32(...) 截断校验与实际写入值
 // 不一致的 fail-open 缺口；非 int32 owner 在 ResolveDataScope 直接拒绝）。
 func TestGeneratedInheritFromBigIntOwnerRejected(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, InheritFrom: &data_scope.InheritRef{Table: "user", ByColumn: "user_id"}}
 	table := getTestTableData()
 	table.Name = "order"
@@ -1199,6 +1234,7 @@ func TestGeneratedInheritFromBigIntOwnerRejected(t *testing.T) {
 // 注入的锚点条目（applyCascadeAnchor 格式）写入渲染结果的锚点块后整体编译，
 // Edit 级联循环使用列类型值（int32）不引入转换问题。
 func TestGeneratedCascadeRegistryCompiles(t *testing.T) {
+	t.Parallel()
 	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}
 	table := getTestTableData()
 	table.Name = "seller_user"
@@ -1332,6 +1368,30 @@ func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode, st
 	root := repoRoot(t)
 	tmp := t.TempDir()
 
+	if err := writeFixtureToolchain(root, tmp); err != nil {
+		return err
+	}
+	if err := writeFixtureStubs(tmp); err != nil {
+		return err
+	}
+	// 生成 handler 依赖真实共享基类：直接拷贝 internal/admin/handler/table.go，
+	// 避免 fixture 用简化替身掩盖泛型契约。
+	if err := writeFixtureHandlerBase(t, root, tmp); err != nil {
+		return err
+	}
+	if err := writeFixtureEntity(t, tmp, className, structContent); err != nil {
+		return err
+	}
+	if err := writeFixtureRepositoryAndHandler(t, tmp, className, modelCode, handlerCode); err != nil {
+		return err
+	}
+	if err := writeFixtureDTO(t, tmp, className, structContent, handlerData); err != nil {
+		return err
+	}
+	return runFixtureBuild(t, tmp)
+}
+
+func writeFixtureToolchain(root, tmp string) error {
 	goMod, err := os.ReadFile(filepath.Join(root, "go.mod")) //nolint:gosec // root 为 repoRoot(t) 定位的固定仓库路径
 	if err != nil {
 		return err
@@ -1349,10 +1409,10 @@ func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode, st
 
 	srcDataScope := filepath.Join(root, "internal", "pkg", "data_scope")
 	dstDataScope := filepath.Join(tmp, "internal", "pkg", "data_scope")
-	if err := copyDir(srcDataScope, dstDataScope); err != nil {
-		return err
-	}
+	return copyDir(srcDataScope, dstDataScope)
+}
 
+func writeFixtureStubs(tmp string) error {
 	stubs := map[string]string{
 		"internal/conf/config.go": `package conf
 
@@ -1503,17 +1563,20 @@ func GetError(v interface{}, err error) error { return err }
 			return err
 		}
 	}
+	return nil
+}
 
-	// 生成 handler 依赖真实共享基类：直接拷贝 internal/admin/handler/table.go，
-	// 避免 fixture 用简化替身掩盖泛型契约。
+func writeFixtureHandlerBase(t *testing.T, root, tmp string) error {
+	t.Helper()
 	externalTable, err := os.ReadFile(filepath.Join(root, "internal", "admin", "handler", "table.go")) //nolint:gosec // 固定仓库内 internal/admin/handler/table.go 夹具
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "internal", "admin", "handler", "table.go"), externalTable, 0o600); err != nil { //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自仓库 table.go，路径由测试拼接
-		return err
-	}
+	return os.WriteFile(filepath.Join(tmp, "internal", "admin", "handler", "table.go"), externalTable, 0o600) //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自仓库 table.go，路径由测试拼接
+}
 
+func writeFixtureEntity(t *testing.T, tmp, className, structContent string) error {
+	t.Helper()
 	entityCode, err := renderEntity(ModelData{
 		Namespace:  "model",
 		ClassName:  className,
@@ -1531,17 +1594,21 @@ func GetError(v interface{}, err error) error { return err }
 		return err
 	}
 	entityPath := filepath.Join(entityDir, strings.ToLower(className)+".go")
-	if err := os.WriteFile(entityPath, []byte(entityCode), 0o600); err != nil {
-		return err
-	}
+	return os.WriteFile(entityPath, []byte(entityCode), 0o600)
+}
+
+func writeFixtureRepositoryAndHandler(t *testing.T, tmp, className, modelCode, handlerCode string) error {
+	t.Helper()
 	modelPath := filepath.Join(tmp, "internal", "admin", "repository", strings.ToLower(className)+"_gen.go")
 	if err := os.WriteFile(modelPath, []byte(modelCode), 0o600); err != nil {
 		return err
 	}
 	handlerPath := filepath.Join(tmp, "internal", "admin", "handler", strings.ToLower(className)+"_handler.go")
-	if err := os.WriteFile(handlerPath, []byte(handlerCode), 0o600); err != nil {
-		return err
-	}
+	return os.WriteFile(handlerPath, []byte(handlerCode), 0o600)
+}
+
+func writeFixtureDTO(t *testing.T, tmp, className, structContent string, handlerData HandlerData) error {
+	t.Helper()
 	dtoDir := filepath.Join(tmp, "internal", "admin", "dto")
 	if err := os.MkdirAll(dtoDir, 0o750); err != nil {
 		return err
@@ -1557,10 +1624,11 @@ func GetError(v interface{}, err error) error { return err }
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(dtoPath, []byte(dtoCode), 0o600); err != nil {
-		return err
-	}
+	return os.WriteFile(dtoPath, []byte(dtoCode), 0o600)
+}
 
+func runFixtureBuild(t *testing.T, tmp string) error {
+	t.Helper()
 	cmd := exec.Command("go", "build", "./...")
 	cmd.Dir = tmp
 	out, err := cmd.CombinedOutput()

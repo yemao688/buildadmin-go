@@ -9,6 +9,7 @@ import (
 )
 
 func TestFrameworkAdminOwnerTablesRegistered(t *testing.T) {
+	t.Parallel()
 	tables := data_scope.AdminOwnerTables()
 	require.Contains(t, tables, "user")
 	require.Contains(t, tables, "user_money_log")

@@ -51,6 +51,7 @@ func (h *failIndexRemoveOnceHook) AfterProcessPipeline(context.Context, []redis.
 }
 
 func TestRedisDriverClearRetriesStaleIndexAfterIndexRemoveFailure(t *testing.T) {
+	t.Parallel()
 	miniRedis, err := miniredis.Run()
 	require.NoError(t, err)
 	t.Cleanup(miniRedis.Close)
@@ -75,6 +76,7 @@ func TestRedisDriverClearRetriesStaleIndexAfterIndexRemoveFailure(t *testing.T) 
 }
 
 func TestRedisDriverClearScopesTokensByType(t *testing.T) {
+	t.Parallel()
 	miniRedis, err := miniredis.Run()
 	require.NoError(t, err)
 	t.Cleanup(miniRedis.Close)
@@ -98,6 +100,7 @@ func TestRedisDriverClearScopesTokensByType(t *testing.T) {
 }
 
 func TestRedisDriverClearTransitionsMixedLegacyIndexByType(t *testing.T) {
+	t.Parallel()
 	miniRedis, err := miniredis.Run()
 	require.NoError(t, err)
 	t.Cleanup(miniRedis.Close)
@@ -294,6 +297,7 @@ func redisTokenValue(t *testing.T, rawToken string, tokenType string, userID int
 }
 
 func TestRedisDriverKeyPrefix(t *testing.T) {
+	t.Parallel()
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)
 
@@ -320,6 +324,7 @@ func TestRedisDriverKeyPrefix(t *testing.T) {
 }
 
 func TestRedisDriverSetUsesDurationTTLAndTypedIndex(t *testing.T) {
+	t.Parallel()
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)
 
@@ -337,6 +342,7 @@ func TestRedisDriverSetUsesDurationTTLAndTypedIndex(t *testing.T) {
 }
 
 func TestRedisDriverSetReturnsRedisErrors(t *testing.T) {
+	t.Parallel()
 	setErr := errors.New("set failed")
 	store := newRedisStoreFake()
 	store.setEXErr = setErr
@@ -351,6 +357,7 @@ func TestRedisDriverSetReturnsRedisErrors(t *testing.T) {
 }
 
 func TestRedisDriverClearKeepsOtherTokenTypes(t *testing.T) {
+	t.Parallel()
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)
 	require.NoError(t, driver.Set("admin-token", "admin", 7, 0))
@@ -364,6 +371,7 @@ func TestRedisDriverClearKeepsOtherTokenTypes(t *testing.T) {
 }
 
 func TestRedisDriverClearReadsAndCleansLegacyIndexByActualType(t *testing.T) {
+	t.Parallel()
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)
 	adminEncrypted, adminData := redisTokenValue(t, "legacy-admin", "admin", 9)
@@ -383,6 +391,7 @@ func TestRedisDriverClearReadsAndCleansLegacyIndexByActualType(t *testing.T) {
 }
 
 func TestRedisDriverPropagatesGetAndClearErrors(t *testing.T) {
+	t.Parallel()
 	getErr := errors.New("get failed")
 	store := newRedisStoreFake()
 	store.getErr = getErr
@@ -398,6 +407,7 @@ func TestRedisDriverPropagatesGetAndClearErrors(t *testing.T) {
 }
 
 func TestTokenHelperGetForWorksWithRedisDriver(t *testing.T) {
+	t.Parallel()
 	store := newRedisStoreFake()
 	driver := newFakeRedisDriver(store)
 	require.NoError(t, driver.Set("admin-token", "admin", 7, 0))

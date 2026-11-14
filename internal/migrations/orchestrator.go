@@ -56,86 +56,108 @@ func Run(db *gorm.DB, config *conf.Configuration) (report Report, err error) {
 		if err != nil {
 			return fmt.Errorf("database state check: %w", err)
 		}
-		if recovery != InstallStrictUpgrade {
-			if err := BootstrapOfficialLedger(pinned, config); err != nil {
-				return fmt.Errorf("official ledger bootstrap before snapshot: %w", err)
-			}
-			if err := MarkSeedPending(pinned, config); err != nil {
-				return fmt.Errorf("database seed marker before snapshot: %w", err)
-			}
-			if err := pinned.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...); err != nil {
-				return fmt.Errorf("database fresh snapshot: %w", err)
-			}
-			if err := core.ApplyTableComments(pinned, config.Database.Prefix); err != nil {
-				return fmt.Errorf("core table comments: %w", err)
-			}
-		} else if _, err := core.EnsureMissingCoreTables(pinned, config.Database.Prefix); err != nil {
-			// strict-upgrade 只补建缺失的核心表（旧库可能没有 country_* 等
-			// 后加表），绝不改动已存在表的结构。
-			return fmt.Errorf("strict upgrade missing core tables: %w", err)
+		if err := runSnapshotStage(pinned, config, recovery); err != nil {
+			return err
 		}
-		if err := BootstrapOfficialLedger(pinned, config); err != nil {
-			return fmt.Errorf("official ledger bootstrap: %w", err)
+		if err := runLedgerBootstrapStage(pinned, config); err != nil {
+			return err
 		}
-		if err := ValidateOfficialLedgerSchema(pinned, config); err != nil {
-			return fmt.Errorf("official ledger schema: %w", err)
-		}
-		if err := BootstrapFrameworkLedger(pinned, config); err != nil {
-			return fmt.Errorf("framework ledger bootstrap: %w", err)
-		}
-		if err := ValidateFrameworkLedgerSchema(pinned, config); err != nil {
-			return fmt.Errorf("framework ledger schema: %w", err)
-		}
-		if err := BootstrapBusinessLedger(pinned, config); err != nil {
-			return fmt.Errorf("business ledger bootstrap: %w", err)
-		}
-		if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
-			return fmt.Errorf("business ledger schema: %w", err)
-		}
-		official, frameworks := OfficialMigrations(), FrameworkMigrations()
-		businessMigrations, err := business.Migrations()
-		if err != nil {
-			return fmt.Errorf("business migration registry: %w", err)
-		}
-		report.Official, err = RunOfficialMigrations(pinned, config, official)
-		if err != nil {
-			return fmt.Errorf("official migration: %w", err)
-		}
-		if err := ReconcileLegacyData(pinned, config); err != nil {
-			return fmt.Errorf("official reconciliation: %w", err)
-		}
-		pending, err := SeedPending(pinned, config)
-		if err != nil {
-			return fmt.Errorf("database seed state: %w", err)
-		}
-		if pending {
-			if err := RunOfficialFreshSeed(pinned, config); err != nil {
-				return err
-			}
-			report.Seeded = true
-		}
-		// framework 迁移账本只记录一次，其 Up 里的种子因此不会在存量库重放；
-		// 每次 migrate/serve 都幂等补种，使新版本新增的 framework seed 能到达
-		// 已完成的库。必须在 RunFrameworkMigrations 之前执行：已记录迁移的
-		// VerifySchema/VerifyUpgradeData 在 runner 内先于后续步骤运行，被删除的
-		// 安全种子行要在常驻断言之前自愈。
-		if err := framework.EnsureSeed(pinned, config); err != nil {
-			return fmt.Errorf("framework seed: %w", err)
-		}
-		report.Framework, err = RunFrameworkMigrations(pinned, config, official, frameworks)
-		if err != nil {
-			return fmt.Errorf("framework migration: %w", err)
-		}
-		report.Business, err = RunBusinessMigrations(pinned, config, businessMigrations)
-		if err != nil {
-			return fmt.Errorf("business migration: %w", err)
-		}
-		if err := FrameworkVerifyCurrent(pinned, config); err != nil {
-			return fmt.Errorf("framework current validation: %w", err)
-		}
-		return nil
+		return runTrackedStages(pinned, config, &report)
 	})
 	return report, err
+}
+
+// runSnapshotStage 在非 strict-upgrade 场景建立全新安装快照；strict-upgrade
+// 只补建缺失的核心表。
+func runSnapshotStage(pinned *gorm.DB, config *conf.Configuration, recovery InstallRecoveryState) error {
+	if recovery != InstallStrictUpgrade {
+		if err := BootstrapOfficialLedger(pinned, config); err != nil {
+			return fmt.Errorf("official ledger bootstrap before snapshot: %w", err)
+		}
+		if err := MarkSeedPending(pinned, config); err != nil {
+			return fmt.Errorf("database seed marker before snapshot: %w", err)
+		}
+		if err := pinned.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(core.CoreModels()...); err != nil {
+			return fmt.Errorf("database fresh snapshot: %w", err)
+		}
+		if err := core.ApplyTableComments(pinned, config.Database.Prefix); err != nil {
+			return fmt.Errorf("core table comments: %w", err)
+		}
+		return nil
+	}
+	if _, err := core.EnsureMissingCoreTables(pinned, config.Database.Prefix); err != nil {
+		// strict-upgrade 只补建缺失的核心表（旧库可能没有 country_* 等
+		// 后加表），绝不改动已存在表的结构。
+		return fmt.Errorf("strict upgrade missing core tables: %w", err)
+	}
+	return nil
+}
+
+func runLedgerBootstrapStage(pinned *gorm.DB, config *conf.Configuration) error {
+	if err := BootstrapOfficialLedger(pinned, config); err != nil {
+		return fmt.Errorf("official ledger bootstrap: %w", err)
+	}
+	if err := ValidateOfficialLedgerSchema(pinned, config); err != nil {
+		return fmt.Errorf("official ledger schema: %w", err)
+	}
+	if err := BootstrapFrameworkLedger(pinned, config); err != nil {
+		return fmt.Errorf("framework ledger bootstrap: %w", err)
+	}
+	if err := ValidateFrameworkLedgerSchema(pinned, config); err != nil {
+		return fmt.Errorf("framework ledger schema: %w", err)
+	}
+	if err := BootstrapBusinessLedger(pinned, config); err != nil {
+		return fmt.Errorf("business ledger bootstrap: %w", err)
+	}
+	if err := ValidateBusinessLedgerSchema(pinned, config); err != nil {
+		return fmt.Errorf("business ledger schema: %w", err)
+	}
+	return nil
+}
+
+func runTrackedStages(pinned *gorm.DB, config *conf.Configuration, recent *Report) error {
+	official, frameworks := OfficialMigrations(), FrameworkMigrations()
+	businessMigrations, err := business.Migrations()
+	if err != nil {
+		return fmt.Errorf("business migration registry: %w", err)
+	}
+	recent.Official, err = RunOfficialMigrations(pinned, config, official)
+	if err != nil {
+		return fmt.Errorf("official migration: %w", err)
+	}
+	if err := ReconcileLegacyData(pinned, config); err != nil {
+		return fmt.Errorf("official reconciliation: %w", err)
+	}
+	pending, err := SeedPending(pinned, config)
+	if err != nil {
+		return fmt.Errorf("database seed state: %w", err)
+	}
+	if pending {
+		if err := RunOfficialFreshSeed(pinned, config); err != nil {
+			return err
+		}
+		recent.Seeded = true
+	}
+	// framework 迁移账本只记录一次，其 Up 里的种子因此不会在存量库重放；
+	// 每次 migrate/serve 都幂等补种，使新版本新增的 framework seed 能到达
+	// 已完成的库。必须在 RunFrameworkMigrations 之前执行：已记录迁移的
+	// VerifySchema/VerifyUpgradeData 在 runner 内先于后续步骤运行，被删除的
+	// 安全种子行要在常驻断言之前自愈。
+	if err := framework.EnsureSeed(pinned, config); err != nil {
+		return fmt.Errorf("framework seed: %w", err)
+	}
+	recent.Framework, err = RunFrameworkMigrations(pinned, config, official, frameworks)
+	if err != nil {
+		return fmt.Errorf("framework migration: %w", err)
+	}
+	recent.Business, err = RunBusinessMigrations(pinned, config, businessMigrations)
+	if err != nil {
+		return fmt.Errorf("business migration: %w", err)
+	}
+	if err := FrameworkVerifyCurrent(pinned, config); err != nil {
+		return fmt.Errorf("framework current validation: %w", err)
+	}
+	return nil
 }
 
 func Rollback(db *gorm.DB, config *conf.Configuration, options RollbackOptions) (report RollbackReport, err error) {

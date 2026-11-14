@@ -100,6 +100,27 @@ func version202(db *gorm.DB, config *conf.Configuration) error {
 	if !core.TableExists(db, t) {
 		return nil
 	}
+	if err := version202RenameTopRules(db, t); err != nil {
+		return err
+	}
+	var dashboards []model.AdminRule
+	if err := db.Table(t).Where("name = ?", "dashboard").Find(&dashboards).Error; err != nil {
+		return err
+	}
+	if err := validateDashboardRuleCount(len(dashboards)); err != nil {
+		return err
+	}
+	if len(dashboards) == 0 {
+		// A newly installed schema has an empty admin_rule table.  The install
+		// seed creates dashboard and its button after version migrations run.
+		// Also tolerate an existing rule set which simply has no console rule;
+		// there is no safe parent to attach dashboard/index to in that case.
+		return nil
+	}
+	return version202EnsureDashboardButton(db, config, t, dashboards[0].ID)
+}
+
+func version202RenameTopRules(db *gorm.DB, t string) error {
 	for _, item := range []struct{ old, new string }{{"dashboard/dashboard", "dashboard"}, {"buildadmin/buildadmin", "buildadmin"}} {
 		var oldCount, newCount int64
 		if err := db.Table(t).Where("name = ?", item.old).Count(&oldCount).Error; err != nil {
@@ -118,56 +139,57 @@ func version202(db *gorm.DB, config *conf.Configuration) error {
 			return err
 		}
 	}
-	var dashboards []model.AdminRule
-	if err := db.Table(t).Where("name = ?", "dashboard").Find(&dashboards).Error; err != nil {
-		return err
-	}
-	if err := validateDashboardRuleCount(len(dashboards)); err != nil {
-		return err
-	}
-	if len(dashboards) == 0 {
-		// A newly installed schema has an empty admin_rule table.  The install
-		// seed creates dashboard and its button after version migrations run.
-		// Also tolerate an existing rule set which simply has no console rule;
-		// there is no safe parent to attach dashboard/index to in that case.
+	return nil
+}
+
+func version202EnsureDashboardButton(db *gorm.DB, config *conf.Configuration, t string, dashboardID int32) error {
+	if dashboardID == 0 {
 		return nil
 	}
-	dashboardID := dashboards[0].ID
-	if dashboardID != 0 {
-		var buttons []model.AdminRule
-		result := db.Table(t).Where("name = ?", "dashboard/index").Find(&buttons)
-		if result.Error != nil {
-			return result.Error
+	button, err := version202DashboardIndexButton(db, t, dashboardID)
+	if err != nil {
+		return err
+	}
+	groups := core.TableName(config, "admin_group")
+	if !core.TableExists(db, groups) {
+		return nil
+	}
+	return db.Exec("UPDATE `"+groups+"` SET rules=CONCAT_WS(',', NULLIF(rules,''), ?) WHERE FIND_IN_SET(?, rules)>0 AND FIND_IN_SET(?, rules)=0", button.ID, dashboardID, button.ID).Error
+}
+
+// version202DashboardIndexButton 返回 dashboard/index 按钮规则，缺失时创建，
+// 并修正其 pid/type/title 使其挂在 dashboard 之下。
+func version202DashboardIndexButton(db *gorm.DB, t string, dashboardID int32) (model.AdminRule, error) {
+	var buttons []model.AdminRule
+	result := db.Table(t).Where("name = ?", "dashboard/index").Find(&buttons)
+	if result.Error != nil {
+		return model.AdminRule{}, result.Error
+	}
+	if len(buttons) > 1 {
+		return model.AdminRule{}, fmt.Errorf("multiple dashboard/index rules found")
+	}
+	var button model.AdminRule
+	if len(buttons) == 1 {
+		button = buttons[0]
+	}
+	if len(buttons) == 0 {
+		if err := db.Table(t).Create(&model.AdminRule{Pid: dashboardID, Type: "button", Title: "查看", Name: "dashboard/index", Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()}).Error; err != nil {
+			return model.AdminRule{}, err
 		}
-		if len(buttons) > 1 {
-			return fmt.Errorf("multiple dashboard/index rules found")
+		if err := db.Table(t).Where("name = ?", "dashboard/index").First(&button).Error; err != nil {
+			return model.AdminRule{}, err
 		}
-		var button model.AdminRule
-		if len(buttons) == 1 {
-			button = buttons[0]
-		}
-		if len(buttons) == 0 {
-			if err := db.Table(t).Create(&model.AdminRule{Pid: dashboardID, Type: "button", Title: "查看", Name: "dashboard/index", Status: "1", UpdateTime: time.Now().Unix(), CreateTime: time.Now().Unix()}).Error; err != nil {
-				return err
-			}
-			if err := db.Table(t).Where("name = ?", "dashboard/index").First(&button).Error; err != nil {
-				return err
-			}
-		} else if button.Pid != dashboardID {
-			return fmt.Errorf("dashboard/index has pid %d, want %d", button.Pid, dashboardID)
-		} else if button.Type != "button" || button.Title != "查看" {
-			if err := db.Table(t).Where("id = ?", button.ID).Updates(map[string]any{"type": "button", "title": "查看"}).Error; err != nil {
-				return err
-			}
-		}
-		groups := core.TableName(config, "admin_group")
-		if core.TableExists(db, groups) {
-			if err := db.Exec("UPDATE `"+groups+"` SET rules=CONCAT_WS(',', NULLIF(rules,''), ?) WHERE FIND_IN_SET(?, rules)>0 AND FIND_IN_SET(?, rules)=0", button.ID, dashboardID, button.ID).Error; err != nil {
-				return err
-			}
+		return button, nil
+	}
+	if button.Pid != dashboardID {
+		return model.AdminRule{}, fmt.Errorf("dashboard/index has pid %d, want %d", button.Pid, dashboardID)
+	}
+	if button.Type != "button" || button.Title != "查看" {
+		if err := db.Table(t).Where("id = ?", button.ID).Updates(map[string]any{"type": "button", "title": "查看"}).Error; err != nil {
+			return model.AdminRule{}, err
 		}
 	}
-	return nil
+	return button, nil
 }
 
 func version205(db *gorm.DB, config *conf.Configuration) error {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"testing"
 
@@ -15,8 +16,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func queryContext(rawQuery string) *gin.Context {
+// TestMain 在串行阶段把 gin 设为测试模式：gin.SetMode 写进程级全局变量，
+// 放在并行子测试里调用会与其它测试同时读写该变量。
+func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
+	os.Exit(m.Run())
+}
+
+func queryContext(rawQuery string) *gin.Context {
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/?"+rawQuery, nil)
 	ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
@@ -30,6 +37,8 @@ func queryContext(rawQuery string) *gin.Context {
 }
 
 func TestQueryBuilderPagination(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name       string
 		query      string
@@ -44,6 +53,7 @@ func TestQueryBuilderPagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, _, limit, offset, err := QueryBuilder(queryContext(tt.query), TableInfo{TableName: "items", Key: "id"}, nil)
 			if err != nil {
 				t.Fatalf("QueryBuilder() error = %v", err)
@@ -56,6 +66,7 @@ func TestQueryBuilderPagination(t *testing.T) {
 }
 
 func TestQueryBuilderSearchFilterComposition(t *testing.T) {
+	t.Parallel()
 	ctx := queryContext("quickSearch=alpha%25&search[0][field]=status&search[0][val]=42&search[0][operator]=eq&search[1][field]=name&search[1][val]=name&search[1][operator]=LIKE")
 	whereS, whereP, orderS, _, _, err := QueryBuilder(ctx, TableInfo{
 		TableName:        "items",
@@ -80,6 +91,8 @@ func TestQueryBuilderSearchFilterComposition(t *testing.T) {
 }
 
 func TestQueryBuilderOrder(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		query     string
@@ -98,6 +111,7 @@ func TestQueryBuilderOrder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, orderS, _, _, err := QueryBuilder(queryContext(tt.query), TableInfo{
 				TableName: "items",
 				Key:       "id",
@@ -126,6 +140,8 @@ func TestQueryBuilderOrder(t *testing.T) {
 // 无 order 参数时生效并追加主键 desc（orderGuarantee）；主排序本身是主键
 // 时不追加；非法默认排序静默回退主键 desc；显式 order 参数优先覆盖。
 func TestQueryBuilderDefaultOrder(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name         string
 		defaultOrder string
@@ -141,6 +157,7 @@ func TestQueryBuilderDefaultOrder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, orderS, _, _, err := QueryBuilder(queryContext(tt.query), TableInfo{
 				TableName:    "items",
 				Key:          "id",
@@ -157,6 +174,8 @@ func TestQueryBuilderDefaultOrder(t *testing.T) {
 }
 
 func TestQueryBuilderSearchFieldValidation(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		field     string
@@ -174,6 +193,7 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			query := "search[0][field]=" + url.QueryEscape(tt.field) + "&search[0][val]=value&search[0][operator]=eq"
 			whereS, _, _, _, _, err := QueryBuilder(queryContext(query), TableInfo{
 				TableName: "items",
@@ -204,6 +224,7 @@ func TestQueryBuilderSearchFieldValidation(t *testing.T) {
 // 子查询与参数；alias 未登记、无 SearchJoins、多层点号、注入形态字段名
 // 一律 400；点号字段与主表普通字段可组合搜索。
 func TestQueryBuilderSearchJoinExists(t *testing.T) {
+	t.Parallel()
 	itemsTable := func() TableInfo {
 		return TableInfo{
 			TableName: "items",
@@ -308,6 +329,7 @@ func TestQueryBuilderSearchJoinExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			whereS, whereP, _, _, _, err := QueryBuilder(queryContext(tt.query), tt.table, nil)
 			if tt.wantError {
 				if err == nil {
@@ -337,6 +359,7 @@ func TestQueryBuilderSearchJoinExists(t *testing.T) {
 // searchJoinExistsCondition（无前导 AND），两者用 or 分组；% 只转义一次；
 // alias 未登记/多层点号返回 400 而非未知表 SQL 错误。
 func TestQueryBuilderQuickSearchRelationFields(t *testing.T) {
+	t.Parallel()
 	table := func(quickSearchField string) TableInfo {
 		return TableInfo{
 			TableName:        "items",
@@ -400,6 +423,7 @@ func TestQueryBuilderQuickSearchRelationFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			whereS, whereP, _, _, _, err := QueryBuilder(queryContext(tt.query), tt.table, nil)
 			if tt.wantError {
 				if err == nil {
@@ -425,6 +449,7 @@ func TestQueryBuilderQuickSearchRelationFields(t *testing.T) {
 }
 
 func TestQueryBuilderHelpers(t *testing.T) {
+	t.Parallel()
 	if got := GetFullField("name", TableInfo{TableName: "items"}); got != "items.name" {
 		t.Fatalf("GetFullField() = %q; want %q", got, "items.name")
 	}
@@ -439,179 +464,124 @@ func TestQueryBuilderHelpers(t *testing.T) {
 	}
 }
 
+// assertDatetimeWhere 用一个搜索项查询并断言 SQL 片段与参数，供 datetime
+// 各场景复用，避免在每个子测试里重复三处断言。
+func assertDatetimeWhere(t *testing.T, fieldTypes map[string]string, rawQuery, wantWhere string, wantParams []interface{}) {
+	t.Helper()
+	ctx := queryContext(rawQuery)
+	whereS, whereP, _, _, _, err := QueryBuilder(ctx, TableInfo{TableName: "items", Key: "id", FieldTypes: fieldTypes}, nil)
+	if err != nil {
+		t.Fatalf("QueryBuilder() error = %v", err)
+	}
+	if whereS != wantWhere {
+		t.Fatalf("whereS = %q; want %q", whereS, wantWhere)
+	}
+	if !reflect.DeepEqual(whereP, wantParams) {
+		t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
+	}
+}
+
 // datetime 搜索基准（Asia/Shanghai）：2024-01-01 00:00:00 = unix 1704038400；
 // 2024-01-01 23:59:59 = 1704124799；2024-01-01 12:00:00 = 1704081600；
 // 2024-01-31 23:59:59 = 1706716799。
 func TestQueryBuilderDatetimeSearch(t *testing.T) {
-	baseTable := func(fieldTypes map[string]string) TableInfo {
-		return TableInfo{TableName: "items", Key: "id", FieldTypes: fieldTypes}
-	}
-
+	t.Parallel()
 	t.Run("native datetime column RANGE uses string BETWEEN", func(t *testing.T) {
+		t.Parallel()
 		// 陷阱①：FieldTypes 传入后 GetFieldType=="datetime"，不再与 unix 戳比较
-		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
-		}
-		wantParams := []interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"published_at": "datetime"},
+			"search[0][field]=published_at&search[0][val]="+url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`published_at` BETWEEN ? AND ? ",
+			[]interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"})
 	})
 
 	t.Run("native datetime column non-RANGE keeps string equality", func(t *testing.T) {
-		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`published_at` = ? " {
-			t.Fatalf("whereS = %q; want string equality", whereS)
-		}
-		wantParams := []interface{}{"2024-01-01 12:00:00"}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		t.Parallel()
+		assertDatetimeWhere(t, map[string]string{"published_at": "datetime"},
+			"search[0][field]=published_at&search[0][val]="+url.QueryEscape("2024-01-01 12:00:00")+"&search[0][operator]=eq&search[0][render]=datetime",
+			"`items`.`published_at` = ? ",
+			[]interface{}{"2024-01-01 12:00:00"})
 	})
 
 	t.Run("qualified own-table field resolves once", func(t *testing.T) {
+		t.Parallel()
 		// 主表自带限定（alias == TableName，如 items.published_at）回退主表
 		// 路径原样透传：strings.Replace 曾把 items.published_at 拼成
 		// items.items.publishedat，GetFieldType 的限定形态修复后走 datetime
 		// 分支正常生成（PHP 主表别名限定同样合法）。
-		ctx := queryContext("search[0][field]=items.published_at&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
-		}
-		wantParams := []interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"published_at": "datetime"},
+			"search[0][field]=items.published_at&search[0][val]="+url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`published_at` BETWEEN ? AND ? ",
+			[]interface{}{"2024-01-01 00:00:00", "2024-01-31 23:59:59"})
 	})
 
 	t.Run("int timestamp column RANGE converts to unix", func(t *testing.T) {
-		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
-		}
-		wantParams := []interface{}{int64(1704038400), int64(1706716799)}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		t.Parallel()
+		assertDatetimeWhere(t, map[string]string{"create_time": "bigint"},
+			"search[0][field]=create_time&search[0][val]="+url.QueryEscape("2024-01-01 00:00:00,2024-01-31 23:59:59")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`create_time` BETWEEN ? AND ? ",
+			[]interface{}{int64(1704038400), int64(1706716799)})
 	})
 
 	t.Run("int timestamp column non-RANGE converts to unix", func(t *testing.T) {
+		t.Parallel()
 		// 陷阱②：eq '2024-01-01 12:00:00' 曾直传原始字符串，MySQL 强转 2024 错乱
-		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`create_time` = ? " {
-			t.Fatalf("whereS = %q; want unix equality", whereS)
-		}
-		wantParams := []interface{}{int64(1704081600)}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"create_time": "bigint"},
+			"search[0][field]=create_time&search[0][val]="+url.QueryEscape("2024-01-01 12:00:00")+"&search[0][operator]=eq&search[0][render]=datetime",
+			"`items`.`create_time` = ? ",
+			[]interface{}{int64(1704081600)})
 	})
 
 	t.Run("single-day RANGE pads end with 23:59:59", func(t *testing.T) {
+		t.Parallel()
 		// 陷阱③："2024-01-01,2024-01-01" 曾解析为 [零点,零点] 只命中零点整
-		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"create_time": "bigint"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
-		}
-		wantParams := []interface{}{int64(1704038400), int64(1704124799)}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"create_time": "bigint"},
+			"search[0][field]=create_time&search[0][val]="+url.QueryEscape("2024-01-01,2024-01-01")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`create_time` BETWEEN ? AND ? ",
+			[]interface{}{int64(1704038400), int64(1704124799)})
 	})
 
 	t.Run("native datetime single-day RANGE pads end with 23:59:59", func(t *testing.T) {
+		t.Parallel()
 		// 陷阱④：原生 datetime 列 "2024-01-01,2024-01-01" 曾直传原始字符串，
 		// BETWEEN 只命中零点整；结束值 len==10 必须显式补 23:59:59（起始值
 		// 保持 'YYYY-MM-DD' 原样，MySQL 隐式按当天零点）
-		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
-		}
-		wantParams := []interface{}{"2024-01-01", "2024-01-01 23:59:59"}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"published_at": "datetime"},
+			"search[0][field]=published_at&search[0][val]="+url.QueryEscape("2024-01-01,2024-01-01")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`published_at` BETWEEN ? AND ? ",
+			[]interface{}{"2024-01-01", "2024-01-01 23:59:59"})
 	})
 
 	t.Run("native datetime single-day RANGE keeps full start and pads short end", func(t *testing.T) {
+		t.Parallel()
 		// 起始值带时分秒、结束值 len==10 的混合形态：起始值原样透传，仅结束值补全
-		ctx := queryContext("search[0][field]=published_at&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00,2024-01-02") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(map[string]string{"published_at": "datetime"}), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`published_at` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want string BETWEEN", whereS)
-		}
-		wantParams := []interface{}{"2024-01-01 12:00:00", "2024-01-02 23:59:59"}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, map[string]string{"published_at": "datetime"},
+			"search[0][field]=published_at&search[0][val]="+url.QueryEscape("2024-01-01 12:00:00,2024-01-02")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`published_at` BETWEEN ? AND ? ",
+			[]interface{}{"2024-01-01 12:00:00", "2024-01-02 23:59:59"})
 	})
 
 	t.Run("hand-written nil FieldTypes falls back to unix path", func(t *testing.T) {
+		t.Parallel()
 		// 手写仓库传 nil：与显式 bigint 字段类型走同一 unix 转换路径
-		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01,2024-01-01") + "&search[0][operator]=RANGE&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(nil), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`create_time` BETWEEN ? AND ? " {
-			t.Fatalf("whereS = %q; want unix BETWEEN", whereS)
-		}
-		wantParams := []interface{}{int64(1704038400), int64(1704124799)}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, nil,
+			"search[0][field]=create_time&search[0][val]="+url.QueryEscape("2024-01-01,2024-01-01")+"&search[0][operator]=RANGE&search[0][render]=datetime",
+			"`items`.`create_time` BETWEEN ? AND ? ",
+			[]interface{}{int64(1704038400), int64(1704124799)})
 	})
 
 	t.Run("nil FieldTypes non-RANGE still converts to unix", func(t *testing.T) {
+		t.Parallel()
 		// 手写仓库 nil：非 RANGE 也转 unix（与显式 bigint 一致）
-		ctx := queryContext("search[0][field]=create_time&search[0][val]=" + url.QueryEscape("2024-01-01 12:00:00") + "&search[0][operator]=eq&search[0][render]=datetime")
-		whereS, whereP, _, _, _, err := QueryBuilder(ctx, baseTable(nil), nil)
-		if err != nil {
-			t.Fatalf("QueryBuilder() error = %v", err)
-		}
-		if whereS != "`items`.`create_time` = ? " {
-			t.Fatalf("whereS = %q; want unix equality", whereS)
-		}
-		wantParams := []interface{}{int64(1704081600)}
-		if !reflect.DeepEqual(whereP, wantParams) {
-			t.Fatalf("whereP = %#v; want %#v", whereP, wantParams)
-		}
+		assertDatetimeWhere(t, nil,
+			"search[0][field]=create_time&search[0][val]="+url.QueryEscape("2024-01-01 12:00:00")+"&search[0][operator]=eq&search[0][render]=datetime",
+			"`items`.`create_time` = ? ",
+			[]interface{}{int64(1704081600)})
 	})
 }
 
 func TestGetFieldTypeMapFromFieldTypes(t *testing.T) {
+	t.Parallel()
 	m := GetFieldTypeMap(TableInfo{
 		TableName: "items",
 		FieldTypes: map[string]string{
@@ -639,6 +609,7 @@ func TestGetFieldTypeMapFromFieldTypes(t *testing.T) {
 }
 
 func TestGetFieldTypeQualifiedForms(t *testing.T) {
+	t.Parallel()
 	m := GetFieldTypeMap(TableInfo{
 		TableName:  "items",
 		FieldTypes: map[string]string{"published_at": "datetime"},

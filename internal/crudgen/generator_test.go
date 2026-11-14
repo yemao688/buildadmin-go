@@ -13,6 +13,7 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // GenerateFromSpec 取进程级 generationMu 生成锁（TryLock 失败即返回 ErrGenerationBusy），并行会与其它取锁测试互相返回 busy
 func TestGenerateFromSpecRejectsProtectedTableBeforeDependencies(t *testing.T) {
 	_, err := GenerateFromSpec(nil, nil, nil, GenerateOptions{Table: crudmodel.Table{Name: "admin"}})
 	if err == nil || err.Error() != `crud generation is forbidden for protected table "admin"` {
@@ -21,12 +22,14 @@ func TestGenerateFromSpecRejectsProtectedTableBeforeDependencies(t *testing.T) {
 }
 
 func TestDeleteQuarantinePathIsReusableByService(t *testing.T) {
+	t.Parallel()
 	// This exercises the same quarantine primitive used by DeleteFromSpec: a
 	// failure before commit restores every manifest member.
 	assertQuarantineRestore(t)
 }
 
 func TestNormalizeGenerationType(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		in, rebuild, want string
 	}{
@@ -51,6 +54,7 @@ func TestNormalizeGenerationType(t *testing.T) {
 // 生成 handler 不再展开 Del：删除响应文案由共享 TableHandler 提供，
 // 模板自身只负责装配 TableOptions。
 func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
+	t.Parallel()
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
 	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
@@ -70,6 +74,7 @@ func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 // copier.Copy 的返回值必须检查（errcheck 门禁）：Add/Edit 各一处，位于共享
 // TableHandler；生成模板不得再出现 copier 调用。
 func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
+	t.Parallel()
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
 	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
@@ -90,6 +95,7 @@ func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
 // 对齐上游:type=create 对已存在的数据表直接删表重建(前端 generateCheck
 // 已弹窗确认),服务端仅校验生成类型本身。
 func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
+	t.Parallel()
 	if err := validateGenerationMode("create"); err != nil {
 		t.Fatal(err)
 	}
@@ -102,6 +108,7 @@ func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
 }
 
 func TestAlterChangesOnlyAddAndModify(t *testing.T) {
+	t.Parallel()
 	changes := deriveAlterChanges([]model.Column{{COLUMN_NAME: "id"}, {COLUMN_NAME: "legacy"}}, []crudmodel.Field{{Name: "id"}, {Name: "name"}})
 	if len(changes) != 2 || changes[0].Type != "change-field-attr" || changes[1].Type != "add-field" {
 		t.Fatalf("unexpected alter changes: %+v", changes)
@@ -113,6 +120,7 @@ func TestAlterChangesOnlyAddAndModify(t *testing.T) {
 // provider.go；过滤后 Generated/Shared 不含被跳过路径，且 manifestAllows 的
 // skipped 集合与 filterManifestPaths 使用的集合同源。
 func TestSkipManifestPathsAndFilter(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{Name: "orders", WebViewsDir: "web/src/views/backend/order/orders"}
 	skipped := skipManifestPaths(table, true, true)
 	if len(skipped) != 6 { // 4 web + repository + repository provider
@@ -183,6 +191,7 @@ func TestSkipManifestPathsAndFilter(t *testing.T) {
 }
 
 func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
+	t.Parallel()
 	path := t.TempDir() + "/model.go"
 	manifest := FileManifest{Generated: []string{path}}
 	if !manifestAllows(manifest, nil, nil) {
@@ -220,6 +229,7 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 //     重新纳入，无需先 crud:delete）；
 //   - 路径漂移（两清单互不包含）始终拒绝。
 func TestManifestAllowsSkippedSubset(t *testing.T) {
+	t.Parallel()
 	path := t.TempDir() + "/model.go"
 	skipped := map[string]bool{filepath.Clean(path): true}
 	log := &entity.Log{Table: crudmodel.JSON_TABLE{GeneratedFiles: []string{path}}}
@@ -245,6 +255,7 @@ func TestManifestAllowsSkippedSubset(t *testing.T) {
 }
 
 func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		viewsPath    string
@@ -256,6 +267,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			manifest, err := BuildFileManifest(crudmodel.Table{
 				Name:           tc.name,
 				ModelFile:      "internal/admin/model/" + tc.name + ".go",
@@ -281,6 +293,7 @@ func TestBuildFileManifestUsesLocaleFirstLanguagePaths(t *testing.T) {
 }
 
 func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
+	t.Parallel()
 	root := util.RootPath()
 	manifest, err := BuildFileManifest(crudmodel.Table{
 		Name:           "country_language_content",
@@ -312,6 +325,7 @@ func TestBuildFileManifestUsesRegistrarOutputAndSharedSet(t *testing.T) {
 }
 
 func TestBuildFileManifestNormalizesPathSeparators(t *testing.T) {
+	t.Parallel()
 	forward := crudmodel.Table{
 		Name: "country_language_content", ModelFile: "internal/admin/model/country/languageContent.go",
 		ControllerFile: "internal/admin/handler/country/languageContent.go", WebViewsDir: "web/src/views/backend/country/languageContent",
@@ -334,6 +348,7 @@ func TestBuildFileManifestNormalizesPathSeparators(t *testing.T) {
 }
 
 func TestCanonicalManifestLangPath(t *testing.T) {
+	t.Parallel()
 	root := util.RootPath()
 	cases := []struct {
 		name, input, want string
@@ -345,6 +360,7 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := canonicalManifestLangPath(tc.input); got != tc.want {
 				t.Fatalf("canonicalManifestLangPath(%q) = %q, want %q", tc.input, got, tc.want)
 			}
@@ -353,6 +369,7 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 }
 
 func TestCompileFailureRestoresSnapshot(t *testing.T) {
+	t.Parallel()
 	path := t.TempDir() + "/generated.go"
 	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
@@ -375,12 +392,14 @@ func TestCompileFailureRestoresSnapshot(t *testing.T) {
 }
 
 func TestGenerationPanicErrorIsReadable(t *testing.T) {
+	t.Parallel()
 	if got := generationPanicError("migrator panic").Error(); got != "panic: migrator panic" {
 		t.Fatalf("panic error = %q", got)
 	}
 }
 
 func TestFailedGenerationUnregistersRegisteredRoutes(t *testing.T) {
+	t.Parallel()
 	routes := []atomicRouteRegistration{{method: "POST", path: "demo/add"}, {method: "DELETE", path: "demo/del"}}
 	var got []atomicRouteRegistration
 	unregisterAtomicRoutes(func(method, path string) { got = append(got, atomicRouteRegistration{method: method, path: path}) }, routes)
@@ -390,6 +409,7 @@ func TestFailedGenerationUnregistersRegisteredRoutes(t *testing.T) {
 }
 
 func TestWireErrorIncludesOutput(t *testing.T) {
+	t.Parallel()
 	err := formatWireError(errors.New("exit status 1"), []byte("wire: undefined provider\n"))
 	if strings.HasPrefix(err.Error(), "wire: wire:") {
 		t.Fatalf("wire error should not duplicate stage prefix: %v", err)
@@ -400,6 +420,7 @@ func TestWireErrorIncludesOutput(t *testing.T) {
 }
 
 func TestWireErrorWithoutOutputReturnsOriginalError(t *testing.T) {
+	t.Parallel()
 	base := errors.New("signal: interrupt")
 	err := formatWireError(base, nil)
 	if !errors.Is(err, base) {
@@ -411,6 +432,7 @@ func TestWireErrorWithoutOutputReturnsOriginalError(t *testing.T) {
 }
 
 func TestParseDeleteGoFilesReportsPathAndLine(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	valid := filepath.Join(dir, "provider.go")
 	invalid := filepath.Join(dir, "registrar_set.go")

@@ -7,6 +7,7 @@ import (
 )
 
 func TestVersion202DashboardRuleCount(t *testing.T) {
+	t.Parallel()
 	if err := validateDashboardRuleCount(0); err != nil {
 		t.Fatalf("empty rule table must be safe for fresh seed: %v", err)
 	}
@@ -19,6 +20,7 @@ func TestVersion202DashboardRuleCount(t *testing.T) {
 }
 
 func TestMenuRuleBackupName(t *testing.T) {
+	t.Parallel()
 	config := &conf.Configuration{}
 	config.Database.Prefix = "ba_"
 	if got := menuRuleBackupName(config); got != "ba_menu_rule_version200_backup" {

@@ -15,6 +15,7 @@ import (
 )
 
 func TestUserMoneyLogTypeFor(t *testing.T) {
+	t.Parallel()
 	// 超管可指定任意类型（含空 → 交给 money 链路的缺省 system）。
 	require.Equal(t, "recharge", moneyLogTypeFor("recharge", true))
 	require.Equal(t, "withdraw", moneyLogTypeFor("withdraw", true))
@@ -26,6 +27,7 @@ func TestUserMoneyLogTypeFor(t *testing.T) {
 }
 
 func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
@@ -59,6 +61,7 @@ func TestMoneyLogScopeOwnerBoundariesAndDelete(t *testing.T) {
 }
 
 func TestMoneyLogConcurrentForUpdateFormsContinuousChain(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
@@ -90,6 +93,7 @@ func TestMoneyLogConcurrentForUpdateFormsContinuousChain(t *testing.T) {
 }
 
 func TestMoneyLogInsertFailureRollsBackBalanceAndDeleteCannotOrphan(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)

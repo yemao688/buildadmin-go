@@ -8,6 +8,7 @@ import (
 )
 
 func TestCrudAdvisoryLockBlocksAnotherSession(t *testing.T) {
+	t.Parallel()
 	db1, _ := testutil.OpenMySQL(t)
 	db2, _ := testutil.OpenMySQL(t)
 	name := generationAdvisoryLockName("crud-test", "ba_lock_test_") + time.Now().Format("150405.000000")

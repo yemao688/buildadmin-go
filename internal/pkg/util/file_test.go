@@ -7,6 +7,7 @@ import (
 
 // 直接断言生产函数的 SVG 输出，避免复制内部实现造成伪覆盖。
 func TestBuildSuffixSvg(t *testing.T) {
+	t.Parallel()
 	svg := BuildSuffixSvg("txt", "")
 	if !strings.Contains(svg, ">TXT</tspan>") {
 		t.Fatalf("suffix text missing from svg: %s", svg)
@@ -17,6 +18,7 @@ func TestBuildSuffixSvg(t *testing.T) {
 }
 
 func TestBuildSuffixSvgUsesExplicitBackgroundAndTruncates(t *testing.T) {
+	t.Parallel()
 	svg := BuildSuffixSvg("toooolong", "#123456")
 	if !strings.Contains(svg, "fill:#123456") {
 		t.Fatalf("explicit background missing from svg: %s", svg)

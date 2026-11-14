@@ -9,6 +9,7 @@ import (
 )
 
 func TestNormalizeAdminIDs(t *testing.T) {
+	t.Parallel()
 	got, err := normalizeIDs([]int32{4, 4, 2, 4}, "admin", false, func(_ int32) error {
 		return cErr.BadRequest("ids must be positive")
 	})

@@ -4,11 +4,9 @@ import (
 	"buildadmin-go/internal/pkg/response"
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	model "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
@@ -24,7 +22,8 @@ import (
 )
 
 func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
-	dsn := fmt.Sprintf("file:config-handler-edit-%d?mode=memory&cache=shared", time.Now().UnixNano())
+	t.Parallel()
+	dsn := uniqueAdminHandlerSQLiteDSN("config-handler-edit")
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
@@ -51,7 +50,6 @@ func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
 	}
 
 	h := NewConfigHandler(nil, config, configModel, service.NewConfigService(configModel), siteconfigSvc)
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/admin/config/edit", h.Edit)
 	requestJSON := `{"site_name":"Hotel","no_access_ip":"","time_zone":"Asia/Shanghai","version":"v1.0.0","record_number":"渝ICP备8888888号-1","config_group":[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"config_quick_entrance","value":"Config Quick entrance"},{"key":"upload","value":"上传配置"}]}`

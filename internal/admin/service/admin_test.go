@@ -12,6 +12,7 @@ import (
 func ptr(v int32) *int32 { return &v }
 
 func TestResolveParentIDForAdd(t *testing.T) {
+	t.Parallel()
 	restricted := data_scope.Actor{AdminID: 5}
 	unrestricted := data_scope.Actor{AdminID: 1, Unrestricted: true}
 
@@ -33,6 +34,7 @@ func TestResolveParentIDForAdd(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := (&AdminService{}).ResolveParentIDForAdd(tc.p, tc.actor)
 			if tc.wantErr {
 				if err == nil {
@@ -51,6 +53,7 @@ func TestResolveParentIDForAdd(t *testing.T) {
 }
 
 func TestResolveParentIDForEdit(t *testing.T) {
+	t.Parallel()
 	restricted := data_scope.Actor{AdminID: 5}
 	unrestricted := data_scope.Actor{AdminID: 1, Unrestricted: true}
 
@@ -75,6 +78,7 @@ func TestResolveParentIDForEdit(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, changed, err := (&AdminService{}).ResolveParentIDForEdit(tc.p, tc.current, tc.actor)
 			if tc.wantErr {
 				if err == nil {
@@ -96,6 +100,7 @@ func TestResolveParentIDForEdit(t *testing.T) {
 }
 
 func TestIsMovingUnderSelf(t *testing.T) {
+	t.Parallel()
 	svc := AdminService{}
 	if !svc.IsMovingUnderSelf(10, ptr(10)) {
 		t.Error("moving node 10 under itself should be detected")
@@ -113,6 +118,7 @@ func TestIsMovingUnderSelf(t *testing.T) {
 }
 
 func TestAdminServiceSelfEditPlan(t *testing.T) {
+	t.Parallel()
 	nickname := "nick"
 	avatar := "/static/avatar.png"
 
@@ -128,6 +134,7 @@ func TestAdminServiceSelfEditPlan(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			avatarOnly, fields := selfEditPlan(tc.p)
 			if avatarOnly != tc.wantAvatarOnly {
 				t.Fatalf("avatarOnly = %v, want %v", avatarOnly, tc.wantAvatarOnly)
@@ -145,6 +152,7 @@ func TestAdminServiceSelfEditPlan(t *testing.T) {
 }
 
 func TestValidateAccountStatusValue(t *testing.T) {
+	t.Parallel()
 	for _, value := range []any{"enable", "disable"} {
 		if err := ValidateAccountStatusValue(value); err != nil {
 			t.Fatalf("%v should be accepted: %v", value, err)

@@ -8,6 +8,7 @@ import (
 )
 
 func TestRegisterAndJobs(t *testing.T) {
+	t.Parallel()
 	registry = nil
 	frozen = false
 

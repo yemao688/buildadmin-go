@@ -158,64 +158,90 @@ func atoiRuleID(raw string) int32 {
 // 重复 ID 在序列化前先保序去重，避免重复项扭曲 repository 侧的 len 比较
 // （"全部权限+额外权限"误判）。
 func (s *AdminGroupService) HandleRules(ctx context.Context, rules []int32, operatorID int32, isSuperAdmin bool) (string, error) {
-	if len(rules) > 0 {
-		list, err := s.adminRuleM.List(ctx)
-		if err != nil {
-			return "", err
-		}
-		// 保序去重：重复提交的规则 ID 只保留一次。
-		uniqueRules := make([]int32, 0, len(rules))
-		seen := make(map[int32]struct{}, len(rules))
-		for _, v := range rules {
-			if _, ok := seen[v]; ok {
-				continue
-			}
-			seen[v] = struct{}{}
-			uniqueRules = append(uniqueRules, v)
-		}
-		// 判断是否超级管理员
-		super := true
-		for _, r := range list {
-			if !slices.Contains(uniqueRules, r.ID) {
-				super = false
-				break
-			}
-		}
-		// 正在建立超管级分组？仅超管允许（PHP: $superAdmin && isSuperAdmin()）。
-		if super && isSuperAdmin {
-			return "*", nil
-		}
-
-		stringRules := []string{}
-		for _, v := range uniqueRules {
-			stringRules = append(stringRules, strconv.Itoa(int(v)))
-		}
-		// 禁止添加`拥有自己全部权限`的分组（PHP: !array_diff($ownedRuleIds, $checkedRules)）。
-		hasRules, err := s.authM.GetRuleIds(operatorID)
-		if err != nil {
-			return "", err
-		}
-		isAll := true
-		for _, v := range hasRules {
-			if !slices.Contains(stringRules, v) {
-				isAll = false
-			}
-		}
-		if isAll {
-			return "", cErr.BadRequest("Role group has all your rights, please contact the upper administrator to add or do not need to add!")
-		}
-		// 非超管：分组权限节点不得超出自己可分配的范围
-		// （PHP: array_diff($checkedRules, $ownedRuleIds) 非空则拒绝；超管已在上方短路）。
-		if !isSuperAdmin {
-			for _, v := range uniqueRules {
-				if !slices.Contains(hasRules, strconv.Itoa(int(v))) {
-					return "", cErr.BadRequest("The group permission node exceeds the range that can be allocated")
-				}
-			}
-		}
-		return strings.Join(stringRules, ","), nil
+	if len(rules) == 0 {
+		return "", nil
 	}
-	return "", nil
+	list, err := s.adminRuleM.List(ctx)
+	if err != nil {
+		return "", err
+	}
+	// 保序去重：重复提交的规则 ID 只保留一次。
+	uniqueRules := uniqueRuleIDs(rules)
+	// 正在建立超管级分组？仅超管允许（PHP: $superAdmin && isSuperAdmin()）。
+	if isSuperAdmin && ruleListCoversAll(list, uniqueRules) {
+		return "*", nil
+	}
+
+	stringRules := ruleIDStrings(uniqueRules)
+	// 禁止添加`拥有自己全部权限`的分组（PHP: !array_diff($ownedRuleIds, $checkedRules)）。
+	hasRules, err := s.authM.GetRuleIds(operatorID)
+	if err != nil {
+		return "", err
+	}
+	if hasRulesCoverAll(hasRules, stringRules) {
+		return "", cErr.BadRequest("Role group has all your rights, please contact the upper administrator to add or do not need to add!")
+	}
+	// 非超管：分组权限节点不得超出自己可分配的范围
+	// （PHP: array_diff($checkedRules, $ownedRuleIds) 非空则拒绝；超管已在上方短路）。
+	if err := checkRuleAllocationRange(uniqueRules, hasRules, isSuperAdmin); err != nil {
+		return "", err
+	}
+	return strings.Join(stringRules, ","), nil
+}
+
+// uniqueRuleIDs 按提交顺序去重规则 ID。
+func uniqueRuleIDs(rules []int32) []int32 {
+	uniqueRules := make([]int32, 0, len(rules))
+	seen := make(map[int32]struct{}, len(rules))
+	for _, v := range rules {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		uniqueRules = append(uniqueRules, v)
+	}
+	return uniqueRules
+}
+
+// ruleListCoversAll 判断提交的规则是否覆盖系统全部规则（超管级分组）。
+func ruleListCoversAll(list []model.AdminRule, uniqueRules []int32) bool {
+	for _, r := range list {
+		if !slices.Contains(uniqueRules, r.ID) {
+			return false
+		}
+	}
+	return true
+}
+
+func ruleIDStrings(uniqueRules []int32) []string {
+	stringRules := []string{}
+	for _, v := range uniqueRules {
+		stringRules = append(stringRules, strconv.Itoa(int(v)))
+	}
+	return stringRules
+}
+
+// hasRulesCoverAll 判断操作者已拥有的权限是否已被提交的分组权限全部覆盖。
+func hasRulesCoverAll(hasRules, stringRules []string) bool {
+	for _, v := range hasRules {
+		if !slices.Contains(stringRules, v) {
+			return false
+		}
+	}
+	return true
+}
+
+// checkRuleAllocationRange 拒绝超出操作者可分配范围的规则节点（超管不受限）。
+func checkRuleAllocationRange(uniqueRules []int32, hasRules []string, isSuperAdmin bool) error {
+	if isSuperAdmin {
+		return nil
+	}
+	for _, v := range uniqueRules {
+		if !slices.Contains(hasRules, strconv.Itoa(int(v))) {
+			return cErr.BadRequest("The group permission node exceeds the range that can be allocated")
+		}
+	}
+	return nil
 }
 
 // CheckAuth 校验操作者是否有权操作该分组（需拥有该分组的全部权限且有

@@ -161,14 +161,7 @@ func (s *MemberService) ValidateUserToken(id int32, ip string) error {
 // Login verifies the credentials and issues the member tokens. ip is passed
 // explicitly so the flow stays transport-free.
 func (s *MemberService) Login(ip string, username string, plainPassword string, keep bool) (interface{}, error) {
-	accountType := ""
-	if loginPhoneRegex.MatchString(username) {
-		accountType = "mobile"
-	} else if loginEmailRegex.MatchString(username) {
-		accountType = "email"
-	} else if loginUsernameRegex.MatchString(username) {
-		accountType = "username"
-	}
+	accountType := memberAccountType(username)
 	if accountType == "" {
 		return nil, cErr.BadRequest("Account not exist")
 	}
@@ -184,24 +177,9 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 		return nil, cErr.BadRequest("Account disabled")
 	}
 
-	retry := s.config.App.UserLoginRetry
-	if retry > 0 && user.LastLoginTime > 0 {
-		now := time.Now().Unix()
-		if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
-			if err := s.users.ResetLoginFailure(user.ID); err != nil {
-				return nil, err
-			}
-			user, err = s.users.GetByAccount(accountType, username)
-			if err != nil {
-				return nil, err
-			}
-			if user == nil {
-				return nil, cErr.BadRequest("Account not exist")
-			}
-		}
-		if user.LoginFailure >= int32(retry) { //nolint:gosec // retry 来自 app.user_login_retry 配置（个位数重试次数），远小于 int32 上界
-			return nil, cErr.BadRequest("Please try again after 1 day")
-		}
+	user, err = s.applyLoginRetry(accountType, username, user)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := password.Compare(user.Password, plainPassword); err != nil {
@@ -211,23 +189,8 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 		return nil, cErr.BadRequest("Password is incorrect")
 	}
 
-	if s.config.App.UserSso {
-		if err := s.tokenHelper.Clear("user", user.ID); err != nil {
-			return nil, err
-		}
-		if err := s.tokenHelper.Clear("user-refresh", user.ID); err != nil {
-			return nil, err
-		}
-	}
-	refreshToken := ""
-	if keep {
-		refreshToken = random.Uuid()
-		if err := s.tokenHelper.Set(refreshToken, "user-refresh", user.ID, 2592000); err != nil {
-			return nil, err
-		}
-	}
-	tokenStr := random.Uuid()
-	if err := s.tokenHelper.Set(tokenStr, "user", user.ID, s.config.App.UserTokenKeepTime); err != nil {
+	tokenStr, refreshToken, err := s.issueMemberLoginTokens(user.ID, keep)
+	if err != nil {
 		return nil, err
 	}
 
@@ -241,6 +204,68 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 	userInfo["token"] = tokenStr
 	userInfo["refresh_token"] = refreshToken
 	return userInfo, err
+}
+
+// memberAccountType 按提交账号的形态判定登录类型（手机/邮箱/用户名）。
+func memberAccountType(username string) string {
+	switch {
+	case loginPhoneRegex.MatchString(username):
+		return "mobile"
+	case loginEmailRegex.MatchString(username):
+		return "email"
+	case loginUsernameRegex.MatchString(username):
+		return "username"
+	}
+	return ""
+}
+
+// applyLoginRetry 处理跨日失败计数重置与重试上限，返回可能需要重新加载的用户行。
+func (s *MemberService) applyLoginRetry(accountType, username string, user *model.User) (*model.User, error) {
+	retry := s.config.App.UserLoginRetry
+	if retry <= 0 || user.LastLoginTime <= 0 {
+		return user, nil
+	}
+	now := time.Now().Unix()
+	if user.LoginFailure > 0 && now-user.LastLoginTime >= 86400 {
+		if err := s.users.ResetLoginFailure(user.ID); err != nil {
+			return nil, err
+		}
+		refreshed, err := s.users.GetByAccount(accountType, username)
+		if err != nil {
+			return nil, err
+		}
+		if refreshed == nil {
+			return nil, cErr.BadRequest("Account not exist")
+		}
+		user = refreshed
+	}
+	if user.LoginFailure >= int32(retry) { //nolint:gosec // retry 来自 app.user_login_retry 配置（个位数重试次数），远小于 int32 上界
+		return nil, cErr.BadRequest("Please try again after 1 day")
+	}
+	return user, nil
+}
+
+func (s *MemberService) issueMemberLoginTokens(userID int32, keep bool) (string, string, error) {
+	if s.config.App.UserSso {
+		if err := s.tokenHelper.Clear("user", userID); err != nil {
+			return "", "", err
+		}
+		if err := s.tokenHelper.Clear("user-refresh", userID); err != nil {
+			return "", "", err
+		}
+	}
+	refreshToken := ""
+	if keep {
+		refreshToken = random.Uuid()
+		if err := s.tokenHelper.Set(refreshToken, "user-refresh", userID, 2592000); err != nil {
+			return "", "", err
+		}
+	}
+	tokenStr := random.Uuid()
+	if err := s.tokenHelper.Set(tokenStr, "user", userID, s.config.App.UserTokenKeepTime); err != nil {
+		return "", "", err
+	}
+	return tokenStr, refreshToken, nil
 }
 
 func (s *MemberService) FilterData(user model.User) map[string]any {

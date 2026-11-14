@@ -7,6 +7,7 @@ import (
 )
 
 func TestCountrySpecsMatchDictionaryContract(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		file        string
 		field       string
@@ -26,6 +27,7 @@ func TestCountrySpecsMatchDictionaryContract(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.file+"/"+test.field, func(t *testing.T) {
+			t.Parallel()
 			spec, err := LoadSpec(filepath.Join(util.RootPath(), "crud_specs", test.file))
 			if err != nil {
 				t.Fatal(err)

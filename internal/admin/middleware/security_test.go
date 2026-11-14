@@ -20,6 +20,7 @@ import (
 
 func TestTransactionResponseWriterIsolatesHeaders(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	rec := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(rec)
 	w := &transactionResponseWriter{ResponseWriter: ctx.Writer, status: http.StatusCreated, header: make(http.Header)}
@@ -55,6 +56,7 @@ func TestTransactionResponseWriterIsolatesHeaders(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 注册/注销全局原子路由能力表，并行会被其它测试的同名注销提前移除
 func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	// The capability map is populated by route registration; an isolated
@@ -80,6 +82,7 @@ func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 
 func TestAtomicRouteCapabilityRejectsUnregisteredRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	r := gin.New()
 	r.POST("/admin/unknown.Action/run", func(_ *gin.Context) {})
 	req := httptest.NewRequest(http.MethodPost, "/admin/unknown.Action/run", nil)
@@ -94,6 +97,7 @@ func TestAtomicRouteCapabilityRejectsUnregisteredRoute(t *testing.T) {
 
 func TestSecurityMissingActorAborts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	r := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(r)
 	c.Request = httptest.NewRequest("DELETE", "/admin/test/index", nil)
@@ -106,6 +110,7 @@ func TestSecurityMissingActorAborts(t *testing.T) {
 }
 
 func TestHasSecurityRuleReportsDatabaseUnavailable(t *testing.T) {
+	t.Parallel()
 	security := NewSecurity(nil, zap.NewNop(), nil, data_scope.NewDenyAllEnforcer())
 	_, err := security.hasSecurityRule(nil, "auth/admin")
 	if err == nil {
@@ -114,6 +119,7 @@ func TestHasSecurityRuleReportsDatabaseUnavailable(t *testing.T) {
 }
 
 func TestNormalizeAuditValueStableDriverValues(t *testing.T) {
+	t.Parallel()
 	if got := normalizeAuditValue([]byte("hello")); got != "hello" {
 		t.Fatalf("[]byte must normalize as text, got %q", got)
 	}
@@ -166,8 +172,10 @@ func serveTransactionShell(t *testing.T, router *gin.Engine) (int, map[string]an
 }
 
 // 事务回滚、提交与失败三条收尾路径都必须输出统一响应壳（time 固定 0）。
+//
+//nolint:paralleltest // 注册全局原子路由并复用同名 sqlite 内存库，子测试并行会互相注销能力/串库
 func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
-	t.Run("业务失败回滚输出已暂存响应", func(t *testing.T) {
+	t.Run("业务失败回滚输出已暂存响应", func(t *testing.T) { //nolint:paralleltest // newTransactionShellRouter 注册全局原子路由且复用同名 sqlite 内存库，并行会互相注销/串库
 		router := newTransactionShellRouter(t, func(c *gin.Context) {
 			stage(c, 0, "boom")
 		})
@@ -180,7 +188,7 @@ func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
 		}
 	})
 
-	t.Run("成功提交输出已暂存响应", func(t *testing.T) {
+	t.Run("成功提交输出已暂存响应", func(t *testing.T) { //nolint:paralleltest // newTransactionShellRouter 注册全局原子路由且复用同名 sqlite 内存库，并行会互相注销/串库
 		router := newTransactionShellRouter(t, func(c *gin.Context) {
 			stage(c, 1, "")
 		})
@@ -193,7 +201,7 @@ func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
 		}
 	})
 
-	t.Run("缺少暂存响应输出事务失败", func(t *testing.T) {
+	t.Run("缺少暂存响应输出事务失败", func(t *testing.T) { //nolint:paralleltest // newTransactionShellRouter 注册全局原子路由且复用同名 sqlite 内存库，并行会互相注销/串库
 		router := newTransactionShellRouter(t, func(_ *gin.Context) {})
 		status, body := serveTransactionShell(t, router)
 		if status != http.StatusInternalServerError {

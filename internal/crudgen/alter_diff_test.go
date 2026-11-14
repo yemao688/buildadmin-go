@@ -17,6 +17,7 @@ func alterTestColumn(name, columnType, nullable string, def interface{}, extra, 
 }
 
 func TestDeriveAlterChangesSkipsInSyncColumns(t *testing.T) {
+	t.Parallel()
 	columns := []model.Column{
 		alterTestColumn("id", "bigint", "NO", nil, "auto_increment", "主键"),
 		alterTestColumn("code", "varchar(20)", "NO", nil, "", "货币代码"),
@@ -35,6 +36,7 @@ func TestDeriveAlterChangesSkipsInSyncColumns(t *testing.T) {
 }
 
 func TestDeriveAlterChangesDetectsRealDrift(t *testing.T) {
+	t.Parallel()
 	base := []model.Column{
 		alterTestColumn("code", "varchar(20)", "NO", nil, "", "货币代码"),
 		alterTestColumn("rate", "decimal(20,8)", "NO", "1.00000000", "", "汇率"),
@@ -51,6 +53,7 @@ func TestDeriveAlterChangesDetectsRealDrift(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			changes := deriveAlterChanges(base, []crudmodel.Field{tc.field})
 			if len(changes) != 1 || changes[0].Type != "change-field-attr" {
 				t.Fatalf("expected one change-field-attr: %+v", changes)
@@ -71,6 +74,7 @@ func TestDeriveAlterChangesDetectsRealDrift(t *testing.T) {
 }
 
 func TestDeriveAlterChangesAddFieldOnlyForMissingColumn(t *testing.T) {
+	t.Parallel()
 	columns := []model.Column{alterTestColumn("id", "bigint", "NO", nil, "auto_increment", "ID")}
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, DefaultType: "NONE", Comment: "ID"},
@@ -83,6 +87,7 @@ func TestDeriveAlterChangesAddFieldOnlyForMissingColumn(t *testing.T) {
 }
 
 func TestAlterDiffRiskClasses(t *testing.T) {
+	t.Parallel()
 	actual := []model.Column{
 		alterTestColumn("id", "bigint unsigned", "NO", nil, "auto_increment", "ID"),
 		alterTestColumn("name", "varchar(20)", "NO", "", "", "名称"),
@@ -113,6 +118,7 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if tc.column.COLUMN_NAME == "" {
 				diffs := deriveAlterDiff(nil, []crudmodel.Field{tc.field})
 				if len(diffs) != 1 || diffs[0].Class != tc.class {
@@ -134,6 +140,7 @@ func TestAlterDiffRiskClasses(t *testing.T) {
 }
 
 func TestAlterDiffRejectsPrimaryKeyNonCommentAttributeDrift(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name   string
 		field  crudmodel.Field
@@ -167,6 +174,7 @@ func TestAlterDiffRejectsPrimaryKeyNonCommentAttributeDrift(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			diffs := deriveAlterDiff([]model.Column{tc.column}, []crudmodel.Field{tc.field})
 			if len(diffs) != 1 || diffs[0].Class != DiffRejected {
 				t.Fatalf("primary key %s drift = %+v", tc.name, diffs)
@@ -176,6 +184,7 @@ func TestAlterDiffRejectsPrimaryKeyNonCommentAttributeDrift(t *testing.T) {
 }
 
 func TestAlterDiffRejectsNullableDownAndEnumRemoval(t *testing.T) {
+	t.Parallel()
 	nullable := deriveAlterDiff([]model.Column{alterTestColumn("note", "varchar(20)", "YES", nil, "", "备注")}, []crudmodel.Field{{Name: "note", Type: "varchar", Length: 20, Null: false, Comment: "备注"}})
 	if len(nullable) != 1 || nullable[0].Class != DiffRejected {
 		t.Fatalf("nullable down = %+v", nullable)
@@ -191,6 +200,7 @@ func TestAlterDiffRejectsNullableDownAndEnumRemoval(t *testing.T) {
 }
 
 func TestDefaultNormalizationPreservesLargeIntegersAndStrings(t *testing.T) {
+	t.Parallel()
 	large := crudmodel.Field{Name: "id", Type: "bigint", DefaultType: "INPUT", Default: "9007199254740993"}
 	if !defaultsMatchColumn(large, sql.NullString{Valid: true, String: "9007199254740993"}) {
 		t.Fatal("large integer default was not compared exactly")
@@ -206,6 +216,7 @@ func TestDefaultNormalizationPreservesLargeIntegersAndStrings(t *testing.T) {
 }
 
 func TestUnmanagedColumnAttributesDoNotChangeModeledMatch(t *testing.T) {
+	t.Parallel()
 	column := alterTestColumn("name", "varchar(20)", "NO", "", "on update CURRENT_TIMESTAMP", "名称")
 	column.CHARACTER_SET_NAME = "utf8mb4"
 	column.COLLATION_NAME = "utf8mb4_bin"
@@ -221,6 +232,7 @@ func TestUnmanagedColumnAttributesDoNotChangeModeledMatch(t *testing.T) {
 }
 
 func TestDeriveAlterDiffAddFieldPosition(t *testing.T) {
+	t.Parallel()
 	columns := []model.Column{
 		alterTestColumn("id", "bigint", "NO", nil, "auto_increment", "ID"),
 		alterTestColumn("name", "varchar(20)", "NO", "", "", "名称"),

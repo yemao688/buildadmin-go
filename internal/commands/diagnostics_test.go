@@ -40,6 +40,7 @@ func collectNotes(results []helper.ApplyTableResult, opts unmanagedNoteOptions) 
 }
 
 func TestPrintUnmanagedNotesAggregatesPerTable(t *testing.T) {
+	t.Parallel()
 	got := collectNotes(unmanagedTestResults(), unmanagedNoteOptions{Prefix: "[database] "})
 	want := strings.Join([]string{
 		"[database] note ops_banner: 2 unmanaged column attributes; run migrate --plan for details",
@@ -58,6 +59,7 @@ func TestPrintUnmanagedNotesAggregatesPerTable(t *testing.T) {
 }
 
 func TestPrintUnmanagedNotesVerboseExpandsEachChange(t *testing.T) {
+	t.Parallel()
 	got := collectNotes(unmanagedTestResults(), unmanagedNoteOptions{Prefix: "CRUD apply ", Verbose: true})
 	want := strings.Join([]string{
 		"CRUD apply note ops_banner.status: database attributes are not modeled by CRUD spec (db: enum ok)",

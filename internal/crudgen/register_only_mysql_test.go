@@ -15,6 +15,8 @@ import (
 // 验证 apply 对 registerOnly spec 静默跳过
 // （返回 ApplySkipped，不建表不改表）——setup/migrate 尾部 apply 扫描
 // crud_specs/ 时不会被受保护拒绝卡死。
+//
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
 func TestApplySkipsRegisterOnlyMySQL(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()

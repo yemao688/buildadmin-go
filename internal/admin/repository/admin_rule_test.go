@@ -39,12 +39,14 @@ func seedAdminRule(t *testing.T, m *AdminRuleRepository, id int32, ruleType, sta
 }
 
 func TestAdminRuleListForMenuFiltersAndOrders(t *testing.T) {
+	t.Parallel()
 	m := newAdminRuleRepositoryFixture(t)
 	seedAdminRule(t, m, 1, "menu_dir", "1", 10)
 	seedAdminRule(t, m, 2, "menu", "0", 20)
 	seedAdminRule(t, m, 3, "button", "1", 30)
 
 	t.Run("super admin sees every rule ordered by weigh", func(t *testing.T) {
+		t.Parallel()
 		list, err := m.ListForMenu(context.Background(), true, nil, "", nil, "")
 		require.NoError(t, err)
 		require.Len(t, list, 3)
@@ -53,12 +55,14 @@ func TestAdminRuleListForMenuFiltersAndOrders(t *testing.T) {
 	})
 
 	t.Run("non-super is limited to the given rule ids", func(t *testing.T) {
+		t.Parallel()
 		list, err := m.ListForMenu(context.Background(), false, []int32{1, 3}, "", nil, "")
 		require.NoError(t, err)
 		require.Len(t, list, 2)
 	})
 
 	t.Run("type and status narrow the result", func(t *testing.T) {
+		t.Parallel()
 		list, err := m.ListForMenu(context.Background(), true, nil, "", []string{"menu_dir", "menu"}, "1")
 		require.NoError(t, err)
 		require.Len(t, list, 1)
@@ -66,6 +70,7 @@ func TestAdminRuleListForMenuFiltersAndOrders(t *testing.T) {
 	})
 
 	t.Run("keyword terms are AND-ed", func(t *testing.T) {
+		t.Parallel()
 		list, err := m.ListForMenu(context.Background(), true, nil, "rule-2", nil, "")
 		require.NoError(t, err)
 		require.Len(t, list, 1)

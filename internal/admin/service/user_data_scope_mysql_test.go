@@ -136,6 +136,7 @@ func userParams(u model.User) UserParams {
 }
 
 func TestUserClosureScopeCRUDAndSelect(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	root := scopeCtx(t, 10, false)
 	child := scopeCtx(t, 20, false)
@@ -183,6 +184,7 @@ func TestUserClosureScopeCRUDAndSelect(t *testing.T) {
 }
 
 func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
@@ -227,6 +229,7 @@ func TestUserOwnerAssignmentAndLogTransfer(t *testing.T) {
 }
 
 func TestUserOwnerAssignmentInvalidTargetStates(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
@@ -247,6 +250,7 @@ func TestUserOwnerAssignmentInvalidTargetStates(t *testing.T) {
 }
 
 func TestUserEditAndAddRollbackWithActiveRequestTransaction(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	ctx := scopeCtx(t, 20, false)
 	actor := scopeActor(t, ctx)
@@ -273,6 +277,7 @@ func TestUserEditAndAddRollbackWithActiveRequestTransaction(t *testing.T) {
 }
 
 func TestUserConcurrentAddSameUsernameReturnsOneFriendlyDuplicateError(t *testing.T) {
+	t.Parallel()
 	f := newScopeFixture(t)
 	const username = "concurrent-username"
 	// ctx/actor 必须在主测试 goroutine 里算好再传进 goroutine：helper 内含

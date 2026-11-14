@@ -84,6 +84,7 @@ func adminParentID(t *testing.T, db *gorm.DB, id int32) *int32 {
 }
 
 func TestAdminHierarchyLinkNewNode(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -111,6 +112,7 @@ func TestAdminHierarchyLinkNewNode(t *testing.T) {
 }
 
 func TestAdminHierarchyLinkNewNodeOrphanParent(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -134,6 +136,7 @@ func TestAdminHierarchyLinkNewNodeOrphanParent(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveRootToRoot(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -159,6 +162,7 @@ func TestAdminHierarchyMoveRootToRoot(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveRootUnderParent(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -191,6 +195,7 @@ func TestAdminHierarchyMoveRootUnderParent(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveSubtree(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -234,6 +239,7 @@ func TestAdminHierarchyMoveSubtree(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveRejectsInvalid(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -279,6 +285,7 @@ func TestAdminHierarchyMoveRejectsInvalid(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveRejectsInconsistentParent(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -311,6 +318,7 @@ func TestAdminHierarchyMoveRejectsInconsistentParent(t *testing.T) {
 }
 
 func TestAdminHierarchyConcurrentMoves(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -383,6 +391,7 @@ func TestAdminHierarchyConcurrentMoves(t *testing.T) {
 }
 
 func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {
@@ -416,6 +425,7 @@ func TestAdminHierarchyModelAddWithParentAndClosure(t *testing.T) {
 }
 
 func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {
@@ -447,6 +457,7 @@ func TestAdminHierarchyModelAddRollbackOnClosureFailure(t *testing.T) {
 }
 
 func TestAdminHierarchyAnchorRowBusyFailsClosed(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -484,6 +495,7 @@ func TestAdminHierarchyAnchorRowBusyFailsClosed(t *testing.T) {
 }
 
 func TestAdminHierarchyClosureOnlyRealAdmins(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {
@@ -539,6 +551,7 @@ func TestAdminHierarchyClosureOnlyRealAdmins(t *testing.T) {
 }
 
 func TestAdminHierarchyMoveRejectsTwoDirectParents(t *testing.T) {
+	t.Parallel()
 	db := openAdminHierarchyTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}); err != nil {

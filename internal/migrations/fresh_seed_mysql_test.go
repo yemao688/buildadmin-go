@@ -14,6 +14,7 @@ import (
 )
 
 func TestFreshSeedPendingRetryAndFrameworkFinalization(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = fmt.Sprintf("fresh_retry_%d_", os.Getpid())
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}
@@ -54,6 +55,7 @@ func TestFreshSeedPendingRetryAndFrameworkFinalization(t *testing.T) {
 }
 
 func TestFrameworkFinalSeedOnCurrentSnapshot(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = fmt.Sprintf("final_seed_%d_", time.Now().UnixNano())
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: cfg.Database.Prefix}

@@ -16,6 +16,7 @@ import (
 )
 
 func TestRandPosition(t *testing.T) {
+	t.Parallel()
 
 	pointArr := []*Point{
 		{Size: 21, Icon: true, Name: "bicycle", Text: "<自行车>", Width: 32, Height: 32, X: 0, Y: 0},
@@ -83,6 +84,8 @@ func checkWithoutPanic(t *testing.T, clickCaptcha *ClickCaptcha, info string) bo
 }
 
 func TestCheckRejectsMalformedInput(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		info        string
@@ -101,6 +104,7 @@ func TestCheckRejectsMalformedInput(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			clickCaptcha := newCheckTestCaptcha(t, test.pointCount)
 			if got := checkWithoutPanic(t, clickCaptcha, test.info); got != test.wantSuccess {
 				t.Fatalf("Check(%q) = %v, want %v", test.info, got, test.wantSuccess)
@@ -110,6 +114,7 @@ func TestCheckRejectsMalformedInput(t *testing.T) {
 }
 
 func TestCheckMalformedInputNeverPanics(t *testing.T) {
+	t.Parallel()
 	clickCaptcha := newCheckTestCaptcha(t, 1)
 	rng := rand.New(rand.NewSource(1)) //nolint:gosec // 固定 seed 的确定性伪随机仅用于构造畸形输入夹具
 
@@ -125,6 +130,7 @@ func TestCheckMalformedInputNeverPanics(t *testing.T) {
 // : 安装向导模式下 DB 连接为 nil（应用以只读基座启动），
 // 点击验证码必须报错/失败而不是空指针 panic。
 func TestNilDBNeverPanics(t *testing.T) {
+	t.Parallel()
 	clickCaptcha := &ClickCaptcha{}
 
 	if _, err := clickCaptcha.Create(nil, "some-id"); err == nil {

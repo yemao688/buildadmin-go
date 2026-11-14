@@ -6,6 +6,7 @@ import (
 )
 
 func TestSummarizeTrack(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		registered []string
@@ -72,6 +73,7 @@ func TestSummarizeTrack(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := summarizeTrack("business", tt.registered, tt.completed, tt.incomplete)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("summarizeTrack() = %+v, want %+v", got, tt.want)

@@ -17,8 +17,10 @@ func openEmptyTestDatabase(t *testing.T, prefix string) (*gorm.DB, *conf.Configu
 }
 
 func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
+	t.Parallel()
 	for _, fixture := range []string{"ledger_only", "pending_partial", "snapshot_complete_pending"} {
 		t.Run(fixture, func(t *testing.T) {
+			t.Parallel()
 			db, cfg := openEmptyTestDatabase(t, "ba_")
 			require.NoError(t, BootstrapOfficialLedger(db, cfg))
 			if fixture != "ledger_only" {
@@ -42,6 +44,7 @@ func TestRecoveryFixturesUseIndependentDatabases(t *testing.T) {
 	}
 
 	t.Run("completed_marker_ledger_only", func(t *testing.T) {
+		t.Parallel()
 		db, cfg := openEmptyTestDatabase(t, "ba_")
 		require.NoError(t, BootstrapOfficialLedger(db, cfg))
 		require.NoError(t, MarkSeedPending(db, cfg))

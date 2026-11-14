@@ -60,6 +60,7 @@ func serveUserLoginRequest(t *testing.T, router *gin.Engine, remoteAddr string) 
 }
 
 func TestUserLoginWritesLastLoginFields(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:user-login?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
@@ -83,6 +84,7 @@ func TestUserLoginWritesLastLoginFields(t *testing.T) {
 // 已认证请求与旧 IsEnabledUser 分支一致地返回 code=401 "Please login first"，
 // 且不写 login 元信息。
 func TestUserLoginRejectsDisabledUser(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:user-login-disabled?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))
@@ -107,6 +109,7 @@ func TestUserLoginRejectsDisabledUser(t *testing.T) {
 // 覆盖 H6a 合并后的行为保持：token 有效但
 // 账号不存在的已认证请求同样返回 code=401 "Please login first"。
 func TestUserLoginRejectsMissingUser(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:user-login-missing?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, testutil.CreateSQLiteUserTables(db, "users", "admins"))

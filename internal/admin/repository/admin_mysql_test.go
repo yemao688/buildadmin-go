@@ -57,6 +57,7 @@ func linkAdmins(t *testing.T, db *gorm.DB, links ...struct {
 }
 
 func TestAdminAddActiveRequestTransactionRollsBackWithOuterFailure(t *testing.T) {
+	t.Parallel()
 	db := prepareAdminModelMySQL(t)
 	m := NewAdminRepository(db, hierarchyConfig("ba_"))
 	ctx := adminTestContext(t, true)
@@ -84,6 +85,7 @@ func TestAdminAddActiveRequestTransactionRollsBackWithOuterFailure(t *testing.T)
 }
 
 func TestAdminAddWithoutRequestTransactionCommitsOwnTransaction(t *testing.T) {
+	t.Parallel()
 	db := prepareAdminModelMySQL(t)
 	m := NewAdminRepository(db, hierarchyConfig("ba_"))
 	ctx := adminTestContext(t, true)
@@ -102,6 +104,7 @@ func TestAdminAddWithoutRequestTransactionCommitsOwnTransaction(t *testing.T) {
 }
 
 func TestAdminAddDuplicateUsernameReturnsFriendlyError(t *testing.T) {
+	t.Parallel()
 	db := prepareAdminModelMySQL(t)
 	m := NewAdminRepository(db, hierarchyConfig("ba_"))
 	ctx := adminTestContext(t, true)
@@ -111,6 +114,7 @@ func TestAdminAddDuplicateUsernameReturnsFriendlyError(t *testing.T) {
 }
 
 func TestRestrictedHierarchyWritersRejectRoot(t *testing.T) {
+	t.Parallel()
 	db := prepareAdminModelMySQL(t)
 	actorAdmin := createAdminForHierarchy(t, db, "actor")
 	candidate := createAdminForHierarchy(t, db, "candidate")
@@ -135,6 +139,7 @@ func TestRestrictedHierarchyWritersRejectRoot(t *testing.T) {
 }
 
 func TestValidateOrMoveWithoutParentChangeChecksOnlyTargetAndClosure(t *testing.T) {
+	t.Parallel()
 	db := prepareAdminModelMySQL(t)
 	invisibleParent := createAdminForHierarchy(t, db, "invisible-parent")
 	actorAdmin := createAdminForHierarchy(t, db, "actor")
@@ -165,6 +170,7 @@ func TestValidateOrMoveWithoutParentChangeChecksOnlyTargetAndClosure(t *testing.
 }
 
 func TestSelectTreeExcludesDescendants(t *testing.T) {
+	t.Parallel()
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {
@@ -210,6 +216,7 @@ func TestSelectTreeExcludesDescendants(t *testing.T) {
 }
 
 func TestSwitchStatusScoped(t *testing.T) {
+	t.Parallel()
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {
@@ -244,6 +251,7 @@ func TestSwitchStatusScoped(t *testing.T) {
 }
 
 func TestAdminModelEditMoveFailureRollsBackPassword(t *testing.T) {
+	t.Parallel()
 	db := openMySQLAdminTestDB(t, "ba_")
 	_ = db.Migrator().DropTable(&model.AdminClosure{}, &model.AdminGroupAccess{}, &model.Admin{})
 	if err := db.AutoMigrate(&model.Admin{}, &model.AdminClosure{}, &model.AdminGroupAccess{}); err != nil {

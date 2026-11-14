@@ -136,25 +136,14 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 	// reassignable 仅在有属主列时有效：ModeNone（含 auto 无 admin_id）没有
 	// 可重分配的 owner；ModeRequired 下 assignOnCreate 必须为 true，否则
 	// Add 不会写入归属、编辑归属也失去对照基线。
-	if cfg.Reassignable && resolved.Mode == data_scope.ModeNone {
-		return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable requires an owner column, got mode none")
-	}
-	if cfg.Reassignable && !resolved.AssignOnCreate {
-		return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable requires assignOnCreate=true for owner column %q", resolved.OwnerColumn)
+	if err := validateReassignableContract(cfg, resolved); err != nil {
+		return ResolvedDataScope{}, err
 	}
 	// 级联归属校验：inheritFrom 与 reassignable 互斥（子表不能手动改归属，
 	// 归属只从主实体继承）；子表注册由生成器在生成/删除时自动维护主实体 repo
 	// 的 CascadeOwners() 锚点块，spec 侧不再声明级联子表列表。
-	if cfg.InheritFrom != nil {
-		if cfg.Reassignable {
-			return ResolvedDataScope{}, fmt.Errorf("data_scope: inheritFrom is mutually exclusive with reassignable")
-		}
-		if resolved.Mode == data_scope.ModeNone {
-			return ResolvedDataScope{}, fmt.Errorf("data_scope: inheritFrom requires an owner column, got mode none")
-		}
-		if err := validateInheritFrom(cfg.InheritFrom, opts.TableName, fields); err != nil {
-			return ResolvedDataScope{}, err
-		}
+	if err := validateInheritFromContract(cfg, resolved, opts, fields); err != nil {
+		return ResolvedDataScope{}, err
 	}
 	if err := validateReadExtraOwners(cfg.ReadExtraOwners, resolved.OwnerColumn, fields); err != nil {
 		return ResolvedDataScope{}, err
@@ -165,21 +154,16 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 	// OwnerInScopeWithActor（admin id 域）；bigint 列会"先截断校验、再写入
 	// 未截断值"（fail-open），非 admin_id 列会生成运行时必炸的代码——生成期
 	// 直接拒绝（评审 MAJOR）。
-	if cfg.Reassignable || cfg.InheritFrom != nil {
-		if resolved.OwnerColumn != "admin_id" {
-			return ResolvedDataScope{}, fmt.Errorf("data_scope: reassignable/inheritFrom requires owner column admin_id (cascade contract), got %q", resolved.OwnerColumn)
-		}
-		if err := requireInt32Owner(resolved.OwnerColumn, fields); err != nil {
-			return ResolvedDataScope{}, err
-		}
+	if err := validateCascadeOwnerContract(cfg, resolved.OwnerColumn, fields); err != nil {
+		return ResolvedDataScope{}, err
 	}
 
 	idx, err := proveIndexStrategy(resolved.OwnerColumn, fields, opts.ProveIndex)
 	if err != nil {
 		return ResolvedDataScope{}, err
 	}
-	if cfg.Mode == data_scope.ModeRequired && cfg.OwnerColumn != "id" && (cfg.AssignOnCreate == nil || !*cfg.AssignOnCreate) {
-		return ResolvedDataScope{}, fmt.Errorf("data_scope: required owner %q must set assignOnCreate=true for CRUD resources with Add", cfg.OwnerColumn)
+	if err := validateRequiredAssignOnCreate(cfg); err != nil {
+		return ResolvedDataScope{}, err
 	}
 
 	return ResolvedDataScope{
@@ -190,6 +174,46 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 		HasAdminID:     hasAdminID,
 		IndexStrategy:  idx,
 	}, nil
+}
+
+func validateReassignableContract(cfg *data_scope.Config, resolved data_scope.Resolved) error {
+	if cfg.Reassignable && resolved.Mode == data_scope.ModeNone {
+		return fmt.Errorf("data_scope: reassignable requires an owner column, got mode none")
+	}
+	if cfg.Reassignable && !resolved.AssignOnCreate {
+		return fmt.Errorf("data_scope: reassignable requires assignOnCreate=true for owner column %q", resolved.OwnerColumn)
+	}
+	return nil
+}
+
+func validateInheritFromContract(cfg *data_scope.Config, resolved data_scope.Resolved, opts DataScopeResolveOptions, fields []crudmodel.Field) error {
+	if cfg.InheritFrom == nil {
+		return nil
+	}
+	if cfg.Reassignable {
+		return fmt.Errorf("data_scope: inheritFrom is mutually exclusive with reassignable")
+	}
+	if resolved.Mode == data_scope.ModeNone {
+		return fmt.Errorf("data_scope: inheritFrom requires an owner column, got mode none")
+	}
+	return validateInheritFrom(cfg.InheritFrom, opts.TableName, fields)
+}
+
+func validateCascadeOwnerContract(cfg *data_scope.Config, ownerColumn string, fields []crudmodel.Field) error {
+	if !cfg.Reassignable && cfg.InheritFrom == nil {
+		return nil
+	}
+	if ownerColumn != "admin_id" {
+		return fmt.Errorf("data_scope: reassignable/inheritFrom requires owner column admin_id (cascade contract), got %q", ownerColumn)
+	}
+	return requireInt32Owner(ownerColumn, fields)
+}
+
+func validateRequiredAssignOnCreate(cfg *data_scope.Config) error {
+	if cfg.Mode == data_scope.ModeRequired && cfg.OwnerColumn != "id" && (cfg.AssignOnCreate == nil || !*cfg.AssignOnCreate) {
+		return fmt.Errorf("data_scope: required owner %q must set assignOnCreate=true for CRUD resources with Add", cfg.OwnerColumn)
+	}
+	return nil
 }
 
 func validateReadExtraOwners(columns []string, primary string, fields []crudmodel.Field) error {

@@ -15,6 +15,7 @@ import (
 // RemotePk 缺省 id、仅 remoteSelect 参与（remoteSelects 的 CSV FK 不生成）、
 // 按条目排序（首键即 Alias）保证可重复生成、无匹配返回空串。
 func TestBuildSearchJoinLiteral(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "parent_admin_id", DesignType: "remoteSelect", Form: crudmodel.FormAttr{RemoteTable: "admin", RemotePk: "id"}},
 		{Name: "reviewer_admin_ids", DesignType: "remoteSelects", Form: crudmodel.FormAttr{RemoteTable: "admin", RemotePk: "", RelationFields: "nickname,email"}},
@@ -69,6 +70,7 @@ func TestBuildSearchJoinLiteral(t *testing.T) {
 // LIKE、语言键复用关联显示列的 relationFieldLangPrefix 约定
 // （<小写 relationName>__<字段>）。
 func TestBuildRelationSearchColumn(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{
 		Name: "user_id", DesignType: "remoteSelect",
 		Form: crudmodel.FormAttr{RemoteTable: "user", RemotePk: "id", RelationFields: "username"},
@@ -111,6 +113,7 @@ func TestBuildRelationSearchColumn(t *testing.T) {
 // parseJoinData 的 relationFieldLangPrefix 约定（<小写 alias>__<column>），
 // 缺翻译回退列名；无点号条目不改变传入切片（既有产物零 diff）。
 func TestAppendQuickSearchRelationTitles(t *testing.T) {
+	t.Parallel()
 	langZh := map[string]string{"admin__username": "管理员名"}
 	tests := []struct {
 		name       string
@@ -144,6 +147,7 @@ func TestAppendQuickSearchRelationTitles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			got := appendQuickSearchRelationTitles(tt.titles, crudmodel.Table{QuickSearchField: tt.quickField}, langZh)
 			require.Equal(t, tt.want, got)
 		})
@@ -154,6 +158,7 @@ func TestAppendQuickSearchRelationTitles(t *testing.T) {
 // 生成 tableInfo.SearchJoins 赋值并自动补 querybuilder import；三者皆空时
 // 回退原 "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（无关联表产物零 diff）。
 func TestModelSearchJoinLiteralRendering(t *testing.T) {
+	t.Parallel()
 	table := getTestTableData()
 	table.DataScope = &data_scope.Config{Mode: data_scope.ModeNone}
 	fields := getCompileFields("")

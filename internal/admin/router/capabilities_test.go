@@ -8,6 +8,7 @@ import (
 )
 
 func TestCRUDCapabilitiesNormalizeRouteAndMethods(t *testing.T) {
+	t.Parallel()
 	adminCapabilities := CRUDCapabilities("auth.Admin")
 	if len(adminCapabilities) != 3 {
 		t.Fatalf("expected 3 capabilities, got %d", len(adminCapabilities))

@@ -19,6 +19,7 @@ type AdminLog = model.AdminLog
 var IsSuperAdmin = adminmodel.IsSuperAdmin
 
 func TestAdminLogScopeUsesCurrentAdminID(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-log-scope?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	// The entity carries MySQL-specific type tags (int unsigned, enum);

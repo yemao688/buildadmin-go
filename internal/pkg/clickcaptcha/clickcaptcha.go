@@ -139,40 +139,9 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	}
 
 	currentLang := ctx.GetHeader("think-lang")
-
-	iconImgMap := map[string]image.Image{}
-	pointArr := []*Point{}
-	randPoints := c.randPoints(c.config.Length + c.config.ConfuseLength)
-	for _, v := range randPoints {
-		point := Point{
-			Size: random.SecureIntn(16) + 15,
-		}
-
-		if _, ok := iconDict[v]; ok {
-			//图标
-			point.Icon = true
-			point.Name = v
-			point.Text = "<" + v + ">"
-			if currentLang == "zh-cn" {
-				point.Text = "<" + iconDict[v] + ">"
-			}
-
-			iconImg, err := loadImage(filepath.Join(util.RootPath(), "public/static/images/captcha/click/icons", v+".png"))
-			if err != nil {
-				return nil, err
-			}
-			iconImgMap[v] = iconImg
-			point.Width, point.Height = iconImg.Bounds().Dx(), iconImg.Bounds().Dy()
-		} else {
-			//字符串文本框宽度和长度
-			point.Icon = false
-			point.Text = v
-			point.Width, point.Height, err = getFontWidthAndHeight(v, point.Size, fontBytes)
-			if err != nil {
-				return nil, err
-			}
-		}
-		pointArr = append(pointArr, &point)
+	pointArr, iconImgMap, err := c.buildCaptchaPoints(currentLang, fontBytes)
+	if err != nil {
+		return nil, err
 	}
 	texts := []string{}
 	// 随机生成验证点位置
@@ -250,6 +219,47 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	}, err
 }
 
+// buildCaptchaPoints 按随机元素清单生成验证点（图标或文字），返回验点顺序
+// 与图标图片缓存；随机数消费顺序与原实现一致（先尺寸再按元素取图标）。
+func (c *ClickCaptcha) buildCaptchaPoints(currentLang string, fontBytes []byte) ([]*Point, map[string]image.Image, error) {
+	iconImgMap := map[string]image.Image{}
+	pointArr := []*Point{}
+	var err error
+	randPoints := c.randPoints(c.config.Length + c.config.ConfuseLength)
+	for _, v := range randPoints {
+		point := Point{
+			Size: random.SecureIntn(16) + 15,
+		}
+
+		if _, ok := iconDict[v]; ok {
+			//图标
+			point.Icon = true
+			point.Name = v
+			point.Text = "<" + v + ">"
+			if currentLang == "zh-cn" {
+				point.Text = "<" + iconDict[v] + ">"
+			}
+
+			iconImg, loadErr := loadImage(filepath.Join(util.RootPath(), "public/static/images/captcha/click/icons", v+".png"))
+			if loadErr != nil {
+				return nil, nil, loadErr
+			}
+			iconImgMap[v] = iconImg
+			point.Width, point.Height = iconImg.Bounds().Dx(), iconImg.Bounds().Dy()
+		} else {
+			//字符串文本框宽度和长度
+			point.Icon = false
+			point.Text = v
+			point.Width, point.Height, err = getFontWidthAndHeight(v, point.Size, fontBytes)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		pointArr = append(pointArr, &point)
+	}
+	return pointArr, iconImgMap, nil
+}
+
 func getFontWidthAndHeight(text string, fontSize int, fontBytes []byte) (int, int, error) {
 	f, err := truetype.Parse(fontBytes)
 	if err != nil {
@@ -309,36 +319,58 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 		return false
 	}
 
+	xyArr, xPro, yPro, ok := parseCaptchaCheckInfo(info, captchaInfo)
+	if !ok {
+		return false
+	}
+	if !matchCaptchaPoints(captchaInfo.PointArr, xyArr, xPro, yPro) {
+		return false
+	}
+
+	if unset {
+		c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Delete(nil)
+	}
+	return true
+}
+
+// parseCaptchaCheckInfo 解析并校验验证信息（"x,y-x,y;w;h"）与验证码记录的
+// 元素数量、画布尺寸、缩放比例，返回各点坐标串与 x/y 比例。
+func parseCaptchaCheckInfo(info string, captchaInfo CaptchaInfo) ([]string, int, int, bool) {
 	infoArr := strings.Split(info, ";")
 	if len(infoArr) != 3 {
-		return false
+		return nil, 0, 0, false
 	}
 
 	xyArr := strings.Split(infoArr[0], "-")
 	if len(xyArr) != len(captchaInfo.PointArr) {
-		return false
+		return nil, 0, 0, false
 	}
 	if captchaInfo.Width <= 0 || captchaInfo.Height <= 0 {
-		return false
+		return nil, 0, 0, false
 	}
 
 	w, err := strconv.Atoi(infoArr[1])
 	if err != nil || w <= 0 {
-		return false
+		return nil, 0, 0, false
 	}
 	h, err := strconv.Atoi(infoArr[2])
 	if err != nil || h <= 0 {
-		return false
+		return nil, 0, 0, false
 	}
 
 	xPro := w / captchaInfo.Width
 	yPro := h / captchaInfo.Height
 	if xPro == 0 || yPro == 0 {
-		return false
+		return nil, 0, 0, false
 	}
+	return xyArr, xPro, yPro, true
+}
 
+// matchCaptchaPoints 逐个校验提交坐标是否落在验证点允许范围内（图标与文字
+// 的纵向区间语义不同，保持原判定）。
+func matchCaptchaPoints(points []*Point, xyArr []string, xPro, yPro int) bool {
 	for k, v := range xyArr {
-		if captchaInfo.PointArr[k] == nil {
+		if points[k] == nil {
 			return false
 		}
 
@@ -355,7 +387,7 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 			return false
 		}
 
-		point := captchaInfo.PointArr[k]
+		point := points[k]
 		if x/xPro < point.X || x/xPro > point.X+point.Width {
 			return false
 		}
@@ -369,10 +401,6 @@ func (c *ClickCaptcha) Check(id string, info string, unset bool) bool {
 		if y/yPro < phStart || y/yPro > phEnd {
 			return false
 		}
-	}
-
-	if unset {
-		c.sqlDB.Model(&captcha.Captcha{}).Where("`key`=?", key).Delete(nil)
 	}
 	return true
 }

@@ -8,6 +8,7 @@ import (
 )
 
 func TestBusinessMessageMapsUploadDomainErrors(t *testing.T) {
+	t.Parallel()
 	message, ok := BusinessMessage(ErrMimetypeNotAllowed)
 	require.True(t, ok)
 	require.Equal(t, ErrMimetypeNotAllowed.Error(), message)

@@ -39,10 +39,12 @@ func readAnchorFixture(t *testing.T, path string) string {
 }
 
 func TestCascadeAnchorEntryFormat(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, "\t\t{Table: \"user_money_log\", ByColumn: \"user_id\", OwnerColumn: \"admin_id\"},", cascadeAnchorEntry("user_money_log", "user_id"))
 }
 
 func TestApplyCascadeAnchorInsertsEntry(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	content := readAnchorFixture(t, path)
@@ -50,6 +52,7 @@ func TestApplyCascadeAnchorInsertsEntry(t *testing.T) {
 }
 
 func TestApplyCascadeAnchorIdempotent(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
@@ -58,6 +61,7 @@ func TestApplyCascadeAnchorIdempotent(t *testing.T) {
 }
 
 func TestApplyCascadeAnchorReplacesChangedByColumn(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	require.NoError(t, applyCascadeAnchor(path, "user_money_log", "user_id"))
@@ -79,6 +83,7 @@ func TestApplyCascadeAnchorReplacesChangedByColumn(t *testing.T) {
 }
 
 func TestApplyCascadeAnchorMultipleEntries(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	require.NoError(t, applyCascadeAnchor(path, "user_money_log", "user_id"))
@@ -88,12 +93,14 @@ func TestApplyCascadeAnchorMultipleEntries(t *testing.T) {
 }
 
 func TestApplyCascadeAnchorMissingFileFails(t *testing.T) {
+	t.Parallel()
 	err := applyCascadeAnchor(filepath.Join(t.TempDir(), "missing.go"), "user_order", "user_id")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "apply cascade anchor")
 }
 
 func TestApplyCascadeAnchorMissingAnchorFails(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, "package repository\n\nfunc (s *UserRepository) CascadeOwners() []data_scope.CascadeOwner {\n\treturn nil\n}\n")
 	err := applyCascadeAnchor(path, "user_order", "user_id")
 	require.Error(t, err)
@@ -104,6 +111,7 @@ func TestApplyCascadeAnchorMissingAnchorFails(t *testing.T) {
 // gofmt/手改的空格差异不得破坏幂等与替换判定）：手改条目带多余空格时，重新
 // 生成（同 Table 新 ByColumn）应原位替换为规范格式，而不是追加第二条。
 func TestApplyCascadeAnchorToleratesWhitespace(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	// 手改后的条目：Table/ByColumn 间多余空格、无尾逗号。
 	handEdited := "\t\t{Table:  \"user_order\",  ByColumn:\"user_id\"  , OwnerColumn: \"admin_id\"}"
@@ -129,6 +137,7 @@ func TestApplyCascadeAnchorToleratesWhitespace(t *testing.T) {
 // 覆盖重复条目收敛：同 Table 出现
 // 两条（历史手改/旧逻辑残留）时，apply 收敛为一条规范条目，避免级联重复执行。
 func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	dup1 := "\t\t{Table: \"user_order\", ByColumn: \"user_id\", OwnerColumn: \"admin_id\"},"
 	dup2 := "\t\t{Table: \"user_order\", ByColumn: \"user_id\", OwnerColumn: \"admin_id\"}, // 手改注释"
@@ -146,6 +155,7 @@ func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 // 覆盖原子写回：同目录临时文件 + rename，
 // 原文件权限保留，写回后内容一致。
 func TestWritePreservingModeAtomic(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, "package repository\n")
 	require.NoError(t, os.Chmod(path, 0640)) //nolint:gosec // 测试断言 writePreservingMode 保留原文件权限，故显式设成 0640
 	require.NoError(t, writePreservingMode(path, "package repository\n\n// v2\n"))
@@ -162,6 +172,7 @@ func TestWritePreservingModeAtomic(t *testing.T) {
 }
 
 func TestRemoveCascadeAnchorRemovesEntry(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	require.NoError(t, applyCascadeAnchor(path, "user_money_log", "user_id"))
@@ -178,6 +189,7 @@ func TestRemoveCascadeAnchorRemovesEntry(t *testing.T) {
 }
 
 func TestRemoveCascadeAnchorIdempotentAndTolerant(t *testing.T) {
+	t.Parallel()
 	path := writeAnchorFixture(t, anchorFixture("User"))
 	// 条目不存在 → nil
 	require.NoError(t, removeCascadeAnchor(path, "ghost"))
@@ -191,6 +203,8 @@ func TestRemoveCascadeAnchorIdempotentAndTolerant(t *testing.T) {
 // 验证 cleanupStaleCascadeAnchors 的空操作
 // 路径：specsDir 为空、无 reassignable 父表、或父表 repo 缺失时均返回空且不
 // 报错（幂等宽容；实际清理发生在子表生成流程，由父表 repo 锚点块驱动）。
+//
+//nolint:paralleltest // 写包级 repoRootOverride，并行会污染其它 cascade 测试的路径解析
 func TestCleanupStaleCascadeAnchorsNoop(t *testing.T) {
 	// 空目录 → 空结果
 	cleaned, err := cleanupStaleCascadeAnchors(t.TempDir(), "order")
@@ -216,6 +230,7 @@ func TestCleanupStaleCascadeAnchorsNoop(t *testing.T) {
 }
 
 func TestParentRepositoryPath(t *testing.T) {
+	t.Parallel()
 	path, err := parentRepositoryPath("seller_user")
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(repoRoot(t), "internal", "admin", "repository", "seller_user.go"), path)

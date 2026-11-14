@@ -75,7 +75,6 @@ func (f *authorizationFixture) grantRule(t *testing.T, uid int32, rules string) 
 
 func (f *authorizationFixture) request(t *testing.T, path string, uid int32) *httptest.ResponseRecorder {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",
@@ -106,6 +105,8 @@ func authorizationBusinessCode(t *testing.T, recorder *httptest.ResponseRecorder
 }
 
 func TestAuthorizationAllowsAuthorizedExistingRule(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 	rule := fixture.addRule(t, "country/currency/index")
 	fixture.grantRule(t, 1, strconv.Itoa(int(rule.ID)))
@@ -116,6 +117,8 @@ func TestAuthorizationAllowsAuthorizedExistingRule(t *testing.T) {
 }
 
 func TestAuthorizationRejectsUnauthorizedExistingRule(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 	fixture.addRule(t, "country/currency/index")
 
@@ -126,6 +129,8 @@ func TestAuthorizationRejectsUnauthorizedExistingRule(t *testing.T) {
 }
 
 func TestAuthorizationRejectsUnknownRule(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 
 	recorder := fixture.request(t, "/admin/country.Currency/index", 1)
@@ -134,7 +139,9 @@ func TestAuthorizationRejectsUnknownRule(t *testing.T) {
 	require.Equal(t, http.StatusForbidden, authorizationBusinessCode(t, recorder))
 }
 
+//nolint:paralleltest // 注册/清理全局豁免与免登录注册表，并行会污染同包读取注册表的测试
 func TestAuthorizationAllowsPermissionExemptRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	fixture := newAuthorizationFixture(t)
 	RegisterPermissionExempt("country/currency", "index")
 	t.Cleanup(func() { UnregisterPermissionExempt("country/currency", "index") })
@@ -144,7 +151,9 @@ func TestAuthorizationAllowsPermissionExemptRoute(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
+//nolint:paralleltest // 注册/清理全局豁免与免登录注册表，并行会污染同包读取注册表的测试
 func TestAuthorizationAllowsIndexIndexPermissionExempt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 	fixture := newAuthorizationFixture(t)
 	RegisterPermissionExempt("index", "index")
 	t.Cleanup(func() { UnregisterPermissionExempt("index", "index") })
@@ -155,6 +164,8 @@ func TestAuthorizationAllowsIndexIndexPermissionExempt(t *testing.T) {
 }
 
 func TestAuthorizationAllowsSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 	fixture.addRule(t, "country/currency/index")
 	fixture.grantRule(t, 1, "*")
@@ -165,6 +176,8 @@ func TestAuthorizationAllowsSuperAdmin(t *testing.T) {
 }
 
 func TestAuthorizationEnforcesRuleAddedAfterCacheInvalidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 
 	initial := fixture.request(t, "/admin/country.Currency/index", 1)
@@ -181,6 +194,8 @@ func TestAuthorizationEnforcesRuleAddedAfterCacheInvalidation(t *testing.T) {
 }
 
 func TestAuthorizationAllowsNonAdminPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 
 	recorder := fixture.request(t, "/api/demo/index", 1)
@@ -189,6 +204,8 @@ func TestAuthorizationAllowsNonAdminPath(t *testing.T) {
 }
 
 func TestAuthorizationRejectsUnparseableAdminRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	fixture := newAuthorizationFixture(t)
 
 	for _, path := range []string{"/admin/foo", "/admin/a/b/c"} {
@@ -200,6 +217,7 @@ func TestAuthorizationRejectsUnparseableAdminRoute(t *testing.T) {
 
 func TestAuthorizationFailsClosedWhenAuthUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",

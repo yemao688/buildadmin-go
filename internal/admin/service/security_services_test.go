@@ -36,6 +36,7 @@ func newSecurityRuleSQLiteFixture(t *testing.T) (*gorm.DB, *conf.Configuration) 
 }
 
 func TestSecuritySeedRuleCannotBeDeleted(t *testing.T) {
+	t.Parallel()
 	// nil repo 也可：seed 守卫在触达 repo 之前返回。
 	require.ErrorContains(t, (&SecurityDataRecycleService{}).Del(context.Background(), []int32{1, 5}), "framework seed rule cannot be deleted")
 	require.ErrorContains(t, (&SensitiveDataService{}).Del(context.Background(), []int32{2}), "framework seed rule cannot be deleted")

@@ -12,6 +12,7 @@ import (
 )
 
 func TestCacheLoadsGroupsOnceAndCopiesValues(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	loads := 0
 	loader := func() ([]int, error) {
@@ -29,6 +30,7 @@ func TestCacheLoadsGroupsOnceAndCopiesValues(t *testing.T) {
 }
 
 func TestCacheReloadClonesOnWriteAndReadPathsReturnInternalStorage(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	rules := []string{"dashboard"}
 	names := []string{"dashboard/index"}
@@ -53,6 +55,7 @@ func TestCacheReloadClonesOnWriteAndReadPathsReturnInternalStorage(t *testing.T)
 }
 
 func TestCacheRuleNamesSetMatchesRuleNamesMembership(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	_, err := cache.ReloadRules(7, func() ([]string, []string, error) {
 		return []string{"rule"}, []string{"dashboard/index", "auth/login", "dashboard/index"}, nil
@@ -79,6 +82,7 @@ func TestCacheRuleNamesSetMatchesRuleNamesMembership(t *testing.T) {
 }
 
 func TestCacheAllNamesSetMatchesAllRuleNamesMembership(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	loads := 0
 	loader := func() ([]string, error) {
@@ -113,6 +117,7 @@ func TestCacheAllNamesSetMatchesAllRuleNamesMembership(t *testing.T) {
 }
 
 func TestCacheAllNamesSetPropagatesLoaderError(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	_, err := cache.AllRuleNames(func() ([]string, error) { return nil, errors.New("boom") })
 	require.Error(t, err)
@@ -121,6 +126,7 @@ func TestCacheAllNamesSetPropagatesLoaderError(t *testing.T) {
 }
 
 func TestCacheInvalidationClearsGroupsRulesAndNames(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	loadGroups := func() ([]int, error) { return []int{1}, nil }
 	loadRules := func() ([]string, []string, error) {
@@ -146,6 +152,7 @@ func TestCacheInvalidationClearsGroupsRulesAndNames(t *testing.T) {
 }
 
 func TestCacheReloadKeepsRuleThenGroupLockOrder(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	names, err := cache.ReloadRules(1, func() ([]string, []string, error) {
 		groups, err := cache.GetOrLoadGroups(1, func() ([]int, error) { return []int{1}, nil })
@@ -159,6 +166,7 @@ func TestCacheReloadKeepsRuleThenGroupLockOrder(t *testing.T) {
 }
 
 func TestCacheConcurrentReadsReloadsAndInvalidation(t *testing.T) {
+	t.Parallel()
 	cache := New[int, string]()
 	var groupLoads atomic.Int32
 	var ruleLoads atomic.Int32

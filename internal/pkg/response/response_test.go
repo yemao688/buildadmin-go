@@ -28,6 +28,7 @@ func requestWithTx() (*gin.Context, *httptest.ResponseRecorder) {
 }
 
 func TestResponseStagesAndCommitsOnce(t *testing.T) {
+	t.Parallel()
 	c, recorder := requestWithTx()
 	Success(c, map[string]string{"state": "ok"})
 	require.Equal(t, 200, recorder.Code)
@@ -40,6 +41,7 @@ func TestResponseStagesAndCommitsOnce(t *testing.T) {
 }
 
 func TestResponseCommitFailureOutputsFailure(t *testing.T) {
+	t.Parallel()
 	c, recorder := requestWithTx()
 	Success(c, "uncommitted")
 	require.True(t, CommitResponse(c, errors.New("commit failed")))
@@ -49,6 +51,7 @@ func TestResponseCommitFailureOutputsFailure(t *testing.T) {
 }
 
 func TestResponseRollbackOutputsFailure(t *testing.T) {
+	t.Parallel()
 	c, recorder := requestWithTx()
 	Success(c, "discarded")
 	require.True(t, RollbackResponse(c, errors.New("rolled back")))
@@ -56,8 +59,10 @@ func TestResponseRollbackOutputsFailure(t *testing.T) {
 }
 
 func TestResponseMapsMySQLLockErrorsToGenericRetryableFailure(t *testing.T) {
+	t.Parallel()
 	for _, number := range []uint16{1205, 1213} {
 		t.Run(strconv.FormatUint(uint64(number), 10), func(t *testing.T) {
+			t.Parallel()
 			c, recorder := requestWithTx()
 			require.True(t, CommitResponse(c, &mysql.MySQLError{Number: number, Message: "secret database details"}))
 			var response Response
@@ -71,6 +76,7 @@ func TestResponseMapsMySQLLockErrorsToGenericRetryableFailure(t *testing.T) {
 }
 
 func TestResponseMapsOtherMySQLErrorsToGenericInternalFailure(t *testing.T) {
+	t.Parallel()
 	c, recorder := requestWithTx()
 	err := &mysql.MySQLError{Number: 1062, Message: "secret database details"}
 	require.True(t, CommitResponse(c, fmt.Errorf("wrapped: %w", err)))
@@ -80,6 +86,7 @@ func TestResponseMapsOtherMySQLErrorsToGenericInternalFailure(t *testing.T) {
 }
 
 func TestResponseMapsCancellationAndBadConnectionToGenericInternalFailure(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -89,6 +96,7 @@ func TestResponseMapsCancellationAndBadConnectionToGenericInternalFailure(t *tes
 		{name: "bad connection", err: fmt.Errorf("wrapped: %w", driver.ErrBadConn)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			c, recorder := requestWithTx()
 			require.True(t, CommitResponse(c, tc.err))
 			require.Equal(t, 500, recorder.Code)
@@ -99,6 +107,7 @@ func TestResponseMapsCancellationAndBadConnectionToGenericInternalFailure(t *tes
 }
 
 func TestWriteDirectBypassesFinishedRequestTransaction(t *testing.T) {
+	t.Parallel()
 	c, recorder := requestWithTx()
 	// 中间件消费事务结果后（TakeOutcome 置 finished）请求上下文仍绑定着事务，
 	// 此时直接写响应必须落地，不能被 Stage 吞掉。
@@ -118,6 +127,7 @@ func TestWriteDirectBypassesFinishedRequestTransaction(t *testing.T) {
 }
 
 func TestFailByErrStagesCancellationAndMySQLFailures(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name string
 		err  error
@@ -127,6 +137,7 @@ func TestFailByErrStagesCancellationAndMySQLFailures(t *testing.T) {
 		{name: "lock timeout", err: fmt.Errorf("wrapped: %w", &mysql.MySQLError{Number: 1205, Message: "secret database details"}), msg: "database lock timeout or deadlock, please retry"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			c, recorder := requestWithTx()
 			FailByErr(c, tc.err)
 			require.Equal(t, 200, recorder.Code)

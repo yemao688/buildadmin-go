@@ -18,6 +18,7 @@ import (
 // 主表 FK），主表 scope 必须始终生效——关联表匹配到 scope 外的行时结果为空；
 // EXISTS 不放大行数，count 与 find 一致（无需 DISTINCT）。
 func TestSearchJoinQuickSearchScope(t *testing.T) {
+	t.Parallel()
 	prefix := fmt.Sprintf("sj_it_%d_", os.Getpid())
 	db, config := testutil.OpenMySQL(t)
 	config.Database.Prefix = prefix
@@ -71,6 +72,7 @@ func TestSearchJoinQuickSearchScope(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 			ctx.Request = httptest.NewRequest("GET", "/?quickSearch="+tt.quickSearch, nil)
 			require.NoError(t, data_scope.SetActor(ctx, tt.actor))

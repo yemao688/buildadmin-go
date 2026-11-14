@@ -16,6 +16,7 @@ import (
 	"golang.org/x/text/language"
 )
 
+//nolint:paralleltest // NewAdminRouter.Register 写全局 adminMiddleware 免登录/免权限注册表
 func TestAdminLogDeleteRoute(t *testing.T) {
 	engine := gin.New()
 	NewAdminRouter(AdminRouterDeps{
@@ -41,6 +42,7 @@ func TestAdminLogDeleteRoute(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // NewAdminRouter.Register 写全局注册表，本体又断言注册表固定内容
 func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 	engine := gin.New()
 	NewAdminRouter(AdminRouterDeps{
@@ -79,6 +81,7 @@ func TestAdminRouterRegistersPermissionExemptions(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // NewAdminRouter.Register 写全局 adminMiddleware 免登录/免权限注册表
 func TestAdminRouterProtectedRouteRequiresLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
@@ -122,6 +125,7 @@ func (f fakeRegistrar) Capabilities() []middleware.AtomicRoute {
 	}
 }
 
+//nolint:paralleltest // NewAdminRouter.Register 写全局 adminMiddleware 免登录/免权限注册表
 func TestAdminRouterRegistersRegistrarCapabilities(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()

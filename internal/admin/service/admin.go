@@ -215,30 +215,17 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 		return cErr.BadRequest("cannot move an administrator under itself")
 	}
 
-	omit := []string{"login_failure", "last_login_time", "parent_id"}
-	if p.Password == "" {
-		omit = append(omit, "password")
-	}
+	omit := adminEditOmit(p.Password)
 
-	checkGroups := []string{}
-	groupIds, _ := s.adminM.GetGroupArr(ctx, operatorID)
-	for _, v := range p.GroupArr {
-		for _, i := range groupIds {
-			if v != strconv.Itoa(int(i)) {
-				checkGroups = append(checkGroups, v)
-			}
-		}
-	}
+	checkGroups := s.collectGroupAuthChecks(ctx, operatorID, p.GroupArr)
 	if len(checkGroups) > 0 {
 		if err := s.CheckGroupAuth(checkGroups, operatorID); err != nil {
 			return err
 		}
 	}
 
-	if changed && parentID != nil {
-		if err := s.CheckParentInScope(ctx, actor, *parentID); err != nil {
-			return err
-		}
+	if err := s.checkEditParentScope(ctx, actor, changed, parentID); err != nil {
+		return err
 	}
 
 	if err := copier.Copy(&admin, p); err != nil {
@@ -246,12 +233,8 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 	}
 	// Hash only after copier.Copy: the params password is plaintext and must
 	// never survive into the model passed to the transactional writer.
-	if p.Password != "" {
-		hash, err := passwordutil.Hash(p.Password)
-		if err != nil {
-			return err
-		}
-		admin.Password = hash
+	if err := applyAdminPasswordHash(&admin, p.Password); err != nil {
+		return err
 	}
 	admin.ParentID = parentID
 
@@ -266,6 +249,49 @@ func (s *AdminService) Edit(ctx context.Context, id int32, p AdminParams, actor 
 	}
 
 	return s.adminM.EditWithActor(ctx, admin, changed, parentID, omit, p.GroupArr, actor)
+}
+
+// adminEditOmit 返回更新时始终跳过的登录元数据列；未提交口令时追加 password。
+func adminEditOmit(password string) []string {
+	omit := []string{"login_failure", "last_login_time", "parent_id"}
+	if password == "" {
+		omit = append(omit, "password")
+	}
+	return omit
+}
+
+// collectGroupAuthChecks 收集需要做越权校验的分组 ID（对齐原有 array_diff 语义）。
+func (s *AdminService) collectGroupAuthChecks(ctx context.Context, operatorID int32, groupArr []string) []string {
+	checkGroups := []string{}
+	groupIds, _ := s.adminM.GetGroupArr(ctx, operatorID)
+	for _, v := range groupArr {
+		for _, i := range groupIds {
+			if v != strconv.Itoa(int(i)) {
+				checkGroups = append(checkGroups, v)
+			}
+		}
+	}
+	return checkGroups
+}
+
+// checkEditParentScope 在父级变更时校验新父级仍在 actor 的作用域内。
+func (s *AdminService) checkEditParentScope(ctx context.Context, actor data_scope.Actor, changed bool, parentID *int32) error {
+	if !changed || parentID == nil {
+		return nil
+	}
+	return s.CheckParentInScope(ctx, actor, *parentID)
+}
+
+func applyAdminPasswordHash(admin *model.Admin, plain string) error {
+	if plain == "" {
+		return nil
+	}
+	hash, err := passwordutil.Hash(plain)
+	if err != nil {
+		return err
+	}
+	admin.Password = hash
+	return nil
 }
 
 // SelfAdminParams 是本人资料更新的纯参数形态：头像与昵称保留"是否提交"
@@ -399,6 +425,30 @@ func (s *AdminService) deleteAdminsTx(ctx context.Context, tx *gorm.DB, hierarch
 	if err != nil {
 		return nil, err
 	}
+	reassign, err := collectAdminReassignments(ctx, tx, hierarchy, targets)
+	if err != nil {
+		return nil, err
+	}
+
+	sorted := slices.Clone(ids)
+	slices.Sort(sorted)
+	result := &adminmodel.AdminDeleteResult{Deleted: sorted}
+	if err := transferAdminOwnerRows(ctx, tx, hierarchy, targets, reassign, result); err != nil {
+		return nil, err
+	}
+
+	if err := hierarchy.DeleteAdminsTx(ctx, tx, sorted); err != nil {
+		return nil, err
+	}
+	if err := hierarchy.DeleteClosureTx(ctx, tx, sorted); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// collectAdminReassignments 在任何写入前排定每个目标的归属转移目标：拥有数据
+// 的管理员必须有合法的上级，且上级不能同批被删。
+func collectAdminReassignments(ctx context.Context, tx *gorm.DB, hierarchy *adminmodel.AdminHierarchy, targets []adminmodel.AdminDeleteTarget) (map[int32]int32, error) {
 	deleting := make(map[int32]struct{}, len(targets))
 	for _, target := range targets {
 		deleting[target.ID] = struct{}{}
@@ -431,10 +481,10 @@ func (s *AdminService) deleteAdminsTx(ctx context.Context, tx *gorm.DB, hierarch
 		}
 		reassign[target.ID] = parentID
 	}
+	return reassign, nil
+}
 
-	sorted := slices.Clone(ids)
-	slices.Sort(sorted)
-	result := &adminmodel.AdminDeleteResult{Deleted: sorted}
+func transferAdminOwnerRows(ctx context.Context, tx *gorm.DB, hierarchy *adminmodel.AdminHierarchy, targets []adminmodel.AdminDeleteTarget, reassign map[int32]int32, result *adminmodel.AdminDeleteResult) error {
 	ownerTables := hierarchy.OwnerTables()
 	for _, target := range targets {
 		newOwnerID, ok := reassign[target.ID]
@@ -444,7 +494,7 @@ func (s *AdminService) deleteAdminsTx(ctx context.Context, tx *gorm.DB, hierarch
 		for _, table := range ownerTables {
 			rows, err := hierarchy.TransferOwnerRowsTx(ctx, tx, table, target.ID, newOwnerID)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if rows == 0 {
 				continue
@@ -457,12 +507,5 @@ func (s *AdminService) deleteAdminsTx(ctx context.Context, tx *gorm.DB, hierarch
 			})
 		}
 	}
-
-	if err := hierarchy.DeleteAdminsTx(ctx, tx, sorted); err != nil {
-		return nil, err
-	}
-	if err := hierarchy.DeleteClosureTx(ctx, tx, sorted); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return nil
 }

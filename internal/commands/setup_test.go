@@ -26,6 +26,7 @@ import (
 )
 
 func TestSetupConsoleCollectsInteractiveValuesAndDefaults(t *testing.T) {
+	t.Parallel()
 	input := strings.NewReader("\n\n\nroot\ndb-secret\n\n\nadmin-secret\nadmin-secret\n\n")
 	var output bytes.Buffer
 	runner := setupRunner{in: input, out: &output}
@@ -53,6 +54,7 @@ func TestSetupConsoleCollectsInteractiveValuesAndDefaults(t *testing.T) {
 }
 
 func TestSetupFlagsTakePriorityOverInteractiveInput(t *testing.T) {
+	t.Parallel()
 	input := strings.NewReader("3307\nprompt-db\nprompt-user\nprompt-prefix\nprompt-admin\nprompt-site\n")
 	options := setupOptions{
 		dbHost:        "flag-host",
@@ -75,6 +77,7 @@ func TestSetupFlagsTakePriorityOverInteractiveInput(t *testing.T) {
 }
 
 func TestMissingSetupFlagsForYesMode(t *testing.T) {
+	t.Parallel()
 	options := setupOptions{yes: true}
 	err := func() error {
 		runner := setupRunner{in: strings.NewReader(""), out: &bytes.Buffer{}}
@@ -87,6 +90,7 @@ func TestMissingSetupFlagsForYesMode(t *testing.T) {
 }
 
 func TestResolveSetupConfigPathUsesConfigYamlWhenConfWasNotExplicitlySet(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, conf.DefaultsFileName)
 
@@ -96,12 +100,14 @@ func TestResolveSetupConfigPathUsesConfigYamlWhenConfWasNotExplicitlySet(t *test
 }
 
 func TestResolveSetupConfigPathUsesExplicitConf(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	if got := resolveSetupConfigPath(root, true, "custom/config.yaml"); got != filepath.Join(root, "custom/config.yaml") {
 		t.Fatalf("resolveSetupConfigPath() = %q, want %q", got, filepath.Join(root, "custom/config.yaml"))
 	}
 }
 
+//nolint:paralleltest // 替换 pflag.CommandLine 全局命令集，并行会互相覆盖
 func TestSetupConfigPathReadsExplicitConfFromRootPFlag(t *testing.T) {
 	root := t.TempDir()
 	customPath := filepath.Join(root, "custom", "config.yaml")
@@ -124,6 +130,7 @@ func TestSetupConfigPathReadsExplicitConfFromRootPFlag(t *testing.T) {
 }
 
 func TestFrontendChoiceBranches(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		answer string
 		want   frontendChoice
@@ -133,6 +140,7 @@ func TestFrontendChoiceBranches(t *testing.T) {
 		{answer: "c\n", want: frontendAbort},
 	} {
 		t.Run(string(test.want), func(t *testing.T) {
+			t.Parallel()
 			choice, err := newSetupConsole(strings.NewReader(test.answer), &bytes.Buffer{}).frontendChoice()
 			if err != nil {
 				t.Fatalf("frontendChoice() error = %v", err)
@@ -145,6 +153,7 @@ func TestFrontendChoiceBranches(t *testing.T) {
 }
 
 func TestSetupRunnerFrontendBranches(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "public"), 0o750); err != nil {
 		t.Fatal(err)
@@ -188,6 +197,7 @@ func TestSetupRunnerFrontendBranches(t *testing.T) {
 }
 
 func TestSetupRunnerRejectsCompletedInstallation(t *testing.T) {
+	t.Parallel()
 	want := "系统已安装"
 	runner := setupRunner{
 		rootPath:   t.TempDir(),
@@ -204,7 +214,10 @@ func TestSetupRunnerRejectsCompletedInstallation(t *testing.T) {
 	}
 }
 
-func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
+// prepareExistingSetupFixture 建立「已存在配置 + 已有前端产物」的安装目录，
+// 返回 root 与 configPath。
+func prepareExistingSetupFixture(t *testing.T) (string, string) {
+	t.Helper()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
 	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
@@ -222,31 +235,66 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	return root, configPath
+}
+
+func countSetupDBCalls(dbCalls *int, probeDatabase *string) func(installer.Database) (*gorm.DB, error) {
+	return func(database installer.Database) (*gorm.DB, error) {
+		*dbCalls++
+		if *dbCalls == 1 {
+			*probeDatabase = database.Database
+		}
+		db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+		return db, err
+	}
+}
+
+func countSetupMigrations(count *int) func(*gorm.DB, *conf.Configuration) (migrations.Report, error) {
+	return func(_ *gorm.DB, got *conf.Configuration) (migrations.Report, error) {
+		*count++
+		if got.Database.Database != "existing" || got.Database.Prefix != "ba_" {
+			return migrations.Report{}, fmt.Errorf("unexpected database config: %#v", got.Database)
+		}
+		return migrations.Report{Official: 1, Seeded: true}, nil
+	}
+}
+
+func countSetupAdminUpdates(count *int) func(*gorm.DB, string, string, string) error {
+	return func(_ *gorm.DB, username, password, site string) error {
+		*count++
+		if username != "admin" || password != "admin-password" || site != "Example" {
+			return fmt.Errorf("unexpected admin input")
+		}
+		return nil
+	}
+}
+
+func assertSetupCompletionOutput(t *testing.T, out string) {
+	t.Helper()
+	if !strings.Contains(out, "安装完成") || !strings.Contains(out, "CRUD apply created") || !strings.Contains(out, "ops_banner") {
+		t.Fatalf("completion output = %q", out)
+	}
+	if !strings.Contains(out, "CRUD apply note ops_banner: 1 unmanaged index (legacy_idx)") {
+		t.Fatalf("drift note missing from output = %q", out)
+	}
+}
+
+func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
+	t.Parallel()
+	root, configPath := prepareExistingSetupFixture(t)
 
 	var writes, migrationsRun, crudApplies, adminUpdates, locks int
 	var probeDatabase string
 	dbCalls := 0
 	deps := setupDependencies{
-		isComplete: func(string) bool { return false },
-		newDB: func(database installer.Database) (*gorm.DB, error) {
-			dbCalls++
-			if dbCalls == 1 {
-				probeDatabase = database.Database
-			}
-			db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-			return db, err
-		},
-		getDatabases: func(installer.Database) ([]string, error) { return []string{"existing"}, nil },
+		isComplete:        func(string) bool { return false },
+		newDB:             countSetupDBCalls(&dbCalls, &probeDatabase),
+		getDatabases:      func(installer.Database) ([]string, error) { return []string{"existing"}, nil },
+		runMigrations:     countSetupMigrations(&migrationsRun),
+		updateAdminConfig: countSetupAdminUpdates(&adminUpdates),
 		writeBaseConfig: func(string, installer.Database, string) error {
 			writes++
 			return nil
-		},
-		runMigrations: func(_ *gorm.DB, got *conf.Configuration) (migrations.Report, error) {
-			migrationsRun++
-			if got.Database.Database != "existing" || got.Database.Prefix != "ba_" {
-				return migrations.Report{}, fmt.Errorf("unexpected database config: %#v", got.Database)
-			}
-			return migrations.Report{Official: 1, Seeded: true}, nil
 		},
 		runCrudApply: func(_ *gorm.DB, _ *conf.Configuration) ([]helper.ApplyTableResult, error) {
 			crudApplies++
@@ -264,13 +312,6 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 			}, nil
 		},
 		buildFrontend: func(string, io.Writer, *conf.Configuration) error { return nil },
-		updateAdminConfig: func(_ *gorm.DB, username, password, site string) error {
-			adminUpdates++
-			if username != "admin" || password != "admin-password" || site != "Example" {
-				return fmt.Errorf("unexpected admin input")
-			}
-			return nil
-		},
 		writeCompletion: func(string) error {
 			locks++
 			return nil
@@ -304,14 +345,10 @@ func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	if dbCalls != 2 || probeDatabase != "" {
 		t.Fatalf("database opens = %d, first database = %q, want 2 opens with empty first database", dbCalls, probeDatabase)
 	}
-	if !strings.Contains(output.String(), "安装完成") || !strings.Contains(output.String(), "CRUD apply created") || !strings.Contains(output.String(), "ops_banner") {
-		t.Fatalf("completion output = %q", output.String())
-	}
-	if !strings.Contains(output.String(), "CRUD apply note ops_banner: 1 unmanaged index (legacy_idx)") {
-		t.Fatalf("drift note missing from output = %q", output.String())
-	}
+	assertSetupCompletionOutput(t, output.String())
 }
 
+//nolint:paralleltest // 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
 func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 	command := newSetupCommand()
 	command.SetArgs([]string{"--help"})
@@ -327,6 +364,7 @@ func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 写 os.Args 并调用 cobra Execute，均为进程级状态
 func TestSetupCommandEnvFlagRejectsInvalidValues(t *testing.T) {
 	// 前序用例一旦调用过 Execute()，initConfig 就常驻在 cobra 的全局 OnInitialize 里，
 	// 会对随后任何命令的 Execute 生效；它按 os.Args 判定是否 setup 流程，缺配置时
@@ -344,6 +382,7 @@ func TestSetupCommandEnvFlagRejectsInvalidValues(t *testing.T) {
 }
 
 func TestValidateSetupEnv(t *testing.T) {
+	t.Parallel()
 	for _, env := range []string{"debug", "release"} {
 		if err := validateSetupEnv(env); err != nil {
 			t.Fatalf("validateSetupEnv(%q) error = %v", env, err)
@@ -355,6 +394,7 @@ func TestValidateSetupEnv(t *testing.T) {
 }
 
 func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
 	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
@@ -382,6 +422,7 @@ func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
 }
 
 func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
 	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
@@ -453,6 +494,7 @@ func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 }
 
 func TestUpdateSetupAdminUpdatesSiteName(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -496,6 +538,7 @@ func TestUpdateSetupAdminUpdatesSiteName(t *testing.T) {
 }
 
 func TestUpdateSetupAdminRejectsMissingSiteName(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -533,6 +576,7 @@ func createSetupAdminTestTables(db *gorm.DB) error {
 	return testutil.CreateSQLiteConfigTable(db, "configs")
 }
 
+//nolint:paralleltest // cobra Find 会读写全局 pflag.CommandLine，并行不安全
 func TestRegisterAddsSetupCommand(t *testing.T) {
 	root := &cobra.Command{Use: "root"}
 	registerCommands(root, func(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*Command, func(), error) {

@@ -107,50 +107,7 @@ func normalizeFreshSensitiveSeed(db *gorm.DB, config *conf.Configuration) error 
 
 func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 	table := core.QuoteIdentifier(core.TableName(config, "admin_rule"))
-	// 判重键是 name+type，但只有「原父行已不存在」时才认领同名行：父菜单被删
-	// 后重建会拿到新的自增 id，幸存的子行若仍按 pid 判重会被当成缺失重复插入，
-	// 并留下指向已删父 id 的孤儿；这里把这类子行重新挂到当前父 id。记录的父级
-	// 仍存在时说明是另一父级下的同名规则（用户自建或移动过），按既有语义不合并，
-	// 继续插入 framework 自己的行。已存在行不覆盖其它字段。
-	ensure := func(pid int32, ruleType, title, name, path, menuType, component string, weigh int) (int32, error) {
-		var existing struct {
-			ID  int32
-			Pid int32
-		}
-		if err := db.Raw("SELECT id, pid FROM "+table+" WHERE name = ? AND type = ? ORDER BY id LIMIT 1", name, ruleType).Scan(&existing).Error; err != nil {
-			return 0, err
-		}
-		if existing.ID != 0 {
-			if existing.Pid == pid {
-				return existing.ID, nil
-			}
-			if existing.Pid != 0 {
-				var parentCount int64
-				if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE id = ?", existing.Pid).Scan(&parentCount).Error; err != nil {
-					return 0, err
-				}
-				if parentCount == 0 {
-					if err := db.Exec("UPDATE "+table+" SET pid = ? WHERE id = ?", pid, existing.ID).Error; err != nil {
-						return 0, fmt.Errorf("reparent country menu %s: %w", name, err)
-					}
-					return existing.ID, nil
-				}
-			}
-		}
-		if err := db.Exec("INSERT INTO "+table+" (pid, type, title, name, path, menu_type, component, weigh, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1')", pid, ruleType, title, name, path, menuType, component, weigh).Error; err != nil {
-			return 0, err
-		}
-		var id int32
-		if err := db.Raw("SELECT id FROM "+table+" WHERE pid = ? AND name = ? AND type = ? ORDER BY id LIMIT 1", pid, name, ruleType).Scan(&id).Error; err != nil {
-			return 0, err
-		}
-		if id == 0 {
-			return 0, fmt.Errorf("country menu %s was not seeded", name)
-		}
-		return id, nil
-	}
-
-	countryID, err := ensure(0, "menu_dir", "国家管理", "country", "country", "", "", 0)
+	countryID, err := ensureCountryMenuRow(db, table, 0, "menu_dir", "国家管理", "country", "country", "", "", 0)
 	if err != nil {
 		return fmt.Errorf("seed country menu dir: %w", err)
 	}
@@ -166,17 +123,61 @@ func seedCountryMenus(db *gorm.DB, config *conf.Configuration) error {
 		{"查看", "/index"}, {"添加", "/add"}, {"编辑", "/edit"}, {"删除", "/del"}, {"快速排序", "/sortable"},
 	}
 	for _, menu := range menus {
-		menuID, err := ensure(countryID, "menu", menu.title, menu.name, menu.name, "tab", "/src/views/backend/"+menu.name+"/index.vue", menu.weigh)
+		menuID, err := ensureCountryMenuRow(db, table, countryID, "menu", menu.title, menu.name, menu.name, "tab", "/src/views/backend/"+menu.name+"/index.vue", menu.weigh)
 		if err != nil {
 			return fmt.Errorf("seed country menu %s: %w", menu.name, err)
 		}
 		for _, button := range buttons {
-			if _, err := ensure(menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
+			if _, err := ensureCountryMenuRow(db, table, menuID, "button", button.title, menu.name+button.suffix, "", "", "", 0); err != nil {
 				return fmt.Errorf("seed country menu %s%s: %w", menu.name, button.suffix, err)
 			}
 		}
 	}
 	return nil
+}
+
+// ensureCountryMenuRow 幂等补种一条 admin_rule 国家菜单/按钮。
+// 判重键是 name+type，但只有「原父行已不存在」时才认领同名行：父菜单被删
+// 后重建会拿到新的自增 id，幸存的子行若仍按 pid 判重会被当成缺失重复插入，
+// 并留下指向已删父 id 的孤儿；这里把这类子行重新挂到当前父 id。记录的父级
+// 仍存在时说明是另一父级下的同名规则（用户自建或移动过），按既有语义不合并，
+// 继续插入 framework 自己的行。已存在行不覆盖其它字段。
+func ensureCountryMenuRow(db *gorm.DB, table string, pid int32, ruleType, title, name, path, menuType, component string, weigh int) (int32, error) {
+	var existing struct {
+		ID  int32
+		Pid int32
+	}
+	if err := db.Raw("SELECT id, pid FROM "+table+" WHERE name = ? AND type = ? ORDER BY id LIMIT 1", name, ruleType).Scan(&existing).Error; err != nil {
+		return 0, err
+	}
+	if existing.ID != 0 {
+		if existing.Pid == pid {
+			return existing.ID, nil
+		}
+		if existing.Pid != 0 {
+			var parentCount int64
+			if err := db.Raw("SELECT COUNT(*) FROM "+table+" WHERE id = ?", existing.Pid).Scan(&parentCount).Error; err != nil {
+				return 0, err
+			}
+			if parentCount == 0 {
+				if err := db.Exec("UPDATE "+table+" SET pid = ? WHERE id = ?", pid, existing.ID).Error; err != nil {
+					return 0, fmt.Errorf("reparent country menu %s: %w", name, err)
+				}
+				return existing.ID, nil
+			}
+		}
+	}
+	if err := db.Exec("INSERT INTO "+table+" (pid, type, title, name, path, menu_type, component, weigh, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '1')", pid, ruleType, title, name, path, menuType, component, weigh).Error; err != nil {
+		return 0, err
+	}
+	var id int32
+	if err := db.Raw("SELECT id FROM "+table+" WHERE pid = ? AND name = ? AND type = ? ORDER BY id LIMIT 1", pid, name, ruleType).Scan(&id).Error; err != nil {
+		return 0, err
+	}
+	if id == 0 {
+		return 0, fmt.Errorf("country menu %s was not seeded", name)
+	}
+	return id, nil
 }
 
 func seedCountryLanguages(db *gorm.DB, config *conf.Configuration) error {

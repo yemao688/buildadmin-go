@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
 
 	"gorm.io/gorm"
@@ -24,10 +25,12 @@ func writeIdxApplySpec(t *testing.T, dir, body string) string {
 	return path
 }
 
-func TestApplyIndexesLifecycle(t *testing.T) {
+// prepareIdxApplyDB 建立隔离前缀的测试库并清空/重建 fixture 表；清理范围与
+// 建表集合保持一致。
+func prepareIdxApplyDB(t *testing.T) (*gorm.DB, *conf.Configuration) {
+	t.Helper()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = idxApplyTestPrefix
-	table := idxApplyTestPrefix + "ops_test_index"
 	for _, table := range []string{"ops_test_index", "crud_log"} {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + idxApplyTestPrefix + table + "`").Error; err != nil {
 			t.Fatal(err)
@@ -42,6 +45,26 @@ func TestApplyIndexesLifecycle(t *testing.T) {
 	if err := db.Exec("CREATE TABLE `" + idxApplyTestPrefix + "crud_log` (`id` int NOT NULL AUTO_INCREMENT, `admin_id` int NOT NULL, `table_name` varchar(200) NOT NULL, `table` blob, `fields` blob, `status` varchar(30) NOT NULL DEFAULT 'start', `comment` varchar(255), `connection` varchar(100) NOT NULL DEFAULT '', `sync` int NOT NULL DEFAULT 0, `create_time` bigint NOT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").Error; err != nil {
 		t.Fatal(err)
 	}
+	return db, cfg
+}
+
+// applyIdxSpec 执行单文件 apply 并要求恰好产出一条结果。
+func applyIdxSpec(t *testing.T, db *gorm.DB, cfg *conf.Configuration, path string) ApplyTableResult {
+	t.Helper()
+	results, err := ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path}, ApplyOptions{AdminID: 1, SkipMenu: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %+v, want exactly one", results)
+	}
+	return results[0]
+}
+
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
+func TestApplyIndexesLifecycle(t *testing.T) {
+	db, cfg := prepareIdxApplyDB(t)
+	table := idxApplyTestPrefix + "ops_test_index"
 
 	baseSpec := `name: ops_test_index
 comment: 索引集成测试
@@ -62,37 +85,28 @@ fields:
 
 	// 1. 全新表：apply 建表并内联唯一索引。
 	path := writeIdxApplySpec(t, dir, indexedSpec)
-	results, err := ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path}, ApplyOptions{AdminID: 1, SkipMenu: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 1 || results[0].Action != ApplyCreated {
-		t.Fatalf("create results = %+v", results)
+	result := applyIdxSpec(t, db, cfg, path)
+	if result.Action != ApplyCreated {
+		t.Fatalf("create results = %+v", result)
 	}
 	assertIndexOnDB(t, db, table, "uk_order_no", true)
 
 	// 2. 幂等：再次 apply 应为 unchanged。
-	results, err = ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path}, ApplyOptions{AdminID: 1, SkipMenu: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 1 || results[0].Action != ApplyUnchanged {
-		t.Fatalf("second apply = %+v, want unchanged", results[0])
+	result = applyIdxSpec(t, db, cfg, path)
+	if result.Action != ApplyUnchanged {
+		t.Fatalf("second apply = %+v, want unchanged", result)
 	}
 
 	// 3. 线外索引：spec 未声明时保留并告警 unmanaged。
 	if err := db.Exec("ALTER TABLE `" + table + "` ADD KEY `idx_status` (`status`)").Error; err != nil {
 		t.Fatal(err)
 	}
-	results, err = ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path}, ApplyOptions{AdminID: 1, SkipMenu: true})
-	if err != nil {
-		t.Fatal(err)
+	result = applyIdxSpec(t, db, cfg, path)
+	if result.Action != ApplyUnchanged {
+		t.Fatalf("out-of-band apply = %+v, want unchanged with warning", result)
 	}
-	if len(results) != 1 || results[0].Action != ApplyUnchanged {
-		t.Fatalf("out-of-band apply = %+v, want unchanged with warning", results[0])
-	}
-	if !containsIndexField(results[0].Unmanaged, "idx_status") {
-		t.Fatalf("unmanaged = %+v, want idx_status warning", results[0].Unmanaged)
+	if !containsIndexField(result.Unmanaged, "idx_status") {
+		t.Fatalf("unmanaged = %+v, want idx_status warning", result.Unmanaged)
 	}
 	assertIndexOnDB(t, db, table, "idx_status", false)
 
@@ -105,15 +119,12 @@ fields:
     unique: true
     columns: [status, order_no]
 `)
-	results, err = ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path2}, ApplyOptions{AdminID: 1, SkipMenu: true})
-	if err != nil {
-		t.Fatal(err)
+	result = applyIdxSpec(t, db, cfg, path2)
+	if result.Action != ApplyAltered {
+		t.Fatalf("add-index apply = %+v, want altered", result)
 	}
-	if len(results) != 1 || results[0].Action != ApplyAltered {
-		t.Fatalf("add-index apply = %+v, want altered", results[0])
-	}
-	if !containsChangeField(results[0].Changes, "add-index") {
-		t.Fatalf("changes = %+v, want add-index", results[0].Changes)
+	if !containsChangeField(result.Changes, "add-index") {
+		t.Fatalf("changes = %+v, want add-index", result.Changes)
 	}
 	assertIndexOnDB(t, db, table, "uk_status_order", true)
 
@@ -123,15 +134,12 @@ fields:
     unique: true
     columns: [order_no]
 `)
-	results, err = ApplySpecs(db, cfg, NewTableStore(db, cfg), []string{path3}, ApplyOptions{AdminID: 1, SkipMenu: true})
-	if err != nil {
-		t.Fatal(err)
+	result = applyIdxSpec(t, db, cfg, path3)
+	if result.Action != ApplyUnchanged {
+		t.Fatalf("drop-index apply = %+v, want unchanged with warning", result)
 	}
-	if len(results) != 1 || results[0].Action != ApplyUnchanged {
-		t.Fatalf("drop-index apply = %+v, want unchanged with warning", results[0])
-	}
-	if !containsIndexField(results[0].Unmanaged, "uk_status_order") {
-		t.Fatalf("unmanaged = %+v, want uk_status_order warning", results[0].Unmanaged)
+	if !containsIndexField(result.Unmanaged, "uk_status_order") {
+		t.Fatalf("unmanaged = %+v, want uk_status_order warning", result.Unmanaged)
 	}
 	assertIndexOnDB(t, db, table, "uk_status_order", true)
 }

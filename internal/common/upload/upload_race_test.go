@@ -26,6 +26,7 @@ import (
 // 每个 goroutine 以不同 topic 和文件内容并发上传，
 // 返回的附件记录、落盘路径与文件内容必须与各自输入一一对应。
 func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "upload_race.db")), &gorm.Config{
 		NamingStrategy:                           schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 		DisableForeignKeyConstraintWhenMigrating: true,

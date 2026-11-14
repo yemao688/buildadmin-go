@@ -33,6 +33,7 @@ func newCRUDStoreTest(t *testing.T) (*CRUDStore, *gin.Context, *gorm.DB) {
 }
 
 func TestCRUDStoreGetOneScoped(t *testing.T) {
+	t.Parallel()
 	store, ctx, _ := newCRUDStoreTest(t)
 	row, err := store.GetOneScoped(ctx, 2)
 	require.NoError(t, err)
@@ -45,6 +46,7 @@ func TestCRUDStoreGetOneScoped(t *testing.T) {
 }
 
 func TestCRUDStoreUpdateFieldScopedTreatsVisibleNoopAsSuccess(t *testing.T) {
+	t.Parallel()
 	store, ctx, _ := newCRUDStoreTest(t)
 	// SQLite 对“写回同值”通常返回 1 行；MySQL 可能返回 0 行。两种都应视为成功。
 	rows, visible, err := store.UpdateFieldScoped(ctx, 1, "name", "a")
@@ -63,6 +65,7 @@ func TestCRUDStoreUpdateFieldScopedTreatsVisibleNoopAsSuccess(t *testing.T) {
 }
 
 func TestCRUDStoreSortWeighScoped(t *testing.T) {
+	t.Parallel()
 	store, ctx, db := newCRUDStoreTest(t)
 	require.NoError(t, store.SortWeighScoped(ctx, "1", "2", "down", "asc"))
 

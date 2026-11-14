@@ -26,7 +26,9 @@ func writeMySQLTestConfig(t *testing.T, content string) string {
 }
 
 func TestLoadMySQLTestConfig(t *testing.T) {
+	t.Parallel()
 	t.Run("config.yaml missing", func(t *testing.T) {
+		t.Parallel()
 		configPath := filepath.Join(t.TempDir(), "configs", "config.yaml")
 		_, err := loadMySQLTestConfig(configPath)
 		if !errors.Is(err, os.ErrNotExist) {
@@ -35,6 +37,7 @@ func TestLoadMySQLTestConfig(t *testing.T) {
 	})
 
 	t.Run("mysql_test missing", func(t *testing.T) {
+		t.Parallel()
 		configPath := writeMySQLTestConfig(t, "app:\n  env: debug\n")
 		_, err := loadMySQLTestConfig(configPath)
 		if !errors.Is(err, errMysqlTestNotConfigured) {
@@ -43,6 +46,7 @@ func TestLoadMySQLTestConfig(t *testing.T) {
 	})
 
 	t.Run("disabled", func(t *testing.T) {
+		t.Parallel()
 		configPath := writeMySQLTestConfig(t, "mysql_test:\n  enabled: false\n")
 		configuration, err := loadMySQLTestConfig(configPath)
 		if err != nil {
@@ -54,6 +58,7 @@ func TestLoadMySQLTestConfig(t *testing.T) {
 	})
 
 	t.Run("parses enabled config", func(t *testing.T) {
+		t.Parallel()
 		configPath := writeMySQLTestConfig(t, `mysql_test:
   enabled: true
   host: 'mysql.test'

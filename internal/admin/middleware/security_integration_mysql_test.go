@@ -137,10 +137,11 @@ func (f *securityFixture) request(t *testing.T, r *gin.Engine, method, url, body
 	return rec
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLScopeInheritanceAndAtomicDelete(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
-	for _, tc := range []struct {
+	for _, tc := range []struct { //nolint:paralleltest // 子测试共享同一 fixture 的行与全局原子路由能力，并行会互相改写数据
 		name         string
 		actor        int32
 		unrestricted bool
@@ -172,6 +173,7 @@ func TestSecurityMySQLScopeInheritanceAndAtomicDelete(t *testing.T) {
 	require.Equal(t, int64(2), count)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLRootRuleInheritedByChild(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
@@ -225,6 +227,7 @@ func TestSecurityMySQLRootRuleInheritedByChild(t *testing.T) {
 	require.Equal(t, int64(1), sensitiveLogs)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLDeleteCommitRollbackAndRestore(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
@@ -262,6 +265,7 @@ func TestSecurityMySQLDeleteCommitRollbackAndRestore(t *testing.T) {
 	require.Zero(t, logs)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLPostOutcomesAndFailures(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
@@ -304,6 +308,7 @@ func TestSecurityMySQLPostOutcomesAndFailures(t *testing.T) {
 	require.Equal(t, int64(1), logs)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *testing.T) {
 	f := newSecurityFixture(t)
 	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
@@ -322,6 +327,7 @@ func TestSecurityMySQLSensitivePostLockOrderAllowsHandlerHierarchyRelock(t *test
 	require.Equal(t, "relocked", username)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLSensitivePostCancellationInterruptsAnchorLock(t *testing.T) {
 	f := newSecurityFixture(t)
 	holder := f.db.Begin()
@@ -355,10 +361,11 @@ func TestSecurityMySQLSensitivePostCancellationInterruptsAnchorLock(t *testing.T
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLFailClosedWriterAndPanic(t *testing.T) {
 	f := newSecurityFixture(t)
 	q := f.table("user")
-	for _, tc := range []struct {
+	for _, tc := range []struct { //nolint:paralleltest // 子测试共享同一 fixture 的行与全局原子路由能力，并行会互相改写数据
 		name    string
 		handler gin.HandlerFunc
 	}{
@@ -396,6 +403,7 @@ func TestSecurityMySQLFailClosedWriterAndPanic(t *testing.T) {
 	require.Equal(t, "old", got)
 }
 
+//nolint:paralleltest // fixture 注册/注销全局原子路由能力表，并行会让先结束的测试移除其它测试仍在用的能力
 func TestSecurityMySQLUnregisteredRouteFailsClosed(t *testing.T) {
 	f := newSecurityFixture(t)
 	require.NoError(t, f.db.Exec("INSERT INTO "+f.table("security_sensitive_data")+" (name,controller,controller_as,data_table,primary_key,data_fields,status) VALUES ('unknown','unknown','unknown/action','user','id','{\"username\":\"username\"}','1')").Error)

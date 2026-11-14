@@ -40,6 +40,8 @@ fields:
 // 模拟"种子迁移 Up 内 EnsureSpecTable 建表
 // → 写种子 → 尾部 apply unchanged"：全新库上种子迁移必须先拿到表才能写数据，
 // 且建表不得触发 requires-approval 阻塞。
+//
+//nolint:paralleltest // ApplySpecs 走进程内 generationMu 的 TryLock，与另一个 spec 用例并行会拿到 ErrGenerationBusy
 func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = specTableTestPrefix
@@ -106,6 +108,7 @@ func TestEnsureSpecTableSeedMigrationFlow(t *testing.T) {
 
 // 校验：spec 不存在时直接报错（防 typo）。
 func TestEnsureSpecTableRejectsMissingSpec(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = specTableTestPrefix
 
@@ -120,6 +123,8 @@ func TestEnsureSpecTableRejectsMissingSpec(t *testing.T) {
 // advisory lock 时 db.DB() 返回 ErrInvalidDB。修复：已 pin 的会话降级跳过
 // 二次加锁（外层迁移锁已保证互斥），此处验证在迁移锁内调用不报
 // "crud advisory lock: invalid db" 且表正常物化。
+//
+//nolint:paralleltest // ApplySpecs 走进程内 generationMu 的 TryLock，与另一个 spec 用例并行会拿到 ErrGenerationBusy
 func TestEnsureSpecTableInsideMigrationLock(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = specTableTestPrefix

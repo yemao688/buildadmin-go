@@ -52,23 +52,10 @@ func main() {
 	}
 
 	// 解析 header 列表："batoken: x, think-lang: zh-cn"
-	var hdr = make(http.Header)
-	for _, part := range strings.Split(*headers, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		k, v, ok := strings.Cut(part, ":")
-		if !ok {
-			fmt.Fprintf(os.Stderr, "error: malformed header %q\n", part)
-			os.Exit(2)
-		}
-		hdr.Add(strings.TrimSpace(k), strings.TrimSpace(v))
-	}
-
-	var bodyReader *bytes.Reader
-	if *body != "" {
-		bodyReader = bytes.NewReader([]byte(*body))
+	hdr, hdrErr := parseBenchHeaders(*headers)
+	if hdrErr != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", hdrErr)
+		os.Exit(2)
 	}
 
 	var (
@@ -83,44 +70,25 @@ func main() {
 
 	client := &http.Client{Timeout: *timeout}
 
-	worker := func() {
-		defer wg.Done()
-		for i := 0; i < perWorker; i++ {
-			reqBody := io.Reader(nil)
-			if bodyReader != nil {
-				reqBody = bytes.NewReader([]byte(*body))
-			}
-			req, err := http.NewRequestWithContext(context.Background(), *method, *url, reqBody)
-			if err != nil {
-				failed.Add(1)
-				continue
-			}
-			req.Header = hdr.Clone()
-
-			t0 := time.Now()
-			resp, err := client.Do(req)
-			elapsed := time.Since(t0)
-			mu.Lock()
-			durations = append(durations, elapsed)
-			mu.Unlock()
-
-			if err != nil {
-				failed.Add(1)
-				continue
-			}
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				success.Add(1)
-			} else {
-				failed.Add(1)
-			}
-		}
+	worker := benchWorker{
+		client:     client,
+		method:     *method,
+		url:        *url,
+		body:       *body,
+		headers:    hdr,
+		iterations: perWorker,
+		mu:         &mu,
+		durations:  &durations,
+		success:    &success,
+		failed:     &failed,
 	}
 
 	for w := 0; w < *concurr; w++ {
 		wg.Add(1)
-		go worker()
+		go func() {
+			defer wg.Done()
+			runBenchWorker(worker)
+		}()
 	}
 	wg.Wait()
 	elapsedTotal := time.Since(start)
@@ -152,6 +120,72 @@ func main() {
 		pct(0.95).Round(time.Microsecond),
 		pct(0.99).Round(time.Microsecond),
 		durations[total-1].Round(time.Microsecond))
+}
+
+// parseBenchHeaders 解析逗号分隔的 "Key: Value" header 列表，缺少冒号的
+// 项返回错误（首个畸形项，错误文本与调用方输出保持一致）。
+func parseBenchHeaders(raw string) (http.Header, error) {
+	hdr := make(http.Header)
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		k, v, ok := strings.Cut(part, ":")
+		if !ok {
+			return nil, fmt.Errorf("malformed header %q", part)
+		}
+		hdr.Add(strings.TrimSpace(k), strings.TrimSpace(v))
+	}
+	return hdr, nil
+}
+
+// benchWorker 是一次压测 worker 的只读配置与共享结果收集器。
+type benchWorker struct {
+	client     *http.Client
+	method     string
+	url        string
+	body       string
+	headers    http.Header
+	iterations int
+	mu         *sync.Mutex
+	durations  *[]time.Duration
+	success    *atomic.Int64
+	failed     *atomic.Int64
+}
+
+func runBenchWorker(cfg benchWorker) {
+	for i := 0; i < cfg.iterations; i++ {
+		reqBody := io.Reader(nil)
+		if cfg.body != "" {
+			reqBody = bytes.NewReader([]byte(cfg.body))
+		}
+		req, err := http.NewRequestWithContext(context.Background(), cfg.method, cfg.url, reqBody)
+		if err != nil {
+			cfg.failed.Add(1)
+			continue
+		}
+		req.Header = cfg.headers.Clone()
+
+		t0 := time.Now()
+		resp, err := cfg.client.Do(req)
+		elapsed := time.Since(t0)
+		cfg.mu.Lock()
+		*cfg.durations = append(*cfg.durations, elapsed)
+		cfg.mu.Unlock()
+
+		if err != nil {
+			cfg.failed.Add(1)
+			continue
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			cfg.success.Add(1)
+		} else {
+			cfg.failed.Add(1)
+		}
+	}
 }
 
 func accumulate(ds []time.Duration) time.Duration {
