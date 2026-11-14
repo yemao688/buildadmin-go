@@ -46,7 +46,7 @@ func (h *DataRecycleLogHandler) Index(ctx *gin.Context) {
 
 func (h *DataRecycleLogHandler) Info(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	dataRecycleLog, err := h.dataRecycleLogM.GetOne(ctx, int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（回收日志 id）
+	dataRecycleLog, err := h.dataRecycleLogM.GetOne(ctx, int32(id)) //nolint:gosec // G115: 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（回收日志 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

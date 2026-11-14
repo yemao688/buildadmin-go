@@ -140,7 +140,7 @@ func TestDocsRouteGated(t *testing.T) {
 
 	t.Run("带有效 cookie 正常出文件", func(t *testing.T) {
 		t.Parallel()
-		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
+		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // G124: 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
 		recorder := serve(t, engine, http.MethodGet, "/docs/guide.html", cookie)
 		require.Equal(t, http.StatusOK, recorder.Code)
 		require.Equal(t, "<h1>guide</h1>", recorder.Body.String())
@@ -148,7 +148,7 @@ func TestDocsRouteGated(t *testing.T) {
 
 	t.Run("带有效 cookie 目录请求 404 不展示列表", func(t *testing.T) {
 		t.Parallel()
-		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
+		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // G124: 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
 		recorder := serve(t, engine, http.MethodGet, "/docs/", cookie)
 		require.Equal(t, http.StatusNotFound, recorder.Code)
 		require.NotContains(t, recorder.Body.String(), "guide.html")

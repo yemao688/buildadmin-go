@@ -239,7 +239,7 @@ func (s *MemberService) applyLoginRetry(accountType, username string, user *mode
 		}
 		user = refreshed
 	}
-	if user.LoginFailure >= int32(retry) { //nolint:gosec // retry 来自 app.user_login_retry 配置（个位数重试次数），远小于 int32 上界
+	if user.LoginFailure >= int32(retry) { //nolint:gosec // G115: retry 来自 app.user_login_retry 配置（个位数重试次数），远小于 int32 上界
 		return nil, cErr.BadRequest("Please try again after 1 day")
 	}
 	return user, nil

@@ -130,7 +130,7 @@ func (s *CRUDStore) sortWeighTx(ctx *gin.Context, tx *gorm.DB, pkField, moveID, 
 		Find(&weighRows).Error; err != nil {
 		return err
 	}
-	weighRowsCount := int32(len(weighRows)) //nolint:gosec // 同一 weigh 值的行数受数据规模与排序去重约束，远小于 int32 上界（2^31-1）
+	weighRowsCount := int32(len(weighRows)) //nolint:gosec // G115: 同一 weigh 值的行数受数据规模与排序去重约束，远小于 int32 上界（2^31-1）
 
 	if err := s.sortWeighShiftWeights(scoped, tx, pkField, moveID, weigh, weighRowsCount, updateMethod); err != nil {
 		return err

@@ -2,9 +2,9 @@
 package random
 
 import (
-	"crypto/md5" //nolint:gosec // 输出格式与 PHP 上游 md5 helper 保持一致（32 位十六进制），不可改用其它摘要
+	"crypto/md5" //nolint:gosec // G501: 输出格式与 PHP 上游 md5 helper 保持一致（32 位十六进制），不可改用其它摘要
 	cryptorand "crypto/rand"
-	"crypto/sha1" //nolint:gosec // 输出格式与 PHP 上游 sha1 helper 保持一致（40 位十六进制），不可改用其它摘要
+	"crypto/sha1" //nolint:gosec // G505: 输出格式与 PHP 上游 sha1 helper 保持一致（40 位十六进制），不可改用其它摘要
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -71,7 +71,7 @@ func Build(t string, length int) string {
 		currentTime := time.Now().Format("2006-01-02 15:04:05")
 		uniqueID := currentTime + randomNumStr
 		// 计算MD5散列
-		hasher := md5.New() //nolint:gosec // 输出格式与 PHP 上游 md5 helper 兼容（32 位十六进制），随机源已改用 crypto/rand
+		hasher := md5.New() //nolint:gosec // G401: 输出格式与 PHP 上游 md5 helper 兼容（32 位十六进制），随机源已改用 crypto/rand
 		hasher.Write([]byte(uniqueID))
 		md5Bytes := hasher.Sum(nil)
 		return fmt.Sprintf("%x", md5Bytes)
@@ -84,7 +84,7 @@ func Build(t string, length int) string {
 		currentTime := strconv.FormatInt(time.Now().UnixNano(), 10)
 		uniqueID := currentTime + randomNumStr
 		// 计算SHA1散列
-		hasher := sha1.New() //nolint:gosec // 输出格式与 PHP 上游 sha1 helper 兼容（40 位十六进制），随机源已改用 crypto/rand
+		hasher := sha1.New() //nolint:gosec // G401: 输出格式与 PHP 上游 sha1 helper 兼容（40 位十六进制），随机源已改用 crypto/rand
 		hasher.Write([]byte(uniqueID))
 		sha1Bytes := hasher.Sum(nil)
 		// 将SHA1散列转换为16进制字符串

@@ -1341,7 +1341,7 @@ func routeIndexURLForController(controller string) string {
 }
 
 func routeURLFromRegistrarFile(path string) string {
-	data, err := os.ReadFile(path) //nolint:gosec // path 来自扫描 internal/admin/router 下生成 registrar 的固定清单
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path 来自扫描 internal/admin/router 下生成 registrar 的固定清单
 	if err != nil {
 		return ""
 	}
@@ -2124,7 +2124,7 @@ func getStubFilePath(name string) string {
 // 组装模板
 func assembleStub(name string, data map[string]string, escapeStr bool) string {
 	stubPath := getStubFilePath(name)
-	content, _ := os.ReadFile(stubPath) //nolint:gosec // stubPath 由 getStubFilePath 拼接 util.RootPath()/internal/crudgen/stubs 与内置模板名
+	content, _ := os.ReadFile(stubPath) //nolint:gosec // G304: stubPath 由 getStubFilePath 拼接 util.RootPath()/internal/crudgen/stubs 与内置模板名
 	stubContent := string(content)
 	for k, v := range data {
 		stubContent = strings.ReplaceAll(stubContent, "{%"+k+"%}", v)

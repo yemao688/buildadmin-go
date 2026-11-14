@@ -41,7 +41,7 @@ func NewDataRecycleHandler(log *zap.Logger, config *conf.Configuration, dataRecy
 
 func (h *DataRecycleHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	row, err := h.dataRecycleM.GetOne(ctx, int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（回收规则 id）
+	row, err := h.dataRecycleM.GetOne(ctx, int32(id)) //nolint:gosec // G115: 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（回收规则 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -91,7 +91,7 @@ func (h *DataRecycleHandler) Edit(ctx *gin.Context) {
 		_, hasID := m["id"]
 		status, hasStatus := m["status"]
 		if hasID && hasStatus {
-			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt()) //nolint:gosec // id 取自请求体 JSON，最终用于回收规则主键列 int(11)
+			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt()) //nolint:gosec // G115: id 取自请求体 JSON，最终用于回收规则主键列 int(11)
 			statusStr, _ := status.(string)
 			if statusStr == "" {
 				statusStr = fmt.Sprintf("%v", status)

@@ -56,7 +56,7 @@ func TestNormalizeGenerationType(t *testing.T) {
 func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 	t.Parallel()
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
-	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
+	content, err := os.ReadFile(tablePath) //nolint:gosec // G304: filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
 	t.Parallel()
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
-	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
+	content, err := os.ReadFile(tablePath) //nolint:gosec // G304: filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestCompileFailureRestoresSnapshot(t *testing.T) {
 	if err := buildAndRestoreOnFailure(snapshot, func() error { return errors.New("compile failed") }); err == nil {
 		t.Fatal("compile failure should be returned")
 	}
-	content, err := os.ReadFile(path) //nolint:gosec // path 为测试内 t.TempDir 下的快照夹具
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 为测试内 t.TempDir 下的快照夹具
 	if err != nil || string(content) != "original" {
 		t.Fatalf("snapshot was not restored: %q, %v", content, err)
 	}

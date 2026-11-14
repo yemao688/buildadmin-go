@@ -55,7 +55,7 @@ func TestIsComplete(t *testing.T) {
 	require.False(t, IsComplete(configRoot))
 
 	require.NoError(t, WriteCompletionLock(root))
-	content, err := os.ReadFile(lockPath) //nolint:gosec // lockPath 位于 t.TempDir 下的 public 目录
+	content, err := os.ReadFile(lockPath) //nolint:gosec // G304: lockPath 位于 t.TempDir 下的 public 目录
 	require.NoError(t, err)
 	require.Equal(t, []byte(InstallationCompletionMark), content)
 }
@@ -75,7 +75,7 @@ func TestWriteBaseConfig(t *testing.T) {
 	}
 
 	require.NoError(t, WriteBaseConfig(configPath, cfg, "token-value"))
-	data, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
+	data, err := os.ReadFile(configPath) //nolint:gosec // G304: configPath 由测试内 t.TempDir 构造
 	require.NoError(t, err)
 
 	var got map[string]any

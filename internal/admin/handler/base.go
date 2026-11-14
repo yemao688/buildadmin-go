@@ -94,7 +94,7 @@ func parsePartialEditRequest(ctx *gin.Context, primaryKey string,
 		return nil, 0, "", nil, false, false
 	}
 
-	id = int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt()) //nolint:gosec // 主键 id 从请求参数解析后用于 WHERE 主键列，列为 int(11)
+	id = int32(com.StrTo(fmt.Sprintf("%v", idVal)).MustInt()) //nolint:gosec // G115: 主键 id 从请求参数解析后用于 WHERE 主键列，列为 int(11)
 	for _, validator := range validators {
 		if validator == nil {
 			continue

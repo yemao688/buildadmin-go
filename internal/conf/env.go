@@ -28,7 +28,7 @@ func EnsureEnvFile(rootPath string) (bool, error) {
 	}
 
 	examplePath := filepath.Join(rootPath, EnvExampleFileName)
-	content, err := os.ReadFile(examplePath) //nolint:gosec // 路径为 rootPath 下固定的 .env.example 文件名，不含外部输入
+	content, err := os.ReadFile(examplePath) //nolint:gosec // G304: 路径为 rootPath 下固定的 .env.example 文件名，不含外部输入
 	if err != nil {
 		if os.IsNotExist(err) {
 			// 没有 .env.example 时跳过：容器内环境变量由 compose environment
@@ -37,7 +37,7 @@ func EnsureEnvFile(rootPath string) (bool, error) {
 		}
 		return false, fmt.Errorf("read env example %q: %w", examplePath, err)
 	}
-	if err := os.WriteFile(envPath, content, 0600); err != nil { //nolint:gosec // envPath 为 rootPath 下固定的 .env 文件名（安装器与启动自愈共用同一常量），不拼接外部输入
+	if err := os.WriteFile(envPath, content, 0600); err != nil { //nolint:gosec // G703: envPath 为 rootPath 下固定的 .env 文件名（安装器与启动自愈共用同一常量），不拼接外部输入
 		return false, fmt.Errorf("write env file %q: %w", envPath, err)
 	}
 	return true, nil

@@ -4,8 +4,8 @@ package token
 import (
 	"buildadmin-go/internal/conf"
 	"crypto/hmac"
-	"crypto/md5"  //nolint:gosec // token 摘要算法由配置 app.token.algo 选择，需兼容 PHP 上游已有的 md5/sha1 token 记录
-	"crypto/sha1" //nolint:gosec // 同上：历史 token 摘要算法之一，保留以兼容既有登录态
+	"crypto/md5"  //nolint:gosec // G501: token 摘要算法由配置 app.token.algo 选择，需兼容 PHP 上游已有的 md5/sha1 token 记录
+	"crypto/sha1" //nolint:gosec // G505: 同上：历史 token 摘要算法之一，保留以兼容既有登录态
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"

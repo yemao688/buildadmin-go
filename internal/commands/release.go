@@ -60,12 +60,12 @@ func defaultReleaseDeps(root string) releaseDeps {
 		root:     root,
 		readFile: os.ReadFile,
 		writeFile: func(path string, data []byte) error {
-			return os.WriteFile(path, data, 0o644) //nolint:gosec // 写入的是 VERSION_FRAMEWORK / version.go 等发布文件，需要被构建工具与其他开发者读取，内容非凭据
+			return os.WriteFile(path, data, 0o644) //nolint:gosec // G306: 写入的是 VERSION_FRAMEWORK / version.go 等发布文件，需要被构建工具与其他开发者读取，内容非凭据
 		},
 		command: func(name string, args ...string) (string, string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), releaseCommandTimeout)
 			defer cancel()
-			process := exec.CommandContext(ctx, name, args...) //nolint:gosec // 命令与参数来自 release 命令内部固定的 git/gofmt/go build 调用，不拼接用户输入
+			process := exec.CommandContext(ctx, name, args...) //nolint:gosec // G204: 命令与参数来自 release 命令内部固定的 git/gofmt/go build 调用，不拼接用户输入
 			process.Dir = root
 			var stdout, stderr bytes.Buffer
 			process.Stdout = &stdout

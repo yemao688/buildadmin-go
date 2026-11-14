@@ -42,7 +42,7 @@ func TestPhase2RegistrySplit(t *testing.T) {
 		if i >= len(want) {
 			t.Fatalf("framework migration count = %d, want list length %d", len(framework), len(want))
 		}
-		if migration.Version != uint64(i+1) || migration.MigrationName != want[i] || migration.Up == nil || migration.VerifyBaseline == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil { //nolint:gosec // want 长度由上方 len(framework) 断言与 i >= len(want) 守卫共同约束
+		if migration.Version != uint64(i+1) || migration.MigrationName != want[i] || migration.Up == nil || migration.VerifyBaseline == nil || migration.VerifySchema == nil || migration.VerifyUpgradeData == nil { //nolint:gosec // G602: want 长度由上方 len(framework) 断言与 i >= len(want) 守卫共同约束
 			t.Fatalf("invalid framework registry entry %d: %#v", i, migration)
 		}
 	}

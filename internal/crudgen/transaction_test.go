@@ -30,7 +30,7 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 	if err := snapshot.Restore(); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(existing) //nolint:gosec // existing 为测试内 t.TempDir 夹具路径
+	data, err := os.ReadFile(existing) //nolint:gosec // G304: existing 为测试内 t.TempDir 夹具路径
 	if err != nil || string(data) != "original" {
 		t.Fatalf("restored existing = %q, err=%v", data, err)
 	}
@@ -97,7 +97,7 @@ func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
 	if err := snapshot.Restore(); err == nil {
 		t.Fatal("missing backup should fail")
 	}
-	data, err := os.ReadFile(path) //nolint:gosec // path 为测试内 t.TempDir 夹具路径
+	data, err := os.ReadFile(path) //nolint:gosec // G304: path 为测试内 t.TempDir 夹具路径
 	if err != nil || string(data) != "changed" {
 		t.Fatalf("target changed after backup read failure: %q, %v", data, err)
 	}

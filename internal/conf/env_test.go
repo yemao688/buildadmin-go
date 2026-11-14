@@ -21,7 +21,7 @@ func TestEnsureEnvFileCopiesExampleOnlyWhenMissing(t *testing.T) {
 	if !created {
 		t.Fatal("EnsureEnvFile reported no file creation")
 	}
-	if got, err := os.ReadFile(filepath.Join(root, EnvFileName)); err != nil || string(got) != string(example) { //nolint:gosec // root 为 t.TempDir，.env 路径由测试构造
+	if got, err := os.ReadFile(filepath.Join(root, EnvFileName)); err != nil || string(got) != string(example) { //nolint:gosec // G304: root 为 t.TempDir，.env 路径由测试构造
 		t.Fatalf("copied env = %q, err=%v", got, err)
 	}
 
@@ -36,7 +36,7 @@ func TestEnsureEnvFileCopiesExampleOnlyWhenMissing(t *testing.T) {
 	if created {
 		t.Fatal("EnsureEnvFile overwrote an existing env file")
 	}
-	if got, err := os.ReadFile(filepath.Join(root, EnvFileName)); err != nil || string(got) != string(custom) { //nolint:gosec // root 为 t.TempDir，.env 路径由测试构造
+	if got, err := os.ReadFile(filepath.Join(root, EnvFileName)); err != nil || string(got) != string(custom) { //nolint:gosec // G304: root 为 t.TempDir，.env 路径由测试构造
 		t.Fatalf("existing env = %q, err=%v", got, err)
 	}
 }

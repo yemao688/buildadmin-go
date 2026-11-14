@@ -202,7 +202,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 func assertDeleteFixtureFilesRestored(t *testing.T, fixture deleteFailureFixture) {
 	t.Helper()
 	for _, path := range fixture.generated {
-		content, err := os.ReadFile(path) //nolint:gosec // fixture.generated 由测试内 t.TempDir 构造
+		content, err := os.ReadFile(path) //nolint:gosec // G304: fixture.generated 由测试内 t.TempDir 构造
 		if err != nil {
 			t.Fatalf("generated file was not restored: %s: %v", path, err)
 		}
@@ -211,7 +211,7 @@ func assertDeleteFixtureFilesRestored(t *testing.T, fixture deleteFailureFixture
 		}
 	}
 	for path, want := range fixture.shared {
-		got, err := os.ReadFile(path) //nolint:gosec // fixture.shared 由测试内 t.TempDir 构造
+		got, err := os.ReadFile(path) //nolint:gosec // G304: fixture.shared 由测试内 t.TempDir 构造
 		if err != nil {
 			t.Fatalf("shared file was not restored: %s: %v", path, err)
 		}
