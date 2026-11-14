@@ -278,7 +278,7 @@ func getFontWidthAndHeight(text string, fontSize int, fontBytes []byte) (int, in
 }
 
 func loadImage(filePath string) (image.Image, error) {
-	fileData, err := os.ReadFile(filePath) //nolint:gosec // 调用方只传入 bgPaths 内置素材清单或 iconDict 图标名，且均已前置 util.RootPath()，不含外部输入
+	fileData, err := os.ReadFile(filePath) //nolint:gosec // G304: 调用方只传入 bgPaths 内置素材清单或 iconDict 图标名，且均已前置 util.RootPath()，不含外部输入
 	if err != nil {
 		return nil, err
 	}

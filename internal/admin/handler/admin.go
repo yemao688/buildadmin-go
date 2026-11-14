@@ -235,7 +235,7 @@ func adminParams(params Admin) service.AdminParams {
 
 func (h *AdminHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	result, err := h.adminM.GetOne(ctx, int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（管理员 id）
+	result, err := h.adminM.GetOne(ctx, int32(id)) //nolint:gosec // G115: 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（管理员 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -356,7 +356,7 @@ func (h *AdminHandler) Select(ctx *gin.Context) (interface{}, bool, error) {
 		return nil, false, nil
 	}
 
-	excludeID := int32(com.StrTo(ctx.Request.FormValue("exclude_id")).MustInt()) //nolint:gosec // exclude_id 是后台筛选的管理员主键，列类型 int(11)，不超过 int32 上界
+	excludeID := int32(com.StrTo(ctx.Request.FormValue("exclude_id")).MustInt()) //nolint:gosec // G115: exclude_id 是后台筛选的管理员主键，列类型 int(11)，不超过 int32 上界
 	keyword := ctx.Request.FormValue("quickSearch")
 	admins, err := h.adminM.SelectTree(ctx, excludeID, keyword)
 	if err != nil {
@@ -395,7 +395,7 @@ func buildAdminTreeOptions(admins []*model.Admin) []map[string]any {
 
 	options := make([]map[string]any, 0, len(flat))
 	for _, l := range flat {
-		admin := findAdminByID(admins, int32(l.GetId())) //nolint:gosec // 树节点 id 取自管理员主键列（int(11)），不超过 int32 上界
+		admin := findAdminByID(admins, int32(l.GetId())) //nolint:gosec // G115: 树节点 id 取自管理员主键列（int(11)），不超过 int32 上界
 		nickname := ""
 		if admin != nil {
 			nickname = admin.Nickname + "(ID:" + strconv.Itoa(int(admin.ID)) + ")"

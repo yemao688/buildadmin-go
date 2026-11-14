@@ -408,7 +408,7 @@ func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
 	if err := writeSetupAppEnv(configPath, "release"); err != nil {
 		t.Fatalf("writeSetupAppEnv() error = %v", err)
 	}
-	content, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
+	content, err := os.ReadFile(configPath) //nolint:gosec // G304: configPath 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 		t.Fatalf("completion output = %q", output.String())
 	}
 
-	content, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
+	content, err := os.ReadFile(configPath) //nolint:gosec // G304: configPath 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}

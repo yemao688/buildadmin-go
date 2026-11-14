@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/util"
@@ -134,6 +135,34 @@ func closeMySQL(db *gorm.DB) {
 	}
 }
 
+// fixtureCleanupAttempts 是清理 fixture 库的总尝试次数（首次 + 重试一次）。
+const fixtureCleanupAttempts = 2
+
+// dropFixtureDatabase 用临时管理连接 DROP 掉 fixture 库，失败重试一次；
+// 连续失败时输出一条可直接执行的语句，避免 <db>_fresh_<pid>_<seq> 永久残留
+// （库名带 pid+序号不复用，后续运行不会自动回收）。
+func dropFixtureDatabase(t *testing.T, open func() (*gorm.DB, error), name string) {
+	t.Helper()
+	statement := "DROP DATABASE IF EXISTS " + quoteMySQLIdentifier(name)
+	var lastErr error
+	for attempt := 1; attempt <= fixtureCleanupAttempts; attempt++ {
+		if attempt > 1 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		adminDB, openErr := open()
+		if openErr != nil {
+			lastErr = openErr
+			continue
+		}
+		lastErr = adminDB.Exec(statement).Error
+		closeMySQL(adminDB)
+		if lastErr == nil {
+			return
+		}
+	}
+	t.Logf("[testutil] cleanup: fixture database %q not dropped (%v); run manually: %s", name, lastErr, statement+";")
+}
+
 // OpenMySQL 解析分层配置的 mysql_test 配置，并为当前测试创建独立 fixture 库。
 // 独立库让测试可以安全地并行（表名互不冲突），t.Cleanup 自动 DROP。
 // 以下情况统一 t.Skip 并输出醒目原因（t.Logf + fmt.Println 双通道）：
@@ -168,15 +197,9 @@ func OpenFixtureDatabase(t *testing.T, tablePrefix string) (*gorm.DB, *conf.Conf
 	t.Cleanup(func() {
 		closeMySQL(fixtureDB)
 		// 清理时重新取管理连接，避免并行测试期间长期各占两条连接。
-		cleanupDB, cleanupErr := openMySQL(testConfig, "", "")
-		if cleanupErr != nil {
-			t.Logf("[testutil] cleanup: open admin connection for %q failed: %v", fixtureName, cleanupErr)
-			return
-		}
-		if dropErr := cleanupDB.Exec("DROP DATABASE IF EXISTS " + quoteMySQLIdentifier(fixtureName)).Error; dropErr != nil {
-			t.Logf("[testutil] cleanup: drop fixture database %q failed: %v", fixtureName, dropErr)
-		}
-		closeMySQL(cleanupDB)
+		dropFixtureDatabase(t, func() (*gorm.DB, error) {
+			return openMySQL(testConfig, "", "")
+		}, fixtureName)
 	})
 
 	if err := adminDB.Exec("CREATE DATABASE " + quoteMySQLIdentifier(fixtureName)).Error; err != nil {

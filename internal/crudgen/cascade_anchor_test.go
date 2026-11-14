@@ -33,7 +33,7 @@ func writeAnchorFixture(t *testing.T, content string) string {
 
 func readAnchorFixture(t *testing.T, path string) string {
 	t.Helper()
-	content, err := os.ReadFile(path) //nolint:gosec // path 由调用方传入的 t.TempDir 夹具路径
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 由调用方传入的 t.TempDir 夹具路径
 	require.NoError(t, err)
 	return string(content)
 }
@@ -157,7 +157,7 @@ func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 func TestWritePreservingModeAtomic(t *testing.T) {
 	t.Parallel()
 	path := writeAnchorFixture(t, "package repository\n")
-	require.NoError(t, os.Chmod(path, 0640)) //nolint:gosec // 测试断言 writePreservingMode 保留原文件权限，故显式设成 0640
+	require.NoError(t, os.Chmod(path, 0640)) //nolint:gosec // G302: 测试断言 writePreservingMode 保留原文件权限，故显式设成 0640
 	require.NoError(t, writePreservingMode(path, "package repository\n\n// v2\n"))
 	info, err := os.Stat(path)
 	require.NoError(t, err)

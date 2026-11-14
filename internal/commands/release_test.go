@@ -483,7 +483,7 @@ func TestReleaseGitCommandAgainstRealRepo(t *testing.T) {
 
 	git := func(args ...string) {
 		t.Helper()
-		process := exec.Command("git", args...) //nolint:gosec // 调用固定 git 子命令，参数由测试内的 git() 调用点给出，工作目录是 t.TempDir 夹具仓库
+		process := exec.Command("git", args...) //nolint:gosec // G204: 调用固定 git 子命令，参数由测试内的 git() 调用点给出，工作目录是 t.TempDir 夹具仓库
 		process.Dir = fixture.root
 		process.Env = append(os.Environ(),
 			"GIT_CONFIG_GLOBAL=/dev/null",

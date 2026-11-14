@@ -3,7 +3,7 @@ package upload
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/sha1" //nolint:gosec // AliOSS V1 签名算法规定使用 HMAC-SHA1，与云厂商接口契约绑定，不可替换
+	"crypto/sha1" //nolint:gosec // G505: AliOSS V1 签名算法规定使用 HMAC-SHA1，与云厂商接口契约绑定，不可替换
 	"encoding/base64"
 	"encoding/json"
 	"fmt"

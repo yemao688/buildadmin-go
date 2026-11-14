@@ -592,8 +592,8 @@ func writeCascadeE2EFixture(t *testing.T, root, userRepo, userEntity, childRepo,
 	require.NoError(t, err)
 	goSum, err := os.ReadFile(filepath.Join(repoRoot(t), "go.sum"))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), goMod, 0o600)) //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.mod
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.sum"), goSum, 0o600)) //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.sum
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), goMod, 0o600)) //nolint:gosec // G703: 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.mod
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.sum"), goSum, 0o600)) //nolint:gosec // G703: 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.sum
 	require.NoError(t, copyDir(filepath.Join(repoRoot(t), "internal", "pkg", "data_scope"), filepath.Join(root, "internal", "pkg", "data_scope")))
 
 	files := map[string]string{
@@ -674,8 +674,8 @@ func writeE2EFixture(t *testing.T, root, autoRepo, autoEntity, globalRepo, globa
 	require.NoError(t, err)
 	goSum, err := os.ReadFile(filepath.Join(repoRoot(t), "go.sum"))
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), goMod, 0o600)) //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.mod
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.sum"), goSum, 0o600)) //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.sum
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), goMod, 0o600)) //nolint:gosec // G703: 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.mod
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.sum"), goSum, 0o600)) //nolint:gosec // G703: 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.sum
 	require.NoError(t, copyDir(filepath.Join(repoRoot(t), "internal", "pkg", "data_scope"), filepath.Join(root, "internal", "pkg", "data_scope")))
 
 	files := map[string]string{

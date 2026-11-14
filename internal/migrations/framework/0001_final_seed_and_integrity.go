@@ -363,7 +363,7 @@ func verifyMoneyDecimalContract(db *gorm.DB, config *conf.Configuration) error {
 		if err != nil {
 			return err
 		}
-		if !ok || strings.ToLower(def.ColumnType) != userMoneyDecimalType || !strings.EqualFold(def.Nullable, "NO") {
+		if !ok || !strings.EqualFold(def.ColumnType, userMoneyDecimalType) || !strings.EqualFold(def.Nullable, "NO") {
 			return fmt.Errorf("%s.%s has invalid money schema", table, item.column)
 		}
 	}

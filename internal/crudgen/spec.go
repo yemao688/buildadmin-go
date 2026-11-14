@@ -130,7 +130,7 @@ func decodeSpecFile(path string) (*specFile, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}
-	content, err := os.ReadFile(path) //nolint:gosec // path 为开发者通过 CLI 显式传入的 crud_specs 文件路径，属本机生成流程
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 为开发者通过 CLI 显式传入的 crud_specs 文件路径，属本机生成流程
 	if err != nil {
 		return nil, fmt.Errorf("read spec %q: %w", path, err)
 	}

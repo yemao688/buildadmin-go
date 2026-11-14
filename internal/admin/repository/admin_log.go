@@ -65,7 +65,7 @@ func (s *AuthRepository) CachedRuleTitle(uid int32, name string) (string, bool) 
 	}
 	name = strings.ToLower(name)
 	for _, rule := range rules {
-		if strings.ToLower(rule.Name) == name {
+		if strings.EqualFold(rule.Name, name) {
 			return rule.Title, true
 		}
 	}

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,7 +76,7 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first createBusinessMigration: %v", err)
 	}
-	original, err := os.ReadFile(first) //nolint:gosec // first 由测试内 createBusinessMigration 在 t.TempDir 下返回
+	original, err := os.ReadFile(first) //nolint:gosec // G304: first 由测试内 createBusinessMigration 在 t.TempDir 下返回
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,11 +87,11 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 	if filepath.Base(first) != "0001_shop_orders.go" || filepath.Base(second) != "0002_settle_orders.go" {
 		t.Fatalf("created %q and %q, want 0001_shop_orders.go / 0002_settle_orders.go", filepath.Base(first), filepath.Base(second))
 	}
-	data, err := os.ReadFile(first) //nolint:gosec // first 由测试内 createBusinessMigration 在 t.TempDir 下返回
+	data, err := os.ReadFile(first) //nolint:gosec // G304: first 由测试内 createBusinessMigration 在 t.TempDir 下返回
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != string(original) {
+	if !bytes.Equal(data, original) {
 		t.Fatal("existing migration file was overwritten")
 	}
 }

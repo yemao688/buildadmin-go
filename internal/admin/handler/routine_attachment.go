@@ -61,7 +61,7 @@ func (v Attachment) GetMessages() validator.ValidatorMessages {
 
 func (h *AttachmentHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	result, err := h.attachmentM.GetOne(ctx, int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（附件 id）
+	result, err := h.attachmentM.GetOne(ctx, int32(id)) //nolint:gosec // G115: 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（附件 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

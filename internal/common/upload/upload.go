@@ -9,7 +9,7 @@ import (
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"context"
-	"crypto/sha1" //nolint:gosec // 附件 sha1 列与去重逻辑对齐 PHP 上游（文件内容哈希，非密码学口令场景）
+	"crypto/sha1" //nolint:gosec // G505: 附件 sha1 列与去重逻辑对齐 PHP 上游（文件内容哈希，非密码学口令场景）
 	"fmt"
 	"html"
 	"image"
@@ -266,10 +266,10 @@ func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId in
 		AdminID:        adminId,
 		UserID:         userId,
 		URL:            savePath,
-		Width:          int32(width),  //nolint:gosec // 图片宽取自 image.Decode 的实际像素尺寸，且 attachments.width 列为 int(11)
-		Height:         int32(height), //nolint:gosec // 同上：attachments.height 列 int(11)
+		Width:          int32(width),
+		Height:         int32(height),
 		Name:           params.File.Filename,
-		Size:           int32(params.File.Size), //nolint:gosec // 文件体积已按 config.Upload.Maxsize(MB) 校验，且 attachments.size 列 int(11)
+		Size:           int32(params.File.Size), //nolint:gosec // G115: 文件体积已按 config.Upload.Maxsize(MB) 校验，且 attachments.size 列 int(11)
 		Mimetype:       sourceType,
 		Storage:        storage,
 		Sha1:           sha1String,
@@ -325,7 +325,7 @@ func readUploadBuffer(params UploadParams) (bytes.Buffer, error) {
 
 // uploadSHA1String 计算上传内容的 sha1（写入 attachments.sha1 并用于秒传去重）。
 func uploadSHA1String(content []byte) (string, error) {
-	hasher := sha1.New() //nolint:gosec // 文件内容哈希，写入 attachments.sha1 并用于秒传去重，与 PHP 上游算法一致，不用于口令或签名
+	hasher := sha1.New() //nolint:gosec // G401: 文件内容哈希，写入 attachments.sha1 并用于秒传去重，与 PHP 上游算法一致，不用于口令或签名
 	if _, err := io.Copy(hasher, bytes.NewReader(content)); err != nil {
 		return "", err
 	}
@@ -373,7 +373,7 @@ func writeUploadFile(savePath string, content []byte) error {
 		return err
 	}
 	// 创建目标文件
-	out, err := os.Create(util.RootPath() + "/public" + savePath) //nolint:gosec // savePath 由 savename 模板渲染，文件名已经 multipart 的 filepath.Base 归一（无路径分隔符）且后缀在白名单内，写入点固定在 util.RootPath()/public 下
+	out, err := os.Create(util.RootPath() + "/public" + savePath) //nolint:gosec // G304: savePath 由 savename 模板渲染，文件名已经 multipart 的 filepath.Base 归一（无路径分隔符）且后缀在白名单内，写入点固定在 util.RootPath()/public 下
 	if err != nil {
 		return err
 	}

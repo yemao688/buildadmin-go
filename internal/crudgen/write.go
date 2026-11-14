@@ -514,7 +514,7 @@ func adminRouterProviderPath() string {
 // 增加一行 NewXxxRegistrar(xxx) 与对应 handler 参数（幂等）。
 func writeAdminRouterEntry(className string) error {
 	path := adminRouterProviderPath()
-	content, err := os.ReadFile(path) //nolint:gosec // path 由 adminRouterProviderPath() 拼出，固定为 util.RootPath()/internal/admin/router/provider.go
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 由 adminRouterProviderPath() 拼出，固定为 util.RootPath()/internal/admin/router/provider.go
 	if err != nil {
 		return err
 	}
@@ -581,7 +581,7 @@ func addProvideRegistrarsEntry(content, className string) (string, error) {
 // 移除逻辑对缺失条目保持幂等）。
 func removeAdminRouterEntry(className string) error {
 	path := adminRouterProviderPath()
-	content, err := os.ReadFile(path) //nolint:gosec // 同上，固定为 internal/admin/router/provider.go
+	content, err := os.ReadFile(path) //nolint:gosec // G304: 同上，固定为 internal/admin/router/provider.go
 	if err != nil {
 		return err
 	}
@@ -710,7 +710,7 @@ func writeProvider(dir string, name string) error {
 	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/router", "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
 		return err
 	}
-	content, err := os.ReadFile(providerPath) //nolint:gosec // providerPath 前置 util.RootPath()，且写入前经 ValidateGeneratedAbsolutePath 限定在生成器允许的包目录内
+	content, err := os.ReadFile(providerPath) //nolint:gosec // G304: providerPath 前置 util.RootPath()，且写入前经 ValidateGeneratedAbsolutePath 限定在生成器允许的包目录内
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -739,7 +739,7 @@ func writeProvider(dir string, name string) error {
 
 // 移除生成的相应代码
 func RemoveProvider(dir string, name string) error {
-	content, err := os.ReadFile(filepath.Join(util.RootPath(), dir, "provider.go")) //nolint:gosec // 路径由 util.RootPath() 与生成器固定的包目录拼成，不含外部输入
+	content, err := os.ReadFile(filepath.Join(util.RootPath(), dir, "provider.go")) //nolint:gosec // G304: 路径由 util.RootPath() 与生成器固定的包目录拼成，不含外部输入
 	if err != nil {
 		return err
 	}

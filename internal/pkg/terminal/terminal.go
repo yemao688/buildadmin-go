@@ -147,7 +147,7 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 		}
 		content, _ := json.Marshal(outData)
 		sseContent := fmt.Sprintf("data: %s\n\n", content)
-		_, _ = ctx.Writer.Write([]byte(sseContent))
+		_, _ = ctx.Writer.WriteString(sseContent)
 		flusher.Flush()
 	}
 
@@ -177,9 +177,9 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", command.Command) //nolint:gosec // 命令来自 terminal_helper 配置表中内置的脚本（pnpm/go/git），不是用户请求输入
+		cmd = exec.Command("cmd", "/C", command.Command) //nolint:gosec // G204: 命令来自 terminal_helper 配置表中内置的脚本（pnpm/go/git），不是用户请求输入
 	} else {
-		cmd = exec.Command("sh", "-c", command.Command) //nolint:gosec // 同上：内置 terminal_helper 配置表中的固定命令
+		cmd = exec.Command("sh", "-c", command.Command) //nolint:gosec // G204: 同上：内置 terminal_helper 配置表中的固定命令
 	}
 
 	if command.Cwd != "" {
@@ -293,9 +293,9 @@ func (t *Terminal) GetCommandOutput(commandKey string) (string, bool) {
 	}
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", command.Command) //nolint:gosec // 同上：内置 terminal_helper 配置表中的固定命令
+		cmd = exec.Command("cmd", "/C", command.Command) //nolint:gosec // G204: 同上：内置 terminal_helper 配置表中的固定命令
 	} else {
-		cmd = exec.Command("sh", "-c", command.Command) //nolint:gosec // 同上：内置 terminal_helper 配置表中的固定命令
+		cmd = exec.Command("sh", "-c", command.Command) //nolint:gosec // G204: 同上：内置 terminal_helper 配置表中的固定命令
 	}
 	// 执行命令并获取输出
 	output, err := cmd.CombinedOutput()

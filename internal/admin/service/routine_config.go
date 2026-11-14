@@ -168,9 +168,9 @@ func (s *ConfigService) SendTestMail(params dto.MailParam) error {
 	}
 	dialer := mail.NewDialer(params.SmtpServer, port, params.SmtpUser, params.SmtpPass)
 	if strings.EqualFold(params.SmtpVerification, "SSL") {
-		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // 邮件服务器 TLS 校验由后台"系统配置"的 smtp_verification 显式控制，自签名邮件服务器需要跳过校验
+		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // G402: 邮件服务器 TLS 校验由后台"系统配置"的 smtp_verification 显式控制，自签名邮件服务器需要跳过校验
 	} else {
-		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: params.SmtpServer} //nolint:gosec // 同上：非 SSL 分支的 STARTTLS 同样由用户配置决定是否校验证书
+		dialer.TLSConfig = &tls.Config{InsecureSkipVerify: true, ServerName: params.SmtpServer} //nolint:gosec // G402: 同上：非 SSL 分支的 STARTTLS 同样由用户配置决定是否校验证书
 	}
 	return dialer.DialAndSend(message)
 }

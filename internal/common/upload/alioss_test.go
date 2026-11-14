@@ -3,7 +3,7 @@ package upload
 import (
 	"context"
 	"crypto/hmac"
-	"crypto/sha1" //nolint:gosec // 用 sha1 复现 OSS 签名算法校验请求，非本仓库的密码学选择
+	"crypto/sha1" //nolint:gosec // G505: 用 sha1 复现 OSS 签名算法校验请求，非本仓库的密码学选择
 	"encoding/base64"
 	"encoding/json"
 	"strconv"

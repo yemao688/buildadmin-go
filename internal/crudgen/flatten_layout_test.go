@@ -56,28 +56,28 @@ func TestParseFlatNameDataIgnoresMultiSegmentRelativePath(t *testing.T) {
 //nolint:paralleltest // 改写真实 internal/admin/router/provider.go 并靠 Cleanup 写回，并行会与写同一文件的测试互相覆盖
 func TestProvideRegistrarsEntryRoundTrip(t *testing.T) {
 	path := adminRouterProviderPath()
-	original, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
+	original, err := os.ReadFile(path) //nolint:gosec // G304: path 为 adminRouterProviderPath 定位的固定仓库文件
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, os.WriteFile(path, original, 0o600)) }) //nolint:gosec // 写回 util.RootPath 下的同一个固定文件，内容为上方读到的原始内容
+	t.Cleanup(func() { require.NoError(t, os.WriteFile(path, original, 0o600)) }) //nolint:gosec // G703: 写回 util.RootPath 下的同一个固定文件，内容为上方读到的原始内容
 
 	// 添加（幂等）
 	require.NoError(t, writeAdminRouterEntry("E2eBanner"))
-	once, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
+	once, err := os.ReadFile(path) //nolint:gosec // G304: path 为 adminRouterProviderPath 定位的固定仓库文件
 	require.NoError(t, err)
 	require.Contains(t, string(once), "\te2eBanner *handler.E2eBannerHandler,\n")
 	require.Contains(t, string(once), "\t\tNewE2eBannerRegistrar(e2eBanner),\n")
 	require.NoError(t, writeAdminRouterEntry("E2eBanner"))
-	twice, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
+	twice, err := os.ReadFile(path) //nolint:gosec // G304: path 为 adminRouterProviderPath 定位的固定仓库文件
 	require.NoError(t, err)
 	require.Equal(t, string(once), string(twice), "anchor insertion is not idempotent")
 
 	// 移除（幂等）
 	require.NoError(t, removeAdminRouterEntry("E2eBanner"))
-	removed, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
+	removed, err := os.ReadFile(path) //nolint:gosec // G304: path 为 adminRouterProviderPath 定位的固定仓库文件
 	require.NoError(t, err)
 	require.Equal(t, string(original), string(removed))
 	require.NoError(t, removeAdminRouterEntry("E2eBanner"))
-	removedAgain, err := os.ReadFile(path) //nolint:gosec // path 为 adminRouterProviderPath 定位的固定仓库文件
+	removedAgain, err := os.ReadFile(path) //nolint:gosec // G304: path 为 adminRouterProviderPath 定位的固定仓库文件
 	require.NoError(t, err)
 	require.Equal(t, string(original), string(removedAgain))
 }

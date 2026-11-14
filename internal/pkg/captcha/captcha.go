@@ -5,13 +5,12 @@ import (
 	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
-	"crypto/md5" //nolint:gosec // 验证码 key 算法必须与 PHP 上游 v2.3.8 的 md5 拼接方案逐位一致，否则已下发验证码全部失效
+	"crypto/md5" //nolint:gosec // G501: 验证码 key 算法必须与 PHP 上游 v2.3.8 的 md5 拼接方案逐位一致，否则已下发验证码全部失效
 	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -161,12 +160,11 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 	// 建立一幅
 	img := image.NewRGBA(image.Rect(0, 0, imageW, imageH))
 	// 设置背景
-	backgroundColor := color.RGBA{uint8(c.config.Bg[0]), uint8(c.config.Bg[1]), uint8(c.config.Bg[2]), 255} //nolint:gosec // Bg 是 NewCaptchaService 内置的固定背景色 {243,251,254}，取值来源不受外部控制
+	backgroundColor := color.RGBA{uint8(c.config.Bg[0]), uint8(c.config.Bg[1]), uint8(c.config.Bg[2]), 255} //nolint:gosec // G115: Bg 是 NewCaptchaService 内置的固定背景色 {243,251,254}，取值来源不受外部控制
 	draw.Draw(img, img.Bounds(), &image.Uniform{backgroundColor}, image.Point{}, draw.Src)
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 仅用于验证码字体颜色等视觉随机，不参与验证码字符生成
 	// 验证码字体随机颜色
-	textColor := color.RGBA{uint8(r.Intn(255)), uint8(r.Intn(255)), uint8(r.Intn(255)), 255} //nolint:gosec // 颜色分量由 r.Intn(255) 产生，上界 254 小于 uint8 上限
+	textColor := color.RGBA{uint8(random.SecureIntn(255)), uint8(random.SecureIntn(255)), uint8(random.SecureIntn(255)), 255} //nolint:gosec // G115: 颜色分量由 random.SecureIntn(255) 产生，上界 254 小于 uint8 上限
 
 	if c.config.UseImgBg {
 		bgPath := background()
@@ -217,8 +215,6 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 
 // 绘验证码
 func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor color.RGBA) (string, error) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 仅用于字体文件与文字倾斜角等视觉随机，字符选择走 random.SecureIntn
-
 	code := []string{}
 	var runes []rune
 	if captcha != "" {
@@ -235,15 +231,15 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 	fontTtf := config.FontTTF
 	if fontTtf == "" {
 		if config.UseZh {
-			name := strconv.Itoa(r.Intn(2) + 1)
+			name := strconv.Itoa(random.SecureIntn(2) + 1)
 			fontTtf = filepath.Join(util.RootPath(), "/public/static/fonts/zhttfs", name+".ttf")
 		} else {
-			name := strconv.Itoa(r.Intn(6) + 1)
+			name := strconv.Itoa(random.SecureIntn(6) + 1)
 			fontTtf = filepath.Join(util.RootPath(), "/public/static/fonts/ttfs", name+".ttf")
 		}
 	}
 
-	fontBytes, err := os.ReadFile(fontTtf) //nolint:gosec // 字体路径仅来自内置 config.FontTTF 或 util.RootPath() 拼出的固定静态资源目录，不含外部输入
+	fontBytes, err := os.ReadFile(fontTtf) //nolint:gosec // G304: 字体路径仅来自内置 config.FontTTF 或 util.RootPath() 拼出的固定静态资源目录，不含外部输入
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +254,7 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 		code = append(code, string(runes[randomIndex]))
 		runes = append(runes[:randomIndex], runes[randomIndex+1:]...)
 
-		textAngle := float64(r.Intn(30)+1) - 15
+		textAngle := float64(random.SecureIntn(30)+1) - 15
 
 		pt := image.Point{int(float64(config.FontSize) * (float64(i) + 1) * 1.3), int(config.FontSize + 15)}
 		drawRotatedText(img, code[i], pt, textAngle, fontFace, textColor)
@@ -268,18 +264,17 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 
 // 画一条由两条连在一起构成的随机正弦函数曲线作干扰线
 func writeCurve(img *image.RGBA, fontSize int, imageW int, imageH int, textColor color.RGBA) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 仅用于干扰曲线的振幅/周期等视觉随机，不参与验证码字符生成
 	py := 0
 
 	// 曲线部分
-	A := r.Intn(int(imageH/2)) + 1          // 振幅
-	b := r.Intn(int(imageH/2)+1) - imageH/4 // Y轴方向偏移量
-	f := r.Intn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
-	T := r.Intn(imageW*2-imageH+1) + imageH // 周期
-	w := 2 * math.Pi / float64(T)           // 角频率
+	A := random.SecureIntn(int(imageH/2)) + 1          // 振幅
+	b := random.SecureIntn(int(imageH/2)+1) - imageH/4 // Y轴方向偏移量
+	f := random.SecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T := random.SecureIntn(imageW*2-imageH+1) + imageH // 周期
+	w := 2 * math.Pi / float64(T)                      // 角频率
 
-	px := 0                                                       // 曲线横坐标起始位置
-	px2 := r.Intn(int(float64(imageW)*0.8)-imageW/2+1) + imageW/2 // 曲线横坐标结束位置
+	px := 0                                                                  // 曲线横坐标起始位置
+	px2 := random.SecureIntn(int(float64(imageW)*0.8)-imageW/2+1) + imageW/2 // 曲线横坐标结束位置
 
 	for px < px2 {
 		if w != 0 {
@@ -295,9 +290,9 @@ func writeCurve(img *image.RGBA, fontSize int, imageW int, imageH int, textColor
 	}
 
 	// 曲线后部分
-	A = r.Intn(int(imageH/2)) + 1          // 振幅
-	f = r.Intn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
-	T = r.Intn(imageW*2-imageH+1) + imageH // 周期
+	A = random.SecureIntn(int(imageH/2)) + 1          // 振幅
+	f = random.SecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T = random.SecureIntn(imageW*2-imageH+1) + imageH // 周期
 	w = (2 * math.Pi) / float64(T)
 	b = py - A*int(math.Sin(w*float64(px+f))) - int(imageH/2) // Y轴方向偏移量
 	px = px2
@@ -322,22 +317,20 @@ func writeNoise(img *image.RGBA) {
 	codeSet := "2345678abcdefhijkmnpqrstuvwxyz"
 	fontFace := basicfont.Face7x13
 
-	// 设置随机数种子
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 仅用于杂点颜色/位置/角度等视觉随机，不参与验证码字符生成
 	for i := 0; i < 10; i++ {
 		// 杂点颜色
 		noiseColor := color.RGBA{
-			R: uint8(r.Intn(76) + 150), //nolint:gosec // 取值区间 [150,225]，小于 uint8 上限
-			G: uint8(r.Intn(76) + 150), //nolint:gosec // 取值区间 [150,225]，小于 uint8 上限
-			B: uint8(r.Intn(76) + 150), //nolint:gosec // 取值区间 [150,225]，小于 uint8 上限
+			R: uint8(random.SecureIntn(76) + 150), //nolint:gosec // G115: 取值区间 [150,225]，小于 uint8 上限
+			G: uint8(random.SecureIntn(76) + 150), //nolint:gosec // G115: 取值区间 [150,225]，小于 uint8 上限
+			B: uint8(random.SecureIntn(76) + 150), //nolint:gosec // G115: 取值区间 [150,225]，小于 uint8 上限
 			A: 255,
 		}
 
 		for j := 0; j < 5; j++ {
-			textPoint := image.Pt(r.Intn(img.Bounds().Dx()), r.Intn(img.Bounds().Dy()))
-			textAngle := float64(r.Intn(90) + 1) // 45度角
+			textPoint := image.Pt(random.SecureIntn(img.Bounds().Dx()), random.SecureIntn(img.Bounds().Dy()))
+			textAngle := float64(random.SecureIntn(90) + 1) // 45度角
 
-			charIndex := r.Intn(len(codeSet))
+			charIndex := random.SecureIntn(len(codeSet))
 			char := codeSet[charIndex]
 			// 绘制旋转后的文本水印
 			drawRotatedText(img, string(char), textPoint, textAngle, fontFace, noiseColor)
@@ -364,18 +357,17 @@ func drawRotatedText(img *image.RGBA, text string, point image.Point, angle floa
 
 // 背景图片路径
 func background() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec // 仅用于背景图片选择等视觉随机，不参与验证码字符生成
 	bgs := []string{}
 	for i := 1; i <= 8; i++ {
 		bgs = append(bgs, filepath.Join("public/static/images/captcha/image/", strconv.Itoa(i)+".jpg"))
 	}
-	randIndex := r.Intn(len(bgs) - 1)
+	randIndex := random.SecureIntn(len(bgs) - 1)
 	imagePath := bgs[randIndex]
 	return imagePath
 }
 
 func loadImage(filePath string) (image.Image, error) {
-	fileData, err := os.ReadFile(filePath) //nolint:gosec // 路径由 background() 从内置固定素材清单拼出并前置 util.RootPath()，不含外部输入
+	fileData, err := os.ReadFile(filePath) //nolint:gosec // G304: 路径由 background() 从内置固定素材清单拼出并前置 util.RootPath()，不含外部输入
 	if err != nil {
 		return nil, err
 	}
@@ -389,9 +381,9 @@ func loadImage(filePath string) (image.Image, error) {
 
 // 加密字符串（对齐 PHP 上游 v2.3.8：length 控制密文长度，用于区分验证码类型）
 func (c *CaptchaService) authCode(str, id string, length int) string {
-	key := fmt.Sprintf("%x", md5.Sum([]byte(c.config.SeKey)))[5:13]    //nolint:gosec // 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
-	strHash := fmt.Sprintf("%x", md5.Sum([]byte(str)))[8:18]           //nolint:gosec // 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
-	return fmt.Sprintf("%x", md5.Sum([]byte(key+strHash+id)))[:length] //nolint:gosec // 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
+	key := fmt.Sprintf("%x", md5.Sum([]byte(c.config.SeKey)))[5:13]    //nolint:gosec // G401: 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
+	strHash := fmt.Sprintf("%x", md5.Sum([]byte(str)))[8:18]           //nolint:gosec // G401: 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
+	return fmt.Sprintf("%x", md5.Sum([]byte(key+strHash+id)))[:length] //nolint:gosec // G401: 与 PHP 上游 v2.3.8 验证码 key 算法兼容，非凭据存储场景
 }
 
 // 生成验证码随机字符

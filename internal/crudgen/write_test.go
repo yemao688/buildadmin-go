@@ -43,7 +43,7 @@ func TestRegistrarTemplateMatchesCountryLanguageShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected, err := os.ReadFile(path) //nolint:gosec // path 为 util.RootPath 定位的固定仓库样例文件
+	expected, err := os.ReadFile(path) //nolint:gosec // G304: path 为 util.RootPath 定位的固定仓库样例文件
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 	if err := writeProvider("internal/admin/model/provider_scaffold_test", "OwnerModel"); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // dir 由测试内 t.TempDir 构造
+	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // G304: dir 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
 	if err := writeProvider("internal/admin/handler/provider_fresh_seq_test", "UserRegistrar"); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // dir 由测试内 t.TempDir 构造
+	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // G304: dir 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 			if err := writeProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
 				t.Fatal(err)
 			}
-			added, err := os.ReadFile(provider) //nolint:gosec // provider 由测试内 t.TempDir 构造
+			added, err := os.ReadFile(provider) //nolint:gosec // G304: provider 由测试内 t.TempDir 构造
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -126,7 +126,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 			if err := RemoveProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
 				t.Fatal(err)
 			}
-			got, err := os.ReadFile(provider) //nolint:gosec // provider 由测试内 t.TempDir 构造
+			got, err := os.ReadFile(provider) //nolint:gosec // G304: provider 由测试内 t.TempDir 构造
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -140,7 +140,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 				if err := RemoveProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
 					t.Fatal(err)
 				}
-				got, err := os.ReadFile(provider) //nolint:gosec // provider 由测试内 t.TempDir 构造
+				got, err := os.ReadFile(provider) //nolint:gosec // G304: provider 由测试内 t.TempDir 构造
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -171,7 +171,7 @@ func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
 	if err := RemoveProvider("internal/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(provider) //nolint:gosec // provider 由测试内 t.TempDir 构造
+	got, err := os.ReadFile(provider) //nolint:gosec // G304: provider 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,7 +512,7 @@ func TestWriteGoFileNormalizesFormattingAndEOF(t *testing.T) {
 	if err := writeGoFile(path, "package provider\n\n\nvar ProviderSet = 1\n\n\n"); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(path) //nolint:gosec // path 为测试内 t.TempDir 夹具路径
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 为测试内 t.TempDir 夹具路径
 	if err != nil {
 		t.Fatal(err)
 	}
