@@ -140,12 +140,12 @@ func NewFileSnapshot(paths []string) (*FileSnapshot, error) {
 			entry.existed = true
 			entry.mode = info.Mode().Perm()
 			entry.backup = filepath.Join(dir, fmt.Sprintf("%06d.bak", i))
-			data, readErr := os.ReadFile(path)
+			data, readErr := os.ReadFile(path) //nolint:gosec // path 为本次生成事务登记的待改写产物绝对路径，均来自 util.RootPath() 下的生成目录
 			if readErr != nil {
 				_ = s.Cleanup()
 				return nil, readErr
 			}
-			if writeErr := os.WriteFile(entry.backup, data, entry.mode); writeErr != nil {
+			if writeErr := os.WriteFile(entry.backup, data, entry.mode); writeErr != nil { //nolint:gosec // 备份文件位于 NewFileSnapshot 用 os.MkdirTemp 创建的临时目录，文件名由序号格式化为 %06d.bak
 				_ = s.Cleanup()
 				return nil, writeErr
 			}
@@ -283,7 +283,7 @@ func manifestPathIsShared(path string) bool {
 }
 
 func atomicRestore(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".crud-restore-*")

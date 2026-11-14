@@ -12,7 +12,7 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 	dir := t.TempDir()
 	existing := filepath.Join(dir, "existing.go")
 	created := filepath.Join(dir, "created.go")
-	if err := os.WriteFile(existing, []byte("original"), 0644); err != nil {
+	if err := os.WriteFile(existing, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := NewFileSnapshot([]string{existing, created})
@@ -20,16 +20,16 @@ func TestFileSnapshotRestoresCreatedAndOverwrittenFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer snapshot.Cleanup()
-	if err := os.WriteFile(existing, []byte("overwritten"), 0644); err != nil {
+	if err := os.WriteFile(existing, []byte("overwritten"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(created, []byte("new"), 0644); err != nil {
+	if err := os.WriteFile(created, []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := snapshot.Restore(); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(existing)
+	data, err := os.ReadFile(existing) //nolint:gosec // existing 为测试内 t.TempDir 夹具路径
 	if err != nil || string(data) != "original" {
 		t.Fatalf("restored existing = %q, err=%v", data, err)
 	}
@@ -75,7 +75,7 @@ func TestBuildFileManifestForFieldsAlwaysClassifiesRelationProviderAsShared(t *t
 
 func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "existing.go")
-	if err := os.WriteFile(path, []byte("original"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := NewFileSnapshot([]string{path})
@@ -86,13 +86,13 @@ func TestFileSnapshotReadFailureLeavesTargetsUntouched(t *testing.T) {
 	if err := os.Remove(snapshot.entries[0].backup); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("changed"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("changed"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := snapshot.Restore(); err == nil {
 		t.Fatal("missing backup should fail")
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path 为测试内 t.TempDir 夹具路径
 	if err != nil || string(data) != "changed" {
 		t.Fatalf("target changed after backup read failure: %q, %v", data, err)
 	}
@@ -108,7 +108,7 @@ func assertQuarantineRestore(t *testing.T) {
 	first := filepath.Join(dir, "first.vue")
 	second := filepath.Join(dir, "second.go")
 	for _, path := range []string{first, second} {
-		if err := os.WriteFile(path, []byte(path), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(path), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

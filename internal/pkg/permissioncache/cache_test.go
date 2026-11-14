@@ -3,6 +3,7 @@ package permissioncache
 import (
 	"errors"
 	"slices"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -151,7 +152,7 @@ func TestCacheReloadKeepsRuleThenGroupLockOrder(t *testing.T) {
 		if err != nil {
 			return nil, nil, err
 		}
-		return []string{"rule"}, []string{"group-" + string(rune('0'+groups[0]))}, nil
+		return []string{"rule"}, []string{"group-" + strconv.Itoa(groups[0])}, nil
 	})
 	require.NoError(t, err)
 	require.Equal(t, []string{"group-1"}, names)

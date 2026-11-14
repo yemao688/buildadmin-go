@@ -102,13 +102,13 @@ func (h *AdminGroupHandler) Add(ctx *gin.Context) {
 
 func (h *AdminGroupHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	adminGroup, err := h.adminGroupM.GetOne(ctx.Request.Context(), int32(id))
+	adminGroup, err := h.adminGroupM.GetOne(ctx.Request.Context(), int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（管理员分组 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
 	}
 
-	if err := h.svc.CheckAuth(header.GetAdminAuth(ctx).Id, header.GetAdminAuth(ctx).IsSuperAdmin, int32(id)); err != nil {
+	if err := h.svc.CheckAuth(header.GetAdminAuth(ctx).Id, header.GetAdminAuth(ctx).IsSuperAdmin, int32(id)); err != nil { //nolint:gosec // 同上：分组主键列 int(11)
 		response.FailByErr(ctx, err)
 		return
 	}

@@ -69,7 +69,7 @@ func createBusinessMigration(dir, name string, versions []uint64) (string, error
 		return "", err
 	}
 	path := filepath.Join(dir, fmt.Sprintf("%04d_%s.go", version, stem))
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644) //nolint:gosec // 目标目录来自开发者显式指定的业务迁移目录，文件名由迁移序号+规范化模块名生成
 	if err != nil {
 		if os.IsExist(err) {
 			return "", fmt.Errorf("迁移文件已存在: %s", path)

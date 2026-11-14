@@ -2,7 +2,7 @@ package upload
 
 import (
 	"bytes"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // 用 sha1 计算附件摘要以校验并发表单与磁盘内容归属
 	"fmt"
 	"mime/multipart"
 	"net/http/httptest"
@@ -124,7 +124,7 @@ func TestUploadHelperConcurrentUploadsDoNotShareRequestState(t *testing.T) {
 	for i := 0; i < workers; i++ {
 		att := seen[i]
 		require.Equal(t, topics[i], att.Topic, "worker %d topic crossed with another request", i)
-		require.Equal(t, fmt.Sprintf("%x", sha1.Sum(contents[i])), att.Sha1, "worker %d sha1 belongs to another file", i)
+		require.Equal(t, fmt.Sprintf("%x", sha1.Sum(contents[i])), att.Sha1, "worker %d sha1 belongs to another file", i) //nolint:gosec // 生产附件的 sha1 摘要即 sha1，测试按其定义复算校验，非安全用途
 		disk, err := os.ReadFile(util.RootPath() + "/public" + att.URL)
 		require.NoError(t, err)
 		require.Equal(t, contents[i], disk, "worker %d on-disk content mismatched", i)

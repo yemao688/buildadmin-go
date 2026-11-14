@@ -134,7 +134,7 @@ func newOwnershipFixture(t *testing.T) (*gorm.DB, *conf.Configuration, ownership
 	// 拍平载体：handler 文件落 internal/admin/handler/<table>.go（删除流程
 	// 的 manifest 由 crud_log 的生成配置推导，其余生成文件缺失会被跳过）。
 	ownFile := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete_fault.go")
-	require.NoError(t, os.WriteFile(ownFile, []byte("package handler\n"), 0644))
+	require.NoError(t, os.WriteFile(ownFile, []byte("package handler\n"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(ownFile) })
 
 	fields := []crudmodel.Field{{Name: "id", Type: "bigint", PrimaryKey: true, AutoIncrement: true, Unsigned: true}}

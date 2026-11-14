@@ -39,8 +39,9 @@ func NewHttpServer(
 	router *gin.Engine,
 ) *http.Server {
 	return &http.Server{
-		Addr:    ":" + config.App.Port,
-		Handler: router,
+		Addr:              ":" + config.App.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 }
 

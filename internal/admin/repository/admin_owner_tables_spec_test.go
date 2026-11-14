@@ -31,7 +31,7 @@ func TestAdminOwnerTablesCoverCrudSpecs(t *testing.T) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".yaml" {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(specDir, entry.Name()))
+		content, err := os.ReadFile(filepath.Join(specDir, entry.Name())) //nolint:gosec // specDir 固定为仓库 crud_specs 目录，文件名来自该目录 ReadDir
 		require.NoError(t, err)
 
 		var spec struct {

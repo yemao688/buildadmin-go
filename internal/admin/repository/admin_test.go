@@ -37,9 +37,9 @@ func (testDialector) DefaultValueOf(*schema.Field) clause.Expression { return ni
 func (testDialector) BindVarTo(w clause.Writer, stmt *gorm.Statement, v interface{}) {
 	_ = stmt
 	_ = v
-	w.WriteByte('?')
+	_ = w.WriteByte('?')
 }
-func (testDialector) QuoteTo(w clause.Writer, s string)              { w.WriteString("`" + s + "`") }
+func (testDialector) QuoteTo(w clause.Writer, s string)              { _, _ = w.WriteString("`" + s + "`") }
 func (testDialector) Explain(sql string, vars ...interface{}) string { return sql }
 
 func openAdminTestDB(t *testing.T) *gorm.DB {

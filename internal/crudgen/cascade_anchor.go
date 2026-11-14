@@ -109,7 +109,7 @@ func validateInheritParent(specsDir, parentTable string) error {
 	if err != nil {
 		return err
 	}
-	content, err := os.ReadFile(repoPath)
+	content, err := os.ReadFile(repoPath) //nolint:gosec // repoPath 来自 parentRepositoryPath，已经 ValidateGeneratedAbsolutePath 限定在 internal/admin/repository 内
 	if err != nil {
 		return fmt.Errorf("inheritFrom parent %q repository %s not found: %w; generate or hand-write it with a CascadeOwners() anchor block first", parentTable, repoPath, err)
 	}
@@ -257,7 +257,7 @@ func cleanupStaleCascadeAnchors(specsDir, childTable string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		content, err := os.ReadFile(repoPath)
+		content, err := os.ReadFile(repoPath) //nolint:gosec // 同上，父表仓库路径经 ValidateGeneratedAbsolutePath 校验
 		if err != nil {
 			// 父表 repo 缺失：无锚点可清理，跳过（父表未生成时没有级联注册）。
 			continue
@@ -289,7 +289,7 @@ func cascadeAnchorEntryPattern(table string) *regexp.Regexp {
 //     不残留旧列，避免级联按旧列 UPDATE 静默漂移；手改残留的重复行也会收敛）；
 //   - 否则在 `// @cascade:end` 之前插入。
 func applyCascadeAnchor(repoFilePath, table, byColumn string) error {
-	content, err := os.ReadFile(repoFilePath)
+	content, err := os.ReadFile(repoFilePath) //nolint:gosec // repoFilePath 由调用方传入的生成产物路径，已限定在 internal/admin/repository 内
 	if err != nil {
 		return fmt.Errorf("apply cascade anchor: read parent repository %q: %w", repoFilePath, err)
 	}
@@ -345,7 +345,7 @@ func applyCascadeAnchor(repoFilePath, table, byColumn string) error {
 // 文件不存在或锚点缺失直接返回 nil（防止 crud:delete 因主实体已删/锚点
 // 结构漂移而失败）；条目不存在同样直接返回 nil。
 func removeCascadeAnchor(repoFilePath, table string) error {
-	content, err := os.ReadFile(repoFilePath)
+	content, err := os.ReadFile(repoFilePath) //nolint:gosec // 同上，仅由 crud:delete 传入已校验的主实体仓库路径
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil

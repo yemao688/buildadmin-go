@@ -51,10 +51,10 @@ func newReleaseFixture(t *testing.T) *releaseFixture {
 func (f *releaseFixture) writeFile(t *testing.T, relative, content string) {
 	t.Helper()
 	path := filepath.Join(f.root, filepath.FromSlash(relative))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		t.Fatalf("MkdirAll(%s) error = %v", path, err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatalf("WriteFile(%s) error = %v", path, err)
 	}
 }
@@ -116,7 +116,7 @@ func (f *releaseFixture) deps(commands releaseFakeCommands) releaseDeps {
 	return releaseDeps{
 		root: f.root,
 		writeFile: func(path string, data []byte) error {
-			return os.WriteFile(path, data, 0o644)
+			return os.WriteFile(path, data, 0o600)
 		},
 		command: commands.run,
 	}
@@ -468,7 +468,7 @@ func TestReleaseGitCommandAgainstRealRepo(t *testing.T) {
 
 	git := func(args ...string) {
 		t.Helper()
-		process := exec.Command("git", args...)
+		process := exec.Command("git", args...) //nolint:gosec // 调用固定 git 子命令，参数由测试内的 git() 调用点给出，工作目录是 t.TempDir 夹具仓库
 		process.Dir = fixture.root
 		process.Env = append(os.Environ(),
 			"GIT_CONFIG_GLOBAL=/dev/null",

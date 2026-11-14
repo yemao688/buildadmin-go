@@ -127,22 +127,26 @@ func ruleIDSet(rawIDs []string) []int32 {
 	ids := make([]int32, 0, len(rawIDs))
 	seen := make(map[int32]struct{}, len(rawIDs))
 	for _, raw := range rawIDs {
-		id, err := strconv.Atoi(raw)
+		v, err := strconv.ParseInt(raw, 10, 32)
 		if err != nil {
 			continue
 		}
-		if _, ok := seen[int32(id)]; ok {
+		id := int32(v)
+		if _, ok := seen[id]; ok {
 			continue
 		}
-		seen[int32(id)] = struct{}{}
-		ids = append(ids, int32(id))
+		seen[id] = struct{}{}
+		ids = append(ids, id)
 	}
 	return ids
 }
 
 // atoiRuleID 解析规则 id；非法值按 0 处理，与历史展示逻辑一致。
 func atoiRuleID(raw string) int32 {
-	id, _ := strconv.Atoi(raw)
+	id, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		return 0
+	}
 	return int32(id)
 }
 

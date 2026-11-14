@@ -107,6 +107,7 @@ func (d RedisDriver) Set(token string, t string, user_id int32, expire int64) er
 		// return the same refreshable expiration error as the MySQL driver.
 		ttl *= 2
 	}
+	//nolint:gosec // 该常量是 Redis 写入 token 与索引的 Lua 脚本，键名由运行时参数传入，不是凭据
 	const setTokenAndIndex = `
 redis.call('SADD', KEYS[1], KEYS[2])
 if tonumber(ARGV[1]) > 0 then

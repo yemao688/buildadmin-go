@@ -60,7 +60,7 @@ func TestDeleteMenuFailureRestoresFilesAndReportsStage(t *testing.T) {
 	callbackName := "crud_helper_test_fail_menu_delete"
 	if err := db.Callback().Delete().Before("gorm:delete").Register(callbackName, func(tx *gorm.DB) {
 		if tx.Statement.Table == cfg.Database.Prefix+"admin_rule" {
-			tx.AddError(errors.New("menu delete injected"))
+			_ = tx.AddError(errors.New("menu delete injected"))
 		}
 	}); err != nil {
 		t.Fatal(err)
@@ -133,10 +133,10 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	// 目录与文件名用表名推导的历史形态（delete_fault → 目录 delete、实体 fault）
 	modelDir := filepath.Join(util.RootPath(), "internal", "admin", "model", "delete")
 	handlerDir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "delete")
-	if err := os.MkdirAll(modelDir, 0755); err != nil {
+	if err := os.MkdirAll(modelDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(handlerDir, 0755); err != nil {
+	if err := os.MkdirAll(handlerDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -147,13 +147,13 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 	modelProvider := filepath.Join(modelDir, "provider.go")
 	handlerProvider := filepath.Join(handlerDir, "provider.go")
 	generated := filepath.Join(modelDir, "fault.go")
-	if err := os.WriteFile(modelProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultModel,\n)\n"), 0644); err != nil {
+	if err := os.WriteFile(modelProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultModel,\n)\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(handlerProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"), 0644); err != nil {
+	if err := os.WriteFile(handlerProvider, []byte("package fixture\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewFaultHandler,\n\tNewFaultRegistrar,\n)\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(generated, []byte("package fixture\n"), 0644); err != nil {
+	if err := os.WriteFile(generated, []byte("package fixture\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -200,7 +200,7 @@ func newDeleteFailureFixture(t *testing.T) (*gorm.DB, *conf.Configuration, delet
 func assertDeleteFixtureFilesRestored(t *testing.T, fixture deleteFailureFixture) {
 	t.Helper()
 	for _, path := range fixture.generated {
-		content, err := os.ReadFile(path)
+		content, err := os.ReadFile(path) //nolint:gosec // fixture.generated 由测试内 t.TempDir 构造
 		if err != nil {
 			t.Fatalf("generated file was not restored: %s: %v", path, err)
 		}
@@ -209,7 +209,7 @@ func assertDeleteFixtureFilesRestored(t *testing.T, fixture deleteFailureFixture
 		}
 	}
 	for path, want := range fixture.shared {
-		got, err := os.ReadFile(path)
+		got, err := os.ReadFile(path) //nolint:gosec // fixture.shared 由测试内 t.TempDir 构造
 		if err != nil {
 			t.Fatalf("shared file was not restored: %s: %v", path, err)
 		}

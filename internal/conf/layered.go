@@ -87,7 +87,7 @@ func FindDeadKeys(defaults, overrides map[string]any) []string {
 // supplied installation values. The header documents why this file is sparse.
 func WriteConfigOverrides(path string, overrides map[string]any) error {
 	existing := map[string]any{}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // 调用方只传入 configs/config.yaml 这一固定配置路径，属受控部署路径
 	switch {
 	case err == nil:
 		if err := yaml.Unmarshal(data, &existing); err != nil {
@@ -115,7 +115,7 @@ func WriteConfigOverrides(path string, overrides map[string]any) error {
 }
 
 func readYAMLMap(path string) (map[string]any, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // 同上：分层配置只读取 configs/ 下的固定文件名
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package clickcaptcha
 import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/captcha"
+	"buildadmin-go/internal/pkg/random"
 	"buildadmin-go/internal/pkg/util"
 	"bytes"
 	"encoding/base64"
@@ -13,7 +14,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -118,7 +118,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 		// 不可用（验证点要落库）；直接报错而非空指针 panic。
 		return nil, errors.New("database is not connected")
 	}
-	randIndex := rand.Intn(len(bgPaths) - 1)
+	randIndex := random.SecureIntn(len(bgPaths) - 1)
 	imagePath := bgPaths[randIndex]
 	bgImg, err := loadImage(filepath.Join(util.RootPath(), imagePath))
 	if err != nil {
@@ -144,7 +144,7 @@ func (c *ClickCaptcha) Create(ctx *gin.Context, id string) (map[string]interface
 	randPoints := c.randPoints(c.config.Length + c.config.ConfuseLength)
 	for _, v := range randPoints {
 		point := Point{
-			Size: rand.Intn(16) + 15,
+			Size: random.SecureIntn(16) + 15,
 		}
 
 		if _, ok := iconDict[v]; ok {
@@ -267,7 +267,7 @@ func getFontWidthAndHeight(text string, fontSize int, fontBytes []byte) (int, in
 }
 
 func loadImage(filePath string) (image.Image, error) {
-	fileData, err := os.ReadFile(filePath)
+	fileData, err := os.ReadFile(filePath) //nolint:gosec // 调用方只传入 bgPaths 内置素材清单或 iconDict 图标名，且均已前置 util.RootPath()，不含外部输入
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 	if strings.Contains(c.config.Mode, "text") {
 		runes := []rune(c.config.ZhSet)
 		for i := 0; i < length; i++ {
-			randomIndex := rand.Intn(len(runes))
+			randomIndex := random.SecureIntn(len(runes))
 			arr = append(arr, string(runes[randomIndex]))
 			runes = append(runes[:randomIndex], runes[randomIndex+1:]...)
 		}
@@ -393,13 +393,13 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 			icons = append(icons, key)
 		}
 		for i := 0; i < length; i++ {
-			randomIndex := rand.Intn(len(icons))
+			randomIndex := random.SecureIntn(len(icons))
 			arr = append(arr, string(icons[randomIndex]))
 			icons = append(icons[:randomIndex], icons[randomIndex+1:]...)
 		}
 	}
 	for i := len(arr) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
+		j := random.SecureIntn(i + 1)
 		arr[i], arr[j] = arr[j], arr[i]
 	}
 	return arr[:length]
@@ -407,8 +407,8 @@ func (c *ClickCaptcha) randPoints(length int) []string {
 
 // 随机生成位置布局
 func (c *ClickCaptcha) RandPosition(poinArr []*Point, imgW int, imgH int, w int, h int, isIcon bool) (x, y int) {
-	x = rand.Intn(imgW - w)
-	y = rand.Intn(imgH-2*h) + h
+	x = random.SecureIntn(imgW - w)
+	y = random.SecureIntn(imgH-2*h) + h
 
 	if !c.CheckPosition(poinArr, x, y, w, h, isIcon) {
 		x, y = c.RandPosition(poinArr, imgW, imgH, w, h, isIcon)

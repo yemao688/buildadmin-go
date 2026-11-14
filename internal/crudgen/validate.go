@@ -151,7 +151,7 @@ type fieldValidationMetadata struct {
 }
 
 func loadSpecValidationMetadata(path string) (specValidationMetadata, error) {
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec // 同一 spec 路径，由 crud:validate 的 CLI 参数提供
 	if err != nil {
 		return specValidationMetadata{}, fmt.Errorf("read spec %q: %w", path, err)
 	}

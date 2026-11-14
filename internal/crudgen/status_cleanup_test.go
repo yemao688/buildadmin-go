@@ -76,12 +76,12 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 	stop := "internal/admin/handler"
 	pkgDir := filepath.Join(util.RootPath(), stop, "prune_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(pkgDir) })
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+	if err := os.MkdirAll(pkgDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	scaffold := "package prune_scaffold_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet()\n"
 	provider := filepath.Join(pkgDir, "provider.go")
-	if err := os.WriteFile(provider, []byte(scaffold), 0644); err != nil {
+	if err := os.WriteFile(provider, []byte(scaffold), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	pruneEmptyProviderScaffold(filepath.Join(stop, "prune_scaffold_test"), stop)
@@ -93,11 +93,11 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 	}
 
 	// 仍有条目的 provider 必须保留，目录也不删
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+	if err := os.MkdirAll(pkgDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	nonEmpty := "package prune_scaffold_test\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet(\n\tNewKeepHandler,\n)\n"
-	if err := os.WriteFile(provider, []byte(nonEmpty), 0644); err != nil {
+	if err := os.WriteFile(provider, []byte(nonEmpty), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	pruneEmptyProviderScaffold(filepath.Join(stop, "prune_scaffold_test"), stop)
@@ -107,12 +107,12 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 
 	// 根包自身不参与清理
 	rootProvider := filepath.Join(util.RootPath(), "internal", "admin", "repository", "provider.go")
-	before, err := os.ReadFile(rootProvider)
+	before, err := os.ReadFile(rootProvider) //nolint:gosec // rootProvider 为 util.RootPath 下的固定仓库文件
 	if err != nil {
 		t.Fatal(err)
 	}
 	pruneEmptyProviderScaffold("internal/admin/repository", "internal/admin/repository")
-	after, err := os.ReadFile(rootProvider)
+	after, err := os.ReadFile(rootProvider) //nolint:gosec // rootProvider 为 util.RootPath 下的固定仓库文件
 	if err != nil || string(after) != string(before) {
 		t.Fatal("root provider.go must not be touched")
 	}
@@ -121,7 +121,7 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 func TestPruneEmptyDirsUpTo(t *testing.T) {
 	stop := t.TempDir()
 	nested := filepath.Join(stop, "a", "b", "c")
-	if err := os.MkdirAll(nested, 0755); err != nil {
+	if err := os.MkdirAll(nested, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	pruneEmptyDirsUpTo(nested, stop)
@@ -134,10 +134,10 @@ func TestPruneEmptyDirsUpTo(t *testing.T) {
 
 	// 链上有内容时停在该层
 	withFile := filepath.Join(stop, "x", "y")
-	if err := os.MkdirAll(withFile, 0755); err != nil {
+	if err := os.MkdirAll(withFile, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stop, "x", "keep.txt"), []byte("1"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(stop, "x", "keep.txt"), []byte("1"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	pruneEmptyDirsUpTo(withFile, stop)
@@ -168,13 +168,13 @@ func TestPruneFrontendEmptyDirs(t *testing.T) {
 	})
 	// 残留场景：模块目录已建但文件被清（生成失败回滚后的形态），全是空目录
 	for _, dir := range []string{viewsModule, langENModule, langZhModule} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// en 下与 account 平级的另一模块文件：共享父目录必须保留
 	sibling := filepath.Join(langENModule, "Orders.ts")
-	if err := os.WriteFile(sibling, []byte("export default {}\n"), 0644); err != nil {
+	if err := os.WriteFile(sibling, []byte("export default {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -239,10 +239,10 @@ func TestRollbackPrunesEmptyFrontendDirs(t *testing.T) {
 	defer func() { _ = snapshot.Cleanup() }()
 	// 模拟生成写入：MkdirAll + 写文件
 	for _, p := range []string{langEN, langZh, viewIndex} {
-		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(p, []byte("generated"), 0644); err != nil {
+		if err := os.WriteFile(p, []byte("generated"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

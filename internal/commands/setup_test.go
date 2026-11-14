@@ -146,10 +146,10 @@ func TestFrontendChoiceBranches(t *testing.T) {
 
 func TestSetupRunnerFrontendBranches(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	builds := 0
@@ -207,19 +207,19 @@ func TestSetupRunnerRejectsCompletedInstallation(t *testing.T) {
 func TestSetupRunnerExistingConfigSkipsRewriteAndCompletes(t *testing.T) {
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
-	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(configPath, []byte("mysql:\n  host: 127.0.0.1\n  port: 3306\n  database: existing\n  username: root\n  password: secret\n  prefix: ba_\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -357,7 +357,7 @@ func TestValidateSetupEnv(t *testing.T) {
 func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
-	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	// 模拟安装器已写入的稀疏覆盖层（仅 mysql 段）。
@@ -368,7 +368,7 @@ func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
 	if err := writeSetupAppEnv(configPath, "release"); err != nil {
 		t.Fatalf("writeSetupAppEnv() error = %v", err)
 	}
-	content, err := os.ReadFile(configPath)
+	content, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,16 +384,16 @@ func TestWriteSetupAppEnvAppendsEnvToSparseConfig(t *testing.T) {
 func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 	root := t.TempDir()
 	configPath := filepath.Join(root, "configs", "config.yaml")
-	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "configs"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "configs", conf.DefaultsFileName), []byte("mysql: {}\nterminal: {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -439,7 +439,7 @@ func TestSetupRunnerFreshInstallWritesAppEnv(t *testing.T) {
 		t.Fatalf("completion output = %q", output.String())
 	}
 
-	content, err := os.ReadFile(configPath)
+	content, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,10 +569,10 @@ func TestBuildSetupFrontendGuidesManualBuildWhenNodeMissing(t *testing.T) {
 
 func TestBuildSetupFrontendDegradesToSkipWhenArtifactExists(t *testing.T) {
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "public"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "public", "index.html"), []byte("ok"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", root)

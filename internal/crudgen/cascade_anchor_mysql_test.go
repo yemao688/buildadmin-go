@@ -15,7 +15,7 @@ func writeTestSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 		"fields:\n" +
 		"  - name: id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n" +
 		"  - name: admin_id\n    type: int\n    unsigned: true\n    null: false\n    comment: 管理员ID\n"
-	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -51,14 +51,14 @@ func TestValidateInheritParent(t *testing.T) {
 
 	// repo 文件存在但无锚点块（如未带 CascadeOwners() 的裸 package）→ 拒绝
 	repoDir := filepath.Join(repoRootOverride, "internal", "admin", "repository")
-	require.NoError(t, os.MkdirAll(repoDir, 0755))
-	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte("package repository\n"), 0644))
+	require.NoError(t, os.MkdirAll(repoDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte("package repository\n"), 0o600))
 	err = validateInheritParent(specsDir, "seller_user")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no cascade anchor block")
 
 	// repo 文件含锚点块 → 通过
-	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte(anchorFixture("SellerUser")), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(repoDir, "seller_user.go"), []byte(anchorFixture("SellerUser")), 0o600))
 	err = validateInheritParent(specsDir, "seller_user")
 	require.NoError(t, err)
 
@@ -74,7 +74,7 @@ func TestValidateInheritParent(t *testing.T) {
 		"fields:\n" +
 		"  - name: user_id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n" +
 		"  - name: admin_id\n    type: int\n    unsigned: true\n    null: false\n    comment: 管理员ID\n"
-	if err := os.WriteFile(filepath.Join(specsDir, "seller_user.yaml"), []byte(nonIDSpec), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(specsDir, "seller_user.yaml"), []byte(nonIDSpec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	err = validateInheritParent(specsDir, "seller_user")
@@ -113,7 +113,7 @@ func TestFindInheritReferrers(t *testing.T) {
 	require.Equal(t, []string{"seller_user_child_a", "seller_user_child_b"}, referrers)
 
 	// 非法 spec（缺失字段）→ 报错（fail-closed）
-	if err := os.WriteFile(filepath.Join(specsDir, "broken.yaml"), []byte("name: broken\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(specsDir, "broken.yaml"), []byte("name: broken\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err = findInheritReferrers(specsDir, "seller_user")

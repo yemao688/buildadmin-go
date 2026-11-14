@@ -25,8 +25,8 @@ func newDocsTestEngine(t *testing.T, enabled bool, password string) (*gin.Engine
 
 	rootDir := t.TempDir()
 	docsDir := filepath.Join(rootDir, "public", "docs")
-	require.NoError(t, os.MkdirAll(docsDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(docsDir, "guide.html"), []byte("<h1>guide</h1>"), 0o644))
+	require.NoError(t, os.MkdirAll(docsDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(docsDir, "guide.html"), []byte("<h1>guide</h1>"), 0o600))
 
 	engine := gin.New()
 	config := &conf.Configuration{App: conf.App{DocsEnabled: enabled, DocsPassword: password}}
@@ -75,7 +75,7 @@ func TestDocsRoutePublic(t *testing.T) {
 	require.NotContains(t, recorder.Body.String(), "guide.html")
 
 	// 目录含 index.html：正常渲染入口页（预写 404 被 FileServer 覆盖）
-	require.NoError(t, os.WriteFile(filepath.Join(docsDir, "index.html"), []byte("<h1>docs index</h1>"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(docsDir, "index.html"), []byte("<h1>docs index</h1>"), 0o600))
 	recorder = serve(t, engine, http.MethodGet, "/docs/", nil)
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, "<h1>docs index</h1>", recorder.Body.String())
@@ -132,14 +132,14 @@ func TestDocsRouteGated(t *testing.T) {
 	})
 
 	t.Run("带有效 cookie 正常出文件", func(t *testing.T) {
-		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)}
+		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
 		recorder := serve(t, engine, http.MethodGet, "/docs/guide.html", cookie)
 		require.Equal(t, http.StatusOK, recorder.Code)
 		require.Equal(t, "<h1>guide</h1>", recorder.Body.String())
 	})
 
 	t.Run("带有效 cookie 目录请求 404 不展示列表", func(t *testing.T) {
-		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)}
+		cookie := &http.Cookie{Name: docsCookieName, Value: docsCookieValue(password)} //nolint:gosec // 测试客户端自造的进站请求 cookie，用于验证服务端校验，不是生产会话 cookie
 		recorder := serve(t, engine, http.MethodGet, "/docs/", cookie)
 		require.Equal(t, http.StatusNotFound, recorder.Code)
 		require.NotContains(t, recorder.Body.String(), "guide.html")

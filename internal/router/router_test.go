@@ -91,8 +91,8 @@ func TestRootRouteServesIndex(t *testing.T) {
 
 	rootDir := t.TempDir()
 	publicDir := filepath.Join(rootDir, "public")
-	require.NoError(t, os.MkdirAll(publicDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o644))
+	require.NoError(t, os.MkdirAll(publicDir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o600))
 
 	engine := gin.New()
 	registerRootRoute(engine, rootDir)
@@ -116,9 +116,9 @@ func TestStaticAssetsCacheHeaders(t *testing.T) {
 
 	rootDir := t.TempDir()
 	publicDir := filepath.Join(rootDir, "public")
-	require.NoError(t, os.MkdirAll(filepath.Join(publicDir, "assets"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "assets", "app-hash.js"), []byte(assetContent), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(publicDir, "assets"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "assets", "app-hash.js"), []byte(assetContent), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(publicDir, "index.html"), []byte(indexContent), 0o600))
 
 	engine := gin.New()
 	// 与 router.go 相同的 group+中间件+Static 组合（/storage 未注册，保持测试最小）

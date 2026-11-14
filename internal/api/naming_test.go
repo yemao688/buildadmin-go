@@ -162,7 +162,7 @@ func TestAPINamingRules(t *testing.T) {
 func TestAPINamingDetectsViolations(t *testing.T) {
 	root := t.TempDir()
 	for _, rule := range apiNamingRules {
-		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o750); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -200,7 +200,7 @@ func TestAPINamingDetectsViolations(t *testing.T) {
 	}
 	for _, sample := range samples {
 		path := filepath.Join(root, sample.file)
-		if err := os.WriteFile(path, []byte(sample.source), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(sample.source), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

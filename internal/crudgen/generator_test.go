@@ -52,7 +52,7 @@ func TestNormalizeGenerationType(t *testing.T) {
 // 模板自身只负责装配 TableOptions。
 func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
-	content, err := os.ReadFile(tablePath)
+	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {
 // TableHandler；生成模板不得再出现 copier 调用。
 func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
 	tablePath := filepath.Join(util.RootPath(), "internal", "admin", "handler", "table.go")
-	content, err := os.ReadFile(tablePath)
+	content, err := os.ReadFile(tablePath) //nolint:gosec // filepath.Join(util.RootPath) 下的固定仓库模板文件
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,14 +188,14 @@ func TestManifestAllowsOnlyLatestSuccessfulTargets(t *testing.T) {
 	if !manifestAllows(manifest, nil, nil) {
 		t.Fatal("first generation without a success manifest should be allowed")
 	}
-	if err := os.WriteFile(path, []byte("package model"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("package model"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if manifestAllows(manifest, nil, nil) {
 		t.Fatal("first generation must reject an existing target")
 	}
 	handlerPath := path + ".handler"
-	if err := os.WriteFile(handlerPath, []byte("package handler"), 0644); err != nil {
+	if err := os.WriteFile(handlerPath, []byte("package handler"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if manifestAllows(FileManifest{Generated: []string{path, handlerPath}}, nil, nil) {
@@ -354,7 +354,7 @@ func TestCanonicalManifestLangPath(t *testing.T) {
 
 func TestCompileFailureRestoresSnapshot(t *testing.T) {
 	path := t.TempDir() + "/generated.go"
-	if err := os.WriteFile(path, []byte("original"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("original"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err := NewFileSnapshot([]string{path})
@@ -362,13 +362,13 @@ func TestCompileFailureRestoresSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer snapshot.Cleanup()
-	if err := os.WriteFile(path, []byte("broken"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := buildAndRestoreOnFailure(snapshot, func() error { return errors.New("compile failed") }); err == nil {
 		t.Fatal("compile failure should be returned")
 	}
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec // path 为测试内 t.TempDir 下的快照夹具
 	if err != nil || string(content) != "original" {
 		t.Fatalf("snapshot was not restored: %q, %v", content, err)
 	}
@@ -414,10 +414,10 @@ func TestParseDeleteGoFilesReportsPathAndLine(t *testing.T) {
 	dir := t.TempDir()
 	valid := filepath.Join(dir, "provider.go")
 	invalid := filepath.Join(dir, "registrar_set.go")
-	if err := os.WriteFile(valid, []byte("package provider\n\nvar ProviderSet = struct{}{}\n"), 0644); err != nil {
+	if err := os.WriteFile(valid, []byte("package provider\n\nvar ProviderSet = struct{}{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(invalid, []byte("package router\n\nvar ProviderSet = []int{\n\t1,\n"), 0644); err != nil {
+	if err := os.WriteFile(invalid, []byte("package router\n\nvar ProviderSet = []int{\n\t1,\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	err := parseDeleteGoFiles(valid, invalid)

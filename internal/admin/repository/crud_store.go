@@ -132,7 +132,7 @@ func (s *CRUDStore) SortWeighScoped(ctx *gin.Context, moveID, targetID, directio
 			Find(&weighRows).Error; err != nil {
 			return err
 		}
-		weighRowsCount := int32(len(weighRows))
+		weighRowsCount := int32(len(weighRows)) //nolint:gosec // 同一 weigh 值的行数受数据规模与排序去重约束，远小于 int32 上界（2^31-1）
 
 		shift := gorm.Expr("weigh + ?", weighRowsCount)
 		if updateMethod == "dec" {
