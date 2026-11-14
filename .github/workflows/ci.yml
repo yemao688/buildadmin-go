@@ -60,7 +60,7 @@ jobs:
             exit 1
           fi
 
-      # .golangci.yml 分档启用（档 A+B 全绿，档 C 列在文件末尾注释）；新增检查前先本地跑看命中数。
+      # .golangci.yml 分档启用（档 A/B/C 全绿）；新增检查前先本地跑看命中数。
       - uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15.0

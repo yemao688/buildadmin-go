@@ -1,13 +1,14 @@
 # golangci-lint v2 配置（对应 golangci-lint v2.15.x + golangci-lint-action@v9）。
 #
-# 分档策略：门禁只跑"当前代码已全部通过"的档 A+B，档 C 的条目连同理据列在
-# 文件末尾注释里，需要专项战役时才逐条打开——不要把存量问题直接塞进流水线，
-# 否则这张红牌没人会看。
+# 分档策略：档 A/B/C 全部纳入门禁并保持全绿；新增 linter 前必须先清空存量
+# 命中，不要把红牌塞进流水线。
 #
 # 档 A（正确性底座，0 条）：govet / ineffassign / unused / staticcheck 的 S 类。
 # 档 B（已清空，曾 199 条）：errcheck（默认设置）/ errorlint / nilerr /
 #   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
-# 档 C 采用逐批开启：每批把 linter 挪进 enable 并清空命中；第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic（仅 diagnostic）、第 4 批 revive（排除 exported / var-naming）。
+# 档 C（已全部清空）：第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic（仅
+#   diagnostic）、第 4 批 revive（排除 exported / var-naming）、第 5 批
+#   paralleltest（全局状态测试逐条立据）、第 6 批 gocyclo（min-complexity 15）。
 
 version: "2"
 
@@ -46,6 +47,12 @@ linters:
 
     # --- 档 C（逐批开启）：第 4 批 revive（排除 exported / var-naming）---
     - revive
+
+    # --- 档 C：第 5 批 paralleltest ---
+    - paralleltest
+
+    # --- 档 C：第 6 批 gocyclo（min-complexity 15）---
+    - gocyclo
 
   settings:
     # staticcheck：保留 S/SA 类正确性检查，关掉 ST1*/QF1* 纯风格重构建议
@@ -94,6 +101,10 @@ linters:
         - name: unreachable-code
         - name: redefines-builtin-id
 
+    # gocyclo：阈值固定 15；超阈值函数应拆分，不要提高阈值或大范围 nolint。
+    gocyclo:
+      min-complexity: 15
+
     misspell:
       # 统一美式拼写，避免不同人写出两套。
       locale: US
@@ -113,14 +124,3 @@ linters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-
-# ---------------------------------------------------------------------------
-# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 1152 条）
-#
-#   - paralleltest   1078 条：本仓库测试依赖全局状态（cobra OnInitialize、
-#                    configPath 全局变量），机械加 t.Parallel() 会把隐藏竞态
-#                    变成真竞态，属风险改造而非风格清理。
-#   - gocyclo          74 条（min-complexity 15）：集中在大函数形态的生成器，
-#                    拆函数会破坏"模板形状"约束。
-# 合计暂缓 1152 条。
-# ---------------------------------------------------------------------------
