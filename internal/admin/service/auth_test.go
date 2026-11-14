@@ -208,7 +208,7 @@ type failingAccessTokenDriver struct {
 	refreshSet bool
 }
 
-func (d *failingAccessTokenDriver) Set(tokenStr, typ string, userID int32, expire int64) error {
+func (d *failingAccessTokenDriver) Set(_, typ string, _ int32, _ int64) error {
 	if typ == "admin-refresh" {
 		d.refreshSet = true
 		return nil

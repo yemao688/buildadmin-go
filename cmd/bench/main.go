@@ -52,7 +52,7 @@ func main() {
 	}
 
 	// 解析 header 列表："batoken: x, think-lang: zh-cn"
-	var hdr http.Header = make(http.Header)
+	var hdr = make(http.Header)
 	for _, part := range strings.Split(*headers, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {

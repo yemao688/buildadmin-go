@@ -1,3 +1,4 @@
+// Package persistence 提供全仓唯一的 BaseModel 与时间戳约定。
 package persistence
 
 import (

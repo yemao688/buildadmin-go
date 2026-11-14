@@ -78,7 +78,7 @@ func TestTranslateMultiNoTargetLanguages(t *testing.T) {
 
 func TestTranslateMultiFallsBackOnMissingConfig(t *testing.T) {
 	// config 缺 translate 段时客户端仍可用（走代码兜底），且能正常请求。
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"code":1,"data":[{"lan_to":"en","text_to":"ok"}]}`))
 	}))
 	t.Cleanup(srv.Close)

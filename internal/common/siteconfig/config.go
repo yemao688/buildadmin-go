@@ -1,3 +1,4 @@
+// Package siteconfig 读取并缓存后台站点配置，按字段类型做值转换。
 package siteconfig
 
 import (
@@ -39,9 +40,8 @@ func (s *Config) SetValueAttr(value any, t string) string {
 	} else if t == "switch" {
 		if v, ok := value.(bool); ok && v {
 			return "1"
-		} else {
-			return "0"
 		}
+		return "0"
 	} else if t == "time" {
 		text, ok := value.(string)
 		if !ok {
@@ -79,11 +79,7 @@ func (s *Config) GetValueAttr() any {
 		}
 		return resultArr
 	} else if s.Type == "switch" {
-		if s.Value == "0" {
-			return false
-		} else {
-			return true
-		}
+		return s.Value != "0"
 	} else if s.Type == "editor" {
 		return s.Value
 	} else if s.Type == "city" || s.Type == "remoteSelects" {

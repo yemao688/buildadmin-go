@@ -1,3 +1,4 @@
+// Package dto 存放后台渠道的请求参数（一表一个 XxxParam，Add/Edit 复用），只做绑定与校验声明。
 package dto
 
 import "buildadmin-go/internal/pkg/validator"

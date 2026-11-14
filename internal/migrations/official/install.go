@@ -1,3 +1,4 @@
+// Package official 保存 PHP 上游迁移与官方安装 seed，其身份不可改写。
 package official
 
 import (

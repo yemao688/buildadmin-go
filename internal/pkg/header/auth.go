@@ -1,3 +1,4 @@
+// Package header 解析请求头中的鉴权与语言信息。
 package header
 
 import (

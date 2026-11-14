@@ -1,3 +1,4 @@
+// Package model 存放共享实体记录：gorm tag 是唯一 schema 映射，同时驱动全新安装 AutoMigrate。
 package model
 
 // Admin 管理员表

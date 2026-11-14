@@ -285,7 +285,7 @@ type RegistrarData struct {
 	RoutePath string
 }
 
-const registrarTemp = `// 由 CRUD 生成器模式维护，自定义额外接口请新增独立 registrar 文件。
+const registrarTemp = `// Package {{.Namespace}} 提供 CRUD 生成器产出的模块路由注册器；自定义额外接口请新增独立 registrar 文件。
 package {{.Namespace}}
 
 import handler "buildadmin-go/internal/admin/handler"

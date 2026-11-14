@@ -1,3 +1,4 @@
+// Package repository 是后台渠道唯一的 GORM 入口：scoped 读、单表原子写与事务原语，业务编排留在 service。
 package repository
 
 import (
@@ -66,7 +67,7 @@ func (s *AdminRepository) DealData(ctx context.Context, data *model.Admin) error
 // 与 loadParentSummaries 同构：收集全部行的 uid → 一次 WHERE uid IN 查询 →
 // 按 uid 回填。逐行填充顺序沿用查询返回顺序（与逐行查询同一访问路径的
 // 返回顺序一致），缺失组的行保持空数组，与逐行 DealData 输出一致。
-func (s *AdminRepository) loadGroupSummaries(ctx context.Context, db *gorm.DB, admins []*model.Admin) error {
+func (s *AdminRepository) loadGroupSummaries(_ context.Context, db *gorm.DB, admins []*model.Admin) error {
 	ids := make([]int32, 0, len(admins))
 	seen := make(map[int32]struct{}, len(admins))
 	for _, admin := range admins {
@@ -225,7 +226,7 @@ func (s *AdminRepository) listScoped(ctx *gin.Context, whereS string, whereP []i
 	return list, nil
 }
 
-func (s *AdminRepository) loadParentSummaries(ctx context.Context, db *gorm.DB, scope func(*gorm.DB) *gorm.DB, admins []*model.Admin) error {
+func (s *AdminRepository) loadParentSummaries(_ context.Context, db *gorm.DB, scope func(*gorm.DB) *gorm.DB, admins []*model.Admin) error {
 	ids := make([]int32, 0, len(admins))
 	seen := make(map[int32]struct{}, len(admins))
 	for _, admin := range admins {

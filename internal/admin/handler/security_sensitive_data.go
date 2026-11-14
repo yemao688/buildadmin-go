@@ -158,7 +158,7 @@ func (h *SensitiveDataHandler) Del(ctx *gin.Context) {
 	response.Success(ctx, "")
 }
 
-func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
+func (h *SensitiveDataHandler) getRouteList(_ *gin.Context) any {
 	return adminRouteList([]string{
 		"addon",
 		"ajax",
@@ -173,7 +173,7 @@ func (h *SensitiveDataHandler) getRouteList(ctx *gin.Context) any {
 	})
 }
 
-func (h *SensitiveDataHandler) getTableList(ctx *gin.Context) map[string]string {
+func (h *SensitiveDataHandler) getTableList(_ *gin.Context) map[string]string {
 	return adminDataTableList(h.tableM.GetTableList(), h.config.Database.Prefix, []string{
 		"area",
 		"token",

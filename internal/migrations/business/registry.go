@@ -1,3 +1,4 @@
+// Package business 是业务仓库扩展迁移轨道的注册与执行入口。
 package business
 
 import (

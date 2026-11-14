@@ -1,3 +1,4 @@
+// Package main 是 buildadmin-go 的服务入口：装配 Cobra 命令与 Wire 依赖图，默认执行 server 子命令。
 package main
 
 import (

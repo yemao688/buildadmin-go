@@ -11,9 +11,8 @@ var SysTimeLocation, _ = time.LoadLocation("Asia/Shanghai")
 func FormatFromUnixTime(t int64) string {
 	if t > 0 {
 		return time.Unix(t, 0).In(SysTimeLocation).Format(SysTimeform)
-	} else {
-		return time.Now().In(SysTimeLocation).Format(SysTimeform)
 	}
+	return time.Now().In(SysTimeLocation).Format(SysTimeform)
 }
 
 // 将字符串转成时间

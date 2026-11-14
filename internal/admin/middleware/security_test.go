@@ -65,7 +65,7 @@ func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 	})
 
 	r := gin.New()
-	r.POST("/admin/auth.Admin/edit", func(c *gin.Context) {})
+	r.POST("/admin/auth.Admin/edit", func(_ *gin.Context) {})
 	req := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/edit", nil)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -81,7 +81,7 @@ func TestAtomicRouteCapabilityNormalizesRegisteredRoute(t *testing.T) {
 func TestAtomicRouteCapabilityRejectsUnregisteredRoute(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/admin/unknown.Action/run", func(c *gin.Context) {})
+	r.POST("/admin/unknown.Action/run", func(_ *gin.Context) {})
 	req := httptest.NewRequest(http.MethodPost, "/admin/unknown.Action/run", nil)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -194,7 +194,7 @@ func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
 	})
 
 	t.Run("缺少暂存响应输出事务失败", func(t *testing.T) {
-		router := newTransactionShellRouter(t, func(c *gin.Context) {})
+		router := newTransactionShellRouter(t, func(_ *gin.Context) {})
 		status, body := serveTransactionShell(t, router)
 		if status != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", status, http.StatusInternalServerError)

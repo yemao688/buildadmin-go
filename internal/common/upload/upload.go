@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"html"
 	"image"
+	// 注册 gif/jpeg/png 解码器，供上传图片的尺寸与格式探测使用。
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -218,7 +219,7 @@ func (s *UploadHelper) getSaveName(params UploadParams, sha1 string) string {
 // Upload 处理一次上传：校验大小/类型、按 sha1 去重、落盘或写入 OSS 并返回附件记录。
 // ctx 保留为请求作用域扩展点，上传流程本身不读取传输层元数据：资源前缀由
 // baseURL 提供，大小超限文案由 lang 翻译，两者均由调用方从请求上下文取得。
-func (s *UploadHelper) Upload(ctx context.Context, params UploadParams, adminId int32, userId int32, baseURL string, lang func(string) string) (any, error) {
+func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId int32, userId int32, baseURL string, lang func(string) string) (any, error) {
 	if err := s.checkSize(lang, params.File); err != nil {
 		return nil, err
 	}

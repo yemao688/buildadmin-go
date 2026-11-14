@@ -25,7 +25,7 @@ func NewCrudService(tableM *repository.TableRepository, crudLogM *repository.Cru
 
 // Generate 执行 CRUD 代码与表结构生成。register/unregister 由调用方注入
 // 原子路由钩子，service 不依赖 gin 与全局中间件。
-func (s *CrudService) Generate(ctx context.Context, actor data_scope.Actor, p dto.CrudGenerateParam, register, unregister func(method, route string)) error {
+func (s *CrudService) Generate(_ context.Context, actor data_scope.Actor, p dto.CrudGenerateParam, register, unregister func(method, route string)) error {
 	if err := requireCrudRootActor(actor); err != nil {
 		return err
 	}

@@ -1,3 +1,4 @@
+// Package service 编排门户渠道的会员认证与对外字段投影。
 package service
 
 import (

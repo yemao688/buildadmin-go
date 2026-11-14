@@ -1,5 +1,5 @@
-// 业务定制 registrar：country.Language 模块的通用翻译工具接口
-// （getMultTranslations）。主文件 country_language.go 由 CRUD 生成器模式
+// Package router 注册 country.Language 模块的通用翻译工具接口（getMultTranslations）。
+// 该业务定制 registrar 与主文件 country_language.go 分离：主文件由 CRUD 生成器模式
 // 维护，不得写入自定义路由（形状守卫 TestRegistrarTemplateMatches
 // CountryLanguageShape 会因偏离模板而变红）；自定义额外接口统一放独立
 // registrar 文件，生成器重新生成主文件时本文件不受影响。

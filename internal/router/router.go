@@ -1,3 +1,4 @@
+// Package router 是路由 bootstrap：创建引擎、挂载全局中间件与静态资源、装配 admin/api 两渠道注册器。
 package router
 
 import (
@@ -159,7 +160,7 @@ func registerPprofRoutes(router *gin.Engine) {
 // 解析结果在首次调用时写入 gin context（i18n.SetLangToContext），同一请求内
 // 后续翻译调用（ginI18n 每次 getMessage 都会回调本函数）直接读缓存，不再
 // 重复解析或查库。同一请求内语言不会中途变化，缓存后行为与首次解析一致。
-func resolveRequestLang(c *gin.Context, defaultLng string, portalDefaultLang func(ctx context.Context) (string, error)) string {
+func resolveRequestLang(c *gin.Context, _ string, portalDefaultLang func(ctx context.Context) (string, error)) string {
 	if lang, ok := i18n.LangFromContext(c); ok {
 		return lang
 	}

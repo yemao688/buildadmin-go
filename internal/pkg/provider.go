@@ -1,3 +1,4 @@
+// Package pkg 汇聚技术基建包的 Wire ProviderSet，供上层依赖图统一注入。
 package pkg
 
 import (

@@ -1,3 +1,4 @@
+// Package installer 实现 CLI setup 的安装流程（写配置、跑迁移、建管理员、落 install.lock）。
 package installer
 
 import (

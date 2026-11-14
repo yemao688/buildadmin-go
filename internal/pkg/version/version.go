@@ -1,3 +1,4 @@
+// Package version 声明框架版本与 PHP 上游兼容版本。
 package version
 
 import (

@@ -32,7 +32,7 @@ func NewSecuritySensitiveDataRepository(sqlDB *gorm.DB, config *conf.Configurati
 	}
 }
 
-func (s *SecuritySensitiveDataRepository) DealData(ctx context.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
+func (s *SecuritySensitiveDataRepository) DealData(_ context.Context, data *model.SecuritySensitiveData) (*OutSensitiveData, error) {
 	outSensitiveData := OutSensitiveData{}
 	if err := copier.Copy(&outSensitiveData, data); err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func (s *SecuritySensitiveDataRepository) List(ctx *gin.Context) ([]*OutSensitiv
 	if err != nil {
 		return nil, 0, err
 	}
-	var total int64 = 0
+	var total int64
 	list := []*model.SecuritySensitiveData{}
 
 	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，

@@ -1,3 +1,4 @@
+// Package migrations 编排三轨迁移（official/framework/business）的执行顺序与状态台账。
 package migrations
 
 import (

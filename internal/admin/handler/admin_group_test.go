@@ -127,7 +127,7 @@ func TestAdminGroupQuickEditRejectsSelfGroup(t *testing.T) {
 // newGroupListFixture seeds a super-admin group (rules="*"), an operator
 // group (rules="1,2"), and a strict-subset group (rules="1"); uid 5 belongs
 // to the operator group and owns rules 1,2.
-func newGroupListFixture(t *testing.T, h *AdminGroupHandler, db *gorm.DB) {
+func newGroupListFixture(t *testing.T, _ *AdminGroupHandler, db *gorm.DB) {
 	t.Helper()
 	for _, id := range []int32{1, 2} {
 		rule := model.AdminRule{ID: id, Type: "button", Title: "rule-" + strconv.Itoa(int(id)), Name: "rule-" + strconv.Itoa(int(id)), Status: "1"}

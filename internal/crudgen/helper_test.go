@@ -146,7 +146,7 @@ func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
 	}
 	field = analyseField(field)
 	field = prepareGeneratedColumnField(field)
-	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, _ bool) string { return "ba_" + name })
 	modelData := ModelData{ClassName: "Orders"}
 	indexData := IndexVueData{}
 	dictEn, dictZh := map[string]string{}, map[string]string{}
@@ -437,7 +437,7 @@ func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
 
 func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
 	field := crudmodel.Field{Name: "owner_id", DesignType: "remoteSelect", Form: crudmodel.FormAttr{RemoteTable: "owner", RemotePk: "uuid", RemoteField: "name", RemoteUrl: "/admin/owner/options"}}
-	metadata := buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	metadata := buildRemoteSearchMetadata(field, func(name string, _ bool) string { return "ba_" + name })
 	column := getTableColumn(crudmodel.Field{Name: field.Name, Table: crudmodel.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
 	if !strings.Contains(column, `comSearchRender: "remoteSelect"`) || !strings.Contains(column, "remote: {") || strings.Count(column, "comSearchRender:") != 1 {
 		t.Fatalf("remote search column metadata incomplete or duplicated: %s", column)
@@ -534,7 +534,7 @@ func TestRemoteSelectRelationColumnUsesNestedPropWithoutSearchOperator(t *testin
 	require.Contains(t, strings.Join(indexData.TableColumn, "\n"), `operator: false`)
 
 	field.Table.ComSearchRender = "remoteSelect"
-	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, _ bool) string { return "ba_" + name })
 	fkColumn := getTableColumn(field, nil, "", "", "")
 	require.Contains(t, fkColumn, `prop: "user_id"`)
 	require.Contains(t, fkColumn, `comSearchRender: "remoteSelect"`)
@@ -635,7 +635,7 @@ fields:
 	field := opts.Fields[1]
 	field = prepareGeneratedColumnField(field)
 	field.Table.ComSearchRender = "remoteSelect"
-	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, full bool) string { return "ba_" + name })
+	field.Table.Remote = buildRemoteSearchMetadata(field, func(name string, _ bool) string { return "ba_" + name })
 	fkColumn := getTableColumn(field, nil, "", "", "")
 	require.Contains(t, fkColumn, `prop: "user_id"`)
 	require.Contains(t, fkColumn, `show: false`)
@@ -657,7 +657,7 @@ fields:
 	multi.Form.RemoteTable = "admin"
 	multi.Table.ComSearchRender = "remoteSelect"
 	multi = prepareGeneratedColumnField(multi)
-	multi.Table.Remote = buildRemoteSearchMetadata(multi, func(name string, full bool) string { return "ba_" + name })
+	multi.Table.Remote = buildRemoteSearchMetadata(multi, func(name string, _ bool) string { return "ba_" + name })
 	multiColumn := getTableColumn(multi, nil, "", "", "")
 	require.Contains(t, multiColumn, `show: false`)
 	require.Contains(t, multiColumn, `comSearchRender: "remoteSelect"`)

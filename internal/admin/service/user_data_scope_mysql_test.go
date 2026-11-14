@@ -108,7 +108,7 @@ func scopeActor(t *testing.T, ctx *gin.Context) data_scope.Actor {
 	return a
 }
 
-func (f *scopeFixture) addUser(t *testing.T, ctx *gin.Context, adminID int32, name string) model.User {
+func (f *scopeFixture) addUser(t *testing.T, _ *gin.Context, adminID int32, name string) model.User {
 	t.Helper()
 	u := model.User{AdminID: adminID, Username: name, Nickname: name, Password: "p", Status: "enable"}
 	require.NoError(t, f.db.Create(&u).Error)

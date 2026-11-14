@@ -1,3 +1,4 @@
+// Package middleware 存放真正的全局中间件（CORS、recovery、路由注册表、登录中止），不依赖业务渠道。
 package middleware
 
 import (

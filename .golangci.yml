@@ -7,7 +7,7 @@
 # 档 A（正确性底座，0 条）：govet / ineffassign / unused / staticcheck 的 S 类。
 # 档 B（已清空，曾 199 条）：errcheck（默认设置）/ errorlint / nilerr /
 #   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
-# 档 C 采用逐批开启：每批把 linter 挪进 enable 并清空命中；第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic（仅 diagnostic）。
+# 档 C 采用逐批开启：每批把 linter 挪进 enable 并清空命中；第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic（仅 diagnostic）、第 4 批 revive（排除 exported / var-naming）。
 
 version: "2"
 
@@ -44,6 +44,9 @@ linters:
     # --- 档 C（逐批开启）：第 3 批 gocritic（仅 diagnostic）---
     - gocritic
 
+    # --- 档 C（逐批开启）：第 4 批 revive（排除 exported / var-naming）---
+    - revive
+
   settings:
     # staticcheck：保留 S/SA 类正确性检查，关掉 ST1*/QF1* 纯风格重构建议
     # （QT 风格化、QF 快速修复在存量代码上是噪音），并豁免 SA1029
@@ -59,6 +62,37 @@ linters:
     # 习惯，收益低于 review 成本，留待单独评估。
     gocritic:
       disabled-tags: ["style", "performance"]
+
+    # revive：显式列出默认规则集并剔除 exported 与 var-naming。
+    # golangci-lint 一旦配置 rules 就替换 revive 默认集，所以要逐条列全。
+    # - exported 不为存量导出标识符补注释（AGENTS.md 口径），故排除。
+    # - var-naming 的命中含 PHP 上游继承命名（如 CdnUrlParams），同时是 Vue
+    #   前端 JSON 契约，改名即破坏 API，故排除。
+    # 新增规则前必须先清空存量，否则等于把红牌塞回流水线。
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+        - name: empty-block
+        - name: superfluous-else
+        - name: unused-parameter
+        - name: unreachable-code
+        - name: redefines-builtin-id
 
     misspell:
       # 统一美式拼写，避免不同人写出两套。
@@ -81,14 +115,12 @@ issues:
   max-same-issues: 0
 
 # ---------------------------------------------------------------------------
-# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 2313 条）
+# 档 C：暂缓（命中数为 2026-11 在本仓库实测，全部打开合计约 1152 条）
 #
-#   - revive         1161 条，其中 exported 887（AGENTS.md 明确不为存量补注释）、
-#                    var-naming 133（含 PHP 继承命名如 CdnUrlParams，同时是 Vue
-#                    前端的 JSON 契约，改名即破坏 API）。
 #   - paralleltest   1078 条：本仓库测试依赖全局状态（cobra OnInitialize、
 #                    configPath 全局变量），机械加 t.Parallel() 会把隐藏竞态
 #                    变成真竞态，属风险改造而非风格清理。
 #   - gocyclo          74 条（min-complexity 15）：集中在大函数形态的生成器，
 #                    拆函数会破坏"模板形状"约束。
+# 合计暂缓 1152 条。
 # ---------------------------------------------------------------------------

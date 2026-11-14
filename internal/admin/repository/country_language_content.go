@@ -116,11 +116,7 @@ func (s *CountryLanguageContentRepository) Add(ctx *gin.Context, countryLanguage
 	}
 
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
-
-		if err := tx.Table(s.TableName).Create(&countryLanguageContent).Error; err != nil {
-			return err
-		}
-		return nil
+		return tx.Table(s.TableName).Create(&countryLanguageContent).Error
 	})
 }
 

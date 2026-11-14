@@ -34,8 +34,8 @@ func (testDialector) BindVarTo(w clause.Writer, stmt *gorm.Statement, v interfac
 	_ = v
 	_ = w.WriteByte('?')
 }
-func (testDialector) QuoteTo(w clause.Writer, s string)              { _, _ = w.WriteString("`" + s + "`") }
-func (testDialector) Explain(sql string, vars ...interface{}) string { return sql }
+func (testDialector) QuoteTo(w clause.Writer, s string)           { _, _ = w.WriteString("`" + s + "`") }
+func (testDialector) Explain(sql string, _ ...interface{}) string { return sql }
 
 // openTestDB returns a GORM DB backed by the test-only dialector.
 func openTestDB(t *testing.T) *gorm.DB {

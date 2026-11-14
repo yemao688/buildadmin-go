@@ -1,3 +1,4 @@
+// Package token 负责令牌签发、校验与存储驱动实现。
 package token
 
 import (
@@ -37,7 +38,7 @@ type TokenHelper struct {
 	Driver
 }
 
-func NewTokenHelper(config *conf.Configuration, log *zap.Logger, sqlDB *gorm.DB, rdb *redis.Client) *TokenHelper {
+func NewTokenHelper(config *conf.Configuration, _ *zap.Logger, sqlDB *gorm.DB, rdb *redis.Client) *TokenHelper {
 	//通过配置判断
 	var driver Driver
 	if config.Token.Default == "redis" {

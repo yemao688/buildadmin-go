@@ -25,7 +25,7 @@ type App interface {
 
 // runServer 启动 HTTP 应用并等待中断信号后优雅关闭；
 // 裸跑默认命令与显式 server 子命令共用同一启动语义。
-func runServer(cmd *cobra.Command, appBootstrap AppBootstrap) {
+func runServer(_ *cobra.Command, appBootstrap AppBootstrap) {
 	app, cleanup, err := appBootstrap(config, loggerWriter, logger)
 	if err != nil {
 		panic(err)
@@ -71,7 +71,7 @@ func newServerCommand(appBootstrap AppBootstrap) *cobra.Command {
 	return &cobra.Command{
 		Use:   "server",
 		Short: "启动 HTTP 服务（裸跑默认即本命令）",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			runServer(cmd, appBootstrap)
 		},
 	}

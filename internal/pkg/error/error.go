@@ -1,3 +1,4 @@
+// Package error 定义业务错误类型与错误码映射。
 package error
 
 import "net/http"

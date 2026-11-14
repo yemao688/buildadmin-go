@@ -1,3 +1,4 @@
+// Package filesystem 提供目录创建、路径规整等文件系统工具。
 package filesystem
 
 import (

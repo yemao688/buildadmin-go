@@ -1,3 +1,4 @@
+// Package clickcaptcha 生成并校验点选验证码。
 package clickcaptcha
 
 import (
@@ -29,19 +30,19 @@ import (
 )
 
 // 可以使用的背景图片路径
-var bgPaths []string = []string{
+var bgPaths = []string{
 	"/public/static/images/captcha/click/bgs/1.png",
 	"/public/static/images/captcha/click/bgs/2.png",
 	"/public/static/images/captcha/click/bgs/3.png",
 }
 
 // 可以使用的字体文件路径
-var fontPaths []string = []string{
+var fontPaths = []string{
 	"/public/static/fonts/zhttfs/2.ttf",
 }
 
 // 验证点 Icon 映射表
-var iconDict map[string]string = map[string]string{
+var iconDict = map[string]string{
 	//nolint:misspell // 这是图标资源文件名（public/static/images/captcha/click/icons/aeroplane.png），改名会破坏素材查找
 	"aeroplane": "飞机",
 	"apple":     "苹果",

@@ -342,7 +342,7 @@ func (s *AdminService) SwitchStatus(ctx context.Context, id int32, status string
 // target's reassignment parent, transfers owner rows and deletes the admin and
 // closure rows. The audit log is emitted after commit.
 func (s *AdminService) Del(ctx context.Context, ids []int32, actor data_scope.Actor) error {
-	idList, err := normalizeIDs(ids, "admin", false, func(id int32) error {
+	idList, err := normalizeIDs(ids, "admin", false, func(_ int32) error {
 		return cErr.BadRequest("ids must be positive")
 	})
 	if err != nil {

@@ -72,7 +72,7 @@ func registerOnInitialize() {
 func newRootCommand(appBootstrap AppBootstrap, cmdBootstrap CmdBootstrap) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use: "app",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, _ []string) {
 			runServer(cmd, appBootstrap)
 		},
 	}

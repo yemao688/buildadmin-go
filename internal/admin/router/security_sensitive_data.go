@@ -1,4 +1,4 @@
-// 由 RouteRegistrar 模式维护（手写模块）
+// Package router 注册 security_sensitive_data（敏感数据）模块路由，由 RouteRegistrar 模式维护（手写模块）。
 package router
 
 import (

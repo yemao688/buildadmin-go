@@ -35,7 +35,7 @@ func NewUserRepository(sqlDB *gorm.DB, config *conf.Configuration, enforcer data
 	}
 }
 
-func (s *UserRepository) DealData(ctx context.Context, data *model.User) (*OutUser, error) {
+func (s *UserRepository) DealData(_ context.Context, data *model.User) (*OutUser, error) {
 	outUser := OutUser{}
 	if err := copier.Copy(&outUser, data); err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func (s *UserRepository) List(ctx *gin.Context) ([]*OutUser, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	var total int64 = 0
+	var total int64
 	list := []*model.User{}
 
 	// count 与 find 必须使用独立 statement：复用同一 db 先 Count 再 Find 时，
@@ -397,7 +397,7 @@ func (s *UserRepository) UpdateStatusWithActor(ctx context.Context, id int32, st
 		return data_scope.ErrScopedAccessDenied
 	}
 	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		result = tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", id).Update("status", status)
 		if result.Error != nil {
 			return result.Error
@@ -416,10 +416,7 @@ func (s *UserRepository) UpdateStatusWithActor(ctx context.Context, id int32, st
 			return gorm.ErrRecordNotFound
 		}
 		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
 // LockUsersWithActor loads the users FOR UPDATE inside the actor's scope.
