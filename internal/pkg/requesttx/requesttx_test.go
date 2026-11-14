@@ -47,7 +47,7 @@ func TestOutcomeStagesOnceAndCanBeDiscarded(t *testing.T) {
 }
 
 func TestFinishUnbindsAndClearsTransaction(t *testing.T) {
-	parent := context.WithValue(context.Background(), "request", "original")
+	parent := context.WithValue(context.Background(), "request", "original") //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 	bound := Bind(parent, &gorm.DB{})
 	require.True(t, Active(bound))
 	Finish(bound)

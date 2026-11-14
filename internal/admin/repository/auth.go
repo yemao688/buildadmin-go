@@ -79,10 +79,7 @@ func (s *AuthRepository) DatabaseAvailable() error {
 	if db == nil {
 		return errors.New("authorization database is unavailable")
 	}
-	if err := db.Ping(); err != nil {
-		return err
-	}
-	return nil
+	return db.Ping()
 }
 
 // GetAllRuleNames returns the names of every admin rule, independent of the
@@ -174,7 +171,7 @@ func (s *AuthRepository) HasClosureSelfRow(adminID int32) (bool, error) {
 	return count > 0, err
 }
 
-func (s *AuthRepository) GetInfo(ctx *gin.Context, id int32) (model.Admin, error) {
+func (s *AuthRepository) GetInfo(_ *gin.Context, id int32) (model.Admin, error) {
 	admin := model.Admin{}
 	err := s.sqlDB.Model(&model.Admin{}).Where("id=?", id).Scan(&admin).Error
 	return admin, err
@@ -344,7 +341,7 @@ func (s *AuthRepository) EnsureRuleList(ctx *gin.Context, uid int32) error {
 }
 
 // 获得权限规则列表
-func (s *AuthRepository) GetRuleList(ctx *gin.Context, uid int32) ([]string, error) {
+func (s *AuthRepository) GetRuleList(_ *gin.Context, uid int32) ([]string, error) {
 	return s.cache.ReloadRules(uid, func() ([]Rule, []string, error) {
 		ids, err := s.GetRuleIds(uid)
 		if err != nil {

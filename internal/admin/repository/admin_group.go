@@ -96,7 +96,7 @@ func (s *AdminGroupRepository) Edit(ctx context.Context, adminGroup model.AdminG
 // by the quick-edit path after the service authorization chain has run.
 func (s *AdminGroupRepository) SwitchStatus(ctx context.Context, id int32, status string) error {
 	var result *gorm.DB
-	if err := s.Transaction(ctx, func(tx *gorm.DB) error {
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		result = tx.Model(&model.AdminGroup{}).Where("id = ?", id).Update("status", status)
 		if result.Error != nil {
 			return result.Error
@@ -115,10 +115,7 @@ func (s *AdminGroupRepository) SwitchStatus(ctx context.Context, id int32, statu
 			return gorm.ErrRecordNotFound
 		}
 		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
+	})
 }
 
 // ChildGroupIDs returns the ids of all groups whose parent is one of ids

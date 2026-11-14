@@ -1,3 +1,4 @@
+// Package service 承载后台渠道需要事务链与业务规则编排的场景；纯 CRUD 模块保持 handler 直连 repository。
 package service
 
 import (

@@ -1,3 +1,4 @@
+// Package tree 提供通用树形结构的构建与遍历。
 package tree
 
 import (
@@ -25,7 +26,7 @@ func (l *Leaf) SetChildren(children interface{}) {
 	l.Children = cast
 }
 
-var icon []string = []string{"│", "├", "└"}
+var icon = []string{"│", "├", "└"}
 
 type TreeNode interface {
 	GetId() int

@@ -1,3 +1,4 @@
+// Package middleware 提供后台渠道的登录态、权限校验与安全审计中间件。
 package middleware
 
 import (

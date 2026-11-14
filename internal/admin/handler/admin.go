@@ -1,3 +1,4 @@
+// Package handler 是后台渠道的薄控制器层：绑定 DTO、调用仓库或服务、输出响应，不承载业务规则与裸查询。
 package handler
 
 import (
@@ -120,7 +121,7 @@ func (l *adminTableTreeLeaf) GetChildren() interface{} {
 	return l.Children
 }
 
-func (l *adminTableTreeLeaf) SetTitle(title string) {}
+func (l *adminTableTreeLeaf) SetTitle(_ string) {}
 
 func (l *adminTableTreeLeaf) SetChildren(children interface{}) {
 	if l == nil {

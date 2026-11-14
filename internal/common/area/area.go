@@ -1,3 +1,4 @@
+// Package area 提供省市区行政区划的读取与树形查询。
 package area
 
 import (
@@ -26,7 +27,7 @@ func NewAreaModel(sqlDB *gorm.DB, config *conf.Configuration) *AreaModel {
 // List 按 province/city 逐级下钻返回省（level 1）、市（level 2）或区县
 // （level 3）的 {value,label} 列表；空 province 表示取省级列表。
 // province/city 由调用方从请求解析后传入，本方法不读传输层元数据。
-func (s *AreaModel) List(ctx context.Context, province, city string) (any, error) {
+func (s *AreaModel) List(_ context.Context, province, city string) (any, error) {
 	whereS := "pid=? and level=?"
 	pid := "0"
 	level := "1"

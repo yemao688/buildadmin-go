@@ -51,11 +51,11 @@ func TestLangContextHelpers(t *testing.T) {
 	require.Equal(t, "zh-Hant", lang)
 
 	// 派生 context（WithValue 链，父为 *gin.Context 或请求 context）可读到
-	derived := context.WithValue(c, "k", "v")
+	derived := context.WithValue(c, "k", "v") //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 	lang, ok = LangFromContext(derived)
 	require.True(t, ok)
 	require.Equal(t, "zh-Hant", lang)
-	requestDerived := context.WithValue(c.Request.Context(), "k2", "v2")
+	requestDerived := context.WithValue(c.Request.Context(), "k2", "v2") //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 	lang, ok = LangFromContext(requestDerived)
 	require.True(t, ok)
 	require.Equal(t, "zh-Hant", lang)

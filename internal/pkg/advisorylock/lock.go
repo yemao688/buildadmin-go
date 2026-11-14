@@ -1,3 +1,4 @@
+// Package advisorylock 封装 MySQL advisory lock，用于跨进程的迁移与生成互斥。
 package advisorylock
 
 import (

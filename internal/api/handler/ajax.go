@@ -1,3 +1,4 @@
+// Package handler 是门户渠道（/api/*）的薄控制器层：绑定参数、调用服务并输出响应。
 package handler
 
 import (

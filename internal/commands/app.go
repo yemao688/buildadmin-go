@@ -1,3 +1,4 @@
+// Package commands 用 Cobra 编排 CLI 子命令（server/migrate/crud/setup 等）与进程启停。
 package commands
 
 import (
@@ -153,9 +154,5 @@ func (a *ServerApp) Stop(ctx context.Context) error {
 
 	// 关闭 cron server
 	a.logger.Info("cron server has been stop")
-	if err := a.cronSrv.Stop(ctx); err != nil {
-		return err
-	}
-
-	return nil
+	return a.cronSrv.Stop(ctx)
 }

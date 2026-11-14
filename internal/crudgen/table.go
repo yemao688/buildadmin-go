@@ -465,7 +465,7 @@ func dataTypeLimit(dataType string) []string {
 }
 
 // 根据数据表解析字段数据
-func ParseTableColumns(columns []dbschema.Column, analyseField bool) []crudmodel.Field {
+func ParseTableColumns(columns []dbschema.Column, _ bool) []crudmodel.Field {
 
 	fields := []crudmodel.Field{}
 	for _, v := range columns {

@@ -1,3 +1,4 @@
+// Package framework 是框架迁移轨道：终局 seed、结构不变量与数据契约校验。
 package framework
 
 import "buildadmin-go/internal/migrations/internal/core"

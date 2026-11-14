@@ -331,7 +331,7 @@ func TestSecurityMySQLSensitivePostCancellationInterruptsAnchorLock(t *testing.T
 	require.NoError(t, holder.Raw("SELECT id FROM "+f.table("admin")+" ORDER BY id LIMIT 1 FOR UPDATE").Scan(&anchorID).Error)
 	require.Equal(t, f.root, anchorID)
 
-	r := f.router(2, false, http.MethodPost, func(c *gin.Context) {
+	r := f.router(2, false, http.MethodPost, func(_ *gin.Context) {
 		t.Fatal("request reached business handler while hierarchy lock was held")
 	})
 	ctx, cancel := context.WithCancel(context.Background())

@@ -1,3 +1,4 @@
+// Package captcha 生成并校验图形验证码。
 package captcha
 
 import (

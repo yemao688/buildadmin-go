@@ -1,3 +1,4 @@
+// Package terminal 提供终端输出、颜色与交互工具。
 package terminal
 
 import (
@@ -26,7 +27,7 @@ import (
 const DistDir = "web/dist"
 
 // 状态标识
-var Flag map[string]string = map[string]string{
+var Flag = map[string]string{
 	"link-success":   "command-link-success",   // 连接成功
 	"exec-success":   "command-exec-success",   // 执行成功
 	"exec-completed": "command-exec-completed", // 执行完成
@@ -240,7 +241,7 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 }
 
 // 成功后回调
-func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, extend string) bool {
+func (t *Terminal) SuccessCallback(outputFunc OutputFunc, commandKey string, _ string) bool {
 	commandArr := strings.Split(commandKey, ".")
 	commandPkey := commandArr[0]
 

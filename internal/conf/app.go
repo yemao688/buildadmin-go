@@ -1,3 +1,4 @@
+// Package conf 定义配置结构并负责 YAML/环境变量加载。
 package conf
 
 type App struct {

@@ -498,12 +498,12 @@ func writeWebFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crud
 }
 
 // repositoryImportAlias 为 handler 中选择仓库包的别名：拍平后恒为根包 repository。
-func repositoryImportAlias(repositoryFile NameInfo) string {
+func repositoryImportAlias(_ NameInfo) string {
 	return "repository"
 }
 
 // dtoImportAlias 为 handler 中选择 DTO 包的别名：拍平后恒为根包 dto。
-func dtoImportAlias(dtoFile NameInfo) string {
+func dtoImportAlias(_ NameInfo) string {
 	return "dto"
 }
 
@@ -956,7 +956,7 @@ func buildModelFieldTypeOverrides(fields []crudmodel.Field) map[string]string {
 	return overrides
 }
 
-func timestampAdapterType(fieldName string) string {
+func timestampAdapterType(_ string) string {
 	// Canonical names are skipped before this helper is called.
 	// Non-canonical integer timestamp design fields keep formatted JSON output.
 	return "validator.FlexFormattedUnixTime"
@@ -1369,7 +1369,7 @@ func buildRelationSearchColumn(field crudmodel.Field, webTranslate string) strin
 // 按条目整体排序（首键即 Alias）保证可重复生成（crud:delete + 重新生成
 // 逐字节一致）；无匹配返回空串（不生成赋值行，无关联字段的表产物零 diff）。
 // querybuilder 类型引用由渲染期 goimports 自动补 import。
-func buildSearchJoinLiteral(table crudmodel.Table, fields []crudmodel.Field, prefix string) string {
+func buildSearchJoinLiteral(_ crudmodel.Table, fields []crudmodel.Field, prefix string) string {
 	joins := make([]string, 0)
 	for _, field := range fields {
 		if field.DesignType != "remoteSelect" || field.Form.RemoteTable == "" {
@@ -1921,7 +1921,7 @@ func collectCityTextFields(fields []crudmodel.Field) []string {
 }
 
 // 控制器/模型等文件的一些杂项属性解析
-func parseSundryData(indexVueData *IndexVueData, formVueData *FormVueData, field crudmodel.Field, table crudmodel.Table) {
+func parseSundryData(_ *IndexVueData, formVueData *FormVueData, field crudmodel.Field, _ crudmodel.Table) {
 	if field.DesignType == "editor" {
 		formVueData.BigDialog = "true"
 	}

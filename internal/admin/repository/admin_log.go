@@ -39,7 +39,7 @@ func (s *AuthRepository) GetEnabledAdmin(id int32) (string, bool) {
 
 // UsernameByID 读取管理员用户名，供操作日志记录历史操作者。这里不做账户
 // 状态过滤：日志要如实记录当次请求的实际操作者。
-func (s *AuthRepository) UsernameByID(ctx context.Context, id int32) (string, bool) {
+func (s *AuthRepository) UsernameByID(_ context.Context, id int32) (string, bool) {
 	if s == nil || s.sqlDB == nil || id == 0 {
 		return "", false
 	}

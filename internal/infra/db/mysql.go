@@ -1,3 +1,4 @@
+// Package db 负责 MySQL 连接初始化与 GORM 配置。
 package db
 
 import (
@@ -74,7 +75,7 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 	)
 
 	dsn := buildDSN(dbConfig)
-	if db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,
 			TablePrefix:   dbConfig.Prefix, // 表前缀
@@ -86,19 +87,19 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 		// 剩余裸写均为单语句操作，MySQL autocommit 保证原子性。
 		SkipDefaultTransaction: true,
 		Logger:                 newLogger, // 使用自定义 Logger
-	}); err != nil {
+	})
+	if err != nil {
 		// serve 只在安装完成（configs/config.yaml 存在）后启动，连库失败即
 		// 真实错误，直接 panic——不再有"未安装时静默返回 nil DB"的向导模式。
 		gLog.Error("failed opening connection to err:", zap.Any("err", err))
 		panic("failed to connect database")
-	} else {
-		sqlDB, _ := db.DB()
-		sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)
-		sqlDB.SetMaxOpenConns(dbConfig.MaxOpenConns)
-		sqlDB.SetConnMaxLifetime(connMaxLifetime(dbConfig))
-		sqlDB.SetConnMaxIdleTime(connMaxIdleTime(dbConfig))
-		return db
 	}
+	sqlDB, _ := db.DB()
+	sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(dbConfig.MaxOpenConns)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime(dbConfig))
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime(dbConfig))
+	return db
 }
 
 // buildDSN 拼接 MySQL DSN。timeout/readTimeout/writeTimeout 防止连接与读写

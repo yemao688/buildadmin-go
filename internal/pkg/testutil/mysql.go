@@ -1,3 +1,4 @@
+// Package testutil 是 MySQL 集成测试的唯一门禁：连接测试库并创建临时 fixture 库。
 package testutil
 
 import (

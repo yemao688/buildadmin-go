@@ -1,4 +1,4 @@
-// 由 RouteRegistrar 模式维护（手写模块）
+// Package router 注册 routine_admin_info（管理员信息）模块路由，由 RouteRegistrar 模式维护（手写模块）。
 package router
 
 import (

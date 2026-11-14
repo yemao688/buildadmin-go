@@ -272,10 +272,7 @@ func ValidateField(field crudmodel.Field) error {
 	if err := validateSQLString(field.Comment); err != nil {
 		return fmt.Errorf("invalid comment for field %q: %w", field.Name, err)
 	}
-	if err := validateFrontendField(field); err != nil {
-		return err
-	}
-	return nil
+	return validateFrontendField(field)
 }
 
 var frontendIdentifierRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

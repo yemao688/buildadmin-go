@@ -217,16 +217,16 @@ func (h *CrudHandler) ParseFieldData(ctx *gin.Context) {
 
 	if reqType == "db" {
 		comment := ""
-		if info, _ := h.tableM.GetInfo(tableName); len(info) == 0 {
+		info, _ := h.tableM.GetInfo(tableName)
+		if len(info) == 0 {
 			response.FailByErr(ctx, cErr.BadRequest("Record not found"))
 			return
-		} else {
-			tableComment, ok := info[0]["TABLE_COMMENT"].(string)
-			if !ok {
-				panic(fmt.Sprintf("unexpected TABLE_COMMENT type %T", info[0]["TABLE_COMMENT"]))
-			}
-			comment = tableComment
 		}
+		tableComment, ok := info[0]["TABLE_COMMENT"].(string)
+		if !ok {
+			panic(fmt.Sprintf("unexpected TABLE_COMMENT type %T", info[0]["TABLE_COMMENT"]))
+		}
+		comment = tableComment
 		empty, _ := h.tableM.IsHasData(tableName)
 
 		columns, _ := h.tableM.GetColumns(tableName)

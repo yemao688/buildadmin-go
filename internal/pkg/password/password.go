@@ -1,3 +1,4 @@
+// Package password 负责密码哈希与校验。
 package password
 
 import "golang.org/x/crypto/bcrypt"

@@ -184,10 +184,7 @@ func ValidateOwnerRef(ref OwnerRef) error {
 	if err := ValidateIdentifier(ref.TableAlias); err != nil {
 		return err
 	}
-	if err := ValidateIdentifier(ref.Column); err != nil {
-		return err
-	}
-	return nil
+	return ValidateIdentifier(ref.Column)
 }
 
 // ValidateActor rejects obviously invalid actors. A restricted actor must have
@@ -227,7 +224,7 @@ const actorContextKey = ActorContextKey
 
 // WithActor attaches an Actor to a context.
 func WithActor(ctx context.Context, actor Actor) context.Context {
-	return context.WithValue(ctx, actorContextKey, actor)
+	return context.WithValue(ctx, actorContextKey, actor) //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 }
 
 // ActorFromContext retrieves a previously attached Actor.

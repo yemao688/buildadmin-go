@@ -1,3 +1,4 @@
+// Package systemroot 解析仓库根与系统根路径，供命令行与生成器定位文件。
 package systemroot
 
 import (

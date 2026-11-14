@@ -55,6 +55,6 @@ func SetLangToContext(c *gin.Context, lang string) {
 	}
 	c.Set(langContextKey, lang)
 	if c.Request != nil {
-		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), langContextKey, lang))
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), langContextKey, lang)) //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 	}
 }

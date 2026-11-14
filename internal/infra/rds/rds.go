@@ -1,3 +1,4 @@
+// Package rds 负责 Redis 客户端初始化。
 package rds
 
 import (

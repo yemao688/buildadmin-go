@@ -1,3 +1,4 @@
+// Package projection 存放按渠道裁剪的实体投影（如 Admin/User 视图），避免共享实体直接泄露渠道字段。
 package projection
 
 type Admin struct {

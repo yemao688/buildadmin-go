@@ -1,3 +1,4 @@
+// Package repository 提供门户渠道会员视角的持久化入口。
 package repository
 
 import "github.com/google/wire"

@@ -124,7 +124,7 @@ func ResolveDataScope(cfg *data_scope.Config, fields []crudmodel.Field, opts Dat
 
 	resolved, err := data_scope.ResolveConfigWithOptions(cfg, hasAdminID, data_scope.ResolveOptions{
 		AllowNoneWithAdminID: opts.AllowNoneWithAdminID,
-		ValidateOwnerColumn: func(column string) error {
+		ValidateOwnerColumn: func(_ string) error {
 			// Already validated above; the contract callback is kept so the
 			// contract lane stays authoritative for identifier safety.
 			return nil

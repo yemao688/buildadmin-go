@@ -1,3 +1,4 @@
+// Package random 生成随机串与随机数。
 package random
 
 import (

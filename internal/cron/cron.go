@@ -1,3 +1,4 @@
+// Package cron 注册与调度后台定时任务。
 package cron
 
 import (
@@ -44,7 +45,7 @@ func (c *Cron) Run() error {
 	return nil
 }
 
-func (c *Cron) Stop(ctx context.Context) error {
+func (c *Cron) Stop(_ context.Context) error {
 	c.server.Stop()
 	return nil
 }

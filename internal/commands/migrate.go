@@ -162,7 +162,7 @@ func (h *MigrateHandler) Run(cmd *cobra.Command, args []string) error {
 }
 
 // Plan 只读输出安装状态、迁移进度与 spec 差量；--strict 下 blocked 差量以失败退出。
-func (h *MigrateHandler) Plan(cmd *cobra.Command, args []string) error {
+func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 	strict, err := cmd.Flags().GetBool("strict")
 	if err != nil {
 		return err
@@ -295,7 +295,7 @@ func (h *MigrateHandler) SetBreakpoint(cmd *cobra.Command, args []string) error 
 	return nil
 }
 
-func (h *MigrateHandler) ClearBreakpoint(cmd *cobra.Command, args []string) error {
+func (h *MigrateHandler) ClearBreakpoint(cmd *cobra.Command, _ []string) error {
 	if err := migrations.ClearBreakpoint(h.db, h.config); err != nil {
 		return fmt.Errorf("clear business migration breakpoint: %w", err)
 	}
@@ -303,7 +303,7 @@ func (h *MigrateHandler) ClearBreakpoint(cmd *cobra.Command, args []string) erro
 	return nil
 }
 
-func (h *MigrateHandler) ListBreakpoints(cmd *cobra.Command, args []string) error {
+func (h *MigrateHandler) ListBreakpoints(cmd *cobra.Command, _ []string) error {
 	breakpoint, err := migrations.GetBreakpoint(h.db, h.config)
 	if err != nil {
 		return fmt.Errorf("list business migration breakpoint: %w", err)

@@ -1,3 +1,4 @@
+// Package core 提供迁移核心表盘点与台账 schema 定义。
 package core
 
 import (

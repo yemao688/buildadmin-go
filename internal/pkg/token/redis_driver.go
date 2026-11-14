@@ -114,10 +114,7 @@ if tonumber(ARGV[1]) > 0 then
   return redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[1])
 end
 return redis.call('SET', KEYS[2], ARGV[2])`
-	if err := store.Eval(ctx, setTokenAndIndex, []string{d.GetUserKeyFor(t, user_id), encryptToken}, ttl, string(dataBytes)); err != nil {
-		return err
-	}
-	return nil
+	return store.Eval(ctx, setTokenAndIndex, []string{d.GetUserKeyFor(t, user_id), encryptToken}, ttl, string(dataBytes))
 }
 
 func (d RedisDriver) Get(token string) (*Token, error) {

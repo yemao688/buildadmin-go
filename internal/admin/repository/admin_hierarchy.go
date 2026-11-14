@@ -85,7 +85,7 @@ func (h *AdminHierarchy) lockHierarchy(tx *gorm.DB) error {
 
 // LockHierarchy serializes non-hierarchy owner assignments with hierarchy
 // mutations. Callers must acquire it before locking user or owner-log rows.
-func (h *AdminHierarchy) LockHierarchy(ctx context.Context, tx *gorm.DB) error {
+func (h *AdminHierarchy) LockHierarchy(_ context.Context, tx *gorm.DB) error {
 	return h.LockHierarchyTx(tx)
 }
 
@@ -444,20 +444,17 @@ func (h *AdminHierarchy) moveSubtreeLocked(ctx context.Context, tx *gorm.DB, nod
 	if newParentID != nil {
 		newParentArg = *newParentID
 	}
-	if result := tx.WithContext(ctx).Exec(
+	result := tx.WithContext(ctx).Exec(
 		"UPDATE "+quoteIdentifier(h.adminTable())+" SET `parent_id` = ? WHERE `id` = ?",
 		newParentArg, nodeID,
-	); result.Error != nil {
+	)
+	if result.Error != nil {
 		return result.Error
 	} else if result.RowsAffected != 1 {
 		return fmt.Errorf("%w: node %d", ErrHierarchyNodeNotFound, nodeID)
 	}
 
-	if err := h.adminRowExists(ctx, tx, nodeID); err != nil {
-		return err
-	}
-
-	return nil
+	return h.adminRowExists(ctx, tx, nodeID)
 }
 
 // AdminOwnerTransfer 记录某张归属表在一次删除中被转移的行数。

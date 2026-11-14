@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	. "github.com/go-playground/assert/v2"
+	assert "github.com/go-playground/assert/v2"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -29,7 +29,7 @@ func TestTime(t *testing.T) {
 	var testTime TestTime
 
 	err := validate.Struct(&testTime)
-	NotEqual(t, err, nil)
+	assert.NotEqual(t, err, nil)
 	var validErrs validator.ValidationErrors
 	if !errors.As(err, &validErrs) {
 		t.Fatalf("got %T, want validator.ValidationErrors", err)
@@ -55,9 +55,9 @@ func AssertError(t *testing.T, err error, nsKey, structNsKey, field, structField
 		}
 	}
 
-	EqualSkip(t, 2, found, true)
-	NotEqualSkip(t, 2, fe, nil)
-	EqualSkip(t, 2, fe.Field(), field)
-	EqualSkip(t, 2, fe.StructField(), structField)
-	EqualSkip(t, 2, fe.Tag(), expectedTag)
+	assert.EqualSkip(t, 2, found, true)
+	assert.NotEqualSkip(t, 2, fe, nil)
+	assert.EqualSkip(t, 2, fe.Field(), field)
+	assert.EqualSkip(t, 2, fe.StructField(), structField)
+	assert.EqualSkip(t, 2, fe.Tag(), expectedTag)
 }
