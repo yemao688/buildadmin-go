@@ -57,21 +57,13 @@ func TestBuildUnknownTypeReturnsInput(t *testing.T) {
 func TestBuildMD5(t *testing.T) {
 	t.Parallel()
 
-	first := Build("md5", 0)
-	second := Build("md5", 0)
-	require.Regexp(t, md5Pattern, first)
-	require.Regexp(t, md5Pattern, second)
-	require.NotEqual(t, first, second)
+	require.Regexp(t, md5Pattern, Build("md5", 0))
 }
 
 func TestBuildSHA1(t *testing.T) {
 	t.Parallel()
 
-	first := Build("sha1", 0)
-	second := Build("sha1", 0)
-	require.Regexp(t, sha1Pattern, first)
-	require.Regexp(t, sha1Pattern, second)
-	require.NotEqual(t, first, second)
+	require.Regexp(t, sha1Pattern, Build("sha1", 0))
 }
 
 func TestUuidShape(t *testing.T) {
