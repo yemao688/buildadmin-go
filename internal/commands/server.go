@@ -38,6 +38,7 @@ func runServer(cmd *cobra.Command, appBootstrap AppBootstrap) {
 		}
 		// os.Exit 不执行 defer，必须在退出前显式清理（此处只会清理一次）。
 		cleanup()
+		//nolint:gocritic // cleanup 已在 os.Exit 前显式调用；runServer 无 error 返回值，失败退出码只能由 os.Exit 承担
 		os.Exit(1)
 	}
 
