@@ -18,7 +18,7 @@ export interface MoneyFormatOptions {
     position?: 'prefix' | 'suffix'
     // 小数位，缺省 2
     decimals?: number
-    // 千分位：仅整数部分三位分组（1,234.56），缺省 true（业务默认千分位展示）
+    // 千分位：仅整数部分三位分组（1,234.56），缺省 true；false 时整数部分不分组
     thousandSeparator?: boolean
     // 显式正负号：signed 时正数前缀 +、负数前缀 -（负数用 ASCII '-'，不用 U+2212），
     // 且正负号在货币符号之前（如 +$100.00 / -$100.00，suffix 位置 +100.00$ / -100.00$）；
@@ -28,9 +28,9 @@ export interface MoneyFormatOptions {
 
 // 千分位分组：对数值串的整数部分按三位分组。正则 \B(?=(\d{3})+(?!\d)) 只匹配
 // "其后紧跟三位的整数倍、且不是最后三位"的位置：1234.56 → 1,234.56、
-// 1234567.89 → 1,234,567.89、123 → 123；负号前无数字故不被分组
-// （-1234.56 → -1,234.56）。先按 '.' 拆分、只对整数部分应用该正则，避免
-// 小数部分被误分组（纯正则会把 123.4567 的 4 位小数分成 123.4,567）。
+// 1234567.89 → 1,234,567.89、123 → 123。入参已取绝对值，不含符号。
+// 先按 '.' 拆分、只对整数部分应用该正则，避免小数部分被误分组
+// （纯正则会把 123.4567 的 4 位小数分成 123.4,567）。
 function addThousandSeparator(formatted: string): string {
     const [integer, fraction] = formatted.split('.')
     const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
@@ -57,10 +57,15 @@ export function formatMoney(amount: number | string, opts: MoneyFormatOptions = 
     const value = (Number(amount) || 0) * rate
     // 用绝对值 toFixed，避免负数自带 '-' 与货币符号拼出双负号（-$-123.45）
     const abs = Math.abs(value)
-    const body = addThousandSeparator(abs.toFixed(decimals))
-    // signed 时正负号显式前缀且位于货币符号之前；非 signed 时负号由 toFixed
-    // 的 '-' 承载、保持现状（$-123.45：符号 prefix + 负号在数值上）
-    const display = signed ? `${value < 0 ? '-' : value > 0 ? '+' : ''}${body}` : `${value < 0 ? '-' : ''}${body}`
+    // toFixed 只负责数值与小数位，分组交给 addThousandSeparator，便于 thousandSeparator 关闭
+    const digits = abs.toFixed(decimals)
+    const body = thousandSeparator ? addThousandSeparator(digits) : digits
+    // signed 时正负号在货币符号之前（+¥100.00 / -¥100.00）；非 signed 时只保留负号，
+    // prefix 下负号跟随数值（¥-123.45），与历史输出一致
+    const sign = value < 0 ? '-' : signed && value > 0 ? '+' : ''
 
-    return position === 'suffix' ? `${display}${symbol}` : `${symbol}${display}`
+    if (position === 'suffix') {
+        return `${sign}${body}${symbol}`
+    }
+    return signed ? `${sign}${symbol}${body}` : `${symbol}${sign}${body}`
 }
