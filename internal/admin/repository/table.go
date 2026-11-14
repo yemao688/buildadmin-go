@@ -152,7 +152,7 @@ func (s *TableRepository) GetTableFields(tableName string, onlyCleanComment bool
 
 	var columnList []Column
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, tableName)
+	args := append(slices.Clone(schemaArgs), tableName)
 	s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? ORDER BY ORDINAL_POSITION", args...).Scan(&columnList)
 	data := map[string]any{}
 	for _, v := range columnList {
@@ -173,7 +173,7 @@ func (s *TableRepository) GetTableFields(tableName string, onlyCleanComment bool
 func (s *TableRepository) GetInfo(tableName string) ([]map[string]any, error) {
 	result := []map[string]any{}
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, s.Name(tableName, true))
+	args := append(slices.Clone(schemaArgs), s.Name(tableName, true))
 	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`tables` WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ?", args...).Scan(&result).Error
 	if err != nil {
 		return result, err
@@ -184,7 +184,7 @@ func (s *TableRepository) GetInfo(tableName string) ([]map[string]any, error) {
 func (s *TableRepository) GetColumns(tableName string) ([]Column, error) {
 	result := []Column{}
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, s.Name(tableName, true))
+	args := append(slices.Clone(schemaArgs), s.Name(tableName, true))
 	err := s.sqlDB.Raw("SELECT * FROM `information_schema`.`columns`  WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? ORDER BY ORDINAL_POSITION", args...).Scan(&result).Error
 	if err != nil {
 		return result, err
@@ -196,7 +196,7 @@ func (s *TableRepository) GetColumns(tableName string) ([]Column, error) {
 func (s *TableRepository) GetTableCollation(tableName string) (string, error) {
 	var collation string
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, s.Name(tableName, true))
+	args := append(slices.Clone(schemaArgs), s.Name(tableName, true))
 	err := s.sqlDB.Raw("SELECT TABLE_COLLATION FROM information_schema.tables WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? LIMIT 1", args...).Scan(&collation).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", nil

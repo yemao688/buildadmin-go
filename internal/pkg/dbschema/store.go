@@ -2,6 +2,7 @@ package dbschema
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"buildadmin-go/internal/pkg/data_scope"
@@ -42,7 +43,7 @@ func (s *Store) Name(tableName string, fullName bool) string {
 func (s *Store) GetColumns(tableName string) ([]Column, error) {
 	result := []Column{}
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, s.Name(tableName, true))
+	args := append(slices.Clone(schemaArgs), s.Name(tableName, true))
 	err := s.db.Raw("SELECT * FROM `information_schema`.`columns` WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? ORDER BY ORDINAL_POSITION", args...).Scan(&result).Error
 	return result, err
 }
@@ -50,7 +51,7 @@ func (s *Store) GetColumns(tableName string) ([]Column, error) {
 func (s *Store) GetTableCollation(tableName string) (string, error) {
 	var collation string
 	schemaExpr, schemaArgs := s.schemaClause()
-	args := append(schemaArgs, s.Name(tableName, true))
+	args := append(slices.Clone(schemaArgs), s.Name(tableName, true))
 	err := s.db.Raw("SELECT TABLE_COLLATION FROM information_schema.tables WHERE TABLE_SCHEMA = "+schemaExpr+" AND table_name = ? LIMIT 1", args...).Scan(&collation).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", nil

@@ -474,8 +474,7 @@ func ParseTableColumns(columns []dbschema.Column, analyseField bool) []crudmodel
 		field.Type = v.DATA_TYPE
 
 		dataType := ""
-		if strings.Contains(v.COLUMN_TYPE, "(") {
-			position := strings.Index(v.COLUMN_TYPE, "(")
+		if position := strings.Index(v.COLUMN_TYPE, "("); position >= 0 {
 			dataType = v.COLUMN_TYPE[:position]
 		} else {
 			dataType = strings.ReplaceAll(v.COLUMN_TYPE, " unsigned", "")
