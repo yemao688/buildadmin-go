@@ -10,10 +10,10 @@ import (
 // 版本号取注册表与目录文件名前缀的较大值加一，避免与未编译的手工文件撞号。
 func TestNextBusinessVersion(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0003_shop_orders.go"), []byte("package business\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "0003_shop_orders.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	got, err := nextBusinessVersion(dir, []uint64{2})
@@ -63,14 +63,14 @@ func TestCreateBusinessMigrationRejectsInvalidName(t *testing.T) {
 // 连续创建两条不同迁移得到递增版本号，已有文件不被覆盖。
 func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0000_seed.go"), []byte("package business\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "0000_seed.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	first, err := createBusinessMigration(dir, "shop-orders", nil)
 	if err != nil {
 		t.Fatalf("first createBusinessMigration: %v", err)
 	}
-	original, err := os.ReadFile(first)
+	original, err := os.ReadFile(first) //nolint:gosec // first 由测试内 createBusinessMigration 在 t.TempDir 下返回
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 	if filepath.Base(first) != "0001_shop_orders.go" || filepath.Base(second) != "0002_settle_orders.go" {
 		t.Fatalf("created %q and %q, want 0001_shop_orders.go / 0002_settle_orders.go", filepath.Base(first), filepath.Base(second))
 	}
-	data, err := os.ReadFile(first)
+	data, err := os.ReadFile(first) //nolint:gosec // first 由测试内 createBusinessMigration 在 t.TempDir 下返回
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 // 同名迁移（文件已存在但尚未重新编译）必须被拒绝，避免生成重复 MigrationName。
 func TestCreateBusinessMigrationRejectsDuplicateStem(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "0001_shop_orders.go"), []byte("package business\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "0001_shop_orders.go"), []byte("package business\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := createBusinessMigration(dir, "shop-orders", nil); err == nil {

@@ -205,7 +205,7 @@ func TestValidateSymlinkContainmentMissingRoot(t *testing.T) {
 		t.Fatalf("missing root with contained candidate rejected: %v", err)
 	}
 	// root 存在时同路径仍须通过（开发场景不受影响）
-	if err := os.MkdirAll(missingRoot, 0o755); err != nil {
+	if err := os.MkdirAll(missingRoot, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if err := validateSymlinkContainment(missingRoot, candidate); err != nil {

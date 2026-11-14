@@ -33,7 +33,7 @@ fields:
     length: 32
     null: true
 `
-	if err := os.WriteFile(path, []byte(spec), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(spec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: "ba_"}}

@@ -35,32 +35,32 @@ func TestDatabaseDSN(t *testing.T) {
 func TestIsComplete(t *testing.T) {
 	root := t.TempDir()
 	public := filepath.Join(root, "public")
-	require.NoError(t, os.Mkdir(public, 0755))
+	require.NoError(t, os.Mkdir(public, 0o750))
 
 	require.False(t, IsComplete(root))
 	lockPath := filepath.Join(public, LockFileName)
-	require.NoError(t, os.WriteFile(lockPath, []byte("in-progress"), 0644))
+	require.NoError(t, os.WriteFile(lockPath, []byte("in-progress"), 0o600))
 	require.False(t, IsComplete(root))
-	require.NoError(t, os.WriteFile(lockPath, []byte(InstallationCompletionMark), 0644))
+	require.NoError(t, os.WriteFile(lockPath, []byte(InstallationCompletionMark), 0o600))
 	require.True(t, IsComplete(root))
 
 	// 仅凭 configs/config.yaml 不视为已安装：安装器只认 install.lock
 	// （向导在环境检查步骤即写入配置，配置存在不代表安装完成）。
 	configRoot := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(configRoot, "configs"), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Join(configRoot, "configs"), 0o750))
 	require.False(t, IsComplete(configRoot))
-	require.NoError(t, os.WriteFile(filepath.Join(configRoot, "configs", "config.yaml"), []byte("mysql:\n    host: 127.0.0.1\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(configRoot, "configs", "config.yaml"), []byte("mysql:\n    host: 127.0.0.1\n"), 0o600))
 	require.False(t, IsComplete(configRoot))
 
 	require.NoError(t, WriteCompletionLock(root))
-	content, err := os.ReadFile(lockPath)
+	content, err := os.ReadFile(lockPath) //nolint:gosec // lockPath 位于 t.TempDir 下的 public 目录
 	require.NoError(t, err)
 	require.Equal(t, []byte(InstallationCompletionMark), content)
 }
 
 func TestWriteBaseConfig(t *testing.T) {
 	configDir := filepath.Join(t.TempDir(), "configs")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.MkdirAll(configDir, 0o750))
 	configPath := filepath.Join(configDir, "config.yaml")
 	cfg := Database{
 		Database: "buildadmin",
@@ -72,7 +72,7 @@ func TestWriteBaseConfig(t *testing.T) {
 	}
 
 	require.NoError(t, WriteBaseConfig(configPath, cfg, "token-value"))
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(configPath) //nolint:gosec // configPath 由测试内 t.TempDir 构造
 	require.NoError(t, err)
 
 	var got map[string]any
@@ -90,7 +90,7 @@ func TestWriteBaseConfig(t *testing.T) {
 
 func TestWriteBaseConfigRejectsInvalidPort(t *testing.T) {
 	configDir := filepath.Join(t.TempDir(), "configs")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.MkdirAll(configDir, 0o750))
 	err := WriteBaseConfig(filepath.Join(configDir, "config.yaml"), Database{Hostport: "not-a-port"}, "token")
 	require.Error(t, err)
 }
@@ -130,7 +130,7 @@ func TestPoolSettings(t *testing.T) {
 func TestLoadPoolConfig(t *testing.T) {
 	root := t.TempDir()
 	configs := filepath.Join(root, "configs")
-	require.NoError(t, os.MkdirAll(configs, 0o755))
+	require.NoError(t, os.MkdirAll(configs, 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(configs, conf.DefaultsFileName), []byte("mysql:\n"+
 		"  max_idle_conns: 50\n"+
 		"  max_open_conns: 300\n"+

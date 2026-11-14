@@ -49,7 +49,7 @@ func TestAttachmentModelMySQLDataScope(t *testing.T) {
 		for _, table := range tables {
 			db.Exec("DROP TABLE IF EXISTS " + quote(table))
 		}
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 	require.NoError(t, db.Exec("CREATE TABLE "+quote(closure)+" (ancestor_id INT NOT NULL, descendant_id INT NOT NULL, depth INT NOT NULL, PRIMARY KEY (ancestor_id, descendant_id))").Error)
 	require.NoError(t, db.Exec("CREATE TABLE "+quote(attachment)+" (id INT PRIMARY KEY, topic VARCHAR(20) NOT NULL, admin_id INT NOT NULL, user_id INT NOT NULL, url VARCHAR(255) NOT NULL, width INT NOT NULL, height INT NOT NULL, name VARCHAR(120) NOT NULL, size INT NOT NULL, mimetype VARCHAR(100) NOT NULL, quote INT NOT NULL, storage VARCHAR(50) NOT NULL, sha1 VARCHAR(40) NOT NULL, create_time BIGINT NOT NULL, last_upload_time BIGINT NOT NULL, KEY idx_admin_id (admin_id))").Error)

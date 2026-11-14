@@ -45,7 +45,7 @@ func TestClosureEnforcerMySQL(t *testing.T) {
 		for _, table := range []string{closureTable, itemsTable, adminsTable} {
 			db.Exec("DROP TABLE IF EXISTS " + q(table))
 		}
-		sqlDB.Close()
+		_ = sqlDB.Close()
 	})
 
 	require.NoError(t, db.Exec("CREATE TABLE "+q(closureTable)+" (ancestor_id INT NOT NULL, descendant_id INT NOT NULL, PRIMARY KEY (ancestor_id, descendant_id))").Error)

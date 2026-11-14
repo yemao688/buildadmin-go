@@ -16,7 +16,7 @@ func writeSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 	spec := "name: " + name + "\ncomment: test\n" + dataScopeYAML +
 		"fields:\n" +
 		"  - name: id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n"
-	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -104,7 +104,7 @@ func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 				writeSpec(t, specsDir, strings.TrimSuffix(fileName, ".yaml"), dsYAML)
 			}
 			if test.broken != "" {
-				if err := os.WriteFile(filepath.Join(specsDir, test.broken), []byte("name: broken\n"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(specsDir, test.broken), []byte("name: broken\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -256,14 +256,14 @@ func WriteBaseConfig(configPath string, cfg Database, tokenKey string) error {
 // wizard writes it early, at the env-check step).
 func IsComplete(rootPath string) bool {
 	lockPath := filepath.Join(rootPath, "public", LockFileName)
-	content, err := os.ReadFile(lockPath)
+	content, err := os.ReadFile(lockPath) //nolint:gosec // lockPath 为 rootPath/public 下的固定完成锁文件名
 	return err == nil && string(content) == InstallationCompletionMark
 }
 
 // WriteCompletionLock marks the installation as complete.
 func WriteCompletionLock(rootPath string) error {
 	path := filepath.Join(rootPath, "public", LockFileName)
-	return os.WriteFile(path, []byte(InstallationCompletionMark), 0644)
+	return os.WriteFile(path, []byte(InstallationCompletionMark), 0600)
 }
 
 // GenerateTokenKey generates the token key used by the installed application.

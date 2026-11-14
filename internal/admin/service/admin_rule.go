@@ -38,7 +38,7 @@ func (s *AdminRuleService) Menus(ctx context.Context, operatorID int32, keyword 
 		if raw == "*" {
 			continue
 		}
-		id, convErr := strconv.Atoi(raw)
+		id, convErr := strconv.ParseInt(raw, 10, 32)
 		if convErr != nil {
 			continue
 		}

@@ -198,7 +198,7 @@ func (s *MemberService) Login(ip string, username string, plainPassword string, 
 				return nil, cErr.BadRequest("Account not exist")
 			}
 		}
-		if user.LoginFailure >= int32(retry) {
+		if user.LoginFailure >= int32(retry) { //nolint:gosec // retry 来自 app.user_login_retry 配置（个位数重试次数），远小于 int32 上界
 			return nil, cErr.BadRequest("Please try again after 1 day")
 		}
 	}

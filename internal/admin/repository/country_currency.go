@@ -125,7 +125,7 @@ func (s *CountryCurrencyRepository) Add(ctx *gin.Context, countryCurrency model.
 			if err := tx.Table(s.TableName).Where("id = ?", countryCurrency.ID).Update("weigh", countryCurrency.ID).Error; err != nil {
 				return err
 			}
-			countryCurrency.Weigh = int32(countryCurrency.ID)
+			countryCurrency.Weigh = int32(countryCurrency.ID) //nolint:gosec // weigh 列本身为 int(11)，且国家币种表由框架种子写入、主键规模为百级，不会触及 int32 上界
 		}
 		return nil
 	})

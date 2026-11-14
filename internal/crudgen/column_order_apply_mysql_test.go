@@ -42,7 +42,7 @@ func writeColOrderSpec(t *testing.T) string {
 		"  - name: images\n    type: varchar\n    length: 1000\n    defaultType: EMPTY STRING\n    comment: 图片集\n" +
 		"  - name: title\n    type: varchar\n    length: 255\n    defaultType: EMPTY STRING\n    comment: 标题\n"
 	path := t.TempDir() + "/ops_col_order.yaml"
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path

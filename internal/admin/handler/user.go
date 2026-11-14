@@ -123,7 +123,7 @@ func (h *UserHandler) One(ctx *gin.Context) {
 		value = userId
 	}
 	id := com.StrTo(value).MustInt()
-	user, err := h.userM.GetOne(ctx, int32(id))
+	user, err := h.userM.GetOne(ctx, int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（会员 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return

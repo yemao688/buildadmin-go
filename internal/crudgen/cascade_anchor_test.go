@@ -27,13 +27,13 @@ func (s *` + className + `Repository) CascadeOwners() []data_scope.CascadeOwner 
 func writeAnchorFixture(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "user_gen.go")
-	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 	return path
 }
 
 func readAnchorFixture(t *testing.T, path string) string {
 	t.Helper()
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec // path 由调用方传入的 t.TempDir 夹具路径
 	require.NoError(t, err)
 	return string(content)
 }
@@ -109,7 +109,7 @@ func TestApplyCascadeAnchorToleratesWhitespace(t *testing.T) {
 	handEdited := "\t\t{Table:  \"user_order\",  ByColumn:\"user_id\"  , OwnerColumn: \"admin_id\"}"
 	content := readAnchorFixture(t, path)
 	content = strings.Replace(content, "\t\t// @cascade:begin\n\t\t// @cascade:end", "\t\t// @cascade:begin\n"+handEdited+"\n\t\t// @cascade:end", 1)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	// 子表重新生成改 byColumn：同 Table 整行替换为规范格式，不追加。
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "order_id"))
@@ -135,7 +135,7 @@ func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 	content := strings.Replace(readAnchorFixture(t, path),
 		"\t\t// @cascade:begin\n\t\t// @cascade:end",
 		"\t\t// @cascade:begin\n"+dup1+"\n"+dup2+"\n\t\t// @cascade:end", 1)
-	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
 	require.NoError(t, applyCascadeAnchor(path, "user_order", "user_id"))
 	out := readAnchorFixture(t, path)
@@ -147,7 +147,7 @@ func TestApplyCascadeAnchorConvergesDuplicates(t *testing.T) {
 // 原文件权限保留，写回后内容一致。
 func TestWritePreservingModeAtomic(t *testing.T) {
 	path := writeAnchorFixture(t, "package repository\n")
-	require.NoError(t, os.Chmod(path, 0640))
+	require.NoError(t, os.Chmod(path, 0640)) //nolint:gosec // 测试断言 writePreservingMode 保留原文件权限，故显式设成 0640
 	require.NoError(t, writePreservingMode(path, "package repository\n\n// v2\n"))
 	info, err := os.Stat(path)
 	require.NoError(t, err)

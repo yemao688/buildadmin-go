@@ -110,9 +110,9 @@ func (handlerTestDialector) Migrator(*gorm.DB) gorm.Migrator                { re
 func (handlerTestDialector) DataTypeOf(*schema.Field) string                { return "" }
 func (handlerTestDialector) DefaultValueOf(*schema.Field) clause.Expression { return nil }
 func (handlerTestDialector) BindVarTo(w clause.Writer, _ *gorm.Statement, _ interface{}) {
-	w.WriteByte('?')
+	_ = w.WriteByte('?')
 }
-func (handlerTestDialector) QuoteTo(w clause.Writer, s string)           { w.WriteString("`" + s + "`") }
+func (handlerTestDialector) QuoteTo(w clause.Writer, s string)           { _, _ = w.WriteString("`" + s + "`") }
 func (handlerTestDialector) Explain(sql string, _ ...interface{}) string { return sql }
 
 // 验证管理员列表树形组装：按 parent_id 组装

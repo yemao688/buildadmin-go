@@ -23,7 +23,7 @@ func initLogger() {
 	}
 
 	if !util.PathExists(logFileDir) {
-		_ = os.Mkdir(config.Log.RootDir, os.ModePerm)
+		_ = os.Mkdir(config.Log.RootDir, 0o750)
 	}
 
 	switch config.Log.Level {

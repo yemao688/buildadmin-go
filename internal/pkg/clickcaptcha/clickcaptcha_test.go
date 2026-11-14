@@ -111,12 +111,12 @@ func TestCheckRejectsMalformedInput(t *testing.T) {
 
 func TestCheckMalformedInputNeverPanics(t *testing.T) {
 	clickCaptcha := newCheckTestCaptcha(t, 1)
-	rng := rand.New(rand.NewSource(1))
+	rng := rand.New(rand.NewSource(1)) //nolint:gosec // 固定 seed 的确定性伪随机仅用于构造畸形输入夹具
 
 	for i := 0; i < 1000; i++ {
 		garbage := make([]byte, rng.Intn(64))
 		for j := range garbage {
-			garbage[j] = byte(rng.Intn(256))
+			garbage[j] = byte(rng.Intn(256)) //nolint:gosec // rng.Intn(256) 上界 255，byte 转换不会溢出
 		}
 		checkWithoutPanic(t, clickCaptcha, string(garbage))
 	}

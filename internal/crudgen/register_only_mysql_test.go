@@ -26,7 +26,7 @@ func TestApplySkipsRegisterOnlyMySQL(t *testing.T) {
 
 	specPath := filepath.Join(t.TempDir(), "user.yaml")
 	spec := "name: user\ncomment: 会员表\nregisterOnly: true\ndataScope:\n  mode: auto\n  reassignable: true\nfields:\n  - name: id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n  - name: admin_id\n    type: int\n    unsigned: true\n    null: false\n    comment: 管理员ID\n"
-	require.NoError(t, os.WriteFile(specPath, []byte(spec), 0644))
+	require.NoError(t, os.WriteFile(specPath, []byte(spec), 0o600))
 
 	// plan 与 apply 都跳过，且不建表
 	results, err := PlanSpecs(db, cfg, NewTableStore(db, cfg), []string{specPath}, ApplyOptions{})

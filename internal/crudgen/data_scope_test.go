@@ -773,8 +773,8 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 			if err != nil {
 				raw, _ := renderRawModel(modelData)
 				debug := "/tmp/crud-debug-raw-" + strings.ToLower(className)
-				_ = os.MkdirAll(debug, 0755)
-				_ = os.WriteFile(filepath.Join(debug, "model_raw.go"), []byte(raw), 0644)
+				_ = os.MkdirAll(debug, 0o750)
+				_ = os.WriteFile(filepath.Join(debug, "model_raw.go"), []byte(raw), 0o600)
 				t.Logf("raw model code written to %s", debug)
 			}
 			require.NoError(t, err)
@@ -801,9 +801,9 @@ func TestGeneratedDataScopeCompiles(t *testing.T) {
 
 			if err := compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp, handlerData); err != nil {
 				debug := "/tmp/crud-debug-" + strings.ToLower(className)
-				_ = os.MkdirAll(debug, 0755)
-				_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0644)
-				_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0644)
+				_ = os.MkdirAll(debug, 0o750)
+				_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0o600)
+				_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0o600)
 				t.Logf("debug files written to %s", debug)
 				t.Fatalf("compile fixture failed: %v", err)
 			}
@@ -922,9 +922,9 @@ func TestGeneratedReassignableCompiles(t *testing.T) {
 
 	if err := compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp, handlerData); err != nil {
 		debug := "/tmp/crud-debug-reassignable"
-		_ = os.MkdirAll(debug, 0755)
-		_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0644)
-		_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0644)
+		_ = os.MkdirAll(debug, 0o750)
+		_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0o600)
+		_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0o600)
 		t.Logf("debug files written to %s", debug)
 		t.Fatalf("compile fixture failed: %v", err)
 	}
@@ -1236,9 +1236,9 @@ func TestGeneratedCascadeRegistryCompiles(t *testing.T) {
 
 	if err := compileDataScopeFixture(t, className, modelCode, handlerCode, modelData.StructTemp, handlerData); err != nil {
 		debug := "/tmp/crud-debug-cascade"
-		_ = os.MkdirAll(debug, 0755)
-		_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0644)
-		_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0644)
+		_ = os.MkdirAll(debug, 0o750)
+		_ = os.WriteFile(filepath.Join(debug, "model.go"), []byte(modelCode), 0o600)
+		_ = os.WriteFile(filepath.Join(debug, "handler.go"), []byte(handlerCode), 0o600)
 		t.Logf("debug files written to %s", debug)
 		t.Fatalf("compile fixture failed: %v", err)
 	}
@@ -1332,18 +1332,18 @@ func compileDataScopeFixture(t *testing.T, className, modelCode, handlerCode, st
 	root := repoRoot(t)
 	tmp := t.TempDir()
 
-	goMod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	goMod, err := os.ReadFile(filepath.Join(root, "go.mod")) //nolint:gosec // root 为 repoRoot(t) 定位的固定仓库路径
 	if err != nil {
 		return err
 	}
-	goSum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	goSum, err := os.ReadFile(filepath.Join(root, "go.sum")) //nolint:gosec // root 为 repoRoot(t) 定位的固定仓库路径
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), goMod, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "go.mod"), goMod, 0o600); err != nil { //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.mod
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "go.sum"), goSum, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "go.sum"), goSum, 0o600); err != nil { //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自 repoRoot 的 go.sum
 		return err
 	}
 
@@ -1496,21 +1496,21 @@ func GetError(v interface{}, err error) error { return err }
 	}
 	for name, body := range stubs {
 		path := filepath.Join(tmp, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 			return err
 		}
 	}
 
 	// 生成 handler 依赖真实共享基类：直接拷贝 internal/admin/handler/table.go，
 	// 避免 fixture 用简化替身掩盖泛型契约。
-	externalTable, err := os.ReadFile(filepath.Join(root, "internal", "admin", "handler", "table.go"))
+	externalTable, err := os.ReadFile(filepath.Join(root, "internal", "admin", "handler", "table.go")) //nolint:gosec // 固定仓库内 internal/admin/handler/table.go 夹具
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(tmp, "internal", "admin", "handler", "table.go"), externalTable, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "internal", "admin", "handler", "table.go"), externalTable, 0o600); err != nil { //nolint:gosec // 写入 t.TempDir 夹具工程，内容拷贝自仓库 table.go，路径由测试拼接
 		return err
 	}
 
@@ -1527,23 +1527,23 @@ func GetError(v interface{}, err error) error { return err }
 		return err
 	}
 	entityDir := filepath.Join(tmp, "internal", "model")
-	if err := os.MkdirAll(entityDir, 0755); err != nil {
+	if err := os.MkdirAll(entityDir, 0o750); err != nil {
 		return err
 	}
 	entityPath := filepath.Join(entityDir, strings.ToLower(className)+".go")
-	if err := os.WriteFile(entityPath, []byte(entityCode), 0644); err != nil {
+	if err := os.WriteFile(entityPath, []byte(entityCode), 0o600); err != nil {
 		return err
 	}
 	modelPath := filepath.Join(tmp, "internal", "admin", "repository", strings.ToLower(className)+"_gen.go")
-	if err := os.WriteFile(modelPath, []byte(modelCode), 0644); err != nil {
+	if err := os.WriteFile(modelPath, []byte(modelCode), 0o600); err != nil {
 		return err
 	}
 	handlerPath := filepath.Join(tmp, "internal", "admin", "handler", strings.ToLower(className)+"_handler.go")
-	if err := os.WriteFile(handlerPath, []byte(handlerCode), 0644); err != nil {
+	if err := os.WriteFile(handlerPath, []byte(handlerCode), 0o600); err != nil {
 		return err
 	}
 	dtoDir := filepath.Join(tmp, "internal", "admin", "dto")
-	if err := os.MkdirAll(dtoDir, 0755); err != nil {
+	if err := os.MkdirAll(dtoDir, 0o750); err != nil {
 		return err
 	}
 	dtoPath := filepath.Join(dtoDir, strings.ToLower(className)+".go")
@@ -1557,7 +1557,7 @@ func GetError(v interface{}, err error) error { return err }
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(dtoPath, []byte(dtoCode), 0644); err != nil {
+	if err := os.WriteFile(dtoPath, []byte(dtoCode), 0o600); err != nil {
 		return err
 	}
 
@@ -1576,7 +1576,7 @@ func copyDir(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dst, 0755); err != nil {
+	if err := os.MkdirAll(dst, 0o750); err != nil {
 		return err
 	}
 	for _, entry := range entries {
@@ -1584,11 +1584,11 @@ func copyDir(src, dst string) error {
 			continue
 		}
 		name := entry.Name()
-		data, err := os.ReadFile(filepath.Join(src, name))
+		data, err := os.ReadFile(filepath.Join(src, name)) //nolint:gosec // src 为仓库内固定夹具目录或 t.TempDir，name 来自该目录 ReadDir
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dst, name), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dst, name), data, 0o600); err != nil { //nolint:gosec // dst 为 t.TempDir 夹具目录，name 来自 src 目录 ReadDir
 			return err
 		}
 	}

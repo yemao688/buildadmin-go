@@ -175,7 +175,7 @@ func TestAdminNamingRules(t *testing.T) {
 func TestAdminNamingDetectsViolations(t *testing.T) {
 	root := t.TempDir()
 	for _, rule := range adminNamingRules {
-		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o750); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -192,10 +192,10 @@ func TestAdminNamingDetectsViolations(t *testing.T) {
 	}
 	for _, sample := range samples {
 		dir := filepath.Join(root, filepath.Dir(sample.file))
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, sample.file), []byte(sample.source), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(root, sample.file), []byte(sample.source), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

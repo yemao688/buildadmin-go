@@ -11,7 +11,7 @@ func writeMySQLTestConfig(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "configs")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	if err := os.MkdirAll(configDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	defaultsPath := filepath.Join(configDir, "config.defaults.yaml")

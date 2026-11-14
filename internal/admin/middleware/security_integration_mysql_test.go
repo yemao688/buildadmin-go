@@ -275,7 +275,7 @@ func TestSecurityMySQLPostOutcomesAndFailures(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, rec.Code)
 	var after, before string
-	f.db.Table(f.table("security_sensitive_data_log")).Select("`before`, `after`").Order("id desc").Row().Scan(&before, &after)
+	require.NoError(t, f.db.Table(f.table("security_sensitive_data_log")).Select("`before`, `after`").Order("id desc").Row().Scan(&before, &after))
 	require.Equal(t, "old", before)
 	require.Equal(t, "new", after)
 	var logs int64

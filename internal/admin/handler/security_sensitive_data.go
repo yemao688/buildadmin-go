@@ -78,7 +78,7 @@ func (h *SensitiveDataHandler) Add(ctx *gin.Context) {
 
 func (h *SensitiveDataHandler) One(ctx *gin.Context) {
 	id := com.StrTo(ctx.Request.FormValue("id")).MustInt()
-	sensitiveData, err := h.sensitiveDataM.GetOne(ctx.Request.Context(), int32(id))
+	sensitiveData, err := h.sensitiveDataM.GetOne(ctx.Request.Context(), int32(id)) //nolint:gosec // 后台主键参数由 com.StrTo(...).MustInt() 解析，对应数据库主键列 int(11)，业务 ID 不超过 int32 上界（敏感数据规则 id）
 	if err != nil {
 		response.FailByErr(ctx, err)
 		return
@@ -116,7 +116,7 @@ func (h *SensitiveDataHandler) Edit(ctx *gin.Context) {
 		_, hasID := m["id"]
 		status, hasStatus := m["status"]
 		if hasID && hasStatus {
-			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt())
+			id := int32(com.StrTo(fmt.Sprintf("%v", m["id"])).MustInt()) //nolint:gosec // id 取自请求体 JSON，最终用于敏感数据规则主键列 int(11)
 			statusStr, _ := status.(string)
 			if statusStr == "" {
 				statusStr = fmt.Sprintf("%v", status)

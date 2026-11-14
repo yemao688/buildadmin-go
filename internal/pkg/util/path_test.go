@@ -10,7 +10,7 @@ import (
 func newRepoTree(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module x\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -20,7 +20,7 @@ func newRepoTree(t *testing.T) string {
 func mkdirs(t *testing.T, root string, parts ...string) string {
 	t.Helper()
 	dir := filepath.Join(append([]string{root}, parts...)...)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 	return dir
@@ -45,7 +45,7 @@ func TestFindRootWithMarkers(t *testing.T) {
 
 	// 生产镜像只有 public/ 标记（/app/app -> /app）
 	imageRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(imageRoot, "public"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(imageRoot, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
 	if got, ok := findRootWithMarkers(imageRoot); !ok || got != imageRoot {

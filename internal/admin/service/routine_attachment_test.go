@@ -36,7 +36,7 @@ func TestAttachmentDeleteHonorsQuoteAndRemovesLocalFileAfterLastReference(t *tes
 
 	url := "/storage/quote-tests/" + strings.ReplaceAll(t.Name(), "/", "_") + ".txt"
 	path := filepath.Join(util.RootPath(), "public", strings.TrimLeft(url, "/"))
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
 	require.NoError(t, os.WriteFile(path, []byte("shared"), 0600))
 	t.Cleanup(func() { _ = os.Remove(path) })
 

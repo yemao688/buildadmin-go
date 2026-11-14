@@ -756,7 +756,7 @@ func buildSetupFrontend(rootPath string, output io.Writer, configuration *conf.C
 			return fmt.Errorf("未配置前端命令 %q", key)
 		}
 		_, _ = fmt.Fprintf(output, "执行: %s\n", command.Command)
-		process := exec.Command("sh", "-c", command.Command)
+		process := exec.Command("sh", "-c", command.Command) //nolint:gosec // 命令取自 configs 中由开发者维护的前端命令配置（pnpm 脚本），属安装器本地流程
 		process.Dir = command.Cwd
 		process.Stdout = output
 		process.Stderr = output

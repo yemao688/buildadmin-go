@@ -134,7 +134,7 @@ func registerPasswordValidation() {
 
 func performAdminLogin(t *testing.T, router *gin.Engine, username, password string) *httptest.ResponseRecorder {
 	t.Helper()
-	body, err := json.Marshal(Login{Username: username, Password: password})
+	body, err := json.Marshal(Login{Username: username, Password: password}) //nolint:gosec // 构造后台登录请求体，密码是测试内固定值，仅发往本地测试路由
 	require.NoError(t, err)
 	request := httptest.NewRequest(http.MethodPost, "/admin/Index/login", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")

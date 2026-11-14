@@ -28,7 +28,7 @@ func writeSyncSpec(t *testing.T, specsDir, name, parent, byColumn string) {
 		"  - name: id\n    type: bigint\n    unsigned: true\n    primaryKey: true\n    autoIncrement: true\n    null: false\n    comment: ID\n" +
 		"  - name: " + byColumn + "\n    type: bigint\n    unsigned: true\n    null: false\n    comment: 关联主表\n" +
 		"  - name: admin_id\n    type: bigint\n    unsigned: true\n    null: false\n    comment: 管理员ID\n"
-	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(specsDir, name+".yaml"), []byte(spec), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

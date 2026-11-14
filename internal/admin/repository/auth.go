@@ -245,7 +245,7 @@ func (s *AuthRepository) LockLoginState(adminID int32, now int64, retry int) (bo
 			// cannot re-lock the account for another day.
 			return tx.Model(&model.Admin{}).Where("id = ?", adminID).Update("login_failure", 0).Error
 		}
-		locked = state.LoginFailure >= int32(retry)
+		locked = state.LoginFailure >= int32(retry) //nolint:gosec // retry 来自 app.login_retry 配置（个位数重试次数），远小于 int32 上界
 		return nil
 	})
 	if err != nil {
