@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,7 +91,7 @@ func TestCreateBusinessMigrationUsesNextVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != string(original) {
+	if !bytes.Equal(data, original) {
 		t.Fatal("existing migration file was overwritten")
 	}
 }

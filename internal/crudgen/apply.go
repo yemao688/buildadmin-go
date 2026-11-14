@@ -549,7 +549,7 @@ func columnOrderDrift(columns []dbschema.Column, fields []crudmodel.Field) []App
 	for _, field := range fields {
 		name := strings.ToLower(field.Name)
 		for _, column := range columns {
-			if strings.ToLower(column.COLUMN_NAME) == name {
+			if strings.EqualFold(column.COLUMN_NAME, name) {
 				expected = append(expected, name)
 				break
 			}

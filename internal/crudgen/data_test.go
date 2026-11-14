@@ -111,9 +111,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      true,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "权重（拖拽排序）",
 		Name:              "weigh",
 		DataType:          "",
@@ -139,9 +137,7 @@ func getTestFieldData() []crudmodel.Field {
 		Null:       true,
 		PrimaryKey: false,
 		Unsigned:   true,
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "状态",
 		Name:              "status",
 		DataType:          "",
@@ -164,9 +160,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "备注",
 		Name:              "remark11",
 		DataType:          "",
@@ -191,9 +185,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "修改时间",
 		Name:              "update_time",
 		DataType:          "",
@@ -221,9 +213,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "创建时间",
 		Name:              "create_time",
 		DataType:          "",
@@ -251,9 +241,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "远程下拉（关联表）",
 		Name:              "banner_id",
 		DataType:          "",
@@ -286,9 +274,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "字符串",
 		Name:              "string",
 		DataType:          "",
@@ -311,9 +297,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "图片",
 		Name:              "image",
 		DataType:          "",
@@ -335,9 +319,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "文件",
 		Name:              "file",
 		DataType:          "",
@@ -359,9 +341,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "单选框",
 		Name:              "radio",
 		DataType:          "enum('opt0','opt1')",
@@ -384,9 +364,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "数字",
 		Name:              "number",
 		DataType:          "",
@@ -414,9 +392,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "日期",
 		Name:              "date",
 		DataType:          "",
@@ -444,9 +420,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "时间日期（时间戳存储）",
 		Name:              "timestamp",
 		DataType:          "",
@@ -474,9 +448,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "年份",
 		Name:              "year",
 		DataType:          "",
@@ -501,9 +473,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "时间日期",
 		Name:              "datetime",
 		DataType:          "",
@@ -529,9 +499,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "时间",
 		Name:              "time",
 		DataType:          "",
@@ -556,9 +524,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "密码",
 		Name:              "password",
 		DataType:          "",
@@ -582,9 +548,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "浮点数",
 		Name:              "float",
 		DataType:          "",
@@ -610,9 +574,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "复选框",
 		Name:              "checkbox",
 		DataType:          "set('opt0','opt1')",
@@ -635,9 +597,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "多行文本框",
 		Name:              "textarea",
 		DataType:          "",
@@ -662,9 +622,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "富文本",
 		Name:              "editor",
 		DataType:          "",
@@ -688,9 +646,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "下拉框",
 		Name:              "select",
 		DataType:          "enum('opt0','opt1')",
@@ -713,9 +669,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "城市选择",
 		Name:              "city",
 		DataType:          "",
@@ -736,9 +690,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "数组",
 		Name:              "array",
 		DataType:          "",
@@ -759,9 +711,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "下拉框（多选）",
 		Name:              "selects",
 		DataType:          "",
@@ -789,9 +739,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "远程下拉（关联多选）",
 		Name:              "team_ids",
 		DataType:          "",
@@ -823,9 +771,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "文件（多选）",
 		Name:              "files",
 		DataType:          "",
@@ -851,9 +797,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "图片（多选）",
 		Name:              "images",
 		DataType:          "",
@@ -878,9 +822,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "颜色选择器",
 		Name:              "color",
 		DataType:          "",
@@ -905,8 +847,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           false,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "开关",
 		Name:              "switch",
 		DataType:          "",
@@ -929,9 +870,7 @@ func getTestFieldData() []crudmodel.Field {
 		Unsigned:           true,
 		AutoIncrement:      false,
 		OriginalDesignType: "",
-	})
-
-	fields = append(fields, crudmodel.Field{
+	}, crudmodel.Field{
 		Title:             "图标选择",
 		Name:              "icon",
 		DataType:          "",

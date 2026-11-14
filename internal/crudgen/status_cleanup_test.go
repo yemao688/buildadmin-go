@@ -4,6 +4,7 @@ import (
 	"buildadmin-go/internal/conf"
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/util"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,7 +117,7 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 	}
 	pruneEmptyProviderScaffold("internal/admin/repository", "internal/admin/repository")
 	after, err := os.ReadFile(rootProvider) //nolint:gosec // G304: rootProvider 为 util.RootPath 下的固定仓库文件
-	if err != nil || string(after) != string(before) {
+	if err != nil || !bytes.Equal(after, before) {
 		t.Fatal("root provider.go must not be touched")
 	}
 }

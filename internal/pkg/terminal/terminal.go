@@ -147,7 +147,7 @@ func (t *Terminal) Exec(ctx *gin.Context, authentication bool) {
 		}
 		content, _ := json.Marshal(outData)
 		sseContent := fmt.Sprintf("data: %s\n\n", content)
-		_, _ = ctx.Writer.Write([]byte(sseContent))
+		_, _ = ctx.Writer.WriteString(sseContent)
 		flusher.Flush()
 	}
 

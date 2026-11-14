@@ -39,11 +39,11 @@ func Compare(v1, v2 string) bool {
 		return false
 	}
 
-	if strings.ToLower(string(v1[0])) == "v" {
+	if strings.EqualFold(string(v1[0]), "v") {
 		v1 = v1[1:]
 	}
 
-	if strings.ToLower(string(v2[0])) == "v" {
+	if strings.EqualFold(string(v2[0]), "v") {
 		v2 = v2[1:]
 	}
 
@@ -94,7 +94,7 @@ func CheckDigitalVersion(version string) bool {
 		return false
 	}
 
-	if strings.ToLower(string(version[0])) == "v" {
+	if strings.EqualFold(string(version[0]), "v") {
 		version = version[1:]
 	}
 

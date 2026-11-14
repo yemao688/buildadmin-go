@@ -7,7 +7,7 @@
 # 档 B（已清空，曾 199 条）：errcheck（默认设置）/ errorlint / nilerr /
 #   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
 # 档 C（已全部清空）：第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic
-#   （diagnostic + performance）、第 4 批 revive（排除 exported / var-naming）、
+#   （默认 check 集 + performance 子集）、第 4 批 revive（排除 exported / var-naming）、
 #   第 5 批 paralleltest（全局状态测试逐条立据）、第 6 批 gocyclo（min-complexity 15）。
 
 version: "2"
@@ -42,7 +42,7 @@ linters:
     # --- 档 C（逐批开启）：第 2 批 gosec ---
     - gosec
 
-    # --- 档 C（逐批开启）：第 3 批 gocritic（diagnostic + performance）---
+    # --- 档 C（逐批开启）：第 3 批 gocritic（默认 check 集 + performance 子集）---
     - gocritic
 
     # --- 档 C（逐批开启）：第 4 批 revive（排除 exported / var-naming）---
@@ -65,11 +65,14 @@ linters:
     # `_ = tx.AddError(...)` 是显式忽略，开了会把 84 条推到 201 条且全是噪音。
     errcheck: {}
 
-    # gocritic 开 correctness（diagnostic）与 performance；performance 在当前
-    # 存量上 0 命中（#44 实测）。style 仍关闭：160 条命中中 134 条是
-    # commentFormatting（中文注释格式噪声），其余 ifElseChain / wrapperFunc /
-    # assignOp 等改写收益低于 review 成本。
+    # gocritic 保持默认 check 集（当前 18 个），并显式启用 4 个 performance
+    # 子集：equalFold / stringXbytes / appendCombine / preferStringWriter（13 条
+    # 已清空）。performance 标签默认不启用，disabled-tags 无法开启；hugeParam
+    # (271) 与 rangeValCopy (111) 共 382 条存量，暂按基线缓开（#44 评估）。
+    # style 仍关闭：160 条命中中 134 条是 commentFormatting（中文注释格式噪声），
+    # 其余 ifElseChain / wrapperFunc / assignOp 等改写收益低于 review 成本。
     gocritic:
+      enabled-checks: ["equalFold", "stringXbytes", "appendCombine", "preferStringWriter"]
       disabled-tags: ["style"]
 
     # revive：显式列出默认规则集并剔除 exported 与 var-naming。

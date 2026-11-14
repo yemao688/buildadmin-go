@@ -223,10 +223,12 @@ func collectReleaseChecks(deps releaseDeps, targetVersion, currentVersion string
 		})
 	}
 
-	checks = append(checks, checkFrameworkConst(deps, currentVersion, baseOK))
-	checks = append(checks, checkChangelog(deps, targetVersion, targetOK))
-	checks = append(checks, checkReleaseWorkspace(deps))
-	checks = append(checks, checkReleaseTag(deps, targetVersion, targetOK))
+	checks = append(checks,
+		checkFrameworkConst(deps, currentVersion, baseOK),
+		checkChangelog(deps, targetVersion, targetOK),
+		checkReleaseWorkspace(deps),
+		checkReleaseTag(deps, targetVersion, targetOK),
+	)
 
 	if releaseFailures(checks) > 0 {
 		checks = append(checks,
