@@ -147,6 +147,7 @@ func toSnakeModule(name string) string {
 }
 
 func TestAPINamingRules(t *testing.T) {
+	t.Parallel()
 	violations, err := collectAPINamingViolations(".")
 	if err != nil {
 		t.Fatal(err)
@@ -160,6 +161,7 @@ func TestAPINamingRules(t *testing.T) {
 }
 
 func TestAPINamingDetectsViolations(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	for _, rule := range apiNamingRules {
 		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o750); err != nil {
@@ -219,6 +221,7 @@ func TestAPINamingDetectsViolations(t *testing.T) {
 }
 
 func TestToSnakeModule(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ in, want string }{
 		{"User", "user"},
 		{"Member", "member"},

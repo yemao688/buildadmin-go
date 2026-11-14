@@ -26,6 +26,7 @@ func newTestTerminal() *Terminal {
 }
 
 func TestGetCommandPlaceholder(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 
 	cmd, ok := term.GetCommand("npx.prettier", "./src/views/backend/test")
@@ -39,6 +40,7 @@ func TestGetCommandPlaceholder(t *testing.T) {
 }
 
 func TestGetCommandPlaceholderEscapesInjection(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 
 	cmd, ok := term.GetCommand("npx.prettier", "./x'; rm -rf /; echo '")
@@ -52,6 +54,7 @@ func TestGetCommandPlaceholderEscapesInjection(t *testing.T) {
 }
 
 func TestGetCommandPlaceholderTildeSeparatedArgs(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 	term.config.Terminal.Commands["fmt"] = map[string]conf.Command{
 		"two": {Cwd: "", Command: "echo %s %s"},
@@ -68,6 +71,7 @@ func TestGetCommandPlaceholderTildeSeparatedArgs(t *testing.T) {
 }
 
 func TestGetCommandWithoutPlaceholderIgnoresExtend(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 
 	cmd, ok := term.GetCommand("version.node", "anything")
@@ -80,6 +84,7 @@ func TestGetCommandWithoutPlaceholderIgnoresExtend(t *testing.T) {
 }
 
 func TestGetCommandUnknownKey(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 	if _, ok := term.GetCommand("npx.missing", ""); ok {
 		t.Fatal("unknown sub key must not resolve")
@@ -90,6 +95,7 @@ func TestGetCommandUnknownKey(t *testing.T) {
 }
 
 func TestGetCommandAppPlaceholder(t *testing.T) {
+	t.Parallel()
 	term := newTestTerminal()
 	term.config.Terminal.Commands["migrate"] = map[string]conf.Command{
 		"run": {Cwd: "", Command: "{app} --conf configs/config.yaml migrate run"},
@@ -131,6 +137,7 @@ func (s *authStub) IsSuperAdmin(_ int32) bool {
 
 func TestExecAuthentication(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	tests := []struct {
 		name            string
@@ -146,6 +153,7 @@ func TestExecAuthentication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			marker := filepath.Join(t.TempDir(), "executed")
 			auth := &authStub{
 				loggedIn:   tt.loggedIn,

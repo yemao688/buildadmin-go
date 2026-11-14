@@ -68,6 +68,7 @@ func loginSecurityResponseCode(t *testing.T, recorder *httptest.ResponseRecorder
 }
 
 func TestLoginRejectsUserToken(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-login-security-domain?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
@@ -86,6 +87,7 @@ func TestLoginRejectsUserToken(t *testing.T) {
 }
 
 func TestLoginRejectsDisabledAdminToken(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-login-security-status?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
@@ -104,6 +106,7 @@ func TestLoginRejectsDisabledAdminToken(t *testing.T) {
 }
 
 func TestLoginStoresAuthenticatedAdminUsername(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-login-security-username?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&loginSecurityAdminRow{}))
@@ -125,6 +128,7 @@ func TestLoginStoresAuthenticatedAdminUsername(t *testing.T) {
 }
 
 func TestUserLoginRejectsAdminToken(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:user-login-security-domain?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	// The entity carries MySQL-specific type tags (int unsigned, enum);
@@ -146,6 +150,7 @@ func TestUserLoginRejectsAdminToken(t *testing.T) {
 }
 
 func TestUserLoginRejectsDisabledUserToken(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:user-login-security-status?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	// The entity carries MySQL-specific type tags (int unsigned, enum);

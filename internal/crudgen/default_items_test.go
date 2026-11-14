@@ -8,6 +8,7 @@ import (
 )
 
 func TestGetFieldDefault(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		field crudmodel.Field
@@ -86,6 +87,7 @@ func TestGetFieldDefault(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := getFieldDefault(tc.field); got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
 			}
@@ -94,6 +96,7 @@ func TestGetFieldDefault(t *testing.T) {
 }
 
 func TestParseTableColumnsDefaultType(t *testing.T) {
+	t.Parallel()
 	columns := []model.Column{
 		{COLUMN_NAME: "a", DATA_TYPE: "int", COLUMN_TYPE: "int(11)", IS_NULLABLE: "YES"},
 		{COLUMN_NAME: "b", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(255)", IS_NULLABLE: "NO", COLUMN_DEFAULT: sql.NullString{Valid: true, String: ""}},

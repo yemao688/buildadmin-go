@@ -24,6 +24,7 @@ func writeSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 // 单元测试：用临时 specs 目录覆盖反向聚合、
 // 过滤与失败关闭路径，不依赖 crud_log 数据。
 func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		specs   map[string]string // 文件名 → dataScope YAML（写为合法 spec）
@@ -99,6 +100,7 @@ func TestBuildCascadeSyncJobsFromSpecs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			specsDir := t.TempDir()
 			for fileName, dsYAML := range test.specs {
 				writeSpec(t, specsDir, strings.TrimSuffix(fileName, ".yaml"), dsYAML)
@@ -151,6 +153,7 @@ func sameJob(a, b CascadeJob) bool {
 // 验证 runCascadeJob 在触达数据库
 // 之前就拒绝非法标识符：校验先行，nil db 即可证明未发生任何执行。
 func TestRunCascadeJobRejectsInvalidIdentifiers(t *testing.T) {
+	t.Parallel()
 	cfg := &conf.Configuration{}
 	invalid := []struct {
 		parent string
@@ -174,6 +177,7 @@ func TestRunCascadeJobRejectsInvalidIdentifiers(t *testing.T) {
 
 // 直接验证标识符规则与 data_scope 复用。
 func TestValidateCascadeJob(t *testing.T) {
+	t.Parallel()
 	valid := CascadeJob{ParentTable: "seller_user", Children: []ChildRef{{ChildTable: "seller_user_money_log", ByColumn: "user_id"}}}
 	if err := validateCascadeJob(valid); err != nil {
 		t.Fatalf("validateCascadeJob(%+v) unexpected error: %v", valid, err)

@@ -602,8 +602,23 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	removals := writeRegistrarParamRemovals(content, fset, file, varName, className)
+	removals = append(removals, writeRegistrarReturnRemovals(content, fset, file, className)...)
+	removals = append(removals, writeRegistrarProviderSetRemovals(content, fset, file, className)...)
+	if len(removals) == 0 {
+		return content, nil
+	}
+	content = applySourceRemovals(content, removals)
+	formatted, err := formatGoCode(content)
+	if err != nil {
+		return "", err
+	}
+	return canonicalizeGoContent(formatted), nil
+}
+
+// writeRegistrarParamRemovals 定位 ProvideRegistrars 的 handler 参数删除区间。
+func writeRegistrarParamRemovals(content string, fset *token.FileSet, file *ast.File, varName, className string) []sourceRemoval {
 	var removals []sourceRemoval
-	// 1. ProvideRegistrars 参数
 	ast.Inspect(file, func(node ast.Node) bool {
 		function, ok := node.(*ast.FuncDecl)
 		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Type.Params == nil {
@@ -619,15 +634,22 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 				break
 			}
 		}
-		if removed {
-			removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
-				field, ok := node.(*ast.Field)
-				return ok && matchField(field)
-			})...)
+		if !removed {
+			return true
 		}
+		removals = append(removals, removeListElementRanges(content, fset, function.Type.Params.Opening, function.Type.Params.Closing, fieldsAsNodes(function.Type.Params.List), func(node ast.Node) bool {
+			field, ok := node.(*ast.Field)
+			return ok && matchField(field)
+		})...)
 		return true
 	})
-	// 2. 只扫 ProvideRegistrars 函数体 return 的 []Registrar 字面量
+	return removals
+}
+
+// writeRegistrarReturnRemovals 只扫 ProvideRegistrars 函数体 return 的
+// []Registrar 字面量，删除 NewXxxRegistrar 条目。
+func writeRegistrarReturnRemovals(content string, fset *token.FileSet, file *ast.File, className string) []sourceRemoval {
+	var removals []sourceRemoval
 	ast.Inspect(file, func(node ast.Node) bool {
 		function, ok := node.(*ast.FuncDecl)
 		if !ok || function.Name == nil || function.Name.Name != "ProvideRegistrars" || function.Body == nil {
@@ -654,8 +676,13 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 		})
 		return false
 	})
-	// 3. 真正的 wire.NewSet ProviderSet 中的 NewXxxRegistrar 条目
-	// （callee 必须是 wire.NewSet，防止误伤同名调用）。
+	return removals
+}
+
+// writeRegistrarProviderSetRemovals 删除真正的 wire.NewSet ProviderSet 中的
+// NewXxxRegistrar 条目（callee 必须是 wire.NewSet，防止误伤同名调用）。
+func writeRegistrarProviderSetRemovals(content string, fset *token.FileSet, file *ast.File, className string) []sourceRemoval {
+	var removals []sourceRemoval
 	ast.Inspect(file, func(node ast.Node) bool {
 		call, ok := node.(*ast.CallExpr)
 		if !ok || len(call.Args) == 0 {
@@ -675,15 +702,7 @@ func removeProvideRegistrarsEntry(content, className string) (string, error) {
 		})...)
 		return true
 	})
-	if len(removals) == 0 {
-		return content, nil
-	}
-	content = applySourceRemovals(content, removals)
-	formatted, err := formatGoCode(content)
-	if err != nil {
-		return "", err
-	}
-	return canonicalizeGoContent(formatted), nil
+	return removals
 }
 
 func writeProvider(dir string, name string) error {

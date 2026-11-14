@@ -16,6 +16,7 @@ import (
 // 在已安装库上删除安全种子、国家菜单与一张核心表，再次 Run 必须通过
 // EnsureMissingCoreTables + EnsureSeed 自愈，而不是让 migrate/serve 失败。
 func TestUpgradeRehearsalSelfHealsExistingDatabaseMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("rehearse_%d_", time.Now().UnixNano())
 	cfg.Database.Prefix = prefix

@@ -41,6 +41,7 @@ func userTestRouter() *gin.Engine {
 	return router
 }
 
+//nolint:paralleltest // userTestRouter 在测试体内向 gin binding 全局 validator 引擎注册 password 校验并写 gin 模式，串行执行
 func TestUserLoginRejectsInvalidAccount(t *testing.T) {
 	config := &conf.Configuration{}
 	config.App.UserLoginCaptcha = false
@@ -59,6 +60,7 @@ func TestUserLoginRejectsInvalidAccount(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, resp.Code)
 }
 
+//nolint:paralleltest // userTestRouter 在测试体内向 gin binding 全局 validator 引擎注册 password 校验并写 gin 模式，串行执行
 func TestUserRegisterRequiresClickCaptcha(t *testing.T) {
 	config := &conf.Configuration{}
 	h := newUserHandlerTest(config)

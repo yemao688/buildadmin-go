@@ -3,6 +3,7 @@ package crudgen
 import "testing"
 
 func TestIsProtectedTable(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"admin", "admin_closure", "security_rule", "table", "user"} {
 		if !IsProtectedTable(name) {
 			t.Errorf("IsProtectedTable(%q) = false, want true", name)
@@ -18,6 +19,7 @@ func TestIsProtectedTable(t *testing.T) {
 }
 
 func TestIsProtectedTableWithPrefix(t *testing.T) {
+	t.Parallel()
 	const prefix = "ba_"
 	for _, name := range []string{"user", "ba_user", "admin", "ba_admin", "ba_security_rule", "ba_table"} {
 		if !IsProtectedTableWithPrefix(prefix, name) {
@@ -36,6 +38,7 @@ func TestIsProtectedTableWithPrefix(t *testing.T) {
 }
 
 func TestProtectedTableNamesAreStable(t *testing.T) {
+	t.Parallel()
 	want := map[string]bool{
 		"admin": true, "admin_closure": true, "admin_log": true, "admin_rule": true,
 		"user": true, "user_money_log": true,

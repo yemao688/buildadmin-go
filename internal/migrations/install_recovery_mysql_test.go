@@ -14,8 +14,9 @@ import (
 )
 
 func TestInstallRecoveryDecisionFourStates(t *testing.T) {
+	t.Parallel()
 	db, baseCfg := testutil.OpenMySQL(t)
-	for index, state := range []struct {
+	for index, state := range []struct { //nolint:paralleltest // 子测试共用父测试的 db 会话并在 setup 中改写其 NamingStrategy，必须串行
 		name  string
 		setup func(*testing.T, *gorm.DB, *conf.Configuration)
 		want  InstallRecoveryState

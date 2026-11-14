@@ -33,6 +33,27 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	if err := normalizeTableConfiguration(&table); err != nil {
 		return err
 	}
+	if err := validateGenerationTableIdentity(table); err != nil {
+		return err
+	}
+	if err := validateGenerationTableNames(table); err != nil {
+		return err
+	}
+	if err := validateGenerationFields(fields); err != nil {
+		return err
+	}
+	// 点号快速搜索的结构校验放在字段归一化之后：alias/列白名单依赖
+	// remoteSelect 字段声明的 remoteTable 与 relationFields。
+	if err := validateQuickSearchRelationPaths(table, fields); err != nil {
+		return err
+	}
+	if err := validateGenerationFieldSet(fields); err != nil {
+		return err
+	}
+	return validateGenerationDesignChangeNames(table)
+}
+
+func validateGenerationTableIdentity(table crudmodel.Table) error {
 	if err := data_scope.ValidateIdentifier(table.Name); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
@@ -46,6 +67,10 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 			}
 		}
 	}
+	return nil
+}
+
+func validateGenerationTableNames(table crudmodel.Table) error {
 	if _, err := ParseEntityNameData(table.Name, table.ModelFile); err != nil {
 		return err
 	}
@@ -61,6 +86,10 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	if _, err := ParseRegistrarNameData(table.Name, table.ControllerFile); err != nil {
 		return err
 	}
+	return nil
+}
+
+func validateGenerationFields(fields []crudmodel.Field) error {
 	for i := range fields {
 		normalizeFieldConfiguration(&fields[i])
 		field := fields[i]
@@ -71,11 +100,10 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 			return err
 		}
 	}
-	// 点号快速搜索的结构校验放在字段归一化之后：alias/列白名单依赖
-	// remoteSelect 字段声明的 remoteTable 与 relationFields。
-	if err := validateQuickSearchRelationPaths(table, fields); err != nil {
-		return err
-	}
+	return nil
+}
+
+func validateGenerationFieldSet(fields []crudmodel.Field) error {
 	if len(fields) == 0 {
 		return fmt.Errorf("at least one field is required")
 	}
@@ -94,9 +122,10 @@ func ValidateGenerationInput(table crudmodel.Table, fields []crudmodel.Field) er
 	if primaryKeys != 1 {
 		return fmt.Errorf("exactly one primary key field is required, got %d", primaryKeys)
 	}
-	if err := validatePrimaryKeyTypes(fields); err != nil {
-		return err
-	}
+	return validatePrimaryKeyTypes(fields)
+}
+
+func validateGenerationDesignChangeNames(table crudmodel.Table) error {
 	for _, change := range table.DesignChange {
 		for _, name := range []string{change.OldName, change.NewName, change.After} {
 			if name != "" && name != firstFieldSentinel {
@@ -195,39 +224,60 @@ func validateRelationField(field crudmodel.Field) error {
 			return fmt.Errorf("invalid remote table for field %q: %w", field.Name, err)
 		}
 	}
-	if field.Form.RemotePk != "" {
-		parts := strings.Split(field.Form.RemotePk, ".")
-		if len(parts) > 2 {
-			return fmt.Errorf("invalid remote primary key for field %q: expected one identifier or owner.field", field.Name)
-		}
-		for _, part := range parts {
-			if err := data_scope.ValidateIdentifier(part); err != nil {
-				return fmt.Errorf("invalid remote primary key for field %q: %w", field.Name, err)
-			}
-		}
+	if err := validateRelationRemotePk(field); err != nil {
+		return err
 	}
 	if field.Form.RemotePrimaryTableAlias != "" && !frontendIdentifierRE.MatchString(field.Form.RemotePrimaryTableAlias) {
 		return fmt.Errorf("invalid remote primary table alias %q", field.Form.RemotePrimaryTableAlias)
 	}
-	if field.Form.RelationFields != "" {
-		for _, name := range strings.Split(field.Form.RelationFields, ",") {
-			name = strings.TrimSpace(name)
-			if name == "" {
-				continue
-			}
-			if err := data_scope.ValidateIdentifier(name); err != nil {
-				return fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
-			}
+	if err := validateRelationColumns(field); err != nil {
+		return err
+	}
+	return validateRelationRemoteModel(field)
+}
+
+func validateRelationRemotePk(field crudmodel.Field) error {
+	if field.Form.RemotePk == "" {
+		return nil
+	}
+	parts := strings.Split(field.Form.RemotePk, ".")
+	if len(parts) > 2 {
+		return fmt.Errorf("invalid remote primary key for field %q: expected one identifier or owner.field", field.Name)
+	}
+	for _, part := range parts {
+		if err := data_scope.ValidateIdentifier(part); err != nil {
+			return fmt.Errorf("invalid remote primary key for field %q: %w", field.Name, err)
 		}
 	}
-	if field.Form.RemoteModel != "" && field.Form.RemoteTable != "" {
-		parsed, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
-		if err != nil {
-			return fmt.Errorf("invalid remote model for field %q: %w", field.Name, err)
+	return nil
+}
+
+func validateRelationColumns(field crudmodel.Field) error {
+	if field.Form.RelationFields == "" {
+		return nil
+	}
+	for _, name := range strings.Split(field.Form.RelationFields, ",") {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
 		}
-		if err := ValidateGeneratedAbsolutePath(parsed.ParseFile, "internal/model"); err != nil {
-			return fmt.Errorf("remote model for field %q escapes model roots: %w", field.Name, err)
+		if err := data_scope.ValidateIdentifier(name); err != nil {
+			return fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
 		}
+	}
+	return nil
+}
+
+func validateRelationRemoteModel(field crudmodel.Field) error {
+	if field.Form.RemoteModel == "" || field.Form.RemoteTable == "" {
+		return nil
+	}
+	parsed, err := ParseEntityNameData(field.Form.RemoteTable, field.Form.RemoteModel)
+	if err != nil {
+		return fmt.Errorf("invalid remote model for field %q: %w", field.Name, err)
+	}
+	if err := ValidateGeneratedAbsolutePath(parsed.ParseFile, "internal/model"); err != nil {
+		return fmt.Errorf("remote model for field %q escapes model roots: %w", field.Name, err)
 	}
 	return nil
 }
@@ -303,6 +353,10 @@ func validateFrontendField(field crudmodel.Field) error {
 	if err := validateFrontendMessage(field.Form.ValidatorMsg); err != nil {
 		return fmt.Errorf("field %q: %w", field.Name, err)
 	}
+	return validateFrontendTableConfig(field)
+}
+
+func validateFrontendTableConfig(field crudmodel.Field) error {
 	for label, value := range map[string]string{
 		"table label": field.Table.Label, "table operator": field.Table.Operator,
 		"table render": field.Table.Render, "table sortable": field.Table.Sortable,

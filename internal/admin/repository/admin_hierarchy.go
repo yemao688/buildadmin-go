@@ -388,20 +388,8 @@ func (h *AdminHierarchy) moveSubtreeLocked(ctx context.Context, tx *gorm.DB, nod
 		return err
 	}
 	if newParentID != nil {
-		if *newParentID == nodeID {
-			return ErrHierarchySelfMove
-		}
-		if err := h.ensureNodeExists(ctx, tx, *newParentID); err != nil {
+		if err := h.validateMoveTargetLocked(ctx, tx, nodeID, *newParentID); err != nil {
 			return err
-		}
-		var isDescendant int64
-		if err := tx.WithContext(ctx).Table(h.closureTable()).
-			Where("ancestor_id = ? AND descendant_id = ?", nodeID, *newParentID).
-			Count(&isDescendant).Error; err != nil {
-			return err
-		}
-		if isDescendant > 0 {
-			return ErrHierarchyDescendantMove
 		}
 	}
 
@@ -455,6 +443,26 @@ func (h *AdminHierarchy) moveSubtreeLocked(ctx context.Context, tx *gorm.DB, nod
 	}
 
 	return h.adminRowExists(ctx, tx, nodeID)
+}
+
+// validateMoveTargetLocked 校验新父节点可接收移动：非自身、存在且不是本节点的后代。
+func (h *AdminHierarchy) validateMoveTargetLocked(ctx context.Context, tx *gorm.DB, nodeID, newParentID int32) error {
+	if newParentID == nodeID {
+		return ErrHierarchySelfMove
+	}
+	if err := h.ensureNodeExists(ctx, tx, newParentID); err != nil {
+		return err
+	}
+	var isDescendant int64
+	if err := tx.WithContext(ctx).Table(h.closureTable()).
+		Where("ancestor_id = ? AND descendant_id = ?", nodeID, newParentID).
+		Count(&isDescendant).Error; err != nil {
+		return err
+	}
+	if isDescendant > 0 {
+		return ErrHierarchyDescendantMove
+	}
+	return nil
 }
 
 // AdminOwnerTransfer 记录某张归属表在一次删除中被转移的行数。

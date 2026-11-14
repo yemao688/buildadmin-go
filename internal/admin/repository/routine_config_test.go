@@ -13,6 +13,7 @@ import (
 // 变量名/用户名唯一性预检已上移 service；repo 只保留并发插入的兜底映射，
 // 其判据必须同时识别 GORM 翻译后的哨兵与 MySQL 原生 1062。
 func TestIsDuplicateKeyErrorRecognizesUniqueViolations(t *testing.T) {
+	t.Parallel()
 	require.True(t, isDuplicateKeyError(gorm.ErrDuplicatedKey))
 	require.True(t, isDuplicateKeyError(fmt.Errorf("create: %w", gorm.ErrDuplicatedKey)))
 	require.True(t, isDuplicateKeyError(&mysql.MySQLError{Number: 1062, Message: "Duplicate entry"}))

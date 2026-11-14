@@ -34,6 +34,7 @@ func newAdminRuleServiceFixture(t *testing.T) (*AdminRuleService, *gorm.DB) {
 // 验证 Menus 按操作者权限范围
 // 过滤：超管（规则集合含 "*"）看到全部，普通管理员只看到自己规则集合内的项。
 func TestAdminRuleServiceMenusFollowsOperatorScope(t *testing.T) {
+	t.Parallel()
 	svc, db := newAdminRuleServiceFixture(t)
 	for _, id := range []int32{1, 2, 3} {
 		rule := model.AdminRule{ID: id, Type: "button", Title: "rule-" + strconv.Itoa(int(id)), Name: "rule-" + strconv.Itoa(int(id)), Status: "1"}

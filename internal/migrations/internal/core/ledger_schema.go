@@ -48,31 +48,42 @@ func compareLedgerColumns(actual []ledgerColumn, expected []ledgerColumnSpec) *l
 	}
 	for i, column := range actual {
 		spec := expected[i]
-		typeMatches := strings.EqualFold(column.Type, spec.Type)
-		if spec.AcceptUnsigned {
-			typeMatches = typeMatches || strings.EqualFold(column.Type, spec.Type+" unsigned")
-		}
-		if column.Name != spec.Name || !typeMatches || column.Nullable != spec.Nullable {
-			return &ledgerColumnMismatch{columnName: column.Name}
-		}
-		if spec.CheckPrecision && precisionValue(column.Precision) != spec.Precision {
-			return &ledgerColumnMismatch{columnName: column.Name}
-		}
-		if spec.RequireNoDefault && column.Default.Valid {
-			return &ledgerColumnMismatch{columnName: column.Name}
-		}
-		if spec.AllowCurrentTimestampDefault && column.Default.Valid &&
-			!strings.EqualFold(column.Default.String, "CURRENT_TIMESTAMP(6)") {
-			return &ledgerColumnMismatch{columnName: column.Name}
-		}
-		if spec.ExpectedDefault != nil && (!column.Default.Valid || column.Default.String != *spec.ExpectedDefault) {
-			return &ledgerColumnMismatch{columnName: column.Name}
-		}
-		if spec.RequireAutoIncrement && !strings.Contains(strings.ToLower(column.Extra), "auto_increment") {
+		if !ledgerColumnIdentityMatches(column, spec) ||
+			!ledgerColumnPrecisionMatches(column, spec) ||
+			!ledgerColumnDefaultMatches(column, spec) {
 			return &ledgerColumnMismatch{columnName: column.Name}
 		}
 	}
 	return nil
+}
+
+func ledgerColumnIdentityMatches(column ledgerColumn, spec ledgerColumnSpec) bool {
+	typeMatches := strings.EqualFold(column.Type, spec.Type)
+	if spec.AcceptUnsigned {
+		typeMatches = typeMatches || strings.EqualFold(column.Type, spec.Type+" unsigned")
+	}
+	return column.Name == spec.Name && typeMatches && column.Nullable == spec.Nullable
+}
+
+func ledgerColumnPrecisionMatches(column ledgerColumn, spec ledgerColumnSpec) bool {
+	if spec.CheckPrecision && precisionValue(column.Precision) != spec.Precision {
+		return false
+	}
+	if spec.RequireAutoIncrement && !strings.Contains(strings.ToLower(column.Extra), "auto_increment") {
+		return false
+	}
+	return true
+}
+
+func ledgerColumnDefaultMatches(column ledgerColumn, spec ledgerColumnSpec) bool {
+	if spec.RequireNoDefault && column.Default.Valid {
+		return false
+	}
+	if spec.AllowCurrentTimestampDefault && column.Default.Valid &&
+		!strings.EqualFold(column.Default.String, "CURRENT_TIMESTAMP(6)") {
+		return false
+	}
+	return spec.ExpectedDefault == nil || (column.Default.Valid && column.Default.String == *spec.ExpectedDefault)
 }
 
 func precisionValue(value sql.NullInt64) int {

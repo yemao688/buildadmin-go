@@ -9,6 +9,7 @@ import (
 )
 
 func TestFlexBoolJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -27,6 +28,7 @@ func TestFlexBoolJSON(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexBool
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -51,6 +53,7 @@ func TestFlexBoolJSON(t *testing.T) {
 }
 
 func TestFlexBoolRejectsNonCanonicalValues(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{`2`, `-1`, `1.0`, `"yes"`, `{}`, `[]`} {
 		var value FlexBool
 		if err := json.Unmarshal([]byte(data), &value); err == nil {
@@ -60,6 +63,7 @@ func TestFlexBoolRejectsNonCanonicalValues(t *testing.T) {
 }
 
 func TestFlexStatusJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -77,6 +81,7 @@ func TestFlexStatusJSON(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexStatus
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -95,6 +100,7 @@ func TestFlexStatusJSON(t *testing.T) {
 }
 
 func TestFlexBoolScanAndValue(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		input any
 		want  FlexBool
@@ -128,6 +134,7 @@ func TestFlexBoolScanAndValue(t *testing.T) {
 }
 
 func TestFlexYearJSON(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		data string
@@ -144,6 +151,7 @@ func TestFlexYearJSON(t *testing.T) {
 		{"null", `null`, FlexYear("")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexYear
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -168,6 +176,7 @@ func TestFlexYearJSON(t *testing.T) {
 }
 
 func TestFlexYearRejectsInvalidValues(t *testing.T) {
+	t.Parallel()
 	for _, data := range []string{`1899`, `1900`, `2156`, `"26"`, `"202A"`, `true`, `{}`, `[]`} {
 		var value FlexYear
 		if err := json.Unmarshal([]byte(data), &value); err == nil {
@@ -177,6 +186,7 @@ func TestFlexYearRejectsInvalidValues(t *testing.T) {
 }
 
 func TestFlexYearScanAndValue(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		input any
 		want  FlexYear
@@ -218,6 +228,7 @@ func TestFlexYearScanAndValue(t *testing.T) {
 }
 
 func TestFlexNumbers(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -244,6 +255,7 @@ func TestFlexNumbers(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got any
 			switch test.want.(type) {
 			case FlexInt32:
@@ -287,6 +299,7 @@ func TestFlexNumbers(t *testing.T) {
 }
 
 func TestFlexNumbersRejectInvalidStrings(t *testing.T) {
+	t.Parallel()
 	for _, target := range []any{new(FlexInt32), new(FlexInt64), new(FlexFloat64)} {
 		if err := json.Unmarshal([]byte(`"not-a-number"`), target); err == nil {
 			t.Fatal("expected invalid numeric string to fail")
@@ -295,6 +308,7 @@ func TestFlexNumbersRejectInvalidStrings(t *testing.T) {
 }
 
 func TestFlexInt32SliceJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -310,6 +324,7 @@ func TestFlexInt32SliceJSON(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexInt32Slice
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -322,6 +337,7 @@ func TestFlexInt32SliceJSON(t *testing.T) {
 }
 
 func TestFlexInt32SliceRejectsInvalidElements(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		data string
 		want string
@@ -348,6 +364,7 @@ func TestFlexInt32SliceRejectsInvalidElements(t *testing.T) {
 }
 
 func TestFlexInt32MapJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -362,6 +379,7 @@ func TestFlexInt32MapJSON(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexInt32Map
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -379,6 +397,7 @@ func TestFlexInt32MapJSON(t *testing.T) {
 }
 
 func TestFlexInt32MapRejectsInvalidEntries(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		data string
 		want string
@@ -405,6 +424,7 @@ func TestFlexInt32MapRejectsInvalidEntries(t *testing.T) {
 }
 
 func TestFlexInt64SliceJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		data string
@@ -421,6 +441,7 @@ func TestFlexInt64SliceJSON(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var got FlexInt64Slice
 			if err := json.Unmarshal([]byte(test.data), &got); err != nil {
 				t.Fatal(err)
@@ -433,6 +454,7 @@ func TestFlexInt64SliceJSON(t *testing.T) {
 }
 
 func TestFlexInt64SliceRejectsInvalidElements(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		data string
 		want string

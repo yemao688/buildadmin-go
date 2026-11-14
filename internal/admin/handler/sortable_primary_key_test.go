@@ -36,6 +36,7 @@ func newSortablePrimaryKeyDB(t *testing.T) *gorm.DB {
 }
 
 func TestSortableDoesNotTruncateInt64CustomPrimaryKey(t *testing.T) {
+	t.Parallel()
 	db := newSortablePrimaryKeyDB(t)
 	require.NoError(t, db.AutoMigrate(&sortableInt64Row{}))
 	ids := []int64{1<<40 + 1, 1<<40 + 2, 1<<40 + 3}
@@ -62,6 +63,7 @@ func TestSortableDoesNotTruncateInt64CustomPrimaryKey(t *testing.T) {
 }
 
 func TestSortableUsesStringCustomPrimaryKeyColumn(t *testing.T) {
+	t.Parallel()
 	db := newSortablePrimaryKeyDB(t)
 	require.NoError(t, db.AutoMigrate(&sortableStringRow{}))
 	require.NoError(t, db.Create([]sortableStringRow{
@@ -87,6 +89,7 @@ func TestSortableUsesStringCustomPrimaryKeyColumn(t *testing.T) {
 }
 
 func TestBaseSortablePreservesLargeJSONPrimaryKey(t *testing.T) {
+	t.Parallel()
 	db := newSortablePrimaryKeyDB(t)
 	require.NoError(t, db.AutoMigrate(&sortableInt64Row{}))
 	moveID := int64(1<<60 + 123)
@@ -108,6 +111,7 @@ func TestBaseSortablePreservesLargeJSONPrimaryKey(t *testing.T) {
 }
 
 func TestSortableRejectsUnsupportedPrimaryKeyShape(t *testing.T) {
+	t.Parallel()
 	_, err := normalizeSortablePrimaryKey([]string{"invalid"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unsupported primary key type")

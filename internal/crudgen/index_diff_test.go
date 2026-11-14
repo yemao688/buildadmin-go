@@ -9,6 +9,7 @@ import (
 )
 
 func TestParseSpecIndexesValid(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "order_no"}, {Name: "seller_id"}, {Name: "hotel_id"}}
 	raw := []specIndex{
 		{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}},
@@ -30,6 +31,7 @@ func TestParseSpecIndexesValid(t *testing.T) {
 }
 
 func TestParseSpecIndexesPrefixLength(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "note", Type: "text"}}
 	indexes, err := parseSpecIndexes([]specIndex{{Name: "idx_note", Columns: []string{"note(64)"}}}, fields)
 	if err != nil {
@@ -46,6 +48,7 @@ func TestParseSpecIndexesPrefixLength(t *testing.T) {
 }
 
 func TestParseSpecIndexesRejects(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "id", PrimaryKey: true}, {Name: "order_no"}, {Name: "note", Type: "text"}}
 	cases := []struct {
 		name  string
@@ -63,6 +66,7 @@ func TestParseSpecIndexesRejects(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := parseSpecIndexes([]specIndex{tc.index}, fields); err == nil {
 				t.Fatalf("parseSpecIndexes(%+v) = nil error, want error", tc.index)
 			}
@@ -77,6 +81,7 @@ func TestParseSpecIndexesRejects(t *testing.T) {
 }
 
 func TestCreateTableDDLIncludesIndexes(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{
 		Name: "orders",
 		Indexes: []crudmodel.IndexSpec{
@@ -105,6 +110,7 @@ func TestCreateTableDDLIncludesIndexes(t *testing.T) {
 }
 
 func TestDeriveIndexDiffs(t *testing.T) {
+	t.Parallel()
 	wanted := []crudmodel.IndexSpec{
 		{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}},
 		{Name: "uk_seller_hotel", Unique: true, Columns: []string{"seller_id", "hotel_id"}},
@@ -132,6 +138,7 @@ func TestDeriveIndexDiffs(t *testing.T) {
 }
 
 func TestDeriveIndexDiffsWarnsWithoutSpecIndexes(t *testing.T) {
+	t.Parallel()
 	// spec 未声明任何索引时，线外索引仍必须告警（评审修复：不得短路）。
 	actual := []actualIndex{
 		{Name: "PRIMARY", Unique: true, Columns: []string{"id"}},
@@ -147,6 +154,7 @@ func TestDeriveIndexDiffsWarnsWithoutSpecIndexes(t *testing.T) {
 }
 
 func TestDeriveIndexDiffsDataScopeExactExemption(t *testing.T) {
+	t.Parallel()
 	// 只有精确匹配 dataScopeIndexName 才豁免；其它 idx_* 前缀视为线外索引。
 	actual := []actualIndex{
 		{Name: "idx_admin_id", Columns: []string{"admin_id"}},
@@ -159,6 +167,7 @@ func TestDeriveIndexDiffsDataScopeExactExemption(t *testing.T) {
 }
 
 func TestDeriveIndexDiffsSpecIndexCollidingWithDataScope(t *testing.T) {
+	t.Parallel()
 	// spec 声明与 data_scope 机制索引同名：不重复 ADD（由 EnsureDataScopeIndex 负责）。
 	wanted := []crudmodel.IndexSpec{{Name: "idx_admin_id", Unique: false, Columns: []string{"admin_id"}}}
 	plan := deriveIndexDiffs(nil, "idx_admin_id", wanted, "ba_orders")
@@ -171,6 +180,7 @@ func TestDeriveIndexDiffsSpecIndexCollidingWithDataScope(t *testing.T) {
 }
 
 func TestDeriveIndexDiffsDefinitionDrift(t *testing.T) {
+	t.Parallel()
 	wanted := []crudmodel.IndexSpec{{Name: "uk_order_no", Unique: true, Columns: []string{"order_no"}}}
 	actual := []actualIndex{{Name: "uk_order_no", Unique: false, Columns: []string{"order_no"}}}
 	plan := deriveIndexDiffs(actual, "", wanted, "t")
@@ -183,6 +193,7 @@ func TestDeriveIndexDiffsDefinitionDrift(t *testing.T) {
 }
 
 func TestSpecIndexesRoundTrip(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	specPath := filepath.Join(dir, "orders.yaml")
 	content := `name: orders

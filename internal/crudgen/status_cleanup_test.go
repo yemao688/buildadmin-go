@@ -15,6 +15,7 @@ import (
 )
 
 func TestTruncateCrudLogCommentFitsVarcharLimit(t *testing.T) {
+	t.Parallel()
 	short := "stage=menu generation: duplicate name"
 	if got := truncateCrudLogComment(short); got != short {
 		t.Fatalf("short message changed: %q", got)
@@ -36,6 +37,7 @@ func TestTruncateCrudLogCommentFitsVarcharLimit(t *testing.T) {
 }
 
 func TestReconcileStaleGeneratingLogs(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +74,7 @@ func TestReconcileStaleGeneratingLogs(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // 在真实仓库 internal/admin 下建删夹具目录并读根 provider.go，并行会与其它真实仓库文件测试互相干扰
 func TestPruneEmptyProviderScaffold(t *testing.T) {
 	stop := "internal/admin/handler"
 	pkgDir := filepath.Join(util.RootPath(), stop, "prune_scaffold_test")
@@ -119,6 +122,7 @@ func TestPruneEmptyProviderScaffold(t *testing.T) {
 }
 
 func TestPruneEmptyDirsUpTo(t *testing.T) {
+	t.Parallel()
 	stop := t.TempDir()
 	nested := filepath.Join(stop, "a", "b", "c")
 	if err := os.MkdirAll(nested, 0o750); err != nil {
@@ -153,6 +157,8 @@ func TestPruneEmptyDirsUpTo(t *testing.T) {
 // 空模块目录链向上清空（止于 views/lang 根），共享父目录中的其他模块
 // 文件必须保留，stopAt 根目录绝不删除。路径按生产推导（LangFile 的末段
 // 是文件名，模块目录是其父目录）构造，与真实残留形态一致。
+//
+//nolint:paralleltest // 在真实仓库 web/src 下建删夹具目录，并行会与其它真实仓库文件测试互相干扰
 func TestPruneFrontendEmptyDirs(t *testing.T) {
 	root := util.RootPath()
 	table := crudmodel.Table{Name: "prune_fixture", WebViewsDir: "web/src/views/backend/prune_fixture/user/account"}
@@ -218,6 +224,8 @@ func TestPruneFrontendEmptyDirs(t *testing.T) {
 // 文件均不存在）→ 生成写入文件并 MkdirAll 建目录 → 失败回滚 snapshot.Restore()
 // 只删文件、目录残留（修复前的 bug 形态）→ pruneFrontendEmptyDirs 清空目录链。
 // 路径全部按生产推导构造（LangFile 末段是文件名、Views 末段是模块目录）。
+//
+//nolint:paralleltest // 在真实仓库 web/src 下建删夹具目录，并行会与其它真实仓库文件测试互相干扰
 func TestRollbackPrunesEmptyFrontendDirs(t *testing.T) {
 	root := util.RootPath()
 	table := crudmodel.Table{Name: "rollback_fixture", WebViewsDir: "web/src/views/backend/rollback_fixture/account"}

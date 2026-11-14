@@ -34,6 +34,7 @@ type attachmentRuntimeRow struct {
 }
 
 func TestAttachmentModelMySQLDataScope(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	db.Config.NamingStrategy = schema.NamingStrategy{}
 	sqlDB, err := db.DB()

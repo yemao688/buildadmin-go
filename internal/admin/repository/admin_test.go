@@ -77,6 +77,7 @@ func adminTestContextID(t *testing.T, id int32, unrestricted bool) *gin.Context 
 func ptr(v int32) *int32 { return &v }
 
 func TestAdminModelScopedFailClosed(t *testing.T) {
+	t.Parallel()
 	db := openAdminTestDB(t)
 	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 
@@ -88,6 +89,7 @@ func TestAdminModelScopedFailClosed(t *testing.T) {
 }
 
 func TestAdminModelScopedUnrestrictedBypass(t *testing.T) {
+	t.Parallel()
 	db := openAdminTestDB(t)
 	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 
@@ -99,6 +101,7 @@ func TestAdminModelScopedUnrestrictedBypass(t *testing.T) {
 }
 
 func TestAdminModelActorRequiresRealRequest(t *testing.T) {
+	t.Parallel()
 	db := openAdminTestDB(t)
 	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	if _, err := m.actor(nil); !errors.Is(err, data_scope.ErrScopedAccessDenied) {
@@ -111,6 +114,7 @@ func TestAdminModelActorRequiresRealRequest(t *testing.T) {
 }
 
 func TestLoadParentSummariesSelectsUsername(t *testing.T) {
+	t.Parallel()
 	db := openAdminTestDB(t)
 	m := NewAdminRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	ctx := adminTestContext(t, true)
@@ -150,6 +154,7 @@ func (l *adminGroupSQLCounter) Trace(_ context.Context, _ time.Time, fc func() (
 }
 
 func TestLoadGroupSummariesBatchesOneQuery(t *testing.T) {
+	t.Parallel()
 	counter := &adminGroupSQLCounter{Interface: logger.Default.LogMode(logger.Silent)}
 	db, err := gorm.Open(sqlite.Open("file:admin-group-summaries-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},

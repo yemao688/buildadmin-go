@@ -24,6 +24,7 @@ import (
 // delete drops the count, the last delete physically removes the row and the
 // local file.
 func TestAttachmentDeleteHonorsQuoteAndRemovesLocalFileAfterLastReference(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "attachment_quote.db")), &gorm.Config{
 		NamingStrategy:                           schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 		DisableForeignKeyConstraintWhenMigrating: true,

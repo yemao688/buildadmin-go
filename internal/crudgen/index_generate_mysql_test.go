@@ -12,6 +12,7 @@ import (
 )
 
 func TestGeneratePathSyncsMissingIndexes(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = idxApplyTestPrefix
 	table := idxApplyTestPrefix + "ops_generate_index"

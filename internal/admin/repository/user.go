@@ -206,6 +206,13 @@ func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, pa
 	if data_scope.ValidateActor(actor) != nil {
 		return data_scope.ErrScopedAccessDenied
 	}
+	updates := userEditUpdates(user, passwordHash)
+	return s.Transaction(ctx, func(tx *gorm.DB) error {
+		return s.editWithActorTx(ctx, tx, user, actor, updates)
+	})
+}
+
+func userEditUpdates(user *model.User, passwordHash string) map[string]interface{} {
 	updates := map[string]interface{}{
 		"username":  user.Username,
 		"nickname":  user.Nickname,
@@ -219,58 +226,84 @@ func (s *UserRepository) EditWithActor(ctx context.Context, user *model.User, pa
 	if passwordHash != "" {
 		updates["password"] = passwordHash
 	}
-	return s.Transaction(ctx, func(tx *gorm.DB) error {
-		err := NewAdminHierarchy(s.config).LockHierarchy(ctx, tx)
-		if err != nil {
+	return updates
+}
+
+func (s *UserRepository) editWithActorTx(ctx context.Context, tx *gorm.DB, user *model.User, actor data_scope.Actor, updates map[string]interface{}) error {
+	err := NewAdminHierarchy(s.config).LockHierarchy(ctx, tx)
+	if err != nil {
+		return err
+	}
+	current, err := s.lockUserRow(ctx, tx, user.ID, actor)
+	if err != nil {
+		return err
+	}
+	// 保留在事务内：行级 FOR UPDATE 读到的当前归属与提交的归属必须成对
+	// 校验，零/负归属会让后续归属作用域与日志同步失去可比对象。拆到
+	// service 会丢失“提交值 + 锁定行”这对同一快照的原子性。
+	if current.AdminID <= 0 || user.AdminID <= 0 {
+		return cErr.BadRequest("invalid administrator owner")
+	}
+	ownerChanged := current.AdminID != user.AdminID
+	if ownerChanged {
+		if err := s.prepareUserOwnerChange(ctx, tx, current, user, actor, updates); err != nil {
 			return err
 		}
-		var current model.User
-		if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", user.ID).First(&current).Error; err != nil {
+	}
+	result := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return s.editWithActorZeroRows(ctx, tx, user.ID, actor)
+	}
+	if result.RowsAffected != 1 {
+		return gorm.ErrRecordNotFound
+	}
+	if ownerChanged {
+		if err := s.syncUserOwnerChange(tx, current.ID, user.AdminID); err != nil {
 			return err
 		}
-		// 保留在事务内：行级 FOR UPDATE 读到的当前归属与提交的归属必须成对
-		// 校验，零/负归属会让后续归属作用域与日志同步失去可比对象。拆到
-		// service 会丢失“提交值 + 锁定行”这对同一快照的原子性。
-		if current.AdminID <= 0 || user.AdminID <= 0 {
-			return cErr.BadRequest("invalid administrator owner")
-		}
-		ownerChanged := current.AdminID != user.AdminID
-		if ownerChanged {
-			if err := s.validateUserOwner(ctx, tx, user.AdminID, actor); err != nil {
-				return err
-			}
-			if err := s.validateUserLogOwners(tx, current.ID, current.AdminID); err != nil {
-				return err
-			}
-			updates["admin_id"] = user.AdminID
-		}
-		result := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", user.ID).Updates(updates)
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			var visible int64
-			if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", user.ID).Count(&visible).Error; err != nil {
-				return err
-			}
-			if visible == 1 {
-				return nil
-			}
-			return gorm.ErrRecordNotFound
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		if ownerChanged {
-			if err := s.syncUserLogOwners(tx, current.ID, user.AdminID); err != nil {
-				return err
-			}
-			if err := s.validateUserLogOwners(tx, current.ID, user.AdminID); err != nil {
-				return err
-			}
-		}
+	}
+	return nil
+}
+
+func (s *UserRepository) lockUserRow(ctx context.Context, tx *gorm.DB, userID int32, actor data_scope.Actor) (*model.User, error) {
+	var current model.User
+	if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Clauses(clause.Locking{Strength: "UPDATE"}).Where("`"+s.TableName+"`.id = ?", userID).First(&current).Error; err != nil {
+		return nil, err
+	}
+	return &current, nil
+}
+
+// editWithActorZeroRows 处理“写回同值”可能返回 0 行的情况：可见且存在即视为成功。
+func (s *UserRepository) editWithActorZeroRows(ctx context.Context, tx *gorm.DB, userID int32, actor data_scope.Actor) error {
+	var visible int64
+	if err := tx.Model(&model.User{}).Scopes(s.scopedWithActor(ctx, actor)).Where("`"+s.TableName+"`.id = ?", userID).Count(&visible).Error; err != nil {
+		return err
+	}
+	if visible == 1 {
 		return nil
-	})
+	}
+	return gorm.ErrRecordNotFound
+}
+
+func (s *UserRepository) prepareUserOwnerChange(ctx context.Context, tx *gorm.DB, current, user *model.User, actor data_scope.Actor, updates map[string]interface{}) error {
+	if err := s.validateUserOwner(ctx, tx, user.AdminID, actor); err != nil {
+		return err
+	}
+	if err := s.validateUserLogOwners(tx, current.ID, current.AdminID); err != nil {
+		return err
+	}
+	updates["admin_id"] = user.AdminID
+	return nil
+}
+
+func (s *UserRepository) syncUserOwnerChange(tx *gorm.DB, userID, ownerID int32) error {
+	if err := s.syncUserLogOwners(tx, userID, ownerID); err != nil {
+		return err
+	}
+	return s.validateUserLogOwners(tx, userID, ownerID)
 }
 
 // validateUserOwner 校验归属管理员在 actor 作用域内且处于启用状态。保留在

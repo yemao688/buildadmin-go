@@ -18,6 +18,7 @@ func resetRegistryForTest() {
 	frozen = false
 }
 
+//nolint:paralleltest // 测试重置并写入包级 business 迁移注册表（registry/frozen），并行会污染同包其它用例
 func TestRegistryValidationSortingCopyAndFreeze(t *testing.T) {
 	resetRegistryForTest()
 	second := validMigration(2, "two")
@@ -39,6 +40,7 @@ func TestRegistryValidationSortingCopyAndFreeze(t *testing.T) {
 	assertRegisterPanics(t, validMigration(3, "three"))
 }
 
+//nolint:paralleltest // 测试重置并写入包级 business 迁移注册表（registry/frozen），并行会污染同包其它用例
 func TestRegistryValidationErrors(t *testing.T) {
 	cases := [][]Migration{
 		{validMigration(2, "one")},
@@ -70,6 +72,7 @@ func assertRegisterPanics(t *testing.T, migration Migration) {
 }
 
 func TestValidateMigrations(t *testing.T) {
+	t.Parallel()
 	noop := func(*gorm.DB, *conf.Configuration) error { return nil }
 
 	valid := validMigration(1, "shop-orders")

@@ -19,6 +19,7 @@ func (d getForTestDriver) Delete(string) error                    { return nil }
 func (d getForTestDriver) Clear(string, int32) error              { return nil }
 
 func TestTokenHelperGetForChecksTokenType(t *testing.T) {
+	t.Parallel()
 	tokenData := &Token{Token: "admin-token", Type: "admin", UserID: 7}
 	helper := &TokenHelper{Driver: getForTestDriver{data: tokenData}}
 
@@ -31,6 +32,7 @@ func TestTokenHelperGetForChecksTokenType(t *testing.T) {
 }
 
 func TestTokenHelperGetForPreservesGetError(t *testing.T) {
+	t.Parallel()
 	getErr := errors.New("token store unavailable")
 	helper := &TokenHelper{Driver: getForTestDriver{err: getErr}}
 

@@ -9,6 +9,7 @@ import (
 // 验证连接池调优配置项与 YAML 键的映射
 // （mapstructure），防止键拼写错误或字段重命名后配置静默失效。
 func TestDatabasePoolConfigYAMLMapping(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, DefaultsFileName)
 	yaml := "mysql:\n" +

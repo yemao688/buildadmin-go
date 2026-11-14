@@ -160,6 +160,7 @@ func toSnakeModule(name string) string {
 }
 
 func TestAdminNamingRules(t *testing.T) {
+	t.Parallel()
 	violations, err := collectAdminNamingViolations(".")
 	if err != nil {
 		t.Fatal(err)
@@ -173,6 +174,7 @@ func TestAdminNamingRules(t *testing.T) {
 }
 
 func TestAdminNamingDetectsViolations(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	for _, rule := range adminNamingRules {
 		if err := os.MkdirAll(filepath.Join(root, rule.dir), 0o750); err != nil {

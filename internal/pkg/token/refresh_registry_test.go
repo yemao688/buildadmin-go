@@ -7,6 +7,7 @@ import (
 )
 
 func TestRegisterRefreshTypeRejectsDuplicate(t *testing.T) {
+	t.Parallel()
 	typ := "test-refresh-duplicate"
 	desc := RefreshTypeDescriptor{AccessType: "test", AccessHeader: "test-token"}
 	require.Error(t, RegisterRefreshType("", desc))

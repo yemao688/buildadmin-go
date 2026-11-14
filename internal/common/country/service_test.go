@@ -12,6 +12,7 @@ import (
 )
 
 func TestServiceDictionaryContract(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:country-i18n?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "dw_"},
 	})

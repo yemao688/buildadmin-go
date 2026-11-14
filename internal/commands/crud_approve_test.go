@@ -10,6 +10,7 @@ import (
 )
 
 func TestPrintApprovalAuditAndPlanAnnotations(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	cmd := &cobra.Command{}
 	cmd.SetOut(&output)

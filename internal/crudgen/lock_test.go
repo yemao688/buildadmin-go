@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // 测试刻意持有进程级 generationMu 并断言 busy，必须独占全局锁
 func TestTryAcquireGenerationLockBusyAndReusable(t *testing.T) {
 	release, err := TryAcquireGenerationLock()
 	if err != nil {
@@ -22,6 +23,7 @@ func TestTryAcquireGenerationLockBusyAndReusable(t *testing.T) {
 }
 
 func TestGenerationAdvisoryLockNameIncludesDatabaseAndPrefix(t *testing.T) {
+	t.Parallel()
 	name := generationAdvisoryLockName("buildadmin_go", "ba_")
 	if name != "buildadmin:crud:buildadmin_go:ba_" {
 		t.Fatalf("name = %q", name)

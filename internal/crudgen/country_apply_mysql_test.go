@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
 func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_country_apply_test_"
@@ -76,6 +77,8 @@ func TestCountrySpecsApplyWithoutAlterDrift(t *testing.T) {
 // default），AutoMigrate 建出的列 default 为 NULL → apply 判 requires-approval
 // blocked，全新安装被框架自带 spec 阻塞（下游 issue）。model 补齐 default 后
 // 本测试应全部 unchanged。
+//
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
 func TestCountryFreshInstallApplyUnblocked(t *testing.T) {
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = "ba_country_fresh_"

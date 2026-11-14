@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//nolint:paralleltest // crudgen 进程级全局生成锁 generationMu，与 TestGenerateRejectsWhenAnotherOperationHoldsLock 互斥
 func TestGenerateRejectsNonRootBeforeAnyMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
@@ -31,6 +32,7 @@ func TestGenerateRejectsNonRootBeforeAnyMutation(t *testing.T) {
 	release()
 }
 
+//nolint:paralleltest // crudgen 进程级全局生成锁 generationMu，本体持有该锁，与同类测试互斥
 func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 	release, err := helper.TryAcquireGenerationLock()
 	if err != nil {
@@ -50,6 +52,7 @@ func TestGenerateRejectsWhenAnotherOperationHoldsLock(t *testing.T) {
 
 // F7: 设计器控制器列表不得包含框架支撑文件与测试文件。
 func TestIsExcludedControllerFile(t *testing.T) {
+	t.Parallel()
 	excluded := []string{
 		"provider.go", "base.go", "table.go", "common.go", "response.go", "route.go",
 		"ajax.go", "dashboard.go", "index.go",

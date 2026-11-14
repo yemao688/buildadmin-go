@@ -13,6 +13,7 @@ import (
 )
 
 func TestDualTrackValidation(t *testing.T) {
+	t.Parallel()
 	official := []OfficialMigration{{Key: OfficialKey{Version: 1, Name: "Version200"}, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	framework := []FrameworkMigration{{Version: 1, MigrationName: "framework-final-seed-and-integrity", RequiresOfficial: []OfficialKey{{Version: 1, Name: "Version200"}}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	if err := ValidateFrameworkMigrations(framework, official); err != nil {
@@ -25,6 +26,7 @@ func TestDualTrackValidation(t *testing.T) {
 }
 
 func TestPhase2RegistrySplit(t *testing.T) {
+	t.Parallel()
 	official, framework := OfficialMigrations(), FrameworkMigrations()
 	if len(official) != 6 || len(framework) != 1 {
 		t.Fatalf("official=%d framework=%d", len(official), len(framework))
@@ -47,6 +49,7 @@ func TestPhase2RegistrySplit(t *testing.T) {
 }
 
 func TestFrameworkValidationRequiresStrictVersionAndTrimmedName(t *testing.T) {
+	t.Parallel()
 	up := func(*gorm.DB, *conf.Configuration) error { return nil }
 	base := []FrameworkMigration{{Version: 1, MigrationName: "one", Up: up}}
 	for name, list := range map[string][]FrameworkMigration{
@@ -56,6 +59,7 @@ func TestFrameworkValidationRequiresStrictVersionAndTrimmedName(t *testing.T) {
 		"trimmed name":       {{Version: 1, MigrationName: "  ", Up: up}},
 	} {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if err := ValidateFrameworkMigrations(list, nil); err == nil {
 				t.Fatal("invalid framework registry accepted")
 			}
@@ -67,6 +71,7 @@ func TestFrameworkValidationRequiresStrictVersionAndTrimmedName(t *testing.T) {
 }
 
 func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
+	t.Parallel()
 	for name, value := range map[string]sql.NullInt64{
 		"null": {}, "zero": {Valid: true, Int64: 0}, "one": {Valid: true, Int64: 1},
 	} {
@@ -81,6 +86,7 @@ func TestLockReleaseResultMustBeExactlyOne(t *testing.T) {
 }
 
 func TestMigrationOrchestratorLockNameIsScopedAndBounded(t *testing.T) {
+	t.Parallel()
 	config := &conf.Configuration{Database: conf.Database{Database: "buildadmin", Prefix: "ba_"}}
 	if got, want := migrationOrchestratorLockName(config), "migration-orchestrator-v1:buildadmin:ba_"; got != want {
 		t.Fatalf("lock name=%q, want %q", got, want)
@@ -96,12 +102,14 @@ func TestMigrationOrchestratorLockNameIsScopedAndBounded(t *testing.T) {
 }
 
 func TestFrameworkRecordTableNameDoesNotUseAutoMigrate(t *testing.T) {
+	t.Parallel()
 	if (FrameworkMigrationRecord{}).TableName() != "migrations_framework" {
 		t.Fatal("unexpected model table name")
 	}
 }
 
 func TestCoreSchemaInventoryViewsStayEquivalent(t *testing.T) {
+	t.Parallel()
 	tables := core.CoreTables()
 	names := core.CoreLogicalNames()
 	models := core.CoreModels()

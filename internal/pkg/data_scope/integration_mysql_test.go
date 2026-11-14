@@ -29,6 +29,7 @@ type runtimeScopeAdmin struct {
 }
 
 func TestClosureEnforcerMySQL(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -171,6 +172,7 @@ func (l *captureLogger) closureStatements() int {
 //   - a verified-missing self-row keeps the full condition and denies scope
 //     exactly like today (zero rows).
 func TestClosureEnforcerSelfRowCacheMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

@@ -2,8 +2,9 @@ package framework
 
 import (
 	"fmt"
+	"os"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/testutil"
@@ -13,9 +14,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// seedSQLiteSeq 与 pid 组合出进程内唯一的内存库名：-count=N 与并行子测试
+// 都可能在同一时钟刻度内重复调用，时间戳不足以保证唯一，重名会让多个测试
+// 共享同一个 cache=shared 内存库并互相锁表。
+var seedSQLiteSeq atomic.Uint64
+
 func openSeedSQLite(t *testing.T) *gorm.DB {
 	t.Helper()
-	dsn := fmt.Sprintf("file:framework-seed-%d?mode=memory&cache=shared", time.Now().UnixNano())
+	dsn := fmt.Sprintf("file:framework-seed-%d-%d?mode=memory&cache=shared", os.Getpid(), seedSQLiteSeq.Add(1))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
 	return db
@@ -45,6 +51,7 @@ type seedIdentityRow struct {
 }
 
 func TestEnsureSecuritySeedRowsSelfHealsWithoutOverwriting(t *testing.T) {
+	t.Parallel()
 	db := openSeedSQLite(t)
 	createSecuritySeedTables(t, db)
 	cfg := seedTestConfig()
@@ -97,6 +104,7 @@ func TestEnsureSecuritySeedRowsSelfHealsWithoutOverwriting(t *testing.T) {
 }
 
 func TestRemoveLegacyModuleStoreMenusIsIdempotent(t *testing.T) {
+	t.Parallel()
 	db := openSeedSQLite(t)
 	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
 	cfg := seedTestConfig()
@@ -120,6 +128,7 @@ func TestRemoveLegacyModuleStoreMenusIsIdempotent(t *testing.T) {
 }
 
 func TestSeedCountryMenusDeduplicatesOnParentNameAndType(t *testing.T) {
+	t.Parallel()
 	db := openSeedSQLite(t)
 	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
 	cfg := seedTestConfig()
@@ -159,6 +168,7 @@ func TestSeedCountryMenusDeduplicatesOnParentNameAndType(t *testing.T) {
 }
 
 func TestSeedCountryMenusReparentsChildrenOfDeletedParent(t *testing.T) {
+	t.Parallel()
 	db := openSeedSQLite(t)
 	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
 	cfg := seedTestConfig()
@@ -202,6 +212,7 @@ func TestSeedCountryMenusReparentsChildrenOfDeletedParent(t *testing.T) {
 }
 
 func TestSeedCountryMenusKeepsRuleUnderAnotherParent(t *testing.T) {
+	t.Parallel()
 	db := openSeedSQLite(t)
 	require.NoError(t, testutil.CreateSQLiteAdminRuleTables(db, "ba_admin_rule", "ba_admin_group", "ba_admin_group_access"))
 	cfg := seedTestConfig()

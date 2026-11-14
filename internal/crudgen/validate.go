@@ -39,33 +39,9 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 			errorsFound = append(errorsFound, fmt.Errorf("field %q could not be read from the spec YAML", field.Name))
 			continue
 		}
-		if err := validateDefaultPairing(field, metadata.Fields[index]); err != nil {
-			errorsFound = append(errorsFound, err)
-		}
-
-		if field.Form.RemoteController != "" {
-			exists, err := validateRemoteFile("remoteController", field.Name, field.Form.RemoteController)
-			if err != nil {
-				errorsFound = append(errorsFound, err)
-			} else if exists && routeIndexURLForController(field.Form.RemoteController) == "" {
-				warnings = append(warnings, ValidationWarning{
-					SpecPath: path,
-					Message:  fmt.Sprintf("field %q remoteController %q exists but no registered route constant was found; the select URL will be derived by convention and may return 404", field.Name, field.Form.RemoteController),
-				})
-			}
-		}
-		if field.Form.RemoteModel != "" {
-			if _, err := validateRemoteFile("remoteModel", field.Name, field.Form.RemoteModel); err != nil {
-				errorsFound = append(errorsFound, err)
-			}
-		}
-		if field.Form.RemoteTable != "" && field.Form.RemoteField != "" &&
-			strings.HasSuffix(field.Form.RemoteField, "_text") && field.Form.RemoteTable != "user" {
-			warnings = append(warnings, ValidationWarning{
-				SpecPath: path,
-				Message:  fmt.Sprintf("field %q remoteField %q ends with _text, but only the user select endpoint builds a _text label key; verify the target select response (handler Select method or ?select=true) instead of assuming the suffix exists", field.Name, field.Form.RemoteField),
-			})
-		}
+		fieldWarnings, fieldErrors := validateSpecFieldEntry(path, field, metadata.Fields[index])
+		warnings = append(warnings, fieldWarnings...)
+		errorsFound = append(errorsFound, fieldErrors...)
 	}
 
 	if metadata.RelativePathSet && hasNonSnakeEntitySegment(opts.Table.GenerateRelativePath) {
@@ -82,6 +58,40 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 		return warnings, errors.Join(errorsFound...)
 	}
 	return warnings, nil
+}
+
+// validateSpecFieldEntry 汇总单字段的校验告警与错误；调用方按字段顺序聚合，
+// 保持与逐字段直写相同的错误出现顺序。
+func validateSpecFieldEntry(path string, field crudmodel.Field, metadata fieldValidationMetadata) ([]ValidationWarning, []error) {
+	warnings := make([]ValidationWarning, 0, 1)
+	errorsFound := make([]error, 0, 2)
+	if err := validateDefaultPairing(field, metadata); err != nil {
+		errorsFound = append(errorsFound, err)
+	}
+	if field.Form.RemoteController != "" {
+		exists, err := validateRemoteFile("remoteController", field.Name, field.Form.RemoteController)
+		if err != nil {
+			errorsFound = append(errorsFound, err)
+		} else if exists && routeIndexURLForController(field.Form.RemoteController) == "" {
+			warnings = append(warnings, ValidationWarning{
+				SpecPath: path,
+				Message:  fmt.Sprintf("field %q remoteController %q exists but no registered route constant was found; the select URL will be derived by convention and may return 404", field.Name, field.Form.RemoteController),
+			})
+		}
+	}
+	if field.Form.RemoteModel != "" {
+		if _, err := validateRemoteFile("remoteModel", field.Name, field.Form.RemoteModel); err != nil {
+			errorsFound = append(errorsFound, err)
+		}
+	}
+	if field.Form.RemoteTable != "" && field.Form.RemoteField != "" &&
+		strings.HasSuffix(field.Form.RemoteField, "_text") && field.Form.RemoteTable != "user" {
+		warnings = append(warnings, ValidationWarning{
+			SpecPath: path,
+			Message:  fmt.Sprintf("field %q remoteField %q ends with _text, but only the user select endpoint builds a _text label key; verify the target select response (handler Select method or ?select=true) instead of assuming the suffix exists", field.Name, field.Form.RemoteField),
+		})
+	}
+	return warnings, errorsFound
 }
 
 // ValidateSpecs validates all supplied specs and aggregates errors so a
@@ -176,24 +186,27 @@ func loadSpecValidationMetadata(path string) (specValidationMetadata, error) {
 	}
 	metadata.Fields = make([]fieldValidationMetadata, 0, len(fieldsNode.Content))
 	for _, fieldNode := range fieldsNode.Content {
-		fieldMetadata := fieldValidationMetadata{}
-		if fieldNode.Kind == yaml.AliasNode {
-			fieldNode = fieldNode.Alias
-		}
-		if fieldNode == nil || fieldNode.Kind != yaml.MappingNode {
-			metadata.Fields = append(metadata.Fields, fieldMetadata)
-			continue
-		}
-		if defaultNode := mappingNodeValue(fieldNode, "default"); defaultNode != nil {
-			fieldMetadata.DefaultSet = true
-			fieldMetadata.Default = yamlNodeString(defaultNode)
-		}
-		if mappingNodeValue(fieldNode, "defaultType") != nil {
-			fieldMetadata.DefaultTypeSet = true
-		}
-		metadata.Fields = append(metadata.Fields, fieldMetadata)
+		metadata.Fields = append(metadata.Fields, loadSpecFieldMetadataNode(fieldNode))
 	}
 	return metadata, nil
+}
+
+func loadSpecFieldMetadataNode(fieldNode *yaml.Node) fieldValidationMetadata {
+	fieldMetadata := fieldValidationMetadata{}
+	if fieldNode.Kind == yaml.AliasNode {
+		fieldNode = fieldNode.Alias
+	}
+	if fieldNode == nil || fieldNode.Kind != yaml.MappingNode {
+		return fieldMetadata
+	}
+	if defaultNode := mappingNodeValue(fieldNode, "default"); defaultNode != nil {
+		fieldMetadata.DefaultSet = true
+		fieldMetadata.Default = yamlNodeString(defaultNode)
+	}
+	if mappingNodeValue(fieldNode, "defaultType") != nil {
+		fieldMetadata.DefaultTypeSet = true
+	}
+	return fieldMetadata
 }
 
 func documentRoot(document *yaml.Node) *yaml.Node {
@@ -242,6 +255,10 @@ func validateDefaultPairing(field crudmodel.Field, metadata fieldValidationMetad
 		return nil
 	}
 
+	return validateDefaultTypePairing(field, value, metadata)
+}
+
+func validateDefaultTypePairing(field crudmodel.Field, value string, metadata fieldValidationMetadata) error {
 	switch field.DefaultType {
 	case "INPUT":
 		return nil

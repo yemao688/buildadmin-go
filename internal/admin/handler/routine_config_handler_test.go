@@ -24,6 +24,7 @@ import (
 )
 
 func TestConfigEditHandlerPersistsPostedValues(t *testing.T) {
+	t.Parallel()
 	dsn := fmt.Sprintf("file:config-handler-edit-%d?mode=memory&cache=shared", time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},

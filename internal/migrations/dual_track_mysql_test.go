@@ -17,6 +17,7 @@ import (
 )
 
 func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "phase1_"
@@ -37,6 +38,15 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework}); err != nil {
 		t.Fatal(err)
 	}
+	assertLockMutualExclusion(t, db)
+	assertLockConnectionIdentity(t, db)
+	assertLockErrorReleases(t, db)
+	assertLockTimeout(t, db)
+	assertLockPanicReleases(t, db)
+}
+
+func assertLockMutualExclusion(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var locks sync.WaitGroup
 	locks.Add(2)
 	entered := make(chan struct{})
@@ -67,6 +77,10 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	if overlap.Load() {
 		t.Fatal("lock callbacks overlapped")
 	}
+}
+
+func assertLockConnectionIdentity(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var connectionID, usedLock sql.NullInt64
 	if err := WithMigrationLock(db, "phase1-identity-lock", time.Second, func(pinned *gorm.DB) error {
 		return pinned.Raw("SELECT CONNECTION_ID(), IS_USED_LOCK(?)", "phase1-identity-lock").Row().Scan(&connectionID, &usedLock)
@@ -76,6 +90,10 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	if !connectionID.Valid || !usedLock.Valid || connectionID.Int64 != usedLock.Int64 {
 		t.Fatalf("lock connection identity=%v used=%v", connectionID, usedLock)
 	}
+}
+
+func assertLockErrorReleases(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	callbackError := errors.New("callback error")
 	if err := WithMigrationLock(db, "phase1-error-lock", time.Second, func(_ *gorm.DB) error { return callbackError }); !errors.Is(err, callbackError) {
 		t.Fatalf("callback error=%v", err)
@@ -83,6 +101,10 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	if err := WithMigrationLock(db, "phase1-error-lock", time.Second, func(_ *gorm.DB) error { return nil }); err != nil {
 		t.Fatal("error path did not release:", err)
 	}
+}
+
+func assertLockTimeout(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	held := make(chan struct{})
 	releaseHeld := make(chan struct{})
 	first := make(chan error, 1)
@@ -99,6 +121,10 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 	if timeoutErr == nil || timedOutCallback.Load() {
 		t.Fatalf("timeout callback ran or returned nil: %v", timeoutErr)
 	}
+}
+
+func assertLockPanicReleases(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	panicLock := "phase1-panic-lock-" + time.Now().Format("150405.000000")
 	var panicErr error
 	var panicCallback bool
@@ -125,9 +151,29 @@ func TestDualTrackMySQLLedgerAndLock(t *testing.T) {
 }
 
 func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	config := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("pinned_%d_", time.Now().UnixNano())}}
 	q := func(logical string) string { return quoteIdentifier(tableName(config, logical)) }
+	setupPinnedSeedSchema(t, db, q)
+	seedPinnedFixtureRows(t, db, q)
+	registry := FrameworkMigrations()
+	if len(registry) != 1 {
+		t.Fatalf("current framework migration registry length=%d, want 1", len(registry))
+	}
+	if err := WithMigrationLock(db, "pinned-framework-registry", time.Second, func(pinned *gorm.DB) error {
+		return registry[0].Up(pinned, config)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	check := db.Session(&gorm.Session{NewDB: true})
+	assertPinnedOwnerIntegrity(t, check, q)
+	assertPinnedUploadConfig(t, check, config)
+	assertPinnedLanguages(t, check, config)
+}
+
+func setupPinnedSeedSchema(t *testing.T, db *gorm.DB, q func(string) string) {
+	t.Helper()
 	for _, logical := range []string{"admin", "user", "attachment", "user_money_log", "admin_log", "security_data_recycle_log", "security_sensitive_data_log", "security_data_recycle", "security_sensitive_data", "crud_log", "admin_closure", "admin_rule", "config", "country_language", "country_language_content", "country_currency"} {
 		db.Exec("DROP TABLE IF EXISTS " + q(logical))
 		table := q(logical)
@@ -153,6 +199,10 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func seedPinnedFixtureRows(t *testing.T, db *gorm.DB, q func(string) string) {
+	t.Helper()
 	if err := db.Exec("INSERT INTO " + q("admin") + " VALUES (1,NULL),(2,1)").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -171,16 +221,10 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 	if err := db.Exec("INSERT INTO "+q("config")+" (id,name,`group`,title,tip,type,value,content,rule,extend,allow_del,weigh) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", 1, "config_group", "basics", "Config group", "", "array", `[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"}]`, "", "required", "", 0, -1).Error; err != nil {
 		t.Fatal(err)
 	}
-	registry := FrameworkMigrations()
-	if len(registry) != 1 {
-		t.Fatalf("current framework migration registry length=%d, want 1", len(registry))
-	}
-	if err := WithMigrationLock(db, "pinned-framework-registry", time.Second, func(pinned *gorm.DB) error {
-		return registry[0].Up(pinned, config)
-	}); err != nil {
-		t.Fatal(err)
-	}
-	check := db.Session(&gorm.Session{NewDB: true})
+}
+
+func assertPinnedOwnerIntegrity(t *testing.T, check *gorm.DB, q func(string) string) {
+	t.Helper()
 	var invalid int64
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user") + " u LEFT JOIN " + q("admin") + " a ON a.id=u.admin_id WHERE a.id IS NULL OR u.admin_id=0").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("user owners invalid=%d err=%v", invalid, err)
@@ -188,26 +232,43 @@ func TestFrameworkFinalSeedPinnedConnection(t *testing.T) {
 	if err := check.Raw("SELECT COUNT(*) FROM " + q("user_money_log") + " l JOIN " + q("user") + " u ON u.id=l.user_id WHERE l.admin_id<>u.admin_id").Scan(&invalid).Error; err != nil || invalid != 0 {
 		t.Fatalf("money owners invalid=%d err=%v", invalid, err)
 	}
+}
+
+func assertPinnedUploadConfig(t *testing.T, check *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	var uploadCount int64
 	if err := check.Table(tableName(config, "config")).Where("`group` = ?", "upload").Count(&uploadCount).Error; err != nil || uploadCount != 6 {
 		t.Fatalf("upload config rows=%d err=%v", uploadCount, err)
 	}
-	var languages []struct {
-		Lan    string
-		Name   string
-		Remark string
-		Status int8
-		Weigh  int32
-	}
+}
+
+type pinnedLanguageRow struct {
+	Lan    string
+	Name   string
+	Remark string
+	Status int8
+	Weigh  int32
+}
+
+func assertPinnedLanguages(t *testing.T, check *gorm.DB, config *conf.Configuration) {
+	t.Helper()
+	var languages []pinnedLanguageRow
 	if err := check.Table(tableName(config, "country_language")).Order("weigh DESC, id ASC").Find(&languages).Error; err != nil {
 		t.Fatal(err)
 	}
-	if len(languages) != 2 || languages[0].Lan != "zh-cn" || languages[0].Name != "简体中文" || languages[0].Remark != "简体中文" || languages[0].Status != 1 || languages[1].Lan != "en" || languages[1].Name != "English" || languages[1].Remark != "English" || languages[1].Status != 1 {
+	if !pinnedLanguagesMatch(languages) {
 		t.Fatalf("country languages=%+v", languages)
 	}
 }
 
+func pinnedLanguagesMatch(languages []pinnedLanguageRow) bool {
+	return len(languages) == 2 &&
+		languages[0].Lan == "zh-cn" && languages[0].Name == "简体中文" && languages[0].Remark == "简体中文" && languages[0].Status == 1 &&
+		languages[1].Lan == "en" && languages[1].Name == "English" && languages[1].Remark == "English" && languages[1].Status == 1
+}
+
 func TestOfficialFailureRetryAndFrameworkPostVerifyOrder(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("retry_order_%d_", time.Now().UnixNano())}}
 	requireNoError := func(err error) {
@@ -274,6 +335,7 @@ func TestOfficialFailureRetryAndFrameworkPostVerifyOrder(t *testing.T) {
 }
 
 func TestFrameworkBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	cfg := &conf.Configuration{Database: conf.Database{Prefix: fmt.Sprintf("baseline_%d_", time.Now().UnixNano())}}
 	if err := BootstrapFrameworkLedger(db, cfg); err != nil {
@@ -312,6 +374,7 @@ func TestFrameworkBaselineRunsOnlyOnApplyAndStandingSchemaRunsOnEveryMigrate(t *
 }
 
 func TestBusinessMoneyColumnOverrideSurvivesFrameworkStandingVerification(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	db, cfg := freshMigrationDatabase(t, db, fmt.Sprintf("biz_ovr_%d_", os.Getpid()))
 	section := &migrationCriticalSection{}
@@ -331,21 +394,37 @@ func TestBusinessMoneyColumnOverrideSurvivesFrameworkStandingVerification(t *tes
 }
 
 func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	config := &conf.Configuration{}
 	config.Database.Prefix = "matrix_"
-	for _, table := range []string{"matrix_migrations_framework", "matrix_migrations"} {
-		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
-			t.Fatal(err)
-		}
-		defer db.Exec("DROP TABLE IF EXISTS `" + table + "`")
-	}
+	setupMatrixLedgers(t, db)
 	if err := db.Exec("CREATE TABLE `matrix_migrations` (`version` BIGINT UNSIGNED NOT NULL, `migration_name` VARCHAR(100) NULL DEFAULT NULL, `start_time` TIMESTAMP NULL DEFAULT NULL, `end_time` TIMESTAMP NULL DEFAULT NULL, `breakpoint` TINYINT(1) NOT NULL DEFAULT 0, PRIMARY KEY (`version`)) ENGINE=InnoDB").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := BootstrapFrameworkLedger(db, config); err != nil {
 		t.Fatal(err)
 	}
+	assertMatrixLedgerColumnContract(t, db, config)
+	assertFrameworkPostVerifyOrder(t, db, config)
+	assertPendingFrameworkRetry(t, db, config)
+	assertFrameworkCollisions(t, db, config)
+	assertFrameworkCompletionGuards(t, db, config)
+	assertOfficialDependencyGuards(t, db, config)
+}
+
+func setupMatrixLedgers(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	for _, table := range []string{"matrix_migrations_framework", "matrix_migrations"} {
+		if err := db.Exec("DROP TABLE IF EXISTS `" + table + "`").Error; err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Exec("DROP TABLE IF EXISTS `" + table + "`") })
+	}
+}
+
+func assertMatrixLedgerColumnContract(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	if err := db.Exec("ALTER TABLE `matrix_migrations_framework` ADD `unexpected` INT NULL").Error; err != nil {
 		t.Fatal(err)
 	}
@@ -358,7 +437,10 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if err := ValidateFrameworkLedgerSchema(db, config); err != nil {
 		t.Fatal(err)
 	}
+}
 
+func assertFrameworkPostVerifyOrder(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	var calls []string
 	framework := FrameworkMigration{Version: 1, MigrationName: "ordered",
 		Up:                func(*gorm.DB, *conf.Configuration) error { calls = append(calls, "up"); return nil },
@@ -377,18 +459,26 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if got := fmt.Sprint(calls); got != "[schema data]" {
 		t.Fatalf("completed order=%s", got)
 	}
+}
 
+func assertPendingFrameworkRetry(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	retryCalls := 0
 	retry := FrameworkMigration{Version: 2, MigrationName: "retry", Up: func(*gorm.DB, *conf.Configuration) error { retryCalls++; return nil }}
 	if err := InsertPendingFrameworkMigration(db, config, retry); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{framework, retry}); err != nil {
+	ordered := FrameworkMigration{Version: 1, MigrationName: "ordered", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
+	if _, err := RunFrameworkMigrations(db, config, nil, []FrameworkMigration{ordered, retry}); err != nil {
 		t.Fatal(err)
 	}
 	if retryCalls != 1 {
 		t.Fatalf("pending retry calls=%d", retryCalls)
 	}
+}
+
+func assertFrameworkCollisions(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	noOp := func(*gorm.DB, *conf.Configuration) error { return nil }
 	for _, collision := range []struct {
 		name, want     string
@@ -404,6 +494,11 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 			t.Fatalf("%s collision error=%v", collision.name, err)
 		}
 	}
+}
+
+func assertFrameworkCompletionGuards(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
+	noOp := func(*gorm.DB, *conf.Configuration) error { return nil }
 	completed := FrameworkMigration{Version: 20, MigrationName: "complete-me", Up: noOp}
 	if err := InsertPendingFrameworkMigration(db, config, completed); err != nil {
 		t.Fatal(err)
@@ -430,7 +525,10 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 			t.Fatal("correct completion:", err)
 		}
 	}
+}
 
+func assertOfficialDependencyGuards(t *testing.T, db *gorm.DB, config *conf.Configuration) {
+	t.Helper()
 	official := []OfficialMigration{{Key: OfficialKey{Version: 1, Name: "Official"}, Source: "test", Up: func(*gorm.DB, *conf.Configuration) error { return nil }}}
 	dependent := FrameworkMigration{Version: 7, MigrationName: "dependent", RequiresOfficial: []OfficialKey{official[0].Key}, Up: func(*gorm.DB, *conf.Configuration) error { return nil }}
 	for _, row := range []string{"", ", 'Official', NOW(6), NULL, 0", ", 'Wrong', NOW(6), NOW(6), 0"} {
@@ -438,15 +536,15 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 			if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err == nil {
 				t.Fatal("missing official accepted")
 			}
-		} else {
-			if err := db.Exec("INSERT INTO `matrix_migrations` VALUES (1" + row + ")").Error; err != nil {
-				t.Fatal(err)
-			}
-			if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err == nil {
-				t.Fatal("pending/collision official accepted")
-			}
-			db.Exec("DELETE FROM `matrix_migrations`")
+			continue
 		}
+		if err := db.Exec("INSERT INTO `matrix_migrations` VALUES (1" + row + ")").Error; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err == nil {
+			t.Fatal("pending/collision official accepted")
+		}
+		db.Exec("DELETE FROM `matrix_migrations`")
 	}
 	if err := db.Exec("INSERT INTO `matrix_migrations` VALUES (1, 'Official', NOW(6), NOW(6), 0)").Error; err != nil {
 		t.Fatal(err)
@@ -454,10 +552,10 @@ func TestDualTrackMySQLContractsAndAliases(t *testing.T) {
 	if _, err := RunFrameworkMigrations(db, config, official, []FrameworkMigration{dependent}); err != nil {
 		t.Fatal("completed official rejected:", err)
 	}
-
 }
 
 func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	variants := []string{"engine", "signed-version", "timestamp", "missing-autoincrement", "missing-unique", "wrong-unique"}
 	for i, variant := range variants {
@@ -481,6 +579,7 @@ func TestDualTrackMySQLLedgerSchemaNegativeMatrix(t *testing.T) {
 // 验证显式 DEFAULT CURRENT_TIMESTAMP(6)
 // 的 start_time 通过校验（新 DDL 形态，explicit_defaults_for_timestamp 两种模式下一致）。
 func TestLedgerDefaultCurrentTimestampAccepted(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	config := &conf.Configuration{Database: conf.Database{Prefix: "default_ok_"}}
 	table := config.Database.Prefix + "migrations_framework"
@@ -500,6 +599,7 @@ func TestLedgerDefaultCurrentTimestampAccepted(t *testing.T) {
 // （阿里云 RDS 默认参数）下旧版 DDL 建出的坏表（start_time 被隐式强加
 // ON UPDATE CURRENT_TIMESTAMP(6)），验证 Bootstrap 幂等自愈并可通过校验。
 func TestLedgerStartTimeOnUpdateSelfHeal(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	config := &conf.Configuration{Database: conf.Database{Prefix: "selfheal_"}}
 	table := config.Database.Prefix + "migrations_framework"

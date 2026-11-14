@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,7 +38,10 @@ func (d authDomainTokenDriver) Clear(string, int32) error              { return 
 
 func newAuthTestModel(t *testing.T) (*MemberService, *gorm.DB) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:auth-model?mode=memory&cache=shared"), &gorm.Config{})
+	// 每个测试用独立的 sqlite 命名内存库：并行执行时共享同名库会互相污染，
+	// 且 TestMemberRegisterReturnsDatabaseErrorDuringUniquenessCheck 会主动 Close 连接。
+	dbName := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+	db, err := gorm.Open(sqlite.Open("file:auth-model-"+dbName+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	// 实体携带 MySQL 方言类型 tag（int unsigned、enum），sqlite 无法
 	// AutoMigrate，因此用与运行期列形状一致的 sqlite 原生 DDL 建 fixture 表。
@@ -56,6 +60,7 @@ func hashForTest(t *testing.T, plain string) string {
 }
 
 func TestMemberIsLoginRejectsAdminToken(t *testing.T) {
+	t.Parallel()
 	m, _ := newAuthTestModel(t)
 	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "admin", UserID: 1}}}
 
@@ -67,6 +72,7 @@ func TestMemberIsLoginRejectsAdminToken(t *testing.T) {
 // 回归：token 有效但会员已被删除时，GetByID 返回 (nil, nil)，必须返回
 // (nil, false) 而不是解引用 nil 导致 /api/index/index 500。
 func TestMemberUserInfoByTokenMissingUser(t *testing.T) {
+	t.Parallel()
 	m, _ := newAuthTestModel(t)
 	m.tokenHelper = &token.TokenHelper{Driver: authDomainTokenDriver{data: &token.Token{Type: "user", UserID: 9999}}}
 
@@ -76,12 +82,14 @@ func TestMemberUserInfoByTokenMissingUser(t *testing.T) {
 }
 
 func TestMemberLoginMissingAccountIsNotDisabled(t *testing.T) {
+	t.Parallel()
 	m, _ := newAuthTestModel(t)
 	_, err := m.Login("203.0.113.9", "user_404", "password", false)
 	require.EqualError(t, err, "Account not exist")
 }
 
 func TestMemberLoginUsesBcryptAndStrictStatuses(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	for _, status := range []string{"enable", "disable"} {
 		user := model.User{Username: "user_" + status, Password: hashForTest(t, "password"), Status: status}
@@ -96,6 +104,7 @@ func TestMemberLoginUsesBcryptAndStrictStatuses(t *testing.T) {
 }
 
 func TestMemberLoginResetsExpiredFailureCounter(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	m.config.App.UserLoginRetry = 2
 	user := model.User{
@@ -115,6 +124,7 @@ func TestMemberLoginResetsExpiredFailureCounter(t *testing.T) {
 }
 
 func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	user := model.User{Username: "response_user", Password: hashForTest(t, "password"), Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
@@ -128,12 +138,14 @@ func TestMemberLoginReturnsUpdatedLastLoginFields(t *testing.T) {
 }
 
 func TestMemberRegisterRejectsInvalidUsername(t *testing.T) {
+	t.Parallel()
 	m, _ := newAuthTestModel(t)
 	_, err := m.Register("203.0.113.9", "bad user", "password")
 	require.EqualError(t, err, "username invalid")
 }
 
 func TestMemberRegisterRejectsExistingUsername(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	require.NoError(t, db.Create(&model.User{Username: "existing"}).Error)
 	_, err := m.Register("203.0.113.9", "existing", "password")
@@ -141,6 +153,7 @@ func TestMemberRegisterRejectsExistingUsername(t *testing.T) {
 }
 
 func TestMemberRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
@@ -154,6 +167,7 @@ func TestMemberRegisterReturnsDatabaseErrorDuringUniquenessCheck(t *testing.T) {
 // enable 通过、disable 与不存在均返回与旧 IsEnabledUser 分支一致的
 // "Please login first"（enable/disable 双态，不涉及其它状态字段）。
 func TestValidateUserTokenStatusSemantics(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	for _, status := range []string{"enable", "disable"} {
 		user := model.User{Username: "vut_" + status, Password: hashForTest(t, "password"), Status: status}
@@ -172,6 +186,7 @@ func TestValidateUserTokenStatusSemantics(t *testing.T) {
 // 60s 窗口内的第二次请求不触发写库（login 元信息保持第一次写入值），窗口
 // 过后恢复写库。时钟经 loginMetaTTL.now 注入（测试入口，不导出公开 API）。
 func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
+	t.Parallel()
 	m, db := newAuthTestModel(t)
 	user := model.User{Username: "throttle_user", Password: hashForTest(t, "password"), Status: "enable"}
 	require.NoError(t, db.Create(&user).Error)
@@ -204,6 +219,7 @@ func TestValidateUserTokenThrottlesLoginMetaWrites(t *testing.T) {
 // 验证节流器并发安全（配合 go test -race
 // 检查 map 读写均持锁）。
 func TestLoginMetaThrottleConcurrentSafe(t *testing.T) {
+	t.Parallel()
 	th := newLoginMetaThrottle(time.Second)
 	var wg sync.WaitGroup
 	for i := 0; i < 64; i++ {

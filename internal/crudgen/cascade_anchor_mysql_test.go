@@ -25,6 +25,8 @@ func writeTestSpec(t *testing.T, specsDir, name, dataScopeYAML string) {
 // repo 落点（internal/admin/repository/<table>.go 含锚点块）检查走可注入的
 // repoRootOverride：隔离根下"仓库无该表 repo"恒成立，业务 fork 拥有
 // seller_user.go 时测试也不失真。
+//
+//nolint:paralleltest // 写包级 repoRootOverride，并行会污染其它 cascade 测试的路径解析
 func TestValidateInheritParent(t *testing.T) {
 	specsDir := t.TempDir()
 	// 隔离仓库状态：repo 落点检查指向临时根，不依赖真实仓库内容。
@@ -85,12 +87,14 @@ func TestValidateInheritParent(t *testing.T) {
 // 使用仓库真实 crud_specs/ 与手写 user repo
 // （registerOnly 登记 + 锚点块）验证通过路径——重装后 crud_log 为空也能通过。
 func TestValidateInheritParentRealUser(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, validateInheritParent(DefaultSpecsDir(), "user"))
 }
 
 // 验证 inbound inheritFrom 引用扫描（specs 驱动）：
 // 无引用→空；有子表声明指向主表→列出（含多子表排序）；主实体自身 spec 不计入。
 func TestFindInheritReferrers(t *testing.T) {
+	t.Parallel()
 	specsDir := t.TempDir()
 
 	// 无任何引用 → 空

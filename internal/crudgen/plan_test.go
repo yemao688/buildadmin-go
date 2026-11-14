@@ -14,6 +14,7 @@ import (
 )
 
 func TestPlanSpecsDoesNotExecuteMissingTableDDL(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:crud-plan?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -56,6 +57,7 @@ fields:
 }
 
 func TestPrimaryKeyDriftComparesCompleteColumnSetAndAttributes(t *testing.T) {
+	t.Parallel()
 	columns := []model.Column{
 		{COLUMN_NAME: "id", COLUMN_TYPE: "bigint", IS_NULLABLE: "NO", COLUMN_KEY: "PRI", EXTRA: "auto_increment", COLUMN_COMMENT: "ID"},
 		{COLUMN_NAME: "tenant_id", COLUMN_TYPE: "bigint", IS_NULLABLE: "NO", COLUMN_KEY: "PRI", COLUMN_COMMENT: "租户"},
@@ -79,6 +81,7 @@ func TestPrimaryKeyDriftComparesCompleteColumnSetAndAttributes(t *testing.T) {
 }
 
 func TestPlanBlockingErrorGatesRiskyPlans(t *testing.T) {
+	t.Parallel()
 	rejected := []ApplyTableResult{{Table: "orders", Diffs: []ApplyChange{{Field: "id", Class: DiffRejected, Reason: "primary key drift"}}}}
 	if err := planBlockingError(rejected, false, false, nil); err == nil {
 		t.Fatal("rejected plan returned nil error")

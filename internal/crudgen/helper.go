@@ -389,13 +389,7 @@ func analyseGenerationFields(fields []crudmodel.Field, table crudmodel.Table, we
 		getDictData(&langZhData, field, "zh-cn", "")
 
 		// 快速搜索字段
-		if slices.Contains(table.QuickSearchField, field.Name) {
-			if n, ok := langZhData[field.Name]; ok {
-				*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, n)
-			} else {
-				*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, field.Name)
-			}
-		}
+		appendFieldQuickSearchTitle(table, field, langZhData, quickSearchFieldZhCnTitle)
 
 		// 不允许双击编辑的字段
 		if field.DesignType == "switch" {
@@ -406,45 +400,16 @@ func analyseGenerationFields(fields []crudmodel.Field, table crudmodel.Table, we
 		columnDict := getColumnDict(field, "", webTranslate)
 
 		// 表单项
-		if slices.Contains(table.FormFields, field.Name) {
-			fieldDefault := getFieldDefault(field)
-			if fieldDefault != "" {
-				indexVueData.DefaultItems = append(indexVueData.DefaultItems, fieldDefault)
-			}
-		}
+		appendFieldFormDefault(table, field, indexVueData)
 
 		// 表格列。For multi remoteSelects with relation fields, retain the raw FK
 		// search column but hide it; relation display columns are added below.
 		field = prepareGeneratedColumnField(field)
-		if slices.Contains(table.ColumnFields, field.Name) {
-			if field.Table.ComSearchRender == "remoteSelect" && field.Form.RemoteTable != "" {
-				field.Table.Remote = buildRemoteSearchMetadata(field, getTableName)
-			}
-			indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", webTranslate))
-		}
-
-		// 关联搜索列：remoteSelect 且配置了关联表与展示字段时，在 FK 列之外
-		// 额外追加一列 alias.field 的 LIKE 搜索列（prop 为点号形态，前端直接
-		// 以该 key 提交查询参数；无 comSearchRender，走既有文本输入分支，组件
-		// 零改动）。语言键复用 parseJoinData 的 relationFieldLangPrefix 约定，
-		// 保证 i18n 字典已有对应条目。仅 remoteSelect 参与：remoteSelects 的
-		// CSV 多选 FK 无法等值关联（对齐 PHP withJoinTable 只覆盖 remoteSelect）。
-		if field.DesignType == "remoteSelect" &&
-			field.Form.RemoteTable != "" && strings.TrimSpace(field.Form.RelationFields) != "" {
-			indexVueData.TableColumn = append(indexVueData.TableColumn, buildRelationSearchColumn(field, webTranslate))
-		}
+		appendFieldTableColumns(indexVueData, field, table, columnDict, getTableName, webTranslate)
 
 		// 关联表数据解析
-		if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
-			if field.Form.RelationFields != "" && field.Form.RemoteTable != "" {
-				columns, err := getColumns(field.Form.RemoteTable)
-				if err != nil {
-					return nil, fmt.Errorf("remote relation %q for field %q: %w", field.Form.RemoteTable, field.Name, err)
-				}
-				if err := parseJoinData(db, columns, &langEnData, &langZhData, handlerData, modelData, indexVueData, field, getTableName, webTranslate); err != nil {
-					return nil, err
-				}
-			}
+		if err := analyseFieldRemoteRelation(field, getColumns, db, langEnData, langZhData, handlerData, modelData, indexVueData, getTableName, webTranslate); err != nil {
+			return nil, err
 		}
 
 		// 模型方法
@@ -458,6 +423,66 @@ func analyseGenerationFields(fields []crudmodel.Field, table crudmodel.Table, we
 		}
 	}
 	return fieldsMap, nil
+}
+
+// appendFieldQuickSearchTitle 收集快速搜索字段的中文标题，缺翻译时回退字段名。
+func appendFieldQuickSearchTitle(table crudmodel.Table, field crudmodel.Field, langZhData map[string]string, quickSearchFieldZhCnTitle *[]string) {
+	if !slices.Contains(table.QuickSearchField, field.Name) {
+		return
+	}
+	if n, ok := langZhData[field.Name]; ok {
+		*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, n)
+		return
+	}
+	*quickSearchFieldZhCnTitle = append(*quickSearchFieldZhCnTitle, field.Name)
+}
+
+// appendFieldFormDefault 为表单字段追加 index.vue 的默认值项（空默认值跳过）。
+func appendFieldFormDefault(table crudmodel.Table, field crudmodel.Field, indexVueData *IndexVueData) {
+	if !slices.Contains(table.FormFields, field.Name) {
+		return
+	}
+	fieldDefault := getFieldDefault(field)
+	if fieldDefault != "" {
+		indexVueData.DefaultItems = append(indexVueData.DefaultItems, fieldDefault)
+	}
+}
+
+// appendFieldTableColumns 追加字段的列表列与关联搜索列。
+func appendFieldTableColumns(indexVueData *IndexVueData, field crudmodel.Field, table crudmodel.Table, columnDict map[string]string, getTableName GetTableName, webTranslate string) {
+	if slices.Contains(table.ColumnFields, field.Name) {
+		if field.Table.ComSearchRender == "remoteSelect" && field.Form.RemoteTable != "" {
+			field.Table.Remote = buildRemoteSearchMetadata(field, getTableName)
+		}
+		indexVueData.TableColumn = append(indexVueData.TableColumn, getTableColumn(field, columnDict, "", "", webTranslate))
+	}
+
+	// 关联搜索列：remoteSelect 且配置了关联表与展示字段时，在 FK 列之外
+	// 额外追加一列 alias.field 的 LIKE 搜索列（prop 为点号形态，前端直接
+	// 以该 key 提交查询参数；无 comSearchRender，走既有文本输入分支，组件
+	// 零改动）。语言键复用 parseJoinData 的 relationFieldLangPrefix 约定，
+	// 保证 i18n 字典已有对应条目。仅 remoteSelect 参与：remoteSelects 的
+	// CSV 多选 FK 无法等值关联（对齐 PHP withJoinTable 只覆盖 remoteSelect）。
+	if field.DesignType == "remoteSelect" &&
+		field.Form.RemoteTable != "" && strings.TrimSpace(field.Form.RelationFields) != "" {
+		indexVueData.TableColumn = append(indexVueData.TableColumn, buildRelationSearchColumn(field, webTranslate))
+	}
+}
+
+// analyseFieldRemoteRelation 解析 remoteSelect/remoteSelects 字段的关联表列与
+// 关联元数据。
+func analyseFieldRemoteRelation(field crudmodel.Field, getColumns GetColumns, db *gorm.DB, langEnData, langZhData map[string]string, handlerData *HandlerData, modelData *ModelData, indexVueData *IndexVueData, getTableName GetTableName, webTranslate string) error {
+	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) {
+		return nil
+	}
+	if field.Form.RelationFields == "" || field.Form.RemoteTable == "" {
+		return nil
+	}
+	columns, err := getColumns(field.Form.RemoteTable)
+	if err != nil {
+		return fmt.Errorf("remote relation %q for field %q: %w", field.Form.RemoteTable, field.Name, err)
+	}
+	return parseJoinData(db, columns, &langEnData, &langZhData, handlerData, modelData, indexVueData, field, getTableName, webTranslate)
 }
 
 // applyWeighSortAndOperateConfig 开启 weigh 字段排序时联动 index.vue 的排序
@@ -886,74 +911,152 @@ var flexNumericFloatDbTypes = []string{"decimal", "double", "real"}
 func buildHandlerParamTypeOverrides(fields []crudmodel.Field) map[string]string {
 	overrides := make(map[string]string)
 	for _, field := range fields {
-		designType := field.DesignType
-		dbType := strings.ToLower(analyseFieldType(field))
-		switch {
-		case isCanonicalTimeField(field.Name):
-			// Auto-maintained integer timestamps stay plain int64 in model/handler DTOs.
-		case isBooleanStorageField(field):
-			overrides[field.Name] = "validator.FlexBool"
-		case designType == "year" || dbType == "year":
-			overrides[field.Name] = "validator.FlexYear"
-		case slices.Contains(dtStringToArray, designType):
-			overrides[field.Name] = "validator.CommaJoined"
-		case designType == "array":
-			overrides[field.Name] = "validator.KeyValueArray"
-		case designType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
-			overrides[field.Name] = "validator.FlexDateTime"
-		case designType == "date":
-			overrides[field.Name] = "validator.FlexDate"
-		case designType == "time":
-			overrides[field.Name] = "validator.FlexClock"
-		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
-			overrides[field.Name] = timestampAdapterType(field.Name)
-			// 普通数字字段宽松化：对齐 PHP 弱类型——前端/第三方可能传字符串数字
-			// （"2"），严格 int32 绑定会 400。本兜底位于所有特殊分支之后，且
-			// timestamp 数字字段分支优先，保证 canonical/日期类字段不被覆盖。
-		case slices.Contains(flexNumericIntDbTypes, dbType):
-			overrides[field.Name] = "validator.FlexInt32"
-		case dbType == "bigint":
-			overrides[field.Name] = "validator.FlexInt64"
-		case slices.Contains(flexNumericFloatDbTypes, dbType):
-			overrides[field.Name] = "validator.FlexFloat64"
+		if typeName, ok := handlerParamTypeOverride(field); ok {
+			overrides[field.Name] = typeName
 		}
 	}
 	return overrides
+}
+
+// handlerParamTypeOverride 返回 handler DTO 字段的宽松校验类型；ok=false 表示
+// 保持严格绑定。分支顺序对齐历史 switch，数字兜底必须位于特殊分支之后。
+func handlerParamTypeOverride(field crudmodel.Field) (string, bool) {
+	designType := field.DesignType
+	dbType := strings.ToLower(analyseFieldType(field))
+	// Auto-maintained integer timestamps stay plain int64 in model/handler DTOs.
+	if isCanonicalTimeField(field.Name) {
+		return "", false
+	}
+	if typeName, ok := handlerParamTypeOverrideDesign(dbType, designType, field); ok {
+		return typeName, true
+	}
+	if typeName, ok := handlerParamTypeOverrideTemporal(dbType, designType, field); ok {
+		return typeName, true
+	}
+	return handlerParamTypeOverrideNumeric(dbType)
+}
+
+// handlerParamTypeOverrideDesign 处理布尔、年份、多选 CSV 与数组字段。
+func handlerParamTypeOverrideDesign(dbType, designType string, field crudmodel.Field) (string, bool) {
+	switch {
+	case isBooleanStorageField(field):
+		return "validator.FlexBool", true
+	case designType == "year" || dbType == "year":
+		return "validator.FlexYear", true
+	case slices.Contains(dtStringToArray, designType):
+		return "validator.CommaJoined", true
+	case designType == "array":
+		return "validator.KeyValueArray", true
+	}
+	return "", false
+}
+
+// handlerParamTypeOverrideTemporal 处理日期时间类与历史整型时间戳字段。
+func handlerParamTypeOverrideTemporal(dbType, designType string, field crudmodel.Field) (string, bool) {
+	switch {
+	case designType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
+		return "validator.FlexDateTime", true
+	case designType == "date":
+		return "validator.FlexDate", true
+	case designType == "time":
+		return "validator.FlexClock", true
+	case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
+		return timestampAdapterType(field.Name), true
+	}
+	return "", false
+}
+
+// handlerParamTypeOverrideNumeric 处理普通数字字段的宽松化兜底。
+func handlerParamTypeOverrideNumeric(dbType string) (string, bool) {
+	switch {
+	case slices.Contains(flexNumericIntDbTypes, dbType):
+		return "validator.FlexInt32", true
+	case dbType == "bigint":
+		return "validator.FlexInt64", true
+	case slices.Contains(flexNumericFloatDbTypes, dbType):
+		return "validator.FlexFloat64", true
+	}
+	return "", false
 }
 
 func buildModelFieldTypeOverrides(fields []crudmodel.Field) map[string]string {
 	overrides := make(map[string]string)
 	for _, rawField := range fields {
 		field := analyseField(rawField)
-		dbType := strings.ToLower(analyseFieldType(field))
-		switch {
-		case isCanonicalTimeField(field.Name):
-			// Auto-maintained integer timestamps stay plain int64 (not FlexUnixTime).
-		case isBooleanStorageField(field):
-			overrides[field.Name] = "validator.FlexBool"
-		case field.DesignType == "year" || dbType == "year":
-			overrides[field.Name] = "validator.FlexYear"
-		case dbType == "time":
-			if field.DesignType == "time" {
-				overrides[field.Name] = "validator.FlexClock"
-			} else {
-				overrides[field.Name] = "string"
-			}
-		case slices.Contains(dtStringToArray, field.DesignType):
-			overrides[field.Name] = "validator.CommaJoined"
-		case field.DesignType == "array":
-			overrides[field.Name] = "validator.KeyValueArray"
-		case field.DesignType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
-			overrides[field.Name] = "validator.FlexDateTime"
-		case field.DesignType == "date" && dbType == "date":
-			overrides[field.Name] = "validator.FlexDate"
-		case field.DesignType == "time" && dbType == "time":
-			overrides[field.Name] = "validator.FlexClock"
-		case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
-			overrides[field.Name] = timestampAdapterType(field.Name)
+		if typeName, ok := modelFieldTypeOverride(field); ok {
+			overrides[field.Name] = typeName
 		}
 	}
 	return overrides
+}
+
+// modelFieldTypeOverride 返回模型字段的宽松校验类型；ok=false 表示保持严格
+// 类型或沿用 gen 默认映射。
+func modelFieldTypeOverride(field crudmodel.Field) (string, bool) {
+	dbType := strings.ToLower(analyseFieldType(field))
+	// Auto-maintained integer timestamps stay plain int64 (not FlexUnixTime).
+	if isCanonicalTimeField(field.Name) {
+		return "", false
+	}
+	if typeName, ok := modelFieldTypeOverrideBase(field, dbType); ok {
+		return typeName, true
+	}
+	if typeName, ok := modelFieldTypeOverrideTime(dbType, field); ok {
+		return typeName, true
+	}
+	if typeName, ok := modelFieldTypeOverrideMulti(field); ok {
+		return typeName, true
+	}
+	return modelFieldTypeOverrideTemporal(dbType, field)
+}
+
+// modelFieldTypeOverrideBase 处理布尔与年份字段。
+func modelFieldTypeOverrideBase(field crudmodel.Field, dbType string) (string, bool) {
+	switch {
+	case isBooleanStorageField(field):
+		return "validator.FlexBool", true
+	case field.DesignType == "year" || dbType == "year":
+		return "validator.FlexYear", true
+	}
+	return "", false
+}
+
+// modelFieldTypeOverrideMulti 处理多选 CSV 与数组字段。
+func modelFieldTypeOverrideMulti(field crudmodel.Field) (string, bool) {
+	switch {
+	case slices.Contains(dtStringToArray, field.DesignType):
+		return "validator.CommaJoined", true
+	case field.DesignType == "array":
+		return "validator.KeyValueArray", true
+	}
+	return "", false
+}
+
+// modelFieldTypeOverrideTime 处理 db 类型为 time 的字段：designType=time 用
+// FlexClock，其余保持字符串。
+func modelFieldTypeOverrideTime(dbType string, field crudmodel.Field) (string, bool) {
+	if dbType != "time" {
+		return "", false
+	}
+	if field.DesignType == "time" {
+		return "validator.FlexClock", true
+	}
+	return "string", true
+}
+
+// modelFieldTypeOverrideTemporal 处理日期时间类与历史整型时间戳字段。
+func modelFieldTypeOverrideTemporal(dbType string, field crudmodel.Field) (string, bool) {
+	switch {
+	case field.DesignType == "datetime" && slices.Contains([]string{"datetime", "timestamp"}, dbType):
+		return "validator.FlexDateTime", true
+	case field.DesignType == "date" && dbType == "date":
+		return "validator.FlexDate", true
+	case field.DesignType == "time" && dbType == "time":
+		return "validator.FlexClock", true
+	case field.OriginalDesignType == "timestamp" && slices.Contains([]string{"bigint", "int", "mediumint", "smallint", "tinyint"}, dbType):
+		return timestampAdapterType(field.Name), true
+	}
+	return "", false
 }
 
 func timestampAdapterType(_ string) string {
@@ -1275,15 +1378,26 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 		prop = "_text"
 	}
 
-	columnStr := ""
-	if field.Table.Label == "" {
-		columnStr += buildTableColumnKey("label", "t("+strconv.Quote(webTranslate+translationPrefix+field.Name)+")")
-	} else {
-		columnStr += buildTableColumnKey("label", field.Table.Label)
-	}
+	columnStr := getTableColumnLabel(field, translationPrefix, webTranslate)
 	columnStr += buildTableColumnKey("prop", fieldNamePrefix+field.Name+prop)
 	columnStr += buildTableColumnKey("align", "center")
+	columnStr += getTableColumnCoreAttributes(field)
+	columnStr += getTableColumnExtraAttributes(field)
+	columnStr += getTableColumnReplaceValue(field, columnDict)
+	return columnStr
+}
 
+// getTableColumnLabel 返回列标签配置项：显式 label 优先，否则走 i18n 翻译键。
+func getTableColumnLabel(field crudmodel.Field, translationPrefix string, webTranslate string) string {
+	if field.Table.Label == "" {
+		return buildTableColumnKey("label", "t("+strconv.Quote(webTranslate+translationPrefix+field.Name)+")")
+	}
+	return buildTableColumnKey("label", field.Table.Label)
+}
+
+// getTableColumnCoreAttributes 返回模糊搜索提示与渲染/操作符/排序配置项。
+func getTableColumnCoreAttributes(field crudmodel.Field) string {
+	columnStr := ""
 	// 模糊搜索增加一个placeholder
 	if field.Table.Operator != "" && field.Table.Operator == "LIKE" {
 		columnStr += buildTableColumnKey("operatorPlaceholder", "t('Fuzzy query')")
@@ -1299,6 +1413,12 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 	if field.Table.Sortable != "" {
 		columnStr += buildTableColumnKey("sortable", field.Table.Sortable)
 	}
+	return columnStr
+}
+
+// getTableColumnExtraAttributes 返回宽度/时间格式/显示/公共搜索/远程搜索配置项。
+func getTableColumnExtraAttributes(field crudmodel.Field) string {
+	columnStr := ""
 	if field.Table.Width != 0 {
 		columnStr += buildTableColumnKey("width", fmt.Sprintf("%v", field.Table.Width))
 	}
@@ -1318,24 +1438,29 @@ func getTableColumn(field crudmodel.Field, columnDict map[string]string, fieldNa
 	if field.Table.Remote != "" {
 		columnStr += " remote: {" + field.Table.Remote + "},"
 	}
+	return columnStr
+}
 
+// getTableColumnReplaceValue 返回 replaceValue 配置项：字典键排序后迭代，保证
+// 重新生成逐字节一致。
+func getTableColumnReplaceValue(field crudmodel.Field, columnDict map[string]string) string {
 	// 需要值替换的渲染类型
 	columnReplaceValue := []string{"tag", "tags", "switch"}
-	if !slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) && (len(columnDict) > 0 || slices.Contains(columnReplaceValue, field.Table.Render)) {
-		itemJson := ""
-		// 排序 keys 后迭代：Go map 迭代顺序随机，直接 range 会使 index.vue 的
-		// replaceValue 键序每次生成都不同，破坏重新生成逐字节一致的契约。
-		dictKeys := make([]string, 0, len(columnDict))
-		for k := range columnDict {
-			dictKeys = append(dictKeys, k)
-		}
-		sort.Strings(dictKeys)
-		for _, k := range dictKeys {
-			itemJson += buildTableColumnKey(k, columnDict[k])
-		}
-		columnStr += " replaceValue: {" + strings.TrimRight(itemJson, ",") + "},"
+	if slices.Contains([]string{"remoteSelect", "remoteSelects"}, field.DesignType) || (len(columnDict) == 0 && !slices.Contains(columnReplaceValue, field.Table.Render)) {
+		return ""
 	}
-	return columnStr
+	itemJson := ""
+	// 排序 keys 后迭代：Go map 迭代顺序随机，直接 range 会使 index.vue 的
+	// replaceValue 键序每次生成都不同，破坏重新生成逐字节一致的契约。
+	dictKeys := make([]string, 0, len(columnDict))
+	for k := range columnDict {
+		dictKeys = append(dictKeys, k)
+	}
+	sort.Strings(dictKeys)
+	for _, k := range dictKeys {
+		itemJson += buildTableColumnKey(k, columnDict[k])
+	}
+	return " replaceValue: {" + strings.TrimRight(itemJson, ",") + "},"
 }
 
 // buildRelationSearchColumn 构建 remoteSelect 字段的关联搜索列：取
@@ -1438,23 +1563,9 @@ func parseJoinData(_ *gorm.DB, columns []dbschema.Column, dictEn *map[string]str
 }
 
 func buildRelationMetadata(joinFields []crudmodel.Field, field crudmodel.Field, className string) (RelationMetadata, error) {
-	remoteTable := field.Form.RemoteTable
-	if err := data_scope.ValidateIdentifier(remoteTable); err != nil {
-		return RelationMetadata{}, fmt.Errorf("invalid remote table %q for field %q: %w", remoteTable, field.Name, err)
-	}
-	remotePK := field.Form.RemotePk
-	if remotePK == "" {
-		remotePK = "id"
-	}
-	if err := data_scope.ValidateIdentifier(remotePK); err != nil {
-		return RelationMetadata{}, fmt.Errorf("%s relation %q has unsupported remote primary key %q: %w", field.DesignType, field.Name, remotePK, err)
-	}
-	multi := field.DesignType == "remoteSelects"
-	if multi && !isMultiRelationStorage(field) {
-		return RelationMetadata{}, fmt.Errorf("remoteSelects relation %q requires string-family CSV storage, got %q", field.Name, analyseFieldType(field))
-	}
-	if multi && strings.TrimSpace(field.Form.RelationFields) == "" {
-		return RelationMetadata{}, fmt.Errorf("remoteSelects relation %q requires relationFields for deferred label enrichment", field.Name)
+	remoteTable, remotePK, multi, err := validateRelationTarget(field)
+	if err != nil {
+		return RelationMetadata{}, err
 	}
 	pkColumn := searchField(joinFields, remotePK)
 	if pkColumn.Name == "" {
@@ -1478,41 +1589,73 @@ func buildRelationMetadata(joinFields []crudmodel.Field, field crudmodel.Field, 
 		return RelationMetadata{}, fmt.Errorf("%s relation %q has unsupported remote primary key type %q; supported types are int32, int64, and string", field.DesignType, field.Name, metadata.RemotePKType)
 	}
 	metadata.Fields = append(metadata.Fields, relationDTOField(pkColumn))
+	if err := appendRelationDTOFields(&metadata, joinFields, field, remotePK, multi); err != nil {
+		return RelationMetadata{}, err
+	}
+	if !multi {
+		metadata.PayloadFields = metadata.Fields
+	}
+	return metadata, nil
+}
 
+// validateRelationTarget 校验远程表/主键标识符与 remoteSelects 的存储契约。
+func validateRelationTarget(field crudmodel.Field) (remoteTable, remotePK string, multi bool, err error) {
+	remoteTable = field.Form.RemoteTable
+	if err := data_scope.ValidateIdentifier(remoteTable); err != nil {
+		return "", "", false, fmt.Errorf("invalid remote table %q for field %q: %w", remoteTable, field.Name, err)
+	}
+	remotePK = field.Form.RemotePk
+	if remotePK == "" {
+		remotePK = "id"
+	}
+	if err := data_scope.ValidateIdentifier(remotePK); err != nil {
+		return "", "", false, fmt.Errorf("%s relation %q has unsupported remote primary key %q: %w", field.DesignType, field.Name, remotePK, err)
+	}
+	multi = field.DesignType == "remoteSelects"
+	if multi && !isMultiRelationStorage(field) {
+		return "", "", false, fmt.Errorf("remoteSelects relation %q requires string-family CSV storage, got %q", field.Name, analyseFieldType(field))
+	}
+	if multi && strings.TrimSpace(field.Form.RelationFields) == "" {
+		return "", "", false, fmt.Errorf("remoteSelects relation %q requires relationFields for deferred label enrichment", field.Name)
+	}
+	return remoteTable, remotePK, multi, nil
+}
+
+// appendRelationDTOFields 按 relationFields 追加关联 DTO 字段：多选时同时收集
+// payload 字段，重复列只保留一次。
+func appendRelationDTOFields(metadata *RelationMetadata, joinFields []crudmodel.Field, field crudmodel.Field, remotePK string, multi bool) error {
 	seen := map[string]bool{remotePK: true}
 	for _, rawName := range strings.Split(field.Form.RelationFields, ",") {
 		name := strings.TrimSpace(rawName)
 		if name == "" {
-			return RelationMetadata{}, fmt.Errorf("empty relation field for field %q", field.Name)
+			return fmt.Errorf("empty relation field for field %q", field.Name)
 		}
 		if err := data_scope.ValidateIdentifier(name); err != nil {
-			return RelationMetadata{}, fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
+			return fmt.Errorf("invalid relation field %q for field %q: %w", name, field.Name, err)
 		}
 		joinField := searchField(joinFields, name)
 		if joinField.Name == "" {
-			return RelationMetadata{}, fmt.Errorf("unknown relation field %q on remote table %q for field %q", name, remoteTable, field.Name)
+			return fmt.Errorf("unknown relation field %q on remote table %q for field %q", name, field.Form.RemoteTable, field.Name)
 		}
-		if multi {
-			alreadyPayload := false
-			for _, payloadField := range metadata.PayloadFields {
-				if payloadField.ColumnName == name {
-					alreadyPayload = true
-					break
-				}
-			}
-			if !alreadyPayload {
-				metadata.PayloadFields = append(metadata.PayloadFields, relationDTOField(joinField))
-			}
+		if multi && !hasRelationPayloadField(metadata, name) {
+			metadata.PayloadFields = append(metadata.PayloadFields, relationDTOField(joinField))
 		}
 		if !seen[name] {
 			metadata.Fields = append(metadata.Fields, relationDTOField(joinField))
 			seen[name] = true
 		}
 	}
-	if !multi {
-		metadata.PayloadFields = metadata.Fields
+	return nil
+}
+
+// hasRelationPayloadField 报告 payload 字段集合中是否已包含该列。
+func hasRelationPayloadField(metadata *RelationMetadata, columnName string) bool {
+	for _, payloadField := range metadata.PayloadFields {
+		if payloadField.ColumnName == columnName {
+			return true
+		}
 	}
-	return metadata, nil
+	return false
 }
 
 func isMultiRelationStorage(field crudmodel.Field) bool {

@@ -55,6 +55,7 @@ func countOwnerRows(t *testing.T, db *gorm.DB, table string, adminID int32) int6
 }
 
 func TestAdminHierarchyDeleteTargetsTxReturnsParentSnapshot(t *testing.T) {
+	t.Parallel()
 	db, root, parent, leaf := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 
@@ -71,6 +72,7 @@ func TestAdminHierarchyDeleteTargetsTxReturnsParentSnapshot(t *testing.T) {
 }
 
 func TestAdminHierarchyDeleteTargetsTxRejectsMissingRows(t *testing.T) {
+	t.Parallel()
 	db, root, _, _ := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 
@@ -83,6 +85,7 @@ func TestAdminHierarchyDeleteTargetsTxRejectsMissingRows(t *testing.T) {
 }
 
 func TestAdminHierarchyCountSubordinatesTx(t *testing.T) {
+	t.Parallel()
 	db, root, parent, leaf := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 
@@ -105,6 +108,7 @@ func TestAdminHierarchyCountSubordinatesTx(t *testing.T) {
 }
 
 func TestAdminHierarchyAdminOwnsRowsTx(t *testing.T) {
+	t.Parallel()
 	db, _, _, leaf := setupAdminDeleteChain(t)
 	createAdminOwnerTestTable(t, db, "ba_owner_a")
 	require.NoError(t, db.Exec("INSERT INTO `ba_owner_a` (admin_id, update_time) VALUES (?,0)", leaf.ID).Error)
@@ -124,6 +128,7 @@ func TestAdminHierarchyAdminOwnsRowsTx(t *testing.T) {
 }
 
 func TestAdminHierarchyEnsureReassignmentTargetEnabledTx(t *testing.T) {
+	t.Parallel()
 	db, root, parent, _ := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 	require.NoError(t, db.Model(&model.Admin{}).Where("id = ?", parent.ID).Update("status", "disable").Error)
@@ -144,6 +149,7 @@ func TestAdminHierarchyEnsureReassignmentTargetEnabledTx(t *testing.T) {
 }
 
 func TestAdminHierarchyTransferOwnerRowsTx(t *testing.T) {
+	t.Parallel()
 	db, _, parent, leaf := setupAdminDeleteChain(t)
 	createAdminOwnerTestTable(t, db, "ba_owner_b")
 	require.NoError(t, db.Exec("INSERT INTO `ba_owner_b` (admin_id, update_time) VALUES (?,0),(?,0)", leaf.ID, parent.ID).Error)
@@ -170,6 +176,7 @@ func TestAdminHierarchyTransferOwnerRowsTx(t *testing.T) {
 }
 
 func TestAdminHierarchyDeleteAdminsTxGuardsRowsAffected(t *testing.T) {
+	t.Parallel()
 	db, _, _, leaf := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 
@@ -191,6 +198,7 @@ func TestAdminHierarchyDeleteAdminsTxGuardsRowsAffected(t *testing.T) {
 }
 
 func TestAdminHierarchyDeleteClosureTx(t *testing.T) {
+	t.Parallel()
 	db, root, _, leaf := setupAdminDeleteChain(t)
 	h := newAdminHierarchy("ba_")
 

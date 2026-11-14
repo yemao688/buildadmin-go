@@ -65,6 +65,7 @@ func newContractTestRouter() *gin.Engine {
 
 func TestRefreshTokenRejectsUnknownTypeWithoutCreatingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user", UserID: 1}}
 	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}}
 	router := newContractTestRouter()
@@ -82,6 +83,7 @@ func TestRefreshTokenRejectsUnknownTypeWithoutCreatingToken(t *testing.T) {
 
 func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	token.RegisterBuiltinRefreshTypes() // 绕过构造器的 struct 字面量需显式登记刷新类型
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user-refresh", UserID: 1}}
 	config := &conf.Configuration{}
@@ -110,6 +112,7 @@ func TestRefreshTokenUsesConfiguredTTLWithoutDeletingOldToken(t *testing.T) {
 
 func TestRefreshAdminTokenUsesAdminTTL(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	token.RegisterBuiltinRefreshTypes() // 绕过构造器的 struct 字面量需显式登记刷新类型
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "admin-refresh", UserID: 1}}
 	config := &conf.Configuration{}
@@ -131,6 +134,7 @@ func TestRefreshAdminTokenUsesAdminTTL(t *testing.T) {
 
 func TestRefreshTokenRejectsWrongDomainHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "user-refresh", UserID: 1}}
 	h := &CommonHandler{tokenHelper: &token.TokenHelper{Driver: driver}, config: &conf.Configuration{}}
 	router := newContractTestRouter()

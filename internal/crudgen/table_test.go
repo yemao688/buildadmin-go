@@ -9,6 +9,7 @@ import (
 )
 
 func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
+	t.Parallel()
 	nullable, err := getDDlFieldData(crudmodel.Field{Name: "nickname", Type: "varchar", Length: 64, Null: true})
 	require.NoError(t, err)
 	assert.NotContains(t, nullable, "NOT NULL")
@@ -19,6 +20,7 @@ func TestGetDDLFieldData_NullableSemantics(t *testing.T) {
 }
 
 func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, defaultType, value, want string
 	}{
@@ -33,6 +35,7 @@ func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
 		{"stale_empty", "EMPTY STRING", "stale", "DEFAULT ''"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := getDDlFieldData(crudmodel.Field{Name: tc.name, Type: "varchar", Length: 32, DefaultType: tc.defaultType, Default: tc.value})
 			require.NoError(t, err)
 			assert.Contains(t, got, tc.want)
@@ -41,6 +44,7 @@ func TestGetDDLFieldDataDefaultTypes(t *testing.T) {
 }
 
 func TestGetDDLFieldDataNullDefaultIsNullable(t *testing.T) {
+	t.Parallel()
 	got, err := getDDlFieldData(crudmodel.Field{Name: "value", Type: "varchar", DefaultType: "NULL"})
 	require.NoError(t, err)
 	assert.NotContains(t, got, "NOT NULL")
@@ -48,8 +52,10 @@ func TestGetDDLFieldDataNullDefaultIsNullable(t *testing.T) {
 }
 
 func TestGetDDLFieldDataNoDefaultFamilies(t *testing.T) {
+	t.Parallel()
 	for dataType := range noDefaultValueTypes {
 		t.Run(dataType, func(t *testing.T) {
+			t.Parallel()
 			got, err := getDDlFieldData(crudmodel.Field{Name: "value", Type: dataType, DefaultType: "INPUT", Default: "x"})
 			require.NoError(t, err)
 			assert.NotContains(t, got, "DEFAULT")
@@ -58,6 +64,7 @@ func TestGetDDLFieldDataNoDefaultFamilies(t *testing.T) {
 }
 
 func TestColumnPositionClause(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{"": "", firstFieldSentinel: " FIRST", "image": " AFTER `image`"}
 	for after, want := range cases {
 		if got := columnPositionClause(after); got != want {

@@ -57,6 +57,7 @@ func colOrderNames(t *testing.T, db *gorm.DB, table string) []string {
 	return names
 }
 
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
 func TestApplyAddsColumnAtSpecPosition(t *testing.T) {
 	db, cfg, table := setupColOrderDB(t)
 	if err := db.Exec("CREATE TABLE `" + table + "` (`id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID', `image` varchar(255) NOT NULL DEFAULT '' COMMENT '图片', `title` varchar(255) NOT NULL DEFAULT '' COMMENT '标题', PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").Error; err != nil {
@@ -87,6 +88,7 @@ func TestApplyAddsColumnAtSpecPosition(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁，并行会与其它取锁测试互相返回 ErrGenerationBusy
 func TestApplyWarnsOnColumnOrderDrift(t *testing.T) {
 	db, cfg, table := setupColOrderDB(t)
 	if err := db.Exec("CREATE TABLE `" + table + "` (`id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID', `title` varchar(255) NOT NULL DEFAULT '' COMMENT '标题', `image` varchar(255) NOT NULL DEFAULT '' COMMENT '图片', PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").Error; err != nil {

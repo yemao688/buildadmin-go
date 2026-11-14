@@ -21,6 +21,7 @@ func contextWithRequestTransaction(t *testing.T, db *gorm.DB) *gin.Context {
 }
 
 func TestBaseModelUsesRequestTransactionFromGinContext(t *testing.T) {
+	t.Parallel()
 	requestDB := newDryRunDB(t)
 	modelDB := newDryRunDB(t)
 	s := &persistence.BaseModel{}
@@ -43,6 +44,7 @@ func TestBaseModelUsesRequestTransactionFromGinContext(t *testing.T) {
 }
 
 func TestBaseModelDBForReturnsIndependentStatements(t *testing.T) {
+	t.Parallel()
 	modelDB := newDryRunDB(t)
 	s := &persistence.BaseModel{}
 	*s = persistence.NewBaseModel("t", "id", "", modelDB)

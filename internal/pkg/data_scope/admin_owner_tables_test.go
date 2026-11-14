@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:paralleltest // 测试向进程级属主表注册表写入且无清理，并行会污染同包其它用例
 func TestRegisterAdminOwnerTables(t *testing.T) {
 	require.NoError(t, RegisterAdminOwnerTables("owner_registry_a", "owner_registry_a", "owner_registry_b"))
 	require.NoError(t, RegisterAdminOwnerTables("owner_registry_b"))
@@ -18,6 +19,7 @@ func TestRegisterAdminOwnerTables(t *testing.T) {
 	require.NotContains(t, AdminOwnerTables(), "mutated")
 }
 
+//nolint:paralleltest // 断言全局属主表注册表在调用前后不变，需与写入该注册表的用例串行
 func TestRegisterAdminOwnerTablesRejectsInvalidBatch(t *testing.T) {
 	before := AdminOwnerTables()
 	require.Error(t, RegisterAdminOwnerTables("owner_valid_batch", "owner-bad-name"))

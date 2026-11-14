@@ -8,6 +8,7 @@ import (
 )
 
 func TestUserMoneyLogParamAmountFormats(t *testing.T) {
+	t.Parallel()
 	var request UserMoneyLogParam
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":1.25,"memo":"x"}`), &request))
 	amount, err := request.Amount()
@@ -32,6 +33,7 @@ func TestUserMoneyLogParamAmountFormats(t *testing.T) {
 }
 
 func TestUserMoneyLogParamAmountRejectsInvalid(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name string
 		body string
@@ -49,6 +51,7 @@ func TestUserMoneyLogParamAmountRejectsInvalid(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var request UserMoneyLogParam
 			require.NoError(t, json.Unmarshal([]byte(tc.body), &request))
 			_, err := request.Amount()
@@ -58,6 +61,7 @@ func TestUserMoneyLogParamAmountRejectsInvalid(t *testing.T) {
 }
 
 func TestUserMoneyLogParamMemoIsOptional(t *testing.T) {
+	t.Parallel()
 	// 备注可选：缺省 memo 应能正常绑定（无 binding:"required"）。
 	var request UserMoneyLogParam
 	require.NoError(t, json.Unmarshal([]byte(`{"user_id":1,"money":"1.25"}`), &request))

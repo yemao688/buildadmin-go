@@ -66,6 +66,7 @@ func newSecurityLogFixture(t *testing.T) *securityLogFixture {
 }
 
 func TestSecurityLogListsKeepJoinedAdminAndRuleFields(t *testing.T) {
+	t.Parallel()
 	f := newSecurityLogFixture(t)
 	ctx, _ := gin.CreateTestContext(nil)
 	_ = data_scope.SetActor(ctx, data_scope.Actor{AdminID: 2})

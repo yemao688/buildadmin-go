@@ -19,6 +19,7 @@ import (
 )
 
 func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
+	t.Parallel()
 	db, config := testutil.OpenMySQL(t)
 	config.Database.Prefix = fmt.Sprintf("cas_%d_", time.Now().UnixNano())
 	db.Config.NamingStrategy = schema.NamingStrategy{SingularTable: true, TablePrefix: config.Database.Prefix}
@@ -37,6 +38,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	t.Run("data recycle add and edit", func(t *testing.T) {
+		t.Parallel()
 		handler := NewDataRecycleHandler(nil, config, securitymodel.NewSecurityDataRecycleRepository(db, config), nil, nil, service.NewSecurityDataRecycleService(securitymodel.NewSecurityDataRecycleRepository(db, config)))
 		router := gin.New()
 		router.POST("/add", handler.Add)
@@ -58,6 +60,7 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 	})
 
 	t.Run("sensitive data add and edit", func(t *testing.T) {
+		t.Parallel()
 		sensitiveRepo := securitymodel.NewSecuritySensitiveDataRepository(db, config)
 		handler := NewSensitiveDataHandler(nil, config, sensitiveRepo, nil, nil, service.NewSensitiveDataService(sensitiveRepo))
 		router := gin.New()

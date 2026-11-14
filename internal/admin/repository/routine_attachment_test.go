@@ -22,6 +22,7 @@ import (
 // 回归测试：Attachment 的 Admin/User 关联必须解析到真实的（带前缀）admin/user 表，
 // 而不是按结构体名推导出不存在的 attachment_admin/attachment_user 表。
 func TestAttachmentAssociationTableNames(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{
 		NamingStrategy:                           schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 		DisableForeignKeyConstraintWhenMigrating: true,
@@ -68,6 +69,7 @@ func (l *attachmentConfigSQLCounter) Trace(_ context.Context, _ time.Time, fc fu
 // alioss 附件只允许 1 次 ba_config（group='upload'）查询（原先每行 1 次 =
 // 3 次），且 FullUrl/Suffix 与单行路径 DealData 逐字段一致。
 func TestAttachmentListAliossSettingsBatchedOnce(t *testing.T) {
+	t.Parallel()
 	counter := &attachmentConfigSQLCounter{Interface: logger.Default.LogMode(logger.Silent)}
 	db, err := gorm.Open(sqlite.Open("file:attachment-alioss-"+strconv.FormatInt(time.Now().UnixNano(), 10)+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},

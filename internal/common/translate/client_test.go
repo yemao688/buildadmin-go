@@ -29,6 +29,7 @@ func serveBody(t *testing.T, status int, body string) *Client {
 }
 
 func TestTranslateMultiSuccessMapping(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusOK, `{"code":1,"data":[{"lan_to":"zh-cn","text_to":"你好"},{"lan_to":"en","text_to":"Hello"}]}`)
 
 	got, err := c.TranslateMulti(context.Background(), "ja", []string{"zh-cn", "en"}, "こんにちは")
@@ -38,6 +39,7 @@ func TestTranslateMultiSuccessMapping(t *testing.T) {
 
 // 兼容部分部署网关把业务体再包一层 res 的形态。
 func TestTranslateMultiWrappedResBody(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusOK, `{"code":0,"res":{"code":1,"data":[{"lan_to":"en","text_to":"world"}]}}`)
 
 	got, err := c.TranslateMulti(context.Background(), "ja", []string{"en"}, "世界")
@@ -46,6 +48,7 @@ func TestTranslateMultiWrappedResBody(t *testing.T) {
 }
 
 func TestTranslateMultiHTTPStatusError(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusInternalServerError, `{"code":0,"msg":"boom"}`)
 
 	_, err := c.TranslateMulti(context.Background(), "ja", []string{"en"}, "x")
@@ -54,6 +57,7 @@ func TestTranslateMultiHTTPStatusError(t *testing.T) {
 }
 
 func TestTranslateMultiBusinessCodeError(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusOK, `{"code":0,"msg":"unknow language"}`)
 
 	_, err := c.TranslateMulti(context.Background(), "ja", []string{"en"}, "x")
@@ -62,6 +66,7 @@ func TestTranslateMultiBusinessCodeError(t *testing.T) {
 }
 
 func TestTranslateMultiEmptyDataError(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusOK, `{"code":1,"data":[]}`)
 
 	_, err := c.TranslateMulti(context.Background(), "ja", []string{"en"}, "x")
@@ -69,6 +74,7 @@ func TestTranslateMultiEmptyDataError(t *testing.T) {
 }
 
 func TestTranslateMultiNoTargetLanguages(t *testing.T) {
+	t.Parallel()
 	c := serveBody(t, http.StatusOK, `{"code":1,"data":[]}`)
 
 	_, err := c.TranslateMulti(context.Background(), "ja", nil, "x")
@@ -77,6 +83,7 @@ func TestTranslateMultiNoTargetLanguages(t *testing.T) {
 }
 
 func TestTranslateMultiFallsBackOnMissingConfig(t *testing.T) {
+	t.Parallel()
 	// config 缺 translate 段时客户端仍可用（走代码兜底），且能正常请求。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"code":1,"data":[{"lan_to":"en","text_to":"ok"}]}`))

@@ -3,6 +3,7 @@ package data_scope
 import "testing"
 
 func TestValidateBusinessIdentifierRejectsInjection(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{"user.id", "user`id", "user id", "user/*x*/", "user#x", ""} {
 		if err := ValidateBusinessIdentifier(value); err == nil {
 			t.Fatalf("expected %q to be rejected", value)
@@ -11,6 +12,7 @@ func TestValidateBusinessIdentifierRejectsInjection(t *testing.T) {
 }
 
 func TestValidateBusinessIdentifierAcceptsPlainName(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{"user", "orders_2026", "_tenant_data"} {
 		if err := ValidateBusinessIdentifier(value); err != nil {
 			t.Fatalf("expected %q to be accepted: %v", value, err)
@@ -19,6 +21,7 @@ func TestValidateBusinessIdentifierAcceptsPlainName(t *testing.T) {
 }
 
 func TestStaticPolicyRejectsSensitiveFields(t *testing.T) {
+	t.Parallel()
 	for _, field := range []string{"admin_id", "password", "token", "secret"} {
 		if err := ValidateSecurityField(field); err == nil {
 			t.Fatalf("expected sensitive field %q to be rejected", field)
@@ -27,12 +30,14 @@ func TestStaticPolicyRejectsSensitiveFields(t *testing.T) {
 }
 
 func TestValidateSecurityFieldAllowsRemovedSalt(t *testing.T) {
+	t.Parallel()
 	if err := ValidateSecurityField("salt"); err != nil {
 		t.Fatalf("removed salt field should be allowed: %v", err)
 	}
 }
 
 func TestCustomPrimaryKeyIdentifierIsAllowed(t *testing.T) {
+	t.Parallel()
 	for _, field := range []string{"order_no", "uuid"} {
 		if err := ValidateSecurityField(field); err != nil {
 			t.Fatalf("custom primary key %q rejected: %v", field, err)

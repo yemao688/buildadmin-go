@@ -43,89 +43,67 @@ func (v FlexBool) MarshalJSON() ([]byte, error) {
 }
 
 func (v *FlexBool) Scan(value any) error {
-	var parsed bool
-	switch value := value.(type) {
-	case nil:
-		parsed = false
-	case bool:
-		parsed = value
-	case int:
-		var err error
-		parsed, err = flexBoolInt64(int64(value))
-		if err != nil {
-			return err
-		}
-	case int8:
-		var err error
-		parsed, err = flexBoolInt64(int64(value))
-		if err != nil {
-			return err
-		}
-	case int16:
-		var err error
-		parsed, err = flexBoolInt64(int64(value))
-		if err != nil {
-			return err
-		}
-	case int32:
-		var err error
-		parsed, err = flexBoolInt64(int64(value))
-		if err != nil {
-			return err
-		}
-	case int64:
-		var err error
-		parsed, err = flexBoolInt64(value)
-		if err != nil {
-			return err
-		}
-	case uint:
-		var err error
-		parsed, err = flexBoolUint64(uint64(value))
-		if err != nil {
-			return err
-		}
-	case uint8:
-		var err error
-		parsed, err = flexBoolUint64(uint64(value))
-		if err != nil {
-			return err
-		}
-	case uint16:
-		var err error
-		parsed, err = flexBoolUint64(uint64(value))
-		if err != nil {
-			return err
-		}
-	case uint32:
-		var err error
-		parsed, err = flexBoolUint64(uint64(value))
-		if err != nil {
-			return err
-		}
-	case uint64:
-		var err error
-		parsed, err = flexBoolUint64(value)
-		if err != nil {
-			return err
-		}
-	case string:
-		var err error
-		parsed, err = parseFlexBoolText(strings.TrimSpace(value))
-		if err != nil {
-			return err
-		}
-	case []byte:
-		var err error
-		parsed, err = parseFlexBoolText(strings.TrimSpace(string(value)))
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("invalid bool scan value %T", value)
+	parsed, err := scanFlexBoolAny(value)
+	if err != nil {
+		return err
 	}
 	*v = FlexBool(parsed)
 	return nil
+}
+
+// scanFlexBoolAny 按驱动可能返回的 Go 类型归一化布尔值：整数按有/无符号分组
+// 收敛到 int64/uint64，字符串与 []byte 走同一文本解析。
+func scanFlexBoolAny(value any) (bool, error) {
+	switch typed := value.(type) {
+	case nil:
+		return false, nil
+	case bool:
+		return typed, nil
+	case int, int8, int16, int32, int64:
+		return scanFlexBoolInt(typed)
+	case uint, uint8, uint16, uint32, uint64:
+		return scanFlexBoolUint(typed)
+	case string:
+		return parseFlexBoolText(strings.TrimSpace(typed))
+	case []byte:
+		return parseFlexBoolText(strings.TrimSpace(string(typed)))
+	default:
+		return false, fmt.Errorf("invalid bool scan value %T", value)
+	}
+}
+
+func scanFlexBoolInt(value any) (bool, error) {
+	switch n := value.(type) {
+	case int:
+		return flexBoolInt64(int64(n))
+	case int8:
+		return flexBoolInt64(int64(n))
+	case int16:
+		return flexBoolInt64(int64(n))
+	case int32:
+		return flexBoolInt64(int64(n))
+	case int64:
+		return flexBoolInt64(n)
+	default:
+		return false, fmt.Errorf("invalid bool scan value %T", value)
+	}
+}
+
+func scanFlexBoolUint(value any) (bool, error) {
+	switch n := value.(type) {
+	case uint:
+		return flexBoolUint64(uint64(n))
+	case uint8:
+		return flexBoolUint64(uint64(n))
+	case uint16:
+		return flexBoolUint64(uint64(n))
+	case uint32:
+		return flexBoolUint64(uint64(n))
+	case uint64:
+		return flexBoolUint64(n)
+	default:
+		return false, fmt.Errorf("invalid bool scan value %T", value)
+	}
 }
 
 func (v FlexBool) Value() (driver.Value, error) {

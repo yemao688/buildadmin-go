@@ -68,6 +68,7 @@ func createLoginAdmin(t *testing.T, db *gorm.DB, username, plain, status string)
 }
 
 func TestAuthServiceLoginSuccessIssuesSession(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
@@ -86,6 +87,7 @@ func TestAuthServiceLoginSuccessIssuesSession(t *testing.T) {
 }
 
 func TestAuthServiceLoginWrongPasswordRecordsFailure(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
@@ -98,6 +100,7 @@ func TestAuthServiceLoginWrongPasswordRecordsFailure(t *testing.T) {
 }
 
 func TestAuthServiceLoginDisabledAccountRejected(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "disable")
 
@@ -106,12 +109,14 @@ func TestAuthServiceLoginDisabledAccountRejected(t *testing.T) {
 }
 
 func TestAuthServiceLoginUnknownAccountRejected(t *testing.T) {
+	t.Parallel()
 	svc, _ := newAuthServiceFixture(t)
 	_, err := svc.Login("ghost", "whatever", false, "", "", "203.0.113.9")
 	require.EqualError(t, err, "Incorrect user name or password!")
 }
 
 func TestAuthServiceLoginCaptchaRequired(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	svc.config.App.AdminLoginCaptcha = true
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
@@ -126,6 +131,7 @@ func TestAuthServiceLoginCaptchaRequired(t *testing.T) {
 }
 
 func TestAuthServiceLoginKeepIssuesRefreshToken(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
 
@@ -135,6 +141,7 @@ func TestAuthServiceLoginKeepIssuesRefreshToken(t *testing.T) {
 }
 
 func TestAuthServiceLoginRetryLockout(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	svc.config.App.AdminLoginRetry = 2
 	createLoginAdmin(t, db, "root", "correct horse battery staple", "enable")
@@ -149,6 +156,7 @@ func TestAuthServiceLoginRetryLockout(t *testing.T) {
 }
 
 func TestAuthServiceLoginExpiredWindowResetsCounter(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	svc.config.App.AdminLoginRetry = 2
 	hash, err := password.Hash("correct horse battery staple")
@@ -181,6 +189,7 @@ func TestAuthServiceLoginExpiredWindowResetsCounter(t *testing.T) {
 }
 
 func TestAuthServiceLoginCounterMonotonic(t *testing.T) {
+	t.Parallel()
 	svc, db := newAuthServiceFixture(t)
 	// Throttling disabled: every wrong attempt must still be counted and
 	// the counter must never regress.
@@ -196,6 +205,7 @@ func TestAuthServiceLoginCounterMonotonic(t *testing.T) {
 }
 
 func TestAuthServiceIsLoggedIn(t *testing.T) {
+	t.Parallel()
 	svc, _ := newAuthServiceFixture(t)
 	require.False(t, svc.IsLoggedIn(""))
 	require.False(t, svc.IsLoggedIn("some-token"))
@@ -229,6 +239,7 @@ func (d *failingAccessTokenDriver) Delete(tokenStr string) error {
 func (d *failingAccessTokenDriver) Clear(string, int32) error { return nil }
 
 func TestAuthServiceLoginCompensatesAccessTokenSetFailure(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-auth-compensate-"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&adminLoginRow{}))
@@ -258,6 +269,7 @@ func (ssoFailDriver) Delete(string) error                    { return nil }
 func (ssoFailDriver) Clear(string, int32) error              { return errors.New("clear unavailable") }
 
 func TestAuthServiceLoginPropagatesSSOClearFailure(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-auth-ssofail-"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&adminLoginRow{}))

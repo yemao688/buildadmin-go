@@ -69,6 +69,7 @@ func (f *fixture) countLogs(userID int32) int64 {
 }
 
 func TestApplyDeltaSystemFlowSuccess(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-system")
 
@@ -90,6 +91,7 @@ func TestApplyDeltaSystemFlowSuccess(t *testing.T) {
 }
 
 func TestApplyDeltaRejectsInsufficientBalance(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-insufficient")
 
@@ -104,6 +106,7 @@ func TestApplyDeltaRejectsInsufficientBalance(t *testing.T) {
 }
 
 func TestApplyDeltaReturnsNotFoundForUnknownUser(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 
 	log, err := f.apply(ApplyInput{UserID: 999999, Delta: 1, Scope: SystemScope()})
@@ -113,6 +116,7 @@ func TestApplyDeltaReturnsNotFoundForUnknownUser(t *testing.T) {
 }
 
 func TestApplyDeltaRejectsNoOwner(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 0, "money-no-owner")
 
@@ -123,6 +127,7 @@ func TestApplyDeltaRejectsNoOwner(t *testing.T) {
 }
 
 func TestApplyDeltaRequiresScope(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-no-scope")
 
@@ -136,6 +141,7 @@ func TestApplyDeltaRequiresScope(t *testing.T) {
 }
 
 func TestApplyDeltaHonorsScope(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-scoped")
 
@@ -154,6 +160,7 @@ func TestApplyDeltaHonorsScope(t *testing.T) {
 }
 
 func TestApplyDeltaNegativeAndPositiveDeltas(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-chain")
 
@@ -175,6 +182,7 @@ func TestApplyDeltaNegativeAndPositiveDeltas(t *testing.T) {
 }
 
 func TestApplyDeltaTypeResolution(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-type")
 
@@ -197,6 +205,7 @@ func TestApplyDeltaTypeResolution(t *testing.T) {
 }
 
 func TestApplyDeltaConcurrentForUpdateConsistency(t *testing.T) {
+	t.Parallel()
 	f := newFixture(t)
 	u := f.addUser(t, 20, "money-concurrent")
 

@@ -3,6 +3,7 @@ package password
 import "testing"
 
 func TestHashAndCompare(t *testing.T) {
+	t.Parallel()
 	hash, err := Hash("correct horse battery staple")
 	if err != nil {
 		t.Fatal(err)

@@ -29,6 +29,7 @@ func mustType[T any](t *testing.T, v any) T {
 }
 
 func TestBuildAdminTreeOptions(t *testing.T) {
+	t.Parallel()
 	admins := []*model.Admin{
 		{ID: 1, Nickname: "Root", Username: "root_user"},
 		{ID: 2, Nickname: "Child", Username: "child_user", ParentID: ptr(1)},
@@ -43,33 +44,41 @@ func TestBuildAdminTreeOptions(t *testing.T) {
 	for _, o := range opts {
 		id := mustType[int](t, o["id"])
 		seen[id] = true
-		text := mustType[string](t, o["nickname"])
-		username := mustType[string](t, o["username"])
-		if id == 1 && strings.Contains(text, "├") {
-			t.Errorf("root option should not be prefixed: %s", text)
-		}
-		if id == 1 && text != "Root(ID:1)" {
-			t.Errorf("root nickname = %q, want un-prefixed label", text)
-		}
-		if id == 1 && username != "root_user(ID:1)" {
-			t.Errorf("root username = %q", username)
-		}
-		if id == 2 && text != "Child(ID:2)" {
-			t.Errorf("child nickname = %q, want un-prefixed label", text)
-		}
-		if id == 2 && !strings.Contains(username, "child_user(ID:2)") {
-			t.Errorf("child username = %q, want tree-prefixed label", username)
-		}
-		if id == 2 && !strings.Contains(username, "└") {
-			t.Errorf("child username = %q, want tree indent marker", username)
-		}
+		assertAdminTreeOptionLabels(t, id, mustType[string](t, o["nickname"]), mustType[string](t, o["username"]))
 	}
 	if !seen[1] || !seen[2] {
 		t.Fatal("missing options")
 	}
 }
 
+func assertAdminTreeOptionLabels(t *testing.T, id int, text, username string) {
+	t.Helper()
+	switch id {
+	case 1:
+		if strings.Contains(text, "├") {
+			t.Errorf("root option should not be prefixed: %s", text)
+		}
+		if text != "Root(ID:1)" {
+			t.Errorf("root nickname = %q, want un-prefixed label", text)
+		}
+		if username != "root_user(ID:1)" {
+			t.Errorf("root username = %q", username)
+		}
+	case 2:
+		if text != "Child(ID:2)" {
+			t.Errorf("child nickname = %q, want un-prefixed label", text)
+		}
+		if !strings.Contains(username, "child_user(ID:2)") {
+			t.Errorf("child username = %q, want tree-prefixed label", username)
+		}
+		if !strings.Contains(username, "└") {
+			t.Errorf("child username = %q, want tree indent marker", username)
+		}
+	}
+}
+
 func TestBuildFlatAdminOptions(t *testing.T) {
+	t.Parallel()
 	admins := []*model.Admin{
 		{ID: 3, Nickname: "A", Username: "alpha"},
 	}
@@ -89,6 +98,7 @@ func TestBuildFlatAdminOptions(t *testing.T) {
 }
 
 func TestSelectErrorIsHandled(t *testing.T) {
+	t.Parallel()
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest("GET", "/admin/auth.Admin/index?select=1", nil)
 	db, err := gorm.Open(handlerTestDialector{}, &gorm.Config{DryRun: true})
@@ -118,6 +128,7 @@ func (handlerTestDialector) Explain(sql string, _ ...interface{}) string { retur
 // 验证管理员列表树形组装：按 parent_id 组装
 // children，顶层不含父引用孤立节点，叶子保留完整 admin 字段。
 func TestAdminTableTreeLeafAssemble(t *testing.T) {
+	t.Parallel()
 	admins := []*model.Admin{
 		{ID: 1, Username: "root", Nickname: "Root", ParentID: nil},
 		{ID: 2, Username: "agent", Nickname: "Agent", ParentID: ptr(1)},
@@ -149,6 +160,7 @@ func TestAdminTableTreeLeafAssemble(t *testing.T) {
 // 验证父节点缺失时（搜索/过滤命中的
 // 子节点）孤立子节点保留为顶层，不丢失数据。
 func TestAdminTableTreeLeafOrphansStayTopLevel(t *testing.T) {
+	t.Parallel()
 	admins := []*model.Admin{
 		{ID: 2, Username: "agent", ParentID: ptr(1)}, // 父 1 不在结果中
 		{ID: 3, Username: "leaf", ParentID: ptr(2)},

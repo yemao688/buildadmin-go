@@ -229,25 +229,15 @@ func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId in
 		return nil, err
 	}
 
-	fileReader, err := params.File.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = fileReader.Close() }()
-
-	var buffer bytes.Buffer
-	_, err = io.Copy(&buffer, fileReader)
+	buffer, err := readUploadBuffer(params)
 	if err != nil {
 		return nil, err
 	}
 
-	//获取文件sha1值
-	hasher := sha1.New() //nolint:gosec // 文件内容哈希，写入 attachments.sha1 并用于秒传去重，与 PHP 上游算法一致，不用于口令或签名
-	if _, err := io.Copy(hasher, bytes.NewReader(buffer.Bytes())); err != nil {
+	sha1String, err := uploadSHA1String(buffer.Bytes())
+	if err != nil {
 		return nil, err
 	}
-	fileSHA1 := hasher.Sum(nil)
-	sha1String := fmt.Sprintf("%x", fileSHA1)
 	savePath := s.getSaveName(params, sha1String)
 	//如果是图片,计算图片宽高
 	isImage := s.checkIsImage(sourceType, suffix)
@@ -261,36 +251,14 @@ func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId in
 		width, height = img.Bounds().Dx(), img.Bounds().Dy()
 	}
 
-	attach := Attachment{}
 	storage := "local"
 	if s.uploadMode() == "alioss" {
 		storage = "alioss"
 	}
-	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, params.topic(), storage).Take(&attach).Error; err == nil {
-		//判断文件是否存在
-		missing := attach.Storage == "local" && !util.PathExists(util.RootPath()+attach.URL)
-		if attach.Storage == "alioss" && s.oss != nil {
-			missing = !s.oss.Exists(attach.URL)
-		}
-		if missing {
-			if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Delete(nil).Error; err != nil {
-				return nil, err
-			}
-		} else {
-			if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
-				"quote":            gorm.Expr("quote + 1"),
-				"last_upload_time": time.Now().Unix(),
-			}).Error; err != nil {
-				return nil, err
-			}
-			attach.Suffix = strings.ToLower(strings.TrimLeft(filepath.Ext(attach.URL), "."))
-			if storage == "alioss" && s.oss != nil {
-				attach.FullUrl = s.oss.URL(attach.URL)
-			} else {
-				attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, "", baseURL, "")
-			}
-			return attach, nil
-		}
+	if attach, reused, err := s.findReusableAttachment(params, sha1String, storage, baseURL); err != nil {
+		return nil, err
+	} else if reused {
+		return attach, nil
 	}
 
 	attachment := Attachment{
@@ -312,33 +280,106 @@ func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId in
 		return nil, err
 	}
 	attachment.Suffix = suffix
-	if storage == "alioss" && s.oss != nil {
-		if err := s.oss.Save(bytes.NewReader(buffer.Bytes()), savePath); err != nil {
-			s.sqlDB.Delete(&attachment)
-			return nil, err
-		}
-		attachment.FullUrl = s.oss.URL(savePath)
+	saved, err := s.saveAttachmentToOSS(&attachment, storage, buffer.Bytes(), savePath)
+	if err != nil {
+		return nil, err
+	}
+	if saved {
 		return attachment, nil
 	}
 	attachment.FullUrl = util.FullUrl(savePath, s.config.App.CdnUrl, "", baseURL, "")
 
+	if err := writeUploadFile(savePath, buffer.Bytes()); err != nil {
+		return nil, err
+	}
+	return attachment, nil
+}
+
+// saveAttachmentToOSS 在 OSS 模式下落盘并回填 FullUrl；未启用 OSS 时返回 false，
+// 由调用方继续本地落盘。落盘失败会删除刚创建的附件记录（与历史行为一致）。
+func (s *UploadHelper) saveAttachmentToOSS(attachment *Attachment, storage string, content []byte, savePath string) (bool, error) {
+	if storage != "alioss" || s.oss == nil {
+		return false, nil
+	}
+	if err := s.oss.Save(bytes.NewReader(content), savePath); err != nil {
+		s.sqlDB.Delete(attachment)
+		return false, err
+	}
+	attachment.FullUrl = s.oss.URL(savePath)
+	return true, nil
+}
+
+func readUploadBuffer(params UploadParams) (bytes.Buffer, error) {
+	var buffer bytes.Buffer
+	fileReader, err := params.File.Open()
+	if err != nil {
+		return buffer, err
+	}
+	defer func() { _ = fileReader.Close() }()
+
+	if _, err = io.Copy(&buffer, fileReader); err != nil {
+		return buffer, err
+	}
+	return buffer, nil
+}
+
+// uploadSHA1String 计算上传内容的 sha1（写入 attachments.sha1 并用于秒传去重）。
+func uploadSHA1String(content []byte) (string, error) {
+	hasher := sha1.New() //nolint:gosec // 文件内容哈希，写入 attachments.sha1 并用于秒传去重，与 PHP 上游算法一致，不用于口令或签名
+	if _, err := io.Copy(hasher, bytes.NewReader(content)); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+// findReusableAttachment 按 sha1/topic/storage 处理秒传：命中且文件仍在时更新引用
+// 计数并返回记录；命中但文件缺失时删除失效记录，返回未命中以便正常落盘。
+func (s *UploadHelper) findReusableAttachment(params UploadParams, sha1String, storage, baseURL string) (Attachment, bool, error) {
+	attach := Attachment{}
+	if err := s.sqlDB.Where("sha1=? and topic=? and storage=?", sha1String, params.topic(), storage).Take(&attach).Error; err != nil {
+		// 秒传查询失败按未命中处理（原实现语义）：这是可选优化，不阻断正常上传。
+		return Attachment{}, false, nil //nolint:nilerr // 查询失败等同未命中，直接走落盘路径
+	}
+	//判断文件是否存在
+	missing := attach.Storage == "local" && !util.PathExists(util.RootPath()+attach.URL)
+	if attach.Storage == "alioss" && s.oss != nil {
+		missing = !s.oss.Exists(attach.URL)
+	}
+	if missing {
+		if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Delete(nil).Error; err != nil {
+			return Attachment{}, false, err
+		}
+		return Attachment{}, false, nil
+	}
+	if err := s.sqlDB.Model(&Attachment{}).Where("id=?", attach.ID).Updates(map[string]any{
+		"quote":            gorm.Expr("quote + 1"),
+		"last_upload_time": time.Now().Unix(),
+	}).Error; err != nil {
+		return Attachment{}, false, err
+	}
+	attach.Suffix = strings.ToLower(strings.TrimLeft(filepath.Ext(attach.URL), "."))
+	if storage == "alioss" && s.oss != nil {
+		attach.FullUrl = s.oss.URL(attach.URL)
+	} else {
+		attach.FullUrl = util.FullUrl(attach.URL, s.config.App.CdnUrl, "", baseURL, "")
+	}
+	return attach, true, nil
+}
+
+func writeUploadFile(savePath string, content []byte) error {
 	dirPath := filepath.Dir(util.RootPath() + "/public" + savePath)
 	// 尝试创建路径中所有不存在的目录
-	err = os.MkdirAll(dirPath, 0o750)
-	if err != nil {
-		return nil, err
+	if err := os.MkdirAll(dirPath, 0o750); err != nil {
+		return err
 	}
 	// 创建目标文件
 	out, err := os.Create(util.RootPath() + "/public" + savePath) //nolint:gosec // savePath 由 savename 模板渲染，文件名已经 multipart 的 filepath.Base 归一（无路径分隔符）且后缀在白名单内，写入点固定在 util.RootPath()/public 下
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() { _ = out.Close() }()
 
 	// 将上传的文件内容写入到目标文件
-	_, err = io.Copy(out, bytes.NewReader(buffer.Bytes()))
-	if err != nil {
-		return nil, err
-	}
-	return attachment, nil
+	_, err = io.Copy(out, bytes.NewReader(content))
+	return err
 }

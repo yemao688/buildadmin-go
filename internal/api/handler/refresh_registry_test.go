@@ -15,6 +15,7 @@ import (
 
 func TestRefreshTokenUsesRegisteredRefreshType(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	driver := &handlerContractTokenDriver{get: &token.Token{Type: "seller-refresh", UserID: 42}}
 	var gotRefreshToken string
 	var gotUserID int32

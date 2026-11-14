@@ -24,6 +24,7 @@ import (
 // 校验不够，构造的 manifest 可指向允许根下任意文件。删除流程只信任生成器
 // 推导的 manifest，且归属校验必须拒绝"根内但非本模块"的路径。
 func TestDeleteRejectsManifestPathOutsideModuleOwnership(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{Name: "delete_fault", GenerateRelativePath: "delete_fault"}
 	own := filepath.Join(util.RootPath(), "internal", "model", "delete_fault.go")
 	require.NoError(t, validateManifestOwnership(FileManifest{Generated: []string{own}}, table, nil))
@@ -35,6 +36,8 @@ func TestDeleteRejectsManifestPathOutsideModuleOwnership(t *testing.T) {
 
 // F3: 删除失败回滚必须恢复被递归删除的 menu_dir 父链（Pid 指向的父级
 // 若被 Delete 一并删除，回滚后必须重建且 Pid 正确）。
+//
+//nolint:paralleltest // 替换包级 runWire/runProjectBuild 钩子并写真实仓库夹具文件，DeleteFromSpec 还取生成锁
 func TestDeleteFailureRestoresNestedMenuDirAncestors(t *testing.T) {
 	db, cfg, fixture := newOwnershipFixture(t)
 	originalWire := runWire
@@ -65,6 +68,8 @@ func TestDeleteFailureRestoresNestedMenuDirAncestors(t *testing.T) {
 
 // F4: 生成失败时，SyncMenu 对既有菜单行的更新必须回滚到原值（而不只是
 // 删除本次新建的行）。
+//
+//nolint:paralleltest // 夹具写真实 internal/admin/handler/delete_fault.go，并行会与同文件的其它测试互相删除对方文件
 func TestMenuSnapshotRestoresUpdatedExistingRows(t *testing.T) {
 	db, cfg, fixture := newOwnershipFixture(t)
 
@@ -154,6 +159,8 @@ func newOwnershipFixture(t *testing.T) (*gorm.DB, *conf.Configuration, ownership
 }
 
 // snapshotMenuRules 必须包含目标菜单的祖先链（F3 依赖）。
+//
+//nolint:paralleltest // 夹具写真实 internal/admin/handler/delete_fault.go，并行会与同文件的其它测试互相删除对方文件
 func TestSnapshotMenuRulesIncludesAncestors(t *testing.T) {
 	db, cfg, fixture := newOwnershipFixture(t)
 	rows, err := snapshotMenuRules(db, cfg, fixture.menuName)
@@ -169,6 +176,8 @@ func TestSnapshotMenuRulesIncludesAncestors(t *testing.T) {
 }
 
 // restoreMenuRules 对"存在但被更新"的行必须恢复原值（F4 依赖）。
+//
+//nolint:paralleltest // 夹具写真实 internal/admin/handler/delete_fault.go，并行会与同文件的其它测试互相删除对方文件
 func TestRestoreMenuRulesRestoresUpdatedRows(t *testing.T) {
 	db, cfg, fixture := newOwnershipFixture(t)
 	rows, err := snapshotMenuRules(db, cfg, fixture.menuName)

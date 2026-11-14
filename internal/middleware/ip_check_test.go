@@ -19,7 +19,6 @@ import (
 // newIpCheckTestEngine 装配 i18n 中间件（util.Lang 依赖 context 里的 i18n）、
 // IpCheck 与写 204 的 handler；handlerCalled 用于确认命中时 handler 未执行。
 func newIpCheckTestEngine(source NoAccessIPSource, handlerCalled *bool) *gin.Engine {
-	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",
@@ -56,7 +55,10 @@ func serveIpCheckWithHeaders(engine *gin.Engine, remoteAddr string, headers map[
 }
 
 func TestIpCheckAllowsEmptyOrFailedConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	t.Run("空配置放行", func(t *testing.T) {
+		t.Parallel()
 		called := false
 		engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 			return "   \n\t ", nil
@@ -69,6 +71,7 @@ func TestIpCheckAllowsEmptyOrFailedConfig(t *testing.T) {
 	})
 
 	t.Run("null source 放行", func(t *testing.T) {
+		t.Parallel()
 		called := false
 		engine := newIpCheckTestEngine(nil, &called)
 
@@ -79,6 +82,7 @@ func TestIpCheckAllowsEmptyOrFailedConfig(t *testing.T) {
 	})
 
 	t.Run("读取配置出错放行", func(t *testing.T) {
+		t.Parallel()
 		called := false
 		engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 			return "", errors.New("db down")
@@ -92,6 +96,8 @@ func TestIpCheckAllowsEmptyOrFailedConfig(t *testing.T) {
 }
 
 func TestIpCheckBlocksBlacklistedIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	called := false
 	engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 		return "192.0.2.1", nil
@@ -117,6 +123,8 @@ func TestIpCheckBlocksBlacklistedIP(t *testing.T) {
 }
 
 func TestIpCheckMatchingRules(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	cases := []struct {
 		name       string
 		rules      string
@@ -158,6 +166,7 @@ func TestIpCheckMatchingRules(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			called := false
 			engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 				return tc.rules, nil
@@ -177,6 +186,8 @@ func TestIpCheckMatchingRules(t *testing.T) {
 }
 
 func TestIpCheckIgnoresSpoofedHeadersFromPublicPeer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	cases := []struct {
 		name    string
 		header  string
@@ -194,6 +205,7 @@ func TestIpCheckIgnoresSpoofedHeadersFromPublicPeer(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			called := false
 			engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 				return "192.0.2.1", nil
@@ -210,6 +222,8 @@ func TestIpCheckIgnoresSpoofedHeadersFromPublicPeer(t *testing.T) {
 }
 
 func TestIpCheckBlocksPublicPeerDespiteInnocentHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	called := false
 	engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 		return "192.0.2.1", nil
@@ -226,6 +240,8 @@ func TestIpCheckBlocksPublicPeerDespiteInnocentHeaders(t *testing.T) {
 }
 
 func TestIpCheckTrustsForwardedHeadersFromInfrastructurePeer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	cases := []struct {
 		name       string
 		remoteAddr string
@@ -243,6 +259,7 @@ func TestIpCheckTrustsForwardedHeadersFromInfrastructurePeer(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			called := false
 			engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 				return "192.0.2.1", nil
@@ -259,6 +276,8 @@ func TestIpCheckTrustsForwardedHeadersFromInfrastructurePeer(t *testing.T) {
 }
 
 func TestIpCheckFallsBackWhenInfrastructurePeerSendsGarbageHeader(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	called := false
 	engine := newIpCheckTestEngine(func(*gin.Context) (string, error) {
 		return "192.0.2.1", nil

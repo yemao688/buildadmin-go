@@ -222,23 +222,7 @@ func validPrimaryKeyName(name string) bool {
 func normalizeSortablePrimaryKey(value any) (string, error) {
 	switch v := value.(type) {
 	case json.RawMessage:
-		if len(v) == 0 {
-			return "", errors.New("empty primary key")
-		}
-		decoder := json.NewDecoder(bytes.NewReader(v))
-		decoder.UseNumber()
-		var decoded any
-		if err := decoder.Decode(&decoded); err != nil {
-			return "", fmt.Errorf("invalid JSON primary key: %w", err)
-		}
-		var extra any
-		if err := decoder.Decode(&extra); err != io.EOF {
-			if err == nil {
-				return "", errors.New("invalid JSON primary key")
-			}
-			return "", fmt.Errorf("invalid JSON primary key: %w", err)
-		}
-		return normalizeSortablePrimaryKey(decoded)
+		return normalizeSortableRawMessage(v)
 	case string:
 		if v == "" {
 			return "", errors.New("empty primary key")
@@ -248,6 +232,41 @@ func normalizeSortablePrimaryKey(value any) (string, error) {
 		return normalizeSortablePrimaryKey(string(v))
 	case json.Number:
 		return normalizeSortableJSONNumber(v)
+	case int, int8, int16, int32, int64:
+		return normalizeSortableSignedInteger(v)
+	case uint, uint8, uint16, uint32, uint64:
+		return normalizeSortableUnsignedInteger(v)
+	case float32:
+		return normalizeSortableFloat(float64(v), 32)
+	case float64:
+		return normalizeSortableFloat(v, 64)
+	default:
+		return "", fmt.Errorf("unsupported primary key type %T", value)
+	}
+}
+
+func normalizeSortableRawMessage(raw json.RawMessage) (string, error) {
+	if len(raw) == 0 {
+		return "", errors.New("empty primary key")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		return "", fmt.Errorf("invalid JSON primary key: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return "", errors.New("invalid JSON primary key")
+		}
+		return "", fmt.Errorf("invalid JSON primary key: %w", err)
+	}
+	return normalizeSortablePrimaryKey(decoded)
+}
+
+func normalizeSortableSignedInteger(value any) (string, error) {
+	switch v := value.(type) {
 	case int:
 		return strconv.FormatInt(int64(v), 10), nil
 	case int8:
@@ -258,6 +277,13 @@ func normalizeSortablePrimaryKey(value any) (string, error) {
 		return strconv.FormatInt(int64(v), 10), nil
 	case int64:
 		return strconv.FormatInt(v, 10), nil
+	default:
+		return "", fmt.Errorf("unsupported primary key type %T", value)
+	}
+}
+
+func normalizeSortableUnsignedInteger(value any) (string, error) {
+	switch v := value.(type) {
 	case uint:
 		return strconv.FormatUint(uint64(v), 10), nil
 	case uint8:
@@ -268,10 +294,6 @@ func normalizeSortablePrimaryKey(value any) (string, error) {
 		return strconv.FormatUint(uint64(v), 10), nil
 	case uint64:
 		return strconv.FormatUint(v, 10), nil
-	case float32:
-		return normalizeSortableFloat(float64(v), 32)
-	case float64:
-		return normalizeSortableFloat(v, 64)
 	default:
 		return "", fmt.Errorf("unsupported primary key type %T", value)
 	}

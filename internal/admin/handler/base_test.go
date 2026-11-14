@@ -5,6 +5,7 @@ import "testing"
 // 三个设计器共用同一转换，差异只在排除清单：回收不含 config/admin_log，
 // 敏感数据含；条目按去前缀后的表名比较。
 func TestAdminDataTableListExclusionLists(t *testing.T) {
+	t.Parallel()
 	tables := map[string]string{
 		"ba_area":           "地区",
 		"ba_config":         "配置",

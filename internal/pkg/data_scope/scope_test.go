@@ -47,12 +47,14 @@ func openTestDB(t *testing.T) *gorm.DB {
 }
 
 func TestModeConstants(t *testing.T) {
+	t.Parallel()
 	assert.Equal(t, ModeAuto, Mode("auto"))
 	assert.Equal(t, ModeRequired, Mode("required"))
 	assert.Equal(t, ModeNone, Mode("none"))
 }
 
 func TestIdentifierValidation(t *testing.T) {
+	t.Parallel()
 	valid := []string{"admin_id", "a", "_hidden", "table_alias", "col1", "AdminID"}
 	for _, s := range valid {
 		require.NoError(t, ValidateIdentifier(s), "expected %q to be valid", s)
@@ -68,6 +70,7 @@ func TestIdentifierValidation(t *testing.T) {
 }
 
 func TestValidateOwnerRef(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "admin_id"}))
 	require.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "", Column: "admin_id"}), ErrInvalidIdentifier)
 	require.ErrorIs(t, ValidateOwnerRef(OwnerRef{TableAlias: "t", Column: "t.admin_id"}), ErrInvalidIdentifier)
@@ -75,6 +78,7 @@ func TestValidateOwnerRef(t *testing.T) {
 }
 
 func TestActorValidation(t *testing.T) {
+	t.Parallel()
 	_, err := NewActor(0)
 	require.ErrorIs(t, err, ErrInvalidActor)
 
@@ -99,6 +103,7 @@ func TestActorValidation(t *testing.T) {
 }
 
 func TestActorContext(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	_, ok := ActorFromContext(ctx)
 	assert.False(t, ok)
@@ -113,6 +118,7 @@ func TestActorContext(t *testing.T) {
 }
 
 func TestResolveConfig_NilConfigIsAuto(t *testing.T) {
+	t.Parallel()
 	r, err := ResolveConfig(nil, true)
 	require.NoError(t, err)
 	assert.Equal(t, ModeAuto, r.Mode)
@@ -128,6 +134,7 @@ func TestResolveConfig_NilConfigIsAuto(t *testing.T) {
 }
 
 func TestResolveConfig_AutoWithoutAdminID(t *testing.T) {
+	t.Parallel()
 	r, err := ResolveConfig(&Config{Mode: ModeAuto}, false)
 	require.NoError(t, err)
 	assert.Equal(t, ModeNone, r.Mode)
@@ -136,6 +143,7 @@ func TestResolveConfig_AutoWithoutAdminID(t *testing.T) {
 }
 
 func TestResolveConfig_Required(t *testing.T) {
+	t.Parallel()
 	r, err := ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: "owner_admin_id"}, false)
 	require.NoError(t, err)
 	assert.Equal(t, ModeRequired, r.Mode)
@@ -145,12 +153,14 @@ func TestResolveConfig_Required(t *testing.T) {
 }
 
 func TestResolveConfig_RequiredWithAssignOnCreate(t *testing.T) {
+	t.Parallel()
 	r, err := ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: "owner_id", AssignOnCreate: ptr(true)}, false)
 	require.NoError(t, err)
 	assert.True(t, r.AssignOnCreate)
 }
 
 func TestResolveConfig_RequiredOwnerColumnValidation(t *testing.T) {
+	t.Parallel()
 	_, err := ResolveConfig(&Config{Mode: ModeRequired, OwnerColumn: ""}, false)
 	require.ErrorIs(t, err, ErrInvalidOwnerColumn)
 
@@ -160,6 +170,7 @@ func TestResolveConfig_RequiredOwnerColumnValidation(t *testing.T) {
 }
 
 func TestResolveConfig_RequiredCustomValidator(t *testing.T) {
+	t.Parallel()
 	customErr := errors.New("column not found")
 	_, err := ResolveConfigWithOptions(
 		&Config{Mode: ModeRequired, OwnerColumn: "admin_id"},
@@ -170,6 +181,7 @@ func TestResolveConfig_RequiredCustomValidator(t *testing.T) {
 }
 
 func TestResolveConfig_NoneWithAdminIDRequiresOverride(t *testing.T) {
+	t.Parallel()
 	_, err := ResolveConfig(&Config{Mode: ModeNone}, true)
 	require.ErrorIs(t, err, ErrInvalidMode)
 
@@ -179,11 +191,13 @@ func TestResolveConfig_NoneWithAdminIDRequiresOverride(t *testing.T) {
 }
 
 func TestResolveConfig_InvalidMode(t *testing.T) {
+	t.Parallel()
 	_, err := ResolveConfig(&Config{Mode: "bad"}, true)
 	assert.ErrorIs(t, err, ErrInvalidMode)
 }
 
 func TestResolveConfig_AutoAdminIDAlwaysAssignOnCreate(t *testing.T) {
+	t.Parallel()
 	r, err := ResolveConfig(&Config{Mode: ModeAuto, AssignOnCreate: ptr(true)}, true)
 	require.NoError(t, err)
 	assert.Equal(t, ModeAuto, r.Mode)
@@ -199,6 +213,7 @@ func TestResolveConfig_AutoAdminIDAlwaysAssignOnCreate(t *testing.T) {
 }
 
 func TestResolveConfig_AdminIDSpecialCase(t *testing.T) {
+	t.Parallel()
 	// Auto must not infer admin.id from OwnerColumn; no admin_id => ModeNone.
 	r, err := ResolveConfig(&Config{Mode: ModeAuto, OwnerColumn: "id"}, false)
 	require.NoError(t, err)
@@ -224,6 +239,7 @@ func TestResolveConfig_AdminIDSpecialCase(t *testing.T) {
 
 func TestDenyAllEnforcer_ActorMissing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -233,6 +249,7 @@ func TestDenyAllEnforcer_ActorMissing(t *testing.T) {
 }
 
 func TestClosureEnforcerPrefixAndSQLShape(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ prefix, table string }{{"", "admin_closure"}, {"ba_", "ba_admin_closure"}} {
 		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: tc.prefix}})
 		assert.Equal(t, tc.table, e.ClosureTable())
@@ -248,6 +265,7 @@ func TestClosureEnforcerPrefixAndSQLShape(t *testing.T) {
 }
 
 func TestClosureEnforcerExtraOwnerSQLGroupsPrimaryOrExtra(t *testing.T) {
+	t.Parallel()
 	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	a, err := NewActor(7)
@@ -262,6 +280,7 @@ func TestClosureEnforcerExtraOwnerSQLGroupsPrimaryOrExtra(t *testing.T) {
 }
 
 func TestClosureEnforcerExtraOwnerRejectsInvalidActorOrIdentifier(t *testing.T) {
+	t.Parallel()
 	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Set(actorContextKey, Actor{AdminID: 0})
@@ -272,6 +291,7 @@ func TestClosureEnforcerExtraOwnerRejectsInvalidActorOrIdentifier(t *testing.T) 
 }
 
 func TestClosureEnforcerExtraOwnerUnrestrictedBypass(t *testing.T) {
+	t.Parallel()
 	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	a, _ := NewUnrestrictedActor(7)
@@ -282,6 +302,7 @@ func TestClosureEnforcerExtraOwnerUnrestrictedBypass(t *testing.T) {
 }
 
 func TestSelfRowMarkers(t *testing.T) {
+	t.Parallel()
 	// Unverified contexts report ok=false.
 	checked, ok := SelfRowChecked(context.Background())
 	assert.False(t, checked)
@@ -305,6 +326,7 @@ func TestSelfRowMarkers(t *testing.T) {
 }
 
 func TestClosureEnforcerSelfRowCache(t *testing.T) {
+	t.Parallel()
 	e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	db := openTestDB(t).Table("resource")
 
@@ -346,6 +368,7 @@ func TestClosureEnforcerSelfRowCache(t *testing.T) {
 }
 
 func TestClosureEnforcerInvalidPrefixesFailClosed(t *testing.T) {
+	t.Parallel()
 	for _, prefix := range []string{"bad.prefix", "bad`prefix", "bad prefix"} {
 		e := NewClosureEnforcer(&conf.Configuration{Database: conf.Database{Prefix: prefix}})
 		assert.Empty(t, e.ClosureTable())
@@ -358,6 +381,7 @@ func TestClosureEnforcerInvalidPrefixesFailClosed(t *testing.T) {
 
 func TestDenyAllEnforcer_ActorFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -373,6 +397,7 @@ func TestDenyAllEnforcer_ActorFromContext(t *testing.T) {
 
 func TestDenyAllEnforcer_ScopeUnrestrictedBypass(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -390,6 +415,7 @@ func TestDenyAllEnforcer_ScopeUnrestrictedBypass(t *testing.T) {
 
 func TestDenyAllEnforcer_ScopeRestrictedDenies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -408,6 +434,7 @@ func TestDenyAllEnforcer_ScopeRestrictedDenies(t *testing.T) {
 
 func TestDenyAllEnforcer_ScopeInvalidOwnerRefDenies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -427,6 +454,7 @@ func TestDenyAllEnforcer_ScopeInvalidOwnerRefDenies(t *testing.T) {
 
 func TestDenyAllEnforcer_ScopeInvalidActorDenies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -443,6 +471,7 @@ func TestDenyAllEnforcer_ScopeInvalidActorDenies(t *testing.T) {
 
 func TestDenyAllEnforcer_ScopeNilDB(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	w := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(w)
 
@@ -455,6 +484,7 @@ func TestDenyAllEnforcer_ScopeNilDB(t *testing.T) {
 }
 
 func TestStubHierarchyWriter(t *testing.T) {
+	t.Parallel()
 	w := NewStubHierarchyWriter()
 	require.ErrorIs(t, w.LinkNewNode(context.Background(), nil, 1, nil), ErrNotImplemented)
 	assert.ErrorIs(t, w.MoveSubtree(context.Background(), nil, 1, nil), ErrNotImplemented)

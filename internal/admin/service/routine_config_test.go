@@ -23,6 +23,7 @@ import (
 // 变量名唯一性预检归 ConfigService（repo 只保留并发 duplicate-key 兜底），
 // 新增与编辑都必须拒绝重名，编辑还需排除自身。
 func TestConfigServiceRejectsDuplicateNames(t *testing.T) {
+	t.Parallel()
 	dsn := fmt.Sprintf("file:config-service-duplicate-%d?mode=memory&cache=shared", time.Now().UnixNano())
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
@@ -57,6 +58,7 @@ type configJSONItem struct {
 }
 
 func TestUpdateConfigValueSkipsUnchangedValue(t *testing.T) {
+	t.Parallel()
 	called := false
 	err := updateConfigValue("same", "same", func() (int64, error) {
 		called = true
@@ -71,6 +73,7 @@ func TestUpdateConfigValueSkipsUnchangedValue(t *testing.T) {
 }
 
 func TestUpdateConfigValueKeepsChangedValueChecks(t *testing.T) {
+	t.Parallel()
 	called := false
 	err := updateConfigValue("old", "new", func() (int64, error) {
 		called = true
@@ -85,6 +88,7 @@ func TestUpdateConfigValueKeepsChangedValueChecks(t *testing.T) {
 }
 
 func TestConfigEditArrayValueFromJSONRequestIsUpdated(t *testing.T) {
+	t.Parallel()
 	requestJSON := `{"site_name":"Hotel","no_access_ip":"","time_zone":"Asia/Shanghai","version":"v1.0.0","record_number":"渝ICP备8888888号-1","config_group":[{"key":"basics","value":"Basics"},{"key":"mail","value":"Mail"},{"key":"config_quick_entrance","value":"Config Quick entrance"},{"key":"upload","value":"上传配置"}]}`
 	params := map[string]interface{}{}
 	if err := json.Unmarshal([]byte(requestJSON), &params); err != nil {

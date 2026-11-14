@@ -8,6 +8,7 @@ import (
 )
 
 func TestMergeConfigMapsDeepMergeAndListReplacement(t *testing.T) {
+	t.Parallel()
 	base := map[string]any{
 		"app":     map[string]any{"env": "debug", "port": 9900},
 		"servers": []any{"default"},
@@ -35,6 +36,7 @@ func TestMergeConfigMapsDeepMergeAndListReplacement(t *testing.T) {
 }
 
 func TestFindDeadKeys(t *testing.T) {
+	t.Parallel()
 	defaults := map[string]any{
 		"app":   map[string]any{"env": "debug"},
 		"mysql": map[string]any{"host": "127.0.0.1"},
@@ -53,6 +55,7 @@ func TestFindDeadKeys(t *testing.T) {
 }
 
 func TestLoadLayeredConfigSparseOverride(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, DefaultsFileName)
 	overridePath := filepath.Join(root, "config.yaml")
@@ -87,6 +90,7 @@ func TestLoadLayeredConfigSparseOverride(t *testing.T) {
 }
 
 func TestLoadLayeredConfigUnmarshalsWithoutRemovedAppName(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	defaultsPath := filepath.Join(root, DefaultsFileName)
 	if err := os.WriteFile(defaultsPath, []byte("app:\n  env: debug\nmysql:\n  host: 127.0.0.1\n"), 0600); err != nil {
@@ -113,6 +117,7 @@ func TestLoadLayeredConfigUnmarshalsWithoutRemovedAppName(t *testing.T) {
 }
 
 func TestWriteConfigOverridesPreservesExistingOverrides(t *testing.T) {
+	t.Parallel()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte("app:\n  env: release\n"), 0600); err != nil {
 		t.Fatal(err)

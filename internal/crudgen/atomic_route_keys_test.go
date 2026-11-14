@@ -14,6 +14,7 @@ import (
 // CRUDCapabilities 键同形（小写斜杠形态，如 country/language），否则
 // 生成后未重启时新模块写请求查不到能力，删除时也注销不掉。
 func TestAtomicRouteRegistrationKeysMatchCapabilityShape(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		tableName string
 		// 期望能力键（与 admin/router capabilityRoute 同形：小写 + 点号转斜杠）
@@ -27,6 +28,7 @@ func TestAtomicRouteRegistrationKeysMatchCapabilityShape(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.tableName, func(t *testing.T) {
+			t.Parallel()
 			// 对齐真实生成流程：normalizeTableConfiguration 会把
 			// GenerateRelativePath 默认置为表名。
 			table := crudmodel.Table{Name: tc.tableName, GenerateRelativePath: tc.tableName}
@@ -66,6 +68,7 @@ func TestAtomicRouteRegistrationKeysMatchCapabilityShape(t *testing.T) {
 // F1 前缀碰撞用例：user 与 user_money_log 的能力键不得互相吞并
 // （旧实现注销键按类名推导，userMoneyLog 与生成注册键不一致）。
 func TestAtomicRouteKeysDoNotCollideAcrossPrefixes(t *testing.T) {
+	t.Parallel()
 	keys := map[string]string{}
 	for _, tableName := range []string{"user", "user_money_log", "user_order", "user_order_item"} {
 		table := crudmodel.Table{Name: tableName, GenerateRelativePath: tableName}

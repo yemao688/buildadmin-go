@@ -11,6 +11,7 @@ import (
 )
 
 func TestNormalizeLang(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		in   string
@@ -30,6 +31,7 @@ func TestNormalizeLang(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			require.Equal(t, tt.want, NormalizeLang(tt.in))
 		})
 	}
@@ -37,6 +39,7 @@ func TestNormalizeLang(t *testing.T) {
 
 func TestLangContextHelpers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 
 	// 未写入时读取返回 ok=false
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())

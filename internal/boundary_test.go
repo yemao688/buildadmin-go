@@ -64,55 +64,86 @@ var boundaryRules = []boundaryRule{
 var importBoundaryWhitelist = []whitelistEntry{}
 
 func TestImportBoundary(t *testing.T) {
+	t.Parallel()
 	actual, err := collectImportBoundaryViolations(".")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	actualByKey := make(map[string]boundaryViolation, len(actual))
-	for _, v := range actual {
-		actualByKey[boundaryKey(v.File, v.ImportPath)] = v
-	}
+	actualByKey := indexBoundaryViolations(actual)
+	whitelistByKey := indexBoundaryWhitelist(importBoundaryWhitelist)
 
-	whitelistByKey := make(map[string]whitelistEntry, len(importBoundaryWhitelist))
-	for _, entry := range importBoundaryWhitelist {
-		whitelistByKey[boundaryKey(entry.File, entry.ImportPath)] = entry
-	}
+	newViolations := unwhitelistedBoundaryViolations(actualByKey, whitelistByKey)
+	sortBoundaryViolations(newViolations)
 
-	var newViolations []boundaryViolation
-	for key, violation := range actualByKey {
-		if _, ok := whitelistByKey[key]; !ok {
-			newViolations = append(newViolations, violation)
-		}
-	}
-
-	var staleWhitelist []whitelistEntry
-	for key, entry := range whitelistByKey {
-		if _, ok := actualByKey[key]; !ok {
-			staleWhitelist = append(staleWhitelist, entry)
-		}
-	}
-
-	sort.Slice(newViolations, func(i, j int) bool {
-		if newViolations[i].File != newViolations[j].File {
-			return newViolations[i].File < newViolations[j].File
-		}
-		if newViolations[i].ImportPath != newViolations[j].ImportPath {
-			return newViolations[i].ImportPath < newViolations[j].ImportPath
-		}
-		return newViolations[i].Line < newViolations[j].Line
-	})
-	sort.Slice(staleWhitelist, func(i, j int) bool {
-		if staleWhitelist[i].File != staleWhitelist[j].File {
-			return staleWhitelist[i].File < staleWhitelist[j].File
-		}
-		return staleWhitelist[i].ImportPath < staleWhitelist[j].ImportPath
-	})
+	staleWhitelist := staleBoundaryWhitelist(whitelistByKey, actualByKey)
+	sortStaleBoundaryWhitelist(staleWhitelist)
 
 	if len(newViolations) == 0 && len(staleWhitelist) == 0 {
 		return
 	}
 
+	t.Fatal(boundaryFailureReport(newViolations, staleWhitelist))
+}
+
+func indexBoundaryViolations(violations []boundaryViolation) map[string]boundaryViolation {
+	byKey := make(map[string]boundaryViolation, len(violations))
+	for _, v := range violations {
+		byKey[boundaryKey(v.File, v.ImportPath)] = v
+	}
+	return byKey
+}
+
+func indexBoundaryWhitelist(entries []whitelistEntry) map[string]whitelistEntry {
+	byKey := make(map[string]whitelistEntry, len(entries))
+	for _, entry := range entries {
+		byKey[boundaryKey(entry.File, entry.ImportPath)] = entry
+	}
+	return byKey
+}
+
+func unwhitelistedBoundaryViolations(actual map[string]boundaryViolation, whitelist map[string]whitelistEntry) []boundaryViolation {
+	var newViolations []boundaryViolation
+	for key, violation := range actual {
+		if _, ok := whitelist[key]; !ok {
+			newViolations = append(newViolations, violation)
+		}
+	}
+	return newViolations
+}
+
+func staleBoundaryWhitelist(whitelist map[string]whitelistEntry, actual map[string]boundaryViolation) []whitelistEntry {
+	var staleWhitelist []whitelistEntry
+	for key, entry := range whitelist {
+		if _, ok := actual[key]; !ok {
+			staleWhitelist = append(staleWhitelist, entry)
+		}
+	}
+	return staleWhitelist
+}
+
+func sortBoundaryViolations(violations []boundaryViolation) {
+	sort.Slice(violations, func(i, j int) bool {
+		if violations[i].File != violations[j].File {
+			return violations[i].File < violations[j].File
+		}
+		if violations[i].ImportPath != violations[j].ImportPath {
+			return violations[i].ImportPath < violations[j].ImportPath
+		}
+		return violations[i].Line < violations[j].Line
+	})
+}
+
+func sortStaleBoundaryWhitelist(entries []whitelistEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].File != entries[j].File {
+			return entries[i].File < entries[j].File
+		}
+		return entries[i].ImportPath < entries[j].ImportPath
+	})
+}
+
+func boundaryFailureReport(newViolations []boundaryViolation, staleWhitelist []whitelistEntry) string {
 	var b strings.Builder
 	b.WriteString("import boundary check failed\n")
 	if len(newViolations) > 0 {
@@ -127,8 +158,7 @@ func TestImportBoundary(t *testing.T) {
 			fmt.Fprintf(&b, "  %s %s -> %s (stage %d: %s)\n", entry.Rule, entry.File, entry.ImportPath, entry.Stage, entry.Reason)
 		}
 	}
-
-	t.Fatal(b.String())
+	return b.String()
 }
 
 func collectImportBoundaryViolations(root string) ([]boundaryViolation, error) {

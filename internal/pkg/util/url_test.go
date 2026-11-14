@@ -11,8 +11,10 @@ import (
 )
 
 func TestGetBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Parallel()
+
 	newCtx := func(tlsState bool, headers map[string]string) *gin.Context {
-		gin.SetMode(gin.TestMode)
 		req := httptest.NewRequest(http.MethodGet, "http://example.com/path", nil)
 		for k, v := range headers {
 			req.Header.Set(k, v)

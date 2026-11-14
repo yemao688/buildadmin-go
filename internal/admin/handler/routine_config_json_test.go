@@ -9,6 +9,7 @@ import (
 )
 
 func TestDecodeConfigJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		value     string
@@ -21,6 +22,7 @@ func TestDecodeConfigJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			items, err := decodeConfigJSON("config_quick_entrance", tt.value)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
@@ -36,6 +38,7 @@ func TestDecodeConfigJSON(t *testing.T) {
 }
 
 func TestConfigJSONRecordNotFoundIsEmpty(t *testing.T) {
+	t.Parallel()
 	items, err := decodeConfigValue("config_quick_entrance", "ignored", gorm.ErrRecordNotFound)
 	if err != nil || len(items) != 0 {
 		t.Fatalf("items=%#v err=%v", items, err)

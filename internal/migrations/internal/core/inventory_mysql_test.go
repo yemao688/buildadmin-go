@@ -14,6 +14,7 @@ import (
 
 // 该用例会建/删整批核心表，走 MySQL 门禁；未配置 mysql_test 时明确 SKIP。
 func TestEnsureMissingCoreTablesCreatesOnlyMissingTablesMySQL(t *testing.T) {
+	t.Parallel()
 	db, baseCfg := testutil.OpenMySQL(t)
 	cfg := *baseCfg
 	cfg.Database.Prefix = fmt.Sprintf("ensure_core_%d_", time.Now().UnixNano())

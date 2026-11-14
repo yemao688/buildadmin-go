@@ -13,6 +13,7 @@ func TestCorsAllowHeadersWildcard(t *testing.T) {
 	// 对齐 PHP 上游 AllowCrossDomain：Allow-Methods/Allow-Headers 为通配符，
 	// 业务扩展 token 域（如 ba-seller-token）无需改动中间件即可通过预检。
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	router := gin.New()
 	router.Use(Cors("*"))
 	router.GET("/api/index/index", func(c *gin.Context) { c.Status(http.StatusOK) })
@@ -33,6 +34,7 @@ func TestCorsAllowHeadersWildcard(t *testing.T) {
 }
 
 func TestParseCorsDomains(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, []string{"localhost", "127.0.0.1"}, parseCorsDomains("localhost,127.0.0.1"))
 	// 逐项 trim 空格并剔除空项（对齐 PHP 上游 explode + 配置中可能存在的
 	// 空格分隔习惯）。
@@ -42,6 +44,7 @@ func TestParseCorsDomains(t *testing.T) {
 }
 
 func TestOriginAllowed(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		origin   string
@@ -132,6 +135,7 @@ func TestOriginAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			require.Equal(t, tt.want, originAllowed(tt.origin, tt.selfHost, tt.domains))
 		})
 	}

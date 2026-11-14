@@ -29,6 +29,7 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+//nolint:paralleltest // newLoginLogRouter 向全局 Gin binding.Validator 单例注册 password 校验器
 func TestLoginAdminLogUsesAuthenticatedAdmin(t *testing.T) {
 	db, handler, record := newAdminLoginLogFixture(t)
 	admin := model.Admin{

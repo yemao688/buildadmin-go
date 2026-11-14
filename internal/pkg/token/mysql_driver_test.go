@@ -28,12 +28,14 @@ func newMysqlDriverTestConfig() *conf.Configuration {
 }
 
 func TestMysqlDriverDeleteAndClearReturnStorageErrors(t *testing.T) {
+	t.Parallel()
 	driver := NewMysqlDriver(newMysqlDriverTestDB(t), newMysqlDriverTestConfig())
 	require.Error(t, driver.Delete("missing-table-token"))
 	require.Error(t, driver.Clear("user", 1))
 }
 
 func TestMysqlDriverClearScopesByTypeAndUserAndDeleteInvalidatesToken(t *testing.T) {
+	t.Parallel()
 	db := newMysqlDriverTestDB(t)
 	// The entity carries MySQL-specific type tags (int unsigned, enum);
 	// sqlite cannot AutoMigrate them, so create the fixture table with

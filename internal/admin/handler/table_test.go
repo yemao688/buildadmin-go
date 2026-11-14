@@ -117,7 +117,9 @@ func newTableTestContext(method, target, body string) *gin.Context {
 }
 
 func TestParsePrimaryKey(t *testing.T) {
+	t.Parallel()
 	t.Run("int64", func(t *testing.T) {
+		t.Parallel()
 		id, err := parsePrimaryKey[int64]("42")
 		if err != nil || id != 42 {
 			t.Fatalf("parsePrimaryKey[int64](42) = %v, %v", id, err)
@@ -130,6 +132,7 @@ func TestParsePrimaryKey(t *testing.T) {
 	})
 
 	t.Run("string", func(t *testing.T) {
+		t.Parallel()
 		id, err := parsePrimaryKey[string]("abc")
 		if err != nil || id != "abc" {
 			t.Fatalf("parsePrimaryKey[string](abc) = %v, %v", id, err)
@@ -149,6 +152,7 @@ func TestParsePrimaryKey(t *testing.T) {
 
 // Edit 的归属恢复契约：未传 / 传 0 时保留原归属，显式传值才采纳。
 func TestTableHandlerEditRestoresOwner(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		body         string
@@ -163,6 +167,7 @@ func TestTableHandlerEditRestoresOwner(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			rows := &tableTestRows{row: tableTestRow{ID: 1, Name: "old", AdminID: 7}}
 			h, _ := newTableTestHandler(rows, nil, true)
 
@@ -187,6 +192,7 @@ func TestTableHandlerEditRestoresOwner(t *testing.T) {
 
 // 缺主键或主键为 0 时必须拒绝写入。
 func TestTableHandlerEditRejectsInvalidPrimaryKey(t *testing.T) {
+	t.Parallel()
 	for _, body := range []string{`{"name":"x"}`, `{"id":0,"name":"x"}`} {
 		rows := &tableTestRows{row: tableTestRow{ID: 1, Name: "old", AdminID: 7}}
 		h, hookCalls := newTableTestHandler(rows, nil, true)
@@ -204,6 +210,7 @@ func TestTableHandlerEditRejectsInvalidPrimaryKey(t *testing.T) {
 
 // Edit 把解析出的主键透传给 GetOne。
 func TestTableHandlerEditPassesPrimaryKey(t *testing.T) {
+	t.Parallel()
 	rows := &tableTestRows{row: tableTestRow{ID: 42, Name: "old", AdminID: 7}}
 	h, _ := newTableTestHandler(rows, nil, true)
 
@@ -219,6 +226,7 @@ func TestTableHandlerEditPassesPrimaryKey(t *testing.T) {
 
 // 写库失败时不得执行 AfterMutation（缓存失效只属于成功响应）。
 func TestTableHandlerEditFailureSkipsHook(t *testing.T) {
+	t.Parallel()
 	rows := &tableTestRows{
 		row:       tableTestRow{ID: 1, Name: "old", AdminID: 7},
 		mutateErr: errors.New("edit failed"),
@@ -234,6 +242,7 @@ func TestTableHandlerEditFailureSkipsHook(t *testing.T) {
 
 // Switch 部分更新：命中白名单时走 UpdateFieldScoped，不进入整行 Edit。
 func TestTableHandlerPartialEdit(t *testing.T) {
+	t.Parallel()
 	rows := &tableTestRows{row: tableTestRow{ID: 1, Name: "old", AdminID: 7}}
 	h, hookCalls := newTableTestHandler(rows, map[string]bool{"name": true}, true)
 
@@ -255,7 +264,9 @@ func TestTableHandlerPartialEdit(t *testing.T) {
 
 // Add 成功写入后执行一次 hook；绑定失败时不写库也不执行 hook。
 func TestTableHandlerAdd(t *testing.T) {
+	t.Parallel()
 	t.Run("成功", func(t *testing.T) {
+		t.Parallel()
 		rows := &tableTestRows{}
 		h, hookCalls := newTableTestHandler(rows, nil, false)
 
@@ -270,6 +281,7 @@ func TestTableHandlerAdd(t *testing.T) {
 	})
 
 	t.Run("绑定失败", func(t *testing.T) {
+		t.Parallel()
 		rows := &tableTestRows{}
 		h, hookCalls := newTableTestHandler(rows, nil, false)
 
@@ -286,6 +298,7 @@ func TestTableHandlerAdd(t *testing.T) {
 
 // Del 正常路径：解析全部 ids[]，写库后执行一次 hook。
 func TestTableHandlerDel(t *testing.T) {
+	t.Parallel()
 	rows := &tableTestRows{}
 	h, hookCalls := newTableTestHandler(rows, nil, false)
 
@@ -305,6 +318,7 @@ func TestTableHandlerDel(t *testing.T) {
 
 // Del 参数缺失或非法时不得写库、不得执行 hook。
 func TestTableHandlerDelRejectsInvalidIDs(t *testing.T) {
+	t.Parallel()
 	for _, target := range []string{"/del", "/del?ids[]=x"} {
 		rows := &tableTestRows{}
 		h, hookCalls := newTableTestHandler(rows, nil, false)

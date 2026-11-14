@@ -50,6 +50,7 @@ func lastAuditLog(t *testing.T, db *gorm.DB) model.AdminLog {
 }
 
 func TestAuditLogServiceSkipsListSelectAndLogoutURLs(t *testing.T) {
+	t.Parallel()
 	svc, db, _ := newAuditLogServiceFixture(t)
 	ctx := context.Background()
 	countLogs := func() int64 {
@@ -75,6 +76,7 @@ func TestAuditLogServiceSkipsListSelectAndLogoutURLs(t *testing.T) {
 }
 
 func TestAuditLogServiceResolvesUsernameFallbacks(t *testing.T) {
+	t.Parallel()
 	svc, db, _ := newAuditLogServiceFixture(t)
 	require.NoError(t, db.Exec("INSERT INTO admin (id, username) VALUES (?, ?)", 7, "db-admin").Error)
 
@@ -93,6 +95,7 @@ func TestAuditLogServiceResolvesUsernameFallbacks(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			require.NoError(t, svc.Record(context.Background(), test.actor, test.username, "/admin/auth.Admin/add", "标题", "203.0.113.9", "ua", test.params))
 			require.Equal(t, test.want, lastAuditLog(t, db).Username)
 		})
@@ -100,6 +103,7 @@ func TestAuditLogServiceResolvesUsernameFallbacks(t *testing.T) {
 }
 
 func TestAuditLogServiceResolvesRuleTitles(t *testing.T) {
+	t.Parallel()
 	svc, db, _ := newAuditLogServiceFixture(t)
 	require.NoError(t, db.Create(&model.AdminRule{Name: "auth/admin", Title: "管理员"}).Error)
 	require.NoError(t, db.Create(&model.AdminRule{Name: "auth/admin/edit", Title: "编辑管理员"}).Error)
@@ -119,6 +123,7 @@ func TestAuditLogServiceResolvesRuleTitles(t *testing.T) {
 }
 
 func TestAuditLogServiceUsesCachedRuleTitles(t *testing.T) {
+	t.Parallel()
 	svc, db, authM := newAuditLogServiceFixture(t)
 	initial := model.AdminRule{Pid: 0, Type: "menu", Title: "Initial", Name: "auth/initial", Status: "1", Weigh: 1}
 	parent := model.AdminRule{Pid: 0, Type: "menu", Title: "管理员", Name: "auth/admin", Status: "1", Weigh: 2}
@@ -141,6 +146,7 @@ func TestAuditLogServiceUsesCachedRuleTitles(t *testing.T) {
 }
 
 func TestAuditLogServiceSanitizesAndTruncates(t *testing.T) {
+	t.Parallel()
 	svc, db, _ := newAuditLogServiceFixture(t)
 	params := map[string]interface{}{
 		"Password": "top-secret",
@@ -174,12 +180,14 @@ func TestAuditLogServiceSanitizesAndTruncates(t *testing.T) {
 }
 
 func TestAuditLogServiceSerializesNilParamsAsObject(t *testing.T) {
+	t.Parallel()
 	svc, db, _ := newAuditLogServiceFixture(t)
 	require.NoError(t, svc.Record(context.Background(), data_scope.Actor{AdminID: 1}, "root", "/admin/auth.Admin/add", "标题", "", "", nil))
 	require.Equal(t, "{}", lastAuditLog(t, db).Data)
 }
 
 func TestAuditLogServiceNilDependenciesDoNotPanic(t *testing.T) {
+	t.Parallel()
 	var nilService *AuditLogService
 	require.NoError(t, nilService.Record(context.Background(), data_scope.Actor{}, "", "/admin/auth.Admin/add", "", "", "", nil))
 

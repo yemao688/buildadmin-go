@@ -13,6 +13,7 @@ import (
 )
 
 func TestGetMenusUsesAdministratorRules(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-auth-menus-"+t.Name()+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true},
 	})

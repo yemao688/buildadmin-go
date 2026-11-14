@@ -18,6 +18,7 @@ import (
 )
 
 func TestGetPk(t *testing.T) {
+	t.Parallel()
 	fields := getTestFieldData()
 	tablePk := getPk(fields)
 
@@ -25,6 +26,7 @@ func TestGetPk(t *testing.T) {
 }
 
 func TestGetComment(t *testing.T) {
+	t.Parallel()
 	table := getTestTableData()
 	comment := getComment(table.Comment)
 
@@ -32,6 +34,7 @@ func TestGetComment(t *testing.T) {
 }
 
 func TestParseWebDirNameData(t *testing.T) {
+	t.Parallel()
 	testTable := getTestTableData()
 	testViews := ParseWebDirNameData("test1", "views", testTable.WebViewsDir)
 	testLang := ParseWebDirNameData("test1", "lang", testTable.WebViewsDir)
@@ -53,6 +56,7 @@ func TestParseWebDirNameData(t *testing.T) {
 }
 
 func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		field      crudmodel.Field
@@ -92,6 +96,7 @@ func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			got := getColumnDict(test.field, "", "")
 			labels := map[string]string{}
 			getDictData(&labels, test.field, "zh-cn", "")
@@ -115,6 +120,7 @@ func TestOptionDictionaryGenerationKeepsPHPCompatibility(t *testing.T) {
 // 对齐上游:crud 来源时 URL 由控制器推导;Go 扁平
 // handler 文件需通过 router.go 反查真实路由名(user.go -> user.User)。
 func TestGetRemoteSelectUrl(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		field crudmodel.Field
@@ -136,6 +142,7 @@ func TestGetRemoteSelectUrl(t *testing.T) {
 }
 
 func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{
 		Name:       "reviewer_admins",
 		Type:       "varchar",
@@ -169,6 +176,7 @@ func TestRemoteSelectsEmitsHiddenFKAndVisibleRelationColumns(t *testing.T) {
 // verifies that prepareGenerationData reads the
 // data-scope configuration from the Table value and that rendering succeeds.
 func TestGenerate_UsesTableDataScope(t *testing.T) {
+	t.Parallel()
 	table := getTestTableData()
 	table.DataScope = &data_scope.Config{Mode: data_scope.ModeNone}
 	fields := getCompileFields("")
@@ -199,6 +207,7 @@ func TestGenerate_UsesTableDataScope(t *testing.T) {
 }
 
 func TestModelQuickSearchFieldRendering(t *testing.T) {
+	t.Parallel()
 	modelData := ModelData{
 		Namespace:        "model",
 		ClassName:        "CountryLanguageContent",
@@ -233,6 +242,7 @@ func TestModelQuickSearchFieldRendering(t *testing.T) {
 // 字面量的构建：去下划线键、列类型小写、datetime/timestamp 归一为
 // "datetime"、按键排序保证可重复生成。
 func TestBuildFieldTypesLiteral(t *testing.T) {
+	t.Parallel()
 	got := buildFieldTypesLiteral([]crudmodel.Field{
 		{Name: "published_at", Type: "datetime"},
 		{Name: "create_time", Type: "bigint"},
@@ -252,6 +262,7 @@ func TestBuildFieldTypesLiteral(t *testing.T) {
 // 生成 tableInfo.FieldTypes 赋值并传入 QueryBuilder；为空时回退原
 // "QueryBuilder(ctx, s.TableInfo(), nil)" 形态（与旧产物逐字节一致）。
 func TestModelFieldTypesLiteralRendering(t *testing.T) {
+	t.Parallel()
 	base := ModelData{
 		Namespace:        "model",
 		ClassName:        "Items",
@@ -278,6 +289,7 @@ func TestModelFieldTypesLiteralRendering(t *testing.T) {
 }
 
 func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name, typ, dataType, want string
 		auto                      bool
@@ -300,6 +312,7 @@ func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := inferDesignTypeForField(crudmodel.Field{Name: tc.name, Type: tc.typ, DataType: tc.dataType, AutoIncrement: tc.auto})
 			if got != tc.want {
 				t.Fatalf("got %q, want %q", got, tc.want)
@@ -309,6 +322,7 @@ func TestInferDesignTypeHelperRuleMatrix(t *testing.T) {
 }
 
 func TestDesignTypeDefaultMatrix(t *testing.T) {
+	t.Parallel()
 	cases := map[string]struct {
 		render, operator, sortable, search string
 		width                              int
@@ -330,6 +344,7 @@ func TestDesignTypeDefaultMatrix(t *testing.T) {
 }
 
 func TestDesignTypeFormDefaultMatrix(t *testing.T) {
+	t.Parallel()
 	tests := map[string]crudmodel.FormAttr{
 		"password":      {Validator: []string{"password"}},
 		"number":        {Validator: []string{"number"}, Step: 1},
@@ -349,6 +364,7 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 	}
 	for designType, want := range tests {
 		t.Run(designType, func(t *testing.T) {
+			t.Parallel()
 			field := crudmodel.Field{DesignType: designType}
 			applyDesignTypeDefaults(&field)
 			require.Equal(t, want, field.Form)
@@ -357,6 +373,7 @@ func TestDesignTypeFormDefaultMatrix(t *testing.T) {
 }
 
 func TestFractionalStepSurvivesPopupFormRendering(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: 0.001}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
 	content, err := renderFormFile(FormVueData{FormFields: []string{markup}}, []crudmodel.Field{field}, "")
@@ -369,6 +386,7 @@ func TestFractionalStepSurvivesPopupFormRendering(t *testing.T) {
 }
 
 func TestNumberStepZeroKeepsExistingDefault(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: 0}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
 	if !strings.Contains(markup, `:input-attr="{ step: 1 }"`) {
@@ -377,6 +395,7 @@ func TestNumberStepZeroKeepsExistingDefault(t *testing.T) {
 }
 
 func TestNumberStepNegativePreservesExistingEmission(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "ratio", DesignType: "number", Form: crudmodel.FormAttr{Step: -0.5}}
 	markup := getFormField(field, nil, "", func(string, bool) string { return "" })
 	if !strings.Contains(markup, `:input-attr="{ step: -0.5 }"`) {
@@ -385,6 +404,7 @@ func TestNumberStepNegativePreservesExistingEmission(t *testing.T) {
 }
 
 func TestGetRemotePk(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		field crudmodel.Field
 		want  string
@@ -401,6 +421,7 @@ func TestGetRemotePk(t *testing.T) {
 }
 
 func TestGetJsonFromAnyEscapesStringsAndSortsNestedValues(t *testing.T) {
+	t.Parallel()
 	quotes := "both ' and \" plus \\\n+"
 	key := "key'\"\\path"
 	got := getJsonFromAny(map[string]any{
@@ -414,6 +435,7 @@ func TestGetJsonFromAnyEscapesStringsAndSortsNestedValues(t *testing.T) {
 }
 
 func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
+	t.Parallel()
 	column := getTableColumn(crudmodel.Field{Name: "title", Table: crudmodel.TableAttr{ComSearchInputAttr: crudmodel.ComSearchInputAttrs{"size": "large"}}}, nil, "", "", "")
 	if !strings.Contains(column, `comSearchInputAttr: { size: "large" }`) {
 		t.Fatalf("column = %s", column)
@@ -421,6 +443,7 @@ func TestGetTableColumnIncludesSearchInputAttrs(t *testing.T) {
 }
 
 func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "status", DesignType: "switch"}, {Name: "enabled", DesignType: "switch"}, {Name: "title", DesignType: "string"}}
 	handler := HandlerData{Namespace: "handler", ClassName: "Orders", ModelImportPath: "buildadmin-go/internal/admin/model", ModelName: "Orders", ModelVar: "orders", PkGoType: "int32", PkJSONName: "id", PartialEditFields: buildPartialEditFields(fields)}
 	content, err := renderHandler(handler)
@@ -436,6 +459,7 @@ func TestGeneratedSwitchPartialEditAllowlistIncludesEverySwitch(t *testing.T) {
 }
 
 func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "owner_id", DesignType: "remoteSelect", Form: crudmodel.FormAttr{RemoteTable: "owner", RemotePk: "uuid", RemoteField: "name", RemoteUrl: "/admin/owner/options"}}
 	metadata := buildRemoteSearchMetadata(field, func(name string, _ bool) string { return "ba_" + name })
 	column := getTableColumn(crudmodel.Field{Name: field.Name, Table: crudmodel.TableAttr{ComSearchRender: "remoteSelect", Remote: metadata}}, nil, "", "", "")
@@ -445,11 +469,13 @@ func TestRemoteCommonSearchMetadataIsGeneratedOnce(t *testing.T) {
 }
 
 func TestBuildOperateColumnKeepsFixedRight(t *testing.T) {
+	t.Parallel()
 	require.Equal(t, ` label: t('Operate'), align: 'center', width: 100, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false`, buildOperateColumn(false))
 	require.Equal(t, ` label: t('Operate'), align: 'center', width: 140, fixed: 'right', render: 'buttons', buttons: optButtons, operator: false`, buildOperateColumn(true))
 }
 
 func TestRemoteSelectRelationMetadataIsSlimAndRemoteSelectsIsEnriched(t *testing.T) {
+	t.Parallel()
 	columns := relationTestColumns()
 	field := relationTestField("remoteSelect", "username")
 	metadata, err := buildRelationMetadata(ParseTableColumns(columns, true), field, "Orders")
@@ -471,12 +497,14 @@ func TestRemoteSelectRelationMetadataIsSlimAndRemoteSelectsIsEnriched(t *testing
 }
 
 func TestRemoteSelectRelationRejectsUnknownColumn(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "missing_name")
 	_, err := buildRelationMetadata(ParseTableColumns(relationTestColumns(), true), field, "Orders")
 	require.ErrorContains(t, err, `unknown relation field "missing_name"`)
 }
 
 func TestRemoteSelectsRejectsBadStorageAndRelationCollisions(t *testing.T) {
+	t.Parallel()
 	badStorage := relationTestField("remoteSelects", "username")
 	badStorage.Type = "bigint"
 	badStorage.DataType = "bigint"
@@ -496,6 +524,7 @@ func TestRemoteSelectsRejectsBadStorageAndRelationCollisions(t *testing.T) {
 }
 
 func TestRemoteSelectRelationRenderIncludesSlimLoaderAndCalls(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	metadata, err := buildRelationMetadata(ParseTableColumns(relationTestColumns(), true), field, "Orders")
 	require.NoError(t, err)
@@ -524,6 +553,7 @@ func TestRemoteSelectRelationRenderIncludesSlimLoaderAndCalls(t *testing.T) {
 }
 
 func TestRemoteSelectRelationColumnUsesNestedPropWithoutSearchOperator(t *testing.T) {
+	t.Parallel()
 	columns := relationTestColumns()
 	field := relationTestField("remoteSelect", "username")
 	indexData := IndexVueData{}
@@ -541,6 +571,7 @@ func TestRemoteSelectRelationColumnUsesNestedPropWithoutSearchOperator(t *testin
 }
 
 func TestParseJoinDataSingleRelationFieldUsesLiteralLabel(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	field.Table.Label = "上级代理"
 	indexData := IndexVueData{}
@@ -551,6 +582,7 @@ func TestParseJoinDataSingleRelationFieldUsesLiteralLabel(t *testing.T) {
 }
 
 func TestParseJoinDataSingleRelationFieldInheritsFKWidth(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	field.Table.Label = "上级代理"
 	field.Table.Width = 150
@@ -562,6 +594,7 @@ func TestParseJoinDataSingleRelationFieldInheritsFKWidth(t *testing.T) {
 }
 
 func TestParseJoinDataWithoutWidthKeepsNoWidthColumn(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	field.Table.Label = "上级代理"
 	indexData := IndexVueData{}
@@ -572,6 +605,7 @@ func TestParseJoinDataWithoutWidthKeepsNoWidthColumn(t *testing.T) {
 }
 
 func TestParseJoinDataMultipleRelationFieldsIgnoreSharedLabel(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelects", "nickname,email")
 	field.Form.RemoteTable = "admin"
 	field.Table.Label = "上级代理"
@@ -586,6 +620,7 @@ func TestParseJoinDataMultipleRelationFieldsIgnoreSharedLabel(t *testing.T) {
 }
 
 func TestParseJoinDataWithoutLabelKeepsDefaultTranslation(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	indexData := IndexVueData{}
 	modelData := ModelData{ClassName: "Orders"}
@@ -595,6 +630,7 @@ func TestParseJoinDataWithoutLabelKeepsDefaultTranslation(t *testing.T) {
 }
 
 func TestOmittedFKColumnStillGeneratesRelationDisplayAndLoader(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{ColumnFields: []string{"id"}}
 	field := relationTestField("remoteSelect", "username")
 	field.Table.ComSearchRender = "remoteSelect"
@@ -614,6 +650,7 @@ func TestOmittedFKColumnStillGeneratesRelationDisplayAndLoader(t *testing.T) {
 }
 
 func TestRelationFKColumnIsHiddenWithRemoteSearchMetadata(t *testing.T) {
+	t.Parallel()
 	path := writeSpecTest(t, `name: relation_loader
 fields:
   - name: id
@@ -664,6 +701,7 @@ fields:
 }
 
 func TestRelationFKExplicitShowTrueIsPreserved(t *testing.T) {
+	t.Parallel()
 	field := relationTestField("remoteSelect", "username")
 	field.Table.Show = "true"
 	prepared := prepareGeneratedColumnField(field)
@@ -671,6 +709,7 @@ func TestRelationFKExplicitShowTrueIsPreserved(t *testing.T) {
 }
 
 func TestRemoteSelectsRenderPositionalNullablePayloadLoader(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{
 		Name: "reviewer_admins", Type: "varchar", DataType: "varchar(255)", DesignType: "remoteSelects",
 		Form: crudmodel.FormAttr{RemoteTable: "admin", RemotePk: "id", RelationFields: "nickname,email"},
@@ -738,6 +777,7 @@ func relationTestField(designType, relationFields string) crudmodel.Field {
 }
 
 func TestBuildEditableColumnsKeepsTableExcludedFormField(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "title", Form: crudmodel.FormAttr{}}, {Name: "hidden_column", TableBuildExclude: true}, {Name: "hidden_form", FormBuildExclude: true}}
 	got := buildEditableColumns("id", "", []string{"title", "hidden_column", "hidden_form"}, fields)
 	if !slices.Equal(got, []string{"title", "hidden_column"}) {
@@ -746,6 +786,7 @@ func TestBuildEditableColumnsKeepsTableExcludedFormField(t *testing.T) {
 }
 
 func TestCityModelStructIncludesTextAccessor(t *testing.T) {
+	t.Parallel()
 	structContent := addCityTextFields("type Orders struct {\n\tRegionCity string `json:\"region_city\"`\n}\n", []string{"region_city"})
 	if !strings.Contains(structContent, "RegionCityText string `json:\"region_city_text\" gorm:\"-\"`") {
 		t.Fatalf("city text accessor missing from struct: %s", structContent)
@@ -760,6 +801,7 @@ func TestCityModelStructIncludesTextAccessor(t *testing.T) {
 }
 
 func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.T) {
+	t.Parallel()
 	table := crudmodel.Table{Name: "orders", FormFields: []string{"region_city"}, ColumnFields: []string{"id", "region_city"}, DataScope: &data_scope.Config{Mode: data_scope.ModeNone}}
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "int", PrimaryKey: true, DesignType: "pk"},
@@ -789,6 +831,7 @@ func TestPrepareGenerationDataCarriesCityTextAccessorIntoModelOutput(t *testing.
 }
 
 func TestRelationNameForField(t *testing.T) {
+	t.Parallel()
 	cases := map[string]string{
 		"user_id_id": "userId",
 		"paid":       "paidTable",
@@ -803,6 +846,7 @@ func TestRelationNameForField(t *testing.T) {
 }
 
 func TestParseWebDirNameDataAutomaticTailAndExplicitUnderscores(t *testing.T) {
+	t.Parallel()
 	auto := ParseWebDirNameData("country_language_content", "views", "")
 	if got := GetMenuName(auto); got != "country/languageContent" {
 		t.Fatalf("automatic menu name=%q", got)
@@ -814,6 +858,7 @@ func TestParseWebDirNameDataAutomaticTailAndExplicitUnderscores(t *testing.T) {
 }
 
 func TestParseWebDirNameDataSeparatorsAndInvalidZeroValue(t *testing.T) {
+	t.Parallel()
 	forward := ParseWebDirNameData("orders", "views", "web/src/views/backend/ops/orders")
 	backslash := ParseWebDirNameData("orders", "views", `web\src\views\backend\ops\orders`)
 	if GetMenuName(forward) != GetMenuName(backslash) || GetMenuName(forward) != "ops/orders" {
@@ -825,6 +870,7 @@ func TestParseWebDirNameDataSeparatorsAndInvalidZeroValue(t *testing.T) {
 }
 
 func TestInferDesignTypeTinyintLengthOneNormalization(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		field    crudmodel.Field
@@ -863,6 +909,7 @@ func TestInferDesignTypeTinyintLengthOneNormalization(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := inferDesignTypeForField(tc.field)
 			if got != tc.wantType {
 				t.Fatalf("designType = %q, want %q", got, tc.wantType)
@@ -872,6 +919,7 @@ func TestInferDesignTypeTinyintLengthOneNormalization(t *testing.T) {
 }
 
 func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name  string
 		field crudmodel.Field
@@ -910,6 +958,7 @@ func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := isBooleanStorageField(tc.field)
 			if got != tc.want {
 				t.Fatalf("isBooleanStorageField = %v, want %v", got, tc.want)
@@ -923,6 +972,7 @@ func TestIsBooleanStorageFieldRequiresSwitchDesignType(t *testing.T) {
 // "crud:delete + 重新生成逐字节一致"契约。keys 必须排序后输出，且多次调用
 // 结果恒定。
 func TestBuildLangTsContentDeterministic(t *testing.T) {
+	t.Parallel()
 	input := map[string]string{
 		"username": "用户名",
 		"nickname": "昵称",

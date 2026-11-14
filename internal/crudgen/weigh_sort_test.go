@@ -7,6 +7,7 @@ import (
 )
 
 func TestWeighDefaultsToDescendingOrder(t *testing.T) {
+	t.Parallel()
 	handlerData := HandlerData{Attr: map[string]string{}}
 	indexVueData := IndexVueData{}
 
@@ -25,6 +26,7 @@ func TestWeighDefaultsToDescendingOrder(t *testing.T) {
 }
 
 func TestWeighExplicitSortTakesPrecedence(t *testing.T) {
+	t.Parallel()
 	handlerData := HandlerData{Attr: map[string]string{}}
 	indexVueData := IndexVueData{}
 	table := crudmodel.Table{DefaultSortField: "updated_at", DefaultSortType: "asc"}
@@ -43,6 +45,7 @@ func TestWeighExplicitSortTakesPrecedence(t *testing.T) {
 }
 
 func TestBuildDefaultOrderLiteralEdgeCases(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "id", Type: "bigint"},
 		{Name: "weigh", Type: "int"},
@@ -63,6 +66,7 @@ func TestBuildDefaultOrderLiteralEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := buildDefaultOrderLiteral(tt.table, fields); got != tt.want {
 				t.Fatalf("buildDefaultOrderLiteral() = %q, want %q", got, tt.want)
 			}
@@ -71,6 +75,7 @@ func TestBuildDefaultOrderLiteralEdgeCases(t *testing.T) {
 }
 
 func TestWeighAbsentDoesNotAddDefaultSort(t *testing.T) {
+	t.Parallel()
 	handlerData := HandlerData{Attr: map[string]string{}}
 	indexVueData := IndexVueData{}
 

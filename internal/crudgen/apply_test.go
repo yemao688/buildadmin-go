@@ -14,6 +14,7 @@ import (
 )
 
 func TestDecideApplyAction(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name         string
 		pkDrift      bool
@@ -29,6 +30,7 @@ func TestDecideApplyAction(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			action, err := decideApplyAction(tc.pkDrift, tc.allowRebuild, "orders", "uuid", "id")
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
@@ -64,6 +66,7 @@ func applyTestSpec(tableName string) *GenerateOptions {
 }
 
 func TestAdoptCrudLogCreatesAndRefreshesSuccessRecord(t *testing.T) {
+	t.Parallel()
 	db, cfg := newApplyTestDB(t)
 	spec := applyTestSpec("apply_adopt")
 
@@ -123,6 +126,7 @@ func writeApplySpec(t *testing.T, name, tableName, specType string) string {
 	return path
 }
 
+//nolint:paralleltest // ApplySpecs 取进程级 generationMu 生成锁（TryLock 失败即返回 ErrGenerationBusy），并行会与其它取锁测试互相返回 busy
 func TestApplySpecsRejectsProtectedTable(t *testing.T) {
 	db, cfg := newApplyTestDB(t)
 	specPath := writeApplySpec(t, "admin", "admin", "create")
@@ -132,6 +136,7 @@ func TestApplySpecsRejectsProtectedTable(t *testing.T) {
 }
 
 func TestApplySpecsFromDirSkipsMissingDirectory(t *testing.T) {
+	t.Parallel()
 	db, cfg := newApplyTestDB(t)
 	results, err := ApplySpecsFromDir(db, cfg, NewTableStore(db, cfg), filepath.Join(t.TempDir(), "no_such_dir"), ApplyOptions{})
 	if err != nil || len(results) != 0 {
@@ -140,12 +145,14 @@ func TestApplySpecsFromDirSkipsMissingDirectory(t *testing.T) {
 }
 
 func TestDefaultSpecDirExists(t *testing.T) {
+	t.Parallel()
 	if dir := DefaultSpecDir(); dir == "" {
 		t.Fatal("repository crud_specs directory must be discovered")
 	}
 }
 
 func TestAlterChangeDDLAddFieldPosition(t *testing.T) {
+	t.Parallel()
 	diff := AlterDiff{
 		Change: crudmodel.ChangeField{Type: "add-field", NewName: "images", After: "image"},
 		Field:  crudmodel.Field{Name: "images", Type: "varchar", Length: 1000, DefaultType: "EMPTY STRING", Comment: "图片集"},
@@ -168,6 +175,7 @@ func TestAlterChangeDDLAddFieldPosition(t *testing.T) {
 }
 
 func TestUnmanagedChangesColumnAttributes(t *testing.T) {
+	t.Parallel()
 	field := crudmodel.Field{Name: "name", Type: "varchar", Length: 20, DefaultType: "EMPTY STRING", Comment: "名称"}
 	baseColumn := func() model.Column {
 		column := alterTestColumn("name", "varchar(20)", "NO", "", "", "名称")
@@ -210,6 +218,7 @@ func TestUnmanagedChangesColumnAttributes(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			column := baseColumn()
 			if tc.mutate != nil {
 				tc.mutate(&column)

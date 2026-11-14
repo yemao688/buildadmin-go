@@ -20,6 +20,7 @@ import (
 // user_id、ownerColumn admin_id）。注册表可扩展：业务 fork 追加子表后仍须含
 // user_money_log 且契约正确，因此不硬断言注册表长度。
 func TestUserCascadeOwnersRegistration(t *testing.T) {
+	t.Parallel()
 	db := openMySQLAdminTestDB(t, "ba_uc_")
 	repo := NewUserRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_uc_"}}, data_scope.NewDenyAllEnforcer())
 
@@ -40,6 +41,7 @@ func TestUserCascadeOwnersRegistration(t *testing.T) {
 // 子表：user 的 admin_id 从 10 改为 20 后，user_money_log 中该 user 的流水
 // admin_id 全部跟随更新；同步后校验通过，未同步时校验失败。
 func TestUserSyncCascadeOwnersMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

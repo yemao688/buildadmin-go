@@ -10,6 +10,7 @@ import (
 )
 
 func TestActiveTransactionIsReusedAndNotCommitted(t *testing.T) {
+	t.Parallel()
 	tx := &gorm.DB{}
 	ctx := Bind(context.Background(), tx)
 	var got *gorm.DB
@@ -25,11 +26,13 @@ func TestActiveTransactionIsReusedAndNotCommitted(t *testing.T) {
 }
 
 func TestFallbackWithoutDatabaseReturnsError(t *testing.T) {
+	t.Parallel()
 	err := Transaction(WithDB(context.Background(), nil), func(*gorm.DB) error { return nil })
 	require.EqualError(t, err, "requesttx: no database bound to context")
 }
 
 func TestOutcomeStagesOnceAndCanBeDiscarded(t *testing.T) {
+	t.Parallel()
 	ctx := Bind(context.Background(), &gorm.DB{})
 	out := Outcome{HTTPCode: 200, BusinessCode: 1, Message: "ok", Data: "value"}
 	require.True(t, Stage(ctx, out))
@@ -47,6 +50,7 @@ func TestOutcomeStagesOnceAndCanBeDiscarded(t *testing.T) {
 }
 
 func TestFinishUnbindsAndClearsTransaction(t *testing.T) {
+	t.Parallel()
 	parent := context.WithValue(context.Background(), "request", "original") //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
 	bound := Bind(parent, &gorm.DB{})
 	require.True(t, Active(bound))
@@ -57,6 +61,7 @@ func TestFinishUnbindsAndClearsTransaction(t *testing.T) {
 }
 
 func TestAfterCommitRunsCallbacksOnce(t *testing.T) {
+	t.Parallel()
 	ctx := Bind(context.Background(), &gorm.DB{})
 	var calls atomic.Int32
 	require.True(t, Stage(ctx, Outcome{HTTPCode: 200, BusinessCode: 1}))
@@ -69,6 +74,7 @@ func TestAfterCommitRunsCallbacksOnce(t *testing.T) {
 }
 
 func TestAfterCommitDiscardAndFinishSuppressCallbacks(t *testing.T) {
+	t.Parallel()
 	ctx := Bind(context.Background(), &gorm.DB{})
 	var calls atomic.Int32
 	require.True(t, AfterCommit(ctx, func() { calls.Add(1) }))
@@ -86,6 +92,7 @@ func TestAfterCommitDiscardAndFinishSuppressCallbacks(t *testing.T) {
 }
 
 func TestAfterCommitInactiveAndFinishedSessionsReturnFalse(t *testing.T) {
+	t.Parallel()
 	callback := func() {}
 	require.False(t, AfterCommit(context.Background(), callback))
 

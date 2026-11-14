@@ -10,6 +10,7 @@ import (
 )
 
 func TestSeedAdminRuleIsPrefixSafeIdempotentAndRecursive(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +68,11 @@ func TestSeedAdminRuleIsPrefixSafeIdempotentAndRecursive(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	assertAdminRuleSeedTree(t, db)
+}
+
+func assertAdminRuleSeedTree(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var count int64
 	if err := db.Table("business_admin_rule").Count(&count).Error; err != nil {
 		t.Fatal(err)
@@ -95,6 +101,7 @@ func TestSeedAdminRuleIsPrefixSafeIdempotentAndRecursive(t *testing.T) {
 }
 
 func TestSeedAdminRuleRejectsInvalidPrefixAndName(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +117,7 @@ func TestSeedAdminRuleRejectsInvalidPrefixAndName(t *testing.T) {
 
 // F6: 判重必须按 pid+name+type——同名不同父的规则不得相互吞并。
 func TestSeedAdminRuleDedupeByPidNameType(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)

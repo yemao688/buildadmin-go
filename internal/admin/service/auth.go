@@ -47,13 +47,8 @@ func (s *AuthService) IsLoggedIn(batoken string) bool {
 // stays transport-free. Every failure path either leaves no token behind or
 // compensates the already-written ones.
 func (s *AuthService) Login(username, password string, keep bool, captchaID, captchaInfo, clientIP string) (map[string]any, error) {
-	if s.config.App.AdminLoginCaptcha {
-		if captchaID == "" || captchaInfo == "" {
-			return nil, cErr.BadRequest("Captcha error")
-		}
-		if s.clickCaptcha == nil || !s.clickCaptcha.Check(captchaID, captchaInfo, true) {
-			return nil, cErr.BadRequest("Captcha error")
-		}
+	if err := s.verifyAdminCaptcha(captchaID, captchaInfo); err != nil {
+		return nil, err
 	}
 
 	admin, err := s.authM.GetByUsername(username)
@@ -84,41 +79,15 @@ func (s *AuthService) Login(username, password string, keep bool, captchaID, cap
 		return nil, cErr.BadRequest(adminLoginCredentialError)
 	}
 
-	// SSO: previous sessions are cleared before a new one is issued; a failed
-	// clear aborts the login instead of leaving stale sessions behind.
-	if s.config.App.AdminSso {
-		if err := s.tokenHelper.Clear("admin", admin.ID); err != nil {
-			return nil, err
-		}
-		if err := s.tokenHelper.Clear("admin-refresh", admin.ID); err != nil {
-			return nil, err
-		}
-	}
-
-	refreshToken := ""
-	if keep {
-		refreshToken = random.Uuid()
-		if err := s.tokenHelper.Set(refreshToken, "admin-refresh", admin.ID, 2592000); err != nil { //30天
-			return nil, err
-		}
-	}
-	token := random.Uuid()
-	if err := s.tokenHelper.Set(token, "admin", admin.ID, s.config.App.AdminTokenKeepTime); err != nil {
-		// Compensate: the refresh token was already written and must not
-		// outlive the failed login.
-		if refreshToken != "" {
-			_ = s.tokenHelper.Delete(refreshToken)
-		}
+	token, refreshToken, err := s.issueAdminLoginTokens(admin.ID, keep)
+	if err != nil {
 		return nil, err
 	}
 
 	// The login metadata update must succeed; on failure every issued token
 	// is revoked so an error response never leaves a usable session behind.
 	if err := s.authM.ResetLoginMeta(admin.ID, now, clientIP); err != nil {
-		_ = s.tokenHelper.Delete(token)
-		if refreshToken != "" {
-			_ = s.tokenHelper.Delete(refreshToken)
-		}
+		s.revokeAdminLoginTokens(token, refreshToken)
 		return nil, err
 	}
 
@@ -131,6 +100,59 @@ func (s *AuthService) Login(username, password string, keep bool, captchaID, cap
 		"token":           token,
 		"refresh_token":   refreshToken,
 	}, nil
+}
+
+func (s *AuthService) verifyAdminCaptcha(captchaID, captchaInfo string) error {
+	if !s.config.App.AdminLoginCaptcha {
+		return nil
+	}
+	if captchaID == "" || captchaInfo == "" {
+		return cErr.BadRequest("Captcha error")
+	}
+	if s.clickCaptcha == nil || !s.clickCaptcha.Check(captchaID, captchaInfo, true) {
+		return cErr.BadRequest("Captcha error")
+	}
+	return nil
+}
+
+// issueAdminLoginTokens 在 SSO 清理后签发访问/刷新令牌；任一写入失败都返回错误，
+// 且不留下可用的刷新令牌。
+func (s *AuthService) issueAdminLoginTokens(adminID int32, keep bool) (string, string, error) {
+	// SSO: previous sessions are cleared before a new one is issued; a failed
+	// clear aborts the login instead of leaving stale sessions behind.
+	if s.config.App.AdminSso {
+		if err := s.tokenHelper.Clear("admin", adminID); err != nil {
+			return "", "", err
+		}
+		if err := s.tokenHelper.Clear("admin-refresh", adminID); err != nil {
+			return "", "", err
+		}
+	}
+
+	refreshToken := ""
+	if keep {
+		refreshToken = random.Uuid()
+		if err := s.tokenHelper.Set(refreshToken, "admin-refresh", adminID, 2592000); err != nil { //30天
+			return "", "", err
+		}
+	}
+	token := random.Uuid()
+	if err := s.tokenHelper.Set(token, "admin", adminID, s.config.App.AdminTokenKeepTime); err != nil {
+		// Compensate: the refresh token was already written and must not
+		// outlive the failed login.
+		if refreshToken != "" {
+			_ = s.tokenHelper.Delete(refreshToken)
+		}
+		return "", "", err
+	}
+	return token, refreshToken, nil
+}
+
+func (s *AuthService) revokeAdminLoginTokens(accessToken, refreshToken string) {
+	_ = s.tokenHelper.Delete(accessToken)
+	if refreshToken != "" {
+		_ = s.tokenHelper.Delete(refreshToken)
+	}
 }
 
 // Logout invalidates the refresh token and the caller's access token.

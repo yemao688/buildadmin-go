@@ -185,27 +185,35 @@ var textTypeRank = map[string]int{"tinytext": 1, "text": 2, "mediumtext": 3, "lo
 func explicitWideningMatrix(actual, desired string) bool {
 	actualBase, actualArgs := typeParts(actual)
 	desiredBase, desiredArgs := typeParts(desired)
-	if actualBase == desiredBase {
-		switch actualBase {
-		case "varchar", "char", "varbinary", "binary":
-			return len(actualArgs) == 1 && len(desiredArgs) == 1 && integerValue(desiredArgs[0]) > integerValue(actualArgs[0])
-		case "decimal", "numeric":
-			return len(actualArgs) == 2 && len(desiredArgs) == 2 && integerValue(desiredArgs[0]) >= integerValue(actualArgs[0]) && integerValue(desiredArgs[1]) >= integerValue(actualArgs[1]) && (actualArgs[0] != desiredArgs[0] || actualArgs[1] != desiredArgs[1])
-		case "enum", "set":
-			return membersContain(enumSetMembers(desired), enumSetMembers(actual)) && len(enumSetMembers(desired)) > len(enumSetMembers(actual))
-		}
+	if actualBase == desiredBase && widenSameBaseType(actualBase, actualArgs, desiredArgs) {
+		return true
 	}
-	if actualRank, ok := integerTypeRank[actualBase]; ok {
-		if desiredRank, ok := integerTypeRank[desiredBase]; ok {
-			return desiredRank > actualRank
-		}
+	if rankWidens(integerTypeRank, actualBase, desiredBase) {
+		return true
 	}
-	if actualRank, ok := textTypeRank[actualBase]; ok {
-		if desiredRank, ok := textTypeRank[desiredBase]; ok {
-			return desiredRank > actualRank
-		}
+	return rankWidens(textTypeRank, actualBase, desiredBase)
+}
+
+func widenSameBaseType(base string, actualArgs, desiredArgs []string) bool {
+	switch base {
+	case "varchar", "char", "varbinary", "binary":
+		return len(actualArgs) == 1 && len(desiredArgs) == 1 && integerValue(desiredArgs[0]) > integerValue(actualArgs[0])
+	case "decimal", "numeric":
+		return len(actualArgs) == 2 && len(desiredArgs) == 2 && integerValue(desiredArgs[0]) >= integerValue(actualArgs[0]) && integerValue(desiredArgs[1]) >= integerValue(actualArgs[1]) && (actualArgs[0] != desiredArgs[0] || actualArgs[1] != desiredArgs[1])
+	case "enum", "set":
+		return membersContain(desiredArgs, actualArgs) && len(desiredArgs) > len(actualArgs)
 	}
 	return false
+}
+
+// rankWidens 判断 base 在同族等级表中是否向更宽的成员扩展。
+func rankWidens(ranks map[string]int, actualBase, desiredBase string) bool {
+	actualRank, ok := ranks[actualBase]
+	if !ok {
+		return false
+	}
+	desiredRank, ok := ranks[desiredBase]
+	return ok && desiredRank > actualRank
 }
 
 func integerValue(value string) int {
@@ -320,7 +328,7 @@ func classifyFieldDiff(field crudmodel.Field, column dbschema.Column, primary bo
 	defaultChangedValue := defaultChanged(field, column)
 	autoChanged := autoIncrementChanged(field, column)
 	commentChanged := column.COLUMN_COMMENT != field.Comment
-	if primary && (typeChanged || unsignedChanged || nullableChangedValue || autoChanged || defaultChangedValue) {
+	if primary && fieldColumnPrimaryDrift(typeChanged, unsignedChanged, nullableChangedValue, autoChanged, defaultChangedValue) {
 		return DiffRejected, "", "primary key column attribute drift requires a business migration"
 	}
 	if unsignedChanged {
@@ -330,15 +338,7 @@ func classifyFieldDiff(field crudmodel.Field, column dbschema.Column, primary bo
 		return DiffRejected, "", "nullable to NOT NULL may reject existing rows"
 	}
 	if typeChanged {
-		actual := column.COLUMN_TYPE
-		desired := specColumnType(field)
-		if typeNarrowing(actual, desired) {
-			return DiffRejected, "", "type narrowing may truncate existing data"
-		}
-		if explicitWideningMatrix(actual, desired) {
-			return DiffRequiresApproval, ApprovalTypeWidening, "type widening is covered by the explicit safety matrix"
-		}
-		return DiffRejected, "", "type change is outside the explicit safety matrix"
+		return classifyTypeChangeDiff(field, column)
 	}
 	if defaultChangedValue {
 		return DiffRequiresApproval, ApprovalDefaults, "default value change requires approval"
@@ -347,15 +347,36 @@ func classifyFieldDiff(field crudmodel.Field, column dbschema.Column, primary bo
 		return DiffRequiresApproval, ApprovalAutoIncrement, "auto_increment change requires approval"
 	}
 	if commentChanged {
-		if primary {
-			return DiffSafeAuto, "", "comment-only change on primary key"
-		}
-		return DiffSafeAuto, "", "comment-only change"
+		return classifyCommentChangeDiff(primary)
 	}
 	if nullableChangedValue {
 		return DiffSafeAuto, "", "nullable expansion"
 	}
 	return DiffRequiresApproval, ApprovalAttributes, "column attribute change requires approval"
+}
+
+// fieldColumnPrimaryDrift 判断主键列是否出现需要业务迁移处理的属性漂移。
+func fieldColumnPrimaryDrift(typeChanged, unsignedChanged, nullableChanged, autoChanged, defaultChanged bool) bool {
+	return typeChanged || unsignedChanged || nullableChanged || autoChanged || defaultChanged
+}
+
+func classifyTypeChangeDiff(field crudmodel.Field, column dbschema.Column) (DiffClass, ApprovalCategory, string) {
+	actual := column.COLUMN_TYPE
+	desired := specColumnType(field)
+	if typeNarrowing(actual, desired) {
+		return DiffRejected, "", "type narrowing may truncate existing data"
+	}
+	if explicitWideningMatrix(actual, desired) {
+		return DiffRequiresApproval, ApprovalTypeWidening, "type widening is covered by the explicit safety matrix"
+	}
+	return DiffRejected, "", "type change is outside the explicit safety matrix"
+}
+
+func classifyCommentChangeDiff(primary bool) (DiffClass, ApprovalCategory, string) {
+	if primary {
+		return DiffSafeAuto, "", "comment-only change on primary key"
+	}
+	return DiffSafeAuto, "", "comment-only change"
 }
 
 // specFieldMatchesColumn 判断 spec 字段与实际列是否完全一致（无漂移）。

@@ -14,6 +14,7 @@ import (
 
 func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	router := gin.New()
 	apiRoutes := newAPIRouteSet(router, router.Group("/api/"))
 	NewUserRegistrar(&api.UserHandler{}).Register(apiRoutes)
@@ -40,6 +41,7 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 // 否则免登录声明会静默失效（新增端点忘了注册）或留下死条目。
 func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	engine := gin.New()
 	rawSet := newAPIRouteSet(engine, engine.Group("/api/"))
 	set, ok := rawSet.(*apiRouteSet)
@@ -62,6 +64,7 @@ func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 
 func TestApiRouterMountsAPIRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Parallel()
 	engine := gin.New()
 	NewApiRouter(ApiRouterDeps{
 		UserLoginM: &apiMiddleware.UserLogin{},

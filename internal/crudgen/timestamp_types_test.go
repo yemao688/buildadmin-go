@@ -9,6 +9,7 @@ import (
 )
 
 func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "create_time", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
 		{Name: "createtime", Type: "bigint", DataType: "bigint", DesignType: "timestamp"},
@@ -40,6 +41,7 @@ func TestTimestampTypeOverridesSkipCanonicalAndSplitOthers(t *testing.T) {
 }
 
 func TestPrepareModelTimestampDataDetectsJSONTagsAndAssignments(t *testing.T) {
+	t.Parallel()
 	data := ModelData{
 		StructTemp: "type Demo struct {\n" +
 			"\tCreateTime int64 `json:\"create_time\"`\n" +
@@ -70,6 +72,7 @@ func TestPrepareModelTimestampDataDetectsJSONTagsAndAssignments(t *testing.T) {
 }
 
 func TestRenderModelUsesOneNowAndActualCanonicalFieldNames(t *testing.T) {
+	t.Parallel()
 	modelData := ModelData{
 		Namespace:        "model",
 		ClassName:        "Demo",
@@ -109,6 +112,7 @@ func TestRenderModelUsesOneNowAndActualCanonicalFieldNames(t *testing.T) {
 }
 
 func TestCanonicalTimestampsExcludedFromEditableColumnsAndParams(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{
 		{Name: "id", PrimaryKey: true, FormBuildExclude: true},
 		{Name: "create_time", DesignType: "timestamp", FormBuildExclude: true},

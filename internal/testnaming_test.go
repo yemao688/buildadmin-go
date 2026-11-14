@@ -16,6 +16,7 @@ import (
 // "需要 mysql_test 配置"的唯一可见标记，缺失时 MySQL 用例会混在纯逻辑测试里，
 // 无法按文件名审阅与筛选。
 func TestMySQLTestFileSuffix(t *testing.T) {
+	t.Parallel()
 	violations, err := collectMySQLTestFileViolations(".")
 	if err != nil {
 		t.Fatal(err)

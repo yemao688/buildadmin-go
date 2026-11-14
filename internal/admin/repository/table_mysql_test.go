@@ -15,6 +15,7 @@ import (
 // 空 schema 参数静默返回 0 列（曾导致 EnsureSpecTable 二次物化误判
 // primary key drift）。
 func TestGetColumnsFallsBackToConnectionDatabase(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("tbl_repo_%d_", time.Now().UnixNano())
 	tableName := prefix + "member"

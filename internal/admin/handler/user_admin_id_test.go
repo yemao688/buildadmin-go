@@ -3,6 +3,7 @@ package handler
 import "testing"
 
 func TestRequestedAdminIDProtocol(t *testing.T) {
+	t.Parallel()
 	if id, present, err := requestedAdminID([]byte(`{"username":"u"}`)); err != nil || present || id != 0 {
 		t.Fatalf("missing admin_id = %d/%v/%v", id, present, err)
 	}

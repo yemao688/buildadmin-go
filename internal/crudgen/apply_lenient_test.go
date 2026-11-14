@@ -7,6 +7,7 @@ import (
 )
 
 func TestApproveAllTreatsRequiresApprovalAsApproved(t *testing.T) {
+	t.Parallel()
 	approved := allApprovalCategories()
 	if len(approved) != len(approvalCategories) {
 		t.Fatalf("allApprovalCategories size = %d, want %d", len(approved), len(approvalCategories))
@@ -32,6 +33,7 @@ func TestApproveAllTreatsRequiresApprovalAsApproved(t *testing.T) {
 }
 
 func TestBlockedApplyChangesWithAllApprovedOnlyRejectsRejected(t *testing.T) {
+	t.Parallel()
 	changes := []ApplyChange{
 		{Field: "note", Class: DiffSafeAuto, Reason: "new nullable column"},
 	}
@@ -50,6 +52,7 @@ func TestBlockedApplyChangesWithAllApprovedOnlyRejectsRejected(t *testing.T) {
 }
 
 func TestPlanBlockingErrorLenientSkipsRejected(t *testing.T) {
+	t.Parallel()
 	rejected := []ApplyTableResult{{Table: "orders", Diffs: []ApplyChange{
 		{Field: "amount", Class: DiffRejected, Reason: "type narrowing may truncate existing data"},
 	}}}
@@ -74,6 +77,7 @@ func TestPlanBlockingErrorLenientSkipsRejected(t *testing.T) {
 
 // 计划阶段必须过滤引用"应用后仍不存在"的列的索引，避免 --plan 高报实际会跳过的 ADD INDEX。
 func TestPlanIndexAdditionsSkipsMissingColumns(t *testing.T) {
+	t.Parallel()
 	added := []ApplyChange{
 		{Field: "idx_ok", Type: "add-index", Class: DiffSafeAuto},
 		{Field: "idx_missing", Type: "add-index", Class: DiffSafeAuto},
@@ -101,6 +105,7 @@ func TestPlanIndexAdditionsSkipsMissingColumns(t *testing.T) {
 // 宽松模式跳过 rejected 新增列后，后继列必须越过它回退到上一个确定存在的列，
 // 否则 ALTER ... AFTER <被跳过的列> 会报 1054 并让启动退出。
 func TestResolveAddFieldPositionsFallsBackPastSkippedField(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "id"}, {Name: "a"}, {Name: "b"}, {Name: "c"}}
 	existing := map[string]bool{"id": true}
 	adding := map[string]bool{"a": true, "c": true} // b 被 rejected 跳过
@@ -119,6 +124,7 @@ func TestResolveAddFieldPositionsFallsBackPastSkippedField(t *testing.T) {
 
 // 前面没有任何确定存在的列时置表首。
 func TestResolveAddFieldPositionsFirstWhenNoPredecessor(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "x"}, {Name: "y"}}
 	adding := map[string]bool{"x": true, "y": true}
 
@@ -133,6 +139,7 @@ func TestResolveAddFieldPositionsFirstWhenNoPredecessor(t *testing.T) {
 
 // 严格模式（全部新增都执行）下重算结果必须与 spec 前驱完全一致，行为不变。
 func TestResolveAddFieldPositionsMatchesSpecOrderWhenNothingSkipped(t *testing.T) {
+	t.Parallel()
 	fields := []crudmodel.Field{{Name: "id"}, {Name: "a"}, {Name: "b"}}
 	adding := map[string]bool{"a": true, "b": true}
 
@@ -148,6 +155,7 @@ func TestResolveAddFieldPositionsMatchesSpecOrderWhenNothingSkipped(t *testing.T
 // 只重写会执行的 add-field：被跳过的列保持原样（它根本不会被执行），
 // 其后继列则改到已执行列之后。
 func TestApplyAddFieldPositionsRewritesOnlyExecutedAddFields(t *testing.T) {
+	t.Parallel()
 	diffs := []AlterDiff{
 		{Change: crudmodel.ChangeField{Type: "add-field", OldName: "a", NewName: "a", After: "id"}, Field: crudmodel.Field{Name: "a"}, Class: DiffSafeAuto},
 		{Change: crudmodel.ChangeField{Type: "add-field", OldName: "b", NewName: "b", After: "a"}, Field: crudmodel.Field{Name: "b"}, Class: DiffRejected},

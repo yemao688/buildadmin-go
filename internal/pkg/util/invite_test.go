@@ -6,6 +6,7 @@ import (
 )
 
 func TestInviteCodeDeterministic(t *testing.T) {
+	t.Parallel()
 	secret := "test-secret"
 	id := int32(42)
 	first := InviteCode(secret, id)
@@ -19,6 +20,7 @@ func TestInviteCodeDeterministic(t *testing.T) {
 }
 
 func TestInviteCodeDistinctPerAdmin(t *testing.T) {
+	t.Parallel()
 	secret := "test-secret"
 	seen := make(map[string]struct{})
 	for id := int32(1); id <= 100; id++ {
@@ -31,6 +33,7 @@ func TestInviteCodeDistinctPerAdmin(t *testing.T) {
 }
 
 func TestInviteCodeAlphabet(t *testing.T) {
+	t.Parallel()
 	secret := "test-secret"
 	for id := int32(1); id <= 50; id++ {
 		code := InviteCode(secret, id)
@@ -43,6 +46,7 @@ func TestInviteCodeAlphabet(t *testing.T) {
 }
 
 func TestInviteCodeSecretMatters(t *testing.T) {
+	t.Parallel()
 	a := InviteCode("secret-a", 1)
 	b := InviteCode("secret-b", 1)
 	if a == b {

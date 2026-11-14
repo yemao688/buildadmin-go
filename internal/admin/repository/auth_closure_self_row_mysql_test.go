@@ -15,6 +15,7 @@ import (
 // 验证支撑 H8 的「每请求一次」闭包自引用行校验：有自引用行的管理员返回 true，
 // 没有自引用行（或 id 未知）返回 false，且在结构良好的闭包表上永不报错。
 func TestAuthRepositoryHasClosureSelfRow(t *testing.T) {
+	t.Parallel()
 	db, _ := testutil.OpenMySQL(t)
 	prefix := fmt.Sprintf("ds_h8r_%d_", os.Getpid())
 	closureTable := prefix + "admin_closure"

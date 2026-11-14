@@ -90,6 +90,7 @@ func adminDelActor(t *testing.T, id int32, unrestricted bool) data_scope.Actor {
 }
 
 func TestAdminDeleteRestrictedVisibleLeafAndRejectInvisibleSibling(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	root := f.createAdmin(t, "root")
 	actor := f.createAdmin(t, "actor")
@@ -113,6 +114,7 @@ func TestAdminDeleteRestrictedVisibleLeafAndRejectInvisibleSibling(t *testing.T)
 }
 
 func TestAdminDeleteClosureFailureRollsBackAdminAndClosure(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	actor := f.createAdmin(t, "actor")
@@ -134,6 +136,7 @@ func TestAdminDeleteClosureFailureRollsBackAdminAndClosure(t *testing.T) {
 }
 
 func TestAdminDeleteLeafTransfersFrameworkOwnerRows(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")
@@ -157,6 +160,7 @@ func TestAdminDeleteLeafTransfersFrameworkOwnerRows(t *testing.T) {
 }
 
 func TestAdminDeleteRejectsSubordinates(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	root := f.createAdmin(t, "root")
 	child := f.createAdmin(t, "child")
@@ -172,6 +176,7 @@ func TestAdminDeleteRejectsSubordinates(t *testing.T) {
 }
 
 func TestAdminDeleteTopLevelWithoutOwnedRows(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")
@@ -187,6 +192,7 @@ func TestAdminDeleteTopLevelWithoutOwnedRows(t *testing.T) {
 }
 
 func TestAdminDeleteTopLevelWithOwnedRowsRejected(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")
@@ -207,6 +213,7 @@ func TestAdminDeleteTopLevelWithOwnedRowsRejected(t *testing.T) {
 }
 
 func TestAdminDeleteRejectsDisabledReassignmentTarget(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")
@@ -233,6 +240,7 @@ func TestAdminDeleteRejectsDisabledReassignmentTarget(t *testing.T) {
 // 正常闭包下父级有下级会被子级检查先拒绝；直接改写 admin.parent_id 模拟
 // 闭包与列不一致的异常库，覆盖"父级也在删除集合"的防御分支。
 func TestAdminDeleteRejectsParentInSameBatch(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")
@@ -257,6 +265,7 @@ func TestAdminDeleteRejectsParentInSameBatch(t *testing.T) {
 }
 
 func TestAdminDeleteAggregatesTransfersPerTargetAndTable(t *testing.T) {
+	t.Parallel()
 	f := newAdminDelFixture(t)
 	f.createFrameworkOwnerTables(t)
 	root := f.createAdmin(t, "root")

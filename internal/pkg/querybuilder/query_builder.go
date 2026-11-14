@@ -128,262 +128,276 @@ func QueryBuilder(ctx *gin.Context, table TableInfo, withTables []TableInfo) (wh
 	}
 
 	// 快速搜索
-	quickSearch := queryParameter.QuickSearch
-	quickSearchField := table.QuickSearchField
-	if quickSearch != "" && quickSearchField != "" {
-		quickSearchFieldArr := strings.Split(quickSearchField, ",")
-		if len(quickSearchFieldArr) == 1 && !strings.Contains(quickSearchField, ".") {
-			// 单一本表字段：保持原输出形态（尾随空格与既有断言一致）
-			whereS += " AND " + Backquote(quickSearchField) + " LIKE ? "
-			whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
-		} else {
-			// 多字段或含点号关联字段：OR 分组。点号条目复用 SearchJoins 的
-			// EXISTS 条件（不带前导 " AND "），值在条件内部按 LIKE 一次转义
-			// 与参数化，避免这里再包 % 造成双重转义。
-			whereS += " AND ("
-			for p, v := range quickSearchFieldArr {
-				if p > 0 {
-					whereS += " or "
-				}
-				if strings.Contains(v, ".") {
-					condition, params, conditionErr := searchJoinExistsCondition(ctx, table, SearchFilter{
-						Field:    v,
-						Val:      quickSearch,
-						Operator: "LIKE",
-					})
-					if conditionErr != nil {
-						err = conditionErr
-						return
-					}
-					whereS += condition
-					whereP = append(whereP, params...)
-					continue
-				}
-				whereS += Backquote(v) + " LIKE ?  "
-				whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
-			}
-			whereS += " )"
+	if queryParameter.QuickSearch != "" && table.QuickSearchField != "" {
+		quickWhereS, quickWhereP, quickErr := qbQuickSearch(ctx, table, queryParameter.QuickSearch)
+		if quickErr != nil {
+			err = quickErr
+			return
 		}
+		whereS += quickWhereS
+		whereP = append(whereP, quickWhereP...)
 	}
 	// 排序：请求参数 order 优先，为空时回退表默认排序（生成器按 spec 填充
 	// DefaultOrder，手写仓库保持空），都没有时按主键 desc。请求参数非法
 	// 直接拒绝；默认排序非法（生成器产物，PHP 也不校验）静默回退主键
 	// desc。orderGuarantee：主排序字段不是主键时，末尾追加主键 desc，
 	// 保证同权重行分页稳定（GORM Order 支持逗号分隔多字段）。
-	orderSource := queryParameter.Order
+	orderS, err = qbOrder(ctx, table, fieldTypeMap, queryParameter.Order)
+	if err != nil {
+		return
+	}
+	// 通用搜索组装
+	searchS, searchP, searchErr := qbSearchWhere(ctx, table, fieldTypeMap, queryParameter.Search)
+	if searchErr != nil {
+		err = searchErr
+		return
+	}
+	whereS += searchS
+	whereP = append(whereP, searchP...)
+	if len(whereS) >= 5 {
+		whereS = whereS[5:]
+	}
+	return
+}
+
+// qbQuickSearch 组装快速搜索片段（含前导 " AND "），返回片段与参数。
+func qbQuickSearch(ctx *gin.Context, table TableInfo, quickSearch string) (string, []interface{}, error) {
+	whereS := ""
+	whereP := []interface{}{}
+	quickSearchField := table.QuickSearchField
+	quickSearchFieldArr := strings.Split(quickSearchField, ",")
+	if len(quickSearchFieldArr) == 1 && !strings.Contains(quickSearchField, ".") {
+		// 单一本表字段：保持原输出形态（尾随空格与既有断言一致）
+		whereS += " AND " + Backquote(quickSearchField) + " LIKE ? "
+		whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
+		return whereS, whereP, nil
+	}
+	// 多字段或含点号关联字段：OR 分组。点号条目复用 SearchJoins 的
+	// EXISTS 条件（不带前导 " AND "），值在条件内部按 LIKE 一次转义
+	// 与参数化，避免这里再包 % 造成双重转义。
+	whereS += " AND ("
+	for p, v := range quickSearchFieldArr {
+		if p > 0 {
+			whereS += " or "
+		}
+		if strings.Contains(v, ".") {
+			condition, params, conditionErr := searchJoinExistsCondition(ctx, table, SearchFilter{
+				Field:    v,
+				Val:      quickSearch,
+				Operator: "LIKE",
+			})
+			if conditionErr != nil {
+				return "", nil, conditionErr
+			}
+			whereS += condition
+			whereP = append(whereP, params...)
+			continue
+		}
+		whereS += Backquote(v) + " LIKE ?  "
+		whereP = append(whereP, "%"+strings.Replace(quickSearch, "%", "\\%", -1)+"%")
+	}
+	whereS += " )"
+	return whereS, whereP, nil
+}
+
+// qbOrder 解析排序参数：请求参数优先，为空回退表默认排序，都为空回退主键
+// desc；请求参数非法返回 BadRequest，默认排序非法静默回退主键 desc。
+func qbOrder(ctx *gin.Context, table TableInfo, fieldTypeMap map[string]string, orderSource string) (string, error) {
 	fromDefaultOrder := false
 	if orderSource == "" && table.DefaultOrder != "" {
 		orderSource = table.DefaultOrder
 		fromDefaultOrder = true
 	}
 	primaryOrder := table.TableName + "." + table.Key + " desc"
-	if orderSource != "" {
-		orderArr := strings.Split(orderSource, ",")
-		if len(orderArr) != 2 || (orderArr[1] != "asc" && orderArr[1] != "desc") {
-			if fromDefaultOrder {
-				// 默认排序非法：静默回退主键 desc（PHP 不校验 defaultSortField）
-				orderS = primaryOrder
-			} else {
-				err = cErr.BadRequest(util.Lang(ctx, "Order express error:{name}", map[string]string{
-					"name": orderSource,
-				}))
-				return
-			}
-		} else {
-			field := GetFullField(orderArr[0], table)
-			if !IsValidFieldName(field, fieldTypeMap) {
-				if fromDefaultOrder {
-					orderS = primaryOrder
-				} else {
-					err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-						"name": orderArr[0],
-					}))
-					return
-				}
-			} else {
-				orderS = field + " " + orderArr[1]
-				// orderGuarantee：主排序字段是主键（裸名或带表前缀）时
-				// 不再追加，否则末尾追加主键 desc 保证分页稳定
-				if orderArr[0] != table.Key && field != table.TableName+"."+table.Key {
-					orderS += ", " + primaryOrder
-				}
-			}
-		}
-	} else {
-		orderS = primaryOrder
+	if orderSource == "" {
+		return primaryOrder, nil
 	}
-	search := queryParameter.Search
-	// 通用搜索组装
+	orderArr := strings.Split(orderSource, ",")
+	if len(orderArr) != 2 || (orderArr[1] != "asc" && orderArr[1] != "desc") {
+		if fromDefaultOrder {
+			// 默认排序非法：静默回退主键 desc（PHP 不校验 defaultSortField）
+			return primaryOrder, nil
+		}
+		return "", cErr.BadRequest(util.Lang(ctx, "Order express error:{name}", map[string]string{
+			"name": orderSource,
+		}))
+	}
+	field := GetFullField(orderArr[0], table)
+	if !IsValidFieldName(field, fieldTypeMap) {
+		if fromDefaultOrder {
+			return primaryOrder, nil
+		}
+		return "", cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": orderArr[0],
+		}))
+	}
+	orderS := field + " " + orderArr[1]
+	// orderGuarantee：主排序字段是主键（裸名或带表前缀）时不再追加，否则
+	// 末尾追加主键 desc 保证分页稳定
+	if orderArr[0] != table.Key && field != table.TableName+"."+table.Key {
+		orderS += ", " + primaryOrder
+	}
+	return orderS, nil
+}
+
+// qbSearchWhere 逐个组装通用搜索条件，返回片段（含前导 " AND "）与参数。
+func qbSearchWhere(ctx *gin.Context, table TableInfo, fieldTypeMap map[string]string, search []SearchFilter) (string, []interface{}, error) {
+	whereS := ""
+	whereP := []interface{}{}
 	for i := 0; i < len(search); i++ {
 		if search[i].Field == "" || search[i].Val == "" || search[i].Operator == "" {
 			continue
 		}
-		// 关联字段 EXISTS 子查询搜索（点号字段，如 "admin.username"）：
-		// 由 buildSearchJoinExists 组装，条件只引用主表列，count 独立查询
-		// 天然正确；点号字段不进入下方 datetime/RANGE 等主表分支（continue
-		// 隔离），关联字段按字符串处理（对齐 PHP 不转换）。主表自带限定
-		// （alias == TableName，如 "items.name"）回退下方主表路径原样透传
-		// （改动前行为，PHP 主表别名限定同样合法）。
-		if strings.Contains(search[i].Field, ".") {
-			if alias, _, _ := strings.Cut(search[i].Field, "."); alias != table.TableName {
-				existsCond, existsParams, existsErr := buildSearchJoinExists(ctx, table, search[i])
-				if existsErr != nil {
-					err = existsErr
-					return
-				}
-				whereS += existsCond
-				whereP = append(whereP, existsParams...)
-				continue
-			}
+		fragment, params, err := qbSearchCondition(ctx, table, fieldTypeMap, search[i])
+		if err != nil {
+			return "", nil, err
 		}
-		field := GetFullField(search[i].Field, table)
-		operater := GetOperatorByAlias(search[i].Operator)
+		whereS += fragment
+		whereP = append(whereP, params...)
+	}
+	return whereS, whereP, nil
+}
 
-		//验证字段合法性
-		if !IsValidFieldName(field, fieldTypeMap) {
-			err = cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-				"name": search[i].Field,
-			}))
-			return
-		}
-		//判断是否是日期。分流语义（由 GetFieldType 决定，字段类型信息来自
-		// TableInfo.FieldTypes，生成仓库按 spec 传入）：
-		//  - GetFieldType == "datetime"（原生 SQL datetime/timestamp 列）：
-		//    字符串比较——RANGE 直接 BETWEEN 字符串，非 RANGE 直接字符串等值；
-		//  - GetFieldType == ""（int unix 时间戳列，或手写仓库 FieldTypes
-		//    为 nil 的回退）：unix 转换——RANGE 解析为 unix 时间戳，非 RANGE
-		//    同样转 unix（防止 int 列与 '2024-01-01 12:00' 原始字符串比较时
-		//    MySQL 强转出 2024 等错乱值）。
-		if search[i].Render == "datetime" {
-			isNativeDatetime := GetFieldType(search[i].Field, fieldTypeMap, table) == "datetime"
-			if search[i].Operator == "RANGE" {
-				datetimeArr := strings.Split(searchStringValue(search[i].Val), ",")
-				if len(datetimeArr) != 2 {
-					continue
-				}
-				whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
-				if isNativeDatetime {
-					// 原生 datetime 列：字符串 BETWEEN（'YYYY-MM-DD HH:mm:ss'）。
-					// 起始值保持零点语义——MySQL 对 'YYYY-MM-DD' 隐式按当天
-					// 00:00:00；结束值 len==10 时显式补 23:59:59，否则单日范围
-					// "2024-01-01,2024-01-01" 只命中零点整（与 unix 路径的
-					// parseDatetimeValue endOfDay 语义对齐）。
-					end := datetimeArr[1]
-					if len(end) == 10 {
-						end += " 23:59:59"
-					}
-					whereP = append(whereP, datetimeArr[0], end)
-				} else {
-					// int unix 时间戳列：解析后转 unix；起始值按当天零点，
-					// len==10 的结束值补 23:59:59（单日范围
-					// "2024-01-01,2024-01-01" 需命中整天而非零点整）
-					whereP = append(whereP, parseDatetimeValue(datetimeArr[0], false), parseDatetimeValue(datetimeArr[1], true))
-				}
-				continue
-			}
-			// 非 RANGE（eq 等）操作符
-			if isNativeDatetime {
-				// 原生 datetime 列：字符串等值
-				whereS += " AND " + Backquote(field) + " = ? "
-				whereP = append(whereP, search[i].Val)
-			} else {
-				// int unix 时间戳列：转 unix 后再比较（原实现直传原始字符串，
-				// MySQL 会把 '2024-01-01 12:00' 强转成 2024 导致错乱匹配）
-				whereS += " AND " + Backquote(field) + " = ? "
-				whereP = append(whereP, parseDatetimeValue(searchStringValue(search[i].Val), false))
-			}
-			continue
-		}
-
-		//范围查询
-		if search[i].Operator == "RANGE" || search[i].Operator == "NOT RANGE" {
-			// 重新确定操作符
-			if strings.HasPrefix(searchStringValue(search[i].Val), ",") {
-				if search[i].Operator == "RANGE" {
-					whereS += " AND " + Backquote(field) + " <= ?"
-				} else {
-					whereS += " AND " + Backquote(field) + " > "
-				}
-				whereP = append(whereP, strings.Trim(searchStringValue(search[i].Val), ","))
-			} else if strings.HasSuffix(searchStringValue(search[i].Val), ",") {
-				if search[i].Operator == "RANGE" {
-					whereS += " AND " + Backquote(field) + " >= ?"
-				} else {
-					whereS += " AND " + Backquote(field) + " < "
-				}
-				whereP = append(whereP, strings.Trim(searchStringValue(search[i].Val), ","))
-			} else {
-				if search[i].Operator == "RANGE" {
-					whereS += " AND " + Backquote(field) + " BETWEEN ? AND ? "
-				} else {
-					whereS += " AND " + Backquote(field) + " NOT BETWEEN ? AND ? "
-				}
-				dataArr := strings.Split(searchStringValue(search[i].Val), ",")
-				whereP = append(whereP, dataArr[0], dataArr[1])
-			}
-			continue
-		}
-
-		switch operater {
-		case "=":
-			fallthrough
-		case "<>":
-			whereS += " AND " + Backquote(field) + " " + operater + " ? "
-			whereP = append(whereP, search[i].Val)
-		case "LIKE":
-			fallthrough
-		case "NOT LIKE":
-			whereS += " AND " + Backquote(field) + " " + operater + " ? "
-			whereP = append(whereP, "%"+strings.Replace(searchStringValue(search[i].Val), "%", "\\%", -1)+"%")
-		case ">":
-			fallthrough
-		case ">=":
-			fallthrough
-		case "<":
-			fallthrough
-		case "<=":
-			whereS += " AND " + Backquote(field) + " " + operater + " ? "
-			if strValue, ok := search[i].Val.(string); ok {
-				num, _ := strconv.Atoi(strValue)
-				whereP = append(whereP, num)
-			} else {
-				whereP = append(whereP, search[i].Val)
-			}
-		case "FIND_IN_SET":
-			if sets, ok := search[i].Val.([]string); ok {
-				for _, v := range sets {
-					whereS += " AND " + operater + "( ? ," + Backquote(field) + ")>0 "
-					whereP = append(whereP, v)
-				}
-			} else {
-				whereS += " AND " + operater + "( ? ," + Backquote(field) + ")>0 "
-				whereP = append(whereP, search[i].Val)
-			}
-		case "IN":
-			fallthrough
-		case "NOT IN":
-			whereS += " AND " + Backquote(field) + " " + operater + " ? "
-			if strValue, ok := search[i].Val.(string); ok {
-				strArr := strings.Split(strValue, ",")
-				whereP = append(whereP, strArr)
-			} else {
-				whereP = append(whereP, search[i].Val)
-			}
-		case "NULL":
-			fallthrough
-		case "NOT NULL":
-			whereS += " AND " + Backquote(field) + " IS " + operater
-		default:
-			err = cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
-				"name": operater,
-			}))
-			return
+// qbSearchCondition 按单个搜索项分流：关联 EXISTS、主表 datetime、主表
+// RANGE/操作符。返回片段与参数；空片段表示该搜索项被跳过（原 continue）。
+func qbSearchCondition(ctx *gin.Context, table TableInfo, fieldTypeMap map[string]string, filter SearchFilter) (string, []interface{}, error) {
+	// 关联字段 EXISTS 子查询搜索（点号字段，如 "admin.username"）：由
+	// buildSearchJoinExists 组装，条件只引用主表列，count 独立查询天然正确；
+	// 点号字段不进入 datetime/RANGE 等主表分支，关联字段按字符串处理（对齐
+	// PHP 不转换）。主表自带限定（alias == TableName）回退主表路径原样透传
+	// （改动前行为，PHP 主表别名限定同样合法）。
+	if strings.Contains(filter.Field, ".") {
+		if alias, _, _ := strings.Cut(filter.Field, "."); alias != table.TableName {
+			return buildSearchJoinExists(ctx, table, filter)
 		}
 	}
-	if len(whereS) >= 5 {
-		whereS = whereS[5:]
+	field := GetFullField(filter.Field, table)
+	//验证字段合法性
+	if !IsValidFieldName(field, fieldTypeMap) {
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": filter.Field,
+		}))
 	}
-	return
+	//判断是否是日期。分流语义（由 GetFieldType 决定，字段类型信息来自
+	// TableInfo.FieldTypes，生成仓库按 spec 传入）：
+	//  - GetFieldType == "datetime"（原生 SQL datetime/timestamp 列）：
+	//    字符串比较——RANGE 直接 BETWEEN 字符串，非 RANGE 直接字符串等值；
+	//  - GetFieldType == ""（int unix 时间戳列，或手写仓库 FieldTypes
+	//    为 nil 的回退）：unix 转换——RANGE 解析为 unix 时间戳，非 RANGE
+	//    同样转 unix（防止 int 列与 '2024-01-01 12:00' 原始字符串比较时
+	//    MySQL 强转出 2024 等错乱值）。
+	if filter.Render == "datetime" {
+		return qbDatetimeCondition(table, fieldTypeMap, field, filter)
+	}
+	operater := GetOperatorByAlias(filter.Operator)
+	//范围查询
+	if filter.Operator == "RANGE" || filter.Operator == "NOT RANGE" {
+		return qbRangeCondition(field, filter)
+	}
+	return qbOperatorCondition(ctx, field, operater, filter.Val)
+}
+
+// qbDatetimeCondition 组装 datetime 搜索条件：原生 datetime 列走字符串
+// 比较，int unix 时间戳列（或类型信息缺失）走 unix 转换。RANGE 双值非法
+// （非两个值）时返回空片段（原 continue）。
+func qbDatetimeCondition(table TableInfo, fieldTypeMap map[string]string, field string, filter SearchFilter) (string, []interface{}, error) {
+	isNativeDatetime := GetFieldType(filter.Field, fieldTypeMap, table) == "datetime"
+	if filter.Operator == "RANGE" {
+		datetimeArr := strings.Split(searchStringValue(filter.Val), ",")
+		if len(datetimeArr) != 2 {
+			return "", nil, nil
+		}
+		whereS := " AND " + Backquote(field) + " BETWEEN ? AND ? "
+		if isNativeDatetime {
+			// 原生 datetime 列：字符串 BETWEEN（'YYYY-MM-DD HH:mm:ss'）。
+			// 起始值保持零点语义——MySQL 对 'YYYY-MM-DD' 隐式按当天
+			// 00:00:00；结束值 len==10 时显式补 23:59:59，否则单日范围
+			// "2024-01-01,2024-01-01" 只命中零点整（与 unix 路径的
+			// parseDatetimeValue endOfDay 语义对齐）。
+			end := datetimeArr[1]
+			if len(end) == 10 {
+				end += " 23:59:59"
+			}
+			return whereS, []interface{}{datetimeArr[0], end}, nil
+		}
+		// int unix 时间戳列：解析后转 unix；起始值按当天零点，len==10 的
+		// 结束值补 23:59:59（单日范围 "2024-01-01,2024-01-01" 需命中整天
+		// 而非零点整）
+		return whereS, []interface{}{parseDatetimeValue(datetimeArr[0], false), parseDatetimeValue(datetimeArr[1], true)}, nil
+	}
+	// 非 RANGE（eq 等）操作符
+	whereS := " AND " + Backquote(field) + " = ? "
+	if isNativeDatetime {
+		// 原生 datetime 列：字符串等值
+		return whereS, []interface{}{filter.Val}, nil
+	}
+	// int unix 时间戳列：转 unix 后再比较（原实现直传原始字符串，MySQL 会
+	// 把 '2024-01-01 12:00' 强转成 2024 导致错乱匹配）
+	return whereS, []interface{}{parseDatetimeValue(searchStringValue(filter.Val), false)}, nil
+}
+
+// qbRangeCondition 组装主表 RANGE/NOT RANGE 条件：逗号前缀为开区间、后缀
+// 为闭区间、否则双值 BETWEEN。
+func qbRangeCondition(field string, filter SearchFilter) (string, []interface{}, error) {
+	valStr := searchStringValue(filter.Val)
+	if strings.HasPrefix(valStr, ",") {
+		if filter.Operator == "RANGE" {
+			return " AND " + Backquote(field) + " <= ?", []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		return " AND " + Backquote(field) + " > ", []interface{}{strings.Trim(valStr, ",")}, nil
+	}
+	if strings.HasSuffix(valStr, ",") {
+		if filter.Operator == "RANGE" {
+			return " AND " + Backquote(field) + " >= ?", []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		return " AND " + Backquote(field) + " < ", []interface{}{strings.Trim(valStr, ",")}, nil
+	}
+	dataArr := strings.Split(valStr, ",")
+	if filter.Operator == "RANGE" {
+		return " AND " + Backquote(field) + " BETWEEN ? AND ? ", []interface{}{dataArr[0], dataArr[1]}, nil
+	}
+	return " AND " + Backquote(field) + " NOT BETWEEN ? AND ? ", []interface{}{dataArr[0], dataArr[1]}, nil
+}
+
+// qbOperatorCondition 按解析后的操作符组装主表条件。
+func qbOperatorCondition(ctx *gin.Context, field string, operater string, val interface{}) (string, []interface{}, error) {
+	whereS := " AND " + Backquote(field)
+	switch operater {
+	case "=", "<>":
+		return whereS + " " + operater + " ? ", []interface{}{val}, nil
+	case "LIKE", "NOT LIKE":
+		return whereS + " " + operater + " ? ", []interface{}{
+			"%" + strings.Replace(searchStringValue(val), "%", "\\%", -1) + "%",
+		}, nil
+	case ">", ">=", "<", "<=":
+		if strValue, ok := val.(string); ok {
+			num, _ := strconv.Atoi(strValue)
+			return whereS + " " + operater + " ? ", []interface{}{num}, nil
+		}
+		return whereS + " " + operater + " ? ", []interface{}{val}, nil
+	case "FIND_IN_SET":
+		if sets, ok := val.([]string); ok {
+			fragment := ""
+			params := make([]interface{}, 0, len(sets))
+			for _, v := range sets {
+				fragment += " AND " + operater + "( ? ," + Backquote(field) + ")>0 "
+				params = append(params, v)
+			}
+			return fragment, params, nil
+		}
+		return whereS + " AND " + operater + "( ? ," + Backquote(field) + ")>0 ", []interface{}{val}, nil
+	case "IN", "NOT IN":
+		if strValue, ok := val.(string); ok {
+			return whereS + " " + operater + " ? ", []interface{}{strings.Split(strValue, ",")}, nil
+		}
+		return whereS + " " + operater + " ? ", []interface{}{val}, nil
+	case "NULL", "NOT NULL":
+		return whereS + " IS " + operater, nil, nil
+	default:
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
+			"name": operater,
+		}))
+	}
 }
 
 // searchStringValue 取搜索值并断言为字符串。RANGE/LIKE 等分支的载荷按契约
@@ -423,33 +437,9 @@ func buildSearchJoinExists(ctx *gin.Context, table TableInfo, filter SearchFilte
 // " AND " 的 EXISTS 条件：quickSearch 的 OR 分组（`a` LIKE ? or EXISTS (...)）
 // 需要裸片段自行拼接。错误与参数契约与包装函数一致。
 func searchJoinExistsCondition(ctx *gin.Context, table TableInfo, filter SearchFilter) (string, []interface{}, error) {
-	// 拆分为 alias 与 fieldName；再含 "."（多层点号 a.b.c）直接拒绝
-	parts := strings.SplitN(filter.Field, ".", 2)
-	if len(parts) != 2 || strings.Contains(parts[1], ".") {
-		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-			"name": filter.Field,
-		}))
-	}
-	alias, fieldName := parts[0], parts[1]
-	// 在 SearchJoins 中查找 alias；找不到（含手写仓库保持空的场景）返回
-	// 400，避免落入 unknown table 的歧义路径
-	var join *SearchJoin
-	for i := range table.SearchJoins {
-		if table.SearchJoins[i].Alias == alias {
-			join = &table.SearchJoins[i]
-			break
-		}
-	}
-	if join == nil {
-		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-			"name": filter.Field,
-		}))
-	}
-	// 关联字段名合法性（正则防注入）
-	if !IsValidFieldName(fieldName, nil) {
-		return "", nil, cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
-			"name": filter.Field,
-		}))
+	join, fieldName, err := sjResolveJoin(ctx, table, filter.Field)
+	if err != nil {
+		return "", nil, err
 	}
 	// 关联列（joinColumn）与 EXISTS 骨架：主表外键列 = 关联表主键列，
 	// 条件只引用主表列，count 独立查询天然正确
@@ -476,54 +466,99 @@ func searchJoinExistsCondition(ctx *gin.Context, table TableInfo, filter SearchF
 		}
 		return exists(joinColumn + " " + operater + " ?"), []interface{}{filter.Val}, nil
 	case "RANGE", "NOT RANGE":
-		// 逗号前后缀语义与主表 RANGE 分支一致：",x" 开区间（RANGE <= x /
-		// NOT RANGE > x）、"x," 闭区间（RANGE >= x / NOT RANGE < x）、
-		// 双值 BETWEEN / NOT BETWEEN
-		valStr := searchStringValue(filter.Val)
-		if strings.HasPrefix(valStr, ",") {
-			if operater == "RANGE" {
-				return exists(joinColumn + " <= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
-			}
-			return exists(joinColumn + " > ?"), []interface{}{strings.Trim(valStr, ",")}, nil
-		}
-		if strings.HasSuffix(valStr, ",") {
-			if operater == "RANGE" {
-				return exists(joinColumn + " >= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
-			}
-			return exists(joinColumn + " < ?"), []interface{}{strings.Trim(valStr, ",")}, nil
-		}
-		// 双值形态：Split 后必须恰好两个值（无逗号或多余逗号都视为参数
-		// 非法返回 400——否则 dataArr[1] 越界 panic 被 gin recovery 转 500）
-		dataArr := strings.Split(valStr, ",")
-		if len(dataArr) != 2 {
-			return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
-				"name": filter.Field,
-			}))
-		}
-		if operater == "RANGE" {
-			return exists(joinColumn + " BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
-		}
-		return exists(joinColumn + " NOT BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
+		return sjExistsRange(ctx, exists, joinColumn, operater, filter)
 	case "NULL", "NOT NULL":
 		return exists(joinColumn + " IS " + operater), nil, nil
 	case "FIND_IN_SET":
-		// 与主表 FIND_IN_SET 分支一致：[]string 逐值各生成一条 EXISTS（多条
-		// 之间用 AND 连接），单值原样绑定
-		if sets, ok := filter.Val.([]string); ok {
-			conditions := make([]string, 0, len(sets))
-			params := make([]interface{}, 0, len(sets))
-			for _, v := range sets {
-				conditions = append(conditions, exists(operater+"( ? ,"+joinColumn+")>0"))
-				params = append(params, v)
-			}
-			return strings.Join(conditions, " AND "), params, nil
-		}
-		return exists(operater + "( ? ," + joinColumn + ")>0"), []interface{}{filter.Val}, nil
+		return sjExistsFindInSet(exists, joinColumn, operater, filter.Val)
 	default:
 		return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
 			"name": operater,
 		}))
 	}
+}
+
+// sjResolveJoin 把点号字段拆成 alias 与字段名，并在 SearchJoins 中查找
+// alias、校验字段名合法性；任何一步失败都返回 BadRequest。
+func sjResolveJoin(ctx *gin.Context, table TableInfo, field string) (*SearchJoin, string, error) {
+	// 拆分为 alias 与 fieldName；再含 "."（多层点号 a.b.c）直接拒绝
+	parts := strings.SplitN(field, ".", 2)
+	if len(parts) != 2 || strings.Contains(parts[1], ".") {
+		return nil, "", cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": field,
+		}))
+	}
+	alias, fieldName := parts[0], parts[1]
+	// 在 SearchJoins 中查找 alias；找不到（含手写仓库保持空的场景）返回
+	// 400，避免落入 unknown table 的歧义路径
+	var join *SearchJoin
+	for i := range table.SearchJoins {
+		if table.SearchJoins[i].Alias == alias {
+			join = &table.SearchJoins[i]
+			break
+		}
+	}
+	if join == nil {
+		return nil, "", cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": field,
+		}))
+	}
+	// 关联字段名合法性（正则防注入）
+	if !IsValidFieldName(fieldName, nil) {
+		return nil, "", cErr.BadRequest(util.Lang(ctx, "Not found field:{name}", map[string]string{
+			"name": field,
+		}))
+	}
+	return join, fieldName, nil
+}
+
+// sjExistsRange 组装关联字段 RANGE/NOT RANGE 的 EXISTS 条件：逗号前缀为开
+// 区间、后缀为闭区间、双值 BETWEEN；双值非恰好两个时返回 BadRequest。
+func sjExistsRange(ctx *gin.Context, exists func(string) string, joinColumn, operater string, filter SearchFilter) (string, []interface{}, error) {
+	// 逗号前后缀语义与主表 RANGE 分支一致：",x" 开区间（RANGE <= x /
+	// NOT RANGE > x）、"x," 闭区间（RANGE >= x / NOT RANGE < x）、
+	// 双值 BETWEEN / NOT BETWEEN
+	valStr := searchStringValue(filter.Val)
+	if strings.HasPrefix(valStr, ",") {
+		if operater == "RANGE" {
+			return exists(joinColumn + " <= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		return exists(joinColumn + " > ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+	}
+	if strings.HasSuffix(valStr, ",") {
+		if operater == "RANGE" {
+			return exists(joinColumn + " >= ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+		}
+		return exists(joinColumn + " < ?"), []interface{}{strings.Trim(valStr, ",")}, nil
+	}
+	// 双值形态：Split 后必须恰好两个值（无逗号或多余逗号都视为参数
+	// 非法返回 400——否则 dataArr[1] 越界 panic 被 gin recovery 转 500）
+	dataArr := strings.Split(valStr, ",")
+	if len(dataArr) != 2 {
+		return "", nil, cErr.BadRequest(util.Lang(ctx, "Where express error:{name}", map[string]string{
+			"name": filter.Field,
+		}))
+	}
+	if operater == "RANGE" {
+		return exists(joinColumn + " BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
+	}
+	return exists(joinColumn + " NOT BETWEEN ? AND ?"), []interface{}{dataArr[0], dataArr[1]}, nil
+}
+
+// sjExistsFindInSet 组装关联字段 FIND_IN_SET 的 EXISTS 条件：[]string 逐值
+// 各生成一条 EXISTS（多条之间用 AND 连接），单值原样绑定。
+func sjExistsFindInSet(exists func(string) string, joinColumn, operater string, val interface{}) (string, []interface{}, error) {
+	// 与主表 FIND_IN_SET 分支一致
+	if sets, ok := val.([]string); ok {
+		conditions := make([]string, 0, len(sets))
+		params := make([]interface{}, 0, len(sets))
+		for _, v := range sets {
+			conditions = append(conditions, exists(operater+"( ? ,"+joinColumn+")>0"))
+			params = append(params, v)
+		}
+		return strings.Join(conditions, " AND "), params, nil
+	}
+	return exists(operater + "( ? ," + joinColumn + ")>0"), []interface{}{val}, nil
 }
 
 // 获取结构体所有字段类型：从 TableInfo.FieldTypes 构建，键形如

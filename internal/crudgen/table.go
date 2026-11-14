@@ -51,73 +51,16 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 	if err := data_scope.ValidateIdentifier(fullTableName); err != nil {
 		return err
 	}
-	comment := table.Comment
 	if db.Migrator().HasTable(fullTableName) {
-		//更新表
-		// 注释已一致时跳过 ALTER：每次 apply 无条件改表注释会在每次启动都取一次
-		// MDL，线上大表因此出现无谓的锁等待。读不到当前注释就照常执行（fail-open，
-		// 优化不得改变行为）。
-		if !tableCommentUnchanged(db, fullTableName, comment) {
-			if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
-				return err
-			}
-		}
-		designChange := table.DesignChange
-		if len(designChange) == 0 {
-			pk := getPk(fields)
-			ownerCol := resolveOwnerColumn(table.DataScope, fields)
-			return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
-		}
-		for _, v := range designChange {
-			if !v.Sync {
-				continue
-			}
-
-			if v.Type == "change-field-attr" {
-				columnExists, err := hasColumn(db, fullTableName, v.OldName)
-				if err != nil {
-					return err
-				}
-				if !columnExists {
-					return cErr.BadRequest(v.OldName + " not exist")
-				}
-				oldField := searchField(fields, v.OldName)
-				fieldData, err := getDDlFieldData(oldField)
-				if err != nil {
-					return err
-				}
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + trimDDLFragment(fieldData)).Error; err != nil {
-					return err
-				}
-
-			} else if v.Type == "add-field" {
-				columnExists, err := hasColumn(db, fullTableName, v.NewName)
-				if err != nil {
-					return err
-				}
-				if columnExists {
-					return cErr.BadRequest(v.NewName + " is exist")
-				}
-
-				newField := searchField(fields, v.NewName)
-				fieldData, err := getDDlFieldData(newField)
-				if err != nil {
-					return err
-				}
-				if err := db.Exec("ALTER TABLE `" + fullTableName + "` ADD " + trimDDLFragment(fieldData) + columnPositionClause(v.After)).Error; err != nil {
-					return err
-				}
-			}
-		}
-	} else {
-		//创建表
-		ddl, err := createTableDDL(fullTableName, table, fields)
-		if err != nil {
-			return err
-		}
-		if err := db.Exec(ddl).Error; err != nil {
-			return err
-		}
+		return updateTableDesign(db, fullTableName, table, fields)
+	}
+	//创建表
+	ddl, err := createTableDDL(fullTableName, table, fields)
+	if err != nil {
+		return err
+	}
+	if err := db.Exec(ddl).Error; err != nil {
+		return err
 	}
 	// Ensure a data-scope index exists whenever the resolved owner column is
 	// not the primary key. This makes the generated DDL self-consistent with
@@ -125,6 +68,73 @@ func HandleTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table,
 	pk := getPk(fields)
 	ownerCol := resolveOwnerColumn(table.DataScope, fields)
 	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+}
+
+// updateTableDesign 同步既有表的注释与 designChange 列变更，并在末尾补齐
+// data-scope 索引；无 designChange 时直接返回索引补齐结果（与历史行为一致，
+// 不重复建索引）。
+func updateTableDesign(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) error {
+	comment := table.Comment
+	//更新表
+	// 注释已一致时跳过 ALTER：每次 apply 无条件改表注释会在每次启动都取一次
+	// MDL，线上大表因此出现无谓的锁等待。读不到当前注释就照常执行（fail-open，
+	// 优化不得改变行为）。
+	if !tableCommentUnchanged(db, fullTableName, comment) {
+		if err := db.Exec("ALTER TABLE `" + fullTableName + "` COMMENT = '" + escapeSQLString(comment) + "'").Error; err != nil {
+			return err
+		}
+	}
+	designChange := table.DesignChange
+	if len(designChange) == 0 {
+		pk := getPk(fields)
+		ownerCol := resolveOwnerColumn(table.DataScope, fields)
+		return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+	}
+	for _, change := range designChange {
+		if !change.Sync {
+			continue
+		}
+		if err := applyDesignChangeEntry(db, fullTableName, change, fields); err != nil {
+			return err
+		}
+	}
+	pk := getPk(fields)
+	ownerCol := resolveOwnerColumn(table.DataScope, fields)
+	return EnsureDataScopeIndex(db, fullTableName, ownerCol, pk)
+}
+
+func applyDesignChangeEntry(db *gorm.DB, fullTableName string, change crudmodel.ChangeField, fields []crudmodel.Field) error {
+	switch change.Type {
+	case "change-field-attr":
+		columnExists, err := hasColumn(db, fullTableName, change.OldName)
+		if err != nil {
+			return err
+		}
+		if !columnExists {
+			return cErr.BadRequest(change.OldName + " not exist")
+		}
+		oldField := searchField(fields, change.OldName)
+		fieldData, err := getDDlFieldData(oldField)
+		if err != nil {
+			return err
+		}
+		return db.Exec("ALTER TABLE `" + fullTableName + "` MODIFY " + trimDDLFragment(fieldData)).Error
+	case "add-field":
+		columnExists, err := hasColumn(db, fullTableName, change.NewName)
+		if err != nil {
+			return err
+		}
+		if columnExists {
+			return cErr.BadRequest(change.NewName + " is exist")
+		}
+		newField := searchField(fields, change.NewName)
+		fieldData, err := getDDlFieldData(newField)
+		if err != nil {
+			return err
+		}
+		return db.Exec("ALTER TABLE `" + fullTableName + "` ADD " + trimDDLFragment(fieldData) + columnPositionClause(change.After)).Error
+	}
+	return nil
 }
 
 func createTableDDL(fullTableName string, table crudmodel.Table, fields []crudmodel.Field) (string, error) {
@@ -325,35 +335,10 @@ func getDDlFieldData(field crudmodel.Field) (string, error) {
 
 	if field.DefaultType != "" {
 		// 优先按上游 defaultType 语义生成默认值子句
-		switch field.DefaultType {
-		case "EMPTY STRING":
-			if !noDefaultValueType(dateType) {
-				fieldTemplData.DefaultValue = "DEFAULT ''"
-			}
-		case "NULL":
-			if !noDefaultValueType(dateType) {
-				fieldTemplData.DefaultValue = "DEFAULT NULL"
-			}
-		case "INPUT":
-			if !noDefaultValueType(dateType) {
-				fieldTemplData.DefaultValue = formatDefault(field.Default)
-			}
-		case "NONE":
-			fieldTemplData.DefaultValue = ""
-		}
+		fieldTemplData.DefaultValue = ddlExplicitDefaultValue(field, dateType)
 	} else if field.Default != "" && field.Default != "none" {
 		// 兼容旧的哨兵值写法(无 defaultType 的场景)
-		if field.Default == "empty string" {
-			if !noDefaultValueType(dateType) {
-				fieldTemplData.DefaultValue = "DEFAULT ''"
-			}
-		} else if field.Default == "null" {
-			if !noDefaultValueType(dateType) {
-				fieldTemplData.DefaultValue = "DEFAULT NULL"
-			}
-		} else {
-			fieldTemplData.DefaultValue = formatDefault(field.Default)
-		}
+		fieldTemplData.DefaultValue = ddlLegacyDefaultValue(field, dateType)
 	}
 
 	if field.AutoIncrement && field.PrimaryKey {
@@ -373,6 +358,42 @@ func getDDlFieldData(field crudmodel.Field) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func ddlExplicitDefaultValue(field crudmodel.Field, dateType string) string {
+	switch field.DefaultType {
+	case "EMPTY STRING":
+		if !noDefaultValueType(dateType) {
+			return "DEFAULT ''"
+		}
+	case "NULL":
+		if !noDefaultValueType(dateType) {
+			return "DEFAULT NULL"
+		}
+	case "INPUT":
+		if !noDefaultValueType(dateType) {
+			return formatDefault(field.Default)
+		}
+	case "NONE":
+		return ""
+	}
+	return ""
+}
+
+func ddlLegacyDefaultValue(field crudmodel.Field, dateType string) string {
+	switch field.Default {
+	case "empty string":
+		if !noDefaultValueType(dateType) {
+			return "DEFAULT ''"
+		}
+	case "null":
+		if !noDefaultValueType(dateType) {
+			return "DEFAULT NULL"
+		}
+	default:
+		return formatDefault(field.Default)
+	}
+	return ""
 }
 
 var noDefaultValueTypes = map[string]bool{

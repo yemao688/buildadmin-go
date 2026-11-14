@@ -37,6 +37,7 @@ func writeSyncSpec(t *testing.T, specsDir, name, parent, byColumn string) {
 // t.Skip）：构造 parent/child 表与不一致行，验证 runCascadeJob 按规格 SQL
 // 修复、幂等且不触碰已一致/无主记录的行（归属列固定 admin_id）。
 func TestRunCascadeJobReconcilesMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_cascade_sync_test_"
 	cfg.Database.Prefix = prefix
@@ -103,6 +104,7 @@ func TestRunCascadeJobReconcilesMySQL(t *testing.T) {
 // 只建子表不建父表，runCascadeJob 必须在执行 UPDATE 之前 fail-closed 报错，
 // 错误包含 "missing"、父表名与子表名。
 func TestRunCascadeJobMissingParentMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_cascade_missing_"
 	cfg.Database.Prefix = prefix
@@ -134,6 +136,7 @@ func TestRunCascadeJobMissingParentMySQL(t *testing.T) {
 // 验证指定 table 参数在无任何子表
 // spec 声明 inheritFrom 指向它时报错退出（临时 specs 目录为空）。
 func TestCascadeHandlerSyncInvalidTargetMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	cfg.Database.Prefix = "ba_cascade_sync_miss_"
 
@@ -154,6 +157,7 @@ func TestCascadeHandlerSyncInvalidTargetMySQL(t *testing.T) {
 // 1146——父表缺失是声明悬空（fail-closed 报错），子表缺失同样明确报错。
 // 健康模块 user_ok 正常对账。
 func TestCascadeSyncSkipsMissingTablesMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_cascade_sync_del_"
 	cfg.Database.Prefix = prefix
@@ -224,10 +228,55 @@ func TestCascadeSyncSkipsMissingTablesMySQL(t *testing.T) {
 // 声明 inheritFrom user，带不一致行。验证：全量 cascade:sync 两个子表都
 // 修复；指定 cascade:sync user 同样修复两表；无声明表指定时报错退出。
 func TestCascadeSyncInheritFromAggregationMySQL(t *testing.T) {
+	t.Parallel()
 	db, cfg := testutil.OpenMySQL(t)
 	prefix := "ba_cascade_sync_agg_"
 	cfg.Database.Prefix = prefix
 
+	prepareCascadeAggFixture(t, db, prefix)
+
+	h := &CascadeHandler{db: db, config: cfg, specsDir: t.TempDir()}
+	writeSyncSpec(t, h.specsDir, "user_money_log", "user", "user_id")
+	writeSyncSpec(t, h.specsDir, "order_recharge", "user", "user_id")
+
+	// 全量：两个子表都修复。
+	var buf bytes.Buffer
+	cmd := mustCobraCommand(t)
+	cmd.SetOut(&buf)
+	if err := h.Sync(cmd, nil); err != nil {
+		t.Fatalf("full cascade:sync error: %v", err)
+	}
+	assertOutputContainsAll(t, "full sync", buf.String(), []string{
+		prefix + "user → " + prefix + "user_money_log via user_id",
+		prefix + "user → " + prefix + "order_recharge via user_id",
+		prefix + "user_money_log: 2 rows reconciled",
+		prefix + "order_recharge: 1 rows reconciled",
+		"reconciled 3 rows across 2 tables",
+	})
+	assertNoInconsistentCascadeRows(t, db, prefix, "user", []string{"user_money_log", "order_recharge"})
+
+	// 重置为不一致，指定 cascade:sync user 同样修复两表。
+	resetCascadeAggRows(t, db, prefix)
+	buf.Reset()
+	if err := h.Sync(cmd, []string{"user"}); err != nil {
+		t.Fatalf("targeted cascade:sync user error: %v", err)
+	}
+	assertOutputContainsAll(t, "targeted sync", buf.String(), []string{
+		prefix + "user_money_log: 3 rows reconciled",
+		prefix + "order_recharge: 2 rows reconciled",
+	})
+	assertNoInconsistentCascadeRows(t, db, prefix, "user", []string{"user_money_log", "order_recharge"})
+
+	// 无声明表指定 → 报错退出。
+	if err := h.Sync(mustCobraCommand(t), []string{"no_such_parent"}); err == nil {
+		t.Fatal("targeted cascade:sync no_such_parent: error = nil, want error")
+	}
+}
+
+// prepareCascadeAggFixture 建 parent + 两个子表的临时表并写入带不一致行，
+// 注册清理自行删除这些表。
+func prepareCascadeAggFixture(t *testing.T, db *gorm.DB, prefix string) {
+	t.Helper()
 	tables := []string{"user", "user_money_log", "order_recharge"}
 	for _, table := range tables {
 		if err := db.Exec("DROP TABLE IF EXISTS `" + prefix + table + "`").Error; err != nil {
@@ -261,53 +310,26 @@ func TestCascadeSyncInheritFromAggregationMySQL(t *testing.T) {
 	if err := db.Exec("INSERT INTO `" + prefix + "order_recharge` (`id`, `user_id`, `admin_id`) VALUES (1, 1, 77), (2, 2, 20)").Error; err != nil {
 		t.Fatal(err)
 	}
+}
 
-	h := &CascadeHandler{db: db, config: cfg, specsDir: t.TempDir()}
-	writeSyncSpec(t, h.specsDir, "user_money_log", "user", "user_id")
-	writeSyncSpec(t, h.specsDir, "order_recharge", "user", "user_id")
-
-	// 全量：两个子表都修复。
-	var buf bytes.Buffer
-	cmd := mustCobraCommand(t)
-	cmd.SetOut(&buf)
-	if err := h.Sync(cmd, nil); err != nil {
-		t.Fatalf("full cascade:sync error: %v", err)
-	}
-	output := buf.String()
-	for _, want := range []string{
-		prefix + "user → " + prefix + "user_money_log via user_id",
-		prefix + "user → " + prefix + "order_recharge via user_id",
-		prefix + "user_money_log: 2 rows reconciled",
-		prefix + "order_recharge: 1 rows reconciled",
-		"reconciled 3 rows across 2 tables",
-	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("full sync output missing %q:\n%s", want, output)
-		}
-	}
-	assertNoInconsistentCascadeRows(t, db, prefix, "user", []string{"user_money_log", "order_recharge"})
-
-	// 重置为不一致，指定 cascade:sync user 同样修复两表。
+// resetCascadeAggRows 把两个子表的 admin_id 批量改回不一致值。
+func resetCascadeAggRows(t *testing.T, db *gorm.DB, prefix string) {
+	t.Helper()
 	if err := db.Exec("UPDATE `" + prefix + "user_money_log` SET `admin_id` = 1234").Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Exec("UPDATE `" + prefix + "order_recharge` SET `admin_id` = 4321").Error; err != nil {
 		t.Fatal(err)
 	}
-	buf.Reset()
-	if err := h.Sync(cmd, []string{"user"}); err != nil {
-		t.Fatalf("targeted cascade:sync user error: %v", err)
-	}
-	output = buf.String()
-	if !strings.Contains(output, prefix+"user_money_log: 3 rows reconciled") ||
-		!strings.Contains(output, prefix+"order_recharge: 2 rows reconciled") {
-		t.Fatalf("targeted sync output unexpected:\n%s", output)
-	}
-	assertNoInconsistentCascadeRows(t, db, prefix, "user", []string{"user_money_log", "order_recharge"})
+}
 
-	// 无声明表指定 → 报错退出。
-	if err := h.Sync(mustCobraCommand(t), []string{"no_such_parent"}); err == nil {
-		t.Fatal("targeted cascade:sync no_such_parent: error = nil, want error")
+// assertOutputContainsAll 断言输出包含所有期望片段（label 只用于失败信息）。
+func assertOutputContainsAll(t *testing.T, label, output string, wants []string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(output, want) {
+			t.Fatalf("%s output missing %q:\n%s", label, want, output)
+		}
 	}
 }
 

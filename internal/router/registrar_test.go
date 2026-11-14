@@ -22,6 +22,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+//nolint:paralleltest // InitRouter 写 pkg/route 进程级路由快照，并行会互相覆盖
 func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testing.T) {
 	engine := newCompleteRouter()
 
@@ -39,6 +40,7 @@ func TestInitRouterCountryRegistrarRoutesAreCollectedWithoutDuplicates(t *testin
 	}
 }
 
+//nolint:paralleltest // InitRouter 写 pkg/route 进程级路由快照，并行会互相覆盖
 func TestInitRouterReplacesCollectedRoutesOnReinitialization(t *testing.T) {
 	newCompleteRouter()
 
@@ -59,6 +61,7 @@ func TestInitRouterReplacesCollectedRoutesOnReinitialization(t *testing.T) {
 	require.Equal(t, want, collectedRoutes)
 }
 
+//nolint:paralleltest // InitRouter 写 pkg/route 进程级路由快照，并行会互相覆盖
 func TestRegistrarCapabilitiesMatchRegisteredRoutes(t *testing.T) {
 	engine := newCompleteRouter()
 

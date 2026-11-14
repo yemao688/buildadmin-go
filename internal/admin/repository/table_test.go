@@ -3,6 +3,7 @@ package repository
 import "testing"
 
 func TestStripTablePrefix(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		table  string
 		prefix string

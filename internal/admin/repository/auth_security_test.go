@@ -40,6 +40,7 @@ func newAdminAuthSecurityModel(t *testing.T, tokenData *token.Token) (*AuthRepos
 }
 
 func TestAdminAuthIsLoginRejectsUserToken(t *testing.T) {
+	t.Parallel()
 	m, db := newAdminAuthSecurityModel(t, &token.Token{Type: "user", UserID: 1})
 	require.NoError(t, db.Create(&adminAuthSecurityRow{ID: 1, Status: "enable"}).Error)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())

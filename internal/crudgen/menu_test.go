@@ -9,7 +9,14 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
+type menuSyncRuleIDs struct {
+	wrongParent int32
+	parent      int32
+	menu        int32
+}
+
+func newMenuSyncDB(t *testing.T) (*gorm.DB, *conf.Configuration) {
+	t.Helper()
 	db, err := gorm.Open(sqlite.Open("file:menu-sync?mode=memory&cache=shared"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
@@ -39,12 +46,12 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 	)`).Error; err != nil {
 		t.Fatal(err)
 	}
-	rules := db.Table("ba_admin_rule")
-	dir := ParseWebDirNameData("ops.orders", "views", "web/src/views/backend/ops/orders")
-	if len(dir.Path) != 1 || dir.Path[0] != "ops" {
-		t.Fatalf("web dir = %+v", dir)
-	}
+	return db, cfg
+}
 
+func seedMenuSyncRules(t *testing.T, db *gorm.DB) menuSyncRuleIDs {
+	t.Helper()
+	rules := db.Table("ba_admin_rule")
 	wrongParent := model.AdminRule{Pid: 99, Type: "menu_dir", Name: "ops", Title: "wrong parent", Path: "ops", Status: "1"}
 	if err := rules.Create(&wrongParent).Error; err != nil {
 		t.Fatal(err)
@@ -63,6 +70,58 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 	if err := rules.Create(&model.AdminRule{Pid: menu.ID, Type: "button", Name: "ops/orders/custom", Title: "Custom", Status: "1"}).Error; err != nil {
 		t.Fatal(err)
 	}
+	return menuSyncRuleIDs{wrongParent: wrongParent.ID, parent: parent.ID, menu: menu.ID}
+}
+
+// assertMenuMatchedUnderParent 先断言同名菜单没有被错挂到错误的父目录下，
+// 再取父目录下的实际菜单行。
+func assertMenuMatchedUnderParent(t *testing.T, db *gorm.DB, ids menuSyncRuleIDs) model.AdminRule {
+	t.Helper()
+	var got model.AdminRule
+	if err := db.Table("ba_admin_rule").Where("pid=? AND name=? AND type=?", ids.wrongParent, "ops/orders", "menu").First(&got).Error; err == nil {
+		t.Fatal("menu was incorrectly matched under the wrong parent")
+	}
+	if err := db.Table("ba_admin_rule").Where("pid=? AND name=? AND type=?", ids.parent, "ops/orders", "menu").First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+func assertMenuSyncFields(t *testing.T, got model.AdminRule) {
+	t.Helper()
+	if got.Title != "Orders" || got.Path != "ops/orders" || got.MenuType != "tab" || got.Component != "/src/views/backend/ops/orders/index.vue" || got.Weigh != 7 || got.Icon != "custom-icon" || got.Keepalive != 1 {
+		t.Fatalf("menu update = %+v", got)
+	}
+}
+
+func assertMenuCustomButtonPreserved(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	var custom model.AdminRule
+	if err := db.Table("ba_admin_rule").Where("name=?", "ops/orders/custom").First(&custom).Error; err != nil {
+		t.Fatal(err)
+	}
+	if custom.Title != "Custom" {
+		t.Fatal("custom button was removed or overwritten")
+	}
+}
+
+func assertMenuSyncUnchanged(t *testing.T, report MenuSyncReport) {
+	t.Helper()
+	for _, item := range report.Results {
+		if item.Action != MenuUnchanged {
+			t.Fatalf("second sync result = %+v", report.Results)
+		}
+	}
+}
+
+func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
+	t.Parallel()
+	db, cfg := newMenuSyncDB(t)
+	dir := ParseWebDirNameData("ops.orders", "views", "web/src/views/backend/ops/orders")
+	if len(dir.Path) != 1 || dir.Path[0] != "ops" {
+		t.Fatalf("web dir = %+v", dir)
+	}
+	ids := seedMenuSyncRules(t, db)
 
 	report, err := SyncMenuWithOptionsAndRecord(db, cfg, dir, "Order management", &MenuOptions{Title: "Orders"})
 	if err != nil {
@@ -71,34 +130,15 @@ func TestMenuSyncUpdatesOwnedFieldsAndPreservesDownstreamFields(t *testing.T) {
 	if len(report.CreatedIDs) != 4 {
 		t.Fatalf("created IDs = %v, want four missing buttons", report.CreatedIDs)
 	}
-	var got model.AdminRule
-	if err := db.Table("ba_admin_rule").Where("pid=? AND name=? AND type=?", wrongParent.ID, "ops/orders", "menu").First(&got).Error; err == nil {
-		t.Fatal("menu was incorrectly matched under the wrong parent")
-	}
-	if err := db.Table("ba_admin_rule").Where("pid=? AND name=? AND type=?", parent.ID, "ops/orders", "menu").First(&got).Error; err != nil {
-		t.Fatal(err)
-	}
-	if got.Title != "Orders" || got.Path != "ops/orders" || got.MenuType != "tab" || got.Component != "/src/views/backend/ops/orders/index.vue" || got.Weigh != 7 || got.Icon != "custom-icon" || got.Keepalive != 1 {
-		t.Fatalf("menu update = %+v", got)
-	}
-
-	var custom model.AdminRule
-	if err := db.Table("ba_admin_rule").Where("name=?", "ops/orders/custom").First(&custom).Error; err != nil {
-		t.Fatal(err)
-	}
-	if custom.Title != "Custom" {
-		t.Fatal("custom button was removed or overwritten")
-	}
+	got := assertMenuMatchedUnderParent(t, db, ids)
+	assertMenuSyncFields(t, got)
+	assertMenuCustomButtonPreserved(t, db)
 
 	second, err := SyncMenuWithOptionsAndRecord(db, cfg, dir, "Order management", &MenuOptions{Title: "Orders"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, item := range second.Results {
-		if item.Action != MenuUnchanged {
-			t.Fatalf("second sync result = %+v", second.Results)
-		}
-	}
+	assertMenuSyncUnchanged(t, second)
 	weight := int32(11)
 	third, err := SyncMenuWithOptionsAndRecord(db, cfg, dir, "Order management", &MenuOptions{Title: "Orders", Weigh: &weight})
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 )
 
 func TestAdminLogDel(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-log-handler?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
@@ -50,6 +51,7 @@ func TestAdminLogDel(t *testing.T) {
 }
 
 func TestAdminLogDelRejectsForgedLogFields(t *testing.T) {
+	t.Parallel()
 	db, err := gorm.Open(sqlite.Open("file:admin-log-handler-forged?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})

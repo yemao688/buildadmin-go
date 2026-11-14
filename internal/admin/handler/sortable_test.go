@@ -84,6 +84,7 @@ func sortableWeights(t *testing.T, db *gorm.DB) map[int32]int32 {
 }
 
 func TestSortableBatchUpdatePreservesEqualWeightSemantics(t *testing.T) {
+	t.Parallel()
 	db, counter := newSortableTestDB(t)
 	require.NoError(t, db.Create([]sortableTestRow{
 		{ID: 1, AdminID: 1, Weigh: 10},
@@ -114,6 +115,7 @@ func TestSortableBatchUpdatePreservesEqualWeightSemantics(t *testing.T) {
 }
 
 func TestSortableBatchUpdatePreservesScope(t *testing.T) {
+	t.Parallel()
 	db, _ := newSortableTestDB(t)
 	require.NoError(t, db.Create([]sortableTestRow{
 		{ID: 1, AdminID: 1, Weigh: 10},

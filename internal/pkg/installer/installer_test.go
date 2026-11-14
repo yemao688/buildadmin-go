@@ -14,6 +14,7 @@ import (
 )
 
 func TestDatabaseDSN(t *testing.T) {
+	t.Parallel()
 	cfg := Database{
 		Database: "buildadmin",
 		Hostname: "db.example.test",
@@ -33,6 +34,7 @@ func TestDatabaseDSN(t *testing.T) {
 }
 
 func TestIsComplete(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	public := filepath.Join(root, "public")
 	require.NoError(t, os.Mkdir(public, 0o750))
@@ -59,6 +61,7 @@ func TestIsComplete(t *testing.T) {
 }
 
 func TestWriteBaseConfig(t *testing.T) {
+	t.Parallel()
 	configDir := filepath.Join(t.TempDir(), "configs")
 	require.NoError(t, os.MkdirAll(configDir, 0o750))
 	configPath := filepath.Join(configDir, "config.yaml")
@@ -89,6 +92,7 @@ func TestWriteBaseConfig(t *testing.T) {
 }
 
 func TestWriteBaseConfigRejectsInvalidPort(t *testing.T) {
+	t.Parallel()
 	configDir := filepath.Join(t.TempDir(), "configs")
 	require.NoError(t, os.MkdirAll(configDir, 0o750))
 	err := WriteBaseConfig(filepath.Join(configDir, "config.yaml"), Database{Hostport: "not-a-port"}, "token")
@@ -96,6 +100,7 @@ func TestWriteBaseConfigRejectsInvalidPort(t *testing.T) {
 }
 
 func TestGenerateTokenKey(t *testing.T) {
+	t.Parallel()
 	key := GenerateTokenKey()
 	require.Len(t, key, 32)
 	for _, char := range key {
@@ -104,6 +109,7 @@ func TestGenerateTokenKey(t *testing.T) {
 }
 
 func TestPoolSettings(t *testing.T) {
+	t.Parallel()
 	// 零值配置回退默认，与 config.defaults.yaml / 运行期 infra/db 语义一致。
 	maxIdle, maxOpen, lifetime, idleTime := poolSettings(conf.Database{})
 	require.Equal(t, 50, maxIdle)
@@ -128,6 +134,7 @@ func TestPoolSettings(t *testing.T) {
 // 值；稀疏覆盖层 config.yaml 存在时合并生效；覆盖层不存在（全新安装早期，
 // 安装器尚未写入 config）时退化为仅基座。
 func TestLoadPoolConfig(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	configs := filepath.Join(root, "configs")
 	require.NoError(t, os.MkdirAll(configs, 0o750))
@@ -160,6 +167,7 @@ func TestLoadPoolConfig(t *testing.T) {
 // 验证连接池参数实际应用到 sql.DB（sql.Open 惰性，
 // 无需真实 MySQL）。
 func TestApplyPoolConfig(t *testing.T) {
+	t.Parallel()
 	db, err := sql.Open("mysql", "installer:pw@tcp(127.0.0.1:1)/buildadmin?charset=utf8mb4&parseTime=True&loc=Local")
 	require.NoError(t, err)
 	defer db.Close()

@@ -3,6 +3,7 @@ package util
 import "testing"
 
 func TestAccountStatusEnabled(t *testing.T) {
+	t.Parallel()
 	for _, status := range []string{"0", "1", "", "ENABLE", "enable ", "other", "disable"} {
 		if !AccountStatusEnabled(status) {
 			continue

@@ -21,6 +21,7 @@ func newInvalidationTestContext(transactional bool, businessCode int) *gin.Conte
 }
 
 func TestInvalidateAfterMutationRegistersSuccessfulTransactionCallback(t *testing.T) {
+	t.Parallel()
 	ctx := newInvalidationTestContext(true, 1)
 	calls := 0
 	InvalidateAfterMutation(ctx, func() { calls++ })
@@ -33,6 +34,7 @@ func TestInvalidateAfterMutationRegistersSuccessfulTransactionCallback(t *testin
 }
 
 func TestInvalidateAfterMutationSkipsNonSuccessfulTransaction(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		code int
@@ -41,6 +43,7 @@ func TestInvalidateAfterMutationSkipsNonSuccessfulTransaction(t *testing.T) {
 		{name: "other", code: 2},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			ctx := newInvalidationTestContext(true, test.code)
 			calls := 0
 			InvalidateAfterMutation(ctx, func() { calls++ })
@@ -51,6 +54,7 @@ func TestInvalidateAfterMutationSkipsNonSuccessfulTransaction(t *testing.T) {
 }
 
 func TestInvalidateAfterMutationRunsImmediatelyWithoutTransaction(t *testing.T) {
+	t.Parallel()
 	ctx := newInvalidationTestContext(false, 0)
 	calls := 0
 	InvalidateAfterMutation(ctx, func() { calls++ })
@@ -58,6 +62,7 @@ func TestInvalidateAfterMutationRunsImmediatelyWithoutTransaction(t *testing.T) 
 }
 
 func TestInvalidateAfterMutationHandlesNilInputs(t *testing.T) {
+	t.Parallel()
 	calls := 0
 	InvalidateAfterMutation(nil, func() { calls++ })
 	InvalidateAfterMutation(nil, nil)

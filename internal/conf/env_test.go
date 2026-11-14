@@ -7,6 +7,7 @@ import (
 )
 
 func TestEnsureEnvFileCopiesExampleOnlyWhenMissing(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	example := []byte("APP_PORT=9900\nAPP_TIME_ZONE=Asia/Shanghai\n")
 	if err := os.WriteFile(filepath.Join(root, EnvExampleFileName), example, 0600); err != nil {
@@ -43,6 +44,7 @@ func TestEnsureEnvFileCopiesExampleOnlyWhenMissing(t *testing.T) {
 // 容器镜像不含 .env.example（.env 由 compose environment 注入，代码兜底）：
 // EnsureEnvFile 与 LoadEnvFile 必须容忍缺失，不能阻止启动。
 func TestEnsureEnvFileSkipsWhenExampleMissing(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 
 	created, err := EnsureEnvFile(root)
@@ -58,6 +60,7 @@ func TestEnsureEnvFileSkipsWhenExampleMissing(t *testing.T) {
 }
 
 func TestLoadEnvFileToleratesMissingFile(t *testing.T) {
+	t.Parallel()
 	if err := LoadEnvFile(filepath.Join(t.TempDir(), EnvFileName)); err != nil {
 		t.Fatalf("LoadEnvFile on a missing file should be a no-op: %v", err)
 	}
@@ -84,6 +87,7 @@ func TestLoadEnvFileDoesNotOverrideExistingEnvironment(t *testing.T) {
 }
 
 func TestResolveAppRuntimeEnvironmentUsesEnvAndFallbacks(t *testing.T) {
+	t.Parallel()
 	settings := ResolveAppRuntimeEnvironment(func(key string) (string, bool) {
 		values := map[string]string{
 			"APP_PORT":      " 9911 ",

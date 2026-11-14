@@ -22,6 +22,7 @@ func getDB(t *testing.T) *gorm.DB {
 }
 
 func TestInstall(t *testing.T) {
+	t.Parallel()
 	db := getDB(t)
 	// 本测试使用固定 go_ 前缀且不随运行变化：前一次运行的遗留表会让安装重入失败
 	// （重播种子会把 owner 置回 0 而 framework 迁移已被账本跳过），每次先清出干净起点。
@@ -42,15 +43,7 @@ func TestInstall(t *testing.T) {
 	if err := install.InsertData(); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
-		var ownerColumns int64
-		if err := db.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN ('admin_id','owner_column')", "go_"+table).Scan(&ownerColumns).Error; err != nil {
-			t.Fatal(err)
-		}
-		if ownerColumns != 0 {
-			t.Fatalf("security seed table %s still has admin_id", table)
-		}
-	}
+	assertInstallNoOwnerColumns(t, db)
 	seedConfig := &conf.Configuration{Database: conf.Database{Prefix: "go_"}}
 	if err := BootstrapOfficialLedger(db, seedConfig); err != nil {
 		t.Fatal(err)
@@ -70,6 +63,27 @@ func TestInstall(t *testing.T) {
 	if _, err := RunFrameworkMigrations(db, seedConfig, OfficialMigrations(), FrameworkMigrations()); err != nil {
 		t.Fatal(err)
 	}
+	assertInstallAdminRules(t, db)
+	assertInstallLanguages(t, db)
+	assertInstallSeedRows(t, db)
+	assertInstallSensitiveSeed(t, db)
+}
+
+func assertInstallNoOwnerColumns(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
+		var ownerColumns int64
+		if err := db.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name IN ('admin_id','owner_column')", "go_"+table).Scan(&ownerColumns).Error; err != nil {
+			t.Fatal(err)
+		}
+		if ownerColumns != 0 {
+			t.Fatalf("security seed table %s still has admin_id", table)
+		}
+	}
+}
+
+func assertInstallAdminRules(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var ruleCount int64
 	if err := db.Table("go_admin_rule").Count(&ruleCount).Error; err != nil {
 		t.Fatal(err)
@@ -105,6 +119,10 @@ func TestInstall(t *testing.T) {
 			t.Fatalf("seeded admin rule %d=%+v, want %+v", i, rules[i], wantRules[i])
 		}
 	}
+}
+
+func assertInstallLanguages(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var languages []struct {
 		Lan    string
 		Name   string
@@ -133,6 +151,10 @@ func TestInstall(t *testing.T) {
 			t.Fatalf("country language %d=%+v, want %+v", i, languages[i], wantLanguages[i])
 		}
 	}
+}
+
+func assertInstallSeedRows(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	for _, table := range []string{"security_data_recycle", "security_sensitive_data"} {
 		var seedCount int64
 		if err := db.Raw("SELECT COUNT(*) FROM `go_" + table + "` WHERE data_table='user'").Scan(&seedCount).Error; err != nil {
@@ -142,6 +164,10 @@ func TestInstall(t *testing.T) {
 			t.Fatalf("seed %s user rule count=%d", table, seedCount)
 		}
 	}
+}
+
+func assertInstallSensitiveSeed(t *testing.T, db *gorm.DB) {
+	t.Helper()
 	var fields string
 	if err := db.Table("go_security_sensitive_data").Where("id=2").Pluck("data_fields", &fields).Error; err != nil {
 		t.Fatal(err)

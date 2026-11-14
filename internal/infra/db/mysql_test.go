@@ -11,6 +11,7 @@ import (
 // 验证 DSN 拼接包含连接/读写超时参数，防止
 // 卡死连接无限阻塞（go-sql-driver 读写超时默认 0 = 永不超时）。
 func TestBuildDSNIncludesTimeouts(t *testing.T) {
+	t.Parallel()
 	cfg := &conf.Database{
 		Host: "127.0.0.1", Port: 3306, Database: "buildadmin",
 		UserName: "root", Password: "secret", Charset: "utf8mb4",
@@ -33,6 +34,7 @@ func TestBuildDSNIncludesTimeouts(t *testing.T) {
 
 // 验证未配置（0）时回退 1800s，配置生效时按秒取值。
 func TestConnMaxLifetimeFallback(t *testing.T) {
+	t.Parallel()
 	cfg := &conf.Database{}
 	if got := connMaxLifetime(cfg); got != 1800*time.Second {
 		t.Errorf("unset conn_max_lifetime = %v, want 1800s", got)
@@ -45,6 +47,7 @@ func TestConnMaxLifetimeFallback(t *testing.T) {
 
 // 验证未配置（0）时回退 300s，配置生效时按秒取值。
 func TestConnMaxIdleTimeFallback(t *testing.T) {
+	t.Parallel()
 	cfg := &conf.Database{}
 	if got := connMaxIdleTime(cfg); got != 300*time.Second {
 		t.Errorf("unset max_idle_time = %v, want 300s", got)

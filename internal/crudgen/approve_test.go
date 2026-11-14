@@ -8,6 +8,7 @@ import (
 )
 
 func TestParseApprovalCategories(t *testing.T) {
+	t.Parallel()
 	approved, err := ParseApprovalCategories("defaults, type-widening,defaults")
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +38,7 @@ func TestParseApprovalCategories(t *testing.T) {
 }
 
 func TestApprovalCategoriesAreSetAtAllRequiresApprovalDiffPoints(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name     string
 		field    crudmodel.Field
@@ -70,6 +72,7 @@ func TestApprovalCategoriesAreSetAtAllRequiresApprovalDiffPoints(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, category, _ := classifyFieldDiff(tc.field, tc.column, false)
 			if category != tc.category {
 				t.Fatalf("category = %q, want %q", category, tc.category)
@@ -79,6 +82,7 @@ func TestApprovalCategoriesAreSetAtAllRequiresApprovalDiffPoints(t *testing.T) {
 }
 
 func TestApprovalCategoryPropagatesToApplyChange(t *testing.T) {
+	t.Parallel()
 	diff := AlterDiff{
 		Field:    crudmodel.Field{Name: "name", Type: "varchar", Length: 40},
 		Change:   crudmodel.ChangeField{Type: "change-field-attr"},
@@ -93,6 +97,7 @@ func TestApprovalCategoryPropagatesToApplyChange(t *testing.T) {
 }
 
 func TestApprovalBlockingMatrix(t *testing.T) {
+	t.Parallel()
 	approval := AlterDiff{Class: DiffRequiresApproval, Category: ApprovalDefaults}
 	rejected := AlterDiff{Class: DiffRejected, Category: ApprovalDefaults}
 	approved := map[ApprovalCategory]bool{ApprovalDefaults: true}
@@ -126,6 +131,7 @@ func TestApprovalBlockingMatrix(t *testing.T) {
 }
 
 func TestApprovalMissingPreservesDefaultBlockingBehavior(t *testing.T) {
+	t.Parallel()
 	change := ApplyChange{Class: DiffRequiresApproval, Category: ApprovalTypeWidening}
 	if len(blockedApplyChanges([]ApplyChange{change}, nil)) != 1 {
 		t.Fatal("requires-approval diff without --approve was not blocked")

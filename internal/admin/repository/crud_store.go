@@ -82,6 +82,12 @@ func (s *CRUDStore) UpdateFieldScoped(ctx *gin.Context, id any, field string, va
 	return 0, false, gorm.ErrRecordNotFound
 }
 
+// sortWeighRow 是重排时按主键字符串与 weigh 读取的最小行投影。
+type sortWeighRow struct {
+	ID    string `gorm:"column:sortable_primary_key"`
+	Weigh int32
+}
+
 // SortWeighScoped 在同一事务内完成 weigh 字段的兄弟节点重排。调用方负责
 // 方向/order 校验与主键归一化；这里只返回数据层错误。
 func (s *CRUDStore) SortWeighScoped(ctx *gin.Context, moveID, targetID, direction, orderDirection string) error {
@@ -89,117 +95,135 @@ func (s *CRUDStore) SortWeighScoped(ctx *gin.Context, moveID, targetID, directio
 		return ErrSortPrimaryKeyInvalid
 	}
 	pkField := s.base.PrimaryKeyName()
-	type fullRow struct {
-		ID    string `gorm:"column:sortable_primary_key"`
-		Weigh int32
+	return s.base.Transaction(ctx, func(tx *gorm.DB) error {
+		return s.sortWeighTx(ctx, tx, pkField, moveID, targetID, direction, orderDirection)
+	})
+}
+
+func (s *CRUDStore) sortWeighTx(ctx *gin.Context, tx *gorm.DB, pkField, moveID, targetID, direction, orderDirection string) error {
+	scoped := func(db *gorm.DB) *gorm.DB {
+		if s.scope != nil {
+			return s.scope(ctx, db)
+		}
+		return db
 	}
 	rowSelect := pkField + " AS sortable_primary_key, weigh"
-	return s.base.Transaction(ctx, func(tx *gorm.DB) error {
-		scoped := func(db *gorm.DB) *gorm.DB {
-			if s.scope != nil {
-				return s.scope(ctx, db)
-			}
-			return db
+	var moveRow, targetRow sortWeighRow
+	if err := scoped(tx).Table(s.base.Table()).Select(rowSelect).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
+		return err
+	}
+	if err := scoped(tx).Table(s.base.Table()).Select(rowSelect).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
+		return err
+	}
+	if moveRow.ID == "" || targetRow.ID == "" {
+		return ErrSortPrimaryKeyInvalid
+	}
+
+	weigh := targetRow.Weigh
+	updateMethod := sortWeighUpdateMethod(direction, orderDirection)
+
+	var weighRows []sortWeighRow
+	if err := scoped(tx).Table(s.base.Table()).
+		Select(rowSelect).
+		Where("weigh = ?", weigh).
+		Order("weigh " + orderDirection + ", " + pkField + " desc").
+		Find(&weighRows).Error; err != nil {
+		return err
+	}
+	weighRowsCount := int32(len(weighRows)) //nolint:gosec // 同一 weigh 值的行数受数据规模与排序去重约束，远小于 int32 上界（2^31-1）
+
+	if err := s.sortWeighShiftWeights(scoped, tx, pkField, moveID, weigh, weighRowsCount, updateMethod); err != nil {
+		return err
+	}
+
+	if direction == "down" {
+		for i, j := 0, len(weighRows)-1; i < j; i, j = i+1, j-1 {
+			weighRows[i], weighRows[j] = weighRows[j], weighRows[i]
 		}
-		var moveRow, targetRow fullRow
-		if err := scoped(tx).Table(s.base.Table()).Select(rowSelect).Where(pkField+" = ?", moveID).Take(&moveRow).Error; err != nil {
-			return err
+	}
+	updatedWeights := make(map[string]int32, len(weighRows)+1)
+	updatedIDs := make([]string, 0, len(weighRows)+1)
+	setWeight := func(id string, weight int32) {
+		if _, ok := updatedWeights[id]; !ok {
+			updatedIDs = append(updatedIDs, id)
 		}
-		if err := scoped(tx).Table(s.base.Table()).Select(rowSelect).Where(pkField+" = ?", targetID).Take(&targetRow).Error; err != nil {
-			return err
+		updatedWeights[id] = weight
+	}
+	if err := sortWeighApplyRows(weighRows, &moveRow, moveID, targetID, updateMethod, setWeight); err != nil {
+		return err
+	}
+	if len(updatedIDs) == 0 {
+		return nil
+	}
+	return s.sortWeighUpdateRows(scoped, tx, pkField, updatedIDs, updatedWeights)
+}
+
+// sortWeighUpdateMethod 由排序方向与移动方向推导 weigh 的增减方式。
+func sortWeighUpdateMethod(direction, orderDirection string) string {
+	if orderDirection == "desc" {
+		if direction == "up" {
+			return "dec"
 		}
-		if moveRow.ID == "" || targetRow.ID == "" {
+		return "inc"
+	}
+	if direction == "up" {
+		return "inc"
+	}
+	return "dec"
+}
+
+func (s *CRUDStore) sortWeighShiftWeights(scoped func(*gorm.DB) *gorm.DB, tx *gorm.DB, pkField, moveID string, weigh, weighRowsCount int32, updateMethod string) error {
+	shift := gorm.Expr("weigh + ?", weighRowsCount)
+	if updateMethod == "dec" {
+		shift = gorm.Expr("weigh - ?", weighRowsCount)
+	}
+	shiftQuery := scoped(tx).Table(s.base.Table()).Where(pkField+" <> ?", moveID)
+	if updateMethod == "dec" {
+		shiftQuery = shiftQuery.Where("weigh < ?", weigh)
+	} else {
+		shiftQuery = shiftQuery.Where("weigh > ?", weigh)
+	}
+	return shiftQuery.UpdateColumn("weigh", shift).Error
+}
+
+// sortWeighApplyRows 按目标行重算每条兄弟行的新 weigh，并通过 setWeight 登记。
+func sortWeighApplyRows(weighRows []sortWeighRow, moveRow *sortWeighRow, moveID, targetID, updateMethod string, setWeight func(string, int32)) error {
+	moveComplete := int32(0)
+	for key, weighRow := range weighRows {
+		if weighRow.ID == "" {
 			return ErrSortPrimaryKeyInvalid
 		}
-
-		weigh := targetRow.Weigh
-		updateMethod := "inc"
-		if orderDirection == "desc" {
-			if direction == "up" {
-				updateMethod = "dec"
-			}
-		} else if direction == "up" {
-			updateMethod = "inc"
-		} else {
-			updateMethod = "dec"
+		if weighRow.ID == moveID {
+			continue
 		}
-
-		var weighRows []fullRow
-		if err := scoped(tx).Table(s.base.Table()).
-			Select(rowSelect).
-			Where("weigh = ?", weigh).
-			Order("weigh " + orderDirection + ", " + pkField + " desc").
-			Find(&weighRows).Error; err != nil {
-			return err
-		}
-		weighRowsCount := int32(len(weighRows)) //nolint:gosec // 同一 weigh 值的行数受数据规模与排序去重约束，远小于 int32 上界（2^31-1）
-
-		shift := gorm.Expr("weigh + ?", weighRowsCount)
+		rowWeighVal := weighRow.Weigh + int32(key)
 		if updateMethod == "dec" {
-			shift = gorm.Expr("weigh - ?", weighRowsCount)
+			rowWeighVal = weighRow.Weigh - int32(key)
 		}
-		shiftQuery := scoped(tx).Table(s.base.Table()).Where(pkField+" <> ?", moveID)
+		if weighRow.ID == targetID {
+			moveComplete = 1
+			moveRow.Weigh = rowWeighVal
+			setWeight(moveRow.ID, moveRow.Weigh)
+		}
 		if updateMethod == "dec" {
-			shiftQuery = shiftQuery.Where("weigh < ?", weigh)
+			rowWeighVal -= moveComplete
 		} else {
-			shiftQuery = shiftQuery.Where("weigh > ?", weigh)
+			rowWeighVal += moveComplete
 		}
-		if err := shiftQuery.UpdateColumn("weigh", shift).Error; err != nil {
-			return err
-		}
+		setWeight(weighRow.ID, rowWeighVal)
+	}
+	return nil
+}
 
-		if direction == "down" {
-			for i, j := 0, len(weighRows)-1; i < j; i, j = i+1, j-1 {
-				weighRows[i], weighRows[j] = weighRows[j], weighRows[i]
-			}
-		}
-		moveComplete := int32(0)
-		updatedWeights := make(map[string]int32, len(weighRows)+1)
-		updatedIDs := make([]string, 0, len(weighRows)+1)
-		setWeight := func(id string, weight int32) {
-			if _, ok := updatedWeights[id]; !ok {
-				updatedIDs = append(updatedIDs, id)
-			}
-			updatedWeights[id] = weight
-		}
-		for key, weighRow := range weighRows {
-			if weighRow.ID == "" {
-				return ErrSortPrimaryKeyInvalid
-			}
-			if weighRow.ID == moveID {
-				continue
-			}
-			rowWeighVal := weighRow.Weigh + int32(key)
-			if updateMethod == "dec" {
-				rowWeighVal = weighRow.Weigh - int32(key)
-			}
-			if weighRow.ID == targetID {
-				moveComplete = 1
-				moveRow.Weigh = rowWeighVal
-				setWeight(moveRow.ID, moveRow.Weigh)
-			}
-			if updateMethod == "dec" {
-				rowWeighVal -= moveComplete
-			} else {
-				rowWeighVal += moveComplete
-			}
-			setWeight(weighRow.ID, rowWeighVal)
-		}
-
-		if len(updatedIDs) > 0 {
-			caseSQL := "CASE"
-			caseArgs := make([]any, 0, len(updatedIDs)*2)
-			for _, id := range updatedIDs {
-				caseSQL += " WHEN " + pkField + " = ? THEN ?"
-				caseArgs = append(caseArgs, id, updatedWeights[id])
-			}
-			caseSQL += " ELSE weigh END"
-			if err := scoped(tx).Table(s.base.Table()).
-				Where(pkField+" in ?", updatedIDs).
-				UpdateColumn("weigh", gorm.Expr(caseSQL, caseArgs...)).Error; err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+func (s *CRUDStore) sortWeighUpdateRows(scoped func(*gorm.DB) *gorm.DB, tx *gorm.DB, pkField string, updatedIDs []string, updatedWeights map[string]int32) error {
+	caseSQL := "CASE"
+	caseArgs := make([]any, 0, len(updatedIDs)*2)
+	for _, id := range updatedIDs {
+		caseSQL += " WHEN " + pkField + " = ? THEN ?"
+		caseArgs = append(caseArgs, id, updatedWeights[id])
+	}
+	caseSQL += " ELSE weigh END"
+	return scoped(tx).Table(s.base.Table()).
+		Where(pkField+" in ?", updatedIDs).
+		UpdateColumn("weigh", gorm.Expr(caseSQL, caseArgs...)).Error
 }
