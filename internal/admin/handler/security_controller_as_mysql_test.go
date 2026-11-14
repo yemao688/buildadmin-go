@@ -36,7 +36,6 @@ func TestSecurityRuleHandlersNormalizeControllerAs(t *testing.T) {
 	require.NoError(t, db.Table(recycleTable).AutoMigrate(&model.SecurityDataRecycle{}))
 	require.NoError(t, db.Table(sensitiveTable).AutoMigrate(&model.SecuritySensitiveData{}))
 
-	gin.SetMode(gin.TestMode)
 	t.Run("data recycle add and edit", func(t *testing.T) {
 		t.Parallel()
 		handler := NewDataRecycleHandler(nil, config, securitymodel.NewSecurityDataRecycleRepository(db, config), nil, nil, service.NewSecurityDataRecycleService(securitymodel.NewSecurityDataRecycleRepository(db, config)))

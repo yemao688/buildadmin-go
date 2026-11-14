@@ -58,7 +58,7 @@ func (l *sortableSQLCounter) Trace(_ context.Context, _ time.Time, fc func() (st
 func newSortableTestDB(t *testing.T) (*gorm.DB, *sortableSQLCounter) {
 	t.Helper()
 	counter := &sortableSQLCounter{Interface: logger.Default.LogMode(logger.Silent)}
-	db, err := gorm.Open(sqlite.Open("file:sortable-test-"+time.Now().Format("150405.000000000")+"?mode=memory&cache=shared"), &gorm.Config{Logger: counter})
+	db, err := gorm.Open(sqlite.Open(uniqueAdminHandlerSQLiteDSN("sortable-test")), &gorm.Config{Logger: counter})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&sortableTestRow{}))
 	counter.selects = 0

@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
 	"net/http/httptest"
+	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	adminmodel "buildadmin-go/internal/admin/repository"
@@ -15,6 +18,21 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/schema"
 )
+
+// TestMain 在串行阶段把 gin 设为测试模式：gin.SetMode 写进程级全局变量，
+// 放到并行测试里调用会与 gin.New/IsDebugging 的读竞争。
+func TestMain(m *testing.M) {
+	gin.SetMode(gin.TestMode)
+	os.Exit(m.Run())
+}
+
+var adminHandlerSQLiteSeq atomic.Uint64
+
+// uniqueAdminHandlerSQLiteDSN 为每次调用生成唯一的 sqlite 内存库 DSN；
+// 固定名在并行测试或 -count>1 时会复用表数据，唯一名让每次夹具互不影响。
+func uniqueAdminHandlerSQLiteDSN(prefix string) string {
+	return fmt.Sprintf("file:%s-%d-%d?mode=memory&cache=shared", prefix, os.Getpid(), adminHandlerSQLiteSeq.Add(1))
+}
 
 func ptr(v int32) *int32 { return &v }
 

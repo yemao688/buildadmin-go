@@ -21,7 +21,7 @@ import (
 
 func TestAdminLogDel(t *testing.T) {
 	t.Parallel()
-	db, err := gorm.Open(sqlite.Open("file:admin-log-handler?mode=memory&cache=shared"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(uniqueAdminHandlerSQLiteDSN("admin-log-handler")), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)
@@ -34,7 +34,6 @@ func TestAdminLogDel(t *testing.T) {
 
 	logModel := adminmodel.NewAdminLogRepository(db, &conf.Configuration{Database: conf.Database{Prefix: "ba_"}})
 	h := NewAdminLogHandler(nil, logModel)
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.DELETE("/admin/auth.AdminLog/del", h.Del)
 
@@ -52,7 +51,7 @@ func TestAdminLogDel(t *testing.T) {
 
 func TestAdminLogDelRejectsForgedLogFields(t *testing.T) {
 	t.Parallel()
-	db, err := gorm.Open(sqlite.Open("file:admin-log-handler-forged?mode=memory&cache=shared"), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(uniqueAdminHandlerSQLiteDSN("admin-log-handler-forged")), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true, TablePrefix: "ba_"},
 	})
 	require.NoError(t, err)

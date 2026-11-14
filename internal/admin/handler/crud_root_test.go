@@ -16,7 +16,6 @@ import (
 
 //nolint:paralleltest // crudgen 进程级全局生成锁 generationMu，与 TestGenerateRejectsWhenAnotherOperationHoldsLock 互斥
 func TestGenerateRejectsNonRootBeforeAnyMutation(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/crud/generate", bytes.NewBufferString(`{"table":{"name":"orders"},"type":"create","fields":[{"name":"id","type":"int"}]}`))

@@ -70,7 +70,6 @@ func TestAdminNullableParentIDFlexBinding(t *testing.T) {
 // 验证通用 ID 结构：字符串数字 id 解码成功，
 // 且 binding:"required" 语义不回归（缺 id 仍触发校验错误）。
 func TestIDSFlexBinding(t *testing.T) {
-	gin.SetMode(gin.TestMode)
 	t.Parallel()
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/x", bytes.NewBufferString(`{"id":"7"}`))

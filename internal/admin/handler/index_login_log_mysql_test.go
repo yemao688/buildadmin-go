@@ -112,7 +112,6 @@ func newAdminLoginLogFixture(t *testing.T) (*gorm.DB, *IndexHandler, *adminmiddl
 }
 
 func newLoginLogRouter(handler *IndexHandler, record *adminmiddleware.Record) *gin.Engine {
-	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.Use(ginI18n.Localize(ginI18n.WithBundle(&ginI18n.BundleCfg{
 		RootPath:         util.RootPath() + "/internal/i18n/locales",

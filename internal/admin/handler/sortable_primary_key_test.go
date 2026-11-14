@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -30,7 +29,7 @@ func (sortableStringRow) TableName() string { return "sortable_string_rows" }
 
 func newSortablePrimaryKeyDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:sortable-primary-key-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(uniqueAdminHandlerSQLiteDSN("sortable-primary-key")), &gorm.Config{})
 	require.NoError(t, err)
 	return db
 }
