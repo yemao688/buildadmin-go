@@ -25,6 +25,19 @@ func TestCrudOnlyRootCommandRegistersCrudCommands(t *testing.T) {
 		}
 	}
 
+	forbidden := map[string]bool{
+		"serve":        true,
+		"setup":        true,
+		"migrate":      true,
+		"cascade:sync": true,
+		"release":      true,
+	}
+	for _, command := range root.Commands() {
+		if forbidden[command.Name()] {
+			t.Fatalf("cmd/crudgen must not register %q", command.Name())
+		}
+	}
+
 	for _, name := range []string{"crud:generate", "crud:delete"} {
 		command, _, err := root.Find([]string{name})
 		if err != nil {

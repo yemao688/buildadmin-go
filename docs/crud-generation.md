@@ -14,7 +14,7 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
-生成器另有独立入口 `go run ./cmd/crudgen ...`：命令集合与 `cmd/server` 的 CRUD 子命令一致（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate`），但只依赖 `internal/crudgen` 与公共基础设施，**不 import `internal/admin` / `internal/api` 渠道**。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
 
 生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
 
@@ -731,7 +731,7 @@ custom 接口必须提供真实存在的 `remoteUrl`，并支持 `GET ?select=tr
 ### 命名与注释
 
 - 只使用一个单列主键，不支持复合主键。
-- `weigh` 必须是 `int`，用于拖拽排序；新增行自动初始化为新行 id。
+- `weigh` 必须是 `int`，用于拖拽排序；新增行自动初始化为新行 id。主键为 `bigint unsigned` 且实际值超过 `int32` 上界时，默认 weigh 赋值会发生截断（`int64` → `int`），这类表应显式设置 weigh 或把主键控制在 `int32` 范围内。
 - 所有业务表都应带 `create_time` 和 `update_time`（`bigint`，自动维护，不进请求 DTO）。
 - `comment` 是字段标题和字典来源。字典精确示例：`状态:0=禁用,1=启用`、`菜单类型:tab=选项卡,link=链接,iframe=Iframe`。
 - enum/set 注释键值应与存储值一致，不一致时按 PHP 兼容语义合并，不会被拒绝。

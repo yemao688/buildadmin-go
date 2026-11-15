@@ -520,6 +520,8 @@ func (s *generateState) runToolchain() error {
 
 // runToolchainChecks 执行 wire 与全仓编译自检；返回失败阶段名供台账记录。
 func (s *generateState) runToolchainChecks() (string, error) {
+	// runToolchain 已在跳过时提前返回；这里保留同一守卫，防止后续直接调用
+	// 本函数时绕过 --skip-compile-check（TestRunToolchainChecksSkipsCompileCheck）。
 	if s.opts.SkipCompileCheck {
 		return "", nil
 	}
@@ -853,7 +855,7 @@ func (s *deleteState) removeProviders() error {
 
 func (s *deleteState) runToolchain() error {
 	if s.skipCompileCheck {
-		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
+		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；删除后请执行 go generate ./cmd/server && go build ./...")
 		return nil
 	}
 	if err := runWire(); err != nil {

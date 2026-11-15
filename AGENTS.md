@@ -204,7 +204,7 @@ go run ./cmd/server crud:validate crud_specs/<module>.yaml [<other-spec.yaml>...
 go run ./cmd/server --conf configs/config.yaml crud:delete <table_name>
 ```
 
-跨版本升级后旧生成产物阻塞 `cmd/server` 编译时，改用独立入口 `go run ./cmd/crudgen ...`（命令集相同，不 import admin/api 渠道），并加 `--skip-compile-check` 跳过 wire/编译自检；全部模块重生成后统一执行 `go generate ./cmd/server && go build ./...`。详见 [`docs/crud-generation.md`](docs/crud-generation.md) 的「旧产物阻塞编译时的批量重生成」。
+跨版本升级后旧生成产物阻塞 `cmd/server` 编译时，改用独立入口 `go run ./cmd/crudgen ...`（只含 CRUD 子命令，不 import admin/api 渠道），并加 `--skip-compile-check` 跳过 wire/编译自检；全部模块重生成后统一执行 `go generate ./cmd/server && go build ./...`。详见 [`docs/crud-generation.md`](docs/crud-generation.md) 的「旧产物阻塞编译时的批量重生成」。
 
 退出码为 0 表示成功，1 表示失败（原因输出到 stderr）。文件阶段失败时会自动恢复文件，但 MySQL DDL 不可回滚；受保护的核心表会被拒绝。受保护核心表（`user`/`user_money_log` 等）可经 `registerOnly` 声明为级联父表/子表——框架自带 `crud_specs/user.yaml`（父表）与 `crud_specs/user_money_log.yaml`（子表），**spec 文件存在即登记生效**（不写 crud_log、不生成代码，重装不丢），业务子表即可 `inheritFrom: { table: user }` 并参与 `cascade:sync` 对账；登记形态与边界见 `docs/crud-generation.md` 的 registerOnly 小节。
 

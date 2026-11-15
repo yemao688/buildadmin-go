@@ -5,7 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -91,32 +91,23 @@ func TestImportBoundary(t *testing.T) {
 	t.Fatal(boundaryFailureReport(newViolations, staleWhitelist))
 }
 
-// cmd/crudgen 是旧生成产物阻塞编译时的逃生入口：入口文件不得直接 import
-// admin/api 渠道；传递依赖由 R11 约束 internal/commands。
+// cmd/crudgen 是旧生成产物阻塞编译时的逃生入口：整个包（含子包）的传递依赖
+// 都不得触达 admin/api 渠道。只查直接 import 挡不住经由公共基础设施间接引入，
+// 这里用 go list -deps 校验完整依赖图。
 func TestCrudgenEntryImportsNoRuntimeChannel(t *testing.T) {
 	t.Parallel()
-	entries, err := os.ReadDir("../cmd/crudgen")
+
+	var stderr strings.Builder
+	cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", modulePath+"/cmd/crudgen/...")
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("go list -deps %s/cmd/crudgen/... failed: %v\n%s", modulePath, err, stderr.String())
 	}
-	fset := token.NewFileSet()
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-			continue
-		}
-		file, err := parser.ParseFile(fset, filepath.Join("..", "cmd", "crudgen", name), nil, parser.ImportsOnly)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, spec := range file.Imports {
-			importPath, err := strconv.Unquote(spec.Path.Value)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if hasImportPrefix(importPath, modulePath+"/internal/admin") || hasImportPrefix(importPath, modulePath+"/internal/api") {
-				t.Fatalf("%s imports runtime channel %s", name, importPath)
-			}
+
+	for _, importPath := range strings.Fields(string(output)) {
+		if hasImportPrefix(importPath, modulePath+"/internal/admin") || hasImportPrefix(importPath, modulePath+"/internal/api") {
+			t.Fatalf("cmd/crudgen depends on runtime channel %s", importPath)
 		}
 	}
 }

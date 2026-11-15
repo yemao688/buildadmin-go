@@ -467,23 +467,6 @@ func TestModelTemplateAddsWeighFromIntegerPrimaryKey(t *testing.T) {
 	Weigh int32 ` + "`json:\"weigh\"`" + `
 }
 
-func TestModelTemplateAddsRowFactory(t *testing.T) {
-	data := ModelData{
-		Namespace:  "model",
-		ClassName:  "Demo",
-		ModelVar:   "demo",
-		Pk:         "id",
-		StructTemp: "type Demo struct{}",
-	}
-	code, err := renderModel(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(code, "func (s *DemoRepository) NewRow() any") || !strings.Contains(code, "return &model.Demo{}") {
-		t.Fatalf("row factory missing from repository template:\n%s", code)
-	}
-}
-
 `
 	withoutWeigh := `type Demo struct {
 	ID int32 ` + "`json:\"id\"`" + `
@@ -510,6 +493,27 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 	}
 	if strings.Contains(withoutCode, "demo.Weigh") || strings.Contains(withoutCode, `Update("weigh", demo.ID)`) {
 		t.Fatalf("weigh post-insert hook emitted without a weigh field:\n%s", withoutCode)
+	}
+}
+
+// 仓库模板必须保留 NewRow 工厂；缺失会让 CRUDStore 的 NewRow 注册失效。
+func TestModelTemplateAddsRowFactory(t *testing.T) {
+	t.Parallel()
+
+	code, err := renderModel(ModelData{
+		Namespace:  "model",
+		ClassName:  "Demo",
+		ModelVar:   "demo",
+		Pk:         "id",
+		PkGoField:  "ID",
+		PkGoType:   "int32",
+		StructTemp: "type Demo struct {\n\tID int32 `json:\"id\"`\n}",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(code, "func (s *DemoRepository) NewRow() any") || !strings.Contains(code, "return &model.Demo{}") {
+		t.Fatalf("row factory missing from repository template:\n%s", code)
 	}
 }
 
