@@ -6,6 +6,7 @@ No permission: 無權限
 You cannot modify your own management group!: 不能修改自己所在的管理組！
 You need to have all the permissions of the group and have additional permissions before you can operate the group~: 您需要擁有該分組的所有權限且還有額外權限時，纔可以操作該分組~
 Role group has all your rights, please contact the upper administrator to add or do not need to add!: 角色組擁有您的全部權限，請聯繫上級管理員添加或無需添加！
+Role remark: 爲保障系統安全，角色組本身的上下級關係僅供參考，系統的實際上下級劃分是根據`權限多寡`來確定的，兩位管理員的權限節點：相同被認爲是`同級`、包含且有額外權限才被認爲是`上級`，同級不可管理同級，上級可爲下級分配自己擁有的權限節點；若有特殊情況管理員需轉`上級`，可建立一個虛擬權限節點
 Dashboard remark: 開源等於互助；開源需要大家一起來支持，支持的方式有很多種，比如使用、推薦、寫教程、保護生態、貢獻代碼、回答問題、分享經驗、打賞讚助等；歡迎您加入我們！
 Rule Type: 規則類型
 Rule Title: 規則標題
@@ -41,8 +42,10 @@ Congratulations, receiving this email means that your email service has been con
 Controller: 控制器
 Data Table: 對應數據表
 Primary Key: 數據表主鍵
+DataRecycle Remark: 在此定義需要回收的數據，實現數據自動統一回收
 No rows were restore: 沒有記錄被還原
 Data Fields: 敏感數據字段
+SensitiveData Remark: 在此定義需要保護的敏感字段，隨後系統將自動監聽該字段的修改操作，並提供了敏感字段的修改回滾功能
 No rows were rollback: 沒有記錄被回滾
 User_id: 用戶
 Money: 變更金額

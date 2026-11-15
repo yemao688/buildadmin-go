@@ -121,6 +121,12 @@ var legacyUnreferencedKeys = map[string]struct{}{
 	"Unknown operation":                                                       {},
 	"No action available, please contact the administrator~":                  {},
 	"Email is exist!":                                                         {},
+	// 以下三条由 admin_rule.remark 经 handler/remark.go 的 remark() 动态查找
+	// （util.Lang），从 PHP 上游迁移来的库备注仍保存这些英文键；源码 grep
+	// 无法证明其死链，与 Dashboard remark / Attachment Remark 同类保留。
+	"Role remark":          {},
+	"DataRecycle Remark":   {},
+	"SensitiveData Remark": {},
 }
 
 // 下游按“各语言键集与 en 完全一致”维护语言包；框架侧先守住该不变量，

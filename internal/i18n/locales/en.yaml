@@ -172,6 +172,9 @@ Unknown operation: Unknown operation
 No action available, please contact the administrator~: There is no action available, please contact the administrator~
 You need to have all the permissions of the group and have additional permissions before you can operate the group~: you need to have all the permissions of the group and have additional permissions before you can operate this group~
 Role group has all your rights, please contact the upper administrator to add or do not need to add!: the role group has all your rights, please contact the upper administrator to add it or no need to add!
+Role remark: To ensure system security, the parent-child relationship of role groups is for reference only; the actual hierarchy is determined by `permission amount`. Two administrators with the same permission nodes are considered `peers`; one containing the other's nodes plus extra permissions is considered `superior`. Peers cannot manage peers; a superior can assign its own permission nodes to subordinates. If an administrator needs to become a `superior` in special cases, a virtual permission node can be created
+DataRecycle Remark: define the data to be recycled here to achieve automatic unified data recycling
+SensitiveData Remark: define the sensitive fields to be protected here; the system will automatically monitor modification of these fields and provide rollback for sensitive field changes
 Account exist: account already exists
 Please delete the child element first, or use batch deletion: please delete the child element first, or use batch deletion!
 Not found field:{name}: 'field {{.name}} does not exist'
