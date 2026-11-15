@@ -45,6 +45,7 @@ func wireApp(*conf.Configuration, *lumberjack.Logger, *zap.Logger) (*commands.Se
 		pkg.ProviderSet,
 		apiMiddleware.ProviderSet,
 		adminMiddleware.ProviderSet,
+		wire.Bind(new(commands.RouteProtectionReporter), new(*adminMiddleware.Authorization)),
 		area.ProviderSet,
 		money.ProviderSet,
 		country.ProviderSet,

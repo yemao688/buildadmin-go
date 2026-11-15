@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type FileManifest struct {
@@ -253,6 +254,111 @@ func uniquePaths(paths []string) []string {
 		}
 	}
 	return result
+}
+
+// manifestRootDirs 列出 crud_log 清单可能记录的产物根（相对仓库根）。
+// 旧记录保存的是生成时的绝对路径，读取时必须先按这些根重新挂到当前仓库，
+// 才能在另一个 checkout / git worktree 里比较或删除同一份清单。
+var manifestRootDirs = []string{
+	"internal/model",
+	"internal/admin/repository",
+	"internal/admin/dto",
+	"internal/admin/handler",
+	"internal/admin/router",
+	"web/src/lang",
+	"web/src/views",
+	"cmd/server",
+}
+
+// manifestPathForRoot 把清单路径解析到 root 下：相对路径直接拼接；绝对
+// 路径已位于 root 下时原样返回，否则按 manifestRootDirs 截取产物根后缀并
+// 重新挂到 root。无法识别根的旧绝对路径保持原样，由调用方校验拒绝。
+func manifestPathForRoot(path, root string) string {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if !filepath.IsAbs(clean) {
+		return filepath.Join(root, clean)
+	}
+	if manifestPathWithinRoot(clean, root) {
+		return clean
+	}
+	if relative, ok := manifestRelativePath(clean); ok {
+		return filepath.Join(root, filepath.FromSlash(relative))
+	}
+	return clean
+}
+
+// manifestPathKey 是清单比较的统一键：先按 root 解析，再规范化分隔符。
+func manifestPathKey(path, root string) string {
+	return filepath.Clean(canonicalManifestLangPath(manifestPathForRoot(path, root)))
+}
+
+func manifestPathWithinRoot(path, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// manifestRelativePath 从绝对路径中截取已知产物根起点的相对路径。
+// 取最靠右的匹配：checkout 目录名本身可能包含 internal/model 之类的片段，
+// 真正的产物根一定最接近文件名。
+func manifestRelativePath(path string) (string, bool) {
+	slash := filepath.ToSlash(filepath.Clean(path))
+	bestIndex := -1
+	for _, root := range manifestRootDirs {
+		index := strings.LastIndex(slash, "/"+root+"/")
+		if index < 0 && strings.HasPrefix(slash, root+"/") {
+			index = 0
+		}
+		if index > bestIndex {
+			bestIndex = index
+		}
+	}
+	switch {
+	case bestIndex < 0:
+		return "", false
+	case bestIndex == 0:
+		return slash, true
+	default:
+		return slash[bestIndex+1:], true
+	}
+}
+
+// portableManifestPath 把当前仓库根下的绝对清单路径转为相对路径，供
+// crud_log 持久化；跨 checkout 共享数据库时不再绑定生成时的根目录。
+func portableManifestPath(path, root string) string {
+	clean := filepath.Clean(filepath.FromSlash(path))
+	if !filepath.IsAbs(clean) {
+		return filepath.ToSlash(clean)
+	}
+	if !manifestPathWithinRoot(clean, root) {
+		return filepath.ToSlash(clean)
+	}
+	relative, err := filepath.Rel(root, clean)
+	if err != nil {
+		return filepath.ToSlash(clean)
+	}
+	return filepath.ToSlash(relative)
+}
+
+func portableManifestPaths(paths []string) []string {
+	root := util.RootPath()
+	result := make([]string, 0, len(paths))
+	for _, path := range paths {
+		result = append(result, portableManifestPath(path, root))
+	}
+	return result
+}
+
+// portableTableForLog 返回写入 crud_log 的 table 副本：manifest 路径统一
+// 存相对仓库根形式，重新生成/删除时再按当前 util.RootPath() 还原。
+func portableTableForLog(table crudmodel.Table) crudmodel.Table {
+	table.GeneratedFiles = portableManifestPaths(table.GeneratedFiles)
+	if table.Manifest != nil {
+		table.Manifest = &crudmodel.CRUDFileManifest{
+			Generated: portableManifestPaths(table.Manifest.Generated),
+			Shared:    portableManifestPaths(table.Manifest.Shared),
+		}
+	}
+	return table
 }
 
 // normalizeFileManifest is the single classification boundary for manifests,

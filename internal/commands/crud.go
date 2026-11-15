@@ -55,13 +55,14 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	generateCmd.Flags().Bool("skip-menu", false, "skip menu creation")
 	generateCmd.Flags().Bool("skip-frontend", false, "skip web artifacts (lang/index.vue/form.vue); implies skip-menu; intended for modules whose frontend is already customized")
 	generateCmd.Flags().Bool("skip-repo", false, "skip repository file and repository provider merge; intended only for modules with an existing customized repository (first-time generation would not compile)")
+	generateCmd.Flags().Bool("skip-compile-check", false, "skip wire regeneration and go build self-check; use while stale generated artifacts block the build, then run go generate ./cmd/server && go build ./...")
 	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	return generateCmd
 }
 
 // newCrudDeleteCommand 删除已生成的 CRUD 文件与菜单。
 func newCrudDeleteCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
-	return &cobra.Command{
+	deleteCmd := &cobra.Command{
 		Use:           "crud:delete <tableName>",
 		Short:         "删除 CRUD 文件",
 		Args:          cobra.ExactArgs(1),
@@ -71,6 +72,8 @@ func newCrudDeleteCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 			return command.crudH.Delete(cmd, args)
 		}),
 	}
+	deleteCmd.Flags().Bool("skip-compile-check", false, "skip wire regeneration and go build self-check; use while stale generated artifacts block the build, then run go generate ./cmd/server && go build ./...")
+	return deleteCmd
 }
 
 // newCrudApplyCommand 将 spec 声明的表结构与菜单幂等应用到目标库（部署语义，alter 安全子集）。
@@ -116,6 +119,7 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
 	opts.SkipFrontend, _ = cmd.Flags().GetBool("skip-frontend")
 	opts.SkipRepo, _ = cmd.Flags().GetBool("skip-repo")
+	opts.SkipCompileCheck, _ = cmd.Flags().GetBool("skip-compile-check")
 	if opts.SkipFrontend {
 		// 前端产物跳过时菜单同步同样跳过（views 未生成，菜单组件路径悬空）。
 		opts.SkipMenu = true
@@ -265,7 +269,8 @@ func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: crud:delete <tableName>")
 	}
-	if err := helper.DeleteFromSpecWithHooks(h.db, h.config, args[0], func(method, path string) {
+	skipCompileCheck, _ := cmd.Flags().GetBool("skip-compile-check")
+	if err := helper.DeleteFromSpecWithHooksAndOptions(h.db, h.config, args[0], helper.DeleteOptions{SkipCompileCheck: skipCompileCheck}, func(method, path string) {
 		action := path[strings.LastIndex(path, "/")+1:]
 		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
 	}); err != nil {

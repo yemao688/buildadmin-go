@@ -249,7 +249,15 @@ git push origin master
 
 1. **工具链（3.3.8）**：`go.mod` 要求 Go 1.27.4；`GOTOOLCHAIN=auto`（默认）首次构建会自动下载。Docker 基础镜像随 `Dockerfile` 变化，用 `BUILD_BASE_REGISTRY` 加速时无需额外调整。验证：`go version` + `go build ./...`。
 
-2. **重新生成业务模块（3.3.9 + 3.4.0，合并后做一次）**：生成仓库内嵌 `repository.CRUDStore`，handler 的 `Base` 只依赖 `CrudTable`，旧产物无法与新 `Base` 编译；新生成器产出 `TableHandler`/`TableRegistrar` 形状。逐个模块 `crud:generate`，按双提交工作流对照 `git diff` 回补定制；把 handler 内的 `requesttx.InvalidateAfterMutation(ctx, ...)` 移到构造器的 `TableOptions.AfterMutation` 闭包，否则重生成会覆盖丢失。生成器路径已从 `internal/pkg/crud_helper` 迁到 `internal/crudgen`，自写脚本 import 旧路径需同步。module 市场已移除，下次 `migrate`/`serve` 会自动清理 6 行菜单/规则（`admin_group.rules` 的悬空 id 不影响鉴权）。验证：`go build ./...`；`crud:generate` 每个模块退出码 0；对照定制提交确认无遗漏。
+2. **重新生成业务模块（3.3.9 + 3.4.0，合并后做一次）**：生成仓库内嵌 `repository.CRUDStore`，handler 的 `Base` 只依赖 `CrudTable`，旧产物无法与新 `Base` 编译；新生成器产出 `TableHandler`/`TableRegistrar` 形状。旧产物同时会阻塞 `cmd/server` 编译（生成器与 serve 共用该入口），因此先用独立生成器 `cmd/crudgen`（只 import `internal/crudgen`，不 import admin/api 渠道）逐模块重生成，并用 `--skip-compile-check` 跳过 wire/编译自检；所有模块完成后恢复门禁：
+
+   ```bash
+   go run ./cmd/crudgen --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --skip-compile-check
+   go generate ./cmd/server
+   go build ./...
+   ```
+
+   `--skip-compile-check` 不跳过文件写入、菜单同步与 `crud_log` 记账，但也不写 `wire_gen.go`；全部模块重生成后必须执行上面的 `go generate ./cmd/server` 与 `go build ./...`。逐个模块按双提交工作流对照 `git diff` 回补定制；把 handler 内的 `requesttx.InvalidateAfterMutation(ctx, ...)` 移到构造器的 `TableOptions.AfterMutation` 闭包，否则重生成会覆盖丢失。生成器路径已从 `internal/pkg/crud_helper` 迁到 `internal/crudgen`，自写脚本 import 旧路径需同步。module 市场已移除，下次 `migrate`/`serve` 会自动清理 6 行菜单/规则（`admin_group.rules` 的悬空 id 不影响鉴权）。验证：`go build ./...`；`crud:generate` 每个模块退出码 0；对照定制提交确认无遗漏。
 
 3. **门禁与前端（3.5.0）**：本版无新迁移、无 `crud_specs`、无 DDL 变更。需要处理：
    - `.golangci.yml` 档 C 全量入闸（testifylint / gosec / gocritic 默认集 + performance 子集 / revive / paralleltest / gocyclo / nolintlint）。业务代码要能过 `golangci-lint run ./...`；存量 `//nolint` 必须写明具体 linter、规则号与理由，且不得残留未命中项，否则 `nolintlint` 会报。

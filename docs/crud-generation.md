@@ -14,6 +14,8 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
+生成器另有独立入口 `go run ./cmd/crudgen ...`：命令集合与 `cmd/server` 的 CRUD 子命令一致（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate`），但只依赖 `internal/crudgen` 与公共基础设施，**不 import `internal/admin` / `internal/api` 渠道**。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+
 生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
 
 **下游升级提示（handler 泛型化之后）：** 重新 `crud:generate` 会整体覆盖生成 handler。旧 handler 内直接调用的 `requesttx.InvalidateAfterMutation(ctx, ...)` 属于模块定制，必须移到构造器的 `TableOptions.AfterMutation` 闭包（闭包内仍调用同一个 `requesttx.InvalidateAfterMutation`），否则重新生成后被覆盖丢失。`internal/admin/router/provider.go` 中历史生成的 `NewXxxRegistrar` 条目可以从 `ProviderSet` 删除——生成器不再追加，保留也无害（这些构造器仍在 `ProvideRegistrars` 内使用）。
@@ -30,6 +32,21 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 - **`--skip-frontend`**：跳过 `web/src/views/<module>/`（index.vue、popupForm.vue）与语言文件（en/zh-cn）的生成，并隐含 `--skip-menu`（views 未生成时菜单组件路径悬空）。用于前端已深度定制、重新生成后端改动时不想覆盖/回补 views 的场景。
 - **`--skip-repo`**：跳过 `internal/admin/repository/<table>.go` 与所在包 provider 合并。**前置检查：仓库文件必须已存在**（首次生成使用会直接报错——handler 引用 `NewXxxRepository` 编译必挂）。用于仓库已手写定制、只想刷新 entity/DTO/handler/registrar 的场景。
 - **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成。
+- **清单路径可移植**：`crud_log` 的 manifest 统一存相对仓库根路径，读取时按当前 `util.RootPath()` 还原；旧记录里的其它 checkout 绝对路径也会按已知产物根重挂到当前仓库。因此同一数据库可以在 git worktree / 另一份 clone 中继续生成或删除，不需要改库。
+
+### 旧产物阻塞编译时的批量重生成
+
+跨版本升级后，旧生成产物可能无法与新 `Base`/`CRUDStore` 一起编译。`crud:generate` 与 `crud:delete` 默认在写入后执行 wire 与 `go build ./...` 自检；其他尚未重生成的模块会让自检失败并触发文件回滚。批量升级时用独立入口加 `--skip-compile-check` 只跳过自检（文件写入、菜单同步与 `crud_log` 记账照常）：
+
+```bash
+# 先逐模块重生成；旧产物未清理完之前跳过 wire/编译自检
+go run ./cmd/crudgen --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --skip-compile-check
+# 全部模块重生成后，统一恢复 wire 与编译门禁
+go generate ./cmd/server
+go build ./...
+```
+
+`--skip-compile-check` 不写 `wire_gen.go`、不做 `go build` 自检，因此**不能替代最终门禁**；全部模块完成后必须执行一次 `go generate ./cmd/server` 与 `go build ./...`。`crud:delete` 同样支持该开关。
 
 已有业务表通常用 `type: alter`。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。`type: create` 对已有表是删除重建，不能当作无损更新。
 

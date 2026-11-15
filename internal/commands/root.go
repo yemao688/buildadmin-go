@@ -40,15 +40,61 @@ func Execute(appBootstrap AppBootstrap, cmdBootstrap CmdBootstrap) error {
 	registerOnInitialize()
 
 	if versionRequested(os.Args[1:]) {
-		fmt.Printf("%s (upstream buildadmin %s)\n", Version, appVersion.Upstream)
+		printVersion()
 		return nil
 	}
 
-	if err := newRootCommand(appBootstrap, cmdBootstrap).Execute(); err != nil {
+	return executeRoot(newRootCommand(appBootstrap, cmdBootstrap))
+}
+
+// ExecuteCrud 是独立生成器入口（cmd/crudgen）：只装配 CRUD 命令，不注册
+// serve/setup/migrate/release。它复用本包的配置/日志引导，但不 import
+// admin/api 渠道，因此旧生成产物编译失败时仍可先重新生成模块。
+func ExecuteCrud() error {
+	initRootFlags()
+	registerOnInitialize()
+
+	if versionRequested(os.Args[1:]) {
+		printVersion()
+		return nil
+	}
+
+	return executeRoot(newCrudOnlyRootCommand(crudOnlyBootstrap))
+}
+
+func printVersion() {
+	fmt.Printf("%s (upstream buildadmin %s)\n", Version, appVersion.Upstream)
+}
+
+func executeRoot(rootCmd *cobra.Command) error {
+	if err := rootCmd.Execute(); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 		return err
 	}
 	return nil
+}
+
+// newCrudOnlyRootCommand 只挂 CRUD 命令；bootstrap 只构造 CrudHandler。
+func newCrudOnlyRootCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:           "crudgen",
+		Short:         "CRUD 生成器独立入口（不依赖 admin/api 渠道编译）",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	rootCmd.AddCommand(
+		newCrudGenerateCommand(cmdBootstrap),
+		newCrudDeleteCommand(cmdBootstrap),
+		newCrudApplyCommand(cmdBootstrap),
+		newCrudValidateCommand(),
+	)
+	return rootCmd
+}
+
+// crudOnlyBootstrap 构造只含 CrudHandler 的 Command；其余命令未注册，
+// 对应 handler 保持 nil。
+func crudOnlyBootstrap(config *conf.Configuration, _ *lumberjack.Logger, logger *zap.Logger) (*Command, func(), error) {
+	return NewCommand(nil, nil, NewCrudHandler(logger, config), nil), func() {}, nil
 }
 
 // initRootFlags 把全局 -c/--conf 注册到 pflag.CommandLine：cobra 会把全局旗标

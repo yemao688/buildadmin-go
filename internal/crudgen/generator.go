@@ -33,6 +33,7 @@ type GenerateOptions struct {
 	SkipMenu              bool
 	SkipFrontend          bool // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
 	SkipRepo              bool // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
+	SkipCompileCheck      bool // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -503,16 +504,32 @@ func (s *generateState) syncMenus(webViewsDir WebDir, tableComment string) error
 }
 
 func (s *generateState) runToolchain() error {
-	if err := runWire(); err != nil {
-		return s.failErr("wire", err)
-	}
-	if err := runProjectBuild(); err != nil {
-		return s.failErr("compile", err)
+	if s.opts.SkipCompileCheck {
+		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
+	} else {
+		stage, err := s.runToolchainChecks()
+		if err != nil {
+			return s.failErr(stage, err)
+		}
 	}
 	if err := updateCrudStatus(s.db, s.cfg, s.logID, "success"); err != nil {
 		return s.failErr("success log update", err)
 	}
 	return nil
+}
+
+// runToolchainChecks 执行 wire 与全仓编译自检；返回失败阶段名供台账记录。
+func (s *generateState) runToolchainChecks() (string, error) {
+	if s.opts.SkipCompileCheck {
+		return "", nil
+	}
+	if err := runWire(); err != nil {
+		return "wire", err
+	}
+	if err := runProjectBuild(); err != nil {
+		return "compile", err
+	}
+	return "", nil
 }
 
 func actualPrimaryKey(db *gorm.DB, fullTableName string) (string, error) {
@@ -575,37 +592,53 @@ func validateGenerationMode(generationType string) error {
 	return nil
 }
 
+// DeleteOptions 控制 crud:delete 的可选行为。
+type DeleteOptions struct {
+	SkipCompileCheck bool // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级
+}
+
 // DeleteFromSpec performs deletion without an HTTP context. The caller is
 // responsible for authorization before invoking this service.
 func DeleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string) error {
 	return DeleteFromSpecWithHooks(db, cfg, tableName, nil)
 }
 
-// deleteState 承载一次删除的可变状态；DeleteFromSpecWithHooks 只保留锁、
+// deleteState 承载一次删除的可变状态；deleteFromSpec 只保留锁、
 // 隔离/快照回滚与 panic 恢复，其余阶段以方法拆分且执行顺序不变。
 type deleteState struct {
-	db             *gorm.DB
-	cfg            *conf.Configuration
-	tableName      string
-	unregister     func(method, path string)
-	log            model.Log
-	manifest       FileManifest
-	parentRepoPath string
-	quarantine     *Quarantine
-	shared         *FileSnapshot
-	menuSnapshot   []model.AdminRule
-	menuName       string
-	handlerFile    NameInfo
-	repositoryFile NameInfo
-	className      string
+	db               *gorm.DB
+	cfg              *conf.Configuration
+	tableName        string
+	unregister       func(method, path string)
+	skipCompileCheck bool
+	log              model.Log
+	manifest         FileManifest
+	parentRepoPath   string
+	quarantine       *Quarantine
+	shared           *FileSnapshot
+	menuSnapshot     []model.AdminRule
+	menuName         string
+	handlerFile      NameInfo
+	repositoryFile   NameInfo
+	className        string
 }
 
 func DeleteFromSpecWithHooks(db *gorm.DB, cfg *conf.Configuration, tableName string, unregister func(method, path string)) (retErr error) {
+	return deleteFromSpec(db, cfg, tableName, DeleteOptions{}, unregister)
+}
+
+// DeleteFromSpecWithHooksAndOptions 同 DeleteFromSpecWithHooks，并允许跳过
+// wire/编译自检（批量升级时旧产物尚未重生成）。
+func DeleteFromSpecWithHooksAndOptions(db *gorm.DB, cfg *conf.Configuration, tableName string, opts DeleteOptions, unregister func(method, path string)) (retErr error) {
+	return deleteFromSpec(db, cfg, tableName, opts, unregister)
+}
+
+func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts DeleteOptions, unregister func(method, path string)) (retErr error) {
 	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return err
 	}
-	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister}
+	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
 	var fail func(string, error) error
 	defer func() {
 		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
@@ -819,6 +852,10 @@ func (s *deleteState) removeProviders() error {
 }
 
 func (s *deleteState) runToolchain() error {
+	if s.skipCompileCheck {
+		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
+		return nil
+	}
 	if err := runWire(); err != nil {
 		return s.markFailed("wire", err)
 	}
@@ -894,11 +931,10 @@ func normalizeDeleteManifest(manifest FileManifest) (FileManifest, error) {
 			if raw == "" || strings.IndexByte(raw, 0) >= 0 {
 				return nil, fmt.Errorf("invalid empty or NUL manifest path")
 			}
-			candidate := canonicalManifestLangPath(raw)
-			if !filepath.IsAbs(filepath.FromSlash(candidate)) {
-				candidate = filepath.Join(util.RootPath(), filepath.FromSlash(candidate))
-			}
-			abs, err := filepath.Abs(filepath.Clean(candidate))
+			// 清单可能来自旧 checkout 的绝对路径：按已知产物根重新挂到当前
+			// 仓库后再做根校验，跨 worktree 删除才不会被陈旧前缀拒绝。
+			candidate := manifestPathKey(raw, util.RootPath())
+			abs, err := filepath.Abs(candidate)
 			if err != nil {
 				return nil, err
 			}
@@ -1249,16 +1285,26 @@ func filterManifestPaths(manifest FileManifest, skipped map[string]bool) FileMan
 //   - 拒绝：previous 与 current 互不包含（换 generateRelativePath/表名等
 //     路径漂移会残留旧文件，必须 crud:delete 后再生成）。
 func manifestAllows(manifest FileManifest, log *model.Log, skipped map[string]bool) bool {
+	return manifestAllowsAt(manifest, log, skipped, util.RootPath())
+}
+
+// manifestAllowsAt 用显式 root 做路径归一，便于验证跨 checkout/worktree 的
+// 清单比较；生产调用始终传入当前 util.RootPath()。
+func manifestAllowsAt(manifest FileManifest, log *model.Log, skipped map[string]bool, root string) bool {
 	if log == nil {
 		return len(manifestConflicts(manifest)) == 0
 	}
-	current := normalizedPathSet(append(append([]string{}, manifest.Generated...), manifest.Shared...))
-	previous := normalizedPathSet(log.Table.GeneratedFiles)
+	current := normalizedPathSetAt(append(append([]string{}, manifest.Generated...), manifest.Shared...), root)
+	previous := normalizedPathSetAt(log.Table.GeneratedFiles, root)
 
 	// skip 方向：previous 剔除本次跳过路径后与 current 等长且完全一致。
+	skipKeys := make(map[string]bool, len(skipped))
+	for path := range skipped {
+		skipKeys[manifestPathKey(path, root)] = true
+	}
 	prevFiltered := make(map[string]bool, len(previous))
 	for path := range previous {
-		if skipped[path] {
+		if skipKeys[path] {
 			continue
 		}
 		prevFiltered[path] = true
@@ -1304,10 +1350,10 @@ func manifestConflicts(manifest FileManifest) []string {
 	return conflicts
 }
 
-func normalizedPathSet(paths []string) map[string]bool {
+func normalizedPathSetAt(paths []string, root string) map[string]bool {
 	result := make(map[string]bool, len(paths))
 	for _, path := range paths {
-		result[filepath.Clean(canonicalManifestLangPath(path))] = true
+		result[manifestPathKey(path, root)] = true
 	}
 	return result
 }
@@ -1364,7 +1410,7 @@ func createCrudLog(db *gorm.DB, cfg *conf.Configuration, opts GenerateOptions) (
 		Tablename:  opts.Table.Name,
 		Comment:    opts.Table.Comment,
 		Connection: opts.Table.DatabaseConnection,
-		Table:      crudmodel.JSON_TABLE(opts.Table),
+		Table:      crudmodel.JSON_TABLE(portableTableForLog(opts.Table)),
 		Fields:     crudmodel.JSON_FIELDS(opts.Fields),
 		Status:     "start",
 	}
