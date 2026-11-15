@@ -68,13 +68,16 @@ func NewCaptchaService(sqlDB *gorm.DB) *CaptchaService {
 		FontSize: 25,
 		UseCurve: true,
 		UseNoise: true,
-		ImageH:   0,
-		ImageW:   0,
 		Length:   4,
 		FontTTF:  "",
 		Bg:       []int{243, 251, 254},
 		Reset:    true,
 	}
+	// 图像宽高默认值沿用 PHP 上游 v2.3.8 的公式（Length=4、FontSize=25 时为 200x62），
+	// 依赖 Length/FontSize 因此不能在字面量里直接给出；Entry 只信任这里的取值。
+	defaultConfig.ImageW = int(float64(defaultConfig.Length*defaultConfig.FontSize)*1.5) + defaultConfig.Length*defaultConfig.FontSize/2
+	defaultConfig.ImageH = int(float64(defaultConfig.FontSize) * 2.5)
+
 	return &CaptchaService{config: defaultConfig, sqlDB: sqlDB}
 }
 
@@ -150,13 +153,12 @@ func (c *CaptchaService) GetCaptchaData(id string) (Captcha, error) {
 func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 	imageW := c.config.ImageW
 	imageH := c.config.ImageH
-	if imageW == 0 {
-		imageW = int(float64(c.config.Length*c.config.FontSize)*1.5) + c.config.Length*c.config.FontSize/2
+	// 尺寸非法时直接返回普通错误（由 response.FailByErr 映射为业务错误），
+	// 既不绘制也不访问数据库。
+	if imageW <= 0 || imageH <= 0 {
+		return nil, fmt.Errorf("invalid captcha image size %dx%d", imageW, imageH)
 	}
 
-	if imageH == 0 {
-		imageH = int(float64(c.config.FontSize) * 2.5)
-	}
 	// 建立一幅
 	img := image.NewRGBA(image.Rect(0, 0, imageW, imageH))
 	// 设置背景
@@ -180,7 +182,7 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 	}
 
 	if c.config.UseCurve {
-		writeCurve(img, c.config.FontSize, c.config.ImageW, c.config.ImageH, textColor)
+		writeCurve(img, c.config.FontSize, imageW, imageH, textColor)
 	}
 
 	key := c.authCode(c.config.SeKey, id, 32)
@@ -262,19 +264,32 @@ func writeText(img *image.RGBA, config CaptchaConfig, captcha string, textColor 
 	return strings.ToUpper(strings.Join(code, "")), nil
 }
 
+// curveSecureIntn 把 SecureIntn 的入参收敛到正区间。
+//
+// writeCurve 的入参来自可配置的 ImageW/ImageH，组合式上界（如 imageW*2-imageH+1、
+// int(imageW*0.8)-imageW/2+1）在细长等非常规但合法的尺寸下会算出非正整数，
+// 直接传给 SecureIntn 会 panic；此时返回 0 使曲线退化但不影响出图。
+// 正常尺寸（200x62）下所有上界均为正，取值分布与原先完全一致。
+func curveSecureIntn(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return random.SecureIntn(n)
+}
+
 // 画一条由两条连在一起构成的随机正弦函数曲线作干扰线
 func writeCurve(img *image.RGBA, fontSize int, imageW int, imageH int, textColor color.RGBA) {
 	py := 0
 
 	// 曲线部分
-	A := random.SecureIntn(int(imageH/2)) + 1          // 振幅
-	b := random.SecureIntn(int(imageH/2)+1) - imageH/4 // Y轴方向偏移量
-	f := random.SecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
-	T := random.SecureIntn(imageW*2-imageH+1) + imageH // 周期
-	w := 2 * math.Pi / float64(T)                      // 角频率
+	A := curveSecureIntn(int(imageH/2)) + 1          // 振幅
+	b := curveSecureIntn(int(imageH/2)+1) - imageH/4 // Y轴方向偏移量
+	f := curveSecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T := curveSecureIntn(imageW*2-imageH+1) + imageH // 周期
+	w := 2 * math.Pi / float64(T)                    // 角频率
 
-	px := 0                                                                  // 曲线横坐标起始位置
-	px2 := random.SecureIntn(int(float64(imageW)*0.8)-imageW/2+1) + imageW/2 // 曲线横坐标结束位置
+	px := 0                                                                // 曲线横坐标起始位置
+	px2 := curveSecureIntn(int(float64(imageW)*0.8)-imageW/2+1) + imageW/2 // 曲线横坐标结束位置
 
 	for px < px2 {
 		if w != 0 {
@@ -290,9 +305,9 @@ func writeCurve(img *image.RGBA, fontSize int, imageW int, imageH int, textColor
 	}
 
 	// 曲线后部分
-	A = random.SecureIntn(int(imageH/2)) + 1          // 振幅
-	f = random.SecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
-	T = random.SecureIntn(imageW*2-imageH+1) + imageH // 周期
+	A = curveSecureIntn(int(imageH/2)) + 1          // 振幅
+	f = curveSecureIntn(int(imageH/2)+1) - imageH/4 // X轴方向偏移量
+	T = curveSecureIntn(imageW*2-imageH+1) + imageH // 周期
 	w = (2 * math.Pi) / float64(T)
 	b = py - A*int(math.Sin(w*float64(px+f))) - int(imageH/2) // Y轴方向偏移量
 	px = px2

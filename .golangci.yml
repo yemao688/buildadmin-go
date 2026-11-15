@@ -8,7 +8,8 @@
 #   forcetypeassert / misspell / predeclared / errname / thelper / 精选 staticcheck。
 # 档 C（已全部清空）：第 1 批 testifylint、第 2 批 gosec、第 3 批 gocritic
 #   （默认 check 集 + performance 子集）、第 4 批 revive（排除 exported / var-naming）、
-#   第 5 批 paralleltest（全局状态测试逐条立据）、第 6 批 gocyclo（min-complexity 15）。
+#   第 5 批 paralleltest（全局状态测试逐条立据）、第 6 批 gocyclo（min-complexity 15）、
+#   第 7 批 nolintlint（豁免必须具体到 linter、写明理由且不得残留未命中项）。
 
 version: "2"
 
@@ -54,7 +55,17 @@ linters:
     # --- 档 C：第 6 批 gocyclo（min-complexity 15）---
     - gocyclo
 
+    # --- 档 C：第 7 批 nolintlint（校验豁免本身）---
+    - nolintlint
+
   settings:
+    # nolintlint：禁止裸 //nolint（必须写明规则名）与无理由豁免；allow-unused
+    # 显式关闭「容忍未命中豁免」，删除不再触发的 //nolint 由该检查兜底。
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+
     # staticcheck：保留 S/SA 类正确性检查，关掉 ST1*/QF1* 纯风格重构建议
     # （QT 风格化、QF 快速修复在存量代码上是噪音），并豁免 SA1029
     # （仓库约定用 string 作 context key，与 Gin / 中间件透传口径一致）。

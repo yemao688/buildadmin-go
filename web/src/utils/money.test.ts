@@ -40,10 +40,12 @@ describe('formatMoney', () => {
         expect(formatMoney(100.5, { code: 'JPY' })).toBe('100.50')
     })
 
-    it('千分位只作用于整数部分', () => {
+    it('千分位只作用于整数部分，可按选项关闭', () => {
         expect(formatMoney(1234567.89)).toBe('¥1,234,567.89')
         expect(formatMoney(-1234.56)).toBe('¥-1,234.56')
-        // 注：thousandSeparator:false 目前是空操作（实现未消费该选项），故不在此断言
+        expect(formatMoney(1234567.89, { thousandSeparator: false })).toBe('¥1234567.89')
+        expect(formatMoney(-1234.56, { thousandSeparator: false })).toBe('¥-1234.56')
+        expect(formatMoney(1234.56, { thousandSeparator: false, position: 'suffix' })).toBe('1234.56¥')
     })
 
     it('符号位置 prefix/suffix', () => {
@@ -58,12 +60,14 @@ describe('formatMoney', () => {
         expect(formatMoney(1, { decimals: 200 })).toBe('¥' + (1).toFixed(100))
     })
 
-    it('signed 为正负数显式加 ASCII 符号，0 不带符号', () => {
-        // 现状：prefix 时货币符号仍在前（¥+100.00），与接口注释“符号位于货币符号之前”不一致
-        expect(formatMoney(100, { signed: true })).toBe('¥+100.00')
-        expect(formatMoney(-100, { signed: true })).toBe('¥-100.00')
+    it('signed 为正负数显式加 ASCII 符号，符号位于货币符号之前，0 不带符号', () => {
+        expect(formatMoney(100, { signed: true })).toBe('+¥100.00')
+        expect(formatMoney(-100, { signed: true })).toBe('-¥100.00')
+        expect(formatMoney(100, { signed: true, position: 'suffix' })).toBe('+100.00¥')
         expect(formatMoney(-100, { signed: true, position: 'suffix' })).toBe('-100.00¥')
         expect(formatMoney(0, { signed: true })).toBe('¥0.00')
+        // signed 与关闭千分位叠加时，符号仍在最外层
+        expect(formatMoney(-1234.56, { signed: true, thousandSeparator: false })).toBe('-¥1234.56')
     })
 
     it('显式 rate 覆盖 store 换算率', () => {
