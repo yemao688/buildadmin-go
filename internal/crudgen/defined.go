@@ -570,34 +570,38 @@ func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.
 			{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
 			{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
 			{{end}}{{end}}
-			if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}			if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
 				return err
 			}
-			{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+			if {{.ModelVar}}.Weigh == 0 {
 				if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
 					return err
 				}
-				{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
-			}
-			{{end}}return nil
-		})
+{{if eq .PkGoType "int64"}}				{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}}) //nolint:gosec // G115: weigh 列为 int(11)，业务表自增主键在业务规模内不会超过 int32 上界
+{{else}}				{{.ModelVar}}.Weigh = {{.ModelVar}}.{{.PkGoField}}
+{{end}}			}
+			return nil
+{{else}}			return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
+{{end}}		})
 	}
 	return s.Transaction(ctx, func(tx *gorm.DB) error {
 		{{if or .HasCreateTime .HasUpdateTime}}now := time.Now().Unix()
 		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
 		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
 		{{end}}{{end}}
-		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
 			return err
 		}
-		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+		if {{.ModelVar}}.Weigh == 0 {
 			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
 				return err
 			}
-			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
-		}
-		{{end}}return nil
-	})
+{{if eq .PkGoType "int64"}}			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}}) //nolint:gosec // G115: weigh 列为 int(11)，业务表自增主键在业务规模内不会超过 int32 上界
+{{else}}			{{.ModelVar}}.Weigh = {{.ModelVar}}.{{.PkGoField}}
+{{end}}		}
+		return nil
+{{else}}		return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
+{{end}}	})
 }
 {{- else -}}
 func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.ClassName}}) error {
@@ -630,17 +634,19 @@ func (s *{{.ClassName}}Repository) Add(ctx *gin.Context, {{.ModelVar}} model.{{.
 		{{if .HasCreateTime}}{{.ModelVar}}.{{.CreateTime}} = now
 		{{end}}{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = now
 		{{end}}{{end}}
-		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
+{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}		if err := tx.Table(s.TableName).Create(&{{.ModelVar}}).Error; err != nil {
 			return err
 		}
-		{{if and .HasWeigh (or (eq .PkGoType "int32") (eq .PkGoType "int64"))}}if {{.ModelVar}}.Weigh == 0 {
+		if {{.ModelVar}}.Weigh == 0 {
 			if err := tx.Table(s.TableName).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).Update("weigh", {{.ModelVar}}.{{.PkGoField}}).Error; err != nil {
 				return err
 			}
-			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}})
-		}
-		{{end}}return nil
-	})
+{{if eq .PkGoType "int64"}}			{{.ModelVar}}.Weigh = int32({{.ModelVar}}.{{.PkGoField}}) //nolint:gosec // G115: weigh 列为 int(11)，业务表自增主键在业务规模内不会超过 int32 上界
+{{else}}			{{.ModelVar}}.Weigh = {{.ModelVar}}.{{.PkGoField}}
+{{end}}		}
+		return nil
+{{else}}		return tx.Table(s.TableName).Create(&{{.ModelVar}}).Error
+{{end}}	})
 }
 {{- end}}
 

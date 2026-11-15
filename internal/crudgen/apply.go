@@ -905,7 +905,7 @@ func adoptCrudLog(db *gorm.DB, cfg *conf.Configuration, spec *GenerateOptions, a
 		return logID, nil
 	}
 	updates := map[string]interface{}{
-		"table":  crudmodel.JSON_TABLE(spec.Table),
+		"table":  crudmodel.JSON_TABLE(portableTableForLog(spec.Table)),
 		"fields": crudmodel.JSON_FIELDS(spec.Fields),
 	}
 	if err := db.Table(crudLogTable(cfg)).Where("id=?", existing.ID).Updates(updates).Error; err != nil {

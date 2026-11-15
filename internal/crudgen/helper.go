@@ -2023,12 +2023,22 @@ func renderRelationLoaderAggregator(modelData ModelData) string {
 	b.WriteString("Repository) loadRelations(ctx *gin.Context, rows *[]model.")
 	b.WriteString(modelData.ClassName)
 	b.WriteString(") error {\n")
-	for _, relation := range modelData.Relations {
+	for i, relation := range modelData.Relations {
+		// 最后一条关系直接以 return 收尾：末尾再补 return nil 会被 revive if-return 判为冗余。
+		if i == len(modelData.Relations)-1 {
+			b.WriteString("\treturn s.load")
+			b.WriteString(relation.RelationGoField)
+			b.WriteString("Relations(ctx, rows)\n")
+			continue
+		}
 		b.WriteString("\tif err := s.load")
 		b.WriteString(relation.RelationGoField)
 		b.WriteString("Relations(ctx, rows); err != nil { return err }\n")
 	}
-	b.WriteString("\treturn nil\n}\n")
+	if len(modelData.Relations) == 0 {
+		b.WriteString("\treturn nil\n")
+	}
+	b.WriteString("}\n")
 	return b.String()
 }
 

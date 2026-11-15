@@ -51,6 +51,57 @@ func TestNormalizeGenerationType(t *testing.T) {
 	}
 }
 
+// --skip-compile-check 只跳过 wire/编译自检，不跳过文件写入与台账收尾。
+//
+//nolint:paralleltest // 改写包级 runWire/runProjectBuild 桩，必须串行
+func TestRunToolchainChecksSkipsCompileCheck(t *testing.T) {
+	oldWire, oldBuild := runWire, runProjectBuild
+	t.Cleanup(func() {
+		runWire, runProjectBuild = oldWire, oldBuild
+	})
+	called := false
+	runWire = func() error { called = true; return nil }
+	runProjectBuild = func() error { called = true; return nil }
+
+	state := &generateState{opts: GenerateOptions{SkipCompileCheck: true}}
+	stage, err := state.runToolchainChecks()
+	if err != nil || stage != "" {
+		t.Fatalf("runToolchainChecks with skip = (%q, %v), want no stage and no error", stage, err)
+	}
+	if called {
+		t.Fatal("--skip-compile-check must not invoke wire or go build")
+	}
+
+	state.opts.SkipCompileCheck = false
+	if _, err := state.runToolchainChecks(); err != nil {
+		t.Fatalf("runToolchainChecks without skip: %v", err)
+	}
+	if !called {
+		t.Fatal("toolchain checks must run without --skip-compile-check")
+	}
+}
+
+// crud:delete 的 --skip-compile-check 同样只跳过 wire/编译自检。
+//
+//nolint:paralleltest // 改写包级 runWire/runProjectBuild 桩，必须串行
+func TestDeleteRunToolchainSkipsCompileCheck(t *testing.T) {
+	oldWire, oldBuild := runWire, runProjectBuild
+	t.Cleanup(func() {
+		runWire, runProjectBuild = oldWire, oldBuild
+	})
+	called := false
+	runWire = func() error { called = true; return nil }
+	runProjectBuild = func() error { called = true; return nil }
+
+	state := &deleteState{skipCompileCheck: true}
+	if err := state.runToolchain(); err != nil {
+		t.Fatalf("delete runToolchain with skip: %v", err)
+	}
+	if called {
+		t.Fatal("--skip-compile-check must not invoke wire or go build")
+	}
+}
+
 // 生成 handler 不再展开 Del：删除响应文案由共享 TableHandler 提供，
 // 模板自身只负责装配 TableOptions。
 func TestHandlerTemplateDeleteUsesSuccessMessage(t *testing.T) {

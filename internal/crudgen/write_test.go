@@ -2,11 +2,14 @@ package crudgen
 
 import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
+	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/util"
+	"go/format"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -492,8 +495,12 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(withCode, "if demo.Weigh == 0") || !strings.Contains(withCode, `Update("weigh", demo.ID)`) || !strings.Contains(withCode, "demo.Weigh = int32(demo.ID)") {
+	if !strings.Contains(withCode, "if demo.Weigh == 0") || !strings.Contains(withCode, `Update("weigh", demo.ID)`) || !strings.Contains(withCode, "demo.Weigh = demo.ID") {
 		t.Fatalf("weigh post-insert hook missing:\n%s", withCode)
+	}
+	// int32 主键直接赋值；带 nolint 会被 nolintlint 判为 unused directive。
+	if strings.Contains(withCode, "demo.Weigh = int32(demo.ID)") || strings.Contains(withCode, "//nolint") {
+		t.Fatalf("int32 primary key must assign weigh without conversion or nolint:\n%s", withCode)
 	}
 
 	data.StructTemp = withoutWeigh
@@ -503,6 +510,128 @@ func TestModelTemplateAddsRowFactory(t *testing.T) {
 	}
 	if strings.Contains(withoutCode, "demo.Weigh") || strings.Contains(withoutCode, `Update("weigh", demo.ID)`) {
 		t.Fatalf("weigh post-insert hook emitted without a weigh field:\n%s", withoutCode)
+	}
+}
+
+// 非 inheritFrom 模型的仓库只有 Add 一处 weigh 赋值，取该行断言类型转换与 nolint 形态。
+func weighAssignmentLine(t *testing.T, code string) string {
+	t.Helper()
+	lines := regexp.MustCompile(`(?m)^\s*\w+\.Weigh = .*$`).FindAllString(code, -1)
+	if len(lines) != 1 {
+		t.Fatalf("expected exactly one weigh assignment, got %d:\n%s", len(lines), code)
+	}
+	return lines[0]
+}
+
+// 渲染仓库模板并确认产物语法有效。
+func renderModelForGuard(t *testing.T, data ModelData) string {
+	t.Helper()
+	code, err := renderModel(data)
+	if err != nil {
+		t.Fatalf("render model: %v", err)
+	}
+	if _, err := format.Source([]byte(code)); err != nil {
+		t.Fatalf("generated repository is not valid Go: %v\n%s", err, code)
+	}
+	return code
+}
+
+// 拒绝「create-if 紧跟 return nil」的尾部形状，该形态会被 revive if-return 判为冗余。
+func assertNoRedundantCreateTail(t *testing.T, code string) {
+	t.Helper()
+	bad := regexp.MustCompile(`(?s)if err := tx\.Table\(s\.TableName\)\.Create\(&demo\)\.Error; err != nil \{\s*return err\s*\}\s*return nil`)
+	if match := bad.FindString(code); match != "" {
+		t.Fatalf("redundant create-if + return nil tail:\n%s", match)
+	}
+}
+
+func TestModelTemplateWeighAssignmentFollowsPrimaryKeyType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		pkGoType   string
+		wantLine   string
+		wantNoLint bool
+	}{
+		{name: "int64 primary key", pkGoType: "int64", wantLine: "demo.Weigh = int32(demo.ID)", wantNoLint: true},
+		{name: "int32 primary key", pkGoType: "int32", wantLine: "demo.Weigh = demo.ID", wantNoLint: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			code := renderModelForGuard(t, ModelData{
+				Namespace: "model", ClassName: "Demo", ModelVar: "demo",
+				Pk: "id", PkGoField: "ID", PkGoType: tc.pkGoType,
+				StructTemp: "type Demo struct {\n\tID " + tc.pkGoType + " `json:\"id\"`\n\tWeigh int32 `json:\"weigh\"`\n}\n",
+			})
+			line := weighAssignmentLine(t, code)
+			if !strings.Contains(line, tc.wantLine) {
+				t.Fatalf("weigh assignment %q does not contain %q", line, tc.wantLine)
+			}
+			if tc.wantNoLint {
+				if !strings.Contains(line, "//nolint:gosec") || !strings.Contains(line, "G115") {
+					t.Fatalf("int64 weigh conversion needs an explained nolint:gosec: %q", line)
+				}
+				return
+			}
+			if strings.Contains(line, "//nolint") {
+				t.Fatalf("int32 weigh assignment must not carry nolint (unused directive): %q", line)
+			}
+		})
+	}
+}
+
+func TestModelTemplateAddReturnsCreateResultWithoutWeigh(t *testing.T) {
+	t.Parallel()
+	plain := renderModelForGuard(t, ModelData{
+		Namespace: "model", ClassName: "Demo", ModelVar: "demo",
+		Pk: "id", PkGoField: "ID", PkGoType: "int32",
+		StructTemp: "type Demo struct {\n\tID int32 `json:\"id\"`\n}\n",
+	})
+	if !strings.Contains(plain, "return tx.Table(s.TableName).Create(&demo).Error") {
+		t.Fatalf("Add without weigh should return the create error directly:\n%s", plain)
+	}
+	if strings.Contains(plain, "demo.Weigh") {
+		t.Fatalf("weigh hook emitted without a weigh field:\n%s", plain)
+	}
+	assertNoRedundantCreateTail(t, plain)
+
+	inherited := renderModelForGuard(t, ModelData{
+		Namespace: "model", Name: "demo", ClassName: "Demo", ModelVar: "demo",
+		Pk: "id", PkGoField: "ID", PkGoType: "int32",
+		StructTemp:            "type Demo struct {\n\tID int32 `json:\"id\"`\n\tUserID int32 `json:\"user_id\"`\n}\n",
+		DataScopePolicy:       data_scope.ResourcePolicy{Mode: data_scope.ModeAuto, OwnerColumn: "admin_id"},
+		DataScopeOwnerGoField: "AdminID", DataScopeOwnerGoType: "int32",
+		InheritFrom:      &data_scope.InheritRef{Table: "user", ByColumn: "user_id"},
+		InheritByGoField: "UserID",
+	})
+	if got := strings.Count(inherited, "return tx.Table(s.TableName).Create(&demo).Error"); got != 2 {
+		t.Fatalf("inheritFrom Add should return the create error directly in both closures, got %d:\n%s", got, inherited)
+	}
+	assertNoRedundantCreateTail(t, inherited)
+}
+
+func TestRenderRelationLoaderAggregatorReturnsLastRelation(t *testing.T) {
+	t.Parallel()
+	data := ModelData{
+		ClassName: "Demo",
+		Relations: []RelationMetadata{{RelationGoField: "User"}, {RelationGoField: "Category"}},
+	}
+	got := renderRelationLoaderAggregator(data)
+	want := "func (s *DemoRepository) loadRelations(ctx *gin.Context, rows *[]model.Demo) error {\n" +
+		"\tif err := s.loadUserRelations(ctx, rows); err != nil { return err }\n" +
+		"\treturn s.loadCategoryRelations(ctx, rows)\n}\n"
+	if got != want {
+		t.Fatalf("aggregator with relations = %q, want %q", got, want)
+	}
+	if strings.Contains(got, "return nil") {
+		t.Fatalf("aggregator must not append return nil after the last relation:\n%s", got)
+	}
+
+	empty := renderRelationLoaderAggregator(ModelData{ClassName: "Demo"})
+	wantEmpty := "func (s *DemoRepository) loadRelations(ctx *gin.Context, rows *[]model.Demo) error {\n\treturn nil\n}\n"
+	if empty != wantEmpty {
+		t.Fatalf("aggregator without relations = %q, want %q", empty, wantEmpty)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -59,6 +60,10 @@ var boundaryRules = []boundaryRule{
 	// crudgen is a development-time tool layer. It may read model/pkg but must
 	// not depend on a runtime channel; metadata access goes through TableStore.
 	{code: "R10", ownerPrefix: "crudgen/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api", modulePath + "/internal/common", modulePath + "/internal/middleware"}},
+	// The standalone generator (cmd/crudgen) reuses internal/commands, so that
+	// package must stay channel-free: importing admin/api would drag stale
+	// generated artifacts into the build and defeat the upgrade escape hatch.
+	{code: "R11", ownerPrefix: "commands/", bannedPrefixes: []string{modulePath + "/internal/admin", modulePath + "/internal/api"}},
 }
 
 var importBoundaryWhitelist = []whitelistEntry{}
@@ -84,6 +89,36 @@ func TestImportBoundary(t *testing.T) {
 	}
 
 	t.Fatal(boundaryFailureReport(newViolations, staleWhitelist))
+}
+
+// cmd/crudgen 是旧生成产物阻塞编译时的逃生入口：入口文件不得直接 import
+// admin/api 渠道；传递依赖由 R11 约束 internal/commands。
+func TestCrudgenEntryImportsNoRuntimeChannel(t *testing.T) {
+	t.Parallel()
+	entries, err := os.ReadDir("../cmd/crudgen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join("..", "cmd", "crudgen", name), nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, spec := range file.Imports {
+			importPath, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if hasImportPrefix(importPath, modulePath+"/internal/admin") || hasImportPrefix(importPath, modulePath+"/internal/api") {
+				t.Fatalf("%s imports runtime channel %s", name, importPath)
+			}
+		}
+	}
 }
 
 func indexBoundaryViolations(violations []boundaryViolation) map[string]boundaryViolation {

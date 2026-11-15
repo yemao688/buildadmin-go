@@ -2,7 +2,6 @@
 package commands
 
 import (
-	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/cron"
 	helper "buildadmin-go/internal/crudgen"
@@ -18,6 +17,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// RouteProtectionReporter 报告缺少权限规则的后台路由（启动诊断）。
+// 用接口而不是具体类型，避免 commands 包反向依赖 admin 渠道——独立生成器
+// cmd/crudgen 复用本包时，旧生成产物不应因 import 图被拖进编译。
+type RouteProtectionReporter interface {
+	ReportUnprotectedRoutes(routes gin.RoutesInfo)
+}
+
 // appStartedAt approximates process start for the "ready in" banner line.
 var appStartedAt = time.Now()
 
@@ -27,7 +33,7 @@ var appStartedAt = time.Now()
 type ServerApp struct {
 	config  *conf.Configuration
 	logger  *zap.Logger
-	authM   *adminMiddleware.Authorization
+	authM   RouteProtectionReporter
 	httpSrv *http.Server
 	cronSrv *cron.Cron
 	db      *gorm.DB
@@ -50,7 +56,7 @@ func NewHttpServer(
 func NewServerApp(
 	config *conf.Configuration,
 	logger *zap.Logger,
-	authM *adminMiddleware.Authorization,
+	authM RouteProtectionReporter,
 	httpSrv *http.Server,
 	cronSrv *cron.Cron,
 	db *gorm.DB,
