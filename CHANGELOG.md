@@ -1,5 +1,23 @@
 # Changelog
 
+## v3.5.1
+
+> 3.5.0 收尾批次：crudgen 跨 worktree 重生成与独立入口（#52 #53 #54）、验证码错误检查位置修正、lint 平台差异收敛、忽略文件精简；无迁移与表结构变更。
+
+- **Fixed（crudgen）:** `crud_log` 的 `generatedFiles` / `manifest` 改存仓库根相对路径，读取时按 `util.RootPath()` 还原，旧记录中的其它 checkout 绝对路径按已知产物根自动重挂；同一数据库可在 worktree / 另一份 clone 继续生成或删除。`crud:delete` 的删除目标仍从表清单重建，不受日志路径影响。
+- **Added（crudgen）:** 新增独立入口 `cmd/crudgen`（只含 CRUD 子命令，不 import admin/api），并在 `crud:generate` / `crud:delete` 增加 `--skip-compile-check`：旧产物阻塞 `cmd/server` 编译时先批量重生成，全部完成后再统一 `go generate ./cmd/server && go build ./...`。入口的传递依赖由 `go list -deps` 守卫。
+- **Fixed（crudgen 模板）:** 生成模板按主键类型处理 weigh（`int64` 带具体理由的 `//nolint:gosec // G115`，`int32` 直接赋值，避免 nolintlint unused）；无 weigh 的 Add 直接返回 Create 错误；关系聚合器消除 `revive if-return`。
+- **Fixed（captcha）:** `writeText` 的错误检查移到调用之后（原先在 DB 写入后才检查）；删除无人调用且缺 `id` 的 `buildCaptchaUrl`；captcha HTTP 测试改用 `t.TempDir()` 独立 sqlite 库，`-count>1` 不再冲突。
+- **Changed（lint）:** 关闭 revive `context-keys-type`——该规则与仓库 string context key 约定冲突，且 v2.15.0 官方二进制在 darwin/linux 上结果不同，导致本地与 CI 无法同时绿；本地与 CI 统一固定官方 v2.15.0。CI web job 增加 `pnpm test`。
+- **Changed（仓库卫生）:** 删除不再使用的 `.cbmignore` 与 `.git-blame-ignore-revs` 并同步清理 `.dockerignore`、CI 注释与 `AGENTS.md`；发版文档示例改用 `<version>` 占位；`docs/crud-generation.md` 补充 `bigint unsigned` 主键 weigh 截断说明与 `cmd/crudgen` 能力边界。
+- **Downstream（业务 fork 升级必读）:** 本版无新迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。合并后：
+  - 旧生成产物阻塞编译时，用 `go run ./cmd/crudgen ... crud:generate <spec> --skip-compile-check` 逐模块重生成，全部完成后执行 `go generate ./cmd/server && go build ./...`；注意入口仍依赖 `internal/model` 的实体产物。
+  - `crud_log` 会自动兼容旧的绝对路径记录，无需改库；跨 worktree / clone 重生成不再需要手工修路径。
+  - `.golangci.yml` 已关闭 revive `context-keys-type`，业务代码用 string context key 不再报错；本地 lint 请使用官方 v2.15.0 二进制（`go install` 构建的判定可能不同）。
+  - 若业务自定义过 `web/src/api/common.ts` 的 `buildCaptchaUrl`，该函数已删除（原本无人调用且会 400）；其余前端变更仅测试与依赖。
+- **Docs:** `AGENTS.md`、`docs/crud-generation.md`、`docs/framework-workflow.md`。
+- **Verified:** CI run `43719862992`（head `3de5920`）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / test / typecheck / build）均成功；发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。
+
 ## v3.5.0
 
 > 生成器与门禁收尾批次：`quickSearch` 支持跨表关联字段、新增框架维护者的 `release` 发版校验命令；档 C 六个 linter 全量入闸并补齐测试网（含 web vitest）；修复公开验证码路由 panic 与 `money.ts` 注释/实现不一致。无迁移、无 `crud_specs`、无表结构变更。
