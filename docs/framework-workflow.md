@@ -153,7 +153,8 @@ go run ./cmd/server --conf configs/config.yaml migrate
 
 ```bash
 cd web
-pnpm install --frozen-lockfile
+# web/pnpm-lock.yaml 未入库（见根 .gitignore），与 CI 口径一致使用 --no-frozen-lockfile
+pnpm install --no-frozen-lockfile
 pnpm dev
 ```
 
@@ -225,7 +226,7 @@ go build ./...
 
 # web/ 目录
 cd web
-pnpm install --frozen-lockfile
+pnpm install --no-frozen-lockfile
 pnpm typecheck
 pnpm build
 ```
@@ -239,6 +240,26 @@ git push origin master
 ```
 
 保留合并提交和升级记录；不要改写 `master` 的远端历史或 force push。
+
+### 跨版本升级要点（3.3.7 → 3.5.0）
+
+下游长期停在 3.3.7 时，一次合并会同时跨过 3.3.8、3.3.9、3.4.0、3.5.0。推荐**一次性合并**：先 merge `upstream/v3`，再在合并后的树上重新生成业务模块一次，即可同时满足 3.3.9 的产物形状与 3.4.0 的 `TableHandler` 形状。分版本逐次升级也可以，但 3.3.9 那一步必须重生成，3.4.0 会再要求一次。
+
+按顺序处理：
+
+1. **工具链（3.3.8）**：`go.mod` 要求 Go 1.27.4；`GOTOOLCHAIN=auto`（默认）首次构建会自动下载。Docker 基础镜像随 `Dockerfile` 变化，用 `BUILD_BASE_REGISTRY` 加速时无需额外调整。验证：`go version` + `go build ./...`。
+
+2. **重新生成业务模块（3.3.9 + 3.4.0，合并后做一次）**：生成仓库内嵌 `repository.CRUDStore`，handler 的 `Base` 只依赖 `CrudTable`，旧产物无法与新 `Base` 编译；新生成器产出 `TableHandler`/`TableRegistrar` 形状。逐个模块 `crud:generate`，按双提交工作流对照 `git diff` 回补定制；把 handler 内的 `requesttx.InvalidateAfterMutation(ctx, ...)` 移到构造器的 `TableOptions.AfterMutation` 闭包，否则重生成会覆盖丢失。生成器路径已从 `internal/pkg/crud_helper` 迁到 `internal/crudgen`，自写脚本 import 旧路径需同步。module 市场已移除，下次 `migrate`/`serve` 会自动清理 6 行菜单/规则（`admin_group.rules` 的悬空 id 不影响鉴权）。验证：`go build ./...`；`crud:generate` 每个模块退出码 0；对照定制提交确认无遗漏。
+
+3. **门禁与前端（3.5.0）**：本版无新迁移、无 `crud_specs`、无 DDL 变更。需要处理：
+   - `.golangci.yml` 档 C 全量入闸（testifylint / gosec / gocritic 默认集 + performance 子集 / revive / paralleltest / gocyclo / nolintlint）。业务代码要能过 `golangci-lint run ./...`；存量 `//nolint` 必须写明具体 linter、规则号与理由，且不得残留未命中项，否则 `nolintlint` 会报。
+   - `web/` 新增 vitest / @vue/test-utils / happy-dom 开发依赖：`pnpm install --no-frozen-lockfile` 后可用 `pnpm test`。
+   - `money.ts` 的 `signed` / `thousandSeparator` 按注释生效；只有自定义这两项的调用点需要复核展示（框架内唯一调用点用默认值，输出不变）。
+   - captcha 默认画布固定为 200×62，公开验证码路由不再 panic；业务无需动作。
+   - `release` 子命令仅框架维护者使用，业务 fork 不需要。
+   验证：`golangci-lint run ./...` 0 issues；`cd web && pnpm lint && pnpm test && pnpm typecheck && pnpm build`。
+
+4. **启动与迁移（所有版本）**：备份目标库后启动 `serve`，它会自动执行三轨迁移与 `crud_specs` 尾部 apply；再跑 `migrate --plan` 确认 `pending` 与 `rejected` 均为 0（`rejected` 的处理见下一节）。
 
 ### 发版前的数据影响确认（rejected）
 

@@ -105,7 +105,7 @@
 
 ## 编码规范（注释 / 测试 / 验证）
 
-适用于 Go 后端（`internal/`、`cmd/`）；`web/` 前端沿用 `pnpm lint`/`typecheck`/`build`，但「不得虚报验证结果」的纪律同样适用。
+适用于 Go 后端（`internal/`、`cmd/`）；`web/` 前端沿用 `pnpm lint`/`test`/`typecheck`/`build`，但「不得虚报验证结果」的纪律同样适用。
 
 ### 注释
 
@@ -139,7 +139,7 @@ go build ./...                  # 后端编译
 go test ./<affected packages> -run '<related tests>'
 ```
 
-- 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm typecheck`、`pnpm build`。
+- 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm test`、`pnpm typecheck`、`pnpm build`。
 - 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI；本机通常没有 golangci-lint v2（`.golangci.yml` 是 v2 语法），`ci.yml` 是手动触发的全量门禁——两者都不属于日常快速验证。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
 - 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
 - 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。
@@ -157,9 +157,11 @@ go run ./cmd/server --conf configs/config.yaml migrate --plan   # 只读：安�
 go generate ./cmd/server                  # after provider or cmd/server/wire.go changes
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
-pnpm install --frozen-lockfile
+# web/pnpm-lock.yaml 未入库（见根 .gitignore），与 CI 口径一致使用 --no-frozen-lockfile
+pnpm install --no-frozen-lockfile
 pnpm dev                               # Vite 9918 on 0.0.0.0; API http://localhost:9900
 pnpm lint
+pnpm test                              # vitest（src/**/*.test.ts）
 pnpm typecheck
 pnpm build                             # emits web/dist/
 ```
