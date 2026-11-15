@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.5.2
+
+> 生成产物 lint 合规与下游可扩展性批次：crudgen 关系加载器跨类型收窄（#56）、reassignable `Edit` 圈复杂度（#57）、api public 路由测试可被业务 fork 扩展（#58）、语言包死键清理（#59）；无迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。
+
+- **Fixed（crudgen · 关系加载器）:** 单关系加载器改为按外键列与远端主键中较宽的整型取共享键类型（`keys` / `seen` / `byKey` 同一类型），两个方向都只剩加宽转换，生成的 `int32((*rows)[i].UserID)` 这类裸收窄与 `gosec G115` 告警消失；同型、多值、字符串与混合组合保持原输出。新增模板守卫测试（bigint FK→int PK、int FK→bigint PK、同型三种形态）。
+- **Fixed（crudgen · reassignable Edit）:** 归属锁行、归属校验与级联同步从 `Edit` 拆成生成的 `prepareEditOwnerChange` / `syncCascadeOwners` / `validateCascadeOwnerRef`，`Edit` 只保留编排与 RowsAffected 分支；加锁顺序、校验时机、级联 UPDATE 与错误值均不变，生成的 `Edit` 圈复杂度 10（阈值 15）。非 reassignable 输出逐字节不变。新增守卫测试按 fzipp/gocyclo 真实口径（嵌套闭包分支计入、`default` 不计）断言所有生成函数 ≤15。
+- **Fixed（api 路由测试）:** `TestPublicRouteSetHasNoOrphans` 改用生产聚合 `ProvideRegistrars(...)` 注册，并按该函数自身签名反射构造零值 handler：业务 fork 在锚点追加 registrar 参数后，本框架测试无需再改实参（原写法会直接编译失败）。
+- **Changed（i18n）:** en / zh-CN / zh-Hant 删除 41 条不可达键（module 市场与旧短信/邮箱绑定遗留），三包键集保持 184 条完全一致。新增 `internal/i18n/locales_test.go`：键集一致性 + en 每条键必须在 Go 源码 / 迁移种子 / 配置数据中命中，框架不引用但保留下游兼容的历史消息列入显式白名单。
+- **Note（i18n 保留键）:** `Role remark` / `DataRecycle Remark` / `SensitiveData Remark` 与既有的 `Dashboard remark` / `Attachment Remark` 由 `admin_rule.remark` 经 `handler/remark.go` 的 `remark()` 动态查找（`util.Lang`），源码 grep 无法证明其死链，故未删除并列入白名单。
+- **Downstream（业务 fork 升级必读）:** 本版无新迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。合并后：
+  - 重新 `crud:generate` 后，生成文件里手补的 `//nolint:gosec // G115`（单关系整型收窄）与 `//nolint:gocyclo`（reassignable `Edit`）可以删除，重生成不会再丢；重生成前按双提交工作流先记录自己的定制点。
+  - 业务追加 api registrar 后无需修改框架测试 `internal/api/router/router_test.go`；但 `ProvideRegistrars` 参数变化仍会改变签名，必须同步运行 `go generate ./cmd/server` 重生成 wire。
+  - 语言包按 en 对齐即可：41 条死键已删除；`Role remark` 等 3 条由数据库动态查找，若业务库 `admin_rule.remark` 仍是英文键，请保留其译文，不要按 grep 结果删除。
+  - 新增的 `internal/i18n/locales_test.go` 会扫描业务仓 `.go` / `.yaml` 引用：业务新增的消息键必须在业务代码中真实引用，否则测试失败；确需保留的历史消息在 `legacyUnreferencedKeys` 写明理由。
+- **Docs/测试:** 新增 crudgen 三处模板守卫测试与 i18n 三处语言包测试；无 `AGENTS.md` 与部署配置变更。
+- **Verified:** CI run `43749994012`（head `154658e`）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / test / typecheck / build）均成功；发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。
+
 ## v3.5.1
 
 > 3.5.0 收尾批次：crudgen 跨 worktree 重生成与独立入口（#52 #53 #54）、验证码错误检查位置修正、lint 平台差异收敛、忽略文件精简；无迁移与表结构变更。
