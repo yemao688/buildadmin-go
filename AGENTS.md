@@ -141,10 +141,11 @@ go test ./<affected packages> -run '<related tests>'
 
 - 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm test`、`pnpm typecheck`、`pnpm build`。
 - 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI；`ci.yml` 是手动触发的全量门禁——这些都不属于日常快速验证。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
-- `golangci-lint` 以 CI 的官方 release 二进制为准：同版本号但编译用 Go 版本不同时（官方 v2.15.0 用 go1.27.0，`go install` 用本机 go1.27.4），`nolintlint` 的未命中判定可能不同（实测官方报 5 条、`go install` 构建报 0 条）。本地与 CI 结论冲突时以 CI 为准，并用官方包复跑：
+- `golangci-lint` 本地与 CI 都固定使用官方 release 二进制 v2.15.0（`.github/workflows/{ci,release-image}.yml` 同版本；不要用 `go install` 重新编译，构建差异会改变个别规则结果）。已确认 `revive` 的 `context-keys-type` 在 v2.15.0 下按平台构建给出不同结果（darwin 报、linux 不报），该规则已在 `.golangci.yml` 关闭；本地与 CI 结论冲突时以 CI（linux）为准。安装/更新：
 
   ```bash
-  curl -sSL "https://github.com/golangci/golangci-lint/releases/download/v<linter-version>/golangci-lint-<linter-version>-$(go env GOOS)-$(go env GOARCH).tar.gz" | tar xz -C /tmp
+  curl -sSL "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-$(go env GOOS)-$(go env GOARCH).tar.gz" | tar xz -C /tmp
+  install -m 0755 /tmp/golangci-lint-2.15.0-$(go env GOOS)-$(go env GOARCH)/golangci-lint "$(go env GOPATH)/bin/golangci-lint"
   ```
 - 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
 - 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。

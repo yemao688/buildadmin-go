@@ -86,17 +86,19 @@ linters:
       enabled-checks: ["equalFold", "stringXbytes", "appendCombine", "preferStringWriter"]
       disabled-tags: ["style"]
 
-    # revive：显式列出默认规则集并剔除 exported 与 var-naming。
+    # revive：显式列出默认规则集并剔除 exported、var-naming 与 context-keys-type。
     # golangci-lint 一旦配置 rules 就替换 revive 默认集，所以要逐条列全。
     # - exported 不为存量导出标识符补注释（AGENTS.md 口径），故排除。
     # - var-naming 的命中含 PHP 上游继承命名（如 CdnUrlParams），同时是 Vue
     #   前端 JSON 契约，改名即破坏 API，故排除。
+    # - context-keys-type 与仓库约定冲突（跨包用 string context key，与 staticcheck
+    #   SA1029 同口径）；且 v2.15.0 实测该规则按平台构建给出不同结果（darwin 报、
+    #   linux 不报），逐行 //nolint 会与 nolintlint 的未命中判定互相打架，故关闭。
     # 新增规则前必须先清空存量，否则等于把红牌塞回流水线。
     revive:
       rules:
         - name: blank-imports
         - name: context-as-argument
-        - name: context-keys-type
         - name: dot-imports
         - name: error-return
         - name: error-strings
