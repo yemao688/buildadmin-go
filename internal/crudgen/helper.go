@@ -1582,6 +1582,7 @@ func buildRelationMetadata(joinFields []crudmodel.Field, field crudmodel.Field, 
 		RemotePK:        remotePK,
 		RemotePKGoField: generatedGoFieldName(remotePK),
 		RemotePKType:    relationColumnGoTypeFromField(pkColumn),
+		FieldGoType:     relationColumnGoTypeFromField(field),
 		RowDTOName:      className + util.SnakeToCamel(relationName, true) + "RelationRow",
 		Multi:           multi,
 	}
@@ -1800,13 +1801,43 @@ func finalizeRelationMetadata(modelData *ModelData) {
 	modelData.RelationLoaders = loaders.String()
 }
 
+// relationLoaderKeyType 返回单关系加载器的共享键类型：两端同型直接复用，
+// 两端均为整型时取较宽者，使两个方向的转换都是加宽转换，避免 gosec G115 的收窄告警。
+// 其它组合（字符串、混合、不支持的类型）沿用远端主键类型，保持既有行为。
+func relationLoaderKeyType(relation RelationMetadata) string {
+	if relation.FieldGoType == relation.RemotePKType {
+		return relation.RemotePKType
+	}
+	if isIntegerGoType(relation.FieldGoType) && isIntegerGoType(relation.RemotePKType) {
+		if relation.FieldGoType == "int64" || relation.RemotePKType == "int64" {
+			return "int64"
+		}
+		return "int32"
+	}
+	return relation.RemotePKType
+}
+
+func isIntegerGoType(goType string) bool {
+	return goType == "int32" || goType == "int64"
+}
+
+// relationKeyExpr 按源类型与键类型是否一致决定是否加显式转换，同型时保持原样输出。
+func relationKeyExpr(sourceType, keyType, expr string) string {
+	if sourceType == keyType {
+		return expr
+	}
+	return keyType + "(" + expr + ")"
+}
+
 func renderRelationLoader(modelData ModelData, relation RelationMetadata) string {
 	if relation.Multi {
 		return renderMultiRelationLoader(modelData, relation)
 	}
+	keyType := relationLoaderKeyType(relation)
+	rowKeyExpr := relationKeyExpr(relation.FieldGoType, keyType, "(*rows)[i]."+generatedGoFieldName(relation.FieldName))
+	remoteKeyExpr := relationKeyExpr(relation.RemotePKType, keyType, "related[i]."+relation.RemotePKGoField)
 	var b strings.Builder
 	methodName := "load" + relation.RelationGoField + "Relations"
-	rowField := generatedGoFieldName(relation.FieldName)
 	b.WriteString("func (s *")
 	b.WriteString(modelData.ClassName)
 	b.WriteString("Repository) ")
@@ -1816,16 +1847,14 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 	b.WriteString(") error {\n")
 	b.WriteString("\tif len(*rows) == 0 { return nil }\n")
 	b.WriteString("\tkeys := make([]")
-	b.WriteString(relation.RemotePKType)
+	b.WriteString(keyType)
 	b.WriteString(", 0, len(*rows))\n")
 	b.WriteString("\tseen := make(map[")
-	b.WriteString(relation.RemotePKType)
+	b.WriteString(keyType)
 	b.WriteString("]struct{}, len(*rows))\n")
 	b.WriteString("\tfor i := range *rows { key := ")
-	b.WriteString(relation.RemotePKType)
-	b.WriteString("((*rows)[i].")
-	b.WriteString(rowField)
-	b.WriteString("); if _, ok := seen[key]; ok { continue }; seen[key] = struct{}{}; keys = append(keys, key) }\n")
+	b.WriteString(rowKeyExpr)
+	b.WriteString("; if _, ok := seen[key]; ok { continue }; seen[key] = struct{}{}; keys = append(keys, key) }\n")
 	b.WriteString("\tif len(keys) == 0 { return nil }\n")
 	b.WriteString("\trelated := make([]model.")
 	b.WriteString(relation.DTOName)
@@ -1843,18 +1872,16 @@ func renderRelationLoader(modelData ModelData, relation RelationMetadata) string
 	b.WriteString(strconv.Quote(relation.RemotePK + " IN ?"))
 	b.WriteString(", keys).Find(&related).Error; err != nil { return err }\n")
 	b.WriteString("\tbyKey := make(map[")
-	b.WriteString(relation.RemotePKType)
+	b.WriteString(keyType)
 	b.WriteString("]*model.")
 	b.WriteString(relation.DTOName)
 	b.WriteString(", len(related))\n")
-	b.WriteString("\tfor i := range related { byKey[related[i].")
-	b.WriteString(relation.RemotePKGoField)
+	b.WriteString("\tfor i := range related { byKey[")
+	b.WriteString(remoteKeyExpr)
 	b.WriteString("] = &related[i] }\n")
 	b.WriteString("\tfor i := range *rows { if relation, ok := byKey[")
-	b.WriteString(relation.RemotePKType)
-	b.WriteString("((*rows)[i].")
-	b.WriteString(rowField)
-	b.WriteString(")]; ok { (*rows)[i].")
+	b.WriteString(rowKeyExpr)
+	b.WriteString("]; ok { (*rows)[i].")
 	b.WriteString(relation.RelationGoField)
 	b.WriteString(" = relation } }\n")
 	b.WriteString("\treturn nil\n}\n\n")

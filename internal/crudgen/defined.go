@@ -400,6 +400,8 @@ type RelationMetadata struct {
 	Multi           bool
 	Fields          []RelationDTOField
 	PayloadFields   []RelationDTOField
+	// FieldGoType 是外键列自身的 Go 类型，用于推导加载器共享键类型。
+	FieldGoType string
 }
 
 type RelationDTOField struct {
@@ -672,29 +674,8 @@ func (s *{{.ClassName}}Repository) Edit(ctx *gin.Context, {{.ModelVar}} model.{{
 		tx = s.scopeDB(ctx, tx)
 		{{if .HasUpdateTime}}{{.ModelVar}}.{{.UpdateTime}} = time.Now().Unix()
 		{{end}}
-		{{if .DataScopePolicy.Reassignable}}// 归属变更时校验新 owner 在当前操作者麾下（自己+后代），超管可任意指定。
-		var current model.{{.ClassName}}
-		if err := tx.Table(s.TableName).Clauses(clause.Locking{Strength: "UPDATE"}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).First(&current).Error; err != nil {
+		{{if .DataScopePolicy.Reassignable}}if err := s.prepareEditOwnerChange(ctx, tx, &{{.ModelVar}}, actor); err != nil {
 			return err
-		}
-		if current.{{.DataScopeOwnerGoField}} != {{.ModelVar}}.{{.DataScopeOwnerGoField}} {
-			if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
-				return err
-			}
-			for _, c := range s.CascadeOwners() {
-				if err := data_scope.ValidateIdentifier(c.Table); err != nil {
-					return err
-				}
-				if err := data_scope.ValidateIdentifier(c.ByColumn); err != nil {
-					return err
-				}
-				if err := data_scope.ValidateIdentifier(c.OwnerColumn); err != nil {
-					return err
-				}
-				{{$bt := "` + "`" + `"}}if err := tx.Session(&gorm.Session{NewDB: true}).Table(s.config.Database.Prefix + c.Table).Where("{{$bt}}"+c.ByColumn+"{{$bt}} = ? AND {{$bt}}"+c.OwnerColumn+"{{$bt}} <> ?", {{.ModelVar}}.{{.PkGoField}}, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Update(c.OwnerColumn, {{.ModelVar}}.{{.DataScopeOwnerGoField}}).Error; err != nil {
-					return fmt.Errorf("cascade owner %q: %w", c.Table, err)
-				}
-			}
 		}
 		{{end}}
 
@@ -719,7 +700,44 @@ func (s *{{.ClassName}}Repository) Edit(ctx *gin.Context, {{.ModelVar}} model.{{
 	}
 	})
 }
+{{if .DataScopePolicy.Reassignable}}
+func (s *{{.ClassName}}Repository) prepareEditOwnerChange(ctx *gin.Context, tx *gorm.DB, {{.ModelVar}} *model.{{.ClassName}}, actor data_scope.Actor) error {
+	// 归属变更时校验新 owner 在当前操作者麾下（自己+后代），超管可任意指定。
+	var current model.{{.ClassName}}
+	if err := tx.Table(s.TableName).Clauses(clause.Locking{Strength: "UPDATE"}).Where("{{.Pk}} = ?", {{.ModelVar}}.{{.PkGoField}}).First(&current).Error; err != nil {
+		return err
+	}
+	if current.{{.DataScopeOwnerGoField}} != {{.ModelVar}}.{{.DataScopeOwnerGoField}} {
+		if err := data_scope.OwnerInScopeWithActor(ctx, tx, s.Enforcer, s.config.Database.Prefix, int32({{.ModelVar}}.{{.DataScopeOwnerGoField}}), actor); err != nil {
+			return err
+		}
+		return s.syncCascadeOwners(tx, {{.ModelVar}}.{{.PkGoField}}, {{.ModelVar}}.{{.DataScopeOwnerGoField}})
+	}
+	return nil
+}
 
+func (s *{{.ClassName}}Repository) syncCascadeOwners(tx *gorm.DB, id {{.PkGoType}}, owner {{.DataScopeOwnerGoType}}) error {
+	for _, c := range s.CascadeOwners() {
+		if err := s.validateCascadeOwnerRef(c); err != nil {
+			return err
+		}
+		{{$bt := "` + "`" + `"}}if err := tx.Session(&gorm.Session{NewDB: true}).Table(s.config.Database.Prefix + c.Table).Where("{{$bt}}"+c.ByColumn+"{{$bt}} = ? AND {{$bt}}"+c.OwnerColumn+"{{$bt}} <> ?", id, owner).Update(c.OwnerColumn, owner).Error; err != nil {
+			return fmt.Errorf("cascade owner %q: %w", c.Table, err)
+		}
+	}
+	return nil
+}
+
+func (s *{{.ClassName}}Repository) validateCascadeOwnerRef(c data_scope.CascadeOwner) error {
+	if err := data_scope.ValidateIdentifier(c.Table); err != nil {
+		return err
+	}
+	if err := data_scope.ValidateIdentifier(c.ByColumn); err != nil {
+		return err
+	}
+	return data_scope.ValidateIdentifier(c.OwnerColumn)
+}
+{{end}}
 func (s *{{.ClassName}}Repository) Del(ctx *gin.Context, ids interface{}) error {
 	normalizedIDs, err := normalize{{.ClassName}}IDs(ids)
 	if err != nil {

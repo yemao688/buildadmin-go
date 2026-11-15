@@ -1001,3 +1001,71 @@ func TestBuildLangTsContentDeterministic(t *testing.T) {
 	}
 	require.Equal(t, first, buildLangTsContent(reordered))
 }
+
+func TestRelationLoaderKeyTypeWidensNarrowingConversions(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name       string
+		fkType     string
+		fkGoType   string
+		remoteType string
+		keyType    string
+		wantRowKey string
+		wantRemote string
+		forbid     []string
+	}{
+		{
+			// bigint 外键指向 int 主键：共享键取 int64，外键侧无需转换
+			name: "bigint外键指向int主键", fkType: "bigint", fkGoType: "int64", remoteType: "int",
+			keyType: "int64", wantRowKey: "key := (*rows)[i].UserID\n", wantRemote: "byKey[int64(related[i].ID)] = &related[i]",
+			forbid: []string{"int32((*rows)", "int32(related["},
+		},
+		{
+			// int 外键指向 bigint 主键：共享键取 int64，外键侧为加宽转换
+			name: "int外键指向bigint主键", fkType: "int", fkGoType: "int32", remoteType: "bigint",
+			keyType: "int64", wantRowKey: "key := int64((*rows)[i].UserID)\n", wantRemote: "byKey[related[i].ID] = &related[i]",
+			forbid: []string{"int32((*rows)", "int32(related["},
+		},
+		{
+			// 两端同为 int32：共享键即主键类型，两侧类型一致时不再输出多余转换
+			name: "int外键指向int主键", fkType: "int", fkGoType: "int32", remoteType: "int",
+			keyType: "int32", wantRowKey: "key := (*rows)[i].UserID\n", wantRemote: "byKey[related[i].ID] = &related[i]",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			columns := []model.Column{
+				{COLUMN_NAME: "id", DATA_TYPE: tc.remoteType, COLUMN_TYPE: tc.remoteType, COLUMN_KEY: "PRI"},
+				{COLUMN_NAME: "username", DATA_TYPE: "varchar", COLUMN_TYPE: "varchar(64)"},
+			}
+			field := crudmodel.Field{
+				Name: "user_id", Type: tc.fkType, DataType: tc.fkType, DesignType: "remoteSelect",
+				Form: crudmodel.FormAttr{RemoteTable: "user", RemotePk: "id", RelationFields: "username"},
+			}
+			metadata, err := buildRelationMetadata(ParseTableColumns(columns, true), field, "Orders")
+			require.NoError(t, err)
+			require.Equal(t, tc.fkGoType, metadata.FieldGoType)
+			data := ModelData{
+				Namespace: "model", ClassName: "Orders", ModelVar: "orders", Pk: "id", PkGoField: "ID", PkGoType: tc.fkGoType,
+				StructTemp: "type Orders struct {\n\tUserID " + tc.fkGoType + " `gorm:\"column:user_id\" json:\"user_id\"`\n}\n",
+				Relations:  []RelationMetadata{metadata},
+			}
+			content, err := renderModel(data)
+			require.NoError(t, err)
+			_, err = parser.ParseFile(token.NewFileSet(), "orders.go", content, parser.AllErrors)
+			require.NoError(t, err)
+			_, err = format.Source([]byte(content))
+			require.NoError(t, err)
+
+			require.Contains(t, content, "keys := make([]"+tc.keyType)
+			require.Contains(t, content, "seen := make(map["+tc.keyType+"]struct{}")
+			require.Contains(t, content, "byKey := make(map["+tc.keyType+"]*model.OrdersUserRelation")
+			require.Contains(t, content, tc.wantRowKey)
+			require.Contains(t, content, tc.wantRemote)
+			for _, forbidden := range tc.forbid {
+				require.NotContains(t, content, forbidden)
+			}
+		})
+	}
+}
