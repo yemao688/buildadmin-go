@@ -39,6 +39,11 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 // 保证 api_routes.go 的 public 名单不是
 // 一份会漂移的愿望清单：名单里的每个 method+path 都必须真的注册到根引擎，
 // 否则免登录声明会静默失效（新增端点忘了注册）或留下死条目。
+//
+// 注册器统一取自生产聚合 ProvideRegistrars（而非在此逐个 new）：业务 fork
+// 必须把业务 registrar 加进 ProvideRegistrars 才能完成生产挂载，本检查因此
+// 自动覆盖业务公共端点，下游无需改动框架测试即可保持绿化；绕过该聚合自行
+// 拼注册器列表，等于同时绕过生产挂载路径，不在本测试承诺范围内。
 func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Parallel()
@@ -46,9 +51,11 @@ func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	rawSet := newAPIRouteSet(engine, engine.Group("/api/"))
 	set, ok := rawSet.(*apiRouteSet)
 	require.True(t, ok, "newAPIRouteSet must return *apiRouteSet")
-	NewUserRegistrar(&api.UserHandler{}).Register(set)
-	NewCommonRegistrar(&api.CommonHandler{}).Register(set)
-	NewIndexRegistrar(&api.IndexHandler{}).Register(set)
+	registrars := ProvideRegistrars(&api.CommonHandler{}, &api.UserHandler{}, &api.IndexHandler{})
+	require.NotEmpty(t, registrars, "ProvideRegistrars must expose the api module registrars")
+	for _, registrar := range registrars {
+		registrar.Register(set)
+	}
 
 	registered := make(map[string]bool)
 	for _, route := range engine.Routes() {
