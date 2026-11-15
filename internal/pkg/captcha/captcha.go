@@ -196,6 +196,9 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 		}
 	} else {
 		captcha, err := writeText(img, c.config, "", textColor)
+		if err != nil {
+			return nil, err
+		}
 		code := c.authCode(captcha, id, GraphicCaptcha)
 
 		if err := c.sqlDB.Model(&Captcha{}).Where("`key`=?", key).Create(&Captcha{
@@ -205,10 +208,6 @@ func (c *CaptchaService) Entry(id string) (*image.RGBA, error) {
 			CreateTime: time.Now().Unix(),
 			ExpireTime: time.Now().Unix() + int64(c.config.Expire),
 		}).Error; err != nil {
-			return nil, err
-		}
-
-		if err != nil {
 			return nil, err
 		}
 	}

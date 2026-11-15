@@ -5,7 +5,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"buildadmin-go/internal/pkg/captcha"
@@ -21,7 +21,7 @@ import (
 func TestCommonCaptchaReturnsPNG(t *testing.T) {
 	t.Parallel()
 
-	db, err := gorm.Open(sqlite.Open("file:common-captcha-"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "captcha.db")), &gorm.Config{})
 	require.NoError(t, err)
 	// 列名与 internal/pkg/captcha/entity.go 对齐；entity 的 MySQL 类型标签不适用于
 	// sqlite，故用裸 DDL 而不是 AutoMigrate。默认命名策略下 Captcha 落在 captchas。

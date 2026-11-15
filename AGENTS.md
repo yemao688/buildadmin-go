@@ -140,7 +140,12 @@ go test ./<affected packages> -run '<related tests>'
 ```
 
 - 前端改动在 `web/` 依次运行 `pnpm lint`、`pnpm test`、`pnpm typecheck`、`pnpm build`。
-- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI；本机通常没有 golangci-lint v2（`.golangci.yml` 是 v2 语法），`ci.yml` 是手动触发的全量门禁——两者都不属于日常快速验证。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
+- 不默认运行 `go test ./...`、`go vet ./...`、`-count=3/10`：部分测试/生成器需要 MySQL 或依赖不完整的 DI；`ci.yml` 是手动触发的全量门禁——这些都不属于日常快速验证。发版/稳定性验证等全量门禁仅在用户明确要求时执行。
+- `golangci-lint` 以 CI 的官方 release 二进制为准：同版本号但编译用 Go 版本不同时（官方 v2.15.0 用 go1.27.0，`go install` 用本机 go1.27.4），`nolintlint` 的未命中判定可能不同（实测官方报 5 条、`go install` 构建报 0 条）。本地与 CI 结论冲突时以 CI 为准，并用官方包复跑：
+
+  ```bash
+  curl -sSL "https://github.com/golangci/golangci-lint/releases/download/v<linter-version>/golangci-lint-<linter-version>-$(go env GOOS)-$(go env GOARCH).tar.gz" | tar xz -C /tmp
+  ```
 - 疑似 flaky：先用 `-run=TestXxx` 限定重复定位，不直接全量重复。单次测试超过约 120 秒时，先查最慢用例与耗时分布（Sleep/网络/数据库/IO/CPU/串行），再决定是否重跑。
 - 禁止用 `-short`、跳过测试、删除断言、降低覆盖率等方式「通过」；不得在无测试输出时声称通过；不得用「上次跑过」替代本次必要验证。
 - 每次验证后如实报告：执行的命令、耗时、PASS/FAIL/SKIP/未运行及失败项。失败先给定位，不只报总数。
@@ -180,7 +185,7 @@ pnpm build                             # emits web/dist/
 - `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
 - gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
 - `.golangci.yml` 用 v2 语法分档启用：档 A、档 B 与档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo/nolintlint）全部纳入门禁并保持全绿；档 C 的逐条豁免（`//nolint`）必须写明具体共享状态理由，禁止文件级豁免。新增 linter 前先本地 `golangci-lint run ./...` 看命中数。
-- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（tag 名 = `frame-v` + `VERSION_FRAMEWORK` 的值，如 `VERSION_FRAMEWORK=3.4.0` 时为 `frame-v3.4.0`；版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
+- 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（tag 名 = `frame-v` 拼接 `VERSION_FRAMEWORK` 的当前值；版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
 - `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.REGISTRY_IMAGE_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
 - `release-image.yml` 的 gate 只做全仓 gofmt/golangci-lint/`go build`/`go vet`，镜像版本号取自 tag 名（不读也不校验 `VERSION`），所以 tag 打成什么版本镜像就是什么版本；CI 推到 `vars.REGISTRY` 指定的镜像仓库（GHCR、ACR、Harbor 均可），基础镜像/GOPROXY/apk 走官方源，镜像不含前端产物（`public/` 由宿主机 bind mount 提供，发布前仍需 `make frontend`）。
 

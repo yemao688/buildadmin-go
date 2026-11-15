@@ -171,10 +171,6 @@ export function getSelectData(remoteUrl: string, q: string, params: anyObj = {})
     })
 }
 
-export function buildCaptchaUrl() {
-    return getUrl() + captchaUrl + '?server=1'
-}
-
 export function getCaptchaData(id: string, apiBaseURL: string) {
     return createAxios({
         url: apiBaseURL + clickCaptchaUrl,
