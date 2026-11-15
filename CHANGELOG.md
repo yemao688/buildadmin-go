@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.5.0
+
+> 生成器与门禁收尾批次：`quickSearch` 支持跨表关联字段、新增框架维护者的 `release` 发版校验命令；档 C 六个 linter 全量入闸并补齐测试网（含 web vitest）；修复公开验证码路由 panic 与 `money.ts` 注释/实现不一致。无迁移、无 `crud_specs`、无表结构变更。
+
+- **Added（生成器）:** `quickSearchField` 支持 `table.column` 跨表关联字段，生成 `EXISTS` 子查询（条件只引用主表列，count 独立查询天然正确），全操作符可用；标识符转义 + 值参数绑定，未登记 alias、多层点号与注入形态在 spec 校验期拒绝。
+- **Added（发版）:** 新增 `release` 子命令（仅框架维护者）：dry-run 校验版本递增、双源一致、`CHANGELOG.md` 小节含下游升级说明、工作区白名单、tag 不存在、gofmt/build；`--write` 只写 `VERSION_FRAMEWORK` 与 `version.Framework`，不 commit、不建 tag。发版流程见 `docs/framework-maintenance.md`。
+- **Changed（lint 门禁）:** 档 C 全部纳入门禁并保持全绿：testifylint、gosec、gocritic（默认集 + `equalFold`/`stringXbytes`/`appendCombine`/`preferStringWriter` 子集）、revive（排除 exported/var-naming）、paralleltest、gocyclo（15）、nolintlint（`allow-unused:false`，要求具体 linter 与理由）。gosec 豁免 137 → 130 并统一为 `//nolint:gosec // Gxxx: 理由`；`hugeParam`/`rangeValCopy` 382 条留基线。
+- **Changed（测试网）:** 补齐 `pkg/random`、`pkg/captcha`、`pkg/header`、`api/repository`、`common/area`、`pkg/route` 单测；`testutil` fixture 库改为每测试独立库（`<db>_fresh_<pid>_<seq>`，自动 DROP，清理失败重试并输出可执行的 DROP 语句）；crudgen 调试输出改为 `pid + 原子序号` 唯一目录。
+- **Changed（web 测试）:** 引入 vitest + @vue/test-utils + happy-dom，新增 `v-auth`、`formatMoney`、表格运行时 3 个样板（24 用例），`pnpm test` 可用；暂未接入 CI web job。
+- **Changed（生成物收尾）:** 生成 handler 去掉未使用的 logger 透传；手写 Registrar 删除已无调用的 `Group()`；`crudgen` 端口倒置，不再直接依赖 `admin/repository` 与 `admin/handler`。
+- **Fixed（captcha）:** `GET /api/common/captcha` 必 panic——默认画布尺寸为 0，`writeCurve` 的 `SecureIntn(0)` 触发 panic。现在默认 200×62（与 PHP 上游公式一致），`Entry` 在绘图与 DB 前校验尺寸（非法返回 400），曲线随机入参收敛到正区间；新增 HTTP 级回归断言 PNG 200×62。
+- **Fixed（money.ts）:** `signed` 的符号移到货币符号之前（`+¥100.00`），`thousandSeparator:false` 真正关闭分组；框架内唯一调用点使用默认选项，展示不变。
+- **Downstream（业务 fork 升级必读）:** 本版无新迁移、无 `crud_specs`、无 DDL。从 3.3.7 一次性合并时按 `docs/framework-workflow.md` 的「跨版本升级要点（3.3.7 → 3.5.0）」执行：合并后重新 `crud:generate` 所有业务模块（一次性满足 3.3.9/3.4.0 的产物形状）并回补定制；把 handler 内的 `requesttx.InvalidateAfterMutation` 移到 `TableOptions.AfterMutation`；跑通 `golangci-lint run ./...`（存量 `//nolint` 需补具体 linter/规则号/理由）；`web/` 重新 `pnpm install --no-frozen-lockfile` 以获取 vitest 依赖。`release` 子命令仅框架维护者使用。
+- **Docs:** `AGENTS.md`（档 C 清单、`pnpm test`、安装命令口径）、`docs/framework-workflow.md`（跨版本升级要点、lockfile 说明）、`docs/framework-maintenance.md`（release 校验含下游说明）、`docs/crud-generation.md`（quickSearch JOIN 与生成物形状）。
+- **Verified:** CI run `43691993032`（head `fb7440c`，包含本版全部代码改动）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / typecheck / build）均成功；发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。本地另验证 `gofmt -l`、`go build ./...`、`golangci-lint run ./...`、`go test ./internal/commands/ ./internal/i18n/ ./internal/pkg/{data_scope,requesttx}/` 与 web `pnpm lint/test/typecheck/build` 通过。
+
 ## v3.4.0
 
 > 生成器产物收敛：handler 收敛到共享泛型基类 `TableHandler[T,P,ID]`，registrar 收敛到数据驱动的 `TableRegistrar`；模块差异改为构造器注入 `TableOptions`，生成文件只剩装配代码。路由、权限与表结构不变。
