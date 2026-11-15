@@ -1757,15 +1757,6 @@ func TestGeneratedReassignableFunctionsStayUnderGocycloLimit(t *testing.T) {
 		if fn.Name.Name == "Edit" {
 			editBody = modelCode[fset.Position(fn.Pos()).Offset:fset.Position(fn.End()).Offset]
 		}
-		// 事务闭包等函数字面量按独立函数计复杂度（cyclomaticComplexity 会跳过嵌套函数体）
-		ast.Inspect(fn.Body, func(node ast.Node) bool {
-			lit, ok := node.(*ast.FuncLit)
-			if !ok {
-				return true
-			}
-			check(fn.Name.Name+"$funcLit", lit.Body)
-			return true
-		})
 	}
 	for name, found := range helpers {
 		require.True(t, found, "缺少生成的 %s 方法", name)
@@ -1779,16 +1770,25 @@ func TestGeneratedReassignableFunctionsStayUnderGocycloLimit(t *testing.T) {
 	t.Logf("最高圈复杂度: %s = %d（阈值 %d）", highestName, highest, limit)
 }
 
-// cyclomaticComplexity 按 gocyclo 口径计算单个函数体的圈复杂度：
-// 基准 1，每个 if/for/range/case/comm 与 && / || 各加 1；嵌套函数字面量不计入外层。
+// cyclomaticComplexity 按 fzipp/gocyclo（golangci-lint 的 gocyclo 判定口径）
+// 计算单个函数的圈复杂度：基准 1，if/for/range 与带表达式的 case/select 分支、
+// && / || 各加 1；default 分支不计。与 gocyclo 一致，嵌套函数字面量里的分支
+// 计入外层函数，因此事务闭包的分支会推高 Edit 的体积——不可跳过，否则回归会
+// 在 lint 报错的同时让本守卫变绿。
 func cyclomaticComplexity(body *ast.BlockStmt) int {
 	complexity := 1
 	ast.Inspect(body, func(node ast.Node) bool {
 		switch n := node.(type) {
-		case *ast.FuncLit:
-			return false
-		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.CaseClause, *ast.CommClause:
+		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
 			complexity++
+		case *ast.CaseClause:
+			if n.List != nil {
+				complexity++
+			}
+		case *ast.CommClause:
+			if n.Comm != nil {
+				complexity++
+			}
 		case *ast.BinaryExpr:
 			if n.Op == token.LAND || n.Op == token.LOR {
 				complexity++
