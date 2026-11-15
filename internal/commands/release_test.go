@@ -29,6 +29,7 @@ const releaseFixtureChangelog = `# Changelog
 ## v3.4.1
 
 - 待发布
+- **Downstream:** 示例升级说明
 
 ## v3.4.0
 
@@ -266,6 +267,42 @@ func TestReleaseRejectsMissingChangelogSection(t *testing.T) {
 		t.Fatalf("缺少 CHANGELOG 小节未返回错误\n%s", output)
 	}
 	requireReleaseOutput(t, output, "CHANGELOG", "## v3.4.1")
+}
+
+// 每个版本小节必须写明下游升级影响，英文 Downstream 与中文「下游」都接受。
+//
+//nolint:paralleltest // runFakeRelease 调用 cobra Execute，OnInitialize 注册后触发 initConfig 进程级写入
+func TestReleaseChangelogRequiresDownstream(t *testing.T) {
+	changelog := "# Changelog\n\n## v3.4.1\n%s\n\n## v3.4.0\n\n- **Downstream:** 上一版\n"
+	tests := []struct {
+		name    string
+		section string
+		wantErr string
+	}{
+		{name: "缺少下游说明", section: "- 待发布", wantErr: "缺少下游升级说明"},
+		{name: "英文 Downstream", section: "- **Downstream:** 无动作"},
+		{name: "中文下游", section: "- **下游升级:** 无动作"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) { //nolint:paralleltest // 子测试调用 cobra Execute，会触发进程级 OnInitialize
+			fixture := newReleaseFixture(t)
+			fixture.writeFile(t, releaseChangelogPath, fmt.Sprintf(changelog, test.section))
+
+			output, err := runFakeRelease(t, fixture.deps(releaseFakeCommands{}), "--version", "3.4.1")
+			if test.wantErr != "" {
+				if err == nil {
+					t.Fatalf("缺少下游说明未返回错误\n%s", output)
+				}
+				requireReleaseOutput(t, output, test.wantErr)
+				return
+			}
+			if err != nil {
+				t.Fatalf("release --version 3.4.1 error = %v\n%s", err, output)
+			}
+			requireReleaseOutput(t, output, "[ok]   CHANGELOG:", "包含下游升级说明")
+		})
+	}
 }
 
 //nolint:paralleltest // runFakeRelease 调用 cobra Execute，会触发进程级 OnInitialize

@@ -288,14 +288,22 @@ func checkChangelog(deps releaseDeps, targetVersion string, targetOK bool) relea
 			detail: fmt.Sprintf("%s 无法读取（需要 ## v%s 小节）: %v", releaseChangelogPath, targetVersion, err),
 		}
 	}
-	if !changelogHasSection(data, targetVersion) {
+	section, ok := changelogVersionSection(data, targetVersion)
+	if !ok {
 		return releaseCheck{
 			status: releaseStatusFail,
 			name:   name,
 			detail: fmt.Sprintf("%s 缺少 ## v%s 小节", releaseChangelogPath, targetVersion),
 		}
 	}
-	return releaseCheck{status: releaseStatusOK, name: name, detail: fmt.Sprintf("存在 ## v%s 小节", targetVersion)}
+	if !changelogSectionDeclaresDownstream(section) {
+		return releaseCheck{
+			status: releaseStatusFail,
+			name:   name,
+			detail: fmt.Sprintf("## v%s 小节缺少下游升级说明（写 Downstream 或「下游」条目）", targetVersion),
+		}
+	}
+	return releaseCheck{status: releaseStatusOK, name: name, detail: fmt.Sprintf("存在 ## v%s 小节且包含下游升级说明", targetVersion)}
 }
 
 // checkReleaseWorkspace 只放行三个发布文件；其它变更会污染发布提交。
@@ -475,10 +483,26 @@ func replaceFrameworkConst(data []byte, version string) ([]byte, error) {
 	return result, nil
 }
 
-// changelogHasSection 匹配独占一行的 ## v<版本> 标题（允许行尾空白）。
-func changelogHasSection(data []byte, version string) bool {
-	pattern := regexp.MustCompile(`(?m)^## v` + regexp.QuoteMeta(version) + `[ \t]*$`)
-	return pattern.Match(data)
+// changelogVersionSection 返回 ## v<版本> 标题到下一个 ## 标题之间的正文。
+// 标题不存在（或版本号不匹配）时 ok=false。
+func changelogVersionSection(data []byte, version string) (section string, ok bool) {
+	heading := regexp.MustCompile(`(?m)^## v` + regexp.QuoteMeta(version) + `[ \t]*$`)
+	loc := heading.FindIndex(data)
+	if loc == nil {
+		return "", false
+	}
+	rest := data[loc[1]:]
+	if next := regexp.MustCompile(`(?m)^## `).FindIndex(rest); next != nil {
+		rest = rest[:next[0]]
+	}
+	return string(rest), true
+}
+
+// changelogSectionDeclaresDownstream 判断版本小节是否写明下游升级影响。
+// 英文 Downstream（大小写不敏感）与中文「下游」都接受，避免下游 fork 逐版本
+// 合并时漏掉必须动作。
+func changelogSectionDeclaresDownstream(section string) bool {
+	return strings.Contains(strings.ToLower(section), "downstream") || strings.Contains(section, "下游")
 }
 
 // parsePorcelainPaths 解析 git status --porcelain 的路径列；rename 取箭头后的新路径。

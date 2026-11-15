@@ -18,14 +18,14 @@
 
 发版由 `release` 子命令完成前置校验与版本文件写入。该命令**不会** commit、不会创建或推送 tag——提交、打 tag 与 push 始终是人工最后一步；命令会把需要执行的命令原样打印出来。
 
-1. 先人工在 `CHANGELOG.md` 增加 `## v<version>` 小节。版本号必须是 `MAJOR.MINOR.PATCH` 三段数字，且严格大于 `VERSION_FRAMEWORK` 的当前值。
+1. 先人工在 `CHANGELOG.md` 增加 `## v<version>` 小节，并写明下游升级影响（`Downstream` 或「下游」条目）。版本号必须是 `MAJOR.MINOR.PATCH` 三段数字，且严格大于 `VERSION_FRAMEWORK` 的当前值。
 2. 只读校验（dry-run）：
 
    ```bash
    go run ./cmd/server release --version 3.4.1
    ```
 
-   逐项输出 `[ok]` / `[fail]` / `[skip]`，覆盖：版本递增、`VERSION_FRAMEWORK` 与 `version.Framework` 一致、`CHANGELOG.md` 小节存在、工作区（仅允许 `VERSION_FRAMEWORK`、`internal/pkg/version/version.go`、`CHANGELOG.md` 三个文件有改动）、`frame-v<version>` tag 不存在、`gofmt -l .` 无输出、`go build ./...` 通过。任一项失败即退出码 1，并列出人工下一步命令；`gofmt` / `go build` 在结构校验失败时标记为 skip。
+   逐项输出 `[ok]` / `[fail]` / `[skip]`，覆盖：版本递增、`VERSION_FRAMEWORK` 与 `version.Framework` 一致、`CHANGELOG.md` 小节存在且包含下游升级说明（`Downstream` 或「下游」）、工作区（仅允许 `VERSION_FRAMEWORK`、`internal/pkg/version/version.go`、`CHANGELOG.md` 三个文件有改动）、`frame-v<version>` tag 不存在、`gofmt -l .` 无输出、`go build ./...` 通过。任一项失败即退出码 1，并列出人工下一步命令；`gofmt` / `go build` 在结构校验失败时标记为 skip。
 3. 校验通过后写入版本文件：
 
    ```bash
