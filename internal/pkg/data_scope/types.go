@@ -224,7 +224,7 @@ const actorContextKey = ActorContextKey
 
 // WithActor attaches an Actor to a context.
 func WithActor(ctx context.Context, actor Actor) context.Context {
-	return context.WithValue(ctx, actorContextKey, actor) //nolint:revive // 仓库约定使用 string context key 跨包传递，改类型会破坏现有中间件契约（与 staticcheck SA1029 同口径）
+	return context.WithValue(ctx, actorContextKey, actor)
 }
 
 // ActorFromContext retrieves a previously attached Actor.
