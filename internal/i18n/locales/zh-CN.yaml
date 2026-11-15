@@ -4,17 +4,12 @@ You have no permission to add an administrator to this group!: 您没有权限�
 Super administrator: 超级管理员
 No permission: 无权限
 You cannot modify your own management group!: 不能修改自己所在的管理组！
-You need to have all permissions of this group to operate this group~: 您需要拥有该分组的所有权限才可以操作该分组~
 You need to have all the permissions of the group and have additional permissions before you can operate the group~: 您需要拥有该分组的所有权限且还有额外权限时，才可以操作该分组~
 Role group has all your rights, please contact the upper administrator to add or do not need to add!: 角色组拥有您的全部权限，请联系上级管理员添加或无需添加！
-Role remark: 为保障系统安全，角色组本身的上下级关系仅供参考，系统的实际上下级划分是根据`权限多寡`来确定的，两位管理员的权限节点：相同被认为是`同级`、包含且有额外权限才被认为是`上级`，同级不可管理同级，上级可为下级分配自己拥有的权限节点；若有特殊情况管理员需转`上级`，可建立一个虚拟权限节点
 Dashboard remark: 开源等于互助；开源需要大家一起来支持，支持的方式有很多种，比如使用、推荐、写教程、保护生态、贡献代码、回答问题、分享经验、打赏赞助等；欢迎您加入我们！
 Rule Type: 规则类型
 Rule Title: 规则标题
 Rule Name: 规则名称
-Parse field data: CRUD代码生成-解析字段数据
-Log start: CRUD代码生成-从历史记录开始
-Generate check: CRUD代码生成-生成前预检
 Change-field-name fail not exist: 字段 {{.field}} 改名失败，数据表内不存在该字段
 Del-field fail not exist: 字段 {{.field}} 删除失败，数据表内不存在该字段
 Change-field-attr fail not exist: 修改字段 {{.field}} 的属性失败，数据表内不存在该字段
@@ -43,14 +38,11 @@ Variable name: 变量名
 Test mail sent successfully~: 测试邮件发送成功~
 This is a test email: 这是一封测试邮件
 Congratulations, receiving this email means that your email service has been configured correctly: 恭喜您，收到此邮件代表您的邮件服务已配置正确；这是邮件主体 <b>在主体中可以使用Html!</b>
-The current page configuration item was updated successfully: 当前页配置项更新成功！
 Controller: 控制器
 Data Table: 对应数据表
 Primary Key: 数据表主键
-DataRecycle Remark: 在此定义需要回收的数据，实现数据自动统一回收
 No rows were restore: 没有记录被还原
 Data Fields: 敏感数据字段
-SensitiveData Remark: 在此定义需要保护的敏感字段，随后系统将自动监听该字段的修改操作，并提供了敏感字段的修改回滚功能
 No rows were rollback: 没有记录被回滚
 User_id: 用户
 Money: 变更金额
@@ -69,30 +61,6 @@ Login succeeded!: 登录成功！
 Incorrect user name or password!: 用户名或密码不正确！
 Login: 登录
 Logout: 注销登录
-Order not found: 订单找不到啦！
-Module already exists: 模块已存在！
-Package download failed: 包下载失败！
-Package check failed: 包检查失败！
-No permission to write temporary files: 没有权限写入临时文件！
-Zip file not found: 找不到压缩包文件
-Unable to open the zip file: 无法打开压缩包文件
-Unable to extract ZIP file: 无法提取ZIP文件
-Unable to package zip file: 无法打包zip文件
-Basic configuration of the Module is incomplete: 模块基础配置不完整
-Module package file does not exist: 模块包文件不存在
-Module file conflicts: 模块文件存在冲突，请手动处理！
-Configuration file has no write permission: 配置文件无写入权限
-The current state of the module cannot be set to disabled: 模块当前状态无法设定为禁用
-The current state of the module cannot be set to enabled: 模块当前状态无法设定为启用
-Module file updated: 模块文件有更新
-Please disable the module first: 请先禁用模块
-Please disable the module before updating: 更新前请先禁用模块
-The directory required by the module is occupied: 模块所需目录已被占用
-Install module: 安装模块
-Unload module: 卸载模块
-Update module: 更新模块
-Change module state: 改变模块状态
-Upload install module: 上传安装模块
 Please login first: 请先登录！
 You have no permission: 没有权限操作！
 Username: 用户名
@@ -122,7 +90,6 @@ Account exist: 帐户已存在
 Username is incorrect: 用户名不正确
 Cache cleaned~: 缓存已清理，请刷新后台~
 Please delete the child element first, or use batch deletion: 请首先删除子元素，或使用批量删除！
-'Configuration write failed: {content}': 配置写入失败：{{.content}}
 Not found field:{name}: '{{.name}}字段不存在'
 Where express error:{name}: 数据查询操作符条件错误:{{.name}}
 Old password error: 旧密码错误
@@ -130,15 +97,9 @@ Frequent email sending: 发送邮件太频繁
 Email has been registered, please log in directly: 邮箱已注册，请直接登录
 The email has been occupied: 邮箱已被占用
 Email not registered: 未注册邮箱
-Please use the account registration email to send the verification code: 请使用账户注册邮箱发送验证码
-The system has completed installation. If you need to reinstall, please delete the {lock} file first: 系统已安装完成。如果需要重新安装，请先删除锁定文件
 No built front-end file found, please rebuild manually!: 没有找到已构建的前端文件，请手动重建!
 Username is exist!: 用户名已存在
 Email is exist!: 邮箱已存在
-Mobile is exist!: 电话已存在
-The email phone has been bound to another account: 手机已绑定其他账号
-The mobile phone has been bound to another account: 邮箱已绑定其他账号
-Depend content file content is incomplete: 依赖内容文件内容不完整
 nickname: 昵称
 birthday: 生日
 Data updated successfully~: 资料更新成功~
@@ -149,11 +110,6 @@ Account does not exist~: 账户不存在~
 Failed to modify password, please try again later~: 修改密码失败，请稍后重试~
 '{account} has been registered': '{{.account}}已被注册，请直接登录~'
 email format error: 电子邮箱格式错误！
-mobile format error: 手机号格式错误！
-You need to verify your account before modifying the binding information: 您需要先通过账户验证才能修改绑定信息！
-Password error: 密码错误！
-email is occupied: 电子邮箱地址已被占用！
-mobile is occupied: 手机号已被占用！
 user_register: 会员注册验证
 user_change_email: 修改邮箱验证
 user_retrieve_pwd: 找回密码验证

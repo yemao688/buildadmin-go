@@ -4,17 +4,12 @@ You have no permission to add an administrator to this group!: 您沒有權限�
 Super administrator: 超級管理員
 No permission: 無權限
 You cannot modify your own management group!: 不能修改自己所在的管理組！
-You need to have all permissions of this group to operate this group~: 您需要擁有該分組的所有權限纔可以操作該分組~
 You need to have all the permissions of the group and have additional permissions before you can operate the group~: 您需要擁有該分組的所有權限且還有額外權限時，纔可以操作該分組~
 Role group has all your rights, please contact the upper administrator to add or do not need to add!: 角色組擁有您的全部權限，請聯繫上級管理員添加或無需添加！
-Role remark: 爲保障系統安全，角色組本身的上下級關係僅供參考，系統的實際上下級劃分是根據`權限多寡`來確定的，兩位管理員的權限節點：相同被認爲是`同級`、包含且有額外權限才被認爲是`上級`，同級不可管理同級，上級可爲下級分配自己擁有的權限節點；若有特殊情況管理員需轉`上級`，可建立一個虛擬權限節點
 Dashboard remark: 開源等於互助；開源需要大家一起來支持，支持的方式有很多種，比如使用、推薦、寫教程、保護生態、貢獻代碼、回答問題、分享經驗、打賞讚助等；歡迎您加入我們！
 Rule Type: 規則類型
 Rule Title: 規則標題
 Rule Name: 規則名稱
-Parse field data: CRUD代碼生成-解析字段數據
-Log start: CRUD代碼生成-從歷史記錄開始
-Generate check: CRUD代碼生成-生成前預檢
 Change-field-name fail not exist: 字段 {{.field}} 改名失敗，數據表內不存在該字段
 Del-field fail not exist: 字段 {{.field}} 刪除失敗，數據表內不存在該字段
 Change-field-attr fail not exist: 修改字段 {{.field}} 的屬性失敗，數據表內不存在該字段
@@ -43,14 +38,11 @@ Variable name: 變量名
 Test mail sent successfully~: 測試郵件發送成功~
 This is a test email: 這是一封測試郵件
 Congratulations, receiving this email means that your email service has been configured correctly: 恭喜您，收到此郵件代表您的郵件服務已配置正確；這是郵件主體 <b>在主體中可以使用Html!</b>
-The current page configuration item was updated successfully: 當前頁配置項更新成功！
 Controller: 控制器
 Data Table: 對應數據表
 Primary Key: 數據表主鍵
-DataRecycle Remark: 在此定義需要回收的數據，實現數據自動統一回收
 No rows were restore: 沒有記錄被還原
 Data Fields: 敏感數據字段
-SensitiveData Remark: 在此定義需要保護的敏感字段，隨後系統將自動監聽該字段的修改操作，並提供了敏感字段的修改回滾功能
 No rows were rollback: 沒有記錄被回滾
 User_id: 用戶
 Money: 變更金額
@@ -69,30 +61,6 @@ Login succeeded!: 登錄成功！
 Incorrect user name or password!: 用戶名或密碼不正確！
 Login: 登錄
 Logout: 註銷登錄
-Order not found: 訂單找不到啦！
-Module already exists: 模塊已存在！
-Package download failed: 包下載失敗！
-Package check failed: 包檢查失敗！
-No permission to write temporary files: 沒有權限寫入臨時文件！
-Zip file not found: 找不到壓縮包文件
-Unable to open the zip file: 無法打開壓縮包文件
-Unable to extract ZIP file: 無法提取ZIP文件
-Unable to package zip file: 無法打包zip文件
-Basic configuration of the Module is incomplete: 模塊基礎配置不完整
-Module package file does not exist: 模塊包文件不存在
-Module file conflicts: 模塊文件存在衝突，請手動處理！
-Configuration file has no write permission: 配置文件無寫入權限
-The current state of the module cannot be set to disabled: 模塊當前狀態無法設定爲禁用
-The current state of the module cannot be set to enabled: 模塊當前狀態無法設定爲啓用
-Module file updated: 模塊文件有更新
-Please disable the module first: 請先禁用模塊
-Please disable the module before updating: 更新前請先禁用模塊
-The directory required by the module is occupied: 模塊所需目錄已被佔用
-Install module: 安裝模塊
-Unload module: 卸載模塊
-Update module: 更新模塊
-Change module state: 改變模塊狀態
-Upload install module: 上傳安裝模塊
 Please login first: 請先登錄！
 You have no permission: 沒有權限操作！
 Username: 用戶名
@@ -122,7 +90,6 @@ Account exist: 帳戶已存在
 Username is incorrect: 用戶名不正確
 Cache cleaned~: 緩存已清理，請刷新後臺~
 Please delete the child element first, or use batch deletion: 請首先刪除子元素，或使用批量刪除！
-'Configuration write failed: {content}': 配置寫入失敗：{{.content}}
 Not found field:{name}: '{{.name}}字段不存在'
 Where express error:{name}: 數據查詢操作符條件錯誤:{{.name}}
 Old password error: 舊密碼錯誤
@@ -130,15 +97,9 @@ Frequent email sending: 發送郵件太頻繁
 Email has been registered, please log in directly: 郵箱已註冊，請直接登錄
 The email has been occupied: 郵箱已被佔用
 Email not registered: 未註冊郵箱
-Please use the account registration email to send the verification code: 請使用賬戶註冊郵箱發送驗證碼
-The system has completed installation. If you need to reinstall, please delete the {lock} file first: 系統已安裝完成。如果需要重新安裝，請先刪除鎖定文件
 No built front-end file found, please rebuild manually!: 沒有找到已構建的前端文件，請手動重建!
 Username is exist!: 用戶名已存在
 Email is exist!: 郵箱已存在
-Mobile is exist!: 電話已存在
-The email phone has been bound to another account: 手機已綁定其他賬號
-The mobile phone has been bound to another account: 郵箱已綁定其他賬號
-Depend content file content is incomplete: 依賴內容文件內容不完整
 nickname: 暱稱
 birthday: 生日
 Data updated successfully~: 資料更新成功~
@@ -149,11 +110,6 @@ Account does not exist~: 賬戶不存在~
 Failed to modify password, please try again later~: 修改密碼失敗，請稍後重試~
 '{account} has been registered': '{{.account}}已被註冊，請直接登錄~'
 email format error: 電子郵箱格式錯誤！
-mobile format error: 手機號格式錯誤！
-You need to verify your account before modifying the binding information: 您需要先通過賬戶驗證才能修改綁定信息！
-Password error: 密碼錯誤！
-email is occupied: 電子郵箱地址已被佔用！
-mobile is occupied: 手機號已被佔用！
 user_register: 會員註冊驗證
 user_change_email: 修改郵箱驗證
 user_retrieve_pwd: 找回密碼驗證
