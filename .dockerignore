@@ -5,8 +5,6 @@
 # VCS / 编辑器 / 系统
 .git
 .gitignore
-.git-blame-ignore-revs
-.cbmignore
 .idea
 .vscode
 .DS_Store

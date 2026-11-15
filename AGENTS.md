@@ -58,7 +58,6 @@
 - `app.port` 和 `app.time_zone` 已从 YAML 移除，只认环境变量 `APP_PORT` 和 `APP_TIME_ZONE`。启动时根目录缺少 `.env` 会自动从 `.env.example` 复制；godotenv 加载时不覆盖已有环境变量，缺失或空值分别兜底为 `9900` 和 `Asia/Shanghai`。应用名称配置项已删除。
 - `/docs` 可选静态文档服务（业务图文操作指南，`public/docs/`）：默认关闭，业务配置 `app.docs_enabled` 开启；`app.docs_password` 非空（或环境变量 `DOCS_PASSWORD` 覆盖）时挂载服务端密码门，仅防随意浏览、非安全边界，实现见 `internal/router/docs.go`。**业务要做文档模块（往 `public/docs/` 发布操作指南）前，先读 `public/docs/guide.html` 引导**——它说明目录约定（根目录只放 HTML、图片按文档分目录 `images/<文档名>/`）、启用配置与密码门行为，该文件由业务仓库自行维护。
 - 构建上下文由根目录 `.dockerignore` 排除式裁剪（黑名单：逐目录/文件列出排除项，不是白名单）：默认只排除 `web/`、`docs/`、`public/`、`.git`、`.env` 等条目，因此**新增目录默认会被包含进构建上下文**；凭据、本地状态和体积大的新目录必须显式加入排除项。镜像内最终只含 Go 二进制与 `crud_specs`（后者由 Dockerfile 复制进运行镜像），不含前端产物（`public/` 由宿主机 bind mount 提供）。新增"镜像内需要"的目录时，必须同步确认 `.dockerignore` 未排除它，否则构建期 `COPY` 拿不到文件。
-- `.cbmignore` 是 codebase-memory MCP 索引的忽略清单（与 `.gitignore` 相互独立，当前排除 `static/install`）；`.git-blame-ignore-revs` 是 `git blame` 跳过的纯格式化提交清单，新 clone 执行 `git config blame.ignoreRevsFile .git-blame-ignore-revs` 后生效（GitHub 网页端自动识别）。
 
 ## 分层与边界（v3.0.0 架构）
 
@@ -184,7 +183,7 @@ pnpm build                             # emits web/dist/
 - `COMPOSE_IMAGE_TAG` 留空即 `latest`；回滚时 pin 精确 `FULL_TAG`，不要依赖会移动的 `latest`。
 - `BUILD_BASE_REGISTRY` 结尾必须带 `/`（拼在镜像名前）；海外构建机传空值回官方 Docker Hub，不要写成无斜杠前缀。
 - `make build` 只做宿主单架构并 `--load`（本地验证）；`make push` 才按 `BUILD_PLATFORMS` 推多架构 manifest list，打 `FULL_TAG`/`VERSION`/`latest` 三个 tag，并带 `--provenance=false --sbom=false`。
-- gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交（`.git-blame-ignore-revs` 登记）清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。新 clone 建议 `git config blame.ignoreRevsFile .git-blame-ignore-revs`，让该提交在 `git blame` 里被跳过。
+- gofmt 在 CI 是全仓硬 gate（`gofmt -l .`）：存量漂移已由一次性格式化提交清空，流水线变红就是自己没格式化，不要再加"只查改动文件"的例外。
 - `.golangci.yml` 用 v2 语法分档启用：档 A、档 B 与档 C（revive/paralleltest/gocritic/gosec/testifylint/gocyclo/nolintlint）全部纳入门禁并保持全绿；档 C 的逐条豁免（`//nolint`）必须写明具体共享状态理由，禁止文件级豁免。新增 linter 前先本地 `golangci-lint run ./...` 看命中数。
 - 发布 tag 分两种前缀：框架仓库用 `frame-v$VERSION_FRAMEWORK`（tag 名 = `frame-v` 拼接 `VERSION_FRAMEWORK` 的当前值；版本源自 `internal/pkg/version.Framework`），业务 fork 用 `v$VERSION`（如 `v1.0.0`）。`release-image.yml` 只认业务 tag（glob 见下条），框架的 `frame-v*` tag 仅作发布标记、**不触发**镜像发布（框架自身不发镜像，该文件随框架下发供业务 fork 继承）；框架发布不要再用裸 `v` 前缀，否则与业务发布在 registry 上无法区分。
 - `release-image.yml` 的 push 触发 glob 是 `v[0-9]*.[0-9]*`（裸 `v3`/`v2` 与分支同名，误推会发 `version=3` 并覆盖 `latest`）；`image` job 用 `if: vars.REGISTRY != '' && vars.REGISTRY_IMAGE_NAME != ''` 守门，未配置发布能力的仓库直接 skipped，`secrets` 不可在 job 级 `if` 引用，仍由「配置校验」step 拦截。
