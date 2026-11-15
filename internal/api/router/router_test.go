@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,6 +40,12 @@ func TestPublicUserAuthenticationRoutesUseFrontendPaths(t *testing.T) {
 // 保证 api_routes.go 的 public 名单不是
 // 一份会漂移的愿望清单：名单里的每个 method+path 都必须真的注册到根引擎，
 // 否则免登录声明会静默失效（新增端点忘了注册）或留下死条目。
+//
+// 注册器统一取自生产聚合 ProvideRegistrars（而非在此逐个 new）：业务 fork
+// 必须把业务 registrar 加进 ProvideRegistrars 才能完成生产挂载，本检查因此
+// 自动覆盖业务公共端点。实参不写死——按函数自身签名反射构造零值 handler，
+// 否则下游每追加一个 registrar 参数都会让本框架测试编译失败。
+// 绕过该聚合自行拼注册器列表，等于同时绕过生产挂载路径，不在本测试承诺范围内。
 func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	t.Parallel()
@@ -46,9 +53,11 @@ func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 	rawSet := newAPIRouteSet(engine, engine.Group("/api/"))
 	set, ok := rawSet.(*apiRouteSet)
 	require.True(t, ok, "newAPIRouteSet must return *apiRouteSet")
-	NewUserRegistrar(&api.UserHandler{}).Register(set)
-	NewCommonRegistrar(&api.CommonHandler{}).Register(set)
-	NewIndexRegistrar(&api.IndexHandler{}).Register(set)
+	registrars := buildTestRegistrars(t, ProvideRegistrars)
+	require.NotEmpty(t, registrars, "ProvideRegistrars must expose the api module registrars")
+	for _, registrar := range registrars {
+		registrar.Register(set)
+	}
 
 	registered := make(map[string]bool)
 	for _, route := range engine.Routes() {
@@ -60,6 +69,27 @@ func TestPublicRouteSetHasNoOrphans(t *testing.T) {
 		path := "/api/" + rel
 		require.True(t, registered[method+" "+path], "public route %s %s is declared but not registered", method, path)
 	}
+}
+
+// buildTestRegistrars 按 provider 自身签名反射构造零值 handler 并调用，
+// 让注册面始终等于生产聚合面：业务 fork 在 ProvideRegistrars 锚点追加 registrar
+// 参数后，本框架测试不需要跟着改实参（写死实参会直接编译失败）。
+// Register 只登记 method+path，不解引用 handler 字段，零值 handler 足够。
+func buildTestRegistrars(t *testing.T, provider any) []Registrar {
+	t.Helper()
+	fn := reflect.ValueOf(provider)
+	require.Equal(t, reflect.Func, fn.Kind(), "registrar provider must be a function")
+	inputs := make([]reflect.Value, fn.Type().NumIn())
+	for i := range inputs {
+		paramType := fn.Type().In(i)
+		require.Equal(t, reflect.Pointer, paramType.Kind(), "ProvideRegistrars parameter %d must be a handler pointer", i)
+		inputs[i] = reflect.New(paramType.Elem())
+	}
+	results := fn.Call(inputs)
+	require.Len(t, results, 1, "ProvideRegistrars must return the registrar slice")
+	registrars, ok := results[0].Interface().([]Registrar)
+	require.True(t, ok, "ProvideRegistrars must return []Registrar")
+	return registrars
 }
 
 func TestApiRouterMountsAPIRoutes(t *testing.T) {

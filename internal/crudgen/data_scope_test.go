@@ -5,6 +5,9 @@ import (
 	"buildadmin-go/internal/pkg/util"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1199,17 +1202,17 @@ func TestModelTemplate_CascadeOwnersMethod(t *testing.T) {
 	assert.Contains(t, method, "// @cascade:begin")
 	assert.Contains(t, method, "// @cascade:end")
 
-	// Edit：运行时循环 + 标识符校验 + 反引号拼接；无静态展开。
+	// Edit 之后的生成方法：运行时循环 + 标识符校验 + 反引号拼接；无静态展开。
 	editStart := strings.Index(out, "func (s *SellerUserRepository) Edit(")
 	require.GreaterOrEqual(t, editStart, 0)
 	edit := out[editStart:]
 	assert.Contains(t, edit, "for _, c := range s.CascadeOwners() {")
 	assert.Contains(t, edit, "if err := data_scope.ValidateIdentifier(c.Table); err != nil {")
 	assert.Contains(t, edit, "if err := data_scope.ValidateIdentifier(c.ByColumn); err != nil {")
-	assert.Contains(t, edit, "if err := data_scope.ValidateIdentifier(c.OwnerColumn); err != nil {")
+	assert.Contains(t, edit, "return data_scope.ValidateIdentifier(c.OwnerColumn)")
 	assert.Contains(t, edit, `tx.Session(&gorm.Session{NewDB: true}).Table(s.config.Database.Prefix+c.Table)`)
-	assert.Contains(t, edit, `.Where("`+"`"+`"+c.ByColumn+"`+"`"+` = ? AND `+"`"+`"+c.OwnerColumn+"`+"`"+` <> ?", sellerUser.ID, sellerUser.AdminID)`)
-	assert.Contains(t, edit, `.Update(c.OwnerColumn, sellerUser.AdminID)`)
+	assert.Contains(t, edit, ".Where(\"`\"+c.ByColumn+\"` = ? AND `\"+c.OwnerColumn+\"` <> ?\", id, owner)")
+	assert.Contains(t, edit, `.Update(c.OwnerColumn, owner)`)
 	assert.Contains(t, edit, `return fmt.Errorf("cascade owner %q: %w", c.Table, err)`)
 	assert.NotContains(t, edit, `{{range .CascadeOwners}}`)
 	// 级联循环在归属变更校验块内：先 OwnerInScopeWithActor 后级联。
@@ -1693,4 +1696,105 @@ func renderRawModel(data ModelData) (string, error) {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+// 渲染带 5 个级联子表的 reassignable 模型，按 gocyclo 口径逐函数计算圈复杂度：
+// 此前 Edit 闭包内联加锁/归属校验/级联循环，复杂度超过 golangci-lint 阈值 15，
+// 下游只能手工加 //nolint:gocyclo（重新生成即丢失）。这里钉住拆分后的形态。
+func TestGeneratedReassignableFunctionsStayUnderGocycloLimit(t *testing.T) {
+	t.Parallel()
+	cfg := &data_scope.Config{Mode: data_scope.ModeAuto, Reassignable: true}
+	table := getTestTableData()
+	table.DataScope = cfg
+	fields := getCompileFields("admin_id")
+	getTableName := func(name string, full bool) string {
+		prefix := ""
+		if full {
+			prefix = "ba_"
+		}
+		return prefix + strings.TrimPrefix(name, prefix)
+	}
+
+	modelData, _, _, _, _, _, _, _, _, _, _, _, _, _, err := prepareGenerationData(table, fields, cfg, getTableName, proveAll)
+	require.NoError(t, err)
+	modelData.Pk = "id"
+	modelData.StructTemp = compileDemoStruct(modelData.ClassName, "admin_id", "AdminID", "admin_id")
+	modelCode, err := renderModel(modelData)
+	require.NoError(t, err)
+	// 复现下游多子表形态：向级联锚点注入 5 条注册条目
+	modelCode = injectCascadeAnchorEntriesForTest(t, modelCode,
+		"seller_user_log", "order_recharge", "order_withdraw", "user_wallet", "ops_banner")
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "seller_user.go", modelCode, parser.AllErrors)
+	require.NoError(t, err)
+
+	const limit = 15
+	highest, highestName := 0, ""
+	check := func(name string, body *ast.BlockStmt) {
+		complexity := cyclomaticComplexity(body)
+		if complexity > highest {
+			highest, highestName = complexity, name
+		}
+		require.LessOrEqual(t, complexity, limit, "%s 圈复杂度 %d 超过 %d", name, complexity, limit)
+	}
+
+	helpers := map[string]bool{
+		"prepareEditOwnerChange":  false,
+		"syncCascadeOwners":       false,
+		"validateCascadeOwnerRef": false,
+	}
+	editBody := ""
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Body == nil {
+			continue
+		}
+		check(fn.Name.Name, fn.Body)
+		if _, ok := helpers[fn.Name.Name]; ok {
+			helpers[fn.Name.Name] = true
+		}
+		if fn.Name.Name == "Edit" {
+			editBody = modelCode[fset.Position(fn.Pos()).Offset:fset.Position(fn.End()).Offset]
+		}
+	}
+	for name, found := range helpers {
+		require.True(t, found, "缺少生成的 %s 方法", name)
+	}
+
+	// Edit 本体只做编排：级联与标识符校验必须已移出到独立方法
+	require.NotEmpty(t, editBody)
+	require.Contains(t, editBody, "s.prepareEditOwnerChange(ctx, tx, &")
+	require.NotContains(t, editBody, "CascadeOwners()")
+	require.NotContains(t, editBody, "ValidateIdentifier(")
+	t.Logf("最高圈复杂度: %s = %d（阈值 %d）", highestName, highest, limit)
+}
+
+// cyclomaticComplexity 按 fzipp/gocyclo（golangci-lint 的 gocyclo 判定口径）
+// 计算单个函数的圈复杂度：基准 1，if/for/range 与带表达式的 case/select 分支、
+// && / || 各加 1；default 分支不计。与 gocyclo 一致，嵌套函数字面量里的分支
+// 计入外层函数，因此事务闭包的分支会推高 Edit 的体积——不可跳过，否则回归会
+// 在 lint 报错的同时让本守卫变绿。
+func cyclomaticComplexity(body *ast.BlockStmt) int {
+	complexity := 1
+	ast.Inspect(body, func(node ast.Node) bool {
+		switch n := node.(type) {
+		case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt:
+			complexity++
+		case *ast.CaseClause:
+			if n.List != nil {
+				complexity++
+			}
+		case *ast.CommClause:
+			if n.Comm != nil {
+				complexity++
+			}
+		case *ast.BinaryExpr:
+			if n.Op == token.LAND || n.Op == token.LOR {
+				complexity++
+			}
+		}
+		return true
+	})
+	return complexity
 }
