@@ -5,6 +5,39 @@ import (
 	"testing"
 )
 
+func TestValidateSpecWarnsOnDeprecatedKeys(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: deprecated_keys
+type: create
+rebuild: Yes
+isCommonModel: 0
+databaseConnection: mysql
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+`)
+	warnings, err := ValidateSpec(path)
+	if err != nil {
+		t.Fatalf("valid spec rejected: %v", err)
+	}
+	messages := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		messages = append(messages, warning.Message)
+	}
+	joined := strings.Join(messages, "\n")
+	for _, want := range []string{
+		"rebuild is deprecated",
+		"isCommonModel is deprecated",
+		"databaseConnection is deprecated",
+		"type: create drops and recreates",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing warning %q in:\n%s", want, joined)
+		}
+	}
+}
+
 func TestValidateSpecAcceptsValidRelationsAndFiles(t *testing.T) {
 	t.Parallel()
 	path := writeSpecTest(t, `name: orders

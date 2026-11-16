@@ -144,7 +144,7 @@ func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
 }
 
 // 对齐上游:type=create 对已存在的数据表直接删表重建(前端 generateCheck
-// 已弹窗确认),服务端仅校验生成类型本身。
+// 已弹窗确认,CLI 追加 --allow-rebuild 确认),服务端仅校验生成类型本身。
 func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
 	t.Parallel()
 	if err := validateGenerationMode("create"); err != nil {
@@ -153,8 +153,32 @@ func TestValidateGenerationModeAllowsCreateOnExistingTable(t *testing.T) {
 	if err := validateGenerationMode("alter"); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateGenerationMode("auto"); err != nil {
+		t.Fatal(err)
+	}
 	if err := validateGenerationMode("log"); err == nil {
 		t.Fatal("unsupported generation type must be rejected")
+	}
+}
+
+func TestResolveGenerationType(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		requested string
+		exists    bool
+		want      string
+	}{
+		{"auto", false, "create"},
+		{"auto", true, "alter"},
+		{"", false, "create"},
+		{"", true, "alter"},
+		{"create", true, "create"},
+		{"alter", false, "alter"},
+	}
+	for _, tc := range cases {
+		if got := resolveGenerationType(tc.requested, tc.exists); got != tc.want {
+			t.Fatalf("resolveGenerationType(%q, %v) = %q, want %q", tc.requested, tc.exists, got, tc.want)
+		}
 	}
 }
 

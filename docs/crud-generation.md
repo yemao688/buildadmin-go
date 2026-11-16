@@ -48,7 +48,13 @@ go build ./...
 
 `--skip-compile-check` 不写 `wire_gen.go`、不做 `go build` 自检，因此**不能替代最终门禁**；全部模块完成后必须执行一次 `go generate ./cmd/server` 与 `go build ./...`。`crud:delete` 同样支持该开关。
 
-已有业务表通常用 `type: alter`。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。`type: create` 对已有表是删除重建，不能当作无损更新。
+`crud:generate --allow-rebuild` 仅在 spec 显式写 `type: create` 且目标表已存在时需要：它确认删除重建（数据丢失）。省略 `type`（`auto`）不会删表。
+
+### 已弃用的 PHP 兼容键
+
+`rebuild`、`modelFile`、`controllerFile`、`isCommonModel`、`databaseConnection` 仍被接受，但不再影响产物；`crud:validate` 会逐条提示。`isCommonModel` 非零值直接报错，`databaseConnection` 只支持 `mysql`。
+
+已有业务表通常用 `type: alter`，或直接省略 `type`（`auto` 按目标库现状推导）。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。显式 `type: create` 对已有表是删除重建，CLI 必须追加 `--allow-rebuild`，不能当作无损更新。
 
 **字体惯例**：本文中使用 `pk` 等作为 designType 值时，不包含引号；`defaultType: <值>` 使用尖括号占位符表示实际值。
 
@@ -105,8 +111,8 @@ fields:
 | --- | --- | --- |
 | `name` | `string`，必填 | 业务表名，安全下划线标识符，自动命名来源。 |
 | `comment` | `string`，默认空 | 表注释。以`表`结尾时管理名称转为`管理`，如`会员组表`→`会员组管理`。 |
-| `type` | `string`，默认 `create` | `create` 或 `alter`。`alter` 只派生变更，不删未在 spec 的列。 |
-| `generateRelativePath` | `string`，必填 | 标准值=表名本身。Go 产物不再由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。省略时兜底默认等于表名，但 spec 不应依赖省略。 |
+| `type` | `string`，默认 `auto` | `auto` / `create` / `alter`。`auto` 按目标库现状推导：表已存在走 `alter`（只补/改列，不删未在 spec 的列），否则 `create`。显式 `create` 对已有表是删除重建，CLI 需 `--allow-rebuild` 确认数据丢失。 |
+| `generateRelativePath` | `string`，默认=表名 | 省略时等于表名。Go 产物不由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。需要多级 views 目录（如 `order_center/recharge`）时必须显式声明。 |
 | `rebuild` | `string`，默认空 | PHP 上游兼容值，通常 `No`/`Yes`。 |
 | `databaseConnection` | `string`，默认 `mysql` | 当前 Go 应用只有一条注入连接，其它值失败。 |
 | `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。支持本表字段与 `alias.column` 关联字段（点号形态）：alias 由外键字段名派生（`user_id` → `user`、`parent_admin_id` → `parentAdmin`，与关联搜索列 prop、语言键同源），列必须是该 `remoteSelect` 字段已声明的 `relationFields` 之一；仅 `remoteSelect` 支持，`remoteSelects` 不产生 alias，且只允许一层关联。 |
@@ -1024,7 +1030,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 5. **布尔语义**：`tinyint(1)` 的非规范值会被请求层拒绝；`char(1)` 不参与布尔兼容。
 6. **路径合法性**：路径不得含 `..`、绝对路径、Windows drive prefix、空段（`a//b`）或 `a..b`。
 7. **省略 vs 空列表**：`formFields`/`columnFields` 省略是自动推导，显式 `[]` 是没有。
-8. **数据库副作用**：`type: create` 对已有表是删除重建；DDL 不可回滚。
+8. **数据库副作用**：显式 `type: create` 对已有表是删除重建（CLI 需 `--allow-rebuild` 确认）；DDL 不可回滚。
 9. **生成后验证**：`go build ./...`；前端改动在 `web/` 执行 `pnpm typecheck`。
 
 ### 参考

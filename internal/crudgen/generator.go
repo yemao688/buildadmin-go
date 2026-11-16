@@ -34,6 +34,7 @@ type GenerateOptions struct {
 	SkipFrontend          bool // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
 	SkipRepo              bool // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
 	SkipCompileCheck      bool // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
+	AllowRebuild          bool // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -394,16 +395,25 @@ func (s *generateState) failErr(stage string, cause error) error {
 func (s *generateState) designTables() ([]string, error) {
 	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
 	getColumns := func(name string) ([]dbschema.Column, error) { return s.tables.GetColumns(name) }
-	// 对齐上游:type=create 时若数据表已存在则先删除重建;
-	// 破坏性确认由前端 generateCheck 弹窗完成,服务端不再拒绝
-	if s.opts.Type == "create" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
-		if err := s.tables.DelTable(s.opts.Table.Name); err != nil {
-			return nil, s.failErr("drop table", err)
+	exists := tableExists(s.db, s.cfg, s.opts.Table.Name)
+	switch resolveGenerationType(s.opts.Type, exists) {
+	case "create":
+		// 对齐上游:type=create 表示删表重建。HTTP 设计器由 generateCheck 弹窗
+		// 确认；CLI 必须显式 --allow-rebuild，避免省略 type 或误改 spec 时
+		// 静默抹掉已有数据。
+		if exists {
+			if !s.opts.AllowRebuild {
+				return nil, s.failErr("drop table", fmt.Errorf("table %q already exists and type=create would drop and recreate it; omit type (auto) or set type: alter, or pass --allow-rebuild to confirm the data loss", s.opts.Table.Name))
+			}
+			if err := s.tables.DelTable(s.opts.Table.Name); err != nil {
+				return nil, s.failErr("drop table", err)
+			}
 		}
-	}
-	if s.opts.Type == "alter" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
-		if err := s.guardAlter(getTableName, getColumns); err != nil {
-			return nil, err
+	case "alter":
+		if exists {
+			if err := s.guardAlter(getTableName, getColumns); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := HandleTableDesign(s.db, getTableName(s.opts.Table.Name, true), s.opts.Table, s.opts.Fields); err != nil {
@@ -588,10 +598,22 @@ func normalizeGenerationType(generationType, rebuild string) string {
 }
 
 func validateGenerationMode(generationType string) error {
-	if generationType != "create" && generationType != "alter" {
-		return fmt.Errorf("unsupported CRUD generation type %q; use create or alter", generationType)
+	if generationType != "create" && generationType != "alter" && generationType != "auto" && generationType != "" {
+		return fmt.Errorf("unsupported CRUD generation type %q; use create, alter or auto", generationType)
 	}
 	return nil
+}
+
+// resolveGenerationType 在 type 省略（auto）时按目标表是否存在推导：已存在走
+// alter（只补/改列，不删表），否则 create。显式 create/alter 原样返回。
+func resolveGenerationType(requested string, tableExists bool) string {
+	if requested == "" || requested == "auto" {
+		if tableExists {
+			return "alter"
+		}
+		return "create"
+	}
+	return requested
 }
 
 // DeleteOptions 控制 crud:delete 的可选行为。

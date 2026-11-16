@@ -95,9 +95,11 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	formFields := resolveSpecFormFields(raw.FormFields, fields)
 	columnFields := resolveSpecColumnFields(raw.ColumnFields, fields)
 	dataScope := resolveSpecDataScope(raw.DataScope)
-	typeName := raw.Type
+	typeName := strings.TrimSpace(raw.Type)
 	if typeName == "" {
-		typeName = "create"
+		// auto：由目标库现状推导 create/alter，避免省略 type 时把已存在的表
+		// 按 create 语义删除重建（历史默认值是 create）。
+		typeName = "auto"
 	}
 	table := crudmodel.Table{
 		Name: raw.Name, Comment: raw.Comment, FormFields: formFields, ColumnFields: columnFields,

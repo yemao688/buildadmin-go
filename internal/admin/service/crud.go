@@ -34,6 +34,7 @@ func (s *CrudService) Generate(_ context.Context, actor data_scope.Actor, p dto.
 		Fields:                p.Fields,
 		Type:                  p.Type,
 		AdminID:               actor.AdminID,
+		AllowRebuild:          true, // 设计器前端 generateCheck 已弹窗确认删表重建
 		RegisterAtomicRoute:   register,
 		UnregisterAtomicRoute: unregister,
 	}); err != nil {

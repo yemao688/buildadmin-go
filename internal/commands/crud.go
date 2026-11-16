@@ -56,6 +56,7 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	generateCmd.Flags().Bool("skip-frontend", false, "skip web artifacts (lang/index.vue/form.vue); implies skip-menu; intended for modules whose frontend is already customized")
 	generateCmd.Flags().Bool("skip-repo", false, "skip repository file and repository provider merge; intended only for modules with an existing customized repository (first-time generation would not compile)")
 	generateCmd.Flags().Bool("skip-compile-check", false, "skip wire regeneration and go build self-check; use while stale generated artifacts block the build, then run go generate ./cmd/server && go build ./...")
+	generateCmd.Flags().Bool("allow-rebuild", false, "allow type=create to drop and recreate an existing table (data loss)")
 	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	return generateCmd
 }
@@ -120,6 +121,7 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	opts.SkipFrontend, _ = cmd.Flags().GetBool("skip-frontend")
 	opts.SkipRepo, _ = cmd.Flags().GetBool("skip-repo")
 	opts.SkipCompileCheck, _ = cmd.Flags().GetBool("skip-compile-check")
+	opts.AllowRebuild, _ = cmd.Flags().GetBool("allow-rebuild")
 	if opts.SkipFrontend {
 		// 前端产物跳过时菜单同步同样跳过（views 未生成，菜单组件路径悬空）。
 		opts.SkipMenu = true

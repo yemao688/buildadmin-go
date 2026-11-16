@@ -136,7 +136,7 @@ fields:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opts.Type != "create" || opts.Table.DataScope == nil || opts.Table.DataScope.Mode != data_scope.ModeAuto {
+	if opts.Type != "auto" || opts.Table.DataScope == nil || opts.Table.DataScope.Mode != data_scope.ModeAuto {
 		t.Fatalf("defaults: type=%q scope=%v", opts.Type, opts.Table.DataScope)
 	}
 	if len(opts.Table.FormFields) != 2 || len(opts.Table.ColumnFields) != 3 {
