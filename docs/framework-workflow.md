@@ -118,6 +118,14 @@ go run ./cmd/server setup --yes \
 - `--env debug|release` 选择 gin 运行模式（默认 `debug`，与 `config.defaults.yaml` 一致）。**生产部署建议 `--env release`**：否则 gin 运行于 debug 模式，`internal/middleware/recovery.go` 会把内部错误详情暴露给客户端；安装后也可改 `configs/config.yaml` 的 `app.env: release`；
 - 显式 `--conf` 路径会作为本次 setup 的配置文件路径。
 
+**顺带准备 MySQL 测试库**（可选）：`--with-test-db`（默认关闭）+ `--test-db-name`（默认 `<db-name>_test`）。安装写入 `configs/config.yaml` 后，用同一 host/port/账号：
+
+1. `CREATE DATABASE IF NOT EXISTS <test-db-name>`（utf8mb4）；
+2. `GRANT ALL PRIVILEGES ON \`<db-name>%\`.* TO '<user>'@'%'`（recovery 测试会派生 `<db-name>_fresh_*` 库）；
+3. 把 `mysql_test` 段（`enabled: true` + 连接字段）**合并**进 `configs/config.yaml`，其它键与 `token.key` 保持不变。
+
+授权失败不会中断安装，而是打印可直接执行的手工 SQL，请由有 `GRANT OPTION` 的管理员执行。交互模式会询问一次（默认否）；`--yes` 下仅按 flag 生效。没有测试库时，43 个 MySQL 门禁集成测试会明确跳过。
+
 **安装命令速查**（宿主机 / 容器内，参数见上）：
 
 | 场景 | 命令 |
@@ -148,6 +156,15 @@ go run ./cmd/server --conf configs/config.yaml migrate
 ```
 
 根目录的 `configs/config.yaml` 可能包含凭据，不要提交。迁移会修改数据库，执行前确认配置指向正确环境并做好备份。
+
+查看迁移状态优先用摘要与业务轨视图（`list` 默认只列 business，`--all` 才展开三轨）：
+
+```bash
+go run ./cmd/server --conf configs/config.yaml migrate status
+# installed  state=strict_upgrade  migrations=12/12 pending=0 incomplete=0  framework=1/1 ...  business=3/3 ...  specs=6
+go run ./cmd/server --conf configs/config.yaml migrate list          # 只看业务轨
+go run ./cmd/server --conf configs/config.yaml --json migrate status # 同一份数据的机器可读版本
+```
 
 前端日常开发必须在 `web/` 执行：
 

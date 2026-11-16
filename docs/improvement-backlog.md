@@ -330,11 +330,35 @@
 
 ## 7. 落地记录
 
+### 已完成
+
 | 项 | 提交 | 说明 |
 | --- | --- | --- |
-| 4.2 姿势字段 | `8d79a20` | `type` 省略即 auto（按库现状推导，不再默认删表）；显式 `create` 需 `--allow-rebuild`；弃用键告警；`generateRelativePath` 可选 |
-| 4.1 spec 简写 | `e595f9e` | `fields` 支持映射写法（字段名做键）；映射写法与序列写法产物一致 |
+| 4.2 姿势字段 | `8d79a20` | `type` 省略即 `auto`（按库现状推导，不再默认删表）；显式 `create` 需 `--allow-rebuild`；弃用键告警；`generateRelativePath` 可选 |
+| 4.1 spec 简写 | `e595f9e` | `fields` 支持映射写法（字段名做键），与序列写法产物一致；`defaultType`/`designType`/表单列均已自动推导 |
 | 2.4 `crud:new` | `011164f` | 生成可校验骨架（主键/status/weigh/两个时间列），未安装环境可用 |
-| 2.3 JSON Schema | `2de5cd5` | `crud:schema --out/--check`，由结构体 tag 反射生成，`crud_specs/schema.json` 入库并有测试守同步 |
-| 2.1 设计器落 spec | `f68da1b` | 生成事务内写回 `crud_specs/<table>.yaml` 并随失败回滚；`crud:export-spec` 补齐存量模块 |
-| 2.2 dry-run | 本次 | `crud:generate --dry-run` 输出表结构差量与文件清单；**内容级 diff 未做**（渲染与写盘耦合），`crud:delete --dry-run` 未做 |
+| 2.3 JSON Schema | `2de5cd5` | `crud:schema --out/--check`，结构体 tag 反射生成，`crud_specs/schema.json` 入库并有测试守同步 |
+| 2.1 设计器落 spec | `f68da1b` | 生成事务内写回 `crud_specs/<table>.yaml` 并随失败回滚；`crud:export-spec` 导出存量模块 |
+| 2.2 dry-run | `b5c0733` | `crud:generate --dry-run`：差量 + 文件清单 + 菜单提示，零副作用 |
+| 3.4 `--json` | `605946e` | validate/generate/apply --plan/migrate --plan/cascade:sync 统一信封 + `approveCommand` |
+| 4.3 归属自动登记 | `c881eda` | 启动扫描 spec 自动登记 owner 表，删除手抄清单与守卫测试 |
+| 3.1 审批页 | `b32e6e1` | `crud:apply --plan --html` 只读页，分类徽章 + 可复制命令，页面不执行 |
+| 3.2 `crud:diff` | `b32e6e1` | 库现状 vs spec 差量，rejected 非零退出 |
+| 3.3 预览页 | `b32e6e1` | `crud:preview`：字段表 + 表单/列表清单 HTML |
+| 3.5 `diagnose` | `b32e6e1` | 安装/迁移/spec/归属/crud_log/前端产物一次体检，支持 `--strict` |
+| 3.6 `crud:list` | `b32e6e1` | 模块总览，支持 `--json` |
+| 4.6 测试库开箱 | `4253771` | `setup --with-test-db` 建库 + 授权 + 合并 `mysql_test` 段 |
+| 4.9 台账可见性 | `5f23e54` | `migrate list` 默认业务轨，新增 `migrate status` 摘要 |
+| 3.7 速查 | 见 `docs/crud-cheatsheet.md` | 任务导向入口，作为长文契约的前置动线 |
+| 4.11 cascade 曝光 | `b32e6e1` | `diagnose` 报告 `inheritFrom` 未登记/缺 spec；速查与 JSON 输出给出下一步命令 |
+
+### 评估后不做（原因）
+
+| 项 | 结论 |
+| --- | --- |
+| 2.2 内容级 diff | 渲染与写盘耦合在同一条调用链（`GenerateFileWithRouteRegistrar` 边渲染边写），要拆出渲染层才能给出文件正文 diff。收益低于风险，先保留"差量 + 文件清单"。 |
+| 4.4 合并两个迁移开关 | `crud.apply_on_migrate` 是"结构迁移成功但业务 schema 暂缓"的逃生口。删掉它会让显式关闭过该开关的部署在下次启动时静默 apply 业务表；保留两个键的成本（一次文档解释）低于这个风险。 |
+| 4.5 离线生成 | 生成链依赖 DB 做表存在性判断、菜单同步与 crud_log 记账；在线性无法用 flag 绕开，只能重排事务边界。`--dry-run` 已经覆盖"不连库先看计划"的主要诉求（需库），真离线要等渲染层拆分。 |
+| 4.7 生成物入库噪声 | `autoload.ts`/`tableRenderer.d.ts` 由 Vite 插件在 `pnpm dev` 时重写；移出版本控制需要 CI 侧生成 + 类型检查改造，属于前端构建链变更，风险与收益不匹配。文档已注明该现象。 |
+| 4.8 定制点机器校验 | 需要"渲染到内存再比对"的渲染层（同 2.2）；当前用双提交工作流 + `git diff` 手工核对，先记录为已知代价。 |
+| 4.10 截图与外部站点 | 属于文档/传播工作，不阻塞功能；`crud-cheatsheet.md` 已补上任务动线，截图与站点留待有真实界面变更时一起做。 |

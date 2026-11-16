@@ -2,6 +2,8 @@
 
 本文是 Go CRUD 生成器的 YAML 契约，面向编写 `crud_specs/*.yaml` 的开发者与 AI agent。它对齐 BuildAdmin v2.3.8 的数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM/Wire 实现。
 
+> 只想"现在该敲什么"：看 [`crud-cheatsheet.md`](crud-cheatsheet.md)。本文是契约，速查是动线。
+
 ## 1. 概述与流程
 
 写 spec 前先与用户对齐需求：给出 2-3 个确定的字段集方案供选择，问清归属与数据权限、审批流、软删除、列表/表单字段取舍、预期关系（`remoteSelect` 目标）。**用户拍板后再落 YAML，不要凭空补全字段。**
@@ -340,17 +342,24 @@ go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对
 - **手写写入路径继承归属时必须显式 `OwnerInScopeWithActor`**：归属继承 + 数据范围校验由**生成 repo 的 Add 自动完成**，但业务自定义的手写写入路径（如 `FinanceService` 直接创建充提单、批量导入等绕过生成 repo Add 的代码）继承主实体归属后很容易漏掉 `OwnerInScopeWithActor` 校验——非超管可跨 scope 植入归属到麾外主实体的记录（与生成 Add 的 `inheritFrom` 语义不一致）。手写写入必须与生成 repo Add 对齐：事务内 `SELECT ... FOR UPDATE` 读主实体归属、显式 `data_scope.OwnerInScopeWithActor(ctx, tx, enforcer, prefix, ownerID, actor)` 校验该归属在请求者麾下，再写入。评审手写业务代码时把这条作为必查项。
 - **锁序反转（已知事项）**：Add 路径（`FOR UPDATE` 父行 → 插子行）与归属变更 Edit 路径（`FOR UPDATE` 子行 → 更新父行）并发时锁序相反，InnoDB 会 abort 其中一方（transient 500，重试即可成功）——框架设计固有，接受为已知事项，不做跨事务锁序统一。
 
-### 管理员删除与 owner 表登记（必须显式）
+### 管理员删除与 owner 表登记（spec 自动登记）
 
 删除叶子管理员时，框架会把该管理员名下的归属数据转挂到其 `parent_id`。转移
-范围来自 `data_scope.RegisterAdminOwnerTables` 的显式登记表清单，不会扫描
-`information_schema`：`admin_id` 表示**归属**的表（`reassignable` 主实体、
-`inheritFrom` 子表、以及所有由 actor 写入归属的业务表）必须登记；表示
-**操作者/审计**的表（`admin_log`、`crud_log`、`security_*_log`）禁止登记，
-否则删除会改写历史操作人。框架已登记 `user`、`user_money_log`；业务仓库在
-自己的 init 中登记 `seller_*`、`order_*` 等归属表（写法见
-[`business-development.md`](business-development.md)「管理员删除与归属转移」）。
-未登记的表不会转移，删除代理后会变成受限代理全部不可见的孤儿数据。
+范围来自 `data_scope.RegisterAdminOwnerTables` 的登记表清单，不会扫描
+`information_schema`。登记分两路：
+
+- **CRUD 表自动登记**：启动时扫描 `crud_specs/`，把 `dataScope.reassignable: true`
+  的主实体与声明 `dataScope.inheritFrom` 的子表自动登记（`internal/crudgen/owner_tables.go`）。
+  spec 是唯一事实源，业务仓库无需手抄第二份清单。
+- **非 CRUD 表手写登记**：没有 spec 的手写表/历史表，在业务仓库的
+  `internal/admin/repository/admin_owner_tables_business.go` init 中调用
+  `data_scope.RegisterAdminOwnerTables`（写法见
+  [`business-development.md`](business-development.md)「管理员删除与归属转移」）。
+
+`admin_id` 表示**操作者/审计**的表（`admin_log`、`crud_log`、`security_*_log`）
+禁止登记，否则删除会改写历史操作人。框架已登记 `user`、`user_money_log`（与
+spec 自动登记重复无害）。未登记的表不会转移，删除代理后会变成受限代理全部
+不可见的孤儿数据。
 
 ### 受保护核心表的 `registerOnly` 登记（手写父表/子表）
 
@@ -1143,3 +1152,22 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 ```
 
 失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。
+
+## 12. 只读命令一览
+
+这些命令都不写库、不写文件，可以随时跑，也是 agent 判断下一步的入口。
+
+| 命令 | 作用 | 依赖 |
+| --- | --- | --- |
+| `crud:validate <spec...>` | 纯校验，警告与错误分开报告 | 无 |
+| `crud:list [--json]` | 模块总览：表名、菜单、数据权限、字段数、`inheritFrom` | 无 |
+| `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML：字段表 + 表单/列表清单，检查组件选择 | 无 |
+| `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
+| `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
+| `crud:apply --plan [--html <path>] [--json]` | 分类计划；`--html` 出只读审批页 | MySQL |
+| `migrate --plan` | 发版前检查 `rejected` 的唯一事实源 | MySQL |
+| `migrate status [--json]` / `migrate list [--all]` | 三轨计数摘要 / 业务轨台账 | MySQL |
+| `diagnose [--json] [--strict]` | 安装、迁移、spec、归属登记、crud_log 覆盖、前端产物 | MySQL（缺失时降级） |
+| `crud:schema --out crud_specs/schema.json` | 刷新编辑器/AI 用的 JSON Schema | 无 |
+
+审批页（`crud:apply --plan --html runtime/plan.html`）是只读的：它把 `safe-auto` / `requires-approval` / `rejected` 逐条列出来，并给出可以直接复制的 `--approve=` 命令；**页面本身不执行任何写操作**，批准仍然发生在终端与 git 里。
