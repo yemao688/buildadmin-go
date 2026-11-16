@@ -97,6 +97,7 @@ func newCrudOnlyRootCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		newCrudValidateCommand(),
 		newCrudNewCommand(),
 		newCrudSchemaCommand(),
+		newCrudExportSpecCommand(cmdBootstrap),
 		newCrudListCommand(),
 		newCrudDiffCommand(cmdBootstrap),
 		newCrudPreviewCommand(),
