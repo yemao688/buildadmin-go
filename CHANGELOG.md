@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.5.4
+
+> 测试稳定性批次：修复 `TestAuditLogServiceResolvesUsernameFallbacks` 并行子测试共享 SQLite 内存库导致的 `SQLITE_LOCKED`（#63）；无产品代码、迁移、`crud_specs`、DDL 与 web 变更。
+
+- **Fixed（测试）:** `internal/admin/service/audit_log_test.go` 的五个并行子测试改为各自构造 fixture，DSN 由「测试名」改为 `pid + 进程内自增序号`：并发写不再命中同一个 `cache=shared` 内存库（原报 `database table is locked`），且 `-count` 重跑不会复用上一轮未关闭的旧库（子测试名在多轮间会重复）。多核机器上不再稳定失败，`-parallel 1` 不再是绕过手段。
+- **Downstream（业务 fork 升级必读）:** 本版无迁移、无 `crud_specs`、无 DDL、无 web 运行时变更，唯一改动是框架自带测试文件。合并后无需任何动作；若业务仓库曾为规避该 flake 手改过此测试，可整体采用框架版本（只影响测试隔离，不涉及业务断言）。
+- **Verified:** CI run `43931647923`（PR head `c76260e`）与 `43932163895`（合并 head `4825e45`，树一致）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / test / typecheck / build）均成功。本地复现：旧文件必现 `database table is locked`、新文件 `-count=3 -parallel 8` 与 `-race` 全 ok。发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。
+
 ## v3.5.3
 
 > i18n 消息契约批次：补齐框架抛出的消息在语言包的缺键（#61）、admin 事务写接口按语言翻译响应、上传超限文案修复，并把反向守卫从「标识符名匹配」加固到「import 路径 + validator/暂存消息」；无迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。
