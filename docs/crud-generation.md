@@ -60,6 +60,20 @@ go build ./...
 
 ## 2. 快速开始
 
+从骨架开始（不连数据库）：
+
+```bash
+go run ./cmd/crudgen crud:new ops_banner --comment 运营轮播
+# → crud_specs/ops_banner.yaml：主键、status、weigh、create_time、update_time 已就位
+```
+
+随后补业务字段、校验、生成：
+
+```bash
+go run ./cmd/crudgen crud:validate crud_specs/ops_banner.yaml
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/ops_banner.yaml
+```
+
 一个可直接生成的最小业务表（演示组件推断、字典注释、自动时间字段；未写的键全部走默认值）：
 
 ```yaml

@@ -93,12 +93,15 @@ func announceMissingRuntimeConfig(configPath string) {
 	setupRequested := false
 	validateRequested := false
 	releaseRequested := false
+	newSpecRequested := false
 	for _, arg := range os.Args[1:] {
 		switch arg {
 		case "setup":
 			setupRequested = true
 		case "crud:validate":
 			validateRequested = true
+		case "crud:new":
+			newSpecRequested = true
 		case "release":
 			releaseRequested = true
 		}
@@ -109,6 +112,8 @@ func announceMissingRuntimeConfig(configPath string) {
 		fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
 	case validateRequested:
 		// crud:validate 不依赖运行配置。
+	case newSpecRequested:
+		// crud:new 只写 spec 骨架，不连数据库，也不依赖运行配置。
 	case releaseRequested:
 		// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
 	default:

@@ -87,6 +87,7 @@ func newCrudOnlyRootCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		newCrudDeleteCommand(cmdBootstrap),
 		newCrudApplyCommand(cmdBootstrap),
 		newCrudValidateCommand(),
+		newCrudNewCommand(),
 	)
 	return rootCmd
 }

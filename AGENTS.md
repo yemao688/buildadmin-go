@@ -159,6 +159,7 @@ go build ./...
 go test ./path/to/package -run '^TestName$'
 go run ./cmd/server --conf configs/config.yaml migrate
 go run ./cmd/server --conf configs/config.yaml migrate --plan   # 只读：安装状态、待执行迁移、spec 差量分类
+go run ./cmd/crudgen crud:new <table>      # 生成 spec 骨架（不连库）
 go generate ./cmd/server                  # after provider or cmd/server/wire.go changes
 
 # frontend, web/ (Vite 8; use a current Node release supported by Vite 8)
