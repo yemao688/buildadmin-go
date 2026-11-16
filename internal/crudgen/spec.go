@@ -146,6 +146,9 @@ func decodeSpecFile(path string) (*specFile, error) {
 	if err := normalizeNullKeys(&document); err != nil {
 		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
 	}
+	if err := expandFieldsShorthand(&document); err != nil {
+		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
+	}
 	normalized, err := yaml.Marshal(&document)
 	if err != nil {
 		return nil, fmt.Errorf("normalize spec %q: %w", path, err)
@@ -166,6 +169,58 @@ func decodeSpecFile(path string) (*specFile, error) {
 		return nil, fmt.Errorf("spec %q must define fields", raw.Name)
 	}
 	return &raw, nil
+}
+
+// expandFieldsShorthand 把 fields 的映射写法展开为等价的序列写法，字段名成为
+// 映射键、其余属性写在值里：
+//
+//	fields:
+//	  code: {type: varchar, length: 20, comment: 货币代码}
+//
+// 等价于 fields: [{name: code, type: varchar, length: 20, comment: 货币代码}]。
+// 改写发生在 Viper 解码前，推断、校验与错误消息全部复用序列路径，因此两种写法
+// 的产物完全一致。
+func expandFieldsShorthand(document *yaml.Node) error {
+	root := documentRoot(document)
+	if root == nil || root.Kind != yaml.MappingNode {
+		return nil
+	}
+	fieldsNode := mappingNodeValue(root, "fields")
+	if fieldsNode == nil || fieldsNode.Kind != yaml.MappingNode {
+		return nil
+	}
+	sequence := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	for index := 0; index+1 < len(fieldsNode.Content); index += 2 {
+		nameNode, attrsNode := fieldsNode.Content[index], fieldsNode.Content[index+1]
+		if nameNode.Kind != yaml.ScalarNode || strings.TrimSpace(nameNode.Value) == "" {
+			return fmt.Errorf("fields mapping keys must be field names, got %q", nameNode.Value)
+		}
+		if attrsNode.Kind == yaml.AliasNode {
+			attrsNode = attrsNode.Alias
+		}
+		if attrsNode.Kind == 0 || (attrsNode.Kind == yaml.ScalarNode && attrsNode.Tag == "!!null") {
+			attrsNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		}
+		if attrsNode.Kind != yaml.MappingNode {
+			return fmt.Errorf("field %q: mapping shorthand requires a mapping value", nameNode.Value)
+		}
+		if mappingNodeValue(attrsNode, "name") != nil {
+			return fmt.Errorf("field %q: remove name from the value; the mapping key is the field name", nameNode.Value)
+		}
+		entry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name"},
+			{Kind: yaml.ScalarNode, Tag: "!!str", Value: nameNode.Value},
+		}}
+		entry.Content = append(entry.Content, attrsNode.Content...)
+		sequence.Content = append(sequence.Content, entry)
+	}
+	for index := 0; index+1 < len(root.Content); index += 2 {
+		if root.Content[index].Value == "fields" {
+			root.Content[index+1] = sequence
+			break
+		}
+	}
+	return nil
 }
 
 // buildSpecFields 按声明顺序把 spec 字段转换为实体字段，逐项保持默认值推导、

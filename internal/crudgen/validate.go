@@ -200,6 +200,9 @@ func loadSpecValidationMetadata(path string) (specValidationMetadata, error) {
 	if root == nil || root.Kind != yaml.MappingNode {
 		return specValidationMetadata{}, fmt.Errorf("spec %q must be a YAML mapping", path)
 	}
+	if err := expandFieldsShorthand(&document); err != nil {
+		return specValidationMetadata{}, fmt.Errorf("spec %q: %w", path, err)
+	}
 	metadata := specValidationMetadata{Root: root}
 	if mappingNodeValue(root, "generateRelativePath") != nil {
 		metadata.RelativePathSet = true

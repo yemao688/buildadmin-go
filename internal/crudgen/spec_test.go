@@ -116,6 +116,46 @@ fields:
 	require.Equal(t, &data_scope.InheritRef{Table: "user_order", ByColumn: "order_id"}, opts.Table.DataScope.InheritFrom)
 }
 
+func TestLoadSpecAcceptsFieldsMappingShorthand(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: demo
+fields:
+  id: {type: bigint, primaryKey: true}
+  admin_id: {type: bigint}
+  name: {type: varchar, length: 32}
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatalf("mapping shorthand rejected: %v", err)
+	}
+	if len(opts.Fields) != 3 {
+		t.Fatalf("fields = %d, want 3", len(opts.Fields))
+	}
+	if opts.Fields[0].Name != "id" || !opts.Fields[0].PrimaryKey {
+		t.Fatalf("first field = %+v", opts.Fields[0])
+	}
+	if opts.Fields[2].Length != 32 || opts.Fields[2].DesignType != "string" {
+		t.Fatalf("name field = %+v", opts.Fields[2])
+	}
+	// 校验加载器同样需要展开映射写法，否则会报"字段无法从 YAML 读取"。
+	if _, err := ValidateSpec(path); err != nil {
+		t.Fatalf("validate rejected mapping shorthand: %v", err)
+	}
+}
+
+func TestLoadSpecRejectsNameInsideMappingValue(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: demo
+fields:
+  code:
+    name: other
+    type: varchar
+`)
+	if _, err := LoadSpec(path); err == nil || !strings.Contains(err.Error(), "mapping key is the field name") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadSpecDefaultsAndMenu(t *testing.T) {
 	t.Parallel()
 	path := writeSpecTest(t, `name: demo

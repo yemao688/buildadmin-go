@@ -130,6 +130,28 @@ fields:
 
 `formFields` 和 `columnFields` 都必须区分"省略"和显式空列表：省略是自动推导，显式 `[]` 是明确没有。
 
+### `fields` 的两种写法
+
+序列写法（完整形式，PHP 设计器与历史 spec 使用）：
+
+```yaml
+fields:
+  - name: code
+    type: varchar
+    length: 20
+    comment: 货币代码
+```
+
+映射写法（短形式）：字段名即映射键，其余属性写在值里，`name` 不再重复：
+
+```yaml
+fields:
+  id: {type: bigint, unsigned: true, primaryKey: true, autoIncrement: true, designType: pk, comment: ID}
+  code: {type: varchar, length: 20, null: false, comment: 货币代码}
+```
+
+两种写法解析后完全等价；`name` 出现在映射值里会报错（字段名只能来自键）。可省略的键与序列写法一致：`defaultType` 由 `default` 推导、`designType` 按字段名/SQL 类型推断、`formFields`/`columnFields` 自动推导。
+
 ### `indexes`
 
 表级索引声明，由 `crud:generate` 与 `crud:apply` 共同物化（两条路径对已有表行为一致）：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并以信息性的 `unmanaged` note 提示，不会自动删除或重建，也不阻断执行）。
