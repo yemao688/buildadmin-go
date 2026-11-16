@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -25,12 +26,27 @@ func jsonMode() bool {
 	return flag != nil && flag.Value.String() == "true"
 }
 
+// jsonEmitted 记录本次执行是否已经输出过 JSON 信封：命令先输出结构化结果再
+// 以非零退出（如 rejected 差量）时，executeRoot 不能再补一条错误信封，否则
+// stdout 上会出现两个 JSON 文档。
+var jsonEmitted atomic.Bool
+
 // printJSON 输出一条成功结果。
 func printJSON(cmd *cobra.Command, data any) error {
-	payload, err := json.MarshalIndent(jsonEnvelope{OK: true, Data: data}, "", "  ")
+	return printJSONEnvelope(cmd, jsonEnvelope{OK: true, Data: data})
+}
+
+// printJSONError 输出失败结果，同时保留结构化 data（如已算好的差量明细）。
+func printJSONError(cmd *cobra.Command, data any, cause error) error {
+	return printJSONEnvelope(cmd, jsonEnvelope{OK: false, Error: cause.Error(), Data: data})
+}
+
+func printJSONEnvelope(cmd *cobra.Command, envelope jsonEnvelope) error {
+	payload, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {
 		return err
 	}
+	jsonEmitted.Store(true)
 	_, err = cmd.OutOrStdout().Write(append(payload, '\n'))
 	return err
 }

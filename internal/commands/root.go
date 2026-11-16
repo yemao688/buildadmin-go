@@ -68,8 +68,9 @@ func printVersion() {
 }
 
 func executeRoot(rootCmd *cobra.Command) error {
+	jsonEmitted.Store(false)
 	if err := rootCmd.Execute(); err != nil {
-		if jsonMode() {
+		if jsonMode() && !jsonEmitted.Load() {
 			// --json 下只输出一条机器可读错误，避免与结构化结果混在 stderr。
 			payload, _ := json.Marshal(jsonEnvelope{OK: false, Error: err.Error()})
 			_, _ = fmt.Fprintln(os.Stdout, string(payload))

@@ -4,6 +4,7 @@ import (
 	helper "buildadmin-go/internal/crudgen"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 
@@ -71,4 +72,27 @@ func writeTempSpec(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+// 命令先算出结构化结果、再因 rejected/失败退出时，信封必须是 ok:false 且带上
+// data，executeRoot 不能再补第二条 JSON。
+func TestPrintJSONErrorKeepsData(t *testing.T) {
+	t.Parallel()
+	cmd := &cobra.Command{}
+	buffer := &bytes.Buffer{}
+	cmd.SetOut(buffer)
+	if err := printJSONError(cmd, map[string]string{"table": "ops_order"}, errors.New("rejected changes")); err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		OK    bool              `json:"ok"`
+		Error string            `json:"error"`
+		Data  map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(buffer.Bytes(), &envelope); err != nil {
+		t.Fatalf("output is not JSON: %v", err)
+	}
+	if envelope.OK || envelope.Error != "rejected changes" || envelope.Data["table"] != "ops_order" {
+		t.Fatalf("envelope = %+v", envelope)
+	}
 }

@@ -176,18 +176,14 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	}
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
 	if jsonMode() {
-		payload := planToJSON(results, specPath)
-		if printErr := printJSON(cmd, dryRunJSON{
-			Plan:      payload,
-			Create:    plan.Create,
-			Overwrite: plan.Overwrite,
-		}); printErr != nil {
-			return printErr
-		}
+		payload := dryRunJSON{Plan: planToJSON(results, specPath), Create: plan.Create, Overwrite: plan.Overwrite}
 		if planErr != nil {
+			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {
+				return printErr
+			}
 			return fmt.Errorf("CRUD plan error: %w", planErr)
 		}
-		return nil
+		return printJSON(cmd, payload)
 	}
 	printApplyPlan(cmd, results)
 	cmd.Printf("\nfiles to create (%d):\n", len(plan.Create))
@@ -251,10 +247,15 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if jsonMode() {
-			if printErr := printJSON(cmd, payload); printErr != nil {
-				return printErr
+			if err != nil {
+				if printErr := printJSONError(cmd, payload, err); printErr != nil {
+					return printErr
+				}
+				return fmt.Errorf("CRUD plan error: %w", err)
 			}
-		} else if htmlOut == "" {
+			return printJSON(cmd, payload)
+		}
+		if htmlOut == "" {
 			printApplyPlan(cmd, results)
 		}
 		if err != nil {

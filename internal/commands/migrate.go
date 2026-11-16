@@ -227,12 +227,15 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 			State: string(report.State), Pending: pending, Incomplete: incomplete,
 			Plan: planToJSON(results, dir),
 		}
-		if printErr := printJSON(cmd, payload); printErr != nil {
-			return printErr
+		if planErr != nil {
+			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {
+				return printErr
+			}
+			return fmt.Errorf("CRUD plan error: %w", planErr)
 		}
-	} else {
-		printPlanResults(cmd, results)
+		return printJSON(cmd, payload)
 	}
+	printPlanResults(cmd, results)
 	if planErr != nil {
 		return fmt.Errorf("CRUD plan error: %w", planErr)
 	}

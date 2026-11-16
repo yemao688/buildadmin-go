@@ -42,15 +42,17 @@ func newDiagnoseCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		SilenceErrors: true,
 		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, _ []string) error {
 			report := runDiagnose(command.crudH.db, command.crudH.config)
+			failure := fmt.Errorf("diagnose found %d error(s) and %d warning(s)", report.Errors, report.Warns)
+			failed := report.Errors > 0 || (strict && report.Warns > 0)
 			if jsonMode() {
-				if err := printJSON(cmd, report); err != nil {
-					return err
+				if failed {
+					return printJSONError(cmd, report, failure)
 				}
-			} else {
-				printDiagnose(cmd, report)
+				return printJSON(cmd, report)
 			}
-			if report.Errors > 0 || (strict && report.Warns > 0) {
-				return fmt.Errorf("diagnose found %d error(s) and %d warning(s)", report.Errors, report.Warns)
+			printDiagnose(cmd, report)
+			if failed {
+				return failure
 			}
 			return nil
 		}),
