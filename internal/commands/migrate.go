@@ -3,8 +3,10 @@ package commands
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"buildadmin-go/internal/conf"
 	helper "buildadmin-go/internal/crudgen"
@@ -16,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// newMigrateCommand 构造 migrate 命令树：run/rollback/breakpoint 子命令。
+// newMigrateCommand 构造 migrate 命令树：run/list/status/rollback/breakpoint/new 子命令。
 func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	migrateCmd := &cobra.Command{
 		Use:           "migrate",
@@ -40,6 +42,27 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		}),
 	}
 	addMigrateRunFlags(runMigrateCmd)
+	listMigrateCmd := &cobra.Command{
+		Use:           "list",
+		Short:         "列出迁移台账（默认仅 business 轨）",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
+			return command.migrateH.List(cmd, args)
+		}),
+	}
+	listMigrateCmd.Flags().Bool("all", false, "列出 official/framework/business 三条轨道")
+	statusMigrateCmd := &cobra.Command{
+		Use:           "status",
+		Short:         "输出迁移进度的一行摘要",
+		Args:          cobra.NoArgs,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
+			return command.migrateH.Status(cmd, args)
+		}),
+	}
 	rollbackMigrateCmd := &cobra.Command{
 		Use:           "rollback [business]",
 		Short:         "回滚 business 数据库迁移",
@@ -93,7 +116,7 @@ func newMigrateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		}),
 	}
 	breakpointCmd.AddCommand(breakpointSetCmd, breakpointClearCmd, breakpointListCmd)
-	migrateCmd.AddCommand(runMigrateCmd, rollbackMigrateCmd, breakpointCmd, newMigrateNewCommand())
+	migrateCmd.AddCommand(runMigrateCmd, listMigrateCmd, statusMigrateCmd, rollbackMigrateCmd, breakpointCmd, newMigrateNewCommand())
 	return migrateCmd
 }
 
@@ -332,6 +355,120 @@ func (h *MigrateHandler) ListBreakpoints(cmd *cobra.Command, _ []string) error {
 	}
 	cmd.Printf("business migration breakpoint: %d (set at %s)\n", breakpoint.Sequence, breakpoint.SetTime.Format("2006-01-02 15:04:05.000000"))
 	return nil
+}
+
+// List 只读输出迁移台账；默认只列 business 轨，--all 展开三条轨道。
+func (h *MigrateHandler) List(cmd *cobra.Command, _ []string) error {
+	all, err := cmd.Flags().GetBool("all")
+	if err != nil {
+		return err
+	}
+	entries, err := migrations.LedgerEntries(h.db, h.config)
+	if err != nil {
+		return fmt.Errorf("list migration ledger: %w", err)
+	}
+	tracks := []string{"business"}
+	if all {
+		tracks = migrations.LedgerTracks
+	}
+	for _, track := range tracks {
+		printed := false
+		for _, entry := range entries {
+			if entry.Track != track {
+				continue
+			}
+			printed = true
+			cmd.Printf("%s migration %-28s version=%-4d start=%s end=%s breakpoint=%t\n",
+				entry.Track, entry.MigrationName, entry.Version,
+				formatLedgerTime(entry.StartTime), formatLedgerTime(entry.EndTime), entry.Breakpoint)
+		}
+		if !printed {
+			cmd.Printf("%s: no migration records\n", track)
+		}
+	}
+	return nil
+}
+
+// Status 输出一行迁移进度摘要；--json 时走统一信封，spec 数量只数文件、不连库 diff。
+func (h *MigrateHandler) Status(cmd *cobra.Command, _ []string) error {
+	report, err := migrations.Status(h.db, h.config)
+	if err != nil {
+		return err
+	}
+	summary := migrations.SummarizeStatus(report)
+	specs, err := countSpecFiles(helper.DefaultSpecDir())
+	if err != nil {
+		return err
+	}
+	if jsonMode() {
+		return printJSON(cmd, migrateStatusJSON{
+			State:      string(summary.State),
+			Migrations: toStatusTrackJSON(summary.Official),
+			Framework:  toStatusTrackJSON(summary.Framework),
+			Business:   toStatusTrackJSON(summary.Business),
+			Specs:      specs,
+		})
+	}
+	cmd.Println(formatMigrateStatus(summary, specs))
+	return nil
+}
+
+type statusTrackJSON struct {
+	Done       int `json:"done"`
+	Total      int `json:"total"`
+	Pending    int `json:"pending"`
+	Incomplete int `json:"incomplete"`
+}
+
+type migrateStatusJSON struct {
+	State      string          `json:"state"`
+	Migrations statusTrackJSON `json:"migrations"`
+	Framework  statusTrackJSON `json:"framework"`
+	Business   statusTrackJSON `json:"business"`
+	Specs      int             `json:"specs"`
+}
+
+func toStatusTrackJSON(track migrations.TrackSummary) statusTrackJSON {
+	return statusTrackJSON{Done: track.Done, Total: track.Total, Pending: track.Pending, Incomplete: track.Incomplete}
+}
+
+// formatMigrateStatus 渲染一行摘要：每轨 done/total + pending/incomplete，末尾是 spec 文件数。
+func formatMigrateStatus(summary migrations.StatusSummary, specs int) string {
+	prefix := "not-installed"
+	if summary.State == migrations.InstallStrictUpgrade {
+		prefix = "installed"
+	}
+	return fmt.Sprintf(
+		"%s  state=%s  migrations=%s  framework=%s  business=%s  specs=%d",
+		prefix, summary.State,
+		formatTrackSummary(summary.Official),
+		formatTrackSummary(summary.Framework),
+		formatTrackSummary(summary.Business),
+		specs,
+	)
+}
+
+func formatTrackSummary(track migrations.TrackSummary) string {
+	return fmt.Sprintf("%d/%d pending=%d incomplete=%d", track.Done, track.Total, track.Pending, track.Incomplete)
+}
+
+func formatLedgerTime(value *time.Time) string {
+	if value == nil {
+		return "-"
+	}
+	return value.Format("2006-01-02 15:04:05.000000")
+}
+
+// countSpecFiles 只统计 crud_specs 下的 *.yaml 数量，不做 schema diff。
+func countSpecFiles(dir string) (int, error) {
+	if dir == "" {
+		return 0, nil
+	}
+	entries, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	if err != nil {
+		return 0, fmt.Errorf("scan spec dir %q: %w", dir, err)
+	}
+	return len(entries), nil
 }
 
 func parseBreakpointSequence(args []string) (uint64, error) {
