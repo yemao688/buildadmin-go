@@ -57,6 +57,7 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	generateCmd.Flags().Bool("skip-repo", false, "skip repository file and repository provider merge; intended only for modules with an existing customized repository (first-time generation would not compile)")
 	generateCmd.Flags().Bool("skip-compile-check", false, "skip wire regeneration and go build self-check; use while stale generated artifacts block the build, then run go generate ./cmd/server && go build ./...")
 	generateCmd.Flags().Bool("allow-rebuild", false, "allow type=create to drop and recreate an existing table (data loss)")
+	generateCmd.Flags().Bool("dry-run", false, "print the schema diff and the files that would be written, then exit without touching the database or filesystem")
 	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	return generateCmd
 }
@@ -113,6 +114,10 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: crud:generate <spec.yaml>")
 	}
+	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	if dryRun {
+		return h.planGenerate(cmd, args[0])
+	}
 	opts, err := helper.LoadSpec(args[0])
 	if err != nil {
 		return fmt.Errorf("load CRUD spec error: %w", err)
@@ -146,6 +151,36 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	}
 	for _, file := range result.Files {
 		cmd.Printf("%s\n", file)
+	}
+	return nil
+}
+
+// planGenerate 是 crud:generate --dry-run：只读地报告表结构差量、将被写入的
+// 文件与冲突，不写库、不写文件、不同步菜单。
+func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
+	opts, err := helper.LoadSpec(specPath)
+	if err != nil {
+		return fmt.Errorf("load CRUD spec error: %w", err)
+	}
+	store := helper.NewTableStore(h.db, h.config)
+	plan, err := helper.PreviewGenerationFiles(h.db, h.config, opts.Table, opts.Fields)
+	if err != nil {
+		return fmt.Errorf("plan generation files: %w", err)
+	}
+	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
+	printApplyPlan(cmd, results)
+	cmd.Printf("\nfiles to create (%d):\n", len(plan.Create))
+	for _, path := range plan.Create {
+		cmd.Printf("  + %s\n", path)
+	}
+	cmd.Printf("files to overwrite (%d):\n", len(plan.Overwrite))
+	for _, path := range plan.Overwrite {
+		cmd.Printf("  ~ %s\n", path)
+	}
+	cmd.Println("menus: would be synced from the table comment (not applied in dry-run)")
+	cmd.Println("dry run: nothing written")
+	if planErr != nil {
+		return fmt.Errorf("CRUD plan error: %w", planErr)
 	}
 	return nil
 }

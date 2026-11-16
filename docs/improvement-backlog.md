@@ -327,3 +327,14 @@
 | 第四步 | 4.6 测试库开箱、4.5 离线生成、4.8 定制点校验、4.10 文档动线 | 改善日常体验与外部观感 |
 
 **共同验收口径**：每一步之后，新加入的人（或 agent）在**不读 `crud-generation.md` 全文**的前提下，能完成"新建一张带归属的业务表并上线"；且任何写库动作之前，都存在一次可读的、可拒绝的预览。
+
+## 7. 落地记录
+
+| 项 | 提交 | 说明 |
+| --- | --- | --- |
+| 4.2 姿势字段 | `8d79a20` | `type` 省略即 auto（按库现状推导，不再默认删表）；显式 `create` 需 `--allow-rebuild`；弃用键告警；`generateRelativePath` 可选 |
+| 4.1 spec 简写 | `e595f9e` | `fields` 支持映射写法（字段名做键）；映射写法与序列写法产物一致 |
+| 2.4 `crud:new` | `011164f` | 生成可校验骨架（主键/status/weigh/两个时间列），未安装环境可用 |
+| 2.3 JSON Schema | `2de5cd5` | `crud:schema --out/--check`，由结构体 tag 反射生成，`crud_specs/schema.json` 入库并有测试守同步 |
+| 2.1 设计器落 spec | `f68da1b` | 生成事务内写回 `crud_specs/<table>.yaml` 并随失败回滚；`crud:export-spec` 补齐存量模块 |
+| 2.2 dry-run | 本次 | `crud:generate --dry-run` 输出表结构差量与文件清单；**内容级 diff 未做**（渲染与写盘耦合），`crud:delete --dry-run` 未做 |

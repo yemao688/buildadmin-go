@@ -16,6 +16,14 @@ go build ./...
 
 生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
 
+### 干跑预览（`--dry-run`）
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --dry-run
+```
+
+只读输出三部分：表结构差量（与 `crud:apply --plan` 同一套 `safe-auto` / `requires-approval` / `rejected` 分类）、将被新建与覆盖的文件、以及"菜单会按表注释同步"的提示。**不写库、不写文件、不同步菜单**。内容级 diff（渲染后的文件正文）尚未提供：渲染与写盘目前耦合在同一条调用链里，需要先把渲染层拆出来。
+
 ### 设计器与 spec 的关系
 
 后台 CRUD 设计器（`/admin/crud`）在生成时**会把表设计写回 `crud_specs/<table>.yaml`**，与 CLI 共用同一份事实源：写盘发生在生成事务内，失败会连同代码产物一起回滚。写出的 spec 不包含 `type`（省略即 `auto`，按目标库现状推导），避免设计器的「创建」语义在后续 CLI 重新生成时删表。
