@@ -166,6 +166,23 @@ fields:
 
 两种写法解析后完全等价；`name` 出现在映射值里会报错（字段名只能来自键）。可省略的键与序列写法一致：`defaultType` 由 `default` 推导、`designType` 按字段名/SQL 类型推断、`formFields`/`columnFields` 自动推导。
 
+### 编辑器与 AI 的 schema 支持
+
+`crud_specs/schema.json` 是随仓库维护的 JSON Schema（由 `crud:schema` 从 spec 结构体生成，测试守住同步）：
+
+```bash
+go run ./cmd/crudgen crud:schema --out crud_specs/schema.json   # 重新生成
+go run ./cmd/crudgen crud:schema --check --out crud_specs/schema.json
+```
+
+本地 `.vscode/settings.json`（该目录被 git 忽略，需自行创建）加一条映射即可获得补全与即时校验：
+
+```json
+{ "yaml.schemas": { "./crud_specs/schema.json": "crud_specs/*.yaml" } }
+```
+
+对 AI 而言，这份 schema 应当替代"通读本文件"成为写 spec 的第一上下文；`crud:validate` 仍是唯一权威校验器。
+
 ### `indexes`
 
 表级索引声明，由 `crud:generate` 与 `crud:apply` 共同物化（两条路径对已有表行为一致）：全新建表时内联进 `CREATE TABLE`，已有表时按差量补建（缺失索引 `safe-auto` 自动新增；spec 未声明的线外索引与定义漂移保留并以信息性的 `unmanaged` note 提示，不会自动删除或重建，也不阻断执行）。

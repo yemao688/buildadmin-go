@@ -1,0 +1,294 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "columnFields": {
+      "description": "列表列字段；省略自动推导，建议显式设置",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "comment": {
+      "description": "表注释；字段标题与字典也来自注释",
+      "type": "string"
+    },
+    "controllerFile": {
+      "type": "string"
+    },
+    "dataScope": {
+      "additionalProperties": true,
+      "description": "数据权限策略：mode/ownerColumn/assignOnCreate/readExtraOwners/reassignable/inheritFrom",
+      "type": "object"
+    },
+    "databaseConnection": {
+      "type": "string"
+    },
+    "defaultSortField": {
+      "description": "默认排序字段",
+      "type": "string"
+    },
+    "defaultSortType": {
+      "description": "默认排序方向 asc|desc",
+      "type": "string"
+    },
+    "fields": {
+      "description": "字段定义；序列写法 [- name: x] 或映射写法 {x: {type: varchar}}",
+      "oneOf": [
+        {
+          "items": {
+            "properties": {
+              "autoIncrement": {
+                "description": "是否自增",
+                "type": "boolean"
+              },
+              "comment": {
+                "description": "表注释；字段标题与字典也来自注释",
+                "type": "string"
+              },
+              "dataType": {
+                "description": "SQL 类型；与 type 二选一",
+                "type": "string"
+              },
+              "default": {
+                "description": "默认值字面量；与 defaultType 配对",
+                "type": "string"
+              },
+              "defaultType": {
+                "description": "NULL | EMPTY STRING | NONE | INPUT，省略时按 default 推导",
+                "type": "string"
+              },
+              "designType": {
+                "description": "表单组件类型，如 switch/select/remoteSelect/editor/image",
+                "type": "string"
+              },
+              "form": {
+                "additionalProperties": true,
+                "description": "表单属性：validator/render/remoteTable/remoteField 等",
+                "type": "object"
+              },
+              "formBuildExclude": {
+                "description": "是否从表单排除",
+                "type": "boolean"
+              },
+              "length": {
+                "description": "长度（varchar/char/decimal 等）",
+                "type": "integer"
+              },
+              "name": {
+                "description": "业务表名，小写下划线标识符",
+                "type": "string"
+              },
+              "null": {
+                "description": "是否允许 NULL，默认 false",
+                "type": "boolean"
+              },
+              "precision": {
+                "description": "小数位（decimal）",
+                "type": "integer"
+              },
+              "primaryKey": {
+                "description": "是否主键；每个 spec 恰好一个",
+                "type": "boolean"
+              },
+              "table": {
+                "additionalProperties": true,
+                "description": "列表属性：render/width/operator/sortable 等",
+                "type": "object"
+              },
+              "tableBuildExclude": {
+                "description": "是否从列表排除",
+                "type": "boolean"
+              },
+              "title": {
+                "description": "字段标题，默认由注释推导",
+                "type": "string"
+              },
+              "type": {
+                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+                "type": "string"
+              },
+              "unsigned": {
+                "description": "是否 unsigned",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "properties": {
+              "autoIncrement": {
+                "description": "是否自增",
+                "type": "boolean"
+              },
+              "comment": {
+                "description": "表注释；字段标题与字典也来自注释",
+                "type": "string"
+              },
+              "dataType": {
+                "description": "SQL 类型；与 type 二选一",
+                "type": "string"
+              },
+              "default": {
+                "description": "默认值字面量；与 defaultType 配对",
+                "type": "string"
+              },
+              "defaultType": {
+                "description": "NULL | EMPTY STRING | NONE | INPUT，省略时按 default 推导",
+                "type": "string"
+              },
+              "designType": {
+                "description": "表单组件类型，如 switch/select/remoteSelect/editor/image",
+                "type": "string"
+              },
+              "form": {
+                "additionalProperties": true,
+                "description": "表单属性：validator/render/remoteTable/remoteField 等",
+                "type": "object"
+              },
+              "formBuildExclude": {
+                "description": "是否从表单排除",
+                "type": "boolean"
+              },
+              "length": {
+                "description": "长度（varchar/char/decimal 等）",
+                "type": "integer"
+              },
+              "name": {
+                "description": "业务表名，小写下划线标识符",
+                "type": "string"
+              },
+              "null": {
+                "description": "是否允许 NULL，默认 false",
+                "type": "boolean"
+              },
+              "precision": {
+                "description": "小数位（decimal）",
+                "type": "integer"
+              },
+              "primaryKey": {
+                "description": "是否主键；每个 spec 恰好一个",
+                "type": "boolean"
+              },
+              "table": {
+                "additionalProperties": true,
+                "description": "列表属性：render/width/operator/sortable 等",
+                "type": "object"
+              },
+              "tableBuildExclude": {
+                "description": "是否从列表排除",
+                "type": "boolean"
+              },
+              "title": {
+                "description": "字段标题，默认由注释推导",
+                "type": "string"
+              },
+              "type": {
+                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+                "type": "string"
+              },
+              "unsigned": {
+                "description": "是否 unsigned",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "type": "object"
+          },
+          "minProperties": 1,
+          "type": "object"
+        }
+      ]
+    },
+    "formFields": {
+      "description": "表单项字段；省略自动推导，[] 表示无表单项",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "generateRelativePath": {
+      "description": "views 目录与菜单/路由名形态；省略即表名",
+      "type": "string"
+    },
+    "indexes": {
+      "description": "表级索引：name/unique/columns",
+      "items": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "业务表名，小写下划线标识符",
+            "type": "string"
+          },
+          "unique": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "isCommonModel": {
+      "type": "integer"
+    },
+    "menu": {
+      "additionalProperties": true,
+      "description": "菜单标题与父节点覆盖：title/parent/weigh",
+      "type": "object"
+    },
+    "modelFile": {
+      "type": "string"
+    },
+    "name": {
+      "description": "业务表名，小写下划线标识符",
+      "type": "string"
+    },
+    "quickSearchField": {
+      "description": "列表公共快速搜索字段，支持 alias.column 关联条目",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "rebuild": {
+      "type": "string"
+    },
+    "registerOnly": {
+      "description": "仅登记不生成，保留给受保护核心表",
+      "type": "boolean"
+    },
+    "type": {
+      "default": "auto",
+      "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+      "enum": [
+        "auto",
+        "create",
+        "alter"
+      ],
+      "type": "string"
+    },
+    "webViewsDir": {
+      "description": "views 路径覆盖，默认 web/src/views/backend/\u003crelativePath\u003e",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "fields"
+  ],
+  "title": "BuildAdmin-Go CRUD spec",
+  "type": "object"
+}
