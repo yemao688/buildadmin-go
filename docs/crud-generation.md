@@ -1119,3 +1119,27 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 - Go generation/runtime: `internal/crudgen/helper.go`, `internal/crudgen/table.go`
 
 PHP 上游的 CRUD 设计器与生成器源码路径仅框架维护者需要，见 [`framework-maintenance.md`](framework-maintenance.md)。
+### 机器可读输出（`--json`）
+
+全局 `--json` 让命令只输出一条 JSON 信封，stdout 不再混入配置引导等噪音：
+
+```bash
+go run ./cmd/crudgen --json crud:validate crud_specs/ops_order.yaml
+go run ./cmd/server --conf configs/config.yaml --json crud:apply --plan
+go run ./cmd/server --conf configs/config.yaml --json migrate --plan
+go run ./cmd/server --conf configs/config.yaml --json cascade:sync
+```
+
+```json
+{
+  "ok": false,
+  "data": {
+    "tables": [{"table": "ops_order", "action": "altered", "blocked": 1,
+      "changes": [{"field": "status", "class": "requires-approval", "category": "attributes", "approved": false}]}],
+    "blockedCategories": ["attributes"],
+    "approveCommand": "crud:apply crud_specs/ --approve=attributes"
+  }
+}
+```
+
+失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。

@@ -30,7 +30,7 @@ func initConfig() {
 
 	runtimeConfigPath := configPath
 	runtimeConfigExists := util.PathExists(runtimeConfigPath)
-	if !runtimeConfigExists {
+	if !runtimeConfigExists && !jsonMode() {
 		announceMissingRuntimeConfig(runtimeConfigPath)
 	}
 
@@ -41,9 +41,12 @@ func initConfig() {
 	}
 	// 注意：不要把 defaultsPath 回写进全局 configPath——它与 --conf flag 绑定同一存储，
 	// 覆写会让 setup 等后续读取 --conf 的流程拿到 defaults 路径而非用户指定路径。
-	fmt.Println("load config:" + defaultsPath)
-	if overridePath != "" {
-		fmt.Println("merge config:" + overridePath)
+	if !jsonMode() {
+		// --json 下 stdout 只放机器可读结果，配置引导行全部静默。
+		fmt.Println("load config:" + defaultsPath)
+		if overridePath != "" {
+			fmt.Println("merge config:" + overridePath)
+		}
 	}
 
 	v, deadKeys, err := conf.LoadLayeredConfig(defaultsPath, overridePath)

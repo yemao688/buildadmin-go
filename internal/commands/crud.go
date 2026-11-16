@@ -23,6 +23,9 @@ func newCrudValidateCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if jsonMode() {
+				return printValidateJSON(cmd, args)
+			}
 			warnings, err := helper.ValidateSpecs(args)
 			for _, warning := range warnings {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s: %s\n", warning.SpecPath, warning.Message)
@@ -145,6 +148,9 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("CRUD generation error: %w", err)
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
+	if jsonMode() {
+		return printJSON(cmd, generatedJSON{LogID: result.LogID, Files: result.Files, Warnings: result.Warnings})
+	}
 	cmd.Printf("CRUD generation success (log id: %d)\n", result.LogID)
 	for _, warning := range result.Warnings {
 		cmd.Printf("CRUD generation warning: %s\n", warning)
@@ -168,6 +174,20 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 		return fmt.Errorf("plan generation files: %w", err)
 	}
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
+	if jsonMode() {
+		payload := planToJSON(results, specPath)
+		if printErr := printJSON(cmd, dryRunJSON{
+			Plan:      payload,
+			Create:    plan.Create,
+			Overwrite: plan.Overwrite,
+		}); printErr != nil {
+			return printErr
+		}
+		if planErr != nil {
+			return fmt.Errorf("CRUD plan error: %w", planErr)
+		}
+		return nil
+	}
 	printApplyPlan(cmd, results)
 	cmd.Printf("\nfiles to create (%d):\n", len(plan.Create))
 	for _, path := range plan.Create {
@@ -210,7 +230,19 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 		} else {
 			results, err = helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
 		}
-		printApplyPlan(cmd, results)
+		if jsonMode() {
+			specRef := ""
+			if len(args) > 0 {
+				specRef = strings.Join(args, " ")
+			} else if dir := helper.DefaultSpecDir(); dir != "" {
+				specRef = dir
+			}
+			if printErr := printJSON(cmd, planToJSON(results, specRef)); printErr != nil {
+				return printErr
+			}
+		} else {
+			printApplyPlan(cmd, results)
+		}
 		if err != nil {
 			return fmt.Errorf("CRUD plan error: %w", err)
 		}

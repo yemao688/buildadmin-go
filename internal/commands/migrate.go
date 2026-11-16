@@ -172,10 +172,14 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if report.State != migrations.InstallStrictUpgrade {
-		printDatabaseInstallGuidance(report.State)
+		if !jsonMode() {
+			printDatabaseInstallGuidance(report.State)
+		}
 		return fmt.Errorf("database is not installed (state: %s); nothing to plan", report.State)
 	}
-	printMigrationStatus(report)
+	if !jsonMode() {
+		printMigrationStatus(report)
+	}
 	if strict {
 		// 迁移未跑完时 spec 差量基于旧 schema，strict 计划必须先把库升到最新。
 		if pending, incomplete := migrationTotals(report); pending > 0 || incomplete > 0 {
@@ -184,14 +188,28 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 	}
 
 	dir := helper.DefaultSpecDir()
+	pending, incomplete := migrationTotals(report)
 	if dir == "" {
+		if jsonMode() {
+			return printJSON(cmd, migratePlanJSON{State: string(report.State), Pending: pending, Incomplete: incomplete, Plan: planJSON{Tables: []planTableJSON{}}})
+		}
 		cmd.Println("[database] 未找到 crud_specs 目录，跳过 spec 差量检查")
 		return nil
 	}
 	// --plan 是发版前检查 rejected 的唯一事实源：rejected 必须让它失败，
 	// 不能因为没带 --strict 就悄悄退出 0。
 	results, planErr := helper.PlanSpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: false, Plan: true})
-	printPlanResults(cmd, results)
+	if jsonMode() {
+		payload := migratePlanJSON{
+			State: string(report.State), Pending: pending, Incomplete: incomplete,
+			Plan: planToJSON(results, dir),
+		}
+		if printErr := printJSON(cmd, payload); printErr != nil {
+			return printErr
+		}
+	} else {
+		printPlanResults(cmd, results)
+	}
 	if planErr != nil {
 		return fmt.Errorf("CRUD plan error: %w", planErr)
 	}

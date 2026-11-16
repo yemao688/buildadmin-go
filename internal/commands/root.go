@@ -4,6 +4,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/util"
 	appVersion "buildadmin-go/internal/pkg/version"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -68,6 +69,12 @@ func printVersion() {
 
 func executeRoot(rootCmd *cobra.Command) error {
 	if err := rootCmd.Execute(); err != nil {
+		if jsonMode() {
+			// --json 下只输出一条机器可读错误，避免与结构化结果混在 stderr。
+			payload, _ := json.Marshal(jsonEnvelope{OK: false, Error: err.Error()})
+			_, _ = fmt.Fprintln(os.Stdout, string(payload))
+			return err
+		}
 		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 		return err
 	}
@@ -103,6 +110,7 @@ func crudOnlyBootstrap(config *conf.Configuration, _ *lumberjack.Logger, logger 
 // 合并进根命令的 persistent flags 参与解析，setup 等流程也通过 pflag.Lookup 读取。
 func initRootFlags() {
 	pflag.StringVarP(&configPath, "conf", "c", filepath.Join(rootPath, "configs", "config.yaml"), "config path, eg: --conf configs/config.yaml")
+	pflag.Bool("json", false, "machine-readable JSON output (supported by crud:*, migrate --plan, cascade:sync)")
 }
 
 // registerOnInitialize 注册配置/日志/校验器初始化钩子。放在 Execute 内而不是
