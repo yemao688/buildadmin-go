@@ -31,10 +31,11 @@ type GenerateOptions struct {
 	Fields                []crudmodel.Field
 	Type                  string
 	SkipMenu              bool
-	SkipFrontend          bool // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
-	SkipRepo              bool // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
-	SkipCompileCheck      bool // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
-	AllowRebuild          bool // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
+	SkipFrontend          bool   // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
+	SkipRepo              bool   // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
+	SkipCompileCheck      bool   // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
+	AllowRebuild          bool   // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
+	SpecOutputDir         string // 非空时把表设计写回该目录的 <table>.yaml（设计器入口用），随生成事务一起回滚
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -69,6 +70,7 @@ type generateState struct {
 	parentRepoPath    string
 	oldParentRepoPath string
 	snapshot          *FileSnapshot
+	specPath          string
 	cleanupAllowed    bool
 	logID             int32
 	createdMenuIDs    []int32
@@ -104,6 +106,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	if early != nil {
 		return early, nil
 	}
+	state.prepareSpecOutput()
 	if err := state.openSnapshot(); err != nil {
 		return nil, err
 	}
@@ -123,6 +126,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 		return nil, err
 	}
 	fail = state.markFailed
+	if err := state.writeSpecOutput(); err != nil {
+		return nil, err
+	}
 	indexWarnings, err := state.designTables()
 	if err != nil {
 		return nil, err
@@ -324,9 +330,42 @@ func (s *generateState) prepareManifest(success *model.Log) error {
 	return nil
 }
 
+// prepareSpecOutput 计算设计器写回 spec 的目标路径；写盘在台账开始后进行，
+// 由文件快照保证失败回滚。
+func (s *generateState) prepareSpecOutput() {
+	if s.opts.SpecOutputDir == "" {
+		return
+	}
+	s.specPath = filepath.Join(s.opts.SpecOutputDir, s.opts.Table.Name+".yaml")
+}
+
+// writeSpecOutput 把设计器提交的表设计写成 crud_specs/<table>.yaml。spec 是
+// 唯一事实源：设计器生成的表必须能被 crud:apply、migrate --plan 与全新环境
+// 重建看到。type 不写入（见 MarshalSpec）。
+func (s *generateState) writeSpecOutput() error {
+	if s.specPath == "" {
+		return nil
+	}
+	content, err := MarshalSpec(s.opts.Table, s.opts.Fields)
+	if err != nil {
+		return s.failErr("spec write", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.specPath), 0o755); err != nil {
+		return s.failErr("spec write", err)
+	}
+	if err := os.WriteFile(s.specPath, content, 0o644); err != nil { //nolint:gosec // G306: spec 是仓库内可读文件
+		return s.failErr("spec write", err)
+	}
+	return nil
+}
+
 // openSnapshot 为本次生成涉及的全部文件建立回滚快照。
 func (s *generateState) openSnapshot() error {
 	snapshotPaths := append(append([]string{}, s.manifest.Generated...), s.manifest.Shared...)
+	if s.specPath != "" {
+		// spec 与产物同属一次生成事务：失败时恢复旧内容或删除新文件。
+		snapshotPaths = append(snapshotPaths, s.specPath)
+	}
 	if s.parentRepoPath != "" {
 		// 主实体 repo 由锚点维护改写，纳入快照使失败回滚能恢复它；不进 manifest。
 		snapshotPaths = append(snapshotPaths, s.parentRepoPath)

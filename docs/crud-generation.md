@@ -14,7 +14,22 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
-生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+
+### 设计器与 spec 的关系
+
+后台 CRUD 设计器（`/admin/crud`）在生成时**会把表设计写回 `crud_specs/<table>.yaml`**，与 CLI 共用同一份事实源：写盘发生在生成事务内，失败会连同代码产物一起回滚。写出的 spec 不包含 `type`（省略即 `auto`，按目标库现状推导），避免设计器的「创建」语义在后续 CLI 重新生成时删表。
+
+因此：
+
+- 设计器生成的表同样能被 `crud:apply`、`migrate --plan`、`cascade:sync` 与全新环境重建看到。
+- **不要同时用两种方式改同一张表**：手改 spec 后用 CLI 生成；用设计器改则视为以设计器为准，并检查 `git diff crud_specs/`。
+- 设计器生成需要写源码与 `crud_specs/`，只适用于开发检出；生产镜像根文件系统只读（`compose read_only: true`），本来也无法生成。
+- 本次改动之前用设计器生成的存量模块没有 spec，用 `crud:export-spec <table>` 从 `crud_log` 导出一次补齐：
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:export-spec ops_banner
+```
 
 生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
 
