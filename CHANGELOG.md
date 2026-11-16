@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.5.3
+
+> i18n 消息契约批次：补齐框架抛出的消息在语言包的缺键（#61）、admin 事务写接口按语言翻译响应、上传超限文案修复，并把反向守卫从「标识符名匹配」加固到「import 路径 + validator/暂存消息」；无迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。
+
+- **Fixed（i18n · 消息键）:** 三语言包自 3.5.2 的 184 键增至 **255 键**（+71，键集完全一致）：补齐 `cErr` 快捷构造与 `util.Lang` 使用的消息、`validator.ValidatorMessages` 自定义校验文案、`response` / `recovery` 基础设施文案（`internal database error`、`database lock timeout or deadlock, please retry`、`Internal Server Error`）与安装器提示。9 处动态拼接改为完整句子（移动/目标主键、管理员删除、内部变量名等），含值消息改用 `util.Lang` 插值。
+- **Fixed（admin 事务响应本地化）:** `security_transaction` 的回滚、提交与 500 兜底三条收尾路径此前把 `requesttx` 暂存的英文消息直接写出（`WriteDirect` 跳过本地化），admin 渠道走请求事务的 `POST` / `DELETE` 在 zh 请求下恒为英文。现与 `writeResponse` 同口径按语言包查表；i18n 中间件缺失时保持原文，不再 panic。
+- **Fixed（上传超限文案）:** 改用语言包既有 `{min}/{max}` 键并按 MiB 填值。原实现使用语言包中不存在的 `%s` 变体，客户端会看到 `%sMiB` 原始占位符；zh / zh-Hant 的 `byte` 单位一并修正为 `MiB`。上传入口的 lang 注入改为可传模板数据。
+- **Changed（反向守卫）:** `TestCodeMessagesHaveLocaleKeys` 改按 import 路径解析包别名（业务用 `errs` 等别名不再绕过，第三方同名 `util` / `response` / `error` 不误报），新增 `validator.ValidatorMessages` 与 `requesttx.Outcome.Message` 覆盖，空消息跳过，遍历跳过 `vendor/`；`WriteDirect`、变量拼装与 `fmt.Errorf` 明确不在承诺范围（测试注释已说明）。
+- **Downstream（业务 fork 升级必读）:** 本版无新迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。合并后：
+  - 语言包以 en 为准对齐到 255 键（3.5.2 → 本版 +71），新增键不要删；业务独有但框架不引用的历史消息按 `legacyUnreferencedKeys` 或自建清单维护。
+  - `TestCodeMessagesHaveLocaleKeys` 会在业务仓扫描 `.go`：业务经 `cErr` / `util.Lang` / `response.*` / `validator.ValidatorMessages` / `requesttx.Outcome` 抛出的字面量消息必须在 en（并同步 zh 包）有键；确需保留的不翻译消息写进 `codeMessageWhitelist` 并注明理由。
+  - **行为变化**：admin 渠道 `POST` / `DELETE`（原子路由，走请求事务）的响应消息现在按 `think-lang` / 门户默认语言翻译；前端若依赖英文原文判断，请改按 `code` 判断。上传超限提示从 `%s` 占位文本变为正常文案（如 `2.00MiB`），若有前端匹配旧文本请同步。
+- **Docs/测试:** `internal/i18n/locales_test.go` 守卫重写（别名解析、validator / 暂存消息、空串、vendor）；`internal/common/upload/upload_test.go` 新增超限文案回归。
+- **Verified:** CI run `43866096726`（head `2e53fa9`）：Go 全量门禁（gofmt / golangci-lint / build / vet / `go test ./... -count=1`，含 MySQL）与 web（lint / test / typecheck / build）均成功；发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。
+
 ## v3.5.2
 
 > 生成产物 lint 合规与下游可扩展性批次：crudgen 关系加载器跨类型收窄（#56）、reassignable `Edit` 圈复杂度（#57）、api public 路由测试可被业务 fork 扩展（#58）、语言包死键清理（#59）；无迁移、无 `crud_specs`、无 DDL、无 web 运行时变更。
