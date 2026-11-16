@@ -86,7 +86,7 @@ File uploaded successfully: 文件上传成功！
 No files were uploaded: 没有文件被上传
 The uploaded file format is not allowed: 上传的文件格式未被允许
 The uploaded image file is not a valid image: 上传的图片文件不是有效的图像
-The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: 上传的文件太大({{.min}}byte)，最大文件大小：{{.max}}byte
+The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: 上传的文件太大({{.min}}MiB)，最大文件大小：{{.max}}MiB
 No files have been uploaded or the file size exceeds the upload limit of the server: 没有文件被上传或文件大小超出服务器上传限制！
 Unknown: 未知
 Account exist: 帐户已存在
@@ -236,3 +236,20 @@ user has money logs, cannot delete: 该会员存在余额日志，无法删除
 user log owner mismatch: 会员日志归属不匹配
 username already exists: 用户名已存在
 username invalid: 用户名格式不正确
+Internal Server Error: 服务器内部错误
+database lock timeout or deadlock, please retry: 数据库锁超时或死锁，请重试
+internal database error: 内部数据库错误
+money required: 请输入金额
+password invalid: 密码无效
+user_id required: 请选择用户
+username max<30: 用户名长度不能超过 30 位
+username min>10: 用户名长度不能小于 10 位
+captcha required: 请输入验证码
+email error: 邮箱格式错误
+hostname required: 请输入主机地址
+mobile error: 手机号格式错误
+name required: 请输入名称
+password required: 请输入密码
+title required: 请输入标题
+username required: 请输入用户名
+username>2 and username<15: 用户名长度须在 3 到 14 位之间

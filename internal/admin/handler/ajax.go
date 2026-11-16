@@ -49,7 +49,7 @@ func (h *AjaxHandler) Upload(ctx *gin.Context) {
 		adminAuth.Id,
 		0,
 		util.GetBaseURL(ctx),
-		func(s string) string { return util.Lang(ctx, s, nil) },
+		func(s string, data map[string]string) string { return util.Lang(ctx, s, data) },
 	)
 	if err != nil {
 		if message, ok := upload.BusinessMessage(err); ok {

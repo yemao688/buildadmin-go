@@ -236,3 +236,20 @@ user has money logs, cannot delete: user has money logs, cannot delete
 user log owner mismatch: user log owner mismatch
 username already exists: username already exists
 username invalid: username invalid
+Internal Server Error: Internal Server Error
+database lock timeout or deadlock, please retry: database lock timeout or deadlock, please retry
+internal database error: internal database error
+money required: money required
+password invalid: password invalid
+user_id required: user_id required
+username max<30: username max<30
+username min>10: username min>10
+captcha required: captcha required
+email error: email error
+hostname required: hostname required
+mobile error: mobile error
+name required: name required
+password required: password required
+title required: title required
+username required: username required
+username>2 and username<15: username>2 and username<15

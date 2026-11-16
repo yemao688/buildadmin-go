@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -177,11 +178,20 @@ func TestLocaleKeysAreReferenced(t *testing.T) {
 // 要么在此写明保留理由。由变量拼装的消息 guard 无法判定，直接跳过。
 var codeMessageWhitelist = map[string]struct{}{}
 
-// TestCodeMessagesHaveLocaleKeys 守住反向契约：框架代码经 cErr 快捷构造、
-// util.Lang、response.Fail/JsonReturn/SuccessWithMessage 直接抛出的消息字面量
-// 必须是 en.yaml 的键。缺键时非英语请求经 writeResponse 查表落空，只会看到
-// 英文原文；下游也无法从 en 差集判断该消息是否需要翻译。
-// response.WriteDirect 不参与：它跳过 msg 本地化，字面量补键并不会翻译它。
+// TestCodeMessagesHaveLocaleKeys 守住反向契约：框架代码直接抛给客户端的消息、
+// 或作为语言包键交给查表的消息字面量，必须是 en.yaml 的键。覆盖：
+//   - 错误包快捷构造（BadRequest / Unauthorized / ForbiddenRequest / InternalServer / New）；
+//   - util.Lang 的 messageID；
+//   - response.Fail / JsonReturn / SuccessWithMessage；
+//   - validator.ValidatorMessages 里每条自定义文案（校验失败会原样回给客户端）；
+//   - requesttx.Outcome 的 Message 字段。
+//
+// 包别名按 import 路径解析，第三方同名包（util/response/error）不会误报，业务
+// 用任意别名也照样命中。空消息视为「无文案」跳过。
+//
+// 不覆盖：response.WriteDirect（有意跳过本地化，调用方必须自行查表）；
+// 变量/常量拼装的消息（无法静态判定）；fmt.Errorf（多为带上下文的内部错误，
+// 由 errorOutcome 原样暴露，是否可翻译不在本守卫承诺内）。
 func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 	t.Parallel()
 	en, ok := loadLocalePacks(t)["en"]
@@ -196,7 +206,7 @@ func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 		}
 		if entry.IsDir() {
 			switch entry.Name() {
-			case ".git", "web", "public", "node_modules":
+			case ".git", "web", "public", "node_modules", "vendor":
 				return filepath.SkipDir
 			}
 			return nil
@@ -209,34 +219,22 @@ func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 		if err != nil {
 			return fmt.Errorf("解析 %s: %w", path, err)
 		}
-		ast.Inspect(file, func(node ast.Node) bool {
-			call, ok := node.(*ast.CallExpr)
-			if !ok {
-				return true
-			}
-			kind, argIndex, ok := messageArgument(call)
-			if !ok || argIndex >= len(call.Args) {
-				return true
-			}
-			value, literal, fragment := messageLiteral(call.Args[argIndex])
-			position := fset.Position(call.Pos())
-			rel, relErr := filepath.Rel(root, position.Filename)
+		for _, site := range messageSites(file, fset) {
+			rel, relErr := filepath.Rel(root, site.position.Filename)
 			require.NoError(t, relErr)
-			site := fmt.Sprintf("%s:%d %s", rel, position.Line, kind)
-			switch {
-			case fragment:
-				fragments = append(fragments, site)
-			case literal:
-				if _, exists := en[value]; exists {
-					return true
-				}
-				if _, retained := codeMessageWhitelist[value]; retained {
-					return true
-				}
-				missing = append(missing, fmt.Sprintf("%s %q", site, value))
+			label := fmt.Sprintf("%s:%d %s", rel, site.position.Line, site.kind)
+			if site.fragment {
+				fragments = append(fragments, label)
+				continue
 			}
-			return true
-		})
+			if _, exists := en[site.value]; exists {
+				continue
+			}
+			if _, retained := codeMessageWhitelist[site.value]; retained {
+				continue
+			}
+			missing = append(missing, fmt.Sprintf("%s %q", label, site.value))
+		}
 		return nil
 	}))
 	sort.Strings(fragments)
@@ -247,8 +245,98 @@ func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 		"代码抛出的消息在 en.yaml 中没有键，非英语请求会回退英文原文；请补键或在 codeMessageWhitelist 写明保留理由：%v", missing)
 }
 
+const (
+	errPkgPath       = "buildadmin-go/internal/pkg/error"
+	utilPkgPath      = "buildadmin-go/internal/pkg/util"
+	responsePkgPath  = "buildadmin-go/internal/pkg/response"
+	validatorPkgPath = "buildadmin-go/internal/pkg/validator"
+	requesttxPkgPath = "buildadmin-go/internal/pkg/requesttx"
+)
+
+// messageSite 是一处需要语言包键的消息字面量（或无法翻译的拼接片段）。
+type messageSite struct {
+	kind     string
+	value    string
+	fragment bool
+	position token.Position
+}
+
+func messageSites(file *ast.File, fset *token.FileSet) []messageSite {
+	imports := importAliases(file)
+	sites := make([]messageSite, 0, 8)
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch n := node.(type) {
+		case *ast.CallExpr:
+			if kind, argIndex, ok := messageArgument(n, imports); ok && argIndex < len(n.Args) {
+				sites = appendMessageSite(sites, kind, n.Args[argIndex], n.Pos(), fset)
+			}
+		case *ast.CompositeLit:
+			sites = appendCompositeSites(sites, n, imports, fset)
+		}
+		return true
+	})
+	return sites
+}
+
+// appendMessageSite 记录一处消息字面量；空串与无法静态判定的变量不算消息。
+func appendMessageSite(sites []messageSite, kind string, expr ast.Expr, pos token.Pos, fset *token.FileSet) []messageSite {
+	value, literal, fragment := messageLiteral(expr)
+	switch {
+	case fragment:
+		return append(sites, messageSite{kind: kind, fragment: true, position: fset.Position(pos)})
+	case literal && value != "":
+		return append(sites, messageSite{kind: kind, value: value, position: fset.Position(pos)})
+	}
+	return sites
+}
+
+// appendCompositeSites 收集复合字面量里的用户文案：validator 自定义消息与
+// requesttx 暂存响应消息。
+func appendCompositeSites(sites []messageSite, lit *ast.CompositeLit, imports map[string]string, fset *token.FileSet) []messageSite {
+	switch compositeKind(lit, imports) {
+	case "validator.ValidatorMessages":
+		for _, elt := range lit.Elts {
+			if kv, ok := elt.(*ast.KeyValueExpr); ok {
+				sites = appendMessageSite(sites, "validator.ValidatorMessages", kv.Value, kv.Pos(), fset)
+			}
+		}
+	case "requesttx.Outcome":
+		for _, elt := range lit.Elts {
+			kv, ok := elt.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			if key, ok := kv.Key.(*ast.Ident); ok && key.Name == "Message" {
+				sites = appendMessageSite(sites, "requesttx.Outcome.Message", kv.Value, kv.Pos(), fset)
+			}
+		}
+	}
+	return sites
+}
+
+// importAliases 返回文件内「本地别名 → import 路径」映射；按路径而不是标识符
+// 名匹配，避免第三方 util/response/error 误报，也支持业务自定义别名。
+func importAliases(file *ast.File) map[string]string {
+	aliases := make(map[string]string, len(file.Imports))
+	for _, spec := range file.Imports {
+		importPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			continue
+		}
+		name := path.Base(importPath)
+		if spec.Name != nil {
+			name = spec.Name.Name
+		}
+		if name == "_" || name == "." {
+			continue
+		}
+		aliases[name] = importPath
+	}
+	return aliases
+}
+
 // messageArgument 识别需要语言包的出参消息调用，返回调用名与消息参数下标。
-func messageArgument(call *ast.CallExpr) (string, int, bool) {
+func messageArgument(call *ast.CallExpr, imports map[string]string) (string, int, bool) {
 	sel, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok {
 		return "", 0, false
@@ -257,20 +345,55 @@ func messageArgument(call *ast.CallExpr) (string, int, bool) {
 	if !ok {
 		return "", 0, false
 	}
-	name := pkg.Name + "." + sel.Sel.Name
-	switch name {
-	case "cErr.BadRequest", "cErr.Unauthorized", "cErr.ForbiddenRequest", "cErr.InternalServer":
-		return name, 0, true
-	case "cErr.New":
-		return name, 2, true
-	case "util.Lang":
-		return name, 1, true
-	case "response.Fail", "response.JsonReturn":
-		return name, 3, true
-	case "response.SuccessWithMessage":
-		return name, 1, true
+	pkgPath, ok := imports[pkg.Name]
+	if !ok {
+		return "", 0, false
+	}
+	kind := path.Base(pkgPath) + "." + sel.Sel.Name
+	switch pkgPath {
+	case errPkgPath:
+		switch sel.Sel.Name {
+		case "BadRequest", "Unauthorized", "ForbiddenRequest", "InternalServer":
+			return kind, 0, true
+		case "New":
+			return kind, 2, true
+		}
+	case utilPkgPath:
+		if sel.Sel.Name == "Lang" {
+			return kind, 1, true
+		}
+	case responsePkgPath:
+		switch sel.Sel.Name {
+		case "Fail", "JsonReturn":
+			return kind, 3, true
+		case "SuccessWithMessage":
+			return kind, 1, true
+		}
 	}
 	return "", 0, false
+}
+
+// compositeKind 识别携带用户文案的复合字面量类型。
+func compositeKind(lit *ast.CompositeLit, imports map[string]string) string {
+	sel, ok := lit.Type.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	switch imports[pkg.Name] {
+	case validatorPkgPath:
+		if sel.Sel.Name == "ValidatorMessages" {
+			return "validator.ValidatorMessages"
+		}
+	case requesttxPkgPath:
+		if sel.Sel.Name == "Outcome" {
+			return "requesttx.Outcome"
+		}
+	}
+	return ""
 }
 
 // messageLiteral 判定消息参数形态：整串字面量、拼接/格式化片段，或无从判断

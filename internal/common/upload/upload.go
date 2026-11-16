@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -160,11 +161,18 @@ func (s *UploadHelper) checkIsImage(sourceType, suffix string) bool {
 	return slices.Contains(typeArr, sourceType) || slices.Contains(suffixArr, suffix)
 }
 
-// 检查文件大小是否允许上传。大小文案由调用方注入的 lang 翻译，
-// 本函数不接触传输层（模板占位与现有 i18n 条目保持原样，不做额外格式化）。
-func (s *UploadHelper) checkSize(lang func(string) string, file *multipart.FileHeader) error {
-	if file.Size > int64(s.config.Upload.Maxsize)*1024*1024 {
-		return &FileTooLargeError{Message: lang("The uploaded file is too large (%sMiB), Maximum file size:%sMiB")}
+// 检查文件大小是否允许上传。超限文案由调用方注入的 lang 按请求语言翻译：
+// 占位符与语言包的 {min}/{max} 键一致，单位为 MiB；本函数不接触传输层。
+func (s *UploadHelper) checkSize(lang func(string, map[string]string) string, file *multipart.FileHeader) error {
+	maxsizeMiB := int64(s.config.Upload.Maxsize)
+	if file.Size > maxsizeMiB*1024*1024 {
+		return &FileTooLargeError{Message: lang(
+			"The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB",
+			map[string]string{
+				"min": strconv.FormatFloat(float64(file.Size)/(1024*1024), 'f', 2, 64),
+				"max": strconv.FormatInt(maxsizeMiB, 10),
+			},
+		)}
 	}
 	return nil
 }
@@ -218,8 +226,8 @@ func (s *UploadHelper) getSaveName(params UploadParams, sha1 string) string {
 
 // Upload 处理一次上传：校验大小/类型、按 sha1 去重、落盘或写入 OSS 并返回附件记录。
 // ctx 保留为请求作用域扩展点，上传流程本身不读取传输层元数据：资源前缀由
-// baseURL 提供，大小超限文案由 lang 翻译，两者均由调用方从请求上下文取得。
-func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId int32, userId int32, baseURL string, lang func(string) string) (any, error) {
+// baseURL 提供，大小超限文案由 lang 按模板数据翻译，两者均由调用方从请求上下文取得。
+func (s *UploadHelper) Upload(_ context.Context, params UploadParams, adminId int32, userId int32, baseURL string, lang func(string, map[string]string) string) (any, error) {
 	if err := s.checkSize(lang, params.File); err != nil {
 		return nil, err
 	}

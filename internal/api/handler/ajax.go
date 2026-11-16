@@ -26,7 +26,7 @@ func (h *CommonHandler) Upload(ctx *gin.Context) {
 		0,
 		userAuth.Id,
 		util.GetBaseURL(ctx),
-		func(s string) string { return util.Lang(ctx, s, nil) },
+		func(s string, data map[string]string) string { return util.Lang(ctx, s, data) },
 	)
 	if err != nil {
 		if message, ok := upload.BusinessMessage(err); ok {

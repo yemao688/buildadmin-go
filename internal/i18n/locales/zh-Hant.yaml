@@ -86,7 +86,7 @@ File uploaded successfully: 文件上傳成功！
 No files were uploaded: 沒有文件被上傳
 The uploaded file format is not allowed: 上傳的文件格式未被允許
 The uploaded image file is not a valid image: 上傳的圖片文件不是有效的圖像
-The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: 上傳的文件太大({{.min}}byte)，最大文件大小：{{.max}}byte
+The uploaded file is too large ({min}MiB), Maximum file size:{max}MiB: 上傳的文件太大({{.min}}MiB)，最大文件大小：{{.max}}MiB
 No files have been uploaded or the file size exceeds the upload limit of the server: 沒有文件被上傳或文件大小超出服務器上傳限制！
 Unknown: 未知
 Account exist: 帳戶已存在
@@ -236,3 +236,20 @@ user has money logs, cannot delete: 該會員存在餘額日誌，無法刪除
 user log owner mismatch: 會員日誌歸屬不匹配
 username already exists: 用戶名已存在
 username invalid: 用戶名格式不正確
+Internal Server Error: 服務器內部錯誤
+database lock timeout or deadlock, please retry: 數據庫鎖超時或死鎖，請重試
+internal database error: 內部數據庫錯誤
+money required: 請輸入金額
+password invalid: 密碼無效
+user_id required: 請選擇用戶
+username max<30: 用戶名長度不能超過 30 位
+username min>10: 用戶名長度不能小於 10 位
+captcha required: 請輸入驗證碼
+email error: 郵箱格式錯誤
+hostname required: 請輸入主機地址
+mobile error: 手機號格式錯誤
+name required: 請輸入名稱
+password required: 請輸入密碼
+title required: 請輸入標題
+username required: 請輸入用戶名
+username>2 and username<15: 用戶名長度須在 3 到 14 位之間
