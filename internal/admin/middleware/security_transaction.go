@@ -117,7 +117,7 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 				// 事务已收尾（TakeOutcome 置 finished），必须先解绑请求上下文，
 				// 否则直接写响应会被 Stage 判为已完成而丢弃。
 				finishRequest()
-				response.WriteDirect(c, out.HTTPCode, out.BusinessCode, out.Message, out.Data)
+				response.WriteDirect(c, out.HTTPCode, out.BusinessCode, localizeOutcomeMessage(c, out.Message), out.Data)
 				return
 			}
 			finishRequest()
@@ -129,7 +129,7 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 			m.log.Warn("[ DataSecurity ] direct response discarded after transaction failure")
 		}
 		c.Writer = originalWriter
-		response.WriteDirect(c, http.StatusInternalServerError, 0, util.Lang(c, "transaction failed", nil), nil)
+		response.WriteDirect(c, http.StatusInternalServerError, 0, localizeOutcomeMessage(c, "transaction failed"), nil)
 		return
 	}
 	c.Writer = originalWriter
@@ -138,6 +138,20 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 	out, ok := requesttx.TakeOutcome(c.Request.Context())
 	finishRequest()
 	if ok {
-		response.WriteDirect(c, out.HTTPCode, out.BusinessCode, out.Message, out.Data)
+		response.WriteDirect(c, out.HTTPCode, out.BusinessCode, localizeOutcomeMessage(c, out.Message), out.Data)
 	}
+}
+
+// localizeOutcomeMessage 与 response.writeResponse 同口径：仅在 i18n 中间件
+// 已挂载时把消息当作 en.yaml 的键翻译。WriteDirect 有意跳过本地化（中间件
+// 收尾时还需原样输出历史响应），事务路径必须自己查表，否则 admin 写接口的
+// cErr 消息键不会生效。
+func localizeOutcomeMessage(c *gin.Context, message string) string {
+	if message == "" {
+		return message
+	}
+	if _, exists := c.Get("i18n"); !exists {
+		return message
+	}
+	return util.Lang(c, message, nil)
 }

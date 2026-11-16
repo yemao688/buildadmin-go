@@ -154,7 +154,15 @@ func newTransactionShellRouter(t *testing.T, punch gin.HandlerFunc) *gin.Engine 
 
 	security := NewSecurity(&conf.Configuration{}, zap.NewNop(), db, data_scope.NewDenyAllEnforcer())
 	router := gin.New()
-	router.Use(ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg())))
+	// 与生产装配一致：think-lang 优先，其余回退 bundle 默认语言（en）。
+	router.Use(ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg()), ginI18n.WithGetLngHandle(
+		func(c *gin.Context, defaultLng string) string {
+			if lng := c.Request.Header.Get("think-lang"); lng != "" {
+				return i18n.NormalizeLang(lng)
+			}
+			return defaultLng
+		},
+	)))
 	router.Use(func(c *gin.Context) {
 		_ = data_scope.SetActor(c, data_scope.Actor{AdminID: 1, Unrestricted: true})
 	}, security.Handler())
@@ -164,8 +172,16 @@ func newTransactionShellRouter(t *testing.T, punch gin.HandlerFunc) *gin.Engine 
 
 func serveTransactionShell(t *testing.T, router *gin.Engine) (int, map[string]any) {
 	t.Helper()
+	return serveTransactionShellLang(t, router, "")
+}
+
+func serveTransactionShellLang(t *testing.T, router *gin.Engine, lang string) (int, map[string]any) {
+	t.Helper()
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/admin/auth.Admin/edit", bytes.NewBufferString(`{"id":1}`))
+	if lang != "" {
+		request.Header.Set("think-lang", lang)
+	}
 	router.ServeHTTP(recorder, request)
 	var body map[string]any
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
@@ -214,4 +230,29 @@ func TestSecurityTransactionEmitsUnifiedShell(t *testing.T) {
 			t.Fatalf("unexpected failure shell: %v", body)
 		}
 	})
+}
+
+// 事务路径用 WriteDirect 收尾（跳过本地化），必须自己按 en.yaml 键查表，
+// 否则 zh 请求在 admin 写接口上始终拿到英文原文。独立成测以保持圈复杂度门禁。
+//
+//nolint:paralleltest // 复用 newTransactionShellRouter 的全局原子路由与同名 sqlite 内存库
+func TestSecurityTransactionLocalizesStagedOutcome(t *testing.T) {
+	rollback := newTransactionShellRouter(t, func(c *gin.Context) {
+		stage(c, 0, "insufficient balance")
+	})
+	if status, body := serveTransactionShellLang(t, rollback, "zh-cn"); status != http.StatusOK || body["msg"] != "余额不足" {
+		t.Fatalf("rollback should be localized: status=%d body=%v", status, body)
+	}
+
+	commit := newTransactionShellRouter(t, func(c *gin.Context) {
+		stage(c, 1, "Deleted successfully")
+	})
+	if status, body := serveTransactionShellLang(t, commit, "zh-cn"); status != http.StatusOK || body["msg"] != "删除成功!" {
+		t.Fatalf("commit should be localized: status=%d body=%v", status, body)
+	}
+
+	missing := newTransactionShellRouter(t, func(_ *gin.Context) {})
+	if status, body := serveTransactionShellLang(t, missing, "zh-cn"); status != http.StatusInternalServerError || body["msg"] != "事务处理失败" {
+		t.Fatalf("missing outcome should be localized: status=%d body=%v", status, body)
+	}
 }
