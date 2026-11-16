@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 
@@ -464,18 +463,18 @@ func collectAdminReassignments(ctx context.Context, tx *gorm.DB, hierarchy *admi
 			continue
 		}
 		if target.ParentID == nil || *target.ParentID <= 0 {
-			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete top-level administrator %d without a reassignment target", target.ID))
+			return nil, cErr.BadRequest("cannot delete top-level administrator without a reassignment target")
 		}
 		parentID := *target.ParentID
 		if _, alsoDeleting := deleting[parentID]; alsoDeleting {
-			return nil, cErr.BadRequest(fmt.Sprintf("cannot delete administrator %d: its parent %d is also being deleted", target.ID, parentID))
+			return nil, cErr.BadRequest("cannot delete administrator whose parent is also being deleted")
 		}
 		if err := hierarchy.EnsureNodeExistsTx(ctx, tx, parentID); err != nil {
 			return nil, err
 		}
 		if err := hierarchy.EnsureReassignmentTargetEnabledTx(ctx, tx, parentID); err != nil {
 			if errors.Is(err, adminmodel.ErrReassignmentTargetDisabled) {
-				return nil, cErr.BadRequest(fmt.Sprintf("reassignment target administrator %d is not enabled", parentID))
+				return nil, cErr.BadRequest("reassignment target administrator is not enabled")
 			}
 			return nil, err
 		}

@@ -7,6 +7,7 @@ import (
 
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/response"
+	"buildadmin-go/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -128,7 +129,7 @@ func (m *Security) runRequestTransaction(c *gin.Context) {
 			m.log.Warn("[ DataSecurity ] direct response discarded after transaction failure")
 		}
 		c.Writer = originalWriter
-		response.WriteDirect(c, http.StatusInternalServerError, 0, "transaction failed", nil)
+		response.WriteDirect(c, http.StatusInternalServerError, 0, util.Lang(c, "transaction failed", nil), nil)
 		return
 	}
 	c.Writer = originalWriter

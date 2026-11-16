@@ -161,12 +161,12 @@ func (h *Base) Sortable(ctx *gin.Context) {
 	}
 	moveID, err := normalizeSortablePrimaryKey(params.Move)
 	if err != nil {
-		response.FailByErr(ctx, cErr.BadRequest("Invalid move primary key: "+err.Error()))
+		response.FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "Invalid move primary key:{name}", map[string]string{"name": err.Error()})))
 		return
 	}
 	targetID, err := normalizeSortablePrimaryKey(params.Target)
 	if err != nil {
-		response.FailByErr(ctx, cErr.BadRequest("Invalid target primary key: "+err.Error()))
+		response.FailByErr(ctx, cErr.BadRequest(util.Lang(ctx, "Invalid target primary key:{name}", map[string]string{"name": err.Error()})))
 		return
 	}
 	if moveID == targetID || params.Direction == "" {

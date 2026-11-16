@@ -778,7 +778,7 @@ func parseFlatNameData(root string, tableName string, namespace string, file str
 	// 类名不能为内部关键字
 	reservedName := strings.ToLower(lastName)
 	if slices.Contains(reservedKeywords, reservedName) {
-		return NameInfo{}, cErr.BadRequest("Unable to use internal variable:" + reservedName)
+		return NameInfo{}, cErr.BadRequest("Unable to use internal variable")
 	}
 
 	parseFile := filepath.Join(util.RootPath(), filepath.FromSlash(root), originalLastName+".go")

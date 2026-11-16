@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/i18n"
 	middlewarecore "buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
 
+	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -152,6 +154,7 @@ func newTransactionShellRouter(t *testing.T, punch gin.HandlerFunc) *gin.Engine 
 
 	security := NewSecurity(&conf.Configuration{}, zap.NewNop(), db, data_scope.NewDenyAllEnforcer())
 	router := gin.New()
+	router.Use(ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg())))
 	router.Use(func(c *gin.Context) {
 		_ = data_scope.SetActor(c, data_scope.Actor{AdminID: 1, Unrestricted: true})
 	}, security.Handler())

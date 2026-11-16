@@ -42,7 +42,7 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 			// Non-admin paths (api/install) are out of scope here.
 			if strings.HasPrefix(c.FullPath(), "/admin") {
 				m.logWarn("admin authorization route not parseable", c.FullPath(), "", header.GetAdminAuth(c).Id)
-				abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
+				abortAuthorization(c, cErr.ForbiddenRequest("No permission"))
 				return
 			}
 			return
@@ -65,7 +65,7 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 		}
 		if !registered {
 			m.logWarn("admin authorization rule not registered", route, action, auth.Id)
-			abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
+			abortAuthorization(c, cErr.ForbiddenRequest("No permission"))
 			return
 		}
 
@@ -78,7 +78,7 @@ func (m *Authorization) Handler() gin.HandlerFunc {
 			return
 		}
 
-		abortAuthorization(c, cErr.ForbiddenRequest("No permission request"))
+		abortAuthorization(c, cErr.ForbiddenRequest("No permission"))
 	}
 }
 

@@ -124,7 +124,7 @@ func (h *IndexHandler) Login(ctx *gin.Context) {
 	if ctx.Request.Method == http.MethodPost {
 		// 进入登录流即设审计标题：成功与失败都会记录为明确的登录事件，
 		// 失败不再退化为 Unknown(login)。
-		ctx.Set("log_title", util.Lang(ctx, "login", nil))
+		ctx.Set("log_title", util.Lang(ctx, "Login", nil))
 
 		var params Login
 		if err := ctx.ShouldBindJSON(&params); err != nil {
