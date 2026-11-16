@@ -182,3 +182,57 @@ Where express error:{name}: 'invalid query operator condition: {{.name}}'
 Username is exist!: username already exists!
 Email is exist!: email already exists!
 Token expiration: login expired, please log in again!
+CRUD file and schema changes require a root administrator: CRUD file and schema changes require a root administrator
+Invalid move primary key:{name}: 'Invalid move primary key: {{.name}}'
+Invalid primary key: Invalid primary key
+Invalid primary key value: Invalid primary key value
+Invalid request body: Invalid request body
+Invalid request form: Invalid request form
+Invalid target primary key:{name}: 'Invalid target primary key: {{.name}}'
+Order express error:{name}: 'Invalid sort expression: {{.name}}'
+Parent administrator not found or not in scope: Parent administrator not found or not in scope
+Please use the weigh field to sort before operating: Please use the weigh field to sort before operating
+The group permission node exceeds the range that can be allocated: The group permission node exceeds the range that can be allocated
+Unable to use internal variable: Unable to use internal variable
+Unsupported primary key field: Unsupported primary key field
+admin scope self-row missing: administrator scope row is missing
+admin_id must be a positive administrator id: admin_id must be a positive administrator id
+administrator owner is disabled: the owning administrator is disabled
+authorization permission lookup failed: authorization permission lookup failed
+authorization rule lookup failed: authorization rule lookup failed
+authorization unavailable: authorization unavailable
+cannot delete administrator whose parent is also being deleted: cannot delete administrator whose parent is also being deleted
+cannot delete administrator with subordinates: cannot delete administrator with subordinates
+cannot delete top-level administrator without a reassignment target: cannot delete top-level administrator without a reassignment target
+cannot move an administrator under itself: cannot move an administrator under itself
+config name already exists: config name already exists
+controller_as already has an enabled security rule: controller_as already has an enabled security rule
+'create failed: rows affected mismatch': 'create failed: rows affected mismatch'
+'delete failed: rows affected mismatch': 'delete failed: rows affected mismatch'
+framework seed rule cannot be deleted: framework seed rule cannot be deleted
+'group assignment failed: rows affected mismatch': 'group assignment failed: rows affected mismatch'
+ids is required: ids is required
+ids must be positive: ids must be positive
+insufficient balance: insufficient balance
+invalid account field: invalid account field
+invalid administrator owner: invalid administrator owner
+invalid request body: invalid request body
+missing Authorization header: missing Authorization header
+parent update failed: parent update failed
+parent_id must be non-negative: parent_id must be non-negative
+reassignment target administrator is not enabled: reassignment target administrator is not enabled
+record not found or no permission: record not found or no permission
+restricted actor cannot move administrator to root: restricted actor cannot move administrator to root
+status must be 0 or 1: status must be 0 or 1
+status must be a string: status must be a string
+status must be enable or disable: status must be enable or disable
+system root administrator is not configured: system root administrator is not configured
+table is required: table is required
+token service unavailable: token service unavailable
+transaction failed: transaction failed
+transaction rolled back: transaction rolled back
+'update failed: rows affected mismatch': 'update failed: rows affected mismatch'
+user has money logs, cannot delete: user has money logs, cannot delete
+user log owner mismatch: user log owner mismatch
+username already exists: username already exists
+username invalid: username invalid

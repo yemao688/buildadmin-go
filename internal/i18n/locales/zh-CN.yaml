@@ -182,3 +182,57 @@ No action available, please contact the administrator~: 没有可用操作，请
 Parameter error: 参数错误!
 Token expiration: 登录态过期，请重新登录！
 Captcha error: 验证码错误！
+CRUD file and schema changes require a root administrator: CRUD 文件与表结构变更仅限根管理员操作
+Invalid move primary key:{name}: '无效的移动主键：{{.name}}'
+Invalid primary key: 无效的主键
+Invalid primary key value: 无效的主键值
+Invalid request body: 无效的请求体
+Invalid request form: 无效的表单请求
+Invalid target primary key:{name}: '无效的目标主键：{{.name}}'
+Order express error:{name}: '无效的排序表达式：{{.name}}'
+Parent administrator not found or not in scope: 上级管理员不存在或不在可见范围内
+Please use the weigh field to sort before operating: 请先使用 weigh 字段排序后再操作
+The group permission node exceeds the range that can be allocated: 分组权限节点超出可分配范围
+Unable to use internal variable: 不能使用内部保留字作为名称
+Unsupported primary key field: 不支持的主键字段
+admin scope self-row missing: 管理员数据范围行缺失
+admin_id must be a positive administrator id: admin_id 必须是正数管理员 ID
+administrator owner is disabled: 归属管理员已被禁用
+authorization permission lookup failed: 授权权限查询失败
+authorization rule lookup failed: 授权规则查询失败
+authorization unavailable: 授权服务不可用
+cannot delete administrator whose parent is also being deleted: 上级管理员也在删除列表中，无法删除该管理员
+cannot delete administrator with subordinates: 该管理员存在下级，无法删除
+cannot delete top-level administrator without a reassignment target: 顶层管理员没有可转移归属的目标，无法删除
+cannot move an administrator under itself: 不能把管理员移动到自身下级
+config name already exists: 配置名称已存在
+controller_as already has an enabled security rule: controller_as 已存在启用的安全规则
+'create failed: rows affected mismatch': '创建失败：影响行数不一致'
+'delete failed: rows affected mismatch': '删除失败：影响行数不一致'
+framework seed rule cannot be deleted: 框架内置规则不能删除
+'group assignment failed: rows affected mismatch': '分组分配失败：影响行数不一致'
+ids is required: ids 不能为空
+ids must be positive: ids 必须为正数
+insufficient balance: 余额不足
+invalid account field: 无效的账号字段
+invalid administrator owner: 无效的管理员归属
+invalid request body: 请求体格式错误
+missing Authorization header: 缺少 Authorization 请求头
+parent update failed: 上级更新失败
+parent_id must be non-negative: parent_id 必须为非负数
+reassignment target administrator is not enabled: 归属转移目标管理员未启用
+record not found or no permission: 记录不存在或无权限
+restricted actor cannot move administrator to root: 受限管理员不能将管理员移动到根级
+status must be 0 or 1: 状态必须为 0 或 1
+status must be a string: 状态必须为字符串
+status must be enable or disable: 状态必须为 enable 或 disable
+system root administrator is not configured: 系统根管理员未配置
+table is required: 表名不能为空
+token service unavailable: 令牌服务不可用
+transaction failed: 事务处理失败
+transaction rolled back: 事务已回滚
+'update failed: rows affected mismatch': '更新失败：影响行数不一致'
+user has money logs, cannot delete: 该会员存在余额日志，无法删除
+user log owner mismatch: 会员日志归属不匹配
+username already exists: 用户名已存在
+username invalid: 用户名格式不正确

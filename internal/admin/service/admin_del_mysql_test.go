@@ -255,7 +255,7 @@ func TestAdminDeleteRejectsParentInSameBatch(t *testing.T) {
 	err := f.svc.Del(context.Background(), []int32{first.ID, second.ID}, adminDelActor(t, root.ID, true))
 	var businessErr *cErr.Error
 	require.ErrorAs(t, err, &businessErr)
-	require.Contains(t, err.Error(), "its parent")
+	require.Contains(t, err.Error(), "whose parent is also being deleted")
 
 	var count int64
 	f.db.Table(f.prefix+"user").Where("admin_id = ?", first.ID).Count(&count)

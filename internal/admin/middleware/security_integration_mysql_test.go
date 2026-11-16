@@ -15,11 +15,13 @@ import (
 	securitymodel "buildadmin-go/internal/admin/repository"
 	"buildadmin-go/internal/admin/service"
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/i18n"
 	middlewarecore "buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/requesttx"
 	"buildadmin-go/internal/pkg/testutil"
 
+	ginI18n "github.com/gin-contrib/i18n"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -99,6 +101,8 @@ func (f *securityFixture) actorContext(actor int32, unrestricted bool) *gin.Cont
 }
 func (f *securityFixture) router(actor int32, unrestricted bool, method string, handler gin.HandlerFunc) *gin.Engine {
 	r := gin.New()
+	// 事务失败路径会经 util.Lang 本地化 500 响应；与生产装配一致先挂 i18n。
+	r.Use(ginI18n.Localize(ginI18n.WithBundle(i18n.NewBundleCfg())))
 	s := NewSecurity(f.config, zap.NewNop(), f.db, data_scope.NewClosureEnforcer(f.config))
 	path := "/admin/auth.Admin/" + map[string]string{http.MethodDelete: "del", http.MethodPost: "edit"}[method]
 	r.Use(func(c *gin.Context) {

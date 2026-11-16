@@ -1,10 +1,15 @@
 package i18n
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -165,6 +170,157 @@ func TestLocaleKeysAreReferenced(t *testing.T) {
 	sort.Strings(unreferenced)
 	require.Empty(t, unreferenced,
 		"en.yaml 存在无引用的死键，请删除或在 legacyUnreferencedKeys 中写明保留理由：%v", unreferenced)
+}
+
+// codeMessageWhitelist 是框架代码抛出、但有意不写进语言包的消息。默认必须
+// 为空：新增消息要么整句作为 en.yaml 的键（带值的消息改用 util.Lang 插值），
+// 要么在此写明保留理由。由变量拼装的消息 guard 无法判定，直接跳过。
+var codeMessageWhitelist = map[string]struct{}{}
+
+// TestCodeMessagesHaveLocaleKeys 守住反向契约：框架代码经 cErr 快捷构造、
+// util.Lang、response.Fail/JsonReturn/SuccessWithMessage 直接抛出的消息字面量
+// 必须是 en.yaml 的键。缺键时非英语请求经 writeResponse 查表落空，只会看到
+// 英文原文；下游也无法从 en 差集判断该消息是否需要翻译。
+// response.WriteDirect 不参与：它跳过 msg 本地化，字面量补键并不会翻译它。
+func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
+	t.Parallel()
+	en, ok := loadLocalePacks(t)["en"]
+	require.True(t, ok, "en.yaml 缺失")
+
+	root := filepath.Join("..", "..")
+	fset := token.NewFileSet()
+	var missing, fragments []string
+	require.NoError(t, filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			switch entry.Name() {
+			case ".git", "web", "public", "node_modules":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// 测试文件里的字面量是断言期望值，不是框架抛出的消息。
+		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return fmt.Errorf("解析 %s: %w", path, err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			kind, argIndex, ok := messageArgument(call)
+			if !ok || argIndex >= len(call.Args) {
+				return true
+			}
+			value, literal, fragment := messageLiteral(call.Args[argIndex])
+			position := fset.Position(call.Pos())
+			rel, relErr := filepath.Rel(root, position.Filename)
+			require.NoError(t, relErr)
+			site := fmt.Sprintf("%s:%d %s", rel, position.Line, kind)
+			switch {
+			case fragment:
+				fragments = append(fragments, site)
+			case literal:
+				if _, exists := en[value]; exists {
+					return true
+				}
+				if _, retained := codeMessageWhitelist[value]; retained {
+					return true
+				}
+				missing = append(missing, fmt.Sprintf("%s %q", site, value))
+			}
+			return true
+		})
+		return nil
+	}))
+	sort.Strings(fragments)
+	sort.Strings(missing)
+	require.Empty(t, fragments,
+		"消息由字符串拼接或 fmt.Sprintf 构造，无法作为 en.yaml 的静态键翻译；请改成完整句子（值走 util.Lang 插值）：%v", fragments)
+	require.Empty(t, missing,
+		"代码抛出的消息在 en.yaml 中没有键，非英语请求会回退英文原文；请补键或在 codeMessageWhitelist 写明保留理由：%v", missing)
+}
+
+// messageArgument 识别需要语言包的出参消息调用，返回调用名与消息参数下标。
+func messageArgument(call *ast.CallExpr) (string, int, bool) {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return "", 0, false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return "", 0, false
+	}
+	name := pkg.Name + "." + sel.Sel.Name
+	switch name {
+	case "cErr.BadRequest", "cErr.Unauthorized", "cErr.ForbiddenRequest", "cErr.InternalServer":
+		return name, 0, true
+	case "cErr.New":
+		return name, 2, true
+	case "util.Lang":
+		return name, 1, true
+	case "response.Fail", "response.JsonReturn":
+		return name, 3, true
+	case "response.SuccessWithMessage":
+		return name, 1, true
+	}
+	return "", 0, false
+}
+
+// messageLiteral 判定消息参数形态：整串字面量、拼接/格式化片段，或无从判断
+// 的变量与常量（后两者不参与校验）。
+func messageLiteral(expr ast.Expr) (value string, literal bool, fragment bool) {
+	switch v := expr.(type) {
+	case *ast.BasicLit:
+		if v.Kind != token.STRING {
+			return "", false, false
+		}
+		unquoted, err := strconv.Unquote(v.Value)
+		if err != nil {
+			return v.Value, true, false
+		}
+		return unquoted, true, false
+	case *ast.BinaryExpr:
+		return "", false, leadingStringLiteral(v)
+	case *ast.CallExpr:
+		return "", false, isSprintfWithLiteralFormat(v)
+	case *ast.ParenExpr:
+		return messageLiteral(v.X)
+	}
+	return "", false, false
+}
+
+// leadingStringLiteral 判断拼接表达式是否以字面量开头：「字面量 + 变量」最容易被
+// 误当成 en.yaml 的键，但查表必然落空，必须改成完整句子或改用 util.Lang 插值。
+// 变量在前的动态拼接（如字段名 + " is exist"）没有可查表的静态文本，跳过。
+func leadingStringLiteral(expr ast.Expr) bool {
+	switch v := expr.(type) {
+	case *ast.BasicLit:
+		return v.Kind == token.STRING
+	case *ast.BinaryExpr:
+		return leadingStringLiteral(v.X)
+	case *ast.ParenExpr:
+		return leadingStringLiteral(v.X)
+	}
+	return false
+}
+
+func isSprintfWithLiteralFormat(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != "Sprintf" || len(call.Args) == 0 {
+		return false
+	}
+	if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "fmt" {
+		return false
+	}
+	format, ok := call.Args[0].(*ast.BasicLit)
+	return ok && format.Kind == token.STRING
 }
 
 func loadLocalePacks(t *testing.T) map[string]map[string]string {
