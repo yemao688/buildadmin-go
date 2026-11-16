@@ -2,7 +2,9 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/pkg/util"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -30,7 +32,7 @@ func initConfig() {
 
 	runtimeConfigPath := configPath
 	runtimeConfigExists := util.PathExists(runtimeConfigPath)
-	if !runtimeConfigExists && !jsonMode() {
+	if !runtimeConfigExists {
 		announceMissingRuntimeConfig(runtimeConfigPath)
 	}
 
@@ -74,6 +76,14 @@ func initConfig() {
 		panic(err)
 	}
 
+	// 归属表清单的事实源是 crud_specs：把声明了 reassignable/inheritFrom 的表
+	// 登记进删除管理员的转移清单，手写登记只保留给没有 spec 的非 CRUD 表。
+	if dir := helper.DefaultSpecDir(); dir != "" {
+		if _, err := helper.RegisterSpecOwnerTables(dir); err != nil && !jsonMode() {
+			fmt.Fprintf(os.Stderr, "warning: register spec owner tables: %v\n", err)
+		}
+	}
+
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
 		fmt.Println("config file changed:", in.Name)
@@ -103,7 +113,7 @@ func announceMissingRuntimeConfig(configPath string) {
 			setupRequested = true
 		case "crud:validate":
 			validateRequested = true
-		case "crud:new", "crud:schema":
+		case "crud:new", "crud:schema", "crud:list", "crud:preview":
 			newSpecRequested = true
 		case "release":
 			releaseRequested = true
@@ -120,6 +130,12 @@ func announceMissingRuntimeConfig(configPath string) {
 	case releaseRequested:
 		// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
 	default:
+		if jsonMode() {
+			// --json 下不打印人类引导，直接给出机器可读错误并非零退出。
+			payload, _ := json.Marshal(jsonEnvelope{OK: false, Error: "configs/config.yaml is missing; run: go run ./cmd/server setup"})
+			fmt.Println(string(payload))
+			os.Exit(1)
+		}
 		printInstallGuidance(configPath)
 		// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），
 		// 然后退出；安装完成后配置存在，正常启动不再走此分支。

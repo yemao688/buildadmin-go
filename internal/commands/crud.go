@@ -95,6 +95,7 @@ func newCrudApplyCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	}
 	applyCmd.Flags().Bool("allow-rebuild", false, "allow destructive drop-and-recreate for primary-key drift (data loss, disposable environments only)")
 	applyCmd.Flags().Bool("plan", false, "print the classified CRUD plan without executing changes")
+	applyCmd.Flags().String("html", "", "with --plan: also render a read-only approval page to this path")
 	applyCmd.Flags().String("approve", "", "approve requires-approval categories: defaults,auto-increment,type-widening,attributes, or all")
 	applyCmd.Flags().Bool("skip-menu", false, "skip menu sync")
 	applyCmd.Flags().Int32("admin-id", 1, "administrator ID recorded for adopted CRUD logs")
@@ -218,6 +219,10 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 	}
 	plan, _ := cmd.Flags().GetBool("plan")
 	opts.Plan = plan
+	htmlOut, _ := cmd.Flags().GetString("html")
+	if htmlOut != "" && !plan {
+		return fmt.Errorf("--html requires --plan: the approval page is rendered from the read-only plan")
+	}
 	var results []helper.ApplyTableResult
 
 	if plan {
@@ -230,17 +235,26 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 		} else {
 			results, err = helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
 		}
-		if jsonMode() {
-			specRef := ""
-			if len(args) > 0 {
-				specRef = strings.Join(args, " ")
-			} else if dir := helper.DefaultSpecDir(); dir != "" {
-				specRef = dir
+		specRef := ""
+		if len(args) > 0 {
+			specRef = strings.Join(args, " ")
+		} else if dir := helper.DefaultSpecDir(); dir != "" {
+			specRef = dir
+		}
+		payload := planToJSON(results, specRef)
+		if htmlOut != "" {
+			if htmlErr := writePlanHTML(htmlOut, payload, specRef, h.config.Database.Database); htmlErr != nil {
+				return htmlErr
 			}
-			if printErr := printJSON(cmd, planToJSON(results, specRef)); printErr != nil {
+			if !jsonMode() {
+				cmd.Printf("approval page written to %s\n", htmlOut)
+			}
+		}
+		if jsonMode() {
+			if printErr := printJSON(cmd, payload); printErr != nil {
 				return printErr
 			}
-		} else {
+		} else if htmlOut == "" {
 			printApplyPlan(cmd, results)
 		}
 		if err != nil {
