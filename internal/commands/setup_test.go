@@ -357,7 +357,7 @@ func TestSetupCommandHelpListsNonInteractiveFlags(t *testing.T) {
 	if err := command.Execute(); err != nil {
 		t.Fatalf("Execute(--help) error = %v", err)
 	}
-	for _, flag := range []string{"--db-host", "--db-password", "--admin-password", "--env", "--skip-frontend", "--yes"} {
+	for _, flag := range []string{"--db-host", "--db-password", "--admin-password", "--env", "--skip-frontend", "--with-test-db", "--test-db-name", "--yes"} {
 		if !strings.Contains(output.String(), flag) {
 			t.Fatalf("help output missing %s: %q", flag, output.String())
 		}
