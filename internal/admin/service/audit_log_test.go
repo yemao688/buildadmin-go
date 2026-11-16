@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	adminrepo "buildadmin-go/internal/admin/repository"
@@ -19,9 +22,13 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+var auditLogServiceSQLiteSeq atomic.Uint64
+
 func newAuditLogServiceFixture(t *testing.T) (*AuditLogService, *gorm.DB, *adminrepo.AuthRepository) {
 	t.Helper()
-	dsn := "file:audit-log-service-" + strings.ReplaceAll(t.Name(), "/", "-") + "?mode=memory&cache=shared"
+	// 每个 fixture 必须是独立库：subtest 名在多轮 -count 间会重复，且并行子测试
+	// 共享 cache=shared 库会返回 SQLITE_LOCKED（issue #63），故用序号保证唯一。
+	dsn := fmt.Sprintf("file:audit-log-service-%d-%d?mode=memory&cache=shared", os.Getpid(), auditLogServiceSQLiteSeq.Add(1))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{SingularTable: true},
 	})
@@ -77,8 +84,6 @@ func TestAuditLogServiceSkipsListSelectAndLogoutURLs(t *testing.T) {
 
 func TestAuditLogServiceResolvesUsernameFallbacks(t *testing.T) {
 	t.Parallel()
-	svc, db, _ := newAuditLogServiceFixture(t)
-	require.NoError(t, db.Exec("INSERT INTO admin (id, username) VALUES (?, ?)", 7, "db-admin").Error)
 
 	tests := []struct {
 		name     string
@@ -96,6 +101,9 @@ func TestAuditLogServiceResolvesUsernameFallbacks(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
+			// 每个子测试独立 fixture，禁止提升到父测试复用（issue #63）。
+			svc, db, _ := newAuditLogServiceFixture(t)
+			require.NoError(t, db.Exec("INSERT INTO admin (id, username) VALUES (?, ?)", 7, "db-admin").Error)
 			require.NoError(t, svc.Record(context.Background(), test.actor, test.username, "/admin/auth.Admin/add", "标题", "203.0.113.9", "ua", test.params))
 			require.Equal(t, test.want, lastAuditLog(t, db).Username)
 		})
