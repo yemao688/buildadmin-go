@@ -105,7 +105,15 @@ go run ./cmd/crudgen crud:new ops_banner --comment 运营轮播
 # → crud_specs/ops_banner.yaml：主键、status、weigh、create_time、update_time 已就位
 ```
 
-随后补业务字段、校验、生成：
+随后补业务字段，一条命令完成校验、差量预检与生成（含 wire + `go build`）：
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:up crud_specs/ops_banner.yaml
+```
+
+`crud:up` 会依次：`crud:validate` 级别的校验（含弃用/风险告警）→ 库与 spec 的差量（`rejected` 直接阻断）→ 提示将被覆盖的定制文件 → 生成（表结构、索引、菜单、五类 Go 产物、前端脚手架）→ wire + `go build` 自检。任一步失败即停，产物由生成器快照回滚。
+
+需要分步控制时仍可用原命令：
 
 ```bash
 go run ./cmd/crudgen crud:validate crud_specs/ops_banner.yaml
@@ -1178,6 +1186,7 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 | `crud:list [--json]` | 模块总览：表名、菜单、数据权限、字段数、`inheritFrom` | 无 |
 | `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML（默认 `runtime/preview/<table>.html`）：字段表 + 表单/列表清单 | 无 |
 | `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
+| `crud:up <spec>` | 校验 → 差量/定制点预检 → 生成（自动 wire + go build） | MySQL |
 | `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
 | `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |
 | `crud:check-customized <table> [--diff]` | 列出被手工改过/缺失的生成产物（定制点） | MySQL |

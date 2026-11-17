@@ -169,6 +169,7 @@ type dryRunJSON struct {
 	Plan      planJSON          `json:"plan"`
 	Create    []string          `json:"filesToCreate"`
 	Overwrite []string          `json:"filesToOverwrite"`
+	NewTable  bool              `json:"newTable,omitempty"`
 	Diffs     *[]dryRunDiffJSON `json:"fileDiffs,omitempty"`
 	Warnings  []string          `json:"warnings,omitempty"`
 }
