@@ -91,7 +91,10 @@ user_id:
 
 列表列写 `user_id`，原始 FK 列自动隐藏，改名后的关联列显示 `username`；搜索用 `quickSearchField: [user.username]`（点号条目只能手写，设计器不出）。
 
-## 看模块与状态
+## 不装库先看产物（离线渲染到 runtime/offline/<table>/）
+go run ./cmd/crudgen crud:render crud_specs/<table>.yaml
+
+# 看模块与状态
 
 ```bash
 crud:list                       # 表名/菜单/数据权限/字段数/继承来源

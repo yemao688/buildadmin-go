@@ -4,6 +4,7 @@ package crudgen
 // 未配置 mysql_test 时 testutil.OpenMySQL 自动跳过（绝不改开发库）。
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ const idxApplyTestPrefix = "ba_idx_apply_test_"
 func writeIdxApplySpec(t *testing.T, dir, body string) string {
 	t.Helper()
 	path := filepath.Join(dir, "ops_test_index.yaml")
-	if err := writeFile(path, body); err != nil {
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path

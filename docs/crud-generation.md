@@ -33,9 +33,20 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 
 ```bash
 crud:check-customized <table> [--diff] [--json]
+crud:check-customized --all [--diff] [--json]     # 全部业务模块（跳过 registerOnly）
 ```
 
-渲染 spec → 与工作树比对 → 列出被手工改过（或缺失）的生成产物，发现差异以非零退出。`--diff` 打印每处差异的 unified diff。它替代双提交工作流里的"人肉 `git diff` 回补"：重新生成前先跑一次，就知道哪些改动会被覆盖、要逐项回补。
+渲染 spec → 与工作树比对 → 列出被手工改过（或缺失）的生成产物，发现差异以非零退出。`--diff` 打印每处差异的 unified diff。它替代双提交工作流里的"人肉 `git diff` 回补"：重新生成前先跑一次，就知道哪些改动会被覆盖、要逐项回补；`--all` 适合放进 CI。
+
+### 离线渲染（`crud:render`）
+
+```bash
+go run ./cmd/crudgen crud:render crud_specs/<module>.yaml [--out <dir>] [--prefix ba_]
+```
+
+不连数据库，把 spec 渲染成完整产物写到 `--out`（默认 `runtime/offline/<table>/`），仓库本身不被修改。实体、仓库、DTO、handler、registrar 与前端产物都由 spec 推导，与在线生成逐字节一致；`remoteSelect`/`remoteSelects` 因为需要远端表的列元数据会被拒绝（避免静默产出降级的关联配置）。
+
+用途：还没有数据库时先看会生成什么、评审 spec 的组件选择，或给 AI 一个不依赖环境的产物预览。
 
 ### 设计器与 spec 的关系
 
@@ -1224,7 +1235,8 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 | `crud:up <spec>` | 校验 → 差量/定制点预检 → 生成（自动 wire + go build） | MySQL |
 | `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
 | `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |
-| `crud:check-customized <table> [--diff]` | 列出被手工改过/缺失的生成产物（定制点） | MySQL |
+| `crud:check-customized <table> [--diff]` / `--all` | 列出被手工改过/缺失的生成产物（定制点）；`--all` 一次检查全部业务模块 | MySQL |
+| `crud:render <spec> [--out] [--prefix]` | 不连数据库渲染产物到目录（离线预览，仓库不改） | 无 |
 | `crud:apply --plan [--html <path>] [--json]` | 分类计划；`--html` 出只读审批页 | MySQL |
 | `migrate --plan` | 发版前检查 `rejected` 的唯一事实源 | MySQL |
 | `migrate status [--json]` / `migrate list [--all]` | 三轨计数摘要 / 业务轨台账 | MySQL |

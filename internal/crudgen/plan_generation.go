@@ -14,7 +14,7 @@ type GenerationFilePlan struct {
 	Create    []string
 	Overwrite []string
 	// NewTable 表示该表自己的产物一个都还不存在（共享 provider/wire 不算）。
-	// 此时无法渲染预览：实体文件由 gorm.io/gen 从真实表结构生成，表还没建。
+	// 此时没有"会被覆盖的定制"，预览/预检直接跳过渲染；产物全部新建。
 	NewTable bool
 }
 

@@ -804,23 +804,3 @@ const dtoTemp = `package {{.Namespace}}
 
 {{.ValidateParam}}
 `
-
-const StructTmpl = `import (
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	{{range .ImportPkgPaths}}{{.}} ` + "\n" + `{{end}}
-)
-
-// {{.ModelStructName}} {{.StructComment}}
-type {{.ModelStructName}} struct {
-    {{range .Fields}}
-    {{if .MultilineComment -}}
-	/*
-{{.ColumnComment}}
-    */
-	{{end -}}
-    {{.Name}} {{.Type}} ` + "`{{.Tags}}` " +
-	"{{if not .MultilineComment}}{{if .ColumnComment}}// {{.ColumnComment}}{{end}}{{end}}" +
-	`{{end}}
-}
-`

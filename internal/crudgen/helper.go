@@ -267,7 +267,7 @@ func buildExcludeParamFields(fields []crudmodel.Field, ds ResolvedDataScope) []s
 	return exclude
 }
 
-func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string), skipFrontend, skipRepo bool) (WebDir, string, error) {
+func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string), skipFrontend, skipRepo bool, sink OutputSink) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -305,25 +305,25 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 
 	// 写入语言包 / index.vue / form.vue（skipFrontend 时整体跳过，写入顺序不变）
 	if !skipFrontend {
-		if err := writeWebLangFiles(langEnData, langZhData, webLangDir); err != nil {
+		if err := writeWebLangFiles(sink, langEnData, langZhData, webLangDir); err != nil {
 			return WebDir{}, "", err
 		}
-		if err := writeWebIndexFile(indexVueData, webViewsDir, handlerFile, tablePk, webTranslate); err != nil {
+		if err := writeWebIndexFile(sink, indexVueData, webViewsDir, handlerFile, tablePk, webTranslate); err != nil {
 			return WebDir{}, "", err
 		}
-		if err := writeWebFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
+		if err := writeWebFormFile(sink, formVueData, webViewsDir, fields, webTranslate); err != nil {
 			return WebDir{}, "", err
 		}
 	}
 
 	// 写入模型代码（实体 + 仓库 + DTO）
-	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, table, modelData, entityFile, repositoryFile, fields, skipRepo)
+	structContent, err := writeModelFiles(sink, db, tablePk, fullTableName, tableName, table, modelData, entityFile, repositoryFile, fields, skipRepo)
 	if err != nil {
 		return WebDir{}, "", err
 	}
 
 	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
+	if err := writeHandlerFile(sink, handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
@@ -506,23 +506,23 @@ func applyWeighSortAndOperateConfig(fieldsMap map[string]string, table crudmodel
 }
 
 // writeWebLangFiles 按固定顺序写入中英文语言包文件（en 先、zh-cn 后）。
-func writeWebLangFiles(langEnData, langZhData map[string]string, webLangDir WebDir) error {
-	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
+func writeWebLangFiles(sink OutputSink, langEnData, langZhData map[string]string, webLangDir WebDir) error {
+	if err := writeWebLangFile(sink, langEnData, "en", webLangDir); err != nil {
 		return err
 	}
-	return writeWebLangFile(langZhData, "zh-cn", webLangDir)
+	return writeWebLangFile(sink, langZhData, "zh-cn", webLangDir)
 }
 
 // writeWebIndexFile 写入 index.vue（表主键与翻译前缀在写入前补全）。
-func writeWebIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo, tablePk, webTranslate string) error {
+func writeWebIndexFile(sink OutputSink, indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo, tablePk, webTranslate string) error {
 	indexVueData.TablePk = tablePk
 	indexVueData.WebTranslate = webTranslate
-	return writeIndexFile(indexVueData, webViewsDir, handlerFile)
+	return writeIndexFile(sink, indexVueData, webViewsDir, handlerFile)
 }
 
 // writeWebFormFile 写入 form.vue。
-func writeWebFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
-	return writeFormFile(formVueData, webViewsDir, fields, webTranslate)
+func writeWebFormFile(sink OutputSink, formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
+	return writeFormFile(sink, formVueData, webViewsDir, fields, webTranslate)
 }
 
 // repositoryImportAlias 为 handler 中选择仓库包的别名：拍平后恒为根包 repository。

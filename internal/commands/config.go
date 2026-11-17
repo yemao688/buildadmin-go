@@ -120,7 +120,7 @@ func announceMissingRuntimeConfig(configPath string) {
 			setupRequested = true
 		case "crud:validate":
 			validateRequested = true
-		case "crud:new", "crud:schema", "crud:list", "crud:preview":
+		case "crud:new", "crud:schema", "crud:list", "crud:preview", "crud:render":
 			newSpecRequested = true
 		case "release":
 			releaseRequested = true

@@ -92,44 +92,145 @@ func (h *CrudHandler) printRenderedDiff(cmd *cobra.Command, specPath string) err
 // newCrudCheckCustomizedCommand 渲染 spec 并与工作树比对，报告被手工改过的生成
 // 产物（即"定制点"），替代双提交工作流里的人肉 git diff。
 func newCrudCheckCustomizedCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
-	var showDiff bool
+	var (
+		showDiff bool
+		all      bool
+	)
 	checkCmd := &cobra.Command{
-		Use:           "crud:check-customized <table>",
+		Use:           "crud:check-customized [table]",
 		Short:         "渲染 spec 并与工作树比对，列出被手工修改（定制）的生成产物",
-		Args:          cobra.ExactArgs(1),
+		Args:          cobra.MaximumNArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
+			if all {
+				if len(args) > 0 {
+					return fmt.Errorf("--all checks every spec; do not pass a table name")
+				}
+				return command.crudH.CheckCustomizedAll(cmd, showDiff)
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("usage: crud:check-customized <table> | --all")
+			}
 			return command.crudH.CheckCustomized(cmd, args[0], showDiff)
 		}),
 	}
 	checkCmd.Flags().BoolVar(&showDiff, "diff", false, "打印每个定制文件的 unified diff")
+	checkCmd.Flags().BoolVar(&all, "all", false, "检查 crud_specs 下全部业务模块（跳过 registerOnly）")
 	return checkCmd
+}
+
+// customizedTable 是一张表的定制点报告；drift 保留原始差异供 --diff 输出。
+type customizedTable struct {
+	Table    string   `json:"table"`
+	Modified []string `json:"modified"`
+	Missing  []string `json:"missing"`
+	NewTable bool     `json:"newTable,omitempty"`
+
+	drift []renderedDrift
 }
 
 // CheckCustomized 只读：渲染 → 比对 → 报告。发现差异以非零退出，便于 CI 与
 // agent 判断"重新生成会不会覆盖定制"。
 func (h *CrudHandler) CheckCustomized(cmd *cobra.Command, table string, showDiff bool) error {
-	specPath, newTable, err := h.customizationTarget(table)
+	report, err := h.customizedTableReport(table)
 	if err != nil {
 		return err
 	}
-	if newTable {
+	if report.NewTable {
 		if jsonMode() {
-			return printJSON(cmd, map[string]any{"table": table, "modified": []string{}, "missing": []string{}})
+			return printJSON(cmd, report)
 		}
 		cmd.Printf("%s: no generated files yet (nothing to compare)\n", table)
 		return nil
 	}
-	drift, err := h.customizationDrift(specPath)
+	if jsonMode() {
+		return reportCustomizedJSON(cmd, report)
+	}
+	return reportCustomizedText(cmd, report, showDiff)
+}
+
+// CheckCustomizedAll 检查 crud_specs 下全部非 registerOnly 模块，供 CI/agent
+// 一次看清哪些模块存在定制点。
+func (h *CrudHandler) CheckCustomizedAll(cmd *cobra.Command, showDiff bool) error {
+	specDir := helper.DefaultSpecDir()
+	if specDir == "" {
+		return fmt.Errorf("crud_specs/ not found; nothing to compare against")
+	}
+	tables, err := renderableSpecTables(specDir)
 	if err != nil {
 		return err
 	}
-	modified, missing := splitDriftPaths(drift)
-	if jsonMode() {
-		return reportCustomizedJSON(cmd, table, drift, modified, missing)
+	if len(tables) == 0 {
+		return fmt.Errorf("no renderable spec found in %s", specDir)
 	}
-	return reportCustomizedText(cmd, table, drift, modified, missing, showDiff)
+	reports := make([]customizedTable, 0, len(tables))
+	changed := 0
+	for _, table := range tables {
+		report, err := h.customizedTableReport(table)
+		if err != nil {
+			return err
+		}
+		reports = append(reports, report)
+		if len(report.Modified)+len(report.Missing) > 0 {
+			changed++
+		}
+	}
+	if jsonMode() {
+		payload := map[string]any{"tables": reports, "changed": changed, "checked": len(reports)}
+		if changed == 0 {
+			return printJSON(cmd, payload)
+		}
+		failure := fmt.Errorf("%d of %d table(s) have customizations", changed, len(reports))
+		if err := printJSONError(cmd, payload, failure); err != nil {
+			return err
+		}
+		return failure
+	}
+	for _, report := range reports {
+		_ = reportCustomizedText(cmd, report, showDiff)
+	}
+	if changed == 0 {
+		cmd.Printf("%d table(s) match a fresh render\n", len(reports))
+		return nil
+	}
+	return fmt.Errorf("%d of %d table(s) have customizations; review them before regenerating", changed, len(reports))
+}
+
+// renderableSpecTables 返回 crud_specs 下非 registerOnly 的表名（排序）。
+func renderableSpecTables(specDir string) ([]string, error) {
+	tables := make([]string, 0)
+	for _, path := range collectSpecPaths(specDir) {
+		options, err := helper.LoadSpec(path)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		}
+		if options.Table.RegisterOnly {
+			continue
+		}
+		tables = append(tables, options.Table.Name)
+	}
+	sort.Strings(tables)
+	return tables, nil
+}
+
+// customizedTableReport 计算单表的定制点；新表直接返回 NewTable。
+func (h *CrudHandler) customizedTableReport(table string) (customizedTable, error) {
+	specPath, newTable, err := h.customizationTarget(table)
+	if err != nil {
+		return customizedTable{}, err
+	}
+	report := customizedTable{Table: table, Modified: []string{}, Missing: []string{}, NewTable: newTable}
+	if newTable {
+		return report, nil
+	}
+	drift, err := h.customizationDrift(specPath)
+	if err != nil {
+		return customizedTable{}, err
+	}
+	report.drift = drift
+	report.Modified, report.Missing = splitDriftPaths(drift)
+	return report, nil
 }
 
 // customizationTarget 解析 spec 路径，并判断该表自己的产物是否已存在。
@@ -175,37 +276,36 @@ func splitDriftPaths(drift []renderedDrift) (modified, missing []string) {
 	return modified, missing
 }
 
-func reportCustomizedJSON(cmd *cobra.Command, table string, drift []renderedDrift, modified, missing []string) error {
-	payload := map[string]any{"table": table, "modified": modified, "missing": missing}
-	if len(drift) == 0 {
-		return printJSON(cmd, payload)
+func reportCustomizedJSON(cmd *cobra.Command, report customizedTable) error {
+	if len(report.drift) == 0 {
+		return printJSON(cmd, report)
 	}
-	failure := fmt.Errorf("%d generated file(s) differ from a fresh render", len(drift))
-	if err := printJSONError(cmd, payload, failure); err != nil {
+	failure := fmt.Errorf("%d generated file(s) differ from a fresh render", len(report.drift))
+	if err := printJSONError(cmd, report, failure); err != nil {
 		return err
 	}
 	return failure
 }
 
-func reportCustomizedText(cmd *cobra.Command, table string, drift []renderedDrift, modified, missing []string, showDiff bool) error {
-	if len(drift) == 0 {
-		cmd.Printf("%s: generated files match a fresh render (no customizations)\n", table)
+func reportCustomizedText(cmd *cobra.Command, report customizedTable, showDiff bool) error {
+	if len(report.drift) == 0 {
+		cmd.Printf("%s: generated files match a fresh render (no customizations)\n", report.Table)
 		return nil
 	}
-	cmd.Printf("%s: %d generated file(s) differ from a fresh render\n", table, len(drift))
-	for _, path := range modified {
+	cmd.Printf("%s: %d generated file(s) differ from a fresh render\n", report.Table, len(report.drift))
+	for _, path := range report.Modified {
 		cmd.Printf("  ~ %s\n", path)
 	}
-	for _, path := range missing {
+	for _, path := range report.Missing {
 		cmd.Printf("  + %s (missing)\n", path)
 	}
 	if showDiff {
-		for _, item := range drift {
+		for _, item := range report.drift {
 			if item.Missing {
 				continue
 			}
 			cmd.Print(helper.UnifiedDiff(relativeToRoot(item.Path), item.Before, item.Rendered))
 		}
 	}
-	return fmt.Errorf("%d generated file(s) differ from a fresh render; review them as customizations before regenerating", len(drift))
+	return nil
 }

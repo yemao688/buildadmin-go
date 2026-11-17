@@ -6,7 +6,7 @@ type CountryCurrency struct {
 	Code   string  `gorm:"column:code;default:'';type:varchar(20);not null;uniqueIndex:uk_country_currency_code,priority:1;comment:货币代码" json:"code"` // 货币代码
 	Name   string  `gorm:"column:name;default:'';type:varchar(50);not null;comment:货币名称" json:"name"`                                                 // 货币名称
 	Symbol string  `gorm:"column:symbol;default:'';type:varchar(20);not null;comment:货币符号" json:"symbol"`                                             // 货币符号
-	Rate   float64 `gorm:"column:rate;type:decimal(20,8);not null;default:1.00000000;comment:汇率" json:"rate"`                                         // 汇率
-	Status int32   `gorm:"column:status;type:tinyint unsigned;not null;default:1;comment:状态:0=禁用,1=启用" json:"status"`                                 // 状态:0=禁用,1=启用
+	Rate   float64 `gorm:"column:rate;default:1;type:decimal(20,8);not null;comment:汇率" json:"rate"`                                                  // 汇率
+	Status int32   `gorm:"column:status;default:1;type:tinyint unsigned;not null;comment:状态:0=禁用,1=启用" json:"status"`                                 // 状态:0=禁用,1=启用
 	Weigh  int32   `gorm:"column:weigh;default:0;type:int;not null;comment:权重" json:"weigh"`                                                          // 权重
 }

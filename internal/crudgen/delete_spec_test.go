@@ -14,7 +14,7 @@ func TestDeleteSpecOnlyRemovesSpec(t *testing.T) {
 	if err := os.WriteFile(path, []byte("name: ops_demo\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := deleteSpecOnlyIn(dir, "ops_demo")
+	err := deleteSpecOnlyIn(nil, nil, dir, "ops_demo")
 	var specOnly *SpecOnlyDeletedError
 	if !errors.As(err, &specOnly) {
 		t.Fatalf("error = %v", err)
@@ -29,7 +29,7 @@ func TestDeleteSpecOnlyRemovesSpec(t *testing.T) {
 
 func TestDeleteSpecOnlyWithoutSpecFails(t *testing.T) {
 	t.Parallel()
-	if err := deleteSpecOnlyIn(t.TempDir(), "ops_missing"); err == nil {
+	if err := deleteSpecOnlyIn(nil, nil, t.TempDir(), "ops_missing"); err == nil {
 		t.Fatal("missing spec must fail")
 	}
 }

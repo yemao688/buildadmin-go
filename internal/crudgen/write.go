@@ -20,18 +20,17 @@ import (
 	"text/template"
 
 	"golang.org/x/tools/imports"
-	"gorm.io/gen"
 	"gorm.io/gorm"
 )
 
 // writeModelFiles 写入共享贫血实体（internal/model）与 admin 仓库
 // （internal/admin/repository，XxxRepository）；DTO 由 writeHandlerFile
 // 另行落盘。返回实体 struct 内容供 DTO/测试复用。
-func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableName string, table crudmodel.Table, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field, skipRepo bool) (string, error) {
+func writeModelFiles(sink OutputSink, _ *gorm.DB, tablePk string, fullTableName string, tableName string, table crudmodel.Table, modelData ModelData, entityFile, repositoryFile NameInfo, fields []crudmodel.Field, skipRepo bool) (string, error) {
 	if tablePk != "" {
 		modelData.Pk = tablePk
 	}
-	structContent, err := getGenerateStruct(db, fullTableName, modelData.ClassName, modelData.ModelFieldType)
+	structContent, err := buildSpecEntityStruct(table, fields, modelData.ClassName, modelData.ModelFieldType)
 	if err != nil {
 		return "", err
 	}
@@ -45,7 +44,7 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 	if err != nil {
 		return "", err
 	}
-	if err := writeGoFile(entityFile.ParseFile, entityContent); err != nil {
+	if err := writeGoFile(sink, entityFile.ParseFile, entityContent); err != nil {
 		return "", err
 	}
 
@@ -60,12 +59,12 @@ func writeModelFiles(db *gorm.DB, tablePk string, fullTableName string, tableNam
 		if err != nil {
 			return "", err
 		}
-		if err := writeGoFile(repositoryFile.ParseFile, repositoryContent); err != nil {
+		if err := writeGoFile(sink, repositoryFile.ParseFile, repositoryContent); err != nil {
 			return "", err
 		}
 
 		// 扁平仓库包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
-		if err := writeProvider(repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
+		if err := writeProvider(sink, repositoryFile.RootFileName, modelData.ClassName+"Repository"); err != nil {
 			return "", err
 		}
 	}
@@ -150,53 +149,6 @@ func addRelationFields(structContent, relationFields string) string {
 	return structContent[:index] + relationFields + structContent[index:]
 }
 
-func getGenerateStruct(db *gorm.DB, fullTableName string, structName string, fieldTypeOverrides map[string]string) (string, error) {
-	g := gen.NewGenerator(gen.Config{
-		OutPath: "./",
-		Mode:    gen.WithoutContext | gen.WithDefaultQuery,
-		//if you want the nullable field generation property to be pointer type, set FieldNullable true
-		// FieldNullable: true,
-		//if you want to assign field which has default value in Create API, set FieldCoverable true, reference: https://gorm.io/docs/create.html#Default-Values
-		/* FieldCoverable: true,*/
-		// if you want generate field with unsigned integer type, set FieldSignable true
-		/* FieldSignable: true,*/
-		//if you want to generate index tags from database, set FieldWithIndexTag true
-		FieldWithIndexTag: true,
-		//if you want to generate type tags from database, set FieldWithTypeTag true
-		FieldWithTypeTag: true,
-		//if you need unit tests for query code, set WithUnitTest true
-		// WithUnitTest: true,
-	})
-	g.UseDB(db)
-	keys := make([]string, 0, len(fieldTypeOverrides))
-	for columnName := range fieldTypeOverrides {
-		keys = append(keys, columnName)
-	}
-	sort.Strings(keys)
-	options := make([]gen.ModelOpt, 0, len(keys))
-	for _, columnName := range keys {
-		options = append(options, gen.FieldType(columnName, fieldTypeOverrides[columnName]))
-	}
-	data := g.GenerateModelAs(fullTableName, structName, options...)
-
-	var buf bytes.Buffer
-	tpl, err := template.New(StructTmpl).Parse(StructTmpl)
-	if err != nil {
-		return "", err
-	}
-	if err := tpl.Execute(&buf, data); err != nil {
-		return "", err
-	}
-	return normalizeGeneratedIDInitialisms(buf.String()), nil
-}
-
-var generatedIDFieldRE = regexp.MustCompile(`(?m)^(\s*)([A-Za-z][A-Za-z0-9]*)Ids(\s+)`)
-
-// applySpecDefaultTags 把 spec 字段声明的 default（EMPTY STRING/INPUT）映射进
-// 生成 struct 的 gorm tag。gorm/gen 从数据库 introspection 生成时，对 DEFAULT ”
-// （string 零值）和 DEFAULT 0（int 零值）不产出 default tag（needDefaultTag
-// 语义），导致生成 model 与 spec 不一致、全新库 apply 被 default 差异阻塞。
-// 此函数按 spec 补齐；gen 已产出的（非零值）保持原样不重复插入。
 func applySpecDefaultTags(structContent string, fields []crudmodel.Field) string {
 	for _, field := range fields {
 		if field.PrimaryKey {
@@ -254,10 +206,6 @@ func ensureFieldDefaultTag(structContent, columnName, defaultTag string) string 
 	})
 }
 
-func normalizeGeneratedIDInitialisms(structContent string) string {
-	return generatedIDFieldRE.ReplaceAllString(structContent, `${1}${2}IDs${3}`)
-}
-
 // func buildModelAppend() {
 
 // }
@@ -283,7 +231,7 @@ func normalizeGeneratedIDInitialisms(structContent string) string {
 
 // }
 
-func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structContent string, dtoFile, registrarFile NameInfo) error {
+func writeHandlerFile(sink OutputSink, handlerData HandlerData, handlerFile NameInfo, structContent string, dtoFile, registrarFile NameInfo) error {
 	// 请求参数结构体落盘到独立 DTO 文件（internal/admin/dto/<table>.go）
 	paramStruct := buildParamStruct(structContent, handlerData)
 	dtoContent, err := render(dtoFile.ParseFile, dtoTemp, struct {
@@ -293,7 +241,7 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 	if err != nil {
 		return err
 	}
-	if err := writeGoFile(dtoFile.ParseFile, dtoContent); err != nil {
+	if err := writeGoFile(sink, dtoFile.ParseFile, dtoContent); err != nil {
 		return err
 	}
 
@@ -303,19 +251,19 @@ func writeHandlerFile(handlerData HandlerData, handlerFile NameInfo, structConte
 		return err
 	}
 	//写入文件
-	if err := writeGoFile(handlerFile.ParseFile, handlerContent); err != nil {
+	if err := writeGoFile(sink, handlerFile.ParseFile, handlerContent); err != nil {
 		return err
 	}
 	// 扁平 handler 包是 wire 静态聚合根包：并入合并 ProviderSet，不动 wire.go。
-	if err := writeProvider(handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
+	if err := writeProvider(sink, handlerFile.RootFileName, handlerData.ClassName+"Handler"); err != nil {
 		return err
 	}
 	// 路由注册器落 internal/admin/router/<table>.go：构造器经 ProvideRegistrars
 	// 锚点聚合（新模块一行 + handler 参数），不再进入该包合并 ProviderSet。
-	if err := writeRegistrarFile(handlerData, registrarFile); err != nil {
+	if err := writeRegistrarFile(sink, handlerData, registrarFile); err != nil {
 		return err
 	}
-	if err := writeAdminRouterEntry(handlerData.ClassName); err != nil {
+	if err := writeAdminRouterEntry(sink, handlerData.ClassName); err != nil {
 		return err
 	}
 	if handlerData.RegisterAtomicRoute != nil {
@@ -481,7 +429,7 @@ func render(file string, temp string, data any) (string, error) {
 // writeRegistrarFile 写入 admin 渠道路由注册器（internal/admin/router/<table>.go）。
 // 注册器是 router 包自身成员：CRUDRoutes/CRUDCapabilities 同包引用，仅 handler
 // 类型需要包限定。
-func writeRegistrarFile(handlerData HandlerData, registrarFile NameInfo) error {
+func writeRegistrarFile(sink OutputSink, handlerData HandlerData, registrarFile NameInfo) error {
 	registrarPath := registrarFile.ParseFile
 	data := RegistrarData{
 		Namespace: registrarFile.Namespace,
@@ -493,7 +441,7 @@ func writeRegistrarFile(handlerData HandlerData, registrarFile NameInfo) error {
 	if err != nil {
 		return err
 	}
-	return writeGoFile(registrarPath, content)
+	return writeGoFile(sink, registrarPath, content)
 }
 
 func lowerFirst(value string) string {
@@ -512,7 +460,7 @@ func adminRouterProviderPath() string {
 
 // writeAdminRouterEntry 向 internal/admin/router/provider.go 的 ProvideRegistrars
 // 增加一行 NewXxxRegistrar(xxx) 与对应 handler 参数（幂等）。
-func writeAdminRouterEntry(className string) error {
+func writeAdminRouterEntry(sink OutputSink, className string) error {
 	path := adminRouterProviderPath()
 	content, err := os.ReadFile(path) //nolint:gosec // G304: path 由 adminRouterProviderPath() 拼出，固定为 util.RootPath()/internal/admin/router/provider.go
 	if err != nil {
@@ -522,7 +470,7 @@ func writeAdminRouterEntry(className string) error {
 	if err != nil {
 		return err
 	}
-	return writeGoFile(path, updated)
+	return writeGoFile(sink, path, updated)
 }
 
 // addProvideRegistrarsEntry 以 AST 精确定位 ProvideRegistrars FuncDecl：
@@ -589,7 +537,7 @@ func removeAdminRouterEntry(className string) error {
 	if err != nil {
 		return err
 	}
-	return writeGoFile(path, updated)
+	return writeGoFile(nil, path, updated)
 }
 
 // removeProvideRegistrarsEntry 从 ProvideRegistrars 精确移除模块的 handler 参数
@@ -705,7 +653,7 @@ func writeRegistrarProviderSetRemovals(content string, fset *token.FileSet, file
 	return removals
 }
 
-func writeProvider(dir string, name string) error {
+func writeProvider(sink OutputSink, dir string, name string) error {
 	providerPath := filepath.Join(util.RootPath(), dir, "provider.go")
 	if err := ValidateGeneratedAbsolutePath(providerPath, "internal/admin/router", "internal/admin/repository", "internal/admin/handler", "internal/admin/model", "internal/common/model"); err != nil {
 		return err
@@ -717,7 +665,7 @@ func writeProvider(dir string, name string) error {
 		}
 		pkg := filepath.Base(dir)
 		content = []byte("package " + pkg + "\n\nimport \"github.com/google/wire\"\n\nvar ProviderSet = wire.NewSet()\n")
-		if err := writeGoFile(providerPath, string(content)); err != nil {
+		if err := writeGoFile(sink, providerPath, string(content)); err != nil {
 			return err
 		}
 	}
@@ -734,7 +682,7 @@ func writeProvider(dir string, name string) error {
 		separator = ","
 	}
 	content = []byte(head + separator + "\n\tNew" + name + ",\n)")
-	return writeGoFile(providerPath, string(content))
+	return writeGoFile(sink, providerPath, string(content))
 }
 
 // 移除生成的相应代码
@@ -747,7 +695,7 @@ func RemoveProvider(dir string, name string) error {
 	if err != nil {
 		return err
 	}
-	return writeGoFile(filepath.Join(util.RootPath(), dir, "provider.go"), newContent)
+	return writeGoFile(nil, filepath.Join(util.RootPath(), dir, "provider.go"), newContent)
 }
 
 // removeProviderEntry 按整行移除 provider 条目（gofmt 折叠残留空行）。
@@ -907,9 +855,9 @@ func formatGoCode(code string) (string, error) {
 	return string(output), nil
 }
 
-func writeFile(path string, content string) error {
-	if sink := currentSink(); sink != nil {
-		// 预览/校验：内容进内存，不落盘，也不创建目录。
+func writeFileTo(sink OutputSink, path string, content string) error {
+	if sink != nil {
+		// 预览/校验：内容进 sink，不落盘，也不创建目录。
 		return sink.WriteFile(path, content)
 	}
 	dir := filepath.Dir(path)
@@ -943,25 +891,25 @@ func writeFile(path string, content string) error {
 	return os.Rename(tmpName, path)
 }
 
-func writeGoFile(path, content string) error {
+func writeGoFile(sink OutputSink, path, content string) error {
 	formatted, err := formatGoCode(content)
 	if err != nil {
 		return err
 	}
-	return writeFile(path, canonicalizeGoContent(formatted))
+	return writeFileTo(sink, path, canonicalizeGoContent(formatted))
 }
 
 func canonicalizeGoContent(content string) string {
 	return strings.TrimRight(content, "\n") + "\n"
 }
 
-func writeWebLangFile(langEnData map[string]string, lang string, webLangDir WebDir) error {
+func writeWebLangFile(sink OutputSink, langEnData map[string]string, lang string, webLangDir WebDir) error {
 	logicalTableName := strings.Join(append(slices.Clone(webLangDir.Path), webLangDir.LastName), "_")
 	if IsProtectedTable(logicalTableName) {
 		return fmt.Errorf("crud generation is forbidden for protected table %q", logicalTableName)
 	}
 	path := filepath.Join(util.RootPath(), webLangDir.LangFile(lang))
-	return writeFile(path, buildLangTsContent(langEnData))
+	return writeFileTo(sink, path, buildLangTsContent(langEnData))
 }
 
 // buildLangTsContent 组装语言 .ts 文件内容。keys 必须排序后迭代：Go map 的
@@ -983,7 +931,7 @@ func buildLangTsContent(langEnData map[string]string) string {
 	return "export default {\n" + langTsContent + "}\n"
 }
 
-func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo) error {
+func writeIndexFile(sink OutputSink, indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo) error {
 	data := map[string]string{}
 	data["webTranslate"] = indexVueData.WebTranslate
 	//组件名称
@@ -1010,7 +958,7 @@ func writeIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile N
 	data["enableDragSort"] = indexVueData.EnableDragSort
 
 	indexVueContent := assembleStub("html/index", data, false)
-	return writeFile(filepath.Join(util.RootPath(), webViewsDir.Views, "index.vue"), indexVueContent)
+	return writeFileTo(sink, filepath.Join(util.RootPath(), webViewsDir.Views, "index.vue"), indexVueContent)
 }
 
 func buildSimpleArray(data []string) string {
@@ -1039,12 +987,12 @@ func buildTableColumn(tableColumnList []string) string {
 	return strings.TrimRight(columnJson, "\n")
 }
 
-func writeFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
+func writeFormFile(sink OutputSink, formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
 	formVueContent, err := renderFormFile(formVueData, fields, webTranslate)
 	if err != nil {
 		return err
 	}
-	return writeFile(filepath.Join(util.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
+	return writeFileTo(sink, filepath.Join(util.RootPath(), webViewsDir.Views, "popupForm.vue"), formVueContent)
 }
 
 func renderFormFile(formVueData FormVueData, fields []crudmodel.Field, webTranslate string) (string, error) {
@@ -1078,7 +1026,15 @@ func renderFormFile(formVueData FormVueData, fields []crudmodel.Field, webTransl
 
 func buildFormValidatorRules(formValidatorRules map[string][]string) string {
 	rulesHtml := ""
-	for key, formItemRule := range formValidatorRules {
+	// map 迭代顺序随机：不排序会让每次生成的 popupForm.vue 规则顺序不同，
+	// 破坏"重新生成逐字节一致"，也会让 check-customized 误报。
+	keys := make([]string, 0, len(formValidatorRules))
+	for key := range formValidatorRules {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		formItemRule := formValidatorRules[key]
 		rulesArrHtml := ""
 		for _, v := range formItemRule {
 			rulesArrHtml += v + ", "
