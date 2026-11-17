@@ -31,11 +31,12 @@ type GenerateOptions struct {
 	Fields                []crudmodel.Field
 	Type                  string
 	SkipMenu              bool
-	SkipFrontend          bool   // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
-	SkipRepo              bool   // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
-	SkipCompileCheck      bool   // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
-	AllowRebuild          bool   // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
-	SpecOutputDir         string // 非空时把表设计写回该目录的 <table>.yaml（设计器入口用），随生成事务一起回滚
+	SkipFrontend          bool       // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
+	SkipRepo              bool       // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
+	SkipCompileCheck      bool       // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
+	AllowRebuild          bool       // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
+	SpecOutputDir         string     // 非空时把表设计写回该目录的 <table>.yaml（设计器入口用），随生成事务一起回滚
+	PreviewSink           OutputSink // 非空时只渲染到 sink：不写盘、不执行 DDL、不写台账、不同步菜单
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -105,6 +106,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	}
 	if early != nil {
 		return early, nil
+	}
+	if opts.PreviewSink != nil {
+		return state.renderPreview(opts.PreviewSink)
 	}
 	state.prepareSpecOutput()
 	if err := state.openSnapshot(); err != nil {
@@ -430,6 +434,23 @@ func (s *generateState) failErr(stage string, cause error) error {
 	return err
 }
 
+// renderPreview 只跑"渲染"这一段：校验与只读的库查询已在 prepare 里完成，
+// 产物写进 sink，不建表、不写台账、不同步菜单、不跑 wire/go build。
+// 主实体 repo 的级联锚点属于另一个模块的文件，预览阶段不改写。
+func (s *generateState) renderPreview(sink OutputSink) (*GenerateResult, error) {
+	if err := WithOutputSink(sink, func() error {
+		_, _, err := s.writeFiles()
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	files := make([]string, 0)
+	if memory, ok := sink.(*MemorySink); ok {
+		files = memory.Paths()
+	}
+	return &GenerateResult{Files: files}, nil
+}
+
 // designTables 物化表结构与索引，返回索引漂移告警。
 func (s *generateState) designTables() ([]string, error) {
 	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
@@ -500,20 +521,20 @@ func (s *generateState) writeFiles() (WebDir, string, error) {
 	if err != nil {
 		return webViewsDir, tableComment, s.failErr("file generation", err)
 	}
-	if s.oldParentRepoPath != "" {
+	if s.opts.PreviewSink == nil && s.oldParentRepoPath != "" {
 		// 先清理旧主实体锚点条目（幂等宽容），再注册新指向；均在 wire/build 前。
 		if err := removeCascadeAnchor(s.oldParentRepoPath, s.opts.Table.Name); err != nil {
 			return webViewsDir, tableComment, s.failErr("cascade anchor remove", err)
 		}
 	}
-	if s.parentRepoPath != "" {
+	if s.opts.PreviewSink == nil && s.parentRepoPath != "" {
 		// 方案 A：子表生成成功后自动注册到主实体 repo 的 CascadeOwners() 锚点块
 		//（在 wire/build 之前，保证编译包含改写后的主实体 repo）。
 		if err := applyCascadeAnchor(s.parentRepoPath, s.opts.Table.Name, s.opts.Table.DataScope.InheritFrom.ByColumn); err != nil {
 			return webViewsDir, tableComment, s.failErr("cascade anchor apply", err)
 		}
 	}
-	if s.opts.Table.DataScope != nil && s.opts.Table.DataScope.Reassignable && !s.opts.SkipRepo {
+	if s.opts.PreviewSink == nil && s.opts.Table.DataScope != nil && s.opts.Table.DataScope.Reassignable && !s.opts.SkipRepo {
 		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
 		// 立即按 crud_specs/ 中仍声明 inheritFrom 指向本表的子表重注册（整行
 		// 幂等），消除重置窗口内的静默级联失效；其 repo 已在快照内可整体回滚。
