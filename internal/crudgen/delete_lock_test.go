@@ -13,7 +13,9 @@ import (
 
 // spec-only 回退与守卫的提前返回也在生成锁内：漏注册 release 会让常驻进程
 // （CrudService.Delete）永久卡在 another generation is in progress。
-// 非并行：generationMu 是进程级状态。
+// 非并行：generationMu 是进程级状态，并行会与其他生成用例互相抢锁。
+//
+//nolint:paralleltest // 进程级 generationMu 必须在同一时刻独占
 func TestDeleteFromSpecReleasesLockOnEarlyReturn(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared"), &gorm.Config{
 		NamingStrategy: schema.NamingStrategy{TablePrefix: "ba_", SingularTable: true},
