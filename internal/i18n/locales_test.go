@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -200,29 +201,28 @@ func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 	root := filepath.Join("..", "..")
 	fset := token.NewFileSet()
 	var missing, fragments []string
-	require.NoError(t, filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			switch entry.Name() {
-			case ".git", "web", "public", "node_modules", "vendor":
-				return filepath.SkipDir
-			}
-			return nil
+	for _, path := range trackedRepoFiles(t, root) {
+		rel, relErr := filepath.Rel(root, path)
+		require.NoError(t, relErr)
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, "web/") || strings.HasPrefix(rel, "public/") ||
+			strings.HasPrefix(rel, "vendor/") || strings.Contains(rel, "/vendor/") {
+			continue
 		}
 		// 测试文件里的字面量是断言期望值，不是框架抛出的消息。
 		if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
-			return nil
+			continue
+		}
+		if _, statErr := os.Stat(path); statErr != nil {
+			// 工作树里已删除但尚未提交的文件。
+			continue
 		}
 		file, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			return fmt.Errorf("解析 %s: %w", path, err)
-		}
+		require.NoError(t, err, "解析 %s", rel)
 		for _, site := range messageSites(file, fset) {
-			rel, relErr := filepath.Rel(root, site.position.Filename)
+			position, relErr := filepath.Rel(root, site.position.Filename)
 			require.NoError(t, relErr)
-			label := fmt.Sprintf("%s:%d %s", rel, site.position.Line, site.kind)
+			label := fmt.Sprintf("%s:%d %s", filepath.ToSlash(position), site.position.Line, site.kind)
 			if site.fragment {
 				fragments = append(fragments, label)
 				continue
@@ -235,8 +235,7 @@ func TestCodeMessagesHaveLocaleKeys(t *testing.T) {
 			}
 			missing = append(missing, fmt.Sprintf("%s %q", label, site.value))
 		}
-		return nil
-	}))
+	}
 	sort.Strings(fragments)
 	sort.Strings(missing)
 	require.Empty(t, fragments,
@@ -478,44 +477,65 @@ func mapKeys(pack map[string]string) []string {
 func readReferenceSources(t *testing.T) string {
 	t.Helper()
 	root := filepath.Join("..", "..")
-	self := filepath.Join(root, "internal", "i18n", "locales_test.go")
-	skipDirs := map[string]struct{}{
-		filepath.Join(root, ".git"):         {},
-		filepath.Join(root, "web"):          {},
-		filepath.Join(root, "public"):       {},
-		filepath.Join(root, "node_modules"): {},
-	}
-	locales := filepath.Join(root, "internal", "i18n", "locales")
+	self := filepath.ToSlash(filepath.Join("internal", "i18n", "locales_test.go"))
+	locales := filepath.ToSlash(filepath.Join("internal", "i18n", "locales"))
 	var builder strings.Builder
-	require.NoError(t, filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() {
-			if path == locales {
-				return filepath.SkipDir
-			}
-			if _, skip := skipDirs[path]; skip {
-				return filepath.SkipDir
-			}
-			return nil
+	for _, path := range trackedRepoFiles(t, root) {
+		rel, err := filepath.Rel(root, path)
+		require.NoError(t, err)
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, "web/") || strings.HasPrefix(rel, "public/") ||
+			strings.HasPrefix(rel, "vendor/") || strings.Contains(rel, "/vendor/") ||
+			strings.HasPrefix(rel, locales+"/") {
+			continue
 		}
 		// 本测试自身携带白名单字面量，不参与引用匹配，否则白名单会自证。
-		if path == self {
-			return nil
+		if rel == self {
+			continue
 		}
 		switch filepath.Ext(path) {
 		case ".go", ".yaml", ".yml":
 		default:
-			return nil
+			continue
 		}
-		content, err := os.ReadFile(path) //nolint:gosec // G304: path 来自 WalkDir 遍历仓库目录，仅用于测试期引用扫描
-		if err != nil {
-			return err
+		content, readErr := os.ReadFile(path) //nolint:gosec // G304: path 来自 git ls-files，仅用于测试期引用扫描
+		if readErr != nil {
+			continue
 		}
 		builder.Write(content)
 		builder.WriteByte('\n')
-		return nil
-	}), "扫描仓库引用来源")
+	}
 	return builder.String()
+}
+
+// trackedRepoFiles 返回仓库已跟踪文件的绝对路径。测试会在仓库内写真实夹具，
+// 直接遍历工作树会把并行测试的临时产物当成框架代码，让守卫跨包抖动；
+// 非 git 检出（源码包）回退到遍历工作树。
+func trackedRepoFiles(t *testing.T, root string) []string {
+	t.Helper()
+	output, err := exec.Command("git", "-C", root, "ls-files", "-z").Output() //nolint:gosec // G204: git 可执行文件固定，root 是测试内的仓库根
+	if err != nil {
+		var files []string
+		require.NoError(t, filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() && entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			if !entry.IsDir() {
+				files = append(files, path)
+			}
+			return nil
+		}))
+		return files
+	}
+	files := make([]string, 0, 512)
+	for _, name := range strings.Split(string(output), "\x00") {
+		if name == "" {
+			continue
+		}
+		files = append(files, filepath.Join(root, filepath.FromSlash(name)))
+	}
+	return files
 }

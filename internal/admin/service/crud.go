@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"path/filepath"
 
 	"buildadmin-go/internal/admin/dto"
 	"buildadmin-go/internal/admin/repository"
@@ -9,6 +10,7 @@ import (
 	"buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/pkg/data_scope"
 	cErr "buildadmin-go/internal/pkg/error"
+	"buildadmin-go/internal/pkg/util"
 )
 
 // CrudService 编排 CRUD 设计器的生成与删除：root 管理员校验、生成器调用与
@@ -25,6 +27,10 @@ func NewCrudService(tableM *repository.TableRepository, crudLogM *repository.Cru
 
 // Generate 执行 CRUD 代码与表结构生成。register/unregister 由调用方注入
 // 原子路由钩子，service 不依赖 gin 与全局中间件。
+//
+// 设计器提交的表设计在生成前写回 crud_specs/<table>.yaml：spec 是唯一事实源，
+// 否则设计器生成的表对 crud:apply、migrate --plan 与全新环境重建都不可见。
+// 生成失败时回滚该文件，避免留下没有对应产物的孤儿 spec。
 func (s *CrudService) Generate(_ context.Context, actor data_scope.Actor, p dto.CrudGenerateParam, register, unregister func(method, route string)) error {
 	if err := requireCrudRootActor(actor); err != nil {
 		return err
@@ -34,6 +40,8 @@ func (s *CrudService) Generate(_ context.Context, actor data_scope.Actor, p dto.
 		Fields:                p.Fields,
 		Type:                  p.Type,
 		AdminID:               actor.AdminID,
+		AllowRebuild:          true, // 设计器前端 generateCheck 已弹窗确认删表重建
+		SpecOutputDir:         specDir(),
 		RegisterAtomicRoute:   register,
 		UnregisterAtomicRoute: unregister,
 	}); err != nil {
@@ -41,6 +49,14 @@ func (s *CrudService) Generate(_ context.Context, actor data_scope.Actor, p dto.
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
 	return nil
+}
+
+// specDir 返回 spec 目录：优先仓库内 crud_specs/，缺失时按其标准位置新建。
+func specDir() string {
+	if dir := crudgen.DefaultSpecDir(); dir != "" {
+		return dir
+	}
+	return filepath.Join(util.RootPath(), "crud_specs")
 }
 
 // Delete 删除 CRUD 生成产物、菜单记录与 crud_log 行；删除同样只允许 root。

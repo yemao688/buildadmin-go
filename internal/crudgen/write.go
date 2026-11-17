@@ -908,6 +908,10 @@ func formatGoCode(code string) (string, error) {
 }
 
 func writeFile(path string, content string) error {
+	if sink := currentSink(); sink != nil {
+		// 预览/校验：内容进内存，不落盘，也不创建目录。
+		return sink.WriteFile(path, content)
+	}
 	dir := filepath.Dir(path)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		// 创建目录

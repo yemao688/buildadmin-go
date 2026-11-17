@@ -205,10 +205,11 @@ repo（`AdminHierarchy`）只提供单步 Tx 原语（加锁、scope 复核、�
 - **审计**：删除成功后 service 输出一条结构化日志（删除的管理员、每张表的
   转移行数、新归属）。
 
-业务仓库必须为自己带归属语义的 `admin_id` 表登记，否则删除代理后这些行会
-成为孤儿：受限代理的闭包 scope 匹配不到已删除节点，数据从所有代理列表里
-静默消失。新增独立文件（不要改框架的 `admin_owner_tables.go`，避免合并框架
-升级冲突）：
+业务仓库**通常不需要手写登记**：启动时会扫描 `crud_specs/`，把声明了
+`dataScope.reassignable` 或 `dataScope.inheritFrom` 的表自动登记进
+`data_scope.RegisterAdminOwnerTables`（见 `internal/crudgen/owner_tables.go`），
+因此 spec 是唯一事实源。只有**没有 spec 的非 CRUD 表**（手写表、历史表）才需要
+新增独立文件补登记（不要改框架的 `admin_owner_tables.go`，避免合并框架升级冲突）：
 
 ```go
 // internal/admin/repository/admin_owner_tables_business.go
@@ -218,19 +219,16 @@ import "buildadmin-go/internal/pkg/data_scope"
 
 func init() {
 	if err := data_scope.RegisterAdminOwnerTables(
-		"seller_user",
-		"seller_listing",
-		"seller_money_log",
-		"order_recharge",
+		"legacy_agent_order",
 	); err != nil {
 		panic("register business admin owner tables: " + err.Error())
 	}
 }
 ```
 
-`inheritFrom` 子表的冗余 `admin_id` 也属于归属，必须一并登记；否则主实体行
-转移了，子表流水仍指向已删除管理员。迁移前可用 `cascade:sync` 对账父表与
-子表归属。
+`inheritFrom` 子表的冗余 `admin_id` 也属于归属，生成时会随 spec 一并登记；否则
+主实体行转移了，子表流水仍指向已删除管理员。迁移前可用 `cascade:sync` 对账父表
+与子表归属。
 
 ## 7. 迁移与决策记录
 

@@ -31,9 +31,12 @@ type GenerateOptions struct {
 	Fields                []crudmodel.Field
 	Type                  string
 	SkipMenu              bool
-	SkipFrontend          bool // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
-	SkipRepo              bool // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
-	SkipCompileCheck      bool // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
+	SkipFrontend          bool       // 跳过 web 产物（lang/index.vue/form.vue）生成；隐含 SkipMenu
+	SkipRepo              bool       // 跳过 repository/<table>.go 与 repository provider 合并（仅限已存在定制 repo 的模块重新生成）
+	SkipCompileCheck      bool       // 跳过 wire 与 go build 自检；仅用于旧产物阻塞编译的批量升级，完成后必须手动 go generate + go build
+	AllowRebuild          bool       // 显式 type=create 且目标表已存在时允许删表重建；CLI 要求 --allow-rebuild，HTTP 设计器由前端确认后置 true
+	SpecOutputDir         string     // 非空时把表设计写回该目录的 <table>.yaml（设计器入口用），随生成事务一起回滚
+	PreviewSink           OutputSink // 非空时只渲染到 sink：不写盘、不执行 DDL、不写台账、不同步菜单
 	AdminID               int32
 	Menu                  *MenuOptions
 	RegisterAtomicRoute   func(method, path string)
@@ -68,12 +71,23 @@ type generateState struct {
 	parentRepoPath    string
 	oldParentRepoPath string
 	snapshot          *FileSnapshot
+	specPath          string
 	cleanupAllowed    bool
 	logID             int32
 	createdMenuIDs    []int32
 	menuSnapshot      []model.AdminRule
 	registeredRoutes  []atomicRouteRegistration
 	indexWarnings     []string
+	specWarnings      []string
+}
+
+// mergeReleaseError 把生成锁释放失败并入返回值：成功时升级为失败，失败时保留
+// 主错误（锁仍会被释放，调用方拿到的是首个真实原因）。
+func mergeReleaseError(retErr error, release func() error) error {
+	if releaseErr := release(); retErr == nil && releaseErr != nil {
+		return releaseErr
+	}
+	return retErr
 }
 
 // GenerateFromSpec performs the complete generation transaction-like
@@ -87,9 +101,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	var fail func(string, error) (*GenerateResult, error)
 	var cleanupSnapshot func() error
 	defer func() {
-		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
-			retErr = releaseErr
-		}
+		retErr = mergeReleaseError(retErr, releaseLocks)
 	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -103,6 +115,10 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	if early != nil {
 		return early, nil
 	}
+	if opts.PreviewSink != nil {
+		return state.renderPreview(opts.PreviewSink)
+	}
+	state.prepareSpecOutput()
 	if err := state.openSnapshot(); err != nil {
 		return nil, err
 	}
@@ -122,6 +138,9 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 		return nil, err
 	}
 	fail = state.markFailed
+	if err := state.writeSpecOutput(); err != nil {
+		return nil, err
+	}
 	indexWarnings, err := state.designTables()
 	if err != nil {
 		return nil, err
@@ -140,7 +159,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 		return nil, err
 	}
 	state.cleanupAllowed = true
-	return &GenerateResult{Files: append(state.manifest.Generated, state.manifest.Shared...), LogID: state.logID, Warnings: state.indexWarnings}, nil
+	return &GenerateResult{
+		Files:    append(state.manifest.Generated, state.manifest.Shared...),
+		LogID:    state.logID,
+		Warnings: append(append([]string{}, state.indexWarnings...), state.specWarnings...),
+	}, nil
 }
 
 // wrapCleanupError 把快照清理失败并入返回值：原本成功的返回改成清理失败，
@@ -311,7 +334,8 @@ func (s *generateState) prepareManifest(success *model.Log) error {
 	if err := validateGenerationMode(s.opts.Type); err != nil {
 		return err
 	}
-	if !manifestAllows(manifest, success, skippedPaths) {
+	// 预览只渲染到内存，不会覆盖既有产物；manifest 冲突守卫只拦截真实写入。
+	if s.opts.PreviewSink == nil && !manifestAllows(manifest, success, skippedPaths) {
 		if success == nil {
 			return fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", s.opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
 		}
@@ -323,9 +347,67 @@ func (s *generateState) prepareManifest(success *model.Log) error {
 	return nil
 }
 
+// prepareSpecOutput 计算设计器写回 spec 的目标路径；写盘在台账开始后进行，
+// 由文件快照保证失败回滚。
+func (s *generateState) prepareSpecOutput() {
+	if s.opts.SpecOutputDir == "" {
+		return
+	}
+	s.specPath = filepath.Join(s.opts.SpecOutputDir, s.opts.Table.Name+".yaml")
+}
+
+// writeSpecOutput 把设计器提交的表设计写成 crud_specs/<table>.yaml。spec 是
+// 唯一事实源：设计器生成的表必须能被 crud:apply、migrate --plan 与全新环境
+// 重建看到。type 不写入（见 MarshalSpec）。
+func (s *generateState) writeSpecOutput() error {
+	if s.specPath == "" {
+		return nil
+	}
+	content, err := MarshalSpec(s.opts.Table, s.opts.Fields)
+	if err != nil {
+		return s.failErr("spec write", err)
+	}
+	// 设计器只覆盖它建模的键：既有的 menu/indexes/reassignable/inheritFrom 等
+	// 必须保留，否则重新设计会静默改变归属与索引语义。
+	if existing, readErr := os.ReadFile(s.specPath); readErr == nil {
+		merged, mergeErr := MergeSpec(existing, content)
+		if mergeErr != nil {
+			return s.failErr("spec write", mergeErr)
+		}
+		if validateErr := ValidateSpecContent(merged); validateErr == nil {
+			content = merged
+		} else {
+			// 保留的 indexes 可能与新字段集不兼容（改宽需前缀/删列失效）：
+			// 丢弃保留项再试一次，并在生成结果里明确告警。
+			fallback, fallbackErr := mergeSpec(existing, content, false)
+			if fallbackErr != nil {
+				return s.failErr("spec write", fallbackErr)
+			}
+			if fallbackErr = ValidateSpecContent(fallback); fallbackErr != nil {
+				return s.failErr("spec write", fmt.Errorf("%w; preserving existing keys made the spec unloadable: %w", fallbackErr, validateErr))
+			}
+			s.specWarnings = append(s.specWarnings, fmt.Sprintf("preserved indexes dropped from %s: %v", relativeSpecPath(s.specPath), validateErr))
+			content = fallback
+		}
+	} else if !os.IsNotExist(readErr) {
+		return s.failErr("spec write", readErr)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.specPath), 0o750); err != nil {
+		return s.failErr("spec write", err)
+	}
+	if err := os.WriteFile(s.specPath, content, 0o644); err != nil { //nolint:gosec // G306: spec 是仓库内可读文件
+		return s.failErr("spec write", err)
+	}
+	return nil
+}
+
 // openSnapshot 为本次生成涉及的全部文件建立回滚快照。
 func (s *generateState) openSnapshot() error {
 	snapshotPaths := append(append([]string{}, s.manifest.Generated...), s.manifest.Shared...)
+	if s.specPath != "" {
+		// spec 与产物同属一次生成事务：失败时恢复旧内容或删除新文件。
+		snapshotPaths = append(snapshotPaths, s.specPath)
+	}
 	if s.parentRepoPath != "" {
 		// 主实体 repo 由锚点维护改写，纳入快照使失败回滚能恢复它；不进 manifest。
 		snapshotPaths = append(snapshotPaths, s.parentRepoPath)
@@ -363,10 +445,14 @@ func (s *generateState) beginLog() error {
 // markFailed 是生成失败的唯一收尾：回滚文件与菜单、记账、注销已注册路由。
 func (s *generateState) markFailed(stage string, cause error) (*GenerateResult, error) {
 	message := fmt.Sprintf("stage=%s: %v", stage, cause)
-	if restoreErr := s.snapshot.Restore(); restoreErr != nil {
-		message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, s.snapshot.dir)
-	} else {
-		s.cleanupAllowed = true
+	// 预览（--dry-run --diff / crud:check-customized）不建快照也不写台账，
+	// 失败时只回传错误，不能解引用 nil snapshot。
+	if s.snapshot != nil {
+		if restoreErr := s.snapshot.Restore(); restoreErr != nil {
+			message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, s.snapshot.dir)
+		} else {
+			s.cleanupAllowed = true
+		}
 	}
 	// F4：生成会 update 既有菜单行，失败时恢复快照原值；新增行单独删除。
 	// 菜单恢复必须排在 recordCrudError 之前：台账写下后再追加 message，
@@ -376,7 +462,9 @@ func (s *generateState) markFailed(stage string, cause error) (*GenerateResult, 
 			message += fmt.Sprintf("; menu restore failed: %v", restoreErr)
 		}
 	}
-	_ = recordCrudError(s.db, s.cfg, s.logID, message)
+	if s.logID != 0 {
+		_ = recordCrudError(s.db, s.cfg, s.logID, message)
+	}
 	if len(s.createdMenuIDs) > 0 {
 		_ = s.db.Table(s.cfg.Database.Prefix+"admin_rule").Where("id IN ?", s.createdMenuIDs).Delete(&model.AdminRule{}).Error
 	}
@@ -390,20 +478,46 @@ func (s *generateState) failErr(stage string, cause error) error {
 	return err
 }
 
+// renderPreview 只跑"渲染"这一段：校验与只读的库查询已在 prepare 里完成，
+// 产物写进 sink，不建表、不写台账、不同步菜单、不跑 wire/go build。
+// 主实体 repo 的级联锚点属于另一个模块的文件，预览阶段不改写。
+func (s *generateState) renderPreview(sink OutputSink) (*GenerateResult, error) {
+	if err := WithOutputSink(sink, func() error {
+		_, _, err := s.writeFiles()
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	files := make([]string, 0)
+	if memory, ok := sink.(*MemorySink); ok {
+		files = memory.Paths()
+	}
+	return &GenerateResult{Files: files}, nil
+}
+
 // designTables 物化表结构与索引，返回索引漂移告警。
 func (s *generateState) designTables() ([]string, error) {
 	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
 	getColumns := func(name string) ([]dbschema.Column, error) { return s.tables.GetColumns(name) }
-	// 对齐上游:type=create 时若数据表已存在则先删除重建;
-	// 破坏性确认由前端 generateCheck 弹窗完成,服务端不再拒绝
-	if s.opts.Type == "create" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
-		if err := s.tables.DelTable(s.opts.Table.Name); err != nil {
-			return nil, s.failErr("drop table", err)
+	exists := tableExists(s.db, s.cfg, s.opts.Table.Name)
+	switch resolveGenerationType(s.opts.Type, exists) {
+	case "create":
+		// 对齐上游:type=create 表示删表重建。HTTP 设计器由 generateCheck 弹窗
+		// 确认；CLI 必须显式 --allow-rebuild，避免省略 type 或误改 spec 时
+		// 静默抹掉已有数据。
+		if exists {
+			if !s.opts.AllowRebuild {
+				return nil, s.failErr("drop table", fmt.Errorf("table %q already exists and type=create would drop and recreate it; omit type (auto) or set type: alter, or pass --allow-rebuild to confirm the data loss", s.opts.Table.Name))
+			}
+			if err := s.tables.DelTable(s.opts.Table.Name); err != nil {
+				return nil, s.failErr("drop table", err)
+			}
 		}
-	}
-	if s.opts.Type == "alter" && tableExists(s.db, s.cfg, s.opts.Table.Name) {
-		if err := s.guardAlter(getTableName, getColumns); err != nil {
-			return nil, err
+	case "alter":
+		if exists {
+			if err := s.guardAlter(getTableName, getColumns); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if err := HandleTableDesign(s.db, getTableName(s.opts.Table.Name, true), s.opts.Table, s.opts.Fields); err != nil {
@@ -451,20 +565,20 @@ func (s *generateState) writeFiles() (WebDir, string, error) {
 	if err != nil {
 		return webViewsDir, tableComment, s.failErr("file generation", err)
 	}
-	if s.oldParentRepoPath != "" {
+	if s.opts.PreviewSink == nil && s.oldParentRepoPath != "" {
 		// 先清理旧主实体锚点条目（幂等宽容），再注册新指向；均在 wire/build 前。
 		if err := removeCascadeAnchor(s.oldParentRepoPath, s.opts.Table.Name); err != nil {
 			return webViewsDir, tableComment, s.failErr("cascade anchor remove", err)
 		}
 	}
-	if s.parentRepoPath != "" {
+	if s.opts.PreviewSink == nil && s.parentRepoPath != "" {
 		// 方案 A：子表生成成功后自动注册到主实体 repo 的 CascadeOwners() 锚点块
 		//（在 wire/build 之前，保证编译包含改写后的主实体 repo）。
 		if err := applyCascadeAnchor(s.parentRepoPath, s.opts.Table.Name, s.opts.Table.DataScope.InheritFrom.ByColumn); err != nil {
 			return webViewsDir, tableComment, s.failErr("cascade anchor apply", err)
 		}
 	}
-	if s.opts.Table.DataScope != nil && s.opts.Table.DataScope.Reassignable && !s.opts.SkipRepo {
+	if s.opts.PreviewSink == nil && s.opts.Table.DataScope != nil && s.opts.Table.DataScope.Reassignable && !s.opts.SkipRepo {
 		// 方案 A：主实体重新生成会把 CascadeOwners() 渲染为空锚点块（重置窗口）。
 		// 立即按 crud_specs/ 中仍声明 inheritFrom 指向本表的子表重注册（整行
 		// 幂等），消除重置窗口内的静默级联失效；其 repo 已在快照内可整体回滚。
@@ -505,7 +619,7 @@ func (s *generateState) syncMenus(webViewsDir WebDir, tableComment string) error
 
 func (s *generateState) runToolchain() error {
 	if s.opts.SkipCompileCheck {
-		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
+		fmt.Fprintln(os.Stderr, "[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
 	} else {
 		stage, err := s.runToolchainChecks()
 		if err != nil {
@@ -588,10 +702,22 @@ func normalizeGenerationType(generationType, rebuild string) string {
 }
 
 func validateGenerationMode(generationType string) error {
-	if generationType != "create" && generationType != "alter" {
-		return fmt.Errorf("unsupported CRUD generation type %q; use create or alter", generationType)
+	if generationType != "create" && generationType != "alter" && generationType != "auto" && generationType != "" {
+		return fmt.Errorf("unsupported CRUD generation type %q; use create, alter or auto", generationType)
 	}
 	return nil
+}
+
+// resolveGenerationType 在 type 省略（auto）时按目标表是否存在推导：已存在走
+// alter（只补/改列，不删表），否则 create。显式 create/alter 原样返回。
+func resolveGenerationType(requested string, tableExists bool) string {
+	if requested == "" || requested == "auto" {
+		if tableExists {
+			return "alter"
+		}
+		return "create"
+	}
+	return requested
 }
 
 // DeleteOptions 控制 crud:delete 的可选行为。
@@ -643,9 +769,7 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
 	var fail func(string, error) error
 	defer func() {
-		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
-			retErr = releaseErr
-		}
+		retErr = mergeReleaseError(retErr, releaseLocks)
 	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -758,8 +882,25 @@ func (s *deleteState) buildManifest() error {
 	if err != nil {
 		return err
 	}
-	s.manifest = prepared
+	// spec 是模块的事实源：删除模块必须一并删除，否则下次 serve/migrate 的
+	// spec apply 会重建菜单并重新记账，模块在重启后"复活"。
+	// 纳入 generated 隔离区，删除失败时随其它产物一起恢复。
+	s.manifest = appendModuleSpec(prepared, DefaultSpecsDir(), s.log.Table.Name)
 	return nil
+}
+
+// appendModuleSpec 把模块的 spec 并入待删除清单（不存在时原样返回）。调用方
+// 负责把结果纳入隔离区，失败删除时 spec 随其它产物一起恢复。
+func appendModuleSpec(manifest FileManifest, specDir, tableName string) FileManifest {
+	if specDir == "" {
+		return manifest
+	}
+	specPath := filepath.Join(specDir, tableName+".yaml")
+	info, statErr := os.Stat(specPath)
+	if statErr == nil && info.Mode().IsRegular() {
+		manifest.Generated = append(manifest.Generated, specPath)
+	}
+	return manifest
 }
 
 // openRecovery 建立隔离区（generated 产物）与共享文件快照（provider 等）。
@@ -855,7 +996,7 @@ func (s *deleteState) removeProviders() error {
 
 func (s *deleteState) runToolchain() error {
 	if s.skipCompileCheck {
-		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；删除后请执行 go generate ./cmd/server && go build ./...")
+		fmt.Fprintln(os.Stderr, "[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；删除后请执行 go generate ./cmd/server && go build ./...")
 		return nil
 	}
 	if err := runWire(); err != nil {
@@ -1583,4 +1724,13 @@ func buildAndRestoreOnFailure(snapshot *FileSnapshot, builder func() error) erro
 
 func generationPanicError(recovered any) error {
 	return fmt.Errorf("panic: %v", recovered)
+}
+
+// relativeSpecPath 把 spec 绝对路径压成仓库相对路径，用于生成告警展示。
+func relativeSpecPath(path string) string {
+	rel, err := filepath.Rel(util.RootPath(), path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
 }

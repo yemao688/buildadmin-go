@@ -51,6 +51,8 @@ type setupOptions struct {
 	siteName      string
 	env           string
 	skipFrontend  bool
+	withTestDB    bool
+	testDBName    string
 	yes           bool
 	provided      map[string]bool
 }
@@ -63,34 +65,40 @@ type setupInput struct {
 }
 
 type setupDependencies struct {
-	isComplete        func(string) bool
-	newDB             func(installer.Database) (*gorm.DB, error)
-	getDatabases      func(installer.Database) ([]string, error)
-	createDatabase    func(installer.Database) error
-	writeBaseConfig   func(string, installer.Database, string) error
-	writeAppEnv       func(string, string) error
-	writeCompletion   func(string) error
-	generateTokenKey  func() string
-	runMigrations     func(*gorm.DB, *conf.Configuration) (migrations.Report, error)
-	runCrudApply      func(*gorm.DB, *conf.Configuration) ([]helper.ApplyTableResult, error)
-	buildFrontend     func(string, io.Writer, *conf.Configuration) error
-	updateAdminConfig func(*gorm.DB, string, string, string) error
+	isComplete         func(string) bool
+	newDB              func(installer.Database) (*gorm.DB, error)
+	getDatabases       func(installer.Database) ([]string, error)
+	createDatabase     func(installer.Database) error
+	writeBaseConfig    func(string, installer.Database, string) error
+	writeAppEnv        func(string, string) error
+	writeCompletion    func(string) error
+	generateTokenKey   func() string
+	runMigrations      func(*gorm.DB, *conf.Configuration) (migrations.Report, error)
+	runCrudApply       func(*gorm.DB, *conf.Configuration) ([]helper.ApplyTableResult, error)
+	buildFrontend      func(string, io.Writer, *conf.Configuration) error
+	updateAdminConfig  func(*gorm.DB, string, string, string) error
+	createTestDatabase func(installer.Database, string) error
+	grantTestDatabase  func(installer.Database, string) error
+	mergeTestConfig    func(string, map[string]any) error
 }
 
 func defaultSetupDependencies() setupDependencies {
 	return setupDependencies{
-		isComplete:        installer.IsComplete,
-		newDB:             installer.NewDB,
-		getDatabases:      installer.GetDatabases,
-		createDatabase:    installer.CreateDatabase,
-		writeBaseConfig:   installer.WriteBaseConfig,
-		writeAppEnv:       writeSetupAppEnv,
-		writeCompletion:   installer.WriteCompletionLock,
-		generateTokenKey:  installer.GenerateTokenKey,
-		runMigrations:     migrations.Run,
-		runCrudApply:      setupCrudApply,
-		buildFrontend:     buildSetupFrontend,
-		updateAdminConfig: updateSetupAdmin,
+		isComplete:         installer.IsComplete,
+		newDB:              installer.NewDB,
+		getDatabases:       installer.GetDatabases,
+		createDatabase:     installer.CreateDatabase,
+		writeBaseConfig:    installer.WriteBaseConfig,
+		writeAppEnv:        writeSetupAppEnv,
+		writeCompletion:    installer.WriteCompletionLock,
+		generateTokenKey:   installer.GenerateTokenKey,
+		runMigrations:      migrations.Run,
+		runCrudApply:       setupCrudApply,
+		buildFrontend:      buildSetupFrontend,
+		updateAdminConfig:  updateSetupAdmin,
+		createTestDatabase: installer.CreateTestDatabase,
+		grantTestDatabase:  installer.GrantDatabaseWildcard,
+		mergeTestConfig:    mergeMySQLTestConfig,
 	}
 }
 
@@ -155,13 +163,15 @@ func newSetupCommand() *cobra.Command {
 	command.Flags().StringVar(&opts.siteName, "site-name", "", "site name")
 	command.Flags().StringVar(&opts.env, "env", "debug", "gin runtime mode: debug or release")
 	command.Flags().BoolVar(&opts.skipFrontend, "skip-frontend", false, "skip frontend build; public/index.html must exist")
+	command.Flags().BoolVar(&opts.withTestDB, "with-test-db", false, "also create the MySQL integration-test database and write the mysql_test section")
+	command.Flags().StringVar(&opts.testDBName, "test-db-name", "", "integration-test database name (default <db-name>_test)")
 	command.Flags().BoolVar(&opts.yes, "yes", false, "non-interactive mode; accept defaults and create the database")
 	return command
 }
 
 var setupFlagNames = []string{
 	"db-host", "db-port", "db-name", "db-user", "db-password", "db-prefix",
-	"admin-name", "admin-password", "site-name", "skip-frontend", "yes",
+	"admin-name", "admin-password", "site-name", "skip-frontend", "with-test-db", "test-db-name", "yes",
 }
 
 func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
@@ -197,6 +207,7 @@ func (r setupRunner) run(command *cobra.Command, options setupOptions) error {
 	if err := r.writeSetupConfig(configExists, input, options.env); err != nil {
 		return err
 	}
+	r.prepareSetupTestDatabase(options, input, console)
 
 	configuration, err := loadSetupConfiguration(r.rootPath, r.configPath)
 	if err != nil {
@@ -299,6 +310,12 @@ func (r setupRunner) completeSetup(db *gorm.DB, options setupOptions, input setu
 }
 
 func completeSetupDependencies(deps setupDependencies) setupDependencies {
+	deps = completeSetupDatabaseDependencies(deps)
+	return completeSetupRuntimeDependencies(deps)
+}
+
+// completeSetupDatabaseDependencies 回落数据库侧的默认实现（建库、探查、测试库）。
+func completeSetupDatabaseDependencies(deps setupDependencies) setupDependencies {
 	defaults := defaultSetupDependencies()
 	if deps.isComplete == nil {
 		deps.isComplete = defaults.isComplete
@@ -315,6 +332,21 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 	if deps.writeBaseConfig == nil {
 		deps.writeBaseConfig = defaults.writeBaseConfig
 	}
+	if deps.createTestDatabase == nil {
+		deps.createTestDatabase = defaults.createTestDatabase
+	}
+	if deps.grantTestDatabase == nil {
+		deps.grantTestDatabase = defaults.grantTestDatabase
+	}
+	if deps.mergeTestConfig == nil {
+		deps.mergeTestConfig = defaults.mergeTestConfig
+	}
+	return deps
+}
+
+// completeSetupRuntimeDependencies 回落安装后运行时动作的默认实现。
+func completeSetupRuntimeDependencies(deps setupDependencies) setupDependencies {
+	defaults := defaultSetupDependencies()
 	if deps.writeAppEnv == nil {
 		deps.writeAppEnv = defaults.writeAppEnv
 	}

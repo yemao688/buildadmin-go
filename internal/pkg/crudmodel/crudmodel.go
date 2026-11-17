@@ -86,9 +86,9 @@ type ChangeField struct {
 // IndexSpec 声明业务表上的一条数据库索引（目前支持唯一索引；普通索引
 // unique=false 同样可声明）。apply 物化表结构时同步建/比对这些索引。
 type IndexSpec struct {
-	Name    string   `json:"name"`    //索引名（必填，数据库内唯一）
-	Unique  bool     `json:"unique"`  //是否唯一索引
-	Columns []string `json:"columns"` //索引列（至少一列，引用 spec 中真实字段）
+	Name    string   `json:"name" mapstructure:"name"`       //索引名（必填，数据库内唯一）
+	Unique  bool     `json:"unique" mapstructure:"unique"`   //是否唯一索引
+	Columns []string `json:"columns" mapstructure:"columns"` //索引列（至少一列，引用 spec 中真实字段）
 }
 
 type Table struct {

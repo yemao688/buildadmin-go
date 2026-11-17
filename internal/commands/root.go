@@ -4,6 +4,7 @@ import (
 	"buildadmin-go/internal/conf"
 	"buildadmin-go/internal/pkg/util"
 	appVersion "buildadmin-go/internal/pkg/version"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -67,7 +68,16 @@ func printVersion() {
 }
 
 func executeRoot(rootCmd *cobra.Command) error {
+	jsonEmitted.Store(false)
 	if err := rootCmd.Execute(); err != nil {
+		if jsonMode() {
+			// --json 只允许一条 stdout JSON：命令已输出过信封就不再补错误。
+			if !jsonEmitted.Load() {
+				payload, _ := json.Marshal(jsonEnvelope{OK: false, Error: err.Error()})
+				_, _ = fmt.Fprintln(os.Stdout, string(payload))
+			}
+			return err
+		}
 		_, _ = fmt.Fprintln(os.Stderr, "error:", err)
 		return err
 	}
@@ -87,6 +97,13 @@ func newCrudOnlyRootCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 		newCrudDeleteCommand(cmdBootstrap),
 		newCrudApplyCommand(cmdBootstrap),
 		newCrudValidateCommand(),
+		newCrudNewCommand(),
+		newCrudSchemaCommand(),
+		newCrudExportSpecCommand(cmdBootstrap),
+		newCrudListCommand(),
+		newCrudDiffCommand(cmdBootstrap),
+		newCrudPreviewCommand(),
+		newCrudCheckCustomizedCommand(cmdBootstrap),
 	)
 	return rootCmd
 }
@@ -100,7 +117,13 @@ func crudOnlyBootstrap(config *conf.Configuration, _ *lumberjack.Logger, logger 
 // initRootFlags 把全局 -c/--conf 注册到 pflag.CommandLine：cobra 会把全局旗标
 // 合并进根命令的 persistent flags 参与解析，setup 等流程也通过 pflag.Lookup 读取。
 func initRootFlags() {
-	pflag.StringVarP(&configPath, "conf", "c", filepath.Join(rootPath, "configs", "config.yaml"), "config path, eg: --conf configs/config.yaml")
+	// 幂等：测试里可能先注册过同名旗标（如直接调 RunE 的用例），重复注册会 panic。
+	if pflag.Lookup("conf") == nil {
+		pflag.StringVarP(&configPath, "conf", "c", filepath.Join(rootPath, "configs", "config.yaml"), "config path, eg: --conf configs/config.yaml")
+	}
+	if pflag.Lookup("json") == nil {
+		pflag.Bool("json", false, "machine-readable JSON output (crud:validate/generate/preview/apply --plan/list/diff/check-customized/export-spec, migrate status/--plan, cascade:sync, diagnose)")
+	}
 }
 
 // registerOnInitialize 注册配置/日志/校验器初始化钩子。放在 Execute 内而不是

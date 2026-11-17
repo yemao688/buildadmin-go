@@ -18,6 +18,18 @@ type ValidationWarning struct {
 	Message  string
 }
 
+// deprecatedSpecKeys 是 PHP 兼容键：仍被接受但不再影响产物。crud:validate 逐条
+// 提示，让业务逐步删掉它们。
+var deprecatedSpecKeys = []string{"rebuild", "modelFile", "controllerFile", "isCommonModel", "databaseConnection"}
+
+var deprecatedSpecKeyReasons = map[string]string{
+	"rebuild":            "PHP compatibility key; only meaningful together with type: log/db/sql. Omit type instead and let the generator pick create/alter from the target table",
+	"modelFile":          "legacy PHP key; generated files are always named after the table and placed in the shared packages",
+	"controllerFile":     "legacy PHP key; generated files are always named after the table and placed in the shared packages",
+	"isCommonModel":      "deprecated; every entity uses the shared internal/model package",
+	"databaseConnection": "only \"mysql\" is supported today; omit the key",
+}
+
 // ValidateSpec validates one CRUD spec without opening a database or running
 // any generation code. It returns warnings separately so callers can keep a
 // successful exit status when a spec is valid but needs attention.
@@ -42,6 +54,29 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 		fieldWarnings, fieldErrors := validateSpecFieldEntry(path, field, metadata.Fields[index])
 		warnings = append(warnings, fieldWarnings...)
 		errorsFound = append(errorsFound, fieldErrors...)
+	}
+
+	for _, key := range metadata.DeprecatedKeys {
+		warnings = append(warnings, ValidationWarning{
+			SpecPath: path,
+			Message:  fmt.Sprintf("%s is deprecated: %s", key, deprecatedSpecKeyReasons[key]),
+		})
+	}
+	switch typeName := strings.ToLower(strings.TrimSpace(opts.Type)); typeName {
+	case "", "auto", "create", "alter":
+	case "log", "db", "sql":
+		warnings = append(warnings, ValidationWarning{
+			SpecPath: path,
+			Message:  fmt.Sprintf("type: %q is legacy (mapped to create/alter by rebuild); prefer omitting type (auto) or declaring alter/create explicitly", opts.Type),
+		})
+	default:
+		errorsFound = append(errorsFound, fmt.Errorf("unsupported type %q; use auto (default), create or alter", opts.Type))
+	}
+	if typeNode := mappingNodeValue(metadata.Root, "type"); typeNode != nil && strings.EqualFold(typeNode.Value, "create") {
+		warnings = append(warnings, ValidationWarning{
+			SpecPath: path,
+			Message:  "type: create drops and recreates an existing table; omit type so the generator derives alter/create from the target database",
+		})
 	}
 
 	if metadata.RelativePathSet && hasNonSnakeEntitySegment(opts.Table.GenerateRelativePath) {
@@ -151,6 +186,8 @@ func hasNonSnakeEntitySegment(relativePath string) bool {
 
 type specValidationMetadata struct {
 	RelativePathSet bool
+	DeprecatedKeys  []string
+	Root            *yaml.Node
 	Fields          []fieldValidationMetadata
 }
 
@@ -173,9 +210,17 @@ func loadSpecValidationMetadata(path string) (specValidationMetadata, error) {
 	if root == nil || root.Kind != yaml.MappingNode {
 		return specValidationMetadata{}, fmt.Errorf("spec %q must be a YAML mapping", path)
 	}
-	metadata := specValidationMetadata{}
+	if err := expandFieldsShorthand(&document); err != nil {
+		return specValidationMetadata{}, fmt.Errorf("spec %q: %w", path, err)
+	}
+	metadata := specValidationMetadata{Root: root}
 	if mappingNodeValue(root, "generateRelativePath") != nil {
 		metadata.RelativePathSet = true
+	}
+	for _, key := range deprecatedSpecKeys {
+		if mappingNodeValue(root, key) != nil {
+			metadata.DeprecatedKeys = append(metadata.DeprecatedKeys, key)
+		}
 	}
 	fieldsNode := mappingNodeValue(root, "fields")
 	if fieldsNode != nil && fieldsNode.Kind == yaml.AliasNode {

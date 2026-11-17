@@ -2,7 +2,9 @@ package commands
 
 import (
 	"buildadmin-go/internal/conf"
+	helper "buildadmin-go/internal/crudgen"
 	"buildadmin-go/internal/pkg/util"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -41,9 +43,12 @@ func initConfig() {
 	}
 	// 注意：不要把 defaultsPath 回写进全局 configPath——它与 --conf flag 绑定同一存储，
 	// 覆写会让 setup 等后续读取 --conf 的流程拿到 defaults 路径而非用户指定路径。
-	fmt.Println("load config:" + defaultsPath)
-	if overridePath != "" {
-		fmt.Println("merge config:" + overridePath)
+	if !jsonMode() {
+		// --json 下 stdout 只放机器可读结果，配置引导行全部静默。
+		fmt.Println("load config:" + defaultsPath)
+		if overridePath != "" {
+			fmt.Println("merge config:" + overridePath)
+		}
 	}
 
 	v, deadKeys, err := conf.LoadLayeredConfig(defaultsPath, overridePath)
@@ -61,7 +66,8 @@ func initConfig() {
 		panic(err)
 	}
 	if createdEnv {
-		fmt.Printf(".env 不存在，已从 %s 自动复制到 %s\n", conf.EnvExampleFileName, conf.EnvFileName)
+		// 引导信息走 stderr：stdout 只承载命令结果（--json 下必须只有一个信封）。
+		fmt.Fprintf(os.Stderr, ".env 不存在，已从 %s 自动复制到 %s\n", conf.EnvExampleFileName, conf.EnvFileName)
 	}
 	if err := conf.LoadEnvFile(envPath); err != nil {
 		panic(err)
@@ -70,6 +76,8 @@ func initConfig() {
 	if err := applyLoadedConfig(v); err != nil {
 		panic(err)
 	}
+
+	registerSpecOwnerTables()
 
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
@@ -86,6 +94,18 @@ func initConfig() {
 	})
 }
 
+// registerSpecOwnerTables 把 spec 声明的归属表登记进删除管理员的转移清单。
+// 事实源是 crud_specs/，手写登记只保留给没有 spec 的非 CRUD 表。
+func registerSpecOwnerTables() {
+	dir := helper.DefaultSpecDir()
+	if dir == "" {
+		return
+	}
+	if _, err := helper.RegisterSpecOwnerTables(dir); err != nil && !jsonMode() {
+		fmt.Fprintf(os.Stderr, "warning: register spec owner tables: %v\n", err)
+	}
+}
+
 // announceMissingRuntimeConfig 在缺少运行配置时按命令行子命令分流：setup
 // 打印引导后继续（以只读基座安装），crud:validate / release 不需要运行
 // 配置而静默继续，其余命令打印安装指引并退出。
@@ -93,12 +113,15 @@ func announceMissingRuntimeConfig(configPath string) {
 	setupRequested := false
 	validateRequested := false
 	releaseRequested := false
+	newSpecRequested := false
 	for _, arg := range os.Args[1:] {
 		switch arg {
 		case "setup":
 			setupRequested = true
 		case "crud:validate":
 			validateRequested = true
+		case "crud:new", "crud:schema", "crud:list", "crud:preview":
+			newSpecRequested = true
 		case "release":
 			releaseRequested = true
 		}
@@ -109,9 +132,17 @@ func announceMissingRuntimeConfig(configPath string) {
 		fmt.Println("configs/config.yaml 不存在，setup 将以只读基座引导 CLI 安装")
 	case validateRequested:
 		// crud:validate 不依赖运行配置。
+	case newSpecRequested:
+		// crud:new 只写 spec 骨架，不连数据库，也不依赖运行配置。
 	case releaseRequested:
 		// release 只读写版本文件并调用 git/gofmt/go build，不依赖运行配置。
 	default:
+		if jsonMode() {
+			// --json 下不打印人类引导，直接给出机器可读错误并非零退出。
+			payload, _ := json.Marshal(jsonEnvelope{OK: false, Error: "configs/config.yaml is missing; run: go run ./cmd/server setup"})
+			fmt.Println(string(payload))
+			os.Exit(1)
+		}
 		printInstallGuidance(configPath)
 		// 停留数秒让日志可见（容器 restart 循环下每次启动都会打印指引），
 		// 然后退出；安装完成后配置存在，正常启动不再走此分支。

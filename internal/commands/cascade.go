@@ -219,14 +219,17 @@ func (h *CascadeHandler) Sync(cmd *cobra.Command, args []string) error {
 		jobs = filtered
 	}
 
-	for _, job := range jobs {
-		for _, child := range job.Children {
-			cmd.Printf("%s%s → %s%s via %s\n", h.config.Database.Prefix, job.ParentTable, h.config.Database.Prefix, child.ChildTable, child.ByColumn)
+	if !jsonMode() {
+		for _, job := range jobs {
+			for _, child := range job.Children {
+				cmd.Printf("%s%s → %s%s via %s\n", h.config.Database.Prefix, job.ParentTable, h.config.Database.Prefix, child.ChildTable, child.ByColumn)
+			}
 		}
 	}
 
 	var total int64
 	var tables int
+	entries := make([]cascadeSyncEntry, 0)
 	for _, job := range jobs {
 		for _, child := range job.Children {
 			affected, err := runCascadeJob(h.db, h.config, job.ParentTable, child)
@@ -236,9 +239,25 @@ func (h *CascadeHandler) Sync(cmd *cobra.Command, args []string) error {
 			}
 			total += affected
 			tables++
-			cmd.Printf("%s%s: %d rows reconciled\n", h.config.Database.Prefix, child.ChildTable, affected)
+			entries = append(entries, cascadeSyncEntry{
+				Parent: job.ParentTable, Child: child.ChildTable, ByColumn: child.ByColumn, Rows: affected,
+			})
+			if !jsonMode() {
+				cmd.Printf("%s%s: %d rows reconciled\n", h.config.Database.Prefix, child.ChildTable, affected)
+			}
 		}
+	}
+	if jsonMode() {
+		return printJSON(cmd, map[string]any{"rows": total, "tables": entries})
 	}
 	cmd.Printf("reconciled %d rows across %d tables\n", total, tables)
 	return nil
+}
+
+// cascadeSyncEntry 是一条级联对账结果：父表通过 ByColumn 同步到子表的行数。
+type cascadeSyncEntry struct {
+	Parent   string `json:"parent"`
+	Child    string `json:"child"`
+	ByColumn string `json:"byColumn"`
+	Rows     int64  `json:"rows"`
 }

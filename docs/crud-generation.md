@@ -2,6 +2,8 @@
 
 本文是 Go CRUD 生成器的 YAML 契约，面向编写 `crud_specs/*.yaml` 的开发者与 AI agent。它对齐 BuildAdmin v2.3.8 的数据库约定，但不是 PHP 运行时完全 parity 声明：生成结果使用本仓库的 Gin/GORM/Wire 实现。
 
+> 只想"现在该敲什么"：看 [`crud-cheatsheet.md`](crud-cheatsheet.md)。本文是契约，速查是动线。
+
 ## 1. 概述与流程
 
 写 spec 前先与用户对齐需求：给出 2-3 个确定的字段集方案供选择，问清归属与数据权限、审批流、软删除、列表/表单字段取舍、预期关系（`remoteSelect` 目标）。**用户拍板后再落 YAML，不要凭空补全字段。**
@@ -14,9 +16,45 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
-生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema` / `crud:list` / `crud:preview` / `crud:diff` / `crud:check-customized` / `crud:export-spec`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
 
-生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
+### 干跑预览（`--dry-run` / `--diff`）
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --dry-run
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --dry-run --diff
+```
+
+只读输出：表结构差量（与 `crud:apply --plan` 同一套 `safe-auto` / `requires-approval` / `rejected` 分类）、将被新建与覆盖的文件、以及"菜单会按表注释同步"的提示。**不写库、不写文件、不同步菜单**。
+
+加 `--diff` 会走生成器的同一条渲染链，把产物渲染进内存再与工作树逐文件比较，输出 unified diff（新增文件只提示路径）。这回答的是"重新生成会覆盖我改过的哪些行"，比事后 `git diff` 更早、更准。
+
+### 定制点校验（`crud:check-customized`）
+
+```bash
+crud:check-customized <table> [--diff] [--json]
+```
+
+渲染 spec → 与工作树比对 → 列出被手工改过（或缺失）的生成产物，发现差异以非零退出。`--diff` 打印每处差异的 unified diff。它替代双提交工作流里的"人肉 `git diff` 回补"：重新生成前先跑一次，就知道哪些改动会被覆盖、要逐项回补。
+
+### 设计器与 spec 的关系
+
+后台 CRUD 设计器（`/admin/crud`）在生成时**会把表设计写回 `crud_specs/<table>.yaml`**，与 CLI 共用同一份事实源：写盘发生在生成事务内，失败会连同代码产物一起回滚。写出的 spec 不包含 `type`（省略即 `auto`，按目标库现状推导），避免设计器的「创建」语义在后续 CLI 重新生成时删表。
+
+设计器只覆盖它在 UI 里表达的键：既有 spec 的 `menu`、`indexes`、`registerOnly` 与 `dataScope` 的 `reassignable` / `inheritFrom` / `readExtraOwners` 会原样保留（否则重新设计一个级联/归属模块会静默丢掉索引与归属声明），`type` 始终丢弃。
+
+因此：
+
+- 设计器生成的表同样能被 `crud:apply`、`migrate --plan`、`cascade:sync` 与全新环境重建看到。
+- **不要同时用两种方式改同一张表**：手改 spec 后用 CLI 生成；用设计器改则视为以设计器为准，并检查 `git diff crud_specs/`。
+- 设计器生成需要写源码与 `crud_specs/`，只适用于开发检出；生产镜像根文件系统只读（`compose read_only: true`），本来也无法生成。
+- 本次改动之前用设计器生成的存量模块没有 spec，用 `crud:export-spec <table>` 从 `crud_log` 导出一次补齐：
+
+```bash
+go run ./cmd/server --conf configs/config.yaml crud:export-spec ops_banner
+```
+
+生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物、菜单与该模块的 `crud_specs/<table>.yaml`（不删表；spec 随删除事务隔离，失败可恢复——否则下次 serve/migrate 的 spec apply 会把菜单和台账重新建回来）。需要跳过菜单时加 `--skip-menu`。
 
 **下游升级提示（handler 泛型化之后）：** 重新 `crud:generate` 会整体覆盖生成 handler。旧 handler 内直接调用的 `requesttx.InvalidateAfterMutation(ctx, ...)` 属于模块定制，必须移到构造器的 `TableOptions.AfterMutation` 闭包（闭包内仍调用同一个 `requesttx.InvalidateAfterMutation`），否则重新生成后被覆盖丢失。`internal/admin/router/provider.go` 中历史生成的 `NewXxxRegistrar` 条目可以从 `ProviderSet` 删除——生成器不再追加，保留也无害（这些构造器仍在 `ProvideRegistrars` 内使用）。
 
@@ -31,7 +69,7 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 
 - **`--skip-frontend`**：跳过 `web/src/views/<module>/`（index.vue、popupForm.vue）与语言文件（en/zh-cn）的生成，并隐含 `--skip-menu`（views 未生成时菜单组件路径悬空）。用于前端已深度定制、重新生成后端改动时不想覆盖/回补 views 的场景。
 - **`--skip-repo`**：跳过 `internal/admin/repository/<table>.go` 与所在包 provider 合并。**前置检查：仓库文件必须已存在**（首次生成使用会直接报错——handler 引用 `NewXxxRepository` 编译必挂）。用于仓库已手写定制、只想刷新 entity/DTO/handler/registrar 的场景。
-- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成。
+- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成；`crud:delete` 会连同 `crud_specs/<table>.yaml` 一起删除，需保留时先 `git checkout crud_specs/<table>.yaml`。
 - **清单路径可移植**：`crud_log` 的 manifest 统一存相对仓库根路径，读取时按当前 `util.RootPath()` 还原；旧记录里的其它 checkout 绝对路径也会按已知产物根重挂到当前仓库。因此同一数据库可以在 git worktree / 另一份 clone 中继续生成或删除，不需要改库。
 
 ### 旧产物阻塞编译时的批量重生成
@@ -48,11 +86,31 @@ go build ./...
 
 `--skip-compile-check` 不写 `wire_gen.go`、不做 `go build` 自检，因此**不能替代最终门禁**；全部模块完成后必须执行一次 `go generate ./cmd/server` 与 `go build ./...`。`crud:delete` 同样支持该开关。
 
-已有业务表通常用 `type: alter`。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。`type: create` 对已有表是删除重建，不能当作无损更新。
+`crud:generate --allow-rebuild` 仅在 spec 显式写 `type: create` 且目标表已存在时需要：它确认删除重建（数据丢失）。省略 `type`（`auto`）不会删表。
+
+### 已弃用的 PHP 兼容键
+
+`rebuild`、`modelFile`、`controllerFile`、`isCommonModel`、`databaseConnection` 仍被接受，但不再影响产物；`crud:validate` 会逐条提示。`isCommonModel` 非零值直接报错，`databaseConnection` 只支持 `mysql`。
+
+已有业务表通常用 `type: alter`，或直接省略 `type`（`auto` 按目标库现状推导）。`log` / `db` / `sql` 是 legacy 值（按 `rebuild` 映射为 create/alter），`crud:validate` 会告警，新 spec 不要使用。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。显式 `type: create` 对已有表是删除重建，CLI 必须追加 `--allow-rebuild`，不能当作无损更新。
 
 **字体惯例**：本文中使用 `pk` 等作为 designType 值时，不包含引号；`defaultType: <值>` 使用尖括号占位符表示实际值。
 
 ## 2. 快速开始
+
+从骨架开始（不连数据库）：
+
+```bash
+go run ./cmd/crudgen crud:new ops_banner --comment 运营轮播
+# → crud_specs/ops_banner.yaml：主键、status、weigh、create_time、update_time 已就位
+```
+
+随后补业务字段、校验、生成：
+
+```bash
+go run ./cmd/crudgen crud:validate crud_specs/ops_banner.yaml
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/ops_banner.yaml
+```
 
 一个可直接生成的最小业务表（演示组件推断、字典注释、自动时间字段；未写的键全部走默认值）：
 
@@ -105,8 +163,8 @@ fields:
 | --- | --- | --- |
 | `name` | `string`，必填 | 业务表名，安全下划线标识符，自动命名来源。 |
 | `comment` | `string`，默认空 | 表注释。以`表`结尾时管理名称转为`管理`，如`会员组表`→`会员组管理`。 |
-| `type` | `string`，默认 `create` | `create` 或 `alter`。`alter` 只派生变更，不删未在 spec 的列。 |
-| `generateRelativePath` | `string`，必填 | 标准值=表名本身。Go 产物不再由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。省略时兜底默认等于表名，但 spec 不应依赖省略。 |
+| `type` | `string`，默认 `auto` | `auto` / `create` / `alter`。`auto` 按目标库现状推导：表已存在走 `alter`（只补/改列，不删未在 spec 的列），否则 `create`。显式 `create` 对已有表是删除重建，CLI 需 `--allow-rebuild` 确认数据丢失。 |
+| `generateRelativePath` | `string`，默认=表名 | 省略时等于表名。Go 产物不由它定位；只决定 views 目录、菜单/路由名形态（见"路径与产物"）。需要多级 views 目录（如 `order_center/recharge`）时必须显式声明。 |
 | `rebuild` | `string`，默认空 | PHP 上游兼容值，通常 `No`/`Yes`。 |
 | `databaseConnection` | `string`，默认 `mysql` | 当前 Go 应用只有一条注入连接，其它值失败。 |
 | `quickSearchField` | `[]string`，默认空 | 公共快速搜索字段。主键始终可搜索，无需在此声明。支持本表字段与 `alias.column` 关联字段（点号形态）：alias 由外键字段名派生（`user_id` → `user`、`parent_admin_id` → `parentAdmin`，与关联搜索列 prop、语言键同源），列必须是该 `remoteSelect` 字段已声明的 `relationFields` 之一；仅 `remoteSelect` 支持，`remoteSelects` 不产生 alias，且只允许一层关联。 |
@@ -123,6 +181,45 @@ fields:
 | `webViewsDir` | `string`，默认自动推导 | `web/src/views/backend` 下的视图目录。显式值优先。 |
 
 `formFields` 和 `columnFields` 都必须区分"省略"和显式空列表：省略是自动推导，显式 `[]` 是明确没有。
+
+### `fields` 的两种写法
+
+序列写法（完整形式，PHP 设计器与历史 spec 使用）：
+
+```yaml
+fields:
+  - name: code
+    type: varchar
+    length: 20
+    comment: 货币代码
+```
+
+映射写法（短形式）：字段名即映射键，其余属性写在值里，`name` 不再重复：
+
+```yaml
+fields:
+  id: {type: bigint, unsigned: true, primaryKey: true, autoIncrement: true, designType: pk, comment: ID}
+  code: {type: varchar, length: 20, null: false, comment: 货币代码}
+```
+
+两种写法解析后完全等价；`name` 出现在映射值里会报错（字段名只能来自键）。可省略的键与序列写法一致：`defaultType` 由 `default` 推导、`designType` 按字段名/SQL 类型推断、`formFields`/`columnFields` 自动推导。
+
+### 编辑器与 AI 的 schema 支持
+
+`crud_specs/schema.json` 是随仓库维护的 JSON Schema（由 `crud:schema` 从 spec 结构体生成，测试守住同步）：
+
+```bash
+go run ./cmd/crudgen crud:schema --out crud_specs/schema.json   # 重新生成
+go run ./cmd/crudgen crud:schema --check --out crud_specs/schema.json
+```
+
+本地 `.vscode/settings.json`（该目录被 git 忽略，需自行创建）加一条映射即可获得补全与即时校验：
+
+```json
+{ "yaml.schemas": { "./crud_specs/schema.json": "crud_specs/*.yaml" } }
+```
+
+对 AI 而言，这份 schema 应当替代"通读本文件"成为写 spec 的第一上下文；`crud:validate` 仍是唯一权威校验器。
 
 ### `indexes`
 
@@ -258,17 +355,24 @@ go run ./cmd/server --conf configs/config.yaml cascade:sync seller_user # 只对
 - **手写写入路径继承归属时必须显式 `OwnerInScopeWithActor`**：归属继承 + 数据范围校验由**生成 repo 的 Add 自动完成**，但业务自定义的手写写入路径（如 `FinanceService` 直接创建充提单、批量导入等绕过生成 repo Add 的代码）继承主实体归属后很容易漏掉 `OwnerInScopeWithActor` 校验——非超管可跨 scope 植入归属到麾外主实体的记录（与生成 Add 的 `inheritFrom` 语义不一致）。手写写入必须与生成 repo Add 对齐：事务内 `SELECT ... FOR UPDATE` 读主实体归属、显式 `data_scope.OwnerInScopeWithActor(ctx, tx, enforcer, prefix, ownerID, actor)` 校验该归属在请求者麾下，再写入。评审手写业务代码时把这条作为必查项。
 - **锁序反转（已知事项）**：Add 路径（`FOR UPDATE` 父行 → 插子行）与归属变更 Edit 路径（`FOR UPDATE` 子行 → 更新父行）并发时锁序相反，InnoDB 会 abort 其中一方（transient 500，重试即可成功）——框架设计固有，接受为已知事项，不做跨事务锁序统一。
 
-### 管理员删除与 owner 表登记（必须显式）
+### 管理员删除与 owner 表登记（spec 自动登记）
 
 删除叶子管理员时，框架会把该管理员名下的归属数据转挂到其 `parent_id`。转移
-范围来自 `data_scope.RegisterAdminOwnerTables` 的显式登记表清单，不会扫描
-`information_schema`：`admin_id` 表示**归属**的表（`reassignable` 主实体、
-`inheritFrom` 子表、以及所有由 actor 写入归属的业务表）必须登记；表示
-**操作者/审计**的表（`admin_log`、`crud_log`、`security_*_log`）禁止登记，
-否则删除会改写历史操作人。框架已登记 `user`、`user_money_log`；业务仓库在
-自己的 init 中登记 `seller_*`、`order_*` 等归属表（写法见
-[`business-development.md`](business-development.md)「管理员删除与归属转移」）。
-未登记的表不会转移，删除代理后会变成受限代理全部不可见的孤儿数据。
+范围来自 `data_scope.RegisterAdminOwnerTables` 的登记表清单，不会扫描
+`information_schema`。登记分两路：
+
+- **CRUD 表自动登记**：启动时扫描 `crud_specs/`，把 `dataScope.reassignable: true`
+  的主实体与声明 `dataScope.inheritFrom` 的子表自动登记（`internal/crudgen/owner_tables.go`）。
+  spec 是唯一事实源，业务仓库无需手抄第二份清单。
+- **非 CRUD 表手写登记**：没有 spec 的手写表/历史表，在业务仓库的
+  `internal/admin/repository/admin_owner_tables_business.go` init 中调用
+  `data_scope.RegisterAdminOwnerTables`（写法见
+  [`business-development.md`](business-development.md)「管理员删除与归属转移」）。
+
+`admin_id` 表示**操作者/审计**的表（`admin_log`、`crud_log`、`security_*_log`）
+禁止登记，否则删除会改写历史操作人。框架已登记 `user`、`user_money_log`（与
+spec 自动登记重复无害）。未登记的表不会转移，删除代理后会变成受限代理全部
+不可见的孤儿数据。
 
 ### 受保护核心表的 `registerOnly` 登记（手写父表/子表）
 
@@ -1024,7 +1128,7 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 5. **布尔语义**：`tinyint(1)` 的非规范值会被请求层拒绝；`char(1)` 不参与布尔兼容。
 6. **路径合法性**：路径不得含 `..`、绝对路径、Windows drive prefix、空段（`a//b`）或 `a..b`。
 7. **省略 vs 空列表**：`formFields`/`columnFields` 省略是自动推导，显式 `[]` 是没有。
-8. **数据库副作用**：`type: create` 对已有表是删除重建；DDL 不可回滚。
+8. **数据库副作用**：显式 `type: create` 对已有表是删除重建（CLI 需 `--allow-rebuild` 确认）；DDL 不可回滚。
 9. **生成后验证**：`go build ./...`；前端改动在 `web/` 执行 `pnpm typecheck`。
 
 ### 参考
@@ -1037,3 +1141,50 @@ go run ./cmd/server --conf configs/config.yaml migrate --strict  # rejected 失�
 - Go generation/runtime: `internal/crudgen/helper.go`, `internal/crudgen/table.go`
 
 PHP 上游的 CRUD 设计器与生成器源码路径仅框架维护者需要，见 [`framework-maintenance.md`](framework-maintenance.md)。
+### 机器可读输出（`--json`）
+
+全局 `--json` 让命令只输出一条 JSON 信封，stdout 不再混入配置引导等噪音：
+
+```bash
+go run ./cmd/crudgen --json crud:validate crud_specs/ops_order.yaml
+go run ./cmd/server --conf configs/config.yaml --json crud:apply --plan
+go run ./cmd/server --conf configs/config.yaml --json migrate --plan
+go run ./cmd/server --conf configs/config.yaml --json cascade:sync
+```
+
+```json
+{
+  "ok": false,
+  "data": {
+    "tables": [{"table": "ops_order", "action": "altered", "blocked": 1,
+      "changes": [{"field": "status", "class": "requires-approval", "category": "attributes", "approved": false}]}],
+    "blockedCategories": ["attributes"],
+    "approveCommand": "crud:apply crud_specs/ops_order.yaml --approve=attributes"
+  }
+}
+```
+
+失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。命令里的 spec 是**展开后的文件列表**（`crud:apply` 接受目录并按文件名排序展开），显式传入 `--conf` 时也会带上，因此可以直接复制执行。
+
+`--json` 承诺 stdout 上只有一个 JSON 文档：配置引导行、SQL 日志（`enable_file_log_writer: false` 时）与 `[crudgen] WARNING` 一律走 stderr。`crud:generate --dry-run --diff --json` 会在 `data.fileDiffs` 里附带逐文件 unified diff；`crud:export-spec --json` 返回导出路径；`crud:new` / `crud:schema` 不支持信封（前者输出人读提示，后者输出原生 schema JSON）。
+
+## 12. 只读命令一览
+
+这些命令都不写库，可以随时跑，也是 agent 判断下一步的入口；只有 `crud:preview`（默认写 `runtime/preview/<table>.html`）与 `crud:schema --out` 会写文件。
+
+| 命令 | 作用 | 依赖 |
+| --- | --- | --- |
+| `crud:validate <spec...>` | 纯校验，警告与错误分开报告 | 无 |
+| `crud:list [--json]` | 模块总览：表名、菜单、数据权限、字段数、`inheritFrom` | 无 |
+| `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML（默认 `runtime/preview/<table>.html`）：字段表 + 表单/列表清单 | 无 |
+| `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
+| `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
+| `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |
+| `crud:check-customized <table> [--diff]` | 列出被手工改过/缺失的生成产物（定制点） | MySQL |
+| `crud:apply --plan [--html <path>] [--json]` | 分类计划；`--html` 出只读审批页 | MySQL |
+| `migrate --plan` | 发版前检查 `rejected` 的唯一事实源 | MySQL |
+| `migrate status [--json]` / `migrate list [--all]` | 三轨计数摘要 / 业务轨台账 | MySQL |
+| `diagnose [--json] [--strict]` | 安装、迁移、spec、归属登记、crud_log 覆盖、前端产物 | MySQL（缺失时降级） |
+| `crud:schema --out crud_specs/schema.json` | 刷新编辑器/AI 用的 JSON Schema | 无 |
+
+审批页（`crud:apply --plan --html runtime/plan.html`）是只读的：它把 `safe-auto` / `requires-approval` / `rejected` 逐条列出来，并给出可以直接复制的 `--approve=` 命令；**页面本身不执行任何写操作**，批准仍然发生在终端与 git 里。

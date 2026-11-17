@@ -1,9 +1,44 @@
 package crudgen
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestValidateSpecWarnsOnDeprecatedKeys(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: deprecated_keys
+type: create
+rebuild: Yes
+isCommonModel: 0
+databaseConnection: mysql
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+`)
+	warnings, err := ValidateSpec(path)
+	if err != nil {
+		t.Fatalf("valid spec rejected: %v", err)
+	}
+	messages := make([]string, 0, len(warnings))
+	for _, warning := range warnings {
+		messages = append(messages, warning.Message)
+	}
+	joined := strings.Join(messages, "\n")
+	for _, want := range []string{
+		"rebuild is deprecated",
+		"isCommonModel is deprecated",
+		"databaseConnection is deprecated",
+		"type: create drops and recreates",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing warning %q in:\n%s", want, joined)
+		}
+	}
+}
 
 func TestValidateSpecAcceptsValidRelationsAndFiles(t *testing.T) {
 	t.Parallel()
@@ -308,5 +343,17 @@ fields:
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "no registered route constant") {
 		t.Fatalf("aggregate warnings = %+v", warnings)
+	}
+}
+
+func TestValidateSpecRejectsUnknownType(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "ops_type.yaml")
+	content := "name: ops_type\ntype: crate\nfields:\n  - {name: id, type: bigint, unsigned: true, primaryKey: true, autoIncrement: true}\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateSpec(path); err == nil {
+		t.Fatal("unsupported type must be rejected")
 	}
 }
