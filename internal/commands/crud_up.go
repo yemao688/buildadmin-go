@@ -56,6 +56,14 @@ func (h *CrudHandler) Up(cmd *cobra.Command, specPath string, flags crudUpFlagVa
 	if err != nil {
 		return fmt.Errorf("load CRUD spec error: %w", err)
 	}
+	// 校验始终执行：--skip-check 只跳过第 2、3 步（差量与定制点预检）。
+	warnings, err := helper.ValidateSpec(specPath)
+	for _, warning := range warnings {
+		cmd.PrintErrln("warning: " + warning.Message)
+	}
+	if err != nil {
+		return fmt.Errorf("spec validation failed: %w", err)
+	}
 	if !flags.skipCheck {
 		if err := h.upPreflight(cmd, specPath, options, flags); err != nil {
 			return err
@@ -99,15 +107,15 @@ func (h *CrudHandler) Up(cmd *cobra.Command, specPath string, flags crudUpFlagVa
 // upPreflight 只读：spec 校验、库与 spec 的差量、以及"重新生成会覆盖哪些手工改动"。
 // rejected 差量直接阻断——生成出的代码会与库现状不一致，必须先写业务迁移。
 func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *helper.GenerateOptions, flags crudUpFlagValues) error {
-	warnings, err := helper.ValidateSpec(specPath)
-	for _, warning := range warnings {
-		cmd.PrintErrln("warning: " + warning.Message)
-	}
-	if err != nil {
-		return fmt.Errorf("spec validation failed: %w", err)
-	}
+	// type: create + --allow-rebuild 会删表重建：此时差量预检看到的是从旧表
+	// 推导出的 rejected（收窄、nullable→NOT NULL 等），它们会被重建消解，
+	// 不能反过来阻断这条已显式授权的路径。crud:apply 本身永远不会删表，
+	// 因此只有生成侧（crud:up/crud:generate）认可这个例外。
+	requestedType := strings.ToLower(strings.TrimSpace(options.Type))
+	rebuildAuthorized := flags.allowRebuild && requestedType == "create" &&
+		h.db.Migrator().HasTable(h.config.Database.Prefix+options.Table.Name)
 	results, planErr := helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), []string{specPath},
-		helper.ApplyOptions{AdminID: flags.adminID, Plan: true, ApproveAll: true})
+		helper.ApplyOptions{AdminID: flags.adminID, Plan: true, ApproveAll: true, AllowRebuild: flags.allowRebuild})
 	var blocked *helper.ApplyBlockedError
 	if planErr != nil && !errors.As(planErr, &blocked) {
 		return fmt.Errorf("CRUD plan error: %w", planErr)
@@ -120,8 +128,9 @@ func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *
 	}
 	plan, planErrFiles := helper.PreviewGenerationFiles(h.db, h.config, options.Table, options.Fields)
 	newTable := planErrFiles == nil && plan.NewTable
+	tableMissing := planErrFiles == nil && plan.TableMissing
 	var drift []string
-	if !newTable {
+	if !newTable && !tableMissing {
 		var driftErr error
 		drift, driftErr = h.customizedFiles(specPath)
 		if driftErr != nil {
@@ -129,10 +138,13 @@ func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *
 			cmd.PrintErrln("warning: customization preflight skipped: " + driftErr.Error())
 		}
 	}
-	if summary.Rejected > 0 {
+	if summary.Rejected > 0 && !rebuildAuthorized {
 		return fmt.Errorf("crud:up: spec has %d rejected change(s) that crud:apply will never execute; write a business migration and align the spec first", summary.Rejected)
 	}
-	if newTable {
+	if rebuildAuthorized && !jsonMode() {
+		cmd.Println("  rebuild: type=create with --allow-rebuild; the table will be dropped and recreated")
+	}
+	if newTable || tableMissing {
 		if !jsonMode() {
 			cmd.Println("  new table: all files will be created, nothing to overwrite")
 		}
