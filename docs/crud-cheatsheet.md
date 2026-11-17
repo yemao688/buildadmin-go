@@ -42,7 +42,7 @@ go run ./cmd/server --conf configs/config.yaml crud:up crud_specs/<table>.yaml
 ```
 
 - 输出里有 `requires-approval`：属正常变更（默认值、自增、类型扩宽、属性），按提示 `crud:apply <spec> --approve=<类别>` 或交给启动自动迁移（它按"全部已批准"执行）。
-- 输出里有 `rejected`：**不会自动执行**。写一条 business 迁移显式处理存量数据后再改列，然后把 spec 对齐。
+- 输出里有 `rejected`：**不会自动执行**。`crud:diff <spec> --write-migration` 会生成带逐条 TODO 的 business 迁移骨架，处理完存量数据再把 spec 对齐。
 
 ## 加归属（多级代理数据权限）
 
@@ -95,6 +95,7 @@ diagnose                        # 全部体检项一次输出（--json 可给 CI
 | `refusing to overwrite existing CRUD output` | 产物与上次成功的 manifest 不一致：先 `crud:delete <table>` 或恢复原路径；`crud:delete` 会连 `crud_specs/<table>.yaml` 一起删，重生成前需 `git checkout` 该 spec |
 | `type=create would drop and recreate` | 你显式写了 `type: create`。改成省略或 `alter`；确实要重建才加 `--allow-rebuild` |
 | `no successful crud_log for table`（export-spec） | 该表从未成功生成过，直接手写 spec |
+| `no successful CRUD generation manifest`（delete） | 现在会退化为「只删 spec」；若两者都没有则报错 |
 | `unknown relation alias` | `quickSearchField` 的点号别名由外键字段名派生，且列必须在 `relationFields` 里 |
 
 ## 交付前检查

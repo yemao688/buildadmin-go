@@ -361,3 +361,14 @@
 | 4.5 离线生成（仅完成渲染层拆分） | `OutputSink` + 渲染链已在，但真正无库运行还要跳过 `prepareDatabaseInputs`（校验 admin-id、读 crud_log）并为 `getColumns`/索引探测提供桩实现。远端关联（`remoteSelect` 的 `relationFields`）依赖目标表列元数据，桩实现会静默产出降级的关联列——这属于"看起来成功、实际生成坏代码"，不做。下一步若要做，先定"离线时关联字段如何降级/报错"的策略，再加 `--offline` 与输出目录。 |
 | 4.7 生成物入库噪声 | `autoload.ts`/`tableRenderer.d.ts` 由 Vite 插件在 `pnpm dev` 时重写；移出版本控制需要 CI 侧生成 + 类型检查改造，属于前端构建链变更，风险与收益不匹配。文档已注明该现象。 |
 | 4.10 截图与外部站点 | 属于文档/传播工作，不阻塞功能；`crud-cheatsheet.md` 已补上任务动线，截图与站点留待有真实界面变更时一起做。 |
+
+## 8. 第二批（本分支）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 3. rejected → 迁移骨架 | 完成 | `crud:diff <spec> --write-migration` 生成 `internal/migrations/business/NNNN_<table>_rejected.go`，Up 内逐条列出原因与建议 DDL |
+| 4. 权限欠账进 diagnose | 完成 | `diagnose` 新增 menus 检查：每个非 registerOnly spec 必须有对应 `admin_rule` 菜单与按钮节点 |
+| 5. 只有 spec 的删除 | 完成 | `crud:delete` 在无成功 manifest 时退化为只删 spec，并明确表未 DROP；两者都没有才报错 |
+| 6. `crud:list --drift` | 完成 | 一次列出每个 spec 的差量摘要（action / safe-auto / requires-approval / rejected） |
+| 10. 文档入口与截图 | 完成 | `docs/README.md` 任务索引；README 增加登录/预览/审批三张截图 |
+| 7. 离线生成（4.5） | **未做** | 实体文件由 `gorm.io/gen` 读取真实表结构生成；没有表就无法产出与真实生成一致的实体，任何"桩"都会让预览与真实产物不一致。要做必须先实现 spec 驱动的实体渲染，并加 golden 对比测试（每个 spec 的离线上线与真实生成逐字节一致）。单独立项。 |

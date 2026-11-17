@@ -38,7 +38,7 @@ func TestMigrationFileStem(t *testing.T) {
 // 骨架必须带正确版本、迁移名与 package，业务只需填 Up；默认不生成可执行 Down。
 func TestRenderBusinessMigration(t *testing.T) {
 	t.Parallel()
-	rendered := renderBusinessMigration(7, "shop-orders")
+	rendered := renderBusinessMigration(7, "shop-orders", "")
 	for _, want := range []string{"package business", "Version:       7", `MigrationName: "shop-orders"`, "func init()", "Register(Migration{"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered migration missing %q:\n%s", want, rendered)

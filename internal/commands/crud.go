@@ -6,6 +6,7 @@ import (
 	"buildadmin-go/internal/infra/db"
 	"buildadmin-go/internal/middleware"
 	"buildadmin-go/internal/pkg/data_scope"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -380,13 +381,25 @@ func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: crud:delete <tableName>")
 	}
 	skipCompileCheck, _ := cmd.Flags().GetBool("skip-compile-check")
-	if err := helper.DeleteFromSpecWithHooksAndOptions(h.db, h.config, args[0], helper.DeleteOptions{SkipCompileCheck: skipCompileCheck}, func(method, path string) {
+	err := helper.DeleteFromSpecWithHooksAndOptions(h.db, h.config, args[0], helper.DeleteOptions{SkipCompileCheck: skipCompileCheck}, func(method, path string) {
 		action := path[strings.LastIndex(path, "/")+1:]
 		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
-	}); err != nil {
+	})
+	var specOnly *helper.SpecOnlyDeletedError
+	if errors.As(err, &specOnly) {
+		if jsonMode() {
+			return printJSON(cmd, map[string]any{"table": args[0], "status": "spec-only", "spec": specOnly.Path, "tableDropped": false})
+		}
+		cmd.Printf("CRUD deletion: %s\n", specOnly.Error())
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("CRUD deletion error: %w", err)
 	}
 	data_scope.InvalidateBusinessIdentifierCache()
+	if jsonMode() {
+		return printJSON(cmd, map[string]any{"table": args[0], "status": "deleted", "tableDropped": false})
+	}
 	cmd.Printf("CRUD deletion success: %s\n", args[0])
 	return nil
 }

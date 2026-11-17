@@ -53,6 +53,12 @@ func newMigrateNewCommand() *cobra.Command {
 
 // createBusinessMigration 在 dir 下创建下一条版本号的迁移骨架，拒绝覆盖已有文件。
 func createBusinessMigration(dir, name string, versions []uint64) (string, error) {
+	return createBusinessMigrationWithBody(dir, name, versions, "")
+}
+
+// createBusinessMigrationWithBody 同 createBusinessMigration，upBody 非空时替换
+// 默认的空 Up 实现（crud:diff --write-migration 用它写入 rejected 变更清单）。
+func createBusinessMigrationWithBody(dir, name string, versions []uint64, upBody string) (string, error) {
 	name = strings.TrimSpace(name)
 	if !migrationNamePattern.MatchString(name) {
 		return "", fmt.Errorf("迁移名 %q 非法：只允许字母、数字、下划线与连字符，且须以字母或数字开头", name)
@@ -76,7 +82,7 @@ func createBusinessMigration(dir, name string, versions []uint64) (string, error
 		}
 		return "", err
 	}
-	if _, err := file.WriteString(renderBusinessMigration(version, name)); err != nil {
+	if _, err := file.WriteString(renderBusinessMigration(version, name, upBody)); err != nil {
 		_ = file.Close()
 		return "", err
 	}
@@ -156,7 +162,10 @@ func migrationFileStem(name string) string {
 	return strings.ReplaceAll(strings.ToLower(name), "-", "_")
 }
 
-func renderBusinessMigration(version uint64, name string) string {
+func renderBusinessMigration(version uint64, name string, upBody string) string {
+	if strings.TrimSpace(upBody) == "" {
+		upBody = "\t\t\treturn nil"
+	}
 	return fmt.Sprintf(`package business
 
 import (
@@ -171,7 +180,7 @@ func init() {
 		// NeedsSpecTables: []string{"ops_banner"}, // Up 前按 spec 物化（只建 schema/索引，不建菜单）
 
 		Up: func(db *gorm.DB, config *conf.Configuration) error {
-			return nil
+%s
 		},
 
 		// Down 可选：只有需要支持 migrate rollback 时才写；省略时 rollback 会拒绝该迁移。
@@ -181,5 +190,5 @@ func init() {
 		// },
 	})
 }
-`, version, name)
+`, version, name, upBody)
 }

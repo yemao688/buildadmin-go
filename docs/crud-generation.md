@@ -1185,7 +1185,8 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 | `crud:validate <spec...>` | 纯校验，警告与错误分开报告 | 无 |
 | `crud:list [--json]` | 模块总览：表名、菜单、数据权限、字段数、`inheritFrom` | 无 |
 | `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML（默认 `runtime/preview/<table>.html`）：字段表 + 表单/列表清单 | 无 |
-| `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
+| `crud:diff <spec> [--json] [--write-migration]` | 库现状 vs spec 的差量；`rejected` 非零退出；`--write-migration` 生成含逐条 TODO 的 business 迁移骨架 | MySQL |
+| `crud:list --drift` | 每个 spec 的差量摘要（action / safe-auto / requires-approval / rejected） | MySQL |
 | `crud:up <spec>` | 校验 → 差量/定制点预检 → 生成（自动 wire + go build） | MySQL |
 | `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
 | `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |
@@ -1193,7 +1194,7 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 | `crud:apply --plan [--html <path>] [--json]` | 分类计划；`--html` 出只读审批页 | MySQL |
 | `migrate --plan` | 发版前检查 `rejected` 的唯一事实源 | MySQL |
 | `migrate status [--json]` / `migrate list [--all]` | 三轨计数摘要 / 业务轨台账 | MySQL |
-| `diagnose [--json] [--strict]` | 安装、迁移、spec、归属登记、crud_log 覆盖、前端产物 | MySQL（缺失时降级） |
+| `diagnose [--json] [--strict]` | 安装、迁移、spec、归属登记、生成菜单/按钮规则、crud_log 覆盖、前端产物 | MySQL（缺失时降级） |
 | `crud:schema --out crud_specs/schema.json` | 刷新编辑器/AI 用的 JSON Schema | 无 |
 
 审批页（`crud:apply --plan --html runtime/plan.html`）是只读的：它把 `safe-auto` / `requires-approval` / `rejected` 逐条列出来，并给出可以直接复制的 `--approve=` 命令；**页面本身不执行任何写操作**，批准仍然发生在终端与 git 里。

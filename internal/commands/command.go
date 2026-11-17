@@ -51,7 +51,7 @@ func registerCommands(rootCmd *cobra.Command, cmdBootstrap CmdBootstrap, appBoot
 		newCrudValidateCommand(),
 		newCrudNewCommand(),
 		newCrudExportSpecCommand(cmdBootstrap),
-		newCrudListCommand(),
+		newCrudListCommand(cmdBootstrap),
 		newCrudDiffCommand(cmdBootstrap),
 		newCrudPreviewCommand(),
 		newCrudCheckCustomizedCommand(cmdBootstrap),

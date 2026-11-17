@@ -78,6 +78,7 @@ type planJSON struct {
 	Tables            []planTableJSON `json:"tables"`
 	BlockedCategories []string        `json:"blockedCategories,omitempty"`
 	ApproveCommand    string          `json:"approveCommand,omitempty"`
+	MigrationPath     string          `json:"migrationPath,omitempty"`
 }
 
 // planToJSON 把 apply/plan 结果转成契约结构。specRef 是展开后的 spec 文件列表，

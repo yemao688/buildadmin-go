@@ -761,12 +761,33 @@ func DeleteFromSpecWithHooksAndOptions(db *gorm.DB, cfg *conf.Configuration, tab
 	return deleteFromSpec(db, cfg, tableName, opts, unregister)
 }
 
+// SpecOnlyDeletedError 表示目标表没有任何生成产物，只删掉了 crud_specs/<table>.yaml。
+// 调用方应当把它当成功处理（表不会被 DROP）。
+type SpecOnlyDeletedError struct {
+	Table string
+	Path  string
+}
+
+func (e *SpecOnlyDeletedError) Error() string {
+	return fmt.Sprintf("table %q has no generated artifacts; removed spec %s (the data table itself is not dropped)", e.Table, e.Path)
+}
+
 func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts DeleteOptions, unregister func(method, path string)) (retErr error) {
 	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return err
 	}
 	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
+	// 从未成功生成过的表没有 manifest：此时 delete 只清理 spec（若存在），
+	// 而不是报错留下孤儿 spec（启动 apply 会用它重建菜单）。
+	reconcileStaleGeneratingLogs(lockedDB, cfg)
+	successLog, lookupErr := latestSuccessfulCrudLog(lockedDB, cfg, tableName)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if successLog == nil {
+		return deleteSpecOnly(tableName)
+	}
 	var fail func(string, error) error
 	defer func() {
 		retErr = mergeReleaseError(retErr, releaseLocks)
@@ -798,6 +819,25 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 		return err
 	}
 	return state.finalize()
+}
+
+// deleteSpecOnly 删除 crud_specs/<table>.yaml；没有 spec 时返回明确错误。
+func deleteSpecOnly(tableName string) error {
+	return deleteSpecOnlyIn(DefaultSpecsDir(), tableName)
+}
+
+func deleteSpecOnlyIn(specDir, tableName string) error {
+	path := filepath.Join(specDir, tableName+".yaml")
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("table %q has neither generated artifacts nor a crud_specs spec; nothing to delete", tableName)
+		}
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove spec %s: %w", path, err)
+	}
+	return &SpecOnlyDeletedError{Table: tableName, Path: path}
 }
 
 func (s *deleteState) prepare() error {

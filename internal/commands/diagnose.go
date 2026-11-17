@@ -71,6 +71,7 @@ func runDiagnose(db *gorm.DB, config *conf.Configuration) diagnoseReport {
 	report.Checks = append(report.Checks,
 		checkSpecs(specDir),
 		checkOwnerTables(specDir),
+		checkGeneratedMenus(db, config, specDir),
 		checkFrontendArtifact(),
 	)
 	report.Checks = append(report.Checks, checkMigrations(db, config)...)
@@ -163,6 +164,67 @@ func checkOwnerTables(specDir string) diagnoseCheck {
 		}
 	}
 	return check
+}
+
+// checkGeneratedMenus 校验每个有 spec 的业务表在 admin_rule 里有对应菜单与按钮节点。
+// 缺菜单的模块在后台完全不可见，而 crud:generate --skip-menu / 手工删规则都会造成
+// 这种欠账，启动时不会报错。
+func checkGeneratedMenus(db *gorm.DB, config *conf.Configuration, specDir string) diagnoseCheck {
+	check := diagnoseCheck{Name: "menus"}
+	if db == nil || config == nil || specDir == "" {
+		check.Status = "skip"
+		check.Message = "database or crud_specs/ unavailable"
+		return check
+	}
+	paths := collectSpecPaths(specDir)
+	total, missing := 0, 0
+	for _, path := range paths {
+		options, err := helper.LoadSpec(path)
+		if err != nil || options.Table.RegisterOnly {
+			continue
+		}
+		menuName, err := expectedMenuName(options)
+		if err != nil {
+			check.Details = append(check.Details, fmt.Sprintf("%s: %v", options.Table.Name, err))
+			check.Status = "warn"
+			continue
+		}
+		total++
+		var menus int64
+		if err := db.Table(config.Database.Prefix+"admin_rule").Where("name = ?", menuName).Count(&menus).Error; err != nil {
+			check.Details = append(check.Details, fmt.Sprintf("%s: read admin_rule: %v", options.Table.Name, err))
+			check.Status = "warn"
+			continue
+		}
+		if menus == 0 {
+			missing++
+			check.Status = "warn"
+			check.Details = append(check.Details,
+				fmt.Sprintf("%s: no admin_rule named %q; run crud:apply (or regenerate without --skip-menu)", options.Table.Name, menuName))
+			continue
+		}
+		var buttons int64
+		if err := db.Table(config.Database.Prefix+"admin_rule").Where("name LIKE ?", menuName+"/%").Count(&buttons).Error; err == nil && buttons == 0 {
+			check.Status = "warn"
+			check.Details = append(check.Details,
+				fmt.Sprintf("%s: menu %q has no button rules (generated with --skip-menu?)", options.Table.Name, menuName))
+		}
+	}
+	if check.Status == "" {
+		check.Status = "ok"
+	}
+	check.Message = fmt.Sprintf("%d module menu(s) checked, %d missing", total, missing)
+	return check
+}
+
+// expectedMenuName 复刻生成器写入 admin_rule 的菜单名（views 相对路径）。
+func expectedMenuName(options *helper.GenerateOptions) (string, error) {
+	webDir := helper.ParseWebDirNameData(options.Table.Name, "views", options.Table.WebViewsDir)
+	name := helper.GetMenuName(webDir)
+	if name == "" || name == "/" {
+		return "", fmt.Errorf("cannot derive menu name from webViewsDir %q", options.Table.WebViewsDir)
+	}
+	return name, nil
 }
 
 func checkFrontendArtifact() diagnoseCheck {
