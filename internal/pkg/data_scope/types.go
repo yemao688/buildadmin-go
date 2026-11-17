@@ -33,22 +33,22 @@ const (
 // Config is the persisted generator/user input. A nil Config resolves to
 // ModeAuto, preserving legacy behavior.
 type Config struct {
-	Mode            Mode     `json:"mode"`
-	OwnerColumn     string   `json:"ownerColumn,omitempty"`
-	ReadExtraOwners []string `json:"readExtraOwners,omitempty"`
-	AssignOnCreate  *bool    `json:"assignOnCreate,omitempty"`
+	Mode            Mode     `json:"mode" mapstructure:"mode"`
+	OwnerColumn     string   `json:"ownerColumn,omitempty" mapstructure:"ownerColumn"`
+	ReadExtraOwners []string `json:"readExtraOwners,omitempty" mapstructure:"readExtraOwners"`
+	AssignOnCreate  *bool    `json:"assignOnCreate,omitempty" mapstructure:"assignOnCreate"`
 	// Reassignable permits editing the owner column: restricted operators may
 	// only reassign to an admin inside their own subtree (self + descendants),
 	// unrestricted operators may pick any existing admin. Only meaningful when
 	// an owner column is resolved.
-	Reassignable bool `json:"reassignable,omitempty"`
+	Reassignable bool `json:"reassignable,omitempty" mapstructure:"reassignable"`
 	// InheritFrom makes Add inherit this resource's owner from a parent
 	// entity instead of assigning the operating admin. The named table is
 	// looked up by the join column and its admin_id is copied. Mutually
 	// exclusive with Reassignable; only meaningful when an owner column is
 	// resolved. Child tables are registered on the parent repository's
 	// CascadeOwners() anchor block automatically at generation time.
-	InheritFrom *InheritRef `json:"inheritFrom,omitempty"`
+	InheritFrom *InheritRef `json:"inheritFrom,omitempty" mapstructure:"inheritFrom"`
 }
 
 // CascadeOwner names one child table whose redundant owner column is kept in
@@ -65,8 +65,8 @@ type CascadeOwner struct {
 // Add. ByColumn is the child's own column referencing the parent's primary
 // key (for example user_id on an order table).
 type InheritRef struct {
-	Table    string `json:"table"`
-	ByColumn string `json:"byColumn"`
+	Table    string `json:"table" mapstructure:"table"`
+	ByColumn string `json:"byColumn" mapstructure:"byColumn"`
 }
 
 // Resolved is the effective policy after applying conventions and defaults.

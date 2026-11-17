@@ -1,6 +1,8 @@
 package crudgen
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -341,5 +343,17 @@ fields:
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "no registered route constant") {
 		t.Fatalf("aggregate warnings = %+v", warnings)
+	}
+}
+
+func TestValidateSpecRejectsUnknownType(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "ops_type.yaml")
+	content := "name: ops_type\ntype: crate\nfields:\n  - {name: id, type: bigint, unsigned: true, primaryKey: true, autoIncrement: true}\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateSpec(path); err == nil {
+		t.Fatal("unsupported type must be rejected")
 	}
 }

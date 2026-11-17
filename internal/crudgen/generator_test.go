@@ -525,3 +525,20 @@ func TestParseDeleteGoFilesReportsPathAndLine(t *testing.T) {
 		t.Fatalf("parse guard error lacks path/line: %v", err)
 	}
 }
+
+// 删除模块要一并删除它的 spec，否则启动时的 spec apply 会把菜单和台账建回来。
+func TestAppendModuleSpecAddsExistingSpec(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "ops_probe.yaml"), []byte("name: ops_probe\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manifest := appendModuleSpec(FileManifest{}, dir, "ops_probe")
+	if len(manifest.Generated) != 1 || filepath.Base(manifest.Generated[0]) != "ops_probe.yaml" {
+		t.Fatalf("spec not appended: %+v", manifest)
+	}
+	missing := appendModuleSpec(FileManifest{}, dir, "ops_missing")
+	if len(missing.Generated) != 0 {
+		t.Fatalf("missing spec must not be appended: %+v", missing)
+	}
+}

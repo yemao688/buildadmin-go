@@ -329,7 +329,8 @@ func (s *generateState) prepareManifest(success *model.Log) error {
 	if err := validateGenerationMode(s.opts.Type); err != nil {
 		return err
 	}
-	if !manifestAllows(manifest, success, skippedPaths) {
+	// 预览只渲染到内存，不会覆盖既有产物；manifest 冲突守卫只拦截真实写入。
+	if s.opts.PreviewSink == nil && !manifestAllows(manifest, success, skippedPaths) {
 		if success == nil {
 			return fmt.Errorf("refusing to overwrite existing CRUD output for table %q: %s", s.opts.Table.Name, strings.Join(manifestConflicts(manifest), ", "))
 		}
@@ -360,6 +361,16 @@ func (s *generateState) writeSpecOutput() error {
 	content, err := MarshalSpec(s.opts.Table, s.opts.Fields)
 	if err != nil {
 		return s.failErr("spec write", err)
+	}
+	// 设计器只覆盖它建模的键：既有的 menu/indexes/reassignable/inheritFrom 等
+	// 必须保留，否则重新设计会静默改变归属与索引语义。
+	if existing, readErr := os.ReadFile(s.specPath); readErr == nil {
+		content, err = MergeSpec(existing, content)
+		if err != nil {
+			return s.failErr("spec write", err)
+		}
+	} else if !os.IsNotExist(readErr) {
+		return s.failErr("spec write", readErr)
 	}
 	if err := os.MkdirAll(filepath.Dir(s.specPath), 0o750); err != nil {
 		return s.failErr("spec write", err)
@@ -414,10 +425,14 @@ func (s *generateState) beginLog() error {
 // markFailed 是生成失败的唯一收尾：回滚文件与菜单、记账、注销已注册路由。
 func (s *generateState) markFailed(stage string, cause error) (*GenerateResult, error) {
 	message := fmt.Sprintf("stage=%s: %v", stage, cause)
-	if restoreErr := s.snapshot.Restore(); restoreErr != nil {
-		message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, s.snapshot.dir)
-	} else {
-		s.cleanupAllowed = true
+	// 预览（--dry-run --diff / crud:check-customized）不建快照也不写台账，
+	// 失败时只回传错误，不能解引用 nil snapshot。
+	if s.snapshot != nil {
+		if restoreErr := s.snapshot.Restore(); restoreErr != nil {
+			message += fmt.Sprintf("; restore failed: %v; recovery directory preserved: %s", restoreErr, s.snapshot.dir)
+		} else {
+			s.cleanupAllowed = true
+		}
 	}
 	// F4：生成会 update 既有菜单行，失败时恢复快照原值；新增行单独删除。
 	// 菜单恢复必须排在 recordCrudError 之前：台账写下后再追加 message，
@@ -582,7 +597,7 @@ func (s *generateState) syncMenus(webViewsDir WebDir, tableComment string) error
 
 func (s *generateState) runToolchain() error {
 	if s.opts.SkipCompileCheck {
-		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
+		fmt.Fprintln(os.Stderr, "[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；全部模块重生成后请执行 go generate ./cmd/server && go build ./...")
 	} else {
 		stage, err := s.runToolchainChecks()
 		if err != nil {
@@ -845,8 +860,24 @@ func (s *deleteState) buildManifest() error {
 	if err != nil {
 		return err
 	}
-	s.manifest = prepared
+	// spec 是模块的事实源：删除模块必须一并删除，否则下次 serve/migrate 的
+	// spec apply 会重建菜单并重新记账，模块在重启后"复活"。
+	// 纳入 generated 隔离区，删除失败时随其它产物一起恢复。
+	s.manifest = appendModuleSpec(prepared, DefaultSpecsDir(), s.tableName)
 	return nil
+}
+
+// appendModuleSpec 把模块的 spec 并入待删除清单（不存在时原样返回）。调用方
+// 负责把结果纳入隔离区，失败删除时 spec 随其它产物一起恢复。
+func appendModuleSpec(manifest FileManifest, specDir, tableName string) FileManifest {
+	if specDir == "" {
+		return manifest
+	}
+	specPath := filepath.Join(specDir, tableName+".yaml")
+	if fileExists(specPath) {
+		manifest.Generated = append(manifest.Generated, specPath)
+	}
+	return manifest
 }
 
 // openRecovery 建立隔离区（generated 产物）与共享文件快照（provider 等）。
@@ -942,7 +973,7 @@ func (s *deleteState) removeProviders() error {
 
 func (s *deleteState) runToolchain() error {
 	if s.skipCompileCheck {
-		fmt.Println("[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；删除后请执行 go generate ./cmd/server && go build ./...")
+		fmt.Fprintln(os.Stderr, "[crudgen] WARNING: --skip-compile-check 已跳过 wire 与 go build 自检；删除后请执行 go generate ./cmd/server && go build ./...")
 		return nil
 	}
 	if err := runWire(); err != nil {

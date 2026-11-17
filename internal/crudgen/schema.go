@@ -10,7 +10,7 @@ import (
 var specSchemaDescriptions = map[string]string{
 	"name":                 "业务表名，小写下划线标识符",
 	"comment":              "表注释；字段标题与字典也来自注释",
-	"type":                 "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+	"type":                 "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）| log/db/sql（legacy，映射为 create/alter）",
 	"generateRelativePath": "views 目录与菜单/路由名形态；省略即表名",
 	"quickSearchField":     "列表公共快速搜索字段，支持 alias.column 关联条目",
 	"defaultSortField":     "默认排序字段",
@@ -53,7 +53,7 @@ func SpecSchema() map[string]any {
 	}
 	properties["type"] = map[string]any{
 		"type":        "string",
-		"enum":        []string{"auto", "create", "alter"},
+		"enum":        []string{"auto", "create", "alter", "log", "db", "sql"},
 		"default":     "auto",
 		"description": specSchemaDescriptions["type"],
 	}

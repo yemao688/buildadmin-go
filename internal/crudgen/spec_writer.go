@@ -18,6 +18,7 @@ type specDocument struct {
 	Name                 string           `yaml:"name"`
 	Comment              string           `yaml:"comment,omitempty"`
 	GenerateRelativePath string           `yaml:"generateRelativePath,omitempty"`
+	WebViewsDir          string           `yaml:"webViewsDir,omitempty"`
 	QuickSearchField     []string         `yaml:"quickSearchField,omitempty"`
 	DefaultSortField     string           `yaml:"defaultSortField,omitempty"`
 	DefaultSortType      string           `yaml:"defaultSortType,omitempty"`
@@ -56,6 +57,7 @@ func MarshalSpec(table crudmodel.Table, fields []crudmodel.Field) ([]byte, error
 		Name:                 table.Name,
 		Comment:              table.Comment,
 		GenerateRelativePath: table.GenerateRelativePath,
+		WebViewsDir:          table.WebViewsDir,
 		QuickSearchField:     table.QuickSearchField,
 		DefaultSortField:     table.DefaultSortField,
 		DefaultSortType:      table.DefaultSortType,
@@ -86,6 +88,78 @@ func MarshalSpec(table crudmodel.Table, fields []crudmodel.Field) ([]byte, error
 	body, err := yaml.Marshal(document)
 	if err != nil {
 		return nil, fmt.Errorf("encode spec: %w", err)
+	}
+	header := "# 由 crudgen 生成（后台设计器或 crud:export-spec）；改动后请用 crud:validate / crud:generate\n"
+	return append([]byte(header), body...), nil
+}
+
+// specModeledKeys 是设计器/导出流程会重写的顶层键；其余键（menu、registerOnly、
+// indexes 以及未来新增的声明）在改写既有 spec 时原样保留，避免设计器覆盖掉它
+// 没有 UI 的语义。type 例外：永远丢弃（省略即 auto，防止重新生成误删表）。
+var specModeledKeys = map[string]struct{}{
+	"name":                 {},
+	"comment":              {},
+	"generateRelativePath": {},
+	"webViewsDir":          {},
+	"quickSearchField":     {},
+	"defaultSortField":     {},
+	"defaultSortType":      {},
+	"formFields":           {},
+	"columnFields":         {},
+	"dataScope":            {},
+	"fields":               {},
+}
+
+// specModeledScopeKeys 是设计器建模的 dataScope 子键；reassignable、inheritFrom
+// 与 readExtraOwners 设计器无法编辑，改写时保留。
+var specModeledScopeKeys = map[string]struct{}{
+	"mode":           {},
+	"ownerColumn":    {},
+	"assignOnCreate": {},
+}
+
+// MergeSpec 把新生成的 spec 合并到既有 spec：设计器不建模的顶层键与 dataScope
+// 子键原样保留，type 永远丢弃。设计器提交的表设计只覆盖它在 UI 里能表达的键，
+// 否则重新设计一个级联/归属模块会静默抹掉 indexes、menu、reassignable 与
+// inheritFrom，进而让 owner 登记与 cascade 同步失效。
+func MergeSpec(existing, generated []byte) ([]byte, error) {
+	var existingDoc, generatedDoc map[string]any
+	if err := yaml.Unmarshal(existing, &existingDoc); err != nil {
+		return nil, fmt.Errorf("parse existing spec: %w", err)
+	}
+	if err := yaml.Unmarshal(generated, &generatedDoc); err != nil {
+		return nil, fmt.Errorf("parse generated spec: %w", err)
+	}
+	for key, value := range existingDoc {
+		if key == "type" {
+			continue
+		}
+		if _, modeled := specModeledKeys[key]; modeled {
+			continue
+		}
+		if _, exists := generatedDoc[key]; !exists {
+			generatedDoc[key] = value
+		}
+	}
+	existingScope, _ := existingDoc["dataScope"].(map[string]any)
+	if len(existingScope) > 0 {
+		generatedScope, _ := generatedDoc["dataScope"].(map[string]any)
+		if generatedScope == nil {
+			generatedScope = map[string]any{}
+			generatedDoc["dataScope"] = generatedScope
+		}
+		for key, value := range existingScope {
+			if _, modeled := specModeledScopeKeys[key]; modeled {
+				continue
+			}
+			if _, exists := generatedScope[key]; !exists {
+				generatedScope[key] = value
+			}
+		}
+	}
+	body, err := yaml.Marshal(generatedDoc)
+	if err != nil {
+		return nil, fmt.Errorf("encode merged spec: %w", err)
 	}
 	header := "# 由 crudgen 生成（后台设计器或 crud:export-spec）；改动后请用 crud:validate / crud:generate\n"
 	return append([]byte(header), body...), nil
@@ -142,6 +216,10 @@ func toSpecValue(value reflect.Value) (any, bool, error) {
 	for value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface {
 		if value.IsNil() {
 			return nil, true, nil
+		}
+		if value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Bool {
+			// *bool 的 false 是显式声明（assignOnCreate: false），不能按零值丢弃。
+			return value.Elem().Bool(), false, nil
 		}
 		value = value.Elem()
 	}

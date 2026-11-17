@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // 设计器的表设计写回 spec 后必须能被 CLI 原样读回，否则两条生成路径会再次
@@ -123,4 +126,72 @@ func TestWriteSpecOutput(t *testing.T) {
 	if options.Table.Name != "ops_demo" || len(options.Fields) != 2 {
 		t.Fatalf("round-trip mismatch: %+v", options.Table)
 	}
+}
+
+// 设计器只建模部分键：改写既有 spec 时 menu/indexes 与 dataScope 的归属声明
+// 必须保留，type 必须丢弃（省略即 auto）。
+func TestMergeSpecPreservesDesignerUnmodeledKeys(t *testing.T) {
+	t.Parallel()
+	existing := []byte(`name: seller_user
+type: create
+menu:
+  title: 卖家
+  weigh: 3
+indexes:
+  - name: uk_existing
+    unique: true
+    columns: [name]
+dataScope:
+  mode: auto
+  ownerColumn: admin_id
+  assignOnCreate: false
+  reassignable: true
+  inheritFrom: {table: user, byColumn: user_id}
+fields:
+  - {name: id, type: bigint}
+`)
+	assignOnCreate := false
+	table := crudmodel.Table{
+		Name: "seller_user",
+		DataScope: &data_scope.Config{
+			Mode: data_scope.ModeAuto, OwnerColumn: "admin_id", AssignOnCreate: &assignOnCreate,
+		},
+		Indexes: []crudmodel.IndexSpec{{Name: "uk_new", Unique: true, Columns: []string{"name"}}},
+	}
+	generated, err := MarshalSpec(table, []crudmodel.Field{{Name: "id", Type: "bigint"}})
+	require.NoError(t, err)
+	merged, err := MergeSpec(existing, generated)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, yaml.Unmarshal(merged, &doc))
+	_, hasType := doc["type"]
+	require.False(t, hasType, "type must be dropped so the next run derives it from the database")
+	require.Contains(t, doc, "menu")
+	require.Contains(t, doc, "indexes")
+	scope, ok := doc["dataScope"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, true, scope["reassignable"])
+	require.Equal(t, map[string]any{"table": "user", "byColumn": "user_id"}, scope["inheritFrom"])
+	require.Equal(t, false, scope["assignOnCreate"])
+}
+
+// MarshalSpec 写出的 dataScope/indexes 必须能被 owner 登记（yaml 小写键）识别。
+func TestMarshalSpecOwnerKeysAreReadable(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	content, err := MarshalSpec(crudmodel.Table{
+		Name: "seller_user",
+		DataScope: &data_scope.Config{
+			Mode:         data_scope.ModeAuto,
+			OwnerColumn:  "admin_id",
+			Reassignable: true,
+			InheritFrom:  &data_scope.InheritRef{Table: "user", ByColumn: "user_id"},
+		},
+	}, []crudmodel.Field{{Name: "id", Type: "bigint"}})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "seller_user.yaml"), content, 0o600))
+	tables, err := CollectOwnerTables(dir)
+	require.NoError(t, err)
+	require.Equal(t, []string{"seller_user"}, tables)
 }

@@ -104,7 +104,7 @@
                 "type": "string"
               },
               "type": {
-                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）| log/db/sql（legacy，映射为 create/alter）",
                 "type": "string"
               },
               "unsigned": {
@@ -190,7 +190,7 @@
                 "type": "string"
               },
               "type": {
-                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+                "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）| log/db/sql（legacy，映射为 create/alter）",
                 "type": "string"
               },
               "unsigned": {
@@ -272,11 +272,14 @@
     },
     "type": {
       "default": "auto",
-      "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）",
+      "description": "auto（默认，按库现状推导）| create（删表重建）| alter（只补/改列）| log/db/sql（legacy，映射为 create/alter）",
       "enum": [
         "auto",
         "create",
-        "alter"
+        "alter",
+        "log",
+        "db",
+        "sql"
       ],
       "type": "string"
     },

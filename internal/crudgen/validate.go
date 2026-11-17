@@ -62,6 +62,16 @@ func ValidateSpec(path string) ([]ValidationWarning, error) {
 			Message:  fmt.Sprintf("%s is deprecated: %s", key, deprecatedSpecKeyReasons[key]),
 		})
 	}
+	switch typeName := strings.ToLower(strings.TrimSpace(opts.Type)); typeName {
+	case "", "auto", "create", "alter":
+	case "log", "db", "sql":
+		warnings = append(warnings, ValidationWarning{
+			SpecPath: path,
+			Message:  fmt.Sprintf("type: %q is legacy (mapped to create/alter by rebuild); prefer omitting type (auto) or declaring alter/create explicitly", opts.Type),
+		})
+	default:
+		errorsFound = append(errorsFound, fmt.Errorf("unsupported type %q; use auto (default), create or alter", opts.Type))
+	}
 	if typeNode := mappingNodeValue(metadata.Root, "type"); typeNode != nil && strings.EqualFold(typeNode.Value, "create") {
 		warnings = append(warnings, ValidationWarning{
 			SpecPath: path,
