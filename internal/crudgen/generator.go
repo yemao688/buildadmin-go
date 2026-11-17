@@ -786,6 +786,11 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 	if err != nil {
 		return err
 	}
+	// 释放锁必须紧跟获取：spec-only 回退与守卫的提前返回也在锁内，漏注册会让
+	// server 进程（CrudService.Delete）永久卡在 "another generation is in progress"。
+	defer func() {
+		retErr = mergeReleaseError(retErr, releaseLocks)
+	}()
 	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
 	// 从未成功生成过的表没有 manifest：此时 delete 只清理 spec（若存在），
 	// 而不是报错留下孤儿 spec（启动 apply 会用它重建菜单）。
@@ -801,9 +806,6 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 		return deleteSpecOnly(lockedDB, cfg, tableName)
 	}
 	var fail func(string, error) error
-	defer func() {
-		retErr = mergeReleaseError(retErr, releaseLocks)
-	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicErr := generationPanicError(recovered)
