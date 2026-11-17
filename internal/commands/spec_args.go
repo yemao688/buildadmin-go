@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // expandSpecPaths 把目录参数展开为按文件名排序的 spec 文件列表：crud:apply 与
@@ -37,10 +38,31 @@ func expandSpecPaths(args []string) ([]string, error) {
 			return nil, fmt.Errorf("no spec files found in %s", arg)
 		}
 		sort.Strings(matches)
-		// 展开结果按仓库相对路径输出：approveCommand 要能直接复制到仓库根执行。
-		for _, match := range matches {
-			paths = append(paths, relativeToRoot(match))
-		}
+		paths = append(paths, matches...)
 	}
-	return paths, nil
+	// 执行用绝对路径（允许从任意 cwd 运行），展示/approveCommand 再压成仓库相对路径。
+	unique := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve spec %s: %w", path, err)
+		}
+		if _, exists := seen[absolute]; exists {
+			continue
+		}
+		seen[absolute] = struct{}{}
+		unique = append(unique, absolute)
+	}
+	return unique, nil
+}
+
+// relativeSpecRef 把展开后的绝对 spec 文件压成仓库相对路径列表，供
+// approveCommand 与审批页展示（可从仓库根直接复制执行）。
+func relativeSpecRef(paths []string) string {
+	display := make([]string, 0, len(paths))
+	for _, path := range paths {
+		display = append(display, relativeToRoot(path))
+	}
+	return strings.Join(display, " ")
 }

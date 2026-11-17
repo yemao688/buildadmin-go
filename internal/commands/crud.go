@@ -192,6 +192,12 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
 	if jsonMode() {
 		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, Warnings: dryRunWarnings}
+		if diffMode {
+			payload.Diffs, err = h.renderDiffPayload(specPath)
+			if err != nil {
+				return err
+			}
+		}
 		if planErr != nil {
 			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {
 				return printErr
@@ -200,10 +206,21 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 		}
 		return printJSON(cmd, payload)
 	}
+	if err := h.printDryRun(cmd, specPath, plan, results, diffMode); err != nil {
+		return err
+	}
+	if planErr != nil {
+		return fmt.Errorf("CRUD plan error: %w", planErr)
+	}
+	return nil
+}
+
+// printDryRun 输出人类可读的 --dry-run 结果；--diff 时附带逐文件 unified diff。
+func (h *CrudHandler) printDryRun(cmd *cobra.Command, specPath string, plan helper.GenerationFilePlan, results []helper.ApplyTableResult, diffMode bool) error {
 	printApplyPlan(cmd, results)
 	if diffMode {
-		if renderErr := h.printRenderedDiff(cmd, specPath); renderErr != nil {
-			return renderErr
+		if err := h.printRenderedDiff(cmd, specPath); err != nil {
+			return err
 		}
 	}
 	cmd.Printf("\nfiles to create (%d):\n", len(plan.Create))
@@ -216,9 +233,6 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	}
 	cmd.Println("menus: would be synced from the table comment (not applied in dry-run)")
 	cmd.Println("dry run: nothing written")
-	if planErr != nil {
-		return fmt.Errorf("CRUD plan error: %w", planErr)
-	}
 	return nil
 }
 
@@ -253,7 +267,7 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 func (h *CrudHandler) applyPlan(cmd *cobra.Command, args []string, opts helper.ApplyOptions, htmlOut string) error {
 	store := helper.NewTableStore(h.db, h.config)
 	results, err := helper.PlanSpecs(h.db, h.config, store, args, opts)
-	specRef := strings.Join(args, " ")
+	specRef := relativeSpecRef(args)
 	payload := planToJSON(results, specRef, confRef())
 	if htmlOut != "" {
 		if htmlErr := writePlanHTML(htmlOut, payload, specRef, h.config.Database.Database); htmlErr != nil {
@@ -375,4 +389,23 @@ func (h *CrudHandler) Delete(cmd *cobra.Command, args []string) error {
 	data_scope.InvalidateBusinessIdentifierCache()
 	cmd.Printf("CRUD deletion success: %s\n", args[0])
 	return nil
+}
+
+// renderDiffPayload 渲染 spec 并与工作树比对，返回 --dry-run --diff --json 的
+// 逐文件差异。
+func (h *CrudHandler) renderDiffPayload(specPath string) ([]dryRunDiffJSON, error) {
+	files, err := h.renderSpecToMemory(specPath)
+	if err != nil {
+		return nil, err
+	}
+	drift := compareRenderedWithDisk(files)
+	payload := make([]dryRunDiffJSON, 0, len(drift))
+	for _, item := range drift {
+		entry := dryRunDiffJSON{Path: relativeToRoot(item.Path), Missing: item.Missing}
+		if !item.Missing {
+			entry.Diff = helper.UnifiedDiff(relativeToRoot(item.Path), item.Before, item.Rendered)
+		}
+		payload = append(payload, entry)
+	}
+	return payload, nil
 }

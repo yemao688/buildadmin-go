@@ -3,6 +3,8 @@ package crudgen
 import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -123,6 +125,12 @@ var specModeledScopeKeys = map[string]struct{}{
 // 否则重新设计一个级联/归属模块会静默抹掉 indexes、menu、reassignable 与
 // inheritFrom，进而让 owner 登记与 cascade 同步失效。
 func MergeSpec(existing, generated []byte) ([]byte, error) {
+	return mergeSpec(existing, generated, true)
+}
+
+// mergeSpec 是 MergeSpec 的实现；preserveIndexes=false 用于「保留的 indexes
+// 已与新字段集不兼容」的降级重试（字段改宽/删除后索引可能需要前缀或失效）。
+func mergeSpec(existing, generated []byte, preserveIndexes bool) ([]byte, error) {
 	var existingDoc, generatedDoc map[string]any
 	if err := yaml.Unmarshal(existing, &existingDoc); err != nil {
 		return nil, fmt.Errorf("parse existing spec: %w", err)
@@ -132,6 +140,9 @@ func MergeSpec(existing, generated []byte) ([]byte, error) {
 	}
 	for key, value := range existingDoc {
 		if key == "type" {
+			continue
+		}
+		if key == "indexes" && !preserveIndexes {
 			continue
 		}
 		if _, modeled := specModeledKeys[key]; modeled {
@@ -330,4 +341,22 @@ func stringSlicePointer(values []string) *[]string {
 	}
 	copied := append([]string{}, values...)
 	return &copied
+}
+
+// ValidateSpecContent 用临时文件校验 spec 内容，供设计器写回在落盘前自检。
+// 一个不可加载的 spec 会让下一次 serve/migrate 直接失败，必须在生成阶段拦住。
+func ValidateSpecContent(content []byte) error {
+	dir, err := os.MkdirTemp("", "crud-spec-*")
+	if err != nil {
+		return fmt.Errorf("create spec validation dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	path := filepath.Join(dir, "spec.yaml")
+	if err := os.WriteFile(path, content, 0o600); err != nil { //nolint:gosec // G703: path 由 MkdirTemp 生成，文件名固定
+		return fmt.Errorf("write spec for validation: %w", err)
+	}
+	if _, err := ValidateSpec(path); err != nil {
+		return err
+	}
+	return nil
 }

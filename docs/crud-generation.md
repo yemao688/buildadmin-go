@@ -69,7 +69,7 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 
 - **`--skip-frontend`**：跳过 `web/src/views/<module>/`（index.vue、popupForm.vue）与语言文件（en/zh-cn）的生成，并隐含 `--skip-menu`（views 未生成时菜单组件路径悬空）。用于前端已深度定制、重新生成后端改动时不想覆盖/回补 views 的场景。
 - **`--skip-repo`**：跳过 `internal/admin/repository/<table>.go` 与所在包 provider 合并。**前置检查：仓库文件必须已存在**（首次生成使用会直接报错——handler 引用 `NewXxxRepository` 编译必挂）。用于仓库已手写定制、只想刷新 entity/DTO/handler/registrar 的场景。
-- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成。
+- **跳过产物的语义**：被跳过的文件不进入本次 manifest 记录（`crud:delete` 不会删除定制文件）、不参与快照（未写入无需回滚）；`manifestAllows` 采用**双向子集**对比——skip 方向允许"本次是上次成功记录剔除跳过路径后的等长子集"，恢复方向允许"上次记录是本次的子集"（从 skip 切回全量时被跳过产物重新纳入，无需先 `crud:delete`）。两清单互不包含（换 `generateRelativePath`/表名的路径漂移，会残留旧文件）仍被拒绝，必须 `crud:delete` 后再生成；`crud:delete` 会连同 `crud_specs/<table>.yaml` 一起删除，需保留时先 `git checkout crud_specs/<table>.yaml`。
 - **清单路径可移植**：`crud_log` 的 manifest 统一存相对仓库根路径，读取时按当前 `util.RootPath()` 还原；旧记录里的其它 checkout 绝对路径也会按已知产物根重挂到当前仓库。因此同一数据库可以在 git worktree / 另一份 clone 中继续生成或删除，不需要改库。
 
 ### 旧产物阻塞编译时的批量重生成
@@ -1166,7 +1166,7 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 
 失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。命令里的 spec 是**展开后的文件列表**（`crud:apply` 接受目录并按文件名排序展开），显式传入 `--conf` 时也会带上，因此可以直接复制执行。
 
-`--json` 承诺 stdout 上只有一个 JSON 文档：配置引导行、SQL 日志（`enable_file_log_writer: false` 时）与 `[crudgen] WARNING` 一律走 stderr。`crud:generate --dry-run --diff --json` 会在 `data.fileDiffs` 里附带逐文件 unified diff；`crud:new` / `crud:schema` 不支持信封（前者输出人读提示，后者输出原生 schema JSON）。
+`--json` 承诺 stdout 上只有一个 JSON 文档：配置引导行、SQL 日志（`enable_file_log_writer: false` 时）与 `[crudgen] WARNING` 一律走 stderr。`crud:generate --dry-run --diff --json` 会在 `data.fileDiffs` 里附带逐文件 unified diff；`crud:export-spec --json` 返回导出路径；`crud:new` / `crud:schema` 不支持信封（前者输出人读提示，后者输出原生 schema JSON）。
 
 ## 12. 只读命令一览
 

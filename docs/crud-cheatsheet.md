@@ -92,7 +92,7 @@ diagnose                        # 全部体检项一次输出（--json 可给 CI
 | --- | --- |
 | `crud generation is forbidden for protected table` | 核心表（user/admin/...）只能 `registerOnly` 登记，不能生成 |
 | `--skip-repo: repository file ... does not exist` | 首次生成不要带 `--skip-repo` |
-| `refusing to overwrite existing CRUD output` | 产物与上次成功的 manifest 不一致：先 `crud:delete <table>` 或恢复原路径 |
+| `refusing to overwrite existing CRUD output` | 产物与上次成功的 manifest 不一致：先 `crud:delete <table>` 或恢复原路径；`crud:delete` 会连 `crud_specs/<table>.yaml` 一起删，重生成前需 `git checkout` 该 spec |
 | `type=create would drop and recreate` | 你显式写了 `type: create`。改成省略或 `alter`；确实要重建才加 `--allow-rebuild` |
 | `no successful crud_log for table`（export-spec） | 该表从未成功生成过，直接手写 spec |
 | `unknown relation alias` | `quickSearchField` 的点号别名由外键字段名派生，且列必须在 `relationFields` 里 |

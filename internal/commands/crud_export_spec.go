@@ -76,12 +76,11 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, content, 0o644); err != nil { //nolint:gosec // G306: spec 是仓库内可读文件
-		return fmt.Errorf("write spec: %w", err)
+	if err := writeValidatedSpec(dir, table, path, content); err != nil {
+		return err
 	}
-	if _, err := helper.ValidateSpec(path); err != nil {
-		_ = os.Remove(path)
-		return fmt.Errorf("exported spec failed validation: %w", err)
+	if jsonMode() {
+		return printJSON(cmd, map[string]any{"table": table, "path": relativeToRoot(path), "merged": force})
 	}
 	cmd.Printf("exported %s\n", path)
 	cmd.Printf("review it, then use crud:generate %s (the designer is no longer required)\n", path)
@@ -103,4 +102,29 @@ func exportSpecContent(path string, table crudmodel.Table, fields []crudmodel.Fi
 		return nil, fmt.Errorf("read existing spec: %w", readErr)
 	}
 	return content, nil
+}
+
+// writeValidatedSpec 先写临时文件并校验，通过后原子替换目标：校验失败不会
+// 删掉上一版 spec。
+func writeValidatedSpec(dir, table, path string, content []byte) error {
+	temp, err := os.CreateTemp(dir, table+"-*.yaml")
+	if err != nil {
+		return fmt.Errorf("create temp spec: %w", err)
+	}
+	tempPath := temp.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+	if _, err := temp.Write(content); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("write temp spec: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("close temp spec: %w", err)
+	}
+	if _, err := helper.ValidateSpec(tempPath); err != nil {
+		return fmt.Errorf("exported spec failed validation: %w", err)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return fmt.Errorf("write spec: %w", err)
+	}
+	return nil
 }

@@ -186,7 +186,7 @@ func confRef() string {
 	if flag == nil || !flag.Changed {
 		return ""
 	}
-	value := flag.Value.String()
+	value := relativeToRoot(flag.Value.String())
 	if strings.ContainsAny(value, " \t") {
 		return strconv.Quote(value)
 	}

@@ -223,11 +223,7 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 	// 不能因为没带 --strict 就悄悄退出 0。
 	results, planErr := helper.PlanSpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, helper.ApplyOptions{AdminID: 1, ApproveAll: true, AllowRejected: false, Plan: true})
 	if jsonMode() {
-		// approveCommand 必须可执行：目录展开为按文件名排序的相对路径。
-		specRef := dir
-		if specFiles, expandErr := expandSpecPaths([]string{dir}); expandErr == nil {
-			specRef = strings.Join(specFiles, " ")
-		}
+		specRef := approveSpecRef(dir)
 		payload := migratePlanJSON{
 			State: string(report.State), Pending: pending, Incomplete: incomplete,
 			Plan: planToJSON(results, specRef, confRef()),
@@ -488,4 +484,14 @@ func parseBreakpointSequence(args []string) (uint64, error) {
 		return 0, fmt.Errorf("invalid breakpoint version %q: %w", args[0], err)
 	}
 	return sequence, nil
+}
+
+// approveSpecRef 把 spec 目录展开为 approveCommand 可执行的相对文件列表；
+// 目录为空/不可读时回退为目录本身。
+func approveSpecRef(dir string) string {
+	specFiles, err := expandSpecPaths([]string{dir})
+	if err != nil || len(specFiles) == 0 {
+		return dir
+	}
+	return relativeSpecRef(specFiles)
 }

@@ -78,6 +78,7 @@ type generateState struct {
 	menuSnapshot      []model.AdminRule
 	registeredRoutes  []atomicRouteRegistration
 	indexWarnings     []string
+	specWarnings      []string
 }
 
 // mergeReleaseError 把生成锁释放失败并入返回值：成功时升级为失败，失败时保留
@@ -158,7 +159,11 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 		return nil, err
 	}
 	state.cleanupAllowed = true
-	return &GenerateResult{Files: append(state.manifest.Generated, state.manifest.Shared...), LogID: state.logID, Warnings: state.indexWarnings}, nil
+	return &GenerateResult{
+		Files:    append(state.manifest.Generated, state.manifest.Shared...),
+		LogID:    state.logID,
+		Warnings: append(append([]string{}, state.indexWarnings...), state.specWarnings...),
+	}, nil
 }
 
 // wrapCleanupError 把快照清理失败并入返回值：原本成功的返回改成清理失败，
@@ -365,9 +370,24 @@ func (s *generateState) writeSpecOutput() error {
 	// 设计器只覆盖它建模的键：既有的 menu/indexes/reassignable/inheritFrom 等
 	// 必须保留，否则重新设计会静默改变归属与索引语义。
 	if existing, readErr := os.ReadFile(s.specPath); readErr == nil {
-		content, err = MergeSpec(existing, content)
-		if err != nil {
-			return s.failErr("spec write", err)
+		merged, mergeErr := MergeSpec(existing, content)
+		if mergeErr != nil {
+			return s.failErr("spec write", mergeErr)
+		}
+		if validateErr := ValidateSpecContent(merged); validateErr == nil {
+			content = merged
+		} else {
+			// 保留的 indexes 可能与新字段集不兼容（改宽需前缀/删列失效）：
+			// 丢弃保留项再试一次，并在生成结果里明确告警。
+			fallback, fallbackErr := mergeSpec(existing, content, false)
+			if fallbackErr != nil {
+				return s.failErr("spec write", fallbackErr)
+			}
+			if fallbackErr = ValidateSpecContent(fallback); fallbackErr != nil {
+				return s.failErr("spec write", fmt.Errorf("%w; preserving existing keys made the spec unloadable: %w", fallbackErr, validateErr))
+			}
+			s.specWarnings = append(s.specWarnings, fmt.Sprintf("preserved indexes dropped from %s: %v", relativeSpecPath(s.specPath), validateErr))
+			content = fallback
 		}
 	} else if !os.IsNotExist(readErr) {
 		return s.failErr("spec write", readErr)
@@ -442,7 +462,9 @@ func (s *generateState) markFailed(stage string, cause error) (*GenerateResult, 
 			message += fmt.Sprintf("; menu restore failed: %v", restoreErr)
 		}
 	}
-	_ = recordCrudError(s.db, s.cfg, s.logID, message)
+	if s.logID != 0 {
+		_ = recordCrudError(s.db, s.cfg, s.logID, message)
+	}
 	if len(s.createdMenuIDs) > 0 {
 		_ = s.db.Table(s.cfg.Database.Prefix+"admin_rule").Where("id IN ?", s.createdMenuIDs).Delete(&model.AdminRule{}).Error
 	}
@@ -863,7 +885,7 @@ func (s *deleteState) buildManifest() error {
 	// spec 是模块的事实源：删除模块必须一并删除，否则下次 serve/migrate 的
 	// spec apply 会重建菜单并重新记账，模块在重启后"复活"。
 	// 纳入 generated 隔离区，删除失败时随其它产物一起恢复。
-	s.manifest = appendModuleSpec(prepared, DefaultSpecsDir(), s.tableName)
+	s.manifest = appendModuleSpec(prepared, DefaultSpecsDir(), s.log.Table.Name)
 	return nil
 }
 
@@ -874,7 +896,8 @@ func appendModuleSpec(manifest FileManifest, specDir, tableName string) FileMani
 		return manifest
 	}
 	specPath := filepath.Join(specDir, tableName+".yaml")
-	if fileExists(specPath) {
+	info, statErr := os.Stat(specPath)
+	if statErr == nil && info.Mode().IsRegular() {
 		manifest.Generated = append(manifest.Generated, specPath)
 	}
 	return manifest
@@ -1701,4 +1724,13 @@ func buildAndRestoreOnFailure(snapshot *FileSnapshot, builder func() error) erro
 
 func generationPanicError(recovered any) error {
 	return fmt.Errorf("panic: %v", recovered)
+}
+
+// relativeSpecPath 把 spec 绝对路径压成仓库相对路径，用于生成告警展示。
+func relativeSpecPath(path string) string {
+	rel, err := filepath.Rel(util.RootPath(), path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
 }

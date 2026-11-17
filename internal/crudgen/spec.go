@@ -95,7 +95,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	formFields := resolveSpecFormFields(raw.FormFields, fields)
 	columnFields := resolveSpecColumnFields(raw.ColumnFields, fields)
 	dataScope := resolveSpecDataScope(raw.DataScope)
-	typeName := strings.TrimSpace(raw.Type)
+	typeName := strings.ToLower(strings.TrimSpace(raw.Type))
 	if typeName == "" {
 		// auto：由目标库现状推导 create/alter，避免省略 type 时把已存在的表
 		// 按 create 语义删除重建（历史默认值是 create）。

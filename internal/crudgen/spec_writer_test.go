@@ -195,3 +195,30 @@ func TestMarshalSpecOwnerKeysAreReadable(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"seller_user"}, tables)
 }
+
+// 保留的 indexes 可能与新字段集不兼容（如字段改宽后需要前缀）：合并结果必须
+// 先校验，失败时降级为丢弃保留项，否则会写出让 serve/migrate 直接失败的 spec。
+func TestMergeSpecFallbackDropsIncompatibleIndexes(t *testing.T) {
+	t.Parallel()
+	existing := []byte(`name: ops_index_probe
+fields:
+  - {name: id, type: bigint, unsigned: true, primaryKey: true, autoIncrement: true}
+  - {name: note, type: varchar, length: 100}
+indexes:
+  - name: uk_note
+    unique: true
+    columns: [note]
+`)
+	generated := []byte(`name: ops_index_probe
+fields:
+  - {name: id, type: bigint, unsigned: true, primaryKey: true, autoIncrement: true}
+  - {name: note, type: longtext}
+`)
+	merged, err := MergeSpec(existing, generated)
+	require.NoError(t, err)
+	require.Error(t, ValidateSpecContent(merged), "longtext index without prefix must be rejected")
+
+	fallback, err := mergeSpec(existing, generated, false)
+	require.NoError(t, err)
+	require.NoError(t, ValidateSpecContent(fallback), "fallback must drop the incompatible index")
+}
