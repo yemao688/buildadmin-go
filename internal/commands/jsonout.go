@@ -166,11 +166,11 @@ type generatedJSON struct {
 }
 
 type dryRunJSON struct {
-	Plan      planJSON         `json:"plan"`
-	Create    []string         `json:"filesToCreate"`
-	Overwrite []string         `json:"filesToOverwrite"`
-	Diffs     []dryRunDiffJSON `json:"fileDiffs,omitempty"`
-	Warnings  []string         `json:"warnings,omitempty"`
+	Plan      planJSON          `json:"plan"`
+	Create    []string          `json:"filesToCreate"`
+	Overwrite []string          `json:"filesToOverwrite"`
+	Diffs     *[]dryRunDiffJSON `json:"fileDiffs,omitempty"`
+	Warnings  []string          `json:"warnings,omitempty"`
 }
 
 type dryRunDiffJSON struct {

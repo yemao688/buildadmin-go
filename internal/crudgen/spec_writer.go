@@ -356,7 +356,7 @@ func ValidateSpecContent(content []byte) error {
 		return fmt.Errorf("write spec for validation: %w", err)
 	}
 	if _, err := ValidateSpec(path); err != nil {
-		return err
+		return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), path, "spec"))
 	}
 	return nil
 }

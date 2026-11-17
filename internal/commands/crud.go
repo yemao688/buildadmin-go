@@ -193,10 +193,11 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	if jsonMode() {
 		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, Warnings: dryRunWarnings}
 		if diffMode {
-			payload.Diffs, err = h.renderDiffPayload(specPath)
-			if err != nil {
-				return err
+			diffs, diffErr := h.renderDiffPayload(specPath)
+			if diffErr != nil {
+				return diffErr
 			}
+			payload.Diffs = &diffs
 		}
 		if planErr != nil {
 			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {

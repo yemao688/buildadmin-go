@@ -69,7 +69,9 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 		return fmt.Errorf("create spec directory: %w", err)
 	}
 	path := filepath.Join(dir, table+".yaml")
-	if _, err := os.Stat(path); err == nil && !force {
+	_, statErr := os.Stat(path)
+	existed := statErr == nil
+	if existed && !force {
 		return fmt.Errorf("spec %s already exists; pass --force to overwrite", path)
 	}
 	content, err := exportSpecContent(path, crudmodel.Table(record.Table), []crudmodel.Field(record.Fields))
@@ -80,7 +82,7 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 		return err
 	}
 	if jsonMode() {
-		return printJSON(cmd, map[string]any{"table": table, "path": relativeToRoot(path), "merged": force})
+		return printJSON(cmd, map[string]any{"table": table, "path": relativeToRoot(path), "merged": existed})
 	}
 	cmd.Printf("exported %s\n", path)
 	cmd.Printf("review it, then use crud:generate %s (the designer is no longer required)\n", path)
