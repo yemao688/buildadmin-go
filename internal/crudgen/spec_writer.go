@@ -87,7 +87,7 @@ func MarshalSpec(table crudmodel.Table, fields []crudmodel.Field) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("encode spec: %w", err)
 	}
-	header := "# 由 CRUD 设计器生成；改动后请用 crud:validate / crud:generate 重新生成\n"
+	header := "# 由 crudgen 生成（后台设计器或 crud:export-spec）；改动后请用 crud:validate / crud:generate\n"
 	return append([]byte(header), body...), nil
 }
 

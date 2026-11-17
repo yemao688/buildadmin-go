@@ -18,13 +18,24 @@ go build ./...
 
 生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
 
-### 干跑预览（`--dry-run`）
+### 干跑预览（`--dry-run` / `--diff`）
 
 ```bash
 go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --dry-run
+go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>.yaml --dry-run --diff
 ```
 
-只读输出三部分：表结构差量（与 `crud:apply --plan` 同一套 `safe-auto` / `requires-approval` / `rejected` 分类）、将被新建与覆盖的文件、以及"菜单会按表注释同步"的提示。**不写库、不写文件、不同步菜单**。内容级 diff（渲染后的文件正文）尚未提供：渲染与写盘目前耦合在同一条调用链里，需要先把渲染层拆出来。
+只读输出：表结构差量（与 `crud:apply --plan` 同一套 `safe-auto` / `requires-approval` / `rejected` 分类）、将被新建与覆盖的文件、以及"菜单会按表注释同步"的提示。**不写库、不写文件、不同步菜单**。
+
+加 `--diff` 会走生成器的同一条渲染链，把产物渲染进内存再与工作树逐文件比较，输出 unified diff（新增文件只提示路径）。这回答的是"重新生成会覆盖我改过的哪些行"，比事后 `git diff` 更早、更准。
+
+### 定制点校验（`crud:check-customized`）
+
+```bash
+crud:check-customized <table> [--diff] [--json]
+```
+
+渲染 spec → 与工作树比对 → 列出被手工改过（或缺失）的生成产物，发现差异以非零退出。`--diff` 打印每处差异的 unified diff。它替代双提交工作流里的"人肉 `git diff` 回补"：重新生成前先跑一次，就知道哪些改动会被覆盖、要逐项回补。
 
 ### 设计器与 spec 的关系
 
@@ -1164,6 +1175,8 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
 | `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML：字段表 + 表单/列表清单，检查组件选择 | 无 |
 | `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
 | `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
+| `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |
+| `crud:check-customized <table> [--diff]` | 列出被手工改过/缺失的生成产物（定制点） | MySQL |
 | `crud:apply --plan [--html <path>] [--json]` | 分类计划；`--html` 出只读审批页 | MySQL |
 | `migrate --plan` | 发版前检查 `rejected` 的唯一事实源 | MySQL |
 | `migrate status [--json]` / `migrate list [--all]` | 三轨计数摘要 / 业务轨台账 | MySQL |

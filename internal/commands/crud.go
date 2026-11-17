@@ -61,6 +61,7 @@ func newCrudGenerateCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 	generateCmd.Flags().Bool("skip-compile-check", false, "skip wire regeneration and go build self-check; use while stale generated artifacts block the build, then run go generate ./cmd/server && go build ./...")
 	generateCmd.Flags().Bool("allow-rebuild", false, "allow type=create to drop and recreate an existing table (data loss)")
 	generateCmd.Flags().Bool("dry-run", false, "print the schema diff and the files that would be written, then exit without touching the database or filesystem")
+	generateCmd.Flags().Bool("diff", false, "with --dry-run: render the files in memory and print unified diffs against the working tree")
 	generateCmd.Flags().Int32("admin-id", 1, "administrator ID recorded as the generator owner")
 	return generateCmd
 }
@@ -122,6 +123,9 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 	if dryRun {
 		return h.planGenerate(cmd, args[0])
 	}
+	if diffFlag, _ := cmd.Flags().GetBool("diff"); diffFlag {
+		return fmt.Errorf("--diff requires --dry-run: it renders in memory and writes nothing")
+	}
 	opts, err := helper.LoadSpec(args[0])
 	if err != nil {
 		return fmt.Errorf("load CRUD spec error: %w", err)
@@ -169,6 +173,7 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	if err != nil {
 		return fmt.Errorf("load CRUD spec error: %w", err)
 	}
+	diffMode, _ := cmd.Flags().GetBool("diff")
 	store := helper.NewTableStore(h.db, h.config)
 	plan, err := helper.PreviewGenerationFiles(h.db, h.config, opts.Table, opts.Fields)
 	if err != nil {
@@ -186,6 +191,11 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 		return printJSON(cmd, payload)
 	}
 	printApplyPlan(cmd, results)
+	if diffMode {
+		if renderErr := h.printRenderedDiff(cmd, specPath); renderErr != nil {
+			return renderErr
+		}
+	}
 	cmd.Printf("\nfiles to create (%d):\n", len(plan.Create))
 	for _, path := range plan.Create {
 		cmd.Printf("  + %s\n", path)

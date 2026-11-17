@@ -147,6 +147,15 @@ func printCrudDiff(cmd *cobra.Command, results []helper.ApplyTableResult, summar
 	cmd.Printf("changes: safe-auto %d, requires-approval %d, rejected %d\n",
 		summary.SafeAuto, summary.RequiresApproval, summary.Rejected)
 
+	safeAuto := collectDiffRows(results, helper.DiffSafeAuto)
+	if len(safeAuto) > 0 {
+		cmd.Println("safe-auto (crud:apply 直接执行):")
+		for _, row := range safeAuto {
+			cmd.Printf("  %s.%s\n", row.Table, row.Field)
+			printDiffDDL(cmd, row.DDL)
+		}
+	}
+
 	approvals := collectDiffRows(results, helper.DiffRequiresApproval)
 	if len(approvals) > 0 {
 		cmd.Println("requires-approval:")
@@ -168,7 +177,7 @@ func printCrudDiff(cmd *cobra.Command, results []helper.ApplyTableResult, summar
 		}
 	}
 
-	if len(approvals) == 0 && len(rejected) == 0 {
+	if len(safeAuto) == 0 && len(approvals) == 0 && len(rejected) == 0 {
 		cmd.Println("no changes: database matches the spec")
 	}
 }
