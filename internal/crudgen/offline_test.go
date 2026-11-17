@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
+	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/util"
 )
 
@@ -101,5 +103,49 @@ fields:
 		if !bytes.Equal(left, right) {
 			t.Fatalf("%s differs between renders", relative)
 		}
+	}
+}
+
+// 无数据库时 owner 列索引按 spec 证明：声明的索引首列或自动创建的
+// idx_<owner> 都算已证明；非首列不算。
+func TestSpecProvesOwnerIndex(t *testing.T) {
+	t.Parallel()
+	indexes := []crudmodel.IndexSpec{
+		{Name: "idx_status_weigh", Columns: []string{"status", "weigh"}},
+	}
+	fields := []crudmodel.Field{
+		{Name: "admin_id", Type: "int"},
+		{Name: "status", Type: "tinyint"},
+		{Name: "weigh", Type: "int"},
+		{Name: "remark", Type: "varchar"},
+	}
+	table := crudmodel.Table{DataScope: &data_scope.Config{Mode: data_scope.ModeAuto}, Indexes: indexes}
+	// admin_id 字段由 HandleTableDesign 无条件补 idx_admin_id（与 dataScope
+	// 模式无关），因此始终可证明。
+	if !specProvesOwnerIndex(table, fields, "admin_id") {
+		t.Fatal("implicit idx_admin_id must prove the owner column")
+	}
+	if !specProvesOwnerIndex(table, fields, "status") {
+		t.Fatal("declared leading index column must prove")
+	}
+	if specProvesOwnerIndex(table, fields, "weigh") {
+		t.Fatal("non-leading index column must not prove")
+	}
+	if specProvesOwnerIndex(table, fields, "remark") {
+		t.Fatal("column without any index must not prove")
+	}
+}
+
+// reassignable 需要 admin 的列元数据，离线必须明确拒绝而不是产出降级关联。
+func TestRenderOfflineRejectsReassignable(t *testing.T) {
+	t.Parallel()
+	specPath := writeSpecTest(t, `name: ops_offline_owner
+dataScope: {mode: auto, reassignable: true}
+fields:
+  id: {type: bigint, unsigned: true, primaryKey: true, autoIncrement: true}
+  admin_id: {type: int}
+`)
+	if _, _, err := RenderOffline(specPath, t.TempDir(), "ba_"); err == nil || !strings.Contains(err.Error(), "reassignable") {
+		t.Fatalf("error = %v", err)
 	}
 }

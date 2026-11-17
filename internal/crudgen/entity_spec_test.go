@@ -63,3 +63,34 @@ fields:
 		t.Fatalf("menu name = %q", name)
 	}
 }
+
+// 实体字段类型与命名必须与旧 gorm.io/gen 产物一致：下游模块重新生成时
+// float→float32、blob→[]byte、tinyint(1)→bool，缩写字段名走 gorm 规则。
+func TestEntityGoTypeAndNameMatchGormGen(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		field    crudmodel.Field
+		wantType string
+		wantName string
+	}{
+		{crudmodel.Field{Name: "id", Type: "bigint"}, "int64", "ID"},
+		{crudmodel.Field{Name: "admin_id", Type: "int"}, "int32", "AdminID"},
+		{crudmodel.Field{Name: "ratio", Type: "float"}, "float32", "Ratio"},
+		{crudmodel.Field{Name: "rate", Type: "decimal"}, "float64", "Rate"},
+		{crudmodel.Field{Name: "payload", Type: "blob"}, "[]byte", "Payload"},
+		{crudmodel.Field{Name: "summary", Type: "varchar"}, "string", "Summary"},
+		{crudmodel.Field{Name: "flag", Type: "tinyint", Length: 1}, "bool", "Flag"},
+		{crudmodel.Field{Name: "bits", Type: "bit"}, "[]uint8", "Bits"},
+		{crudmodel.Field{Name: "html_content", Type: "varchar"}, "string", "HTMLContent"},
+		{crudmodel.Field{Name: "cpu_load", Type: "int"}, "int32", "CPULoad"},
+		{crudmodel.Field{Name: "user_ids", Type: "varchar"}, "string", "UserIDs"},
+	}
+	for _, tc := range cases {
+		if got := entityGoType(tc.field); got != tc.wantType {
+			t.Errorf("%s type = %s, want %s", tc.field.Name, got, tc.wantType)
+		}
+		if got := entityGoFieldName(tc.field.Name); got != tc.wantName {
+			t.Errorf("%s name = %s, want %s", tc.field.Name, got, tc.wantName)
+		}
+	}
+}
