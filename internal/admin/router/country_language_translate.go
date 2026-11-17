@@ -17,10 +17,10 @@ import (
 )
 
 type CountryLanguageTranslateRegistrar struct {
-	handler *handler.CountryLanguageHandler
+	handler *handler.CountryLanguageTranslateHandler
 }
 
-func NewCountryLanguageTranslateRegistrar(handler *handler.CountryLanguageHandler) *CountryLanguageTranslateRegistrar {
+func NewCountryLanguageTranslateRegistrar(handler *handler.CountryLanguageTranslateHandler) *CountryLanguageTranslateRegistrar {
 	return &CountryLanguageTranslateRegistrar{handler: handler}
 }
 

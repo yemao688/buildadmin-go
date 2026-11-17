@@ -184,6 +184,7 @@ fields:
 | `columnFields` | `[]string`，省略时自动推导 | 省略时取全部字段，包括带 relation enrichment 的外键（FK 自动隐藏）。建议始终显式设置，只放需要在列表出现的字段；`password`、密钥、长备注等不应进列表。 |
 | `dataScope` | map，默认 `mode: auto` | 数据权限策略（见下文）。 |
 | `menu` | map，默认未配置 | 菜单标题和父节点覆盖；省略时菜单仍按表注释创建，跳过使用 `--skip-menu`。 |
+| `hooks` | map，默认空 | 命名扩展点：`afterMutation` 声明钩子名，生成代码输出 `crudhooks.Mutation("<名>")`，实现由业务装配期注册（见下文）。 |
 | `indexes` | `[]map`，默认空 | 表级索引声明（见下文）：唯一/普通索引由 `crud:generate` 与 `crud:apply` 物化。 |
 | `fields` | `[]map`，必填 | SQL 字段、设计类型以及 form/table 属性，必须恰好一个主键。 |
 | `webViewsDir` | `string`，默认自动推导 | `web/src/views/backend` 下的视图目录。显式值优先。 |
@@ -246,6 +247,39 @@ indexes:
 ```
 
 约束：索引名必填且全 spec 内不重复；`columns` 至少一列、引用真实字段、单索引内不重复。长文本列（text/varchar 等）建索引必须使用 `col(N)` 前缀语法（N 为正整数），与 MySQL 前缀索引一致。索引删除不在 apply 语义内（spec 移除声明后实际索引保留并以 `unmanaged` note 提示）；需要删索引的破坏性变更走 business 迁移。
+
+### `hooks`（命名扩展点）
+
+生成文件会被整文件重写，所以**不要**把业务逻辑写进生成产物。需要"写成功之后做点什么"（缓存失效、通知、审计）时，把实现放到业务包，spec 只声明名字：
+
+```yaml
+hooks:
+  afterMutation: currency-cache
+```
+
+生成器在 `TableOptions` 里输出：
+
+```go
+AfterMutation: crudhooks.Mutation("currency-cache"),
+```
+
+实现由业务在**装配期**注册（见 `internal/admin/handler/crud_hooks.go`，手写文件，生成器不覆盖）：
+
+```go
+func ProvideCrudHooks(countrySvc *country.Service) crudhooks.Registrations {
+    mustRegisterMutation("currency-cache", func(ctx *gin.Context) {
+        requesttx.InvalidateAfterMutation(ctx, countrySvc.InvalidateCurrencyCache)
+    })
+    return crudhooks.Registrations{}
+}
+```
+
+语义与约束：
+
+- `Mutation` 在**请求期**按名字查找，注册顺序不影响 wire 构造顺序；名字未注册时是 no-op，并在首次触发时打一条 `[crudhooks] ... is not registered` 日志（漏注册可见但不至于让服务起不来）。
+- 钩子名只允许字母、数字、下划线、连字符；同名重复注册会 panic（启动期暴露），不要用同一个名字承载两种语义。
+- 依赖注入：需要服务实例的钩子写在 `ProvideCrudHooks` 的 provider 里（wire 已接入）；不需要依赖的纯函数也可以在那里注册。
+- 自定义**接口/action** 不用钩子：在 handler 包新增独立 handler 类型，并放进 `internal/admin/router/custom_registrars.go`（`ProvideCustomRegistrars`），同样不写生成文件。
 
 ### `dataScope` 与 `menu`
 

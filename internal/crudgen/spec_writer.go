@@ -27,6 +27,7 @@ type specDocument struct {
 	FormFields           *[]string        `yaml:"formFields,omitempty"`
 	ColumnFields         *[]string        `yaml:"columnFields,omitempty"`
 	DataScope            map[string]any   `yaml:"dataScope,omitempty"`
+	Hooks                map[string]any   `yaml:"hooks,omitempty"`
 	Indexes              []map[string]any `yaml:"indexes,omitempty"`
 	Fields               []specFieldDoc   `yaml:"fields"`
 }
@@ -65,6 +66,13 @@ func MarshalSpec(table crudmodel.Table, fields []crudmodel.Field) ([]byte, error
 		DefaultSortType:      table.DefaultSortType,
 		FormFields:           stringSlicePointer(table.FormFields),
 		ColumnFields:         stringSlicePointer(table.ColumnFields),
+	}
+	if table.Hooks != nil {
+		hooks, err := structToMap(table.Hooks)
+		if err != nil {
+			return nil, fmt.Errorf("encode hooks: %w", err)
+		}
+		document.Hooks = hooks
 	}
 	if table.DataScope != nil {
 		scope, err := structToMap(table.DataScope)

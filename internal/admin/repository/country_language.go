@@ -125,7 +125,7 @@ func (s *CountryLanguageRepository) Add(ctx *gin.Context, countryLanguage model.
 			if err := tx.Table(s.TableName).Where("id = ?", countryLanguage.ID).Update("weigh", countryLanguage.ID).Error; err != nil {
 				return err
 			}
-			countryLanguage.Weigh = int32(countryLanguage.ID) //nolint:gosec // G115: 同上：weigh 列 int(11)，国家语言表由框架种子写入、主键规模为百级
+			countryLanguage.Weigh = int32(countryLanguage.ID) //nolint:gosec // G115: weigh 列为 int(11)，业务表自增主键在业务规模内不会超过 int32 上界
 		}
 		return nil
 	})

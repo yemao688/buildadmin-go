@@ -21,6 +21,7 @@ import (
 	adminhandler "buildadmin-go/internal/admin/handler"
 	adminMiddleware "buildadmin-go/internal/admin/middleware"
 	"buildadmin-go/internal/middleware"
+	"buildadmin-go/internal/pkg/crudhooks"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,6 +36,11 @@ type AdminRouterDeps struct {
 	IndexHandler   *adminhandler.IndexHandler
 	AjaxHandler    *adminhandler.AjaxHandler
 	Registrars     []Registrar
+	// CustomRegistrars 是手写 registrar（自定义 action/接口），由
+	// ProvideCustomRegistrars 装配，生成器不维护这一层。
+	CustomRegistrars CustomRegistrarSet
+	// CrudHooks 的构造过程完成 CRUD 钩子注册（值本身不使用）。
+	CrudHooks crudhooks.Registrations
 }
 
 // AdminRouter 完成 /admin/* 路由与能力的注册。
@@ -87,13 +93,25 @@ func (r *AdminRouter) Register(engine *gin.Engine) {
 	adminRouter.POST("ajax/clearCache", r.deps.AjaxHandler.ClearCache)
 	adminRouter.POST("ajax/changeTerminalConfig", r.deps.AjaxHandler.ChangeTerminalConfig)
 
+	registrars := r.allRegistrars()
 	// AtomicRoute 能力注册先于路由挂载，与拆分前的组装顺序保持一致。
-	for _, registrar := range r.deps.Registrars {
+	for _, registrar := range registrars {
 		for _, capability := range registrar.Capabilities() {
 			middleware.RegisterAtomicRoute(capability)
 		}
 	}
-	for _, registrar := range r.deps.Registrars {
+	for _, registrar := range registrars {
 		registrar.Register(adminRouter)
 	}
+}
+
+// allRegistrars 合并生成器维护的模块注册器与手写注册器：自定义 action 放
+// CustomRegistrars，重新生成不会影响。
+func (r *AdminRouter) allRegistrars() []Registrar {
+	if len(r.deps.CustomRegistrars) == 0 {
+		return r.deps.Registrars
+	}
+	merged := make([]Registrar, 0, len(r.deps.Registrars)+len(r.deps.CustomRegistrars))
+	merged = append(merged, r.deps.Registrars...)
+	return append(merged, r.deps.CustomRegistrars...)
 }

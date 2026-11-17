@@ -2,6 +2,8 @@ name: country_language
 comment: 全局语言
 type: alter
 generateRelativePath: country_language
+hooks:
+  afterMutation: language-cache
 dataScope:
   mode: none
 quickSearchField: [lan, name]

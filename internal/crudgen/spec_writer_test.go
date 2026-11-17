@@ -25,6 +25,7 @@ func TestMarshalSpecRoundTripsThroughLoadSpec(t *testing.T) {
 		FormFields:           []string{"title", "user_id", "status"},
 		ColumnFields:         []string{"title", "user_id", "status", "create_time"},
 		DataScope:            &data_scope.Config{Mode: data_scope.ModeAuto},
+		Hooks:                &crudmodel.Hooks{AfterMutation: "currency-cache"},
 		Indexes:              []crudmodel.IndexSpec{{Name: "uk_title", Unique: true, Columns: []string{"title"}}},
 	}
 	fields := []crudmodel.Field{
@@ -85,6 +86,9 @@ func assertRewrittenIdentity(t *testing.T, options *GenerateOptions, fields []cr
 	}
 	if options.Table.DataScope == nil || options.Table.DataScope.Mode != data_scope.ModeAuto {
 		t.Fatalf("data scope lost: %+v", options.Table.DataScope)
+	}
+	if options.Table.Hooks == nil || options.Table.Hooks.AfterMutation != "currency-cache" {
+		t.Fatalf("hooks lost: %+v", options.Table.Hooks)
 	}
 }
 

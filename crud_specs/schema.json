@@ -219,6 +219,10 @@
       "description": "views 目录与菜单/路由名形态；省略即表名",
       "type": "string"
     },
+    "hooks": {
+      "additionalProperties": true,
+      "type": "object"
+    },
     "indexes": {
       "description": "表级索引：name/unique/columns",
       "items": {

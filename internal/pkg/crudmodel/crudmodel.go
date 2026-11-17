@@ -91,6 +91,12 @@ type IndexSpec struct {
 	Columns []string `json:"columns" mapstructure:"columns"` //索引列（至少一列，引用 spec 中真实字段）
 }
 
+// Hooks 声明生成代码中按名字解析的扩展点：spec 只写名字，实现由业务装配期
+// 注册（internal/pkg/crudhooks），重新生成不会覆盖。
+type Hooks struct {
+	AfterMutation string `json:"afterMutation,omitempty" yaml:"afterMutation,omitempty"`
+}
+
 type Table struct {
 	DataScope            *data_scope.Config `json:"dataScope,omitempty"`      //数据权限配置
 	Name                 string             `json:"name"`                     //数据表名
@@ -111,6 +117,7 @@ type Table struct {
 	Rebuild              string             `json:"rebuild"`                  //是否重建
 	Empty                bool               `json:"empty"`                    //表格是否有数据,后台增加
 	RegisterOnly         bool               `json:"registerOnly,omitempty"`   //仅登记不生成：受保护核心表（user 等）以 crud_log 登记供级联校验/对账，不生成任何产物
+	Hooks                *Hooks             `json:"hooks,omitempty"`          //命名扩展点（afterMutation 等），实现由业务装配期注册
 	Indexes              []IndexSpec        `json:"indexes,omitempty"`        //表级索引声明（apply 物化）
 	GeneratedFiles       []string           `json:"generatedFiles,omitempty"` //最近一次成功生成的文件清单
 	Manifest             *CRUDFileManifest  `json:"manifest,omitempty" gorm:"-"`

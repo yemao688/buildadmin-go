@@ -372,3 +372,11 @@
 | 6. `crud:list --drift` | 完成 | 一次列出每个 spec 的差量摘要（action / safe-auto / requires-approval / rejected） |
 | 10. 文档入口与截图 | 完成 | `docs/README.md` 任务索引；README 增加登录/预览/审批三张截图 |
 | 7. 离线生成（4.5） | **未做** | 实体文件由 `gorm.io/gen` 读取真实表结构生成；没有表就无法产出与真实生成一致的实体，任何"桩"都会让预览与真实产物不一致。要做必须先实现 spec 驱动的实体渲染，并加 golden 对比测试（每个 spec 的离线上线与真实生成逐字节一致）。单独立项。 |
+
+## 9. 第三批（hooks 与产物校正）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 1. 定制点提升为 spec 能力 | 完成 | spec 新增 `hooks.afterMutation`；生成代码输出 `crudhooks.Mutation("<名>")`，实现在 `internal/admin/handler/crud_hooks.go`（手写、装配期注册）。`internal/pkg/crudhooks` 延迟解析 + 未注册告警；自定义 action 走独立 handler + `router/custom_registrars.go` |
+| 2. 校正 country_* 产物 | 完成 | `country_currency` / `country_language` 的缓存失效改为钩子；`getMultTranslations` 移到独立 `CountryLanguageTranslateHandler`；三个模块重新生成后 `crud:check-customized` 均为 0，可逐字节复现 |
+| 3. 生成器新增扩展点 | 完成 | `AdminRouterDeps.CustomRegistrars`（手写 registrar 并入路由）+ `CrudHooks`（触发装配期注册），wire 自动装配 |
