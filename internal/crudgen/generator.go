@@ -276,6 +276,13 @@ func (s *generateState) prepareInheritance() error {
 	// 条目会残留并继续级联已独立的子表——扫描 crud_specs/ 中所有 reassignable
 	// 父表的锚点块，凡含本子表条目者一律清理（幂等），并纳入快照。事实源是
 	// specs 目录与 repo 锚点块本身（crud_log 生成历史不参与）。
+	//
+	// 只读路径（--dry-run --diff / crud:check-customized / crud:render）不做
+	// 清理：锚点写入本身已被 PreviewSink 拦住，若这里照常删除，预览/离线命令
+	// 会静默改写仓库里的父表 repo（且失败时也同样发生）。
+	if s.opts.PreviewSink != nil {
+		return nil
+	}
 	staleParentRepoPaths, err := cleanupStaleCascadeAnchors(DefaultSpecsDir(), s.opts.Table.Name)
 	if err != nil {
 		return err

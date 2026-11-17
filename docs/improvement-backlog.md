@@ -386,7 +386,7 @@
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
-| 4.5 离线生成 | 完成 | 实体改为 spec 驱动（`buildSpecEntityStruct`），不再用 `gorm.io/gen` 反查库；`crud:render` 不连库渲染到目录，`remoteSelect` 直接拒绝。实测离线产物与在线生成 **10 个文件逐字节一致** |
+| 4.5 离线生成 | 完成 | 实体改为 spec 驱动（`buildSpecEntityStruct`），不再用 `gorm.io/gen` 反查库；`crud:render` 不连库渲染到目录，`remoteSelect`/`remoteSelects` 与 `dataScope.reassignable`（需 admin 列元数据）直接拒绝，其余归属列按 spec 索引声明证明。实测离线产物与在线生成 **10 个文件逐字节一致** |
 | 钩子漏注册 | 完成 | serve 启动时按 spec 校验 `hooks.afterMutation` 是否已注册并告警（`warnUnregisteredMutationHooks`），不再只等首次写操作 |
 | `check-customized --all` | 完成 | 一次检查全部业务模块，支持 `--diff` / `--json`，有定制即非零退出 |
 | spec-only 删除残留菜单 | 完成 | 无 manifest 时按 spec 推导菜单名清理 `admin_rule` 菜单与按钮行，再删 spec，并报告清理数量 |

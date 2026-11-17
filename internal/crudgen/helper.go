@@ -276,7 +276,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	// 改写后的克隆。
 	fields = slices.Clone(fields)
 	fullTableName := getTableName(table.Name, true)
-	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
+	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName, table, fields))
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -612,10 +612,12 @@ func ownerGoType(field crudmodel.Field) (string, error) {
 // buildIndexProver returns a prover that checks information_schema.STATISTICS for
 // an index on the owner column. It is production-only; tests can supply their
 // own ProveIndex callback.
-func buildIndexProver(db *gorm.DB, fullTableName string) func(string) (bool, error) {
+func buildIndexProver(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) func(string) (bool, error) {
 	return func(column string) (bool, error) {
 		if db == nil {
-			return false, nil
+			// 离线渲染没有数据库可查：按 spec 判断。apply 会物化声明的索引，
+			// 并为归属列自动创建 idx_<owner>，因此这两种情况都算已证明。
+			return specProvesOwnerIndex(table, fields, column), nil
 		}
 		var count int64
 		err := db.Raw(
@@ -2297,4 +2299,26 @@ func getJsonFromAny(data map[string]any) string {
 func isNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+// specProvesOwnerIndex 在无数据库时按 spec 证明归属列索引：声明索引的首列
+// （与 information_schema SEQ_IN_INDEX=1 对齐）或生成/apply 自动创建的
+// idx_<owner>（owner 列由 resolveOwnerColumn 推导）。
+func specProvesOwnerIndex(table crudmodel.Table, fields []crudmodel.Field, column string) bool {
+	if owner := resolveOwnerColumn(table.DataScope, fields); owner != "" && strings.EqualFold(owner, column) {
+		return true
+	}
+	for _, index := range table.Indexes {
+		if len(index.Columns) == 0 {
+			continue
+		}
+		first := index.Columns[0]
+		if bracket := strings.IndexByte(first, '('); bracket >= 0 {
+			first = first[:bracket]
+		}
+		if strings.EqualFold(strings.TrimSpace(first), column) {
+			return true
+		}
+	}
+	return false
 }

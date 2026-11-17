@@ -344,6 +344,7 @@ type ModelData struct {
 	ModelVar         string //结构体变量
 	QuickSearchField string //快速搜索字段
 	StructTemp       string //结构体
+	EntityNeedsTime  bool   // 实体/关系 DTO 使用 time.Time，需要 import "time"
 
 	// 子包模型对根包 BaseModel 的限定引用；根包生成时为空，输出保持不变。
 
@@ -794,7 +795,9 @@ func normalize{{.ClassName}}IDs(ids interface{}) ([]{{.PkGoType}}, error) {
 // 结构体与其关系 DTO 同包输出，关系展示字段（gorm:"-"）随实体落位。
 const entityTemp = `package model
 
-{{.StructTemp}}
+{{if .EntityNeedsTime}}import "time"
+
+{{end}}{{.StructTemp}}
 
 {{.RelationStructs}}
 `

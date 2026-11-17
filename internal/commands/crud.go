@@ -189,7 +189,7 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 		if diffMode {
 			empty := make([]dryRunDiffJSON, 0)
 			payload.Diffs = &empty
-			if !plan.NewTable && !plan.TableMissing {
+			if canRenderPreview(plan) {
 				diffs, diffErr := h.renderDiffPayload(specPath)
 				if diffErr != nil {
 					return diffErr
@@ -421,4 +421,10 @@ func (h *CrudHandler) renderDiffPayload(specPath string) ([]dryRunDiffJSON, erro
 		payload = append(payload, entry)
 	}
 	return payload, nil
+}
+
+// canRenderPreview 判断预览能否渲染实体：新表或库里还没有表时，在线实体渲染
+// 依赖真实表结构，必须跳过渲染。
+func canRenderPreview(plan helper.GenerationFilePlan) bool {
+	return !plan.NewTable && !plan.TableMissing
 }

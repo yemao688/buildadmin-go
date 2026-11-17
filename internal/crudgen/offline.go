@@ -90,6 +90,12 @@ func RenderOffline(specPath, outDir, prefix string) ([]string, string, error) {
 	if err := rejectOfflineRelations(options.Fields); err != nil {
 		return nil, "", err
 	}
+	// reassignable 会把 owner 列预置成 admin 的远程下拉，展开它需要 admin 表的
+	// 真实列元数据（pk 类型、username 长度）；无库时无法保证与在线产物一致，
+	// 明确拒绝而不是静默产出降级的关联配置。
+	if options.Table.DataScope != nil && options.Table.DataScope.Reassignable {
+		return nil, "", fmt.Errorf("offline rendering cannot expand the reassignable owner's admin relation: it needs admin column metadata from the database; use crud:generate --dry-run against a database or drop dataScope.reassignable")
+	}
 	if strings.TrimSpace(prefix) == "" {
 		prefix = "ba_"
 	}

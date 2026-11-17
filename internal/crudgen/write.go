@@ -38,6 +38,7 @@ func writeModelFiles(sink OutputSink, _ *gorm.DB, tablePk string, fullTableName 
 	modelData.StructTemp = addCityTextFields(structContent, modelData.CityTextFields)
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
+	modelData.EntityNeedsTime = strings.Contains(modelData.StructTemp+modelData.RelationStructs, "time.Time")
 
 	// 实体文件（扁平 internal/model/<entity>.go，包名 model）
 	entityContent, err := render(entityFile.ParseFile, entityTemp, modelData)
@@ -348,6 +349,7 @@ func renderEntity(modelData ModelData) (string, error) {
 	}
 	modelData.StructTemp = addRelationFields(modelData.StructTemp, modelData.RelationFields)
 	prepareModelTimestampData(&modelData)
+	modelData.EntityNeedsTime = strings.Contains(modelData.StructTemp+modelData.RelationStructs, "time.Time")
 	return render("", entityTemp, modelData)
 }
 

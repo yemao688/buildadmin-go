@@ -44,7 +44,7 @@ crud:check-customized --all [--diff] [--json]     # 全部业务模块（跳过 
 go run ./cmd/crudgen crud:render crud_specs/<module>.yaml [--out <dir>] [--prefix ba_]
 ```
 
-不连数据库，把 spec 渲染成完整产物写到 `--out`（默认 `runtime/offline/<table>/`），仓库本身不被修改。实体、仓库、DTO、handler、registrar 与前端产物都由 spec 推导，与在线生成逐字节一致；`remoteSelect`/`remoteSelects` 因为需要远端表的列元数据会被拒绝（避免静默产出降级的关联配置）。
+不连数据库，把 spec 渲染成完整产物写到 `--out`（默认 `runtime/offline/<table>/`），仓库本身不被修改。实体、仓库、DTO、handler、registrar 与前端产物都由 spec 推导，与在线生成逐字节一致；`remoteSelect`/`remoteSelects` 与 `dataScope.reassignable` 因为需要远端表（后者是 `admin`）的列元数据会被明确拒绝（避免静默产出降级的关联配置）。`dataScope.auto`/`inheritFrom` 的归属列索引按 spec 的 `indexes` 声明与生成器自动创建的 `idx_<owner>` 证明，不需要数据库。
 
 用途：还没有数据库时先看会生成什么、评审 spec 的组件选择，或给 AI 一个不依赖环境的产物预览。
 

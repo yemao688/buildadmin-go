@@ -4,6 +4,8 @@ import (
 	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"fmt"
 	"strings"
+
+	"gorm.io/gorm/schema"
 )
 
 // buildSpecEntityStruct 按 spec 生成实体结构体源码。
@@ -26,7 +28,7 @@ func buildSpecEntityStruct(table crudmodel.Table, fields []crudmodel.Field, clas
 	for _, field := range fields {
 		goType := typeOverrides[field.Name]
 		if goType == "" {
-			goType = relationColumnGoTypeFromField(field)
+			goType = entityGoType(field)
 		}
 		writeEntityField(&builder, field, goType, indexTags[field.Name])
 	}
@@ -34,19 +36,56 @@ func buildSpecEntityStruct(table crudmodel.Table, fields []crudmodel.Field, clas
 	return builder.String(), nil
 }
 
-// entityGoFieldName 在通用列名转换之上补齐常见缩写后缀，保证 admin_id/
-// last_login_ip/json_data 这类列输出 ID/IP/JSON 形态。
+// entityGoFieldName 用 gorm 的命名策略把列名转成导出字段名：旧链路走
+// gorm.io/gen，它同样调用 NamingStrategy.SchemaName，因此 HTML/CPU/XML/UID
+// 这类缩写与历史产物一致（手写的后缀表会漏掉它们，重新生成会静默改名）。
 func entityGoFieldName(column string) string {
-	name := generatedGoFieldName(column)
-	for suffix, replacement := range map[string]string{
-		"Ip": "IP", "Url": "URL", "Uri": "URI", "Uuid": "UUID",
-		"Api": "API", "Http": "HTTP", "Json": "JSON", "Sql": "SQL",
-	} {
-		if strings.HasSuffix(name, suffix) {
-			name = strings.TrimSuffix(name, suffix) + replacement
-		}
+	name := schema.NamingStrategy{SingularTable: true}.SchemaName(column)
+	if strings.HasSuffix(name, "Ids") {
+		return strings.TrimSuffix(name, "Ids") + "IDs"
 	}
 	return name
+}
+
+// entityGoType 按 gorm.io/gen 的历史映射把列类型转成实体字段类型。生成器由
+// spec 驱动后不再反查数据库，但重新生成的产物必须与旧在线产物一致：float
+// 是 float32、blob/binary 家族是 []byte、tinyint(1) 是 bool、bit 是 []uint8。
+// 不同的是裸 spec 的 tinyint(1)（非 switch）：旧链路按列类型给 bool，这里保持
+// 同一判定。designType 的覆盖（Flex* 适配类型）由 typeOverrides 先行处理。
+func entityGoType(field crudmodel.Field) string {
+	base := strings.ToLower(analyseFieldType(field))
+	switch base {
+	case "numeric", "integer", "int", "smallint", "mediumint", "year":
+		return "int32"
+	case "bigint":
+		return "int64"
+	case "tinyint":
+		if entityTinyintIsBool(field) {
+			return "bool"
+		}
+		return "int32"
+	case "float":
+		return "float32"
+	case "real", "double", "decimal":
+		return "float64"
+	case "binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob":
+		return "[]byte"
+	case "bit":
+		return "[]uint8"
+	case "date", "datetime", "timestamp", "time":
+		return "time.Time"
+	default:
+		return "string"
+	}
+}
+
+// entityTinyintIsBool 对齐 gorm.io/gen 的 tinyint(1) → bool 判定。
+func entityTinyintIsBool(field crudmodel.Field) bool {
+	dataType := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(field.DataType), " ", ""))
+	if strings.HasPrefix(dataType, "tinyint(1") {
+		return true
+	}
+	return field.Length == 1
 }
 
 // writeEntityField 输出一行实体字段：多行注释用块注释放在字段上方，单行注释

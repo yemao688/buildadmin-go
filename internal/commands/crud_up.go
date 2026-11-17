@@ -111,9 +111,7 @@ func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *
 	// 推导出的 rejected（收窄、nullable→NOT NULL 等），它们会被重建消解，
 	// 不能反过来阻断这条已显式授权的路径。crud:apply 本身永远不会删表，
 	// 因此只有生成侧（crud:up/crud:generate）认可这个例外。
-	requestedType := strings.ToLower(strings.TrimSpace(options.Type))
-	rebuildAuthorized := flags.allowRebuild && requestedType == "create" &&
-		h.db.Migrator().HasTable(h.config.Database.Prefix+options.Table.Name)
+	rebuildAuthorized := h.rebuildAuthorized(options, flags.allowRebuild)
 	results, planErr := helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), []string{specPath},
 		helper.ApplyOptions{AdminID: flags.adminID, Plan: true, ApproveAll: true, AllowRebuild: flags.allowRebuild})
 	var blocked *helper.ApplyBlockedError
@@ -127,8 +125,7 @@ func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *
 			summary.SafeAuto, summary.RequiresApproval, summary.Rejected)
 	}
 	plan, planErrFiles := helper.PreviewGenerationFiles(h.db, h.config, options.Table, options.Fields)
-	newTable := planErrFiles == nil && plan.NewTable
-	tableMissing := planErrFiles == nil && plan.TableMissing
+	newTable, tableMissing := previewState(plan, planErrFiles)
 	var drift []string
 	if !newTable && !tableMissing {
 		var driftErr error
@@ -150,13 +147,35 @@ func (h *CrudHandler) upPreflight(cmd *cobra.Command, specPath string, options *
 		}
 		return nil
 	}
-	if len(drift) > 0 && !jsonMode() {
-		cmd.Printf("  will overwrite %d file(s) that differ from a fresh render:\n", len(drift))
-		for _, path := range drift {
-			cmd.Printf("    ~ %s\n", relativeToRoot(path))
-		}
-	}
+	printDriftHint(cmd, drift)
 	return nil
+}
+
+// previewState 汇总预览能否渲染：文件清单计算失败时按可渲染处理（真实阻断由
+// 生成器再报一次），否则透传 NewTable/TableMissing。
+func previewState(plan helper.GenerationFilePlan, planErr error) (newTable, tableMissing bool) {
+	if planErr != nil {
+		return false, false
+	}
+	return plan.NewTable, plan.TableMissing
+}
+
+// rebuildAuthorized 报告本次生成是否会删表重建：只有显式 type: create、
+// --allow-rebuild 且目标表已存在时成立。
+func (h *CrudHandler) rebuildAuthorized(options *helper.GenerateOptions, allowRebuild bool) bool {
+	return allowRebuild && strings.EqualFold(strings.TrimSpace(options.Type), "create") &&
+		h.db.Migrator().HasTable(h.config.Database.Prefix+options.Table.Name)
+}
+
+// printDriftHint 提示重新生成会覆盖哪些与全新渲染不一致的文件。
+func printDriftHint(cmd *cobra.Command, drift []string) {
+	if len(drift) == 0 || jsonMode() {
+		return
+	}
+	cmd.Printf("  will overwrite %d file(s) that differ from a fresh render:\n", len(drift))
+	for _, path := range drift {
+		cmd.Printf("    ~ %s\n", relativeToRoot(path))
+	}
 }
 
 // customizedFiles 返回与全新渲染不一致（或缺失）的产物绝对路径，按路径排序。
