@@ -788,6 +788,9 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 		return lookupErr
 	}
 	if successLog == nil {
+		if err := validateSpecOnlyDeleteTarget(cfg, tableName); err != nil {
+			return err
+		}
 		return deleteSpecOnly(lockedDB, cfg, tableName)
 	}
 	var fail func(string, error) error
@@ -1814,4 +1817,30 @@ func relativeSpecPath(path string) string {
 		return path
 	}
 	return rel
+}
+
+// validateSpecOnlyDeleteTarget 守住 spec-only 删除的边界：registerOnly 的核心表
+// 从不写 crud_log，会走到这条无 manifest 的分支，因此保护检查必须在回退之前；
+// 表名必须是合法标识符（否则 ../ 可以逃出 crud_specs/）；仍有子表声明
+// inheritFrom 指向它时拒绝（删掉父 spec 会让子表声明悬空，启动 apply 与
+// cascade:sync 直接失败）。
+func validateSpecOnlyDeleteTarget(cfg *conf.Configuration, tableName string) error {
+	prefix := ""
+	if cfg != nil {
+		prefix = cfg.Database.Prefix
+	}
+	if IsProtectedTableWithPrefix(prefix, tableName) {
+		return fmt.Errorf("crud deletion is forbidden for protected table %q", tableName)
+	}
+	if err := data_scope.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", tableName, err)
+	}
+	referrers, err := findInheritReferrers(DefaultSpecsDir(), tableName)
+	if err != nil {
+		return err
+	}
+	if len(referrers) > 0 {
+		return fmt.Errorf("refusing to delete spec of table %q: child table(s) %s still declare inheritFrom pointing at it; delete or re-point those child specs first", tableName, strings.Join(referrers, ", "))
+	}
+	return nil
 }
