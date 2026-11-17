@@ -72,7 +72,7 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 	if _, err := os.Stat(path); err == nil && !force {
 		return fmt.Errorf("spec %s already exists; pass --force to overwrite", path)
 	}
-	content, err := helper.MarshalSpec(crudmodel.Table(record.Table), []crudmodel.Field(record.Fields))
+	content, err := exportSpecContent(path, crudmodel.Table(record.Table), []crudmodel.Field(record.Fields))
 	if err != nil {
 		return err
 	}
@@ -86,4 +86,21 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 	cmd.Printf("exported %s\n", path)
 	cmd.Printf("review it, then use crud:generate %s (the designer is no longer required)\n", path)
 	return nil
+}
+
+// exportSpecContent 生成 spec；目标已存在时合并（保留设计器不建模的键，
+// 例如 menu 与 indexes），供 --force 覆盖场景使用。
+func exportSpecContent(path string, table crudmodel.Table, fields []crudmodel.Field) ([]byte, error) {
+	content, err := helper.MarshalSpec(table, fields)
+	if err != nil {
+		return nil, err
+	}
+	existing, readErr := os.ReadFile(path) //nolint:gosec // G304: path 由 --dir/默认 crud_specs 与表名拼成
+	if readErr == nil {
+		return helper.MergeSpec(existing, content)
+	}
+	if !os.IsNotExist(readErr) {
+		return nil, fmt.Errorf("read existing spec: %w", readErr)
+	}
+	return content, nil
 }

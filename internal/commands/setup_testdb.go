@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"buildadmin-go/internal/conf"
+	"buildadmin-go/internal/pkg/data_scope"
 	"buildadmin-go/internal/pkg/installer"
 )
 
@@ -66,6 +67,10 @@ func (r setupRunner) prepareSetupTestDatabase(options setupOptions, input setupI
 	}
 
 	name := setupTestDatabaseName(options, input.database)
+	if err := validateTestDatabaseName(input.database.Database, name); err != nil {
+		_, _ = fmt.Fprintf(r.out, "跳过测试库准备: %v\n", err)
+		return
+	}
 	if err := r.deps.createTestDatabase(input.database, name); err != nil {
 		_, _ = fmt.Fprintf(r.out, "创建测试库 %s 失败: %v\n", name, err)
 		_, _ = fmt.Fprintln(r.out, "测试库配置已跳过；可手工执行以下 SQL 后重新安装（或加 --with-test-db 重跑 setup）：")
@@ -97,4 +102,16 @@ func (r setupRunner) printTestDatabaseSQL(database installer.Database, testDBNam
 	account := "'" + strings.ReplaceAll(database.Username, "'", "''") + "'@'%'"
 	_, _ = fmt.Fprintf(r.out, "  CREATE DATABASE IF NOT EXISTS %s CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n", identifier(testDBName))
 	_, _ = fmt.Fprintf(r.out, "  GRANT ALL PRIVILEGES ON %s.* TO %s;\n", identifier(database.Database+"%"), account)
+}
+
+// validateTestDatabaseName 拒绝把 MySQL 测试库指向主库：43 个 MySQL 门禁用例
+// 会建删表并跑迁移，指到生产库等于让测试直接改写业务 schema。
+func validateTestDatabaseName(mainDatabase, testDatabase string) error {
+	if err := data_scope.ValidateIdentifier(testDatabase); err != nil {
+		return fmt.Errorf("invalid test database name %q: %w", testDatabase, err)
+	}
+	if testDatabase == mainDatabase {
+		return fmt.Errorf("test database must differ from the main database %q; MySQL integration tests create and drop tables", mainDatabase)
+	}
+	return nil
 }

@@ -122,7 +122,7 @@ func initRootFlags() {
 		pflag.StringVarP(&configPath, "conf", "c", filepath.Join(rootPath, "configs", "config.yaml"), "config path, eg: --conf configs/config.yaml")
 	}
 	if pflag.Lookup("json") == nil {
-		pflag.Bool("json", false, "machine-readable JSON output (supported by crud:*, migrate status/--plan, cascade:sync, diagnose)")
+		pflag.Bool("json", false, "machine-readable JSON output (crud:validate/generate/preview/apply --plan/list/diff/check-customized/export-spec, migrate status/--plan, cascade:sync, diagnose)")
 	}
 }
 

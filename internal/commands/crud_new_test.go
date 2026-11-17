@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,5 +58,21 @@ func TestCrudNewRejectsUnsafeTableName(t *testing.T) {
 	t.Parallel()
 	if err := runCrudNew(t, "bad-name;drop", t.TempDir()); err == nil {
 		t.Fatal("unsafe table name must be rejected")
+	}
+}
+
+// --comment 里的 YAML 元字符（冒号、逗号）必须被引用，产物要能被 spec 校验器读回。
+func TestRenderSpecSkeletonQuotesComment(t *testing.T) {
+	t.Parallel()
+	content := renderSpecSkeleton("ops_probe", "状态: 0=禁用,1=启用")
+	path := filepath.Join(t.TempDir(), "ops_probe.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := helper.ValidateSpec(path); err != nil {
+		t.Fatalf("skeleton must be valid YAML: %v\n%s", err, content)
+	}
+	if !strings.Contains(content, "comment: '状态: 0=禁用,1=启用'") && !strings.Contains(content, "comment: \"状态: 0=禁用,1=启用\"") {
+		t.Fatalf("comment must be quoted:\n%s", content)
 	}
 }

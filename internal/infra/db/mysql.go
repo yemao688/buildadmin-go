@@ -47,8 +47,9 @@ func NewDB(config *conf.Configuration, gLog *zap.Logger) *gorm.DB {
 			Compress:   logConfig.Compress,
 		}
 	} else {
-		// 默认 Writer
-		writer = os.Stdout
+		// 默认 Writer 走 stderr：SQL 日志不是命令结果，stdout 需留给 --json
+		// 信封与可管道化的结构化输出（enable_file_log_writer=false 时尤其重要）。
+		writer = os.Stderr
 	}
 
 	switch dbConfig.LogMode {

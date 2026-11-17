@@ -237,3 +237,16 @@ func TestPrepareSetupTestDatabaseCreateFailureSkipsConfig(t *testing.T) {
 		t.Fatalf("manual CREATE DATABASE statement missing from output: %q", output)
 	}
 }
+
+func TestValidateTestDatabaseName(t *testing.T) {
+	t.Parallel()
+	if err := validateTestDatabaseName("buildadmin_go", "buildadmin_go_test"); err != nil {
+		t.Fatalf("valid test database rejected: %v", err)
+	}
+	if err := validateTestDatabaseName("buildadmin_go", "buildadmin_go"); err == nil {
+		t.Fatal("test database pointing at the main database must be rejected")
+	}
+	if err := validateTestDatabaseName("buildadmin_go", "bad-name"); err == nil {
+		t.Fatal("invalid identifier must be rejected")
+	}
+}

@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 // newCrudNewCommand 生成最小可校验的 CRUD spec 骨架：主键、状态、权重与两个
@@ -45,15 +47,31 @@ func newCrudNewCommand() *cobra.Command {
 			if _, err := os.Stat(path); err == nil && !force {
 				return fmt.Errorf("spec %s already exists; pass --force to overwrite", path)
 			}
-			if err := os.WriteFile(path, []byte(renderSpecSkeleton(table, comment)), 0o644); err != nil { //nolint:gosec // G306: spec 是开发者可编辑的仓库内文件
-				return fmt.Errorf("write spec: %w", err)
+			// 先写临时文件并校验，通过后再原子替换目标：校验失败不留半成品，
+			// 也不会因为 --force 覆盖掉原有 spec（此前非法 comment 会留下坏文件，
+			// 进而阻塞整目录的 crud:apply/migrate）。
+			temp, err := os.CreateTemp(dir, table+"-*.yaml")
+			if err != nil {
+				return fmt.Errorf("create temp spec: %w", err)
 			}
-			warnings, err := helper.ValidateSpec(path)
+			tempPath := temp.Name()
+			defer func() { _ = os.Remove(tempPath) }()
+			if _, err := temp.WriteString(renderSpecSkeleton(table, comment)); err != nil {
+				_ = temp.Close()
+				return fmt.Errorf("write temp spec: %w", err)
+			}
+			if err := temp.Close(); err != nil {
+				return fmt.Errorf("close temp spec: %w", err)
+			}
+			warnings, err := helper.ValidateSpec(tempPath)
 			for _, warning := range warnings {
 				cmd.PrintErrln("warning: " + warning.Message)
 			}
 			if err != nil {
 				return fmt.Errorf("generated spec failed validation: %w", err)
+			}
+			if err := os.Rename(tempPath, path); err != nil {
+				return fmt.Errorf("write spec: %w", err)
 			}
 			cmd.Printf("created %s\n", path)
 			cmd.Printf("next: add business fields, then run crud:validate %s && crud:generate %s\n", path, path)
@@ -79,10 +97,10 @@ func renderSpecSkeleton(table, comment string) string {
 	builder.WriteString("#   crud:generate crud_specs/" + table + ".yaml\n")
 	builder.WriteString("name: " + table + "\n")
 	if comment != "" {
-		builder.WriteString("comment: " + comment + "\n")
+		builder.WriteString("comment: " + yamlScalar(comment) + "\n")
 	}
 	builder.WriteString("dataScope:\n  mode: auto\n")
-	builder.WriteString("menu:\n  title: " + title + "\n")
+	builder.WriteString("menu:\n  title: " + yamlScalar(title) + "\n")
 	builder.WriteString(`fields:
   id: {type: bigint, unsigned: true, primaryKey: true, autoIncrement: true, designType: pk, comment: ID}
   status: {type: tinyint, length: 1, null: false, default: "1", designType: switch, comment: "状态:0=禁用,1=启用"}
@@ -91,4 +109,14 @@ func renderSpecSkeleton(table, comment string) string {
   update_time: {type: bigint, unsigned: true, null: false, default: "0", comment: 更新时间}
 `)
 	return builder.String()
+}
+
+// yamlScalar 用 yaml 编码器输出单行标量：注释里的冒号、引号与井号会被正确
+// 引起来，避免手拼 YAML 生成无法解析的 spec。
+func yamlScalar(value string) string {
+	encoded, err := yaml.Marshal(value)
+	if err != nil {
+		return strconv.Quote(value)
+	}
+	return strings.TrimRight(string(encoded), "\n")
 }

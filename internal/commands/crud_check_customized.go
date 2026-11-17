@@ -135,7 +135,11 @@ func (h *CrudHandler) CheckCustomized(cmd *cobra.Command, table string, showDiff
 	if jsonMode() {
 		payload := map[string]any{"table": table, "modified": modified, "missing": missing}
 		if len(drift) > 0 {
-			return printJSONError(cmd, payload, fmt.Errorf("%d generated file(s) differ from a fresh render", len(drift)))
+			failure := fmt.Errorf("%d generated file(s) differ from a fresh render", len(drift))
+			if printErr := printJSONError(cmd, payload, failure); printErr != nil {
+				return printErr
+			}
+			return failure
 		}
 		return printJSON(cmd, payload)
 	}

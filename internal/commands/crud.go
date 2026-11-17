@@ -174,6 +174,16 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 		return fmt.Errorf("load CRUD spec error: %w", err)
 	}
 	diffMode, _ := cmd.Flags().GetBool("diff")
+	// --dry-run 必须暴露真实生成里唯一可能删表的动作：type=create 且表已存在。
+	dryRunWarnings := make([]string, 0, 1)
+	if strings.EqualFold(opts.Type, "create") && h.db.Migrator().HasTable(h.config.Database.Prefix+opts.Table.Name) {
+		dryRunWarnings = append(dryRunWarnings, fmt.Sprintf("spec declares type: create and table %q already exists; the real crud:generate drops and recreates it and requires --allow-rebuild", opts.Table.Name))
+		if !jsonMode() {
+			for _, warning := range dryRunWarnings {
+				cmd.PrintErrln("warning: " + warning)
+			}
+		}
+	}
 	store := helper.NewTableStore(h.db, h.config)
 	plan, err := helper.PreviewGenerationFiles(h.db, h.config, opts.Table, opts.Fields)
 	if err != nil {
@@ -181,7 +191,7 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	}
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
 	if jsonMode() {
-		payload := dryRunJSON{Plan: planToJSON(results, specPath), Create: plan.Create, Overwrite: plan.Overwrite}
+		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, Warnings: dryRunWarnings}
 		if planErr != nil {
 			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {
 				return printErr
@@ -229,35 +239,22 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 	if htmlOut != "" && !plan {
 		return fmt.Errorf("--html requires --plan: the approval page is rendered from the read-only plan")
 	}
-	if plan {
-		return h.applyPlan(cmd, args, opts, htmlOut)
+	paths, err := expandSpecPaths(args)
+	if err != nil {
+		return err
 	}
-	return h.applyChanges(cmd, args, opts)
+	if plan {
+		return h.applyPlan(cmd, paths, opts, htmlOut)
+	}
+	return h.applyChanges(cmd, paths, opts)
 }
 
 // applyPlan 处理 crud:apply --plan：只读差量、可选审批页与 --json 信封。
 func (h *CrudHandler) applyPlan(cmd *cobra.Command, args []string, opts helper.ApplyOptions, htmlOut string) error {
 	store := helper.NewTableStore(h.db, h.config)
-	var (
-		results []helper.ApplyTableResult
-		err     error
-	)
-	if len(args) == 0 {
-		dir := helper.DefaultSpecDir()
-		if dir == "" {
-			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply --plan <spec.yaml...>")
-		}
-		results, err = helper.PlanSpecsFromDir(h.db, h.config, store, dir, opts)
-	} else {
-		results, err = helper.PlanSpecs(h.db, h.config, store, args, opts)
-	}
-	specRef := ""
-	if len(args) > 0 {
-		specRef = strings.Join(args, " ")
-	} else if dir := helper.DefaultSpecDir(); dir != "" {
-		specRef = dir
-	}
-	payload := planToJSON(results, specRef)
+	results, err := helper.PlanSpecs(h.db, h.config, store, args, opts)
+	specRef := strings.Join(args, " ")
+	payload := planToJSON(results, specRef, confRef())
 	if htmlOut != "" {
 		if htmlErr := writePlanHTML(htmlOut, payload, specRef, h.config.Database.Database); htmlErr != nil {
 			return htmlErr
@@ -287,19 +284,7 @@ func (h *CrudHandler) applyPlan(cmd *cobra.Command, args []string, opts helper.A
 // applyChanges 处理真正的 crud:apply：把 spec 差量写入目标库。
 func (h *CrudHandler) applyChanges(cmd *cobra.Command, args []string, opts helper.ApplyOptions) error {
 	store := helper.NewTableStore(h.db, h.config)
-	var (
-		results []helper.ApplyTableResult
-		err     error
-	)
-	if len(args) == 0 {
-		dir := helper.DefaultSpecDir()
-		if dir == "" {
-			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply <spec.yaml...>")
-		}
-		results, err = helper.ApplySpecsFromDir(h.db, h.config, store, dir, opts)
-	} else {
-		results, err = helper.ApplySpecs(h.db, h.config, store, args, opts)
-	}
+	results, err := helper.ApplySpecs(h.db, h.config, store, args, opts)
 	if err != nil {
 		printApplyResults(cmd, results)
 		return fmt.Errorf("CRUD apply error: %w", err)

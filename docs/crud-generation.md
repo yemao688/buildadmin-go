@@ -16,7 +16,7 @@ go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<module>
 go build ./...
 ```
 
-生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
+生成器另有独立入口 `go run ./cmd/crudgen ...`：只含 `cmd/server` 的 CRUD 子命令（`crud:generate` / `crud:delete` / `crud:apply` / `crud:validate` / `crud:new` / `crud:schema` / `crud:list` / `crud:preview` / `crud:diff` / `crud:check-customized` / `crud:export-spec`），复用 `internal/commands` 的 CRUD 命令实现，依赖 `internal/model` 等公共类型，**不 import `internal/admin` / `internal/api` 渠道**（因此 admin 侧旧产物不再阻塞它，实体文件仍参与编译）。合并框架升级后，旧生成产物与新 `Base`/`CRUDStore` 不兼容时，`cmd/server` 本身无法编译；此时先用 `cmd/crudgen` 重生成模块，再处理业务编译错误（见下文「旧产物阻塞编译时的批量重生成」）。
 
 ### 干跑预览（`--dry-run` / `--diff`）
 
@@ -41,6 +41,8 @@ crud:check-customized <table> [--diff] [--json]
 
 后台 CRUD 设计器（`/admin/crud`）在生成时**会把表设计写回 `crud_specs/<table>.yaml`**，与 CLI 共用同一份事实源：写盘发生在生成事务内，失败会连同代码产物一起回滚。写出的 spec 不包含 `type`（省略即 `auto`，按目标库现状推导），避免设计器的「创建」语义在后续 CLI 重新生成时删表。
 
+设计器只覆盖它在 UI 里表达的键：既有 spec 的 `menu`、`indexes`、`registerOnly` 与 `dataScope` 的 `reassignable` / `inheritFrom` / `readExtraOwners` 会原样保留（否则重新设计一个级联/归属模块会静默丢掉索引与归属声明），`type` 始终丢弃。
+
 因此：
 
 - 设计器生成的表同样能被 `crud:apply`、`migrate --plan`、`cascade:sync` 与全新环境重建看到。
@@ -52,7 +54,7 @@ crud:check-customized <table> [--diff] [--json]
 go run ./cmd/server --conf configs/config.yaml crud:export-spec ops_banner
 ```
 
-生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物和菜单（不删表）。需要跳过菜单时加 `--skip-menu`。
+生成器为每个模块产出五类 Go 产物——实体（`internal/model/<table>.go`）、仓库（`internal/admin/repository/<table>.go`）、DTO（`internal/admin/dto/<table>.go`）、handler（`internal/admin/handler/<table>.go`）、路由注册器（`internal/admin/router/<table>.go`）——全部"文件名=表名"落单包，并维护共享 provider 锚点。生成 handler 嵌入共享泛型基类 `TableHandler[T,P,ID]`（Index/Add/Edit/Del 的标准实现），模块差异通过 `TableOptions` 注入：`PKJSONName`（Edit 主键 JSON 名）、`PartialEdit`（Switch 部分更新白名单）、`RestoreAfterCopy`（reassignable 归属恢复）与 `AfterMutation`（缓存失效等提交后动作）；生成 registrar 返回共享 `TableRegistrar` 的薄构造器。生成器退出码 `0` 才表示成功。使用 `crud:delete <table_name>` 删除产物、菜单与该模块的 `crud_specs/<table>.yaml`（不删表；spec 随删除事务隔离，失败可恢复——否则下次 serve/migrate 的 spec apply 会把菜单和台账重新建回来）。需要跳过菜单时加 `--skip-menu`。
 
 **下游升级提示（handler 泛型化之后）：** 重新 `crud:generate` 会整体覆盖生成 handler。旧 handler 内直接调用的 `requesttx.InvalidateAfterMutation(ctx, ...)` 属于模块定制，必须移到构造器的 `TableOptions.AfterMutation` 闭包（闭包内仍调用同一个 `requesttx.InvalidateAfterMutation`），否则重新生成后被覆盖丢失。`internal/admin/router/provider.go` 中历史生成的 `NewXxxRegistrar` 条目可以从 `ProviderSet` 删除——生成器不再追加，保留也无害（这些构造器仍在 `ProvideRegistrars` 内使用）。
 
@@ -90,7 +92,7 @@ go build ./...
 
 `rebuild`、`modelFile`、`controllerFile`、`isCommonModel`、`databaseConnection` 仍被接受，但不再影响产物；`crud:validate` 会逐条提示。`isCommonModel` 非零值直接报错，`databaseConnection` 只支持 `mysql`。
 
-已有业务表通常用 `type: alter`，或直接省略 `type`（`auto` 按目标库现状推导）。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。显式 `type: create` 对已有表是删除重建，CLI 必须追加 `--allow-rebuild`，不能当作无损更新。
+已有业务表通常用 `type: alter`，或直接省略 `type`（`auto` 按目标库现状推导）。`log` / `db` / `sql` 是 legacy 值（按 `rebuild` 映射为 create/alter），`crud:validate` 会告警，新 spec 不要使用。`alter` 只派生新增/修改字段，不自动删除未出现在 spec 的列。显式 `type: create` 对已有表是删除重建，CLI 必须追加 `--allow-rebuild`，不能当作无损更新。
 
 **字体惯例**：本文中使用 `pk` 等作为 designType 值时，不包含引号；`defaultType: <值>` 使用尖括号占位符表示实际值。
 
@@ -1157,22 +1159,24 @@ go run ./cmd/server --conf configs/config.yaml --json cascade:sync
     "tables": [{"table": "ops_order", "action": "altered", "blocked": 1,
       "changes": [{"field": "status", "class": "requires-approval", "category": "attributes", "approved": false}]}],
     "blockedCategories": ["attributes"],
-    "approveCommand": "crud:apply crud_specs/ --approve=attributes"
+    "approveCommand": "crud:apply crud_specs/ops_order.yaml --approve=attributes"
   }
 }
 ```
 
-失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。
+失败时输出 `{"ok": false, "error": "..."}` 并以非零退出。`approveCommand` 是刻意设计的：agent 拿到 JSON 就知道下一步该请人批准什么，不需要自己拼参数。命令里的 spec 是**展开后的文件列表**（`crud:apply` 接受目录并按文件名排序展开），显式传入 `--conf` 时也会带上，因此可以直接复制执行。
+
+`--json` 承诺 stdout 上只有一个 JSON 文档：配置引导行、SQL 日志（`enable_file_log_writer: false` 时）与 `[crudgen] WARNING` 一律走 stderr。`crud:generate --dry-run --diff --json` 会在 `data.fileDiffs` 里附带逐文件 unified diff；`crud:new` / `crud:schema` 不支持信封（前者输出人读提示，后者输出原生 schema JSON）。
 
 ## 12. 只读命令一览
 
-这些命令都不写库、不写文件，可以随时跑，也是 agent 判断下一步的入口。
+这些命令都不写库，可以随时跑，也是 agent 判断下一步的入口；只有 `crud:preview`（默认写 `runtime/preview/<table>.html`）与 `crud:schema --out` 会写文件。
 
 | 命令 | 作用 | 依赖 |
 | --- | --- | --- |
 | `crud:validate <spec...>` | 纯校验，警告与错误分开报告 | 无 |
 | `crud:list [--json]` | 模块总览：表名、菜单、数据权限、字段数、`inheritFrom` | 无 |
-| `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML：字段表 + 表单/列表清单，检查组件选择 | 无 |
+| `crud:preview <spec> [--out] [--json]` | 渲染只读 HTML（默认 `runtime/preview/<table>.html`）：字段表 + 表单/列表清单 | 无 |
 | `crud:diff <spec> [--json]` | 库现状 vs spec 的差量；`rejected` 非零退出 | MySQL |
 | `crud:generate <spec> --dry-run` | 差量 + 将写文件清单 + 菜单提示 | MySQL |
 | `crud:generate <spec> --dry-run --diff` | 同上 + 渲染后与工作树的逐文件 unified diff | MySQL |

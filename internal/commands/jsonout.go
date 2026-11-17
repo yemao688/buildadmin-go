@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 
@@ -79,9 +80,9 @@ type planJSON struct {
 	ApproveCommand    string          `json:"approveCommand,omitempty"`
 }
 
-// planToJSON 把 apply/plan 结果转成契约结构。specRef 是传给 crud:apply 的
-// 路径或目录，用来生成可直接执行的 approveCommand。
-func planToJSON(results []helper.ApplyTableResult, specRef string) planJSON {
+// planToJSON 把 apply/plan 结果转成契约结构。specRef 是展开后的 spec 文件列表，
+// conf 是显式传入的 --conf；两者用来生成可直接复制执行的 approveCommand。
+func planToJSON(results []helper.ApplyTableResult, specRef, conf string) planJSON {
 	payload := planJSON{Tables: make([]planTableJSON, 0, len(results))}
 	categorySet := map[string]struct{}{}
 	for _, result := range results {
@@ -118,7 +119,11 @@ func planToJSON(results []helper.ApplyTableResult, specRef string) planJSON {
 		if ref == "" {
 			ref = "crud_specs/"
 		}
-		payload.ApproveCommand = fmt.Sprintf("crud:apply %s --approve=%s", ref, strings.Join(payload.BlockedCategories, ","))
+		command := fmt.Sprintf("crud:apply %s --approve=%s", ref, strings.Join(payload.BlockedCategories, ","))
+		if conf != "" {
+			command += " --conf " + conf
+		}
+		payload.ApproveCommand = command
 	}
 	return payload
 }
@@ -161,7 +166,29 @@ type generatedJSON struct {
 }
 
 type dryRunJSON struct {
-	Plan      planJSON `json:"plan"`
-	Create    []string `json:"filesToCreate"`
-	Overwrite []string `json:"filesToOverwrite"`
+	Plan      planJSON         `json:"plan"`
+	Create    []string         `json:"filesToCreate"`
+	Overwrite []string         `json:"filesToOverwrite"`
+	Diffs     []dryRunDiffJSON `json:"fileDiffs,omitempty"`
+	Warnings  []string         `json:"warnings,omitempty"`
+}
+
+type dryRunDiffJSON struct {
+	Path    string `json:"path"`
+	Missing bool   `json:"missing,omitempty"`
+	Diff    string `json:"diff,omitempty"`
+}
+
+// confRef 返回显式传入的 --conf（未传时为空）：approveCommand 必须能在同一
+// 配置/数据库上执行，否则审批会打到默认配置指向的库。
+func confRef() string {
+	flag := pflag.Lookup("conf")
+	if flag == nil || !flag.Changed {
+		return ""
+	}
+	value := flag.Value.String()
+	if strings.ContainsAny(value, " \t") {
+		return strconv.Quote(value)
+	}
+	return value
 }

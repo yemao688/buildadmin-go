@@ -52,20 +52,25 @@ func newCrudListCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if jsonMode() {
-				if printErr := printJSON(cmd, crudListJSON{Count: len(specs), Specs: specs}); printErr != nil {
-					return printErr
-				}
-			} else {
-				printSpecSummaries(cmd, specs, dir)
-			}
+			var listErr error
 			if len(failures) > 0 {
 				for _, failure := range failures {
 					cmd.PrintErrln("crud:list: " + failure)
 				}
-				return fmt.Errorf("crud:list failed for %d spec(s): %s", len(failures), strings.Join(failures, "; "))
+				listErr = fmt.Errorf("crud:list failed for %d spec(s): %s", len(failures), strings.Join(failures, "; "))
 			}
-			return nil
+			payload := crudListJSON{Count: len(specs), Specs: specs}
+			if jsonMode() {
+				if listErr != nil {
+					if printErr := printJSONError(cmd, payload, listErr); printErr != nil {
+						return printErr
+					}
+					return listErr
+				}
+				return printJSON(cmd, payload)
+			}
+			printSpecSummaries(cmd, specs, dir)
+			return listErr
 		},
 	}
 	listCmd.Flags().StringVar(&specDir, "dir", "", "spec 目录，默认 crud_specs/")

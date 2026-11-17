@@ -129,7 +129,8 @@ func planHTMLMetaFrom(payload planJSON, specRef, database string) planHTMLMeta {
 		Risk:      "ok",
 	}
 	for _, table := range payload.Tables {
-		meta.Blocked += table.Blocked
+		// 只按变更分类统计一次：table.Blocked 已包含 rejected 与未批准的
+		// requires-approval，再累加会重复计数。
 		for _, change := range table.Changes {
 			switch change.Class {
 			case "rejected":

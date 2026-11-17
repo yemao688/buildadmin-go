@@ -225,7 +225,7 @@ func (h *MigrateHandler) Plan(cmd *cobra.Command, _ []string) error {
 	if jsonMode() {
 		payload := migratePlanJSON{
 			State: string(report.State), Pending: pending, Incomplete: incomplete,
-			Plan: planToJSON(results, dir),
+			Plan: planToJSON(results, dir, confRef()),
 		}
 		if planErr != nil {
 			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {

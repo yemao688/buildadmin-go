@@ -66,7 +66,8 @@ func initConfig() {
 		panic(err)
 	}
 	if createdEnv {
-		fmt.Printf(".env 不存在，已从 %s 自动复制到 %s\n", conf.EnvExampleFileName, conf.EnvFileName)
+		// 引导信息走 stderr：stdout 只承载命令结果（--json 下必须只有一个信封）。
+		fmt.Fprintf(os.Stderr, ".env 不存在，已从 %s 自动复制到 %s\n", conf.EnvExampleFileName, conf.EnvFileName)
 	}
 	if err := conf.LoadEnvFile(envPath); err != nil {
 		panic(err)

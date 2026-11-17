@@ -18,7 +18,7 @@ func TestWritePlanHTMLRendersDiffAndCommand(t *testing.T) {
 			{Field: "legacy", Class: helper.DiffRejected, Reason: `column removal <script>alert(1)</script> is not automatic`},
 		},
 		Blocked: []helper.ApplyChange{{Field: "legacy", Class: helper.DiffRejected}},
-	}}, "crud_specs/")
+	}}, "crud_specs/", "")
 	path := filepath.Join(t.TempDir(), "plan.html")
 	if err := writePlanHTML(path, payload, "crud_specs/", "demo"); err != nil {
 		t.Fatal(err)
@@ -51,5 +51,23 @@ func TestPlanHTMLMetaRiskLevels(t *testing.T) {
 	bad := planHTMLMetaFrom(planJSON{Tables: []planTableJSON{{Table: "a", Changes: []planChangeJSON{{Class: "rejected"}}}}}, "", "")
 	if bad.Risk != "bad" || bad.Rejected != 1 {
 		t.Fatalf("rejected plan = %+v", bad)
+	}
+}
+
+// 头部「待批准」只统计一次：table.Blocked 与逐变更统计不能重复累加。
+func TestPlanHTMLMetaCountsBlockedOnce(t *testing.T) {
+	t.Parallel()
+	payload := planJSON{Tables: []planTableJSON{{
+		Table:   "ops_order",
+		Blocked: 2,
+		Changes: []planChangeJSON{
+			{Field: "a", Class: "requires-approval", Category: "defaults"},
+			{Field: "b", Class: "requires-approval", Category: "attributes", Approved: true},
+			{Field: "c", Class: "rejected"},
+		},
+	}}}
+	meta := planHTMLMetaFrom(payload, "crud_specs/ops_order.yaml", "demo")
+	if meta.Blocked != 1 || meta.Rejected != 1 {
+		t.Fatalf("blocked=%d rejected=%d, want 1/1", meta.Blocked, meta.Rejected)
 	}
 }

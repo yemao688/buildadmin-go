@@ -22,7 +22,7 @@ func TestPlanToJSONExposesApproveCommand(t *testing.T) {
 		},
 		Blocked: []helper.ApplyChange{{Field: "legacy", Class: helper.DiffRejected}},
 	}}
-	payload := planToJSON(results, "crud_specs/ops_order.yaml")
+	payload := planToJSON(results, "crud_specs/ops_order.yaml", "")
 	if len(payload.BlockedCategories) != 1 || payload.BlockedCategories[0] != string(helper.ApprovalAttributes) {
 		t.Fatalf("blocked categories = %v", payload.BlockedCategories)
 	}

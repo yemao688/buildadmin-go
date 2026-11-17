@@ -59,12 +59,12 @@ func (h *CrudHandler) Diff(cmd *cobra.Command, args []string) error {
 	rejectedErr := fmt.Errorf("crud:diff: %s 有 %d 条 rejected 变更，crud:apply 不会执行它们，必须写业务迁移", specPath, summary.Rejected)
 	if jsonMode() {
 		if summary.Rejected > 0 {
-			if printErr := printJSONError(cmd, planToJSON(results, specPath), rejectedErr); printErr != nil {
+			if printErr := printJSONError(cmd, planToJSON(results, specPath, confRef()), rejectedErr); printErr != nil {
 				return printErr
 			}
 			return rejectedErr
 		}
-		return printJSON(cmd, planToJSON(results, specPath))
+		return printJSON(cmd, planToJSON(results, specPath, confRef()))
 	}
 	printCrudDiff(cmd, results, summary, specPath)
 	if summary.Rejected > 0 {

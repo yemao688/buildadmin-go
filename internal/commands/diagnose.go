@@ -46,7 +46,10 @@ func newDiagnoseCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 			failed := report.Errors > 0 || (strict && report.Warns > 0)
 			if jsonMode() {
 				if failed {
-					return printJSONError(cmd, report, failure)
+					if printErr := printJSONError(cmd, report, failure); printErr != nil {
+						return printErr
+					}
+					return failure
 				}
 				return printJSON(cmd, report)
 			}

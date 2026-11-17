@@ -7,7 +7,7 @@
 ## 加一张业务表
 
 ```bash
-go run ./cmd/crudgen crud:new ops_banner --comment 运营轮播   # 生成骨架
+go run ./cmd/crudgen crud:new ops_banner --comment 运营轮播   # 生成骨架（注释含冒号会自动加引号）
 # 编辑 crud_specs/ops_banner.yaml，只补业务字段
 go run ./cmd/crudgen crud:validate crud_specs/ops_banner.yaml
 go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/ops_banner.yaml --dry-run  # 先看差量
