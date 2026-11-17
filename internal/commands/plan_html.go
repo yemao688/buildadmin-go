@@ -152,11 +152,11 @@ func planHTMLMetaFrom(payload planJSON, specRef, database string) planHTMLMeta {
 // writePlanHTML 渲染审批页；目录不存在时自动创建。
 func writePlanHTML(path string, payload planJSON, specRef, database string) error {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("create plan directory: %w", err)
 		}
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(path) //nolint:gosec // G304: path 是开发者通过 --html 显式传入的页面输出路径
 	if err != nil {
 		return fmt.Errorf("create plan page: %w", err)
 	}

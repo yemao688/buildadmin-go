@@ -218,70 +218,87 @@ func (h *CrudHandler) Apply(cmd *cobra.Command, args []string) error {
 	opts.SkipMenu, _ = cmd.Flags().GetBool("skip-menu")
 	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
 	approve, _ := cmd.Flags().GetString("approve")
-	var err error
-	opts.ApprovedCategories, err = helper.ParseApprovalCategories(approve)
+	approvedCategories, err := helper.ParseApprovalCategories(approve)
 	if err != nil {
 		return fmt.Errorf("invalid --approve: %w", err)
 	}
+	opts.ApprovedCategories = approvedCategories
 	plan, _ := cmd.Flags().GetBool("plan")
 	opts.Plan = plan
 	htmlOut, _ := cmd.Flags().GetString("html")
 	if htmlOut != "" && !plan {
 		return fmt.Errorf("--html requires --plan: the approval page is rendered from the read-only plan")
 	}
-	var results []helper.ApplyTableResult
-
 	if plan {
-		if len(args) == 0 {
-			dir := helper.DefaultSpecDir()
-			if dir == "" {
-				return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply --plan <spec.yaml...>")
-			}
-			results, err = helper.PlanSpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, opts)
-		} else {
-			results, err = helper.PlanSpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
+		return h.applyPlan(cmd, args, opts, htmlOut)
+	}
+	return h.applyChanges(cmd, args, opts)
+}
+
+// applyPlan 处理 crud:apply --plan：只读差量、可选审批页与 --json 信封。
+func (h *CrudHandler) applyPlan(cmd *cobra.Command, args []string, opts helper.ApplyOptions, htmlOut string) error {
+	store := helper.NewTableStore(h.db, h.config)
+	var (
+		results []helper.ApplyTableResult
+		err     error
+	)
+	if len(args) == 0 {
+		dir := helper.DefaultSpecDir()
+		if dir == "" {
+			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply --plan <spec.yaml...>")
 		}
-		specRef := ""
-		if len(args) > 0 {
-			specRef = strings.Join(args, " ")
-		} else if dir := helper.DefaultSpecDir(); dir != "" {
-			specRef = dir
+		results, err = helper.PlanSpecsFromDir(h.db, h.config, store, dir, opts)
+	} else {
+		results, err = helper.PlanSpecs(h.db, h.config, store, args, opts)
+	}
+	specRef := ""
+	if len(args) > 0 {
+		specRef = strings.Join(args, " ")
+	} else if dir := helper.DefaultSpecDir(); dir != "" {
+		specRef = dir
+	}
+	payload := planToJSON(results, specRef)
+	if htmlOut != "" {
+		if htmlErr := writePlanHTML(htmlOut, payload, specRef, h.config.Database.Database); htmlErr != nil {
+			return htmlErr
 		}
-		payload := planToJSON(results, specRef)
-		if htmlOut != "" {
-			if htmlErr := writePlanHTML(htmlOut, payload, specRef, h.config.Database.Database); htmlErr != nil {
-				return htmlErr
-			}
-			if !jsonMode() {
-				cmd.Printf("approval page written to %s\n", htmlOut)
-			}
+		if !jsonMode() {
+			cmd.Printf("approval page written to %s\n", htmlOut)
 		}
-		if jsonMode() {
-			if err != nil {
-				if printErr := printJSONError(cmd, payload, err); printErr != nil {
-					return printErr
-				}
-				return fmt.Errorf("CRUD plan error: %w", err)
-			}
-			return printJSON(cmd, payload)
-		}
-		if htmlOut == "" {
-			printApplyPlan(cmd, results)
-		}
+	}
+	if jsonMode() {
 		if err != nil {
+			if printErr := printJSONError(cmd, payload, err); printErr != nil {
+				return printErr
+			}
 			return fmt.Errorf("CRUD plan error: %w", err)
 		}
-		return nil
+		return printJSON(cmd, payload)
 	}
+	if htmlOut == "" {
+		printApplyPlan(cmd, results)
+	}
+	if err != nil {
+		return fmt.Errorf("CRUD plan error: %w", err)
+	}
+	return nil
+}
 
+// applyChanges 处理真正的 crud:apply：把 spec 差量写入目标库。
+func (h *CrudHandler) applyChanges(cmd *cobra.Command, args []string, opts helper.ApplyOptions) error {
+	store := helper.NewTableStore(h.db, h.config)
+	var (
+		results []helper.ApplyTableResult
+		err     error
+	)
 	if len(args) == 0 {
 		dir := helper.DefaultSpecDir()
 		if dir == "" {
 			return fmt.Errorf("no spec directory crud_specs found; pass spec files explicitly: crud:apply <spec.yaml...>")
 		}
-		results, err = helper.ApplySpecsFromDir(h.db, h.config, helper.NewTableStore(h.db, h.config), dir, opts)
+		results, err = helper.ApplySpecsFromDir(h.db, h.config, store, dir, opts)
 	} else {
-		results, err = helper.ApplySpecs(h.db, h.config, helper.NewTableStore(h.db, h.config), args, opts)
+		results, err = helper.ApplySpecs(h.db, h.config, store, args, opts)
 	}
 	if err != nil {
 		printApplyResults(cmd, results)

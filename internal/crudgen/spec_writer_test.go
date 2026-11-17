@@ -5,6 +5,7 @@ import (
 	"buildadmin-go/internal/pkg/data_scope"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -34,18 +35,42 @@ func TestMarshalSpecRoundTripsThroughLoadSpec(t *testing.T) {
 		{Name: "create_time", Type: "bigint", Unsigned: true, Comment: "创建时间"},
 		{Name: "update_time", Type: "bigint", Unsigned: true, Comment: "更新时间"},
 	}
+	options, content, path := rewriteSpecThroughDisk(t, table, fields)
+	assertRewrittenSpec(t, options, fields, path)
+	if !strings.Contains(string(content), "remoteTable: user") {
+		t.Fatalf("written spec must use camelCase attribute keys:\n%s", content)
+	}
+}
+
+// rewriteSpecThroughDisk 把设计写回临时 spec 再读回来，返回读回结果、原始内容与路径。
+func rewriteSpecThroughDisk(t *testing.T, table crudmodel.Table, fields []crudmodel.Field) (*GenerateOptions, []byte, string) {
+	t.Helper()
 	content, err := MarshalSpec(table, fields)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "ops_banner.yaml")
-	if err := os.WriteFile(path, content, 0o644); err != nil {
+	if err := os.WriteFile(path, content, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	options, err := LoadSpec(path)
 	if err != nil {
 		t.Fatalf("load rewritten spec: %v\n%s", err, content)
 	}
+	return options, content, path
+}
+
+func assertRewrittenSpec(t *testing.T, options *GenerateOptions, fields []crudmodel.Field, path string) {
+	t.Helper()
+	assertRewrittenIdentity(t, options, fields)
+	assertRewrittenFieldAttrs(t, options)
+	if warnings, err := ValidateSpec(path); err != nil {
+		t.Fatalf("rewritten spec does not validate: %v (%+v)", err, warnings)
+	}
+}
+
+func assertRewrittenIdentity(t *testing.T, options *GenerateOptions, fields []crudmodel.Field) {
+	t.Helper()
 	if options.Table.Name != "ops_banner" || options.Table.Comment != "轮播图表" {
 		t.Fatalf("table identity lost: %+v", options.Table)
 	}
@@ -55,6 +80,13 @@ func TestMarshalSpecRoundTripsThroughLoadSpec(t *testing.T) {
 	if len(options.Fields) != len(fields) {
 		t.Fatalf("fields = %d, want %d", len(options.Fields), len(fields))
 	}
+	if options.Table.DataScope == nil || options.Table.DataScope.Mode != data_scope.ModeAuto {
+		t.Fatalf("data scope lost: %+v", options.Table.DataScope)
+	}
+}
+
+func assertRewrittenFieldAttrs(t *testing.T, options *GenerateOptions) {
+	t.Helper()
 	user := options.Fields[3]
 	if user.Form.RemoteTable != "user" || user.Form.RemoteField != "username" || user.Form.RemotePk != "id" || user.Form.RelationFields != "username" {
 		t.Fatalf("remote attributes lost: %+v", user.Form)
@@ -65,12 +97,6 @@ func TestMarshalSpecRoundTripsThroughLoadSpec(t *testing.T) {
 	}
 	if len(options.Table.Indexes) != 1 || options.Table.Indexes[0].Name != "uk_title" || !options.Table.Indexes[0].Unique {
 		t.Fatalf("indexes lost: %+v", options.Table.Indexes)
-	}
-	if options.Table.DataScope == nil || options.Table.DataScope.Mode != data_scope.ModeAuto {
-		t.Fatalf("data scope lost: %+v", options.Table.DataScope)
-	}
-	if warnings, err := ValidateSpec(path); err != nil {
-		t.Fatalf("rewritten spec does not validate: %v (%+v)", err, warnings)
 	}
 }
 

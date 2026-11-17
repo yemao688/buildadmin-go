@@ -23,7 +23,7 @@ func TestWritePlanHTMLRendersDiffAndCommand(t *testing.T) {
 	if err := writePlanHTML(path, payload, "crud_specs/", "demo"); err != nil {
 		t.Fatal(err)
 	}
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec // G304: path 为测试内 t.TempDir 夹具路径
 	if err != nil {
 		t.Fatal(err)
 	}

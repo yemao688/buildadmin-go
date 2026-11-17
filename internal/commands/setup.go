@@ -310,6 +310,12 @@ func (r setupRunner) completeSetup(db *gorm.DB, options setupOptions, input setu
 }
 
 func completeSetupDependencies(deps setupDependencies) setupDependencies {
+	deps = completeSetupDatabaseDependencies(deps)
+	return completeSetupRuntimeDependencies(deps)
+}
+
+// completeSetupDatabaseDependencies 回落数据库侧的默认实现（建库、探查、测试库）。
+func completeSetupDatabaseDependencies(deps setupDependencies) setupDependencies {
 	defaults := defaultSetupDependencies()
 	if deps.isComplete == nil {
 		deps.isComplete = defaults.isComplete
@@ -326,6 +332,21 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 	if deps.writeBaseConfig == nil {
 		deps.writeBaseConfig = defaults.writeBaseConfig
 	}
+	if deps.createTestDatabase == nil {
+		deps.createTestDatabase = defaults.createTestDatabase
+	}
+	if deps.grantTestDatabase == nil {
+		deps.grantTestDatabase = defaults.grantTestDatabase
+	}
+	if deps.mergeTestConfig == nil {
+		deps.mergeTestConfig = defaults.mergeTestConfig
+	}
+	return deps
+}
+
+// completeSetupRuntimeDependencies 回落安装后运行时动作的默认实现。
+func completeSetupRuntimeDependencies(deps setupDependencies) setupDependencies {
+	defaults := defaultSetupDependencies()
 	if deps.writeAppEnv == nil {
 		deps.writeAppEnv = defaults.writeAppEnv
 	}
@@ -346,15 +367,6 @@ func completeSetupDependencies(deps setupDependencies) setupDependencies {
 	}
 	if deps.updateAdminConfig == nil {
 		deps.updateAdminConfig = defaults.updateAdminConfig
-	}
-	if deps.createTestDatabase == nil {
-		deps.createTestDatabase = defaults.createTestDatabase
-	}
-	if deps.grantTestDatabase == nil {
-		deps.grantTestDatabase = defaults.grantTestDatabase
-	}
-	if deps.mergeTestConfig == nil {
-		deps.mergeTestConfig = defaults.mergeTestConfig
 	}
 	return deps
 }

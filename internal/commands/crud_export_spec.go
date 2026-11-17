@@ -65,7 +65,7 @@ func (h *CrudHandler) ExportSpec(cmd *cobra.Command, table, targetDir string, fo
 	if dir == "" {
 		dir = filepath.Join(util.RootPath(), "crud_specs")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create spec directory: %w", err)
 	}
 	path := filepath.Join(dir, table+".yaml")

@@ -80,6 +80,15 @@ type generateState struct {
 	indexWarnings     []string
 }
 
+// mergeReleaseError 把生成锁释放失败并入返回值：成功时升级为失败，失败时保留
+// 主错误（锁仍会被释放，调用方拿到的是首个真实原因）。
+func mergeReleaseError(retErr error, release func() error) error {
+	if releaseErr := release(); retErr == nil && releaseErr != nil {
+		return releaseErr
+	}
+	return retErr
+}
+
 // GenerateFromSpec performs the complete generation transaction-like
 // orchestration. File changes are recoverable; MySQL DDL is not transactional.
 func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, opts GenerateOptions) (result *GenerateResult, retErr error) {
@@ -91,9 +100,7 @@ func GenerateFromSpec(db *gorm.DB, cfg *conf.Configuration, tables TableStore, o
 	var fail func(string, error) (*GenerateResult, error)
 	var cleanupSnapshot func() error
 	defer func() {
-		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
-			retErr = releaseErr
-		}
+		retErr = mergeReleaseError(retErr, releaseLocks)
 	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -354,7 +361,7 @@ func (s *generateState) writeSpecOutput() error {
 	if err != nil {
 		return s.failErr("spec write", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(s.specPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.specPath), 0o750); err != nil {
 		return s.failErr("spec write", err)
 	}
 	if err := os.WriteFile(s.specPath, content, 0o644); err != nil { //nolint:gosec // G306: spec 是仓库内可读文件
@@ -725,9 +732,7 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
 	var fail func(string, error) error
 	defer func() {
-		if releaseErr := releaseLocks(); retErr == nil && releaseErr != nil {
-			retErr = releaseErr
-		}
+		retErr = mergeReleaseError(retErr, releaseLocks)
 	}()
 	defer func() {
 		if recovered := recover(); recovered != nil {

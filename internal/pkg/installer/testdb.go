@@ -16,7 +16,7 @@ func CreateTestDatabase(cfg Database, name string) error {
 	defer func() { _ = db.Close() }()
 
 	// 库名来自安装参数，一律反引号转义后拼接；CREATE DATABASE 不接受占位参数。
-	statement := "CREATE DATABASE IF NOT EXISTS " + quoteSQLIdentifier(name) +
+	statement := "CREATE DATABASE IF NOT EXISTS " + quoteSQLIdentifier(name) + //nolint:gosec // G202: 标识符经 quoteSQLIdentifier 白名单转义后拼接，无外部输入直接入 SQL
 		" CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
 	_, err = db.Exec(statement)
 	return err

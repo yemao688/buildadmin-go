@@ -13,7 +13,7 @@ func TestCollectOwnerTablesFindsSpecDeclarations(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name, content string) {
 		t.Helper()
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -53,7 +53,7 @@ fields: []
 func TestCollectOwnerTablesRejectsBrokenSpec(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("name: [unclosed\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("name: [unclosed\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := CollectOwnerTables(dir); err == nil {

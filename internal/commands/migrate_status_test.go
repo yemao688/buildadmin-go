@@ -62,7 +62,7 @@ func TestCountSpecFiles(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	for _, name := range []string{"a.yaml", "b.yaml", "notes.md"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("name: x\n"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("name: x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}

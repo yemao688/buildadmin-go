@@ -76,13 +76,7 @@ func initConfig() {
 		panic(err)
 	}
 
-	// 归属表清单的事实源是 crud_specs：把声明了 reassignable/inheritFrom 的表
-	// 登记进删除管理员的转移清单，手写登记只保留给没有 spec 的非 CRUD 表。
-	if dir := helper.DefaultSpecDir(); dir != "" {
-		if _, err := helper.RegisterSpecOwnerTables(dir); err != nil && !jsonMode() {
-			fmt.Fprintf(os.Stderr, "warning: register spec owner tables: %v\n", err)
-		}
-	}
+	registerSpecOwnerTables()
 
 	v.WatchConfig()
 	v.OnConfigChange(func(in fsnotify.Event) {
@@ -97,6 +91,18 @@ func initConfig() {
 			logConfigChangeError(err)
 		}
 	})
+}
+
+// registerSpecOwnerTables 把 spec 声明的归属表登记进删除管理员的转移清单。
+// 事实源是 crud_specs/，手写登记只保留给没有 spec 的非 CRUD 表。
+func registerSpecOwnerTables() {
+	dir := helper.DefaultSpecDir()
+	if dir == "" {
+		return
+	}
+	if _, err := helper.RegisterSpecOwnerTables(dir); err != nil && !jsonMode() {
+		fmt.Fprintf(os.Stderr, "warning: register spec owner tables: %v\n", err)
+	}
 }
 
 // announceMissingRuntimeConfig 在缺少运行配置时按命令行子命令分流：setup

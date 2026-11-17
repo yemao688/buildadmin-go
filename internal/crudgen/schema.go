@@ -47,7 +47,10 @@ var specSchemaDescriptions = map[string]string{
 // oneOf 表达。
 func SpecSchema() map[string]any {
 	root := structSchema(reflect.TypeOf(specFile{}))
-	properties := root["properties"].(map[string]any)
+	properties, _ := root["properties"].(map[string]any)
+	if properties == nil {
+		properties = map[string]any{}
+	}
 	properties["type"] = map[string]any{
 		"type":        "string",
 		"enum":        []string{"auto", "create", "alter"},

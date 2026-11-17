@@ -65,9 +65,11 @@ func newDiagnoseCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 func runDiagnose(db *gorm.DB, config *conf.Configuration) diagnoseReport {
 	report := diagnoseReport{}
 	specDir := helper.DefaultSpecDir()
-	report.Checks = append(report.Checks, checkSpecs(specDir))
-	report.Checks = append(report.Checks, checkOwnerTables(specDir))
-	report.Checks = append(report.Checks, checkFrontendArtifact())
+	report.Checks = append(report.Checks,
+		checkSpecs(specDir),
+		checkOwnerTables(specDir),
+		checkFrontendArtifact(),
+	)
 	report.Checks = append(report.Checks, checkMigrations(db, config)...)
 	report.Checks = append(report.Checks, checkSpecPlan(db, config, specDir)...)
 	report.Checks = append(report.Checks, checkCrudLogCoverage(db, config, specDir))

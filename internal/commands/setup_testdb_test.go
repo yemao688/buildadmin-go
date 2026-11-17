@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,16 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// setupRunnerOutput 取安装流程写出的文本；runner.out 是接口，断言必须检查。
+func setupRunnerOutput(t *testing.T, writer io.Writer) string {
+	t.Helper()
+	buffer, ok := writer.(*bytes.Buffer)
+	if !ok {
+		t.Fatalf("setup runner output is %T, want *bytes.Buffer", writer)
+	}
+	return buffer.String()
+}
 
 // readSetupYAML 读取 configs 覆盖层为嵌套 map，断言用。
 func readSetupYAML(t *testing.T, path string) map[string]any {
@@ -186,7 +197,7 @@ func TestPrepareSetupTestDatabaseGrantFailureKeepsInstall(t *testing.T) {
 	if !ok || mysqlTest["enabled"] != true || mysqlTest["database"] != "buildadmin_test" {
 		t.Fatalf("mysql_test section = %#v", got["mysql_test"])
 	}
-	output := runner.out.(*bytes.Buffer).String()
+	output := setupRunnerOutput(t, runner.out)
 	if !strings.Contains(output, "GRANT ALL PRIVILEGES ON `buildadmin%`.* TO 'root'@'%';") {
 		t.Fatalf("manual GRANT statement missing from output: %q", output)
 	}
@@ -222,7 +233,7 @@ func TestPrepareSetupTestDatabaseCreateFailureSkipsConfig(t *testing.T) {
 	if _, ok := got["mysql_test"]; ok {
 		t.Fatalf("mysql_test must not be written when the database creation failed: %#v", got["mysql_test"])
 	}
-	if !strings.Contains(runner.out.(*bytes.Buffer).String(), "CREATE DATABASE IF NOT EXISTS `buildadmin_test`") {
-		t.Fatalf("manual CREATE DATABASE statement missing from output: %q", runner.out.(*bytes.Buffer).String())
+	if output := setupRunnerOutput(t, runner.out); !strings.Contains(output, "CREATE DATABASE IF NOT EXISTS `buildadmin_test`") {
+		t.Fatalf("manual CREATE DATABASE statement missing from output: %q", output)
 	}
 }

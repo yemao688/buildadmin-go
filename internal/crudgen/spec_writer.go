@@ -159,77 +159,89 @@ func toSpecValue(value reflect.Value) (any, bool, error) {
 		number := value.Float()
 		return number, number == 0, nil
 	case reflect.Slice:
-		if value.IsNil() || value.Len() == 0 {
-			return nil, true, nil
-		}
-		items := make([]any, 0, value.Len())
-		for index := 0; index < value.Len(); index++ {
-			item, empty, err := toSpecValue(value.Index(index))
-			if err != nil {
-				return nil, false, err
-			}
-			if empty {
-				continue
-			}
-			items = append(items, item)
-		}
-		if len(items) == 0 {
-			return nil, true, nil
-		}
-		return items, false, nil
+		return specSliceValue(value)
 	case reflect.Map:
-		if value.IsNil() || value.Len() == 0 {
-			return nil, true, nil
-		}
-		result := make(map[string]any, value.Len())
-		iter := value.MapRange()
-		for iter.Next() {
-			key, ok := iter.Key().Interface().(string)
-			if !ok {
-				return nil, false, fmt.Errorf("spec attribute map keys must be strings")
-			}
-			item, empty, err := toSpecValue(iter.Value())
-			if err != nil {
-				return nil, false, err
-			}
-			if empty {
-				continue
-			}
-			result[key] = item
-		}
-		if len(result) == 0 {
-			return nil, true, nil
-		}
-		return result, false, nil
+		return specMapValue(value)
 	case reflect.Struct:
-		result := make(map[string]any, value.NumField())
-		typ := value.Type()
-		for index := 0; index < typ.NumField(); index++ {
-			field := typ.Field(index)
-			if field.PkgPath != "" {
-				continue
-			}
-			key := strings.Split(field.Tag.Get("mapstructure"), ",")[0]
-			if key == "" || key == "-" {
-				// mapstructure 缺省按字段名大小写不敏感匹配，写字段名即可。
-				key = field.Name
-			}
-			item, empty, err := toSpecValue(value.Field(index))
-			if err != nil {
-				return nil, false, err
-			}
-			if empty {
-				continue
-			}
-			result[key] = item
-		}
-		if len(result) == 0 {
-			return nil, true, nil
-		}
-		return result, false, nil
+		return specStructValue(value)
 	default:
 		return nil, false, fmt.Errorf("unsupported spec attribute kind %s", value.Kind())
 	}
+}
+
+func specSliceValue(value reflect.Value) (any, bool, error) {
+	if value.IsNil() || value.Len() == 0 {
+		return nil, true, nil
+	}
+	items := make([]any, 0, value.Len())
+	for index := 0; index < value.Len(); index++ {
+		item, empty, err := toSpecValue(value.Index(index))
+		if err != nil {
+			return nil, false, err
+		}
+		if empty {
+			continue
+		}
+		items = append(items, item)
+	}
+	if len(items) == 0 {
+		return nil, true, nil
+	}
+	return items, false, nil
+}
+
+func specMapValue(value reflect.Value) (any, bool, error) {
+	if value.IsNil() || value.Len() == 0 {
+		return nil, true, nil
+	}
+	result := make(map[string]any, value.Len())
+	iter := value.MapRange()
+	for iter.Next() {
+		key, ok := iter.Key().Interface().(string)
+		if !ok {
+			return nil, false, fmt.Errorf("spec attribute map keys must be strings")
+		}
+		item, empty, err := toSpecValue(iter.Value())
+		if err != nil {
+			return nil, false, err
+		}
+		if empty {
+			continue
+		}
+		result[key] = item
+	}
+	if len(result) == 0 {
+		return nil, true, nil
+	}
+	return result, false, nil
+}
+
+func specStructValue(value reflect.Value) (any, bool, error) {
+	result := make(map[string]any, value.NumField())
+	typ := value.Type()
+	for index := 0; index < typ.NumField(); index++ {
+		field := typ.Field(index)
+		if field.PkgPath != "" {
+			continue
+		}
+		key := strings.Split(field.Tag.Get("mapstructure"), ",")[0]
+		if key == "" || key == "-" {
+			// mapstructure 缺省按字段名大小写不敏感匹配，写字段名即可。
+			key = field.Name
+		}
+		item, empty, err := toSpecValue(value.Field(index))
+		if err != nil {
+			return nil, false, err
+		}
+		if empty {
+			continue
+		}
+		result[key] = item
+	}
+	if len(result) == 0 {
+		return nil, true, nil
+	}
+	return result, false, nil
 }
 
 // stringSlicePointer 区分「省略」（nil）与「显式空列表」：表单字段为空列表

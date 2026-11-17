@@ -87,7 +87,7 @@ func TestCrudListSortsAndCountsSpecs(t *testing.T) {
 	}
 }
 
-func TestCrudListJSONEnvelope(t *testing.T) {
+func TestCrudListJSONEnvelope(t *testing.T) { //nolint:paralleltest // 依赖全局 pflag.CommandLine 注入 --json，必须串行
 	// 不并行：jsonMode() 读全局 --json，测试内临时打开它。
 	enableJSONMode(t)
 	dir := t.TempDir()

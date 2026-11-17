@@ -191,27 +191,10 @@ func expandFieldsShorthand(document *yaml.Node) error {
 	}
 	sequence := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
 	for index := 0; index+1 < len(fieldsNode.Content); index += 2 {
-		nameNode, attrsNode := fieldsNode.Content[index], fieldsNode.Content[index+1]
-		if nameNode.Kind != yaml.ScalarNode || strings.TrimSpace(nameNode.Value) == "" {
-			return fmt.Errorf("fields mapping keys must be field names, got %q", nameNode.Value)
+		entry, err := expandFieldsEntry(fieldsNode.Content[index], fieldsNode.Content[index+1])
+		if err != nil {
+			return err
 		}
-		if attrsNode.Kind == yaml.AliasNode {
-			attrsNode = attrsNode.Alias
-		}
-		if attrsNode.Kind == 0 || (attrsNode.Kind == yaml.ScalarNode && attrsNode.Tag == "!!null") {
-			attrsNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		}
-		if attrsNode.Kind != yaml.MappingNode {
-			return fmt.Errorf("field %q: mapping shorthand requires a mapping value", nameNode.Value)
-		}
-		if mappingNodeValue(attrsNode, "name") != nil {
-			return fmt.Errorf("field %q: remove name from the value; the mapping key is the field name", nameNode.Value)
-		}
-		entry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
-			{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name"},
-			{Kind: yaml.ScalarNode, Tag: "!!str", Value: nameNode.Value},
-		}}
-		entry.Content = append(entry.Content, attrsNode.Content...)
 		sequence.Content = append(sequence.Content, entry)
 	}
 	for index := 0; index+1 < len(root.Content); index += 2 {
@@ -221,6 +204,31 @@ func expandFieldsShorthand(document *yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+// expandFieldsEntry 把一条 "字段名: 属性" 展开成 "name: 字段名" 加原属性的序列项。
+func expandFieldsEntry(nameNode, attrsNode *yaml.Node) (*yaml.Node, error) {
+	if nameNode.Kind != yaml.ScalarNode || strings.TrimSpace(nameNode.Value) == "" {
+		return nil, fmt.Errorf("fields mapping keys must be field names, got %q", nameNode.Value)
+	}
+	if attrsNode.Kind == yaml.AliasNode {
+		attrsNode = attrsNode.Alias
+	}
+	if attrsNode.Kind == 0 || (attrsNode.Kind == yaml.ScalarNode && attrsNode.Tag == "!!null") {
+		attrsNode = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	}
+	if attrsNode.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("field %q: mapping shorthand requires a mapping value", nameNode.Value)
+	}
+	if mappingNodeValue(attrsNode, "name") != nil {
+		return nil, fmt.Errorf("field %q: remove name from the value; the mapping key is the field name", nameNode.Value)
+	}
+	entry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: "name"},
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: nameNode.Value},
+	}}
+	entry.Content = append(entry.Content, attrsNode.Content...)
+	return entry, nil
 }
 
 // buildSpecFields 按声明顺序把 spec 字段转换为实体字段，逐项保持默认值推导、

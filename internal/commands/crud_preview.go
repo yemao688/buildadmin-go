@@ -336,11 +336,11 @@ func previewStringSet(values []string) map[string]struct{} {
 // writeCrudPreviewHTML 渲染预览页；输出目录不存在时自动创建。
 func writeCrudPreviewHTML(path string, data crudPreviewData) error {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return fmt.Errorf("create preview directory: %w", err)
 		}
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(path) //nolint:gosec // G304: path 是开发者通过 --out 显式传入的预览输出路径
 	if err != nil {
 		return fmt.Errorf("create preview page: %w", err)
 	}

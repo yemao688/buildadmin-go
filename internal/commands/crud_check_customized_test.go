@@ -12,10 +12,10 @@ func TestCompareRenderedWithDisk(t *testing.T) {
 	unchanged := filepath.Join(dir, "unchanged.go")
 	changed := filepath.Join(dir, "changed.go")
 	missing := filepath.Join(dir, "missing.go")
-	if err := os.WriteFile(unchanged, []byte("same\n"), 0o644); err != nil {
+	if err := os.WriteFile(unchanged, []byte("same\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(changed, []byte("old\n"), 0o644); err != nil {
+	if err := os.WriteFile(changed, []byte("old\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	drift := compareRenderedWithDisk(map[string]string{
