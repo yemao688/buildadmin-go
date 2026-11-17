@@ -185,11 +185,11 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	}
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
 	if jsonMode() {
-		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, NewTable: plan.NewTable, Warnings: dryRunWarnings}
+		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, NewTable: plan.NewTable, TableMissing: plan.TableMissing, Warnings: dryRunWarnings}
 		if diffMode {
 			empty := make([]dryRunDiffJSON, 0)
 			payload.Diffs = &empty
-			if !plan.NewTable {
+			if !plan.NewTable && !plan.TableMissing {
 				diffs, diffErr := h.renderDiffPayload(specPath)
 				if diffErr != nil {
 					return diffErr
@@ -218,8 +218,8 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 func (h *CrudHandler) printDryRun(cmd *cobra.Command, specPath string, plan helper.GenerationFilePlan, results []helper.ApplyTableResult, diffMode bool) error {
 	printApplyPlan(cmd, results)
 	if diffMode {
-		if plan.NewTable {
-			cmd.Println("\nno file diffs: all files are new (table does not exist yet)")
+		if plan.NewTable || plan.TableMissing {
+			cmd.Println("\nno file diffs: the table does not exist yet; all files will be created")
 		} else if err := h.printRenderedDiff(cmd, specPath); err != nil {
 			return err
 		}
