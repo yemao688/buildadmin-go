@@ -122,11 +122,11 @@ func newCrudCheckCustomizedCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
 
 // customizedTable 是一张表的定制点报告；drift 保留原始差异供 --diff 输出。
 type customizedTable struct {
-	Table    string   `json:"table"`
-	Modified []string `json:"modified"`
-	Missing  []string `json:"missing"`
-	NewTable     bool   `json:"newTable,omitempty"`
-	TableMissing bool   `json:"tableMissing,omitempty"`
+	Table        string   `json:"table"`
+	Modified     []string `json:"modified"`
+	Missing      []string `json:"missing"`
+	NewTable     bool     `json:"newTable,omitempty"`
+	TableMissing bool     `json:"tableMissing,omitempty"`
 
 	drift []renderedDrift
 }
