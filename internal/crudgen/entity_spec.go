@@ -68,6 +68,8 @@ func entityGoType(field crudmodel.Field) string {
 		return "float32"
 	case "real", "double", "decimal":
 		return "float64"
+	case "bool", "boolean":
+		return "bool"
 	case "binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob":
 		return "[]byte"
 	case "bit":

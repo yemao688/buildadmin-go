@@ -80,6 +80,8 @@ func TestEntityGoTypeAndNameMatchGormGen(t *testing.T) {
 		{crudmodel.Field{Name: "payload", Type: "blob"}, "[]byte", "Payload"},
 		{crudmodel.Field{Name: "summary", Type: "varchar"}, "string", "Summary"},
 		{crudmodel.Field{Name: "flag", Type: "tinyint", Length: 1}, "bool", "Flag"},
+		{crudmodel.Field{Name: "enabled", Type: "bool"}, "bool", "Enabled"},
+		{crudmodel.Field{Name: "verified", Type: "boolean"}, "bool", "Verified"},
 		{crudmodel.Field{Name: "bits", Type: "bit"}, "[]uint8", "Bits"},
 		{crudmodel.Field{Name: "html_content", Type: "varchar"}, "string", "HTMLContent"},
 		{crudmodel.Field{Name: "cpu_load", Type: "int"}, "int32", "CPULoad"},
