@@ -2,6 +2,7 @@ package commands
 
 import (
 	helper "buildadmin-go/internal/crudgen"
+	"strings"
 	"testing"
 )
 
@@ -88,5 +89,28 @@ func TestCrudDiffCommandRequiresOneSpec(t *testing.T) {
 	}
 	if err := diffCmd.ValidateArgs([]string{"a.yaml"}); err != nil {
 		t.Fatalf("single spec must be accepted: %v", err)
+	}
+}
+
+func TestRenderRejectedMigrationBody(t *testing.T) {
+	t.Parallel()
+	body := renderRejectedMigrationBody([]crudDiffRow{{
+		Table:  "ops_order",
+		Field:  "legacy",
+		Reason: "column removal is not automatic",
+		DDL:    "ALTER TABLE `ba_ops_order` DROP COLUMN `legacy`",
+	}})
+	for _, want := range []string{
+		"ops_order.legacy: column removal is not automatic",
+		"ALTER TABLE `ba_ops_order` DROP COLUMN `legacy`",
+		"TODO",
+		"return nil",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "\n\t\treturn nil") {
+		t.Fatalf("body must be indented for the Up function:\n%s", body)
 	}
 }

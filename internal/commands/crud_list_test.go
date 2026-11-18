@@ -15,7 +15,7 @@ import (
 // initConfig 读取进程 os.Args，在测试进程里会误判为未豁免并退出。
 func runCrudList(t *testing.T, dir string) (string, error) {
 	t.Helper()
-	listCmd := newCrudListCommand()
+	listCmd := newCrudListCommand(nil)
 	buffer := &bytes.Buffer{}
 	listCmd.SetOut(buffer)
 	listCmd.SetErr(buffer)

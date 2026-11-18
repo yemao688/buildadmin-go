@@ -761,16 +761,42 @@ func DeleteFromSpecWithHooksAndOptions(db *gorm.DB, cfg *conf.Configuration, tab
 	return deleteFromSpec(db, cfg, tableName, opts, unregister)
 }
 
+// SpecOnlyDeletedError 表示目标表没有任何生成产物，只删掉了 crud_specs/<table>.yaml。
+// 调用方应当把它当成功处理（表不会被 DROP）。
+type SpecOnlyDeletedError struct {
+	Table string
+	Path  string
+}
+
+func (e *SpecOnlyDeletedError) Error() string {
+	return fmt.Sprintf("table %q has no generated artifacts; removed spec %s (the data table itself is not dropped)", e.Table, e.Path)
+}
+
 func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts DeleteOptions, unregister func(method, path string)) (retErr error) {
 	lockedDB, releaseLocks, err := acquireGenerationLocks(db, cfg)
 	if err != nil {
 		return err
 	}
-	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
-	var fail func(string, error) error
+	// 释放锁必须紧跟获取：spec-only 回退与守卫的提前返回也在锁内，漏注册会让
+	// server 进程（CrudService.Delete）永久卡在 "another generation is in progress"。
 	defer func() {
 		retErr = mergeReleaseError(retErr, releaseLocks)
 	}()
+	state := &deleteState{db: lockedDB, cfg: cfg, tableName: tableName, unregister: unregister, skipCompileCheck: opts.SkipCompileCheck}
+	// 从未成功生成过的表没有 manifest：此时 delete 只清理 spec（若存在），
+	// 而不是报错留下孤儿 spec（启动 apply 会用它重建菜单）。
+	reconcileStaleGeneratingLogs(lockedDB, cfg)
+	successLog, lookupErr := latestSuccessfulCrudLog(lockedDB, cfg, tableName)
+	if lookupErr != nil {
+		return lookupErr
+	}
+	if successLog == nil {
+		if err := validateSpecOnlyDeleteTarget(cfg, tableName); err != nil {
+			return err
+		}
+		return deleteSpecOnly(tableName)
+	}
+	var fail func(string, error) error
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicErr := generationPanicError(recovered)
@@ -798,6 +824,25 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 		return err
 	}
 	return state.finalize()
+}
+
+// deleteSpecOnly 删除 crud_specs/<table>.yaml；没有 spec 时返回明确错误。
+func deleteSpecOnly(tableName string) error {
+	return deleteSpecOnlyIn(DefaultSpecsDir(), tableName)
+}
+
+func deleteSpecOnlyIn(specDir, tableName string) error {
+	path := filepath.Join(specDir, tableName+".yaml")
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("table %q has neither generated artifacts nor a crud_specs spec; nothing to delete", tableName)
+		}
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove spec %s: %w", path, err)
+	}
+	return &SpecOnlyDeletedError{Table: tableName, Path: path}
 }
 
 func (s *deleteState) prepare() error {
@@ -1733,4 +1778,30 @@ func relativeSpecPath(path string) string {
 		return path
 	}
 	return rel
+}
+
+// validateSpecOnlyDeleteTarget 守住 spec-only 删除的边界：registerOnly 的核心表
+// 从不写 crud_log，会走到这条无 manifest 的分支，因此保护检查必须在回退之前；
+// 表名必须是合法标识符（否则 ../ 可以逃出 crud_specs/）；仍有子表声明
+// inheritFrom 指向它时拒绝（删掉父 spec 会让子表声明悬空，启动 apply 与
+// cascade:sync 直接失败）。
+func validateSpecOnlyDeleteTarget(cfg *conf.Configuration, tableName string) error {
+	prefix := ""
+	if cfg != nil {
+		prefix = cfg.Database.Prefix
+	}
+	if IsProtectedTableWithPrefix(prefix, tableName) {
+		return fmt.Errorf("crud deletion is forbidden for protected table %q", tableName)
+	}
+	if err := data_scope.ValidateIdentifier(tableName); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", tableName, err)
+	}
+	referrers, err := findInheritReferrers(DefaultSpecsDir(), tableName)
+	if err != nil {
+		return err
+	}
+	if len(referrers) > 0 {
+		return fmt.Errorf("refusing to delete spec of table %q: child table(s) %s still declare inheritFrom pointing at it; delete or re-point those child specs first", tableName, strings.Join(referrers, ", "))
+	}
+	return nil
 }

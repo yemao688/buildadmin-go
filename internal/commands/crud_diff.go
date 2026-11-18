@@ -2,8 +2,11 @@ package commands
 
 import (
 	helper "buildadmin-go/internal/crudgen"
+	"buildadmin-go/internal/migrations"
+	"buildadmin-go/internal/pkg/util"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -29,21 +32,24 @@ type crudDiffRow struct {
 
 // newCrudDiffCommand 只读地预览"库现状 vs spec"的差量：不写库、不写文件。
 func newCrudDiffCommand(cmdBootstrap CmdBootstrap) *cobra.Command {
-	return &cobra.Command{
+	var writeMigration bool
+	diffCmd := &cobra.Command{
 		Use:           "crud:diff <spec.yaml>",
 		Short:         "只读预览库现状与 spec 的差量（不写库）",
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: withCmd(cmdBootstrap, func(cmd *cobra.Command, command *Command, args []string) error {
-			return command.crudH.Diff(cmd, args)
+			return command.crudH.Diff(cmd, args, writeMigration)
 		}),
 	}
+	diffCmd.Flags().BoolVar(&writeMigration, "write-migration", false, "为 rejected 变更创建 business 迁移骨架（含逐条 TODO）")
+	return diffCmd
 }
 
 // Diff 输出库现状与 spec 的只读差量；requires-approval 不算失败，rejected 以
 // 非零退出，便于 CI/agent 判断必须补业务迁移。
-func (h *CrudHandler) Diff(cmd *cobra.Command, args []string) error {
+func (h *CrudHandler) Diff(cmd *cobra.Command, args []string, writeMigration bool) error {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: crud:diff <spec.yaml>")
 	}
@@ -57,6 +63,26 @@ func (h *CrudHandler) Diff(cmd *cobra.Command, args []string) error {
 	}
 	summary := summarizeApplyPlan(results)
 	rejectedErr := fmt.Errorf("crud:diff: %s 有 %d 条 rejected 变更，crud:apply 不会执行它们，必须写业务迁移", specPath, summary.Rejected)
+	migrationPath := ""
+	if writeMigration {
+		rejected := collectDiffRows(results, helper.DiffRejected)
+		var migrationErr error
+		migrationPath, migrationErr = writeRejectedMigration(results, rejected)
+		if migrationErr != nil {
+			return migrationErr
+		}
+	}
+	if jsonMode() && migrationPath != "" {
+		payload := planToJSON(results, specPath, confRef())
+		payload.MigrationPath = relativeToRoot(migrationPath)
+		if summary.Rejected > 0 {
+			if printErr := printJSONError(cmd, payload, rejectedErr); printErr != nil {
+				return printErr
+			}
+			return rejectedErr
+		}
+		return printJSON(cmd, payload)
+	}
 	if jsonMode() {
 		if summary.Rejected > 0 {
 			if printErr := printJSONError(cmd, planToJSON(results, specPath, confRef()), rejectedErr); printErr != nil {
@@ -65,6 +91,9 @@ func (h *CrudHandler) Diff(cmd *cobra.Command, args []string) error {
 			return rejectedErr
 		}
 		return printJSON(cmd, planToJSON(results, specPath, confRef()))
+	}
+	if migrationPath != "" {
+		cmd.Printf("migration skeleton written: %s\n", relativeToRoot(migrationPath))
 	}
 	printCrudDiff(cmd, results, summary, specPath)
 	if summary.Rejected > 0 {
@@ -189,4 +218,41 @@ func printDiffDDL(cmd *cobra.Command, ddl string) {
 	for _, line := range strings.Split(ddl, "\n") {
 		cmd.Printf("    %s\n", line)
 	}
+}
+
+// writeRejectedMigration 为 rejected 变更创建 business 迁移骨架：每条变更写成
+// TODO 注释（含原因与建议 DDL），Up 返回 nil 以便骨架先编译通过。
+func writeRejectedMigration(results []helper.ApplyTableResult, rejected []crudDiffRow) (string, error) {
+	if len(rejected) == 0 {
+		return "", nil
+	}
+	table := results[0].Table
+	dir := filepath.Join(util.RootPath(), "internal", "migrations", "business")
+	list, err := migrations.BusinessMigrations()
+	if err != nil {
+		return "", fmt.Errorf("读取 business 迁移注册表: %w", err)
+	}
+	versions := make([]uint64, 0, len(list))
+	for _, migration := range list {
+		versions = append(versions, migration.Version)
+	}
+	return createBusinessMigrationWithBody(dir, table+"_rejected", versions, renderRejectedMigrationBody(rejected))
+}
+
+// renderRejectedMigrationBody 生成 Up 函数体（已按文件缩进）。
+func renderRejectedMigrationBody(rejected []crudDiffRow) string {
+	var builder strings.Builder
+	builder.WriteString("\t\t\t// crud:diff 报告以下 rejected 变更：crud:apply 永不执行它们。\n")
+	builder.WriteString("\t\t\t// 每条都要先处理存量数据，再把 spec 对齐；完成后重跑 crud:diff 应为 0 rejected。\n")
+	for _, row := range rejected {
+		fmt.Fprintf(&builder, "\t\t\t//\n\t\t\t// - %s.%s: %s\n", row.Table, row.Field, row.Reason)
+		for _, line := range strings.Split(row.DDL, "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			fmt.Fprintf(&builder, "\t\t\t//   %s\n", line)
+		}
+	}
+	builder.WriteString("\t\t\t// TODO: 回填/归档数据并执行上面的 DDL，然后同步 spec\n\t\t\treturn nil")
+	return builder.String()
 }

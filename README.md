@@ -7,6 +7,14 @@
 - 全新安装建立 24 张表；后台管理功能完整（权限、安全、常规、字典、CRUD 代码生成）。
 - 前台 `/` 是自包含占位页，提供最小 `userInfo` store 和 `/api/user/{login,register,logout}`，作为业务门户的开发起点。
 
+## 界面与文档入口
+
+| 登录 | CRUD 预览（生成前检查组件） | 变更审批（只读计划页） |
+| --- | --- | --- |
+| ![登录](docs/images/screenshots/admin-login.jpg) | ![CRUD 预览](docs/images/screenshots/crud-preview.jpg) | ![变更审批](docs/images/screenshots/crud-approval.jpg) |
+
+按任务找文档：[`docs/README.md`](docs/README.md)。只想知道"现在该敲什么"：[`docs/crud-cheatsheet.md`](docs/crud-cheatsheet.md)。
+
 ## 技术栈与要求
 
 - Go：以 `go.mod` 的 `go 1.27.x` 为准。
