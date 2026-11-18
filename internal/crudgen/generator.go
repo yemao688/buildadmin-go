@@ -276,6 +276,13 @@ func (s *generateState) prepareInheritance() error {
 	// 条目会残留并继续级联已独立的子表——扫描 crud_specs/ 中所有 reassignable
 	// 父表的锚点块，凡含本子表条目者一律清理（幂等），并纳入快照。事实源是
 	// specs 目录与 repo 锚点块本身（crud_log 生成历史不参与）。
+	//
+	// 只读路径（--dry-run --diff / crud:check-customized / crud:render）不做
+	// 清理：锚点写入本身已被 PreviewSink 拦住，若这里照常删除，预览/离线命令
+	// 会静默改写仓库里的父表 repo（且失败时也同样发生）。
+	if s.opts.PreviewSink != nil {
+		return nil
+	}
 	staleParentRepoPaths, err := cleanupStaleCascadeAnchors(DefaultSpecsDir(), s.opts.Table.Name)
 	if err != nil {
 		return err
@@ -482,10 +489,7 @@ func (s *generateState) failErr(stage string, cause error) error {
 // 产物写进 sink，不建表、不写台账、不同步菜单、不跑 wire/go build。
 // 主实体 repo 的级联锚点属于另一个模块的文件，预览阶段不改写。
 func (s *generateState) renderPreview(sink OutputSink) (*GenerateResult, error) {
-	if err := WithOutputSink(sink, func() error {
-		_, _, err := s.writeFiles()
-		return err
-	}); err != nil {
+	if _, _, err := s.writeFiles(); err != nil {
 		return nil, err
 	}
 	files := make([]string, 0)
@@ -561,7 +565,7 @@ func (s *generateState) writeFiles() (WebDir, string, error) {
 	getTableName := func(name string, full bool) string { return s.tables.Name(name, full) }
 	getColumns := func(name string) ([]dbschema.Column, error) { return s.tables.GetColumns(name) }
 	register := s.wrapAtomicRoutes()
-	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(s.opts.Table, s.opts.Fields, s.opts.Table.DataScope, getTableName, getColumns, s.db, register, s.opts.SkipFrontend, s.opts.SkipRepo)
+	webViewsDir, tableComment, err := GenerateFileWithRouteRegistrar(s.opts.Table, s.opts.Fields, s.opts.Table.DataScope, getTableName, getColumns, s.db, register, s.opts.SkipFrontend, s.opts.SkipRepo, s.opts.PreviewSink)
 	if err != nil {
 		return webViewsDir, tableComment, s.failErr("file generation", err)
 	}
@@ -764,12 +768,17 @@ func DeleteFromSpecWithHooksAndOptions(db *gorm.DB, cfg *conf.Configuration, tab
 // SpecOnlyDeletedError 表示目标表没有任何生成产物，只删掉了 crud_specs/<table>.yaml。
 // 调用方应当把它当成功处理（表不会被 DROP）。
 type SpecOnlyDeletedError struct {
-	Table string
-	Path  string
+	Table        string
+	Path         string
+	RulesRemoved int64
 }
 
 func (e *SpecOnlyDeletedError) Error() string {
-	return fmt.Sprintf("table %q has no generated artifacts; removed spec %s (the data table itself is not dropped)", e.Table, e.Path)
+	message := fmt.Sprintf("table %q has no generated artifacts; removed spec %s (the data table itself is not dropped)", e.Table, e.Path)
+	if e.RulesRemoved > 0 {
+		message += fmt.Sprintf(" and %d orphan menu/rule row(s)", e.RulesRemoved)
+	}
+	return message
 }
 
 func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts DeleteOptions, unregister func(method, path string)) (retErr error) {
@@ -794,7 +803,7 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 		if err := validateSpecOnlyDeleteTarget(cfg, tableName); err != nil {
 			return err
 		}
-		return deleteSpecOnly(tableName)
+		return deleteSpecOnly(lockedDB, cfg, tableName)
 	}
 	var fail func(string, error) error
 	defer func() {
@@ -826,12 +835,13 @@ func deleteFromSpec(db *gorm.DB, cfg *conf.Configuration, tableName string, opts
 	return state.finalize()
 }
 
-// deleteSpecOnly 删除 crud_specs/<table>.yaml；没有 spec 时返回明确错误。
-func deleteSpecOnly(tableName string) error {
-	return deleteSpecOnlyIn(DefaultSpecsDir(), tableName)
+// deleteSpecOnly 删除 crud_specs/<table>.yaml，并清理由该 spec 产生、但没有
+// 生成台账可追溯的菜单/按钮规则（crud:apply 只物化菜单、不生成代码的情形）。
+func deleteSpecOnly(db *gorm.DB, cfg *conf.Configuration, tableName string) error {
+	return deleteSpecOnlyIn(db, cfg, DefaultSpecsDir(), tableName)
 }
 
-func deleteSpecOnlyIn(specDir, tableName string) error {
+func deleteSpecOnlyIn(db *gorm.DB, cfg *conf.Configuration, specDir, tableName string) error {
 	path := filepath.Join(specDir, tableName+".yaml")
 	if _, err := os.Stat(path); err != nil {
 		if os.IsNotExist(err) {
@@ -839,10 +849,48 @@ func deleteSpecOnlyIn(specDir, tableName string) error {
 		}
 		return err
 	}
+	removed, err := removeSpecMenuRules(db, cfg, path)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("remove spec %s: %w", path, err)
 	}
-	return &SpecOnlyDeletedError{Table: tableName, Path: path}
+	return &SpecOnlyDeletedError{Table: tableName, Path: path, RulesRemoved: removed}
+}
+
+// removeSpecMenuRules 按 spec 推导的菜单名删除 admin_rule 行（含子按钮）。
+// spec 无法解析时跳过清理——此时仍删 spec，交由人工确认菜单。
+func removeSpecMenuRules(db *gorm.DB, cfg *conf.Configuration, specPath string) (int64, error) {
+	if db == nil || cfg == nil {
+		return 0, nil
+	}
+	menuName, err := specMenuName(specPath)
+	if err != nil || menuName == "" {
+		// spec 无法解析时跳过菜单清理，仍允许删除 spec；残留规则交由人工确认。
+		return 0, nil //nolint:nilerr // 解析失败不是删除操作的失败原因
+	}
+	result := db.Table(cfg.Database.Prefix+"admin_rule").
+		Where("name = ?", menuName).
+		Or("name LIKE ?", menuName+"/%").
+		Delete(&model.AdminRule{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("remove orphan menu rules for %q: %w", menuName, result.Error)
+	}
+	return result.RowsAffected, nil
+}
+
+// specMenuName 复刻生成器写入 admin_rule 的菜单名。
+func specMenuName(specPath string) (string, error) {
+	options, err := LoadSpec(specPath)
+	if err != nil {
+		return "", err
+	}
+	if options.Table.RegisterOnly {
+		return "", nil
+	}
+	webDir := ParseWebDirNameData(options.Table.Name, "views", options.Table.WebViewsDir)
+	return GetMenuName(webDir), nil
 }
 
 func (s *deleteState) prepare() error {

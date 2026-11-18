@@ -380,3 +380,14 @@
 | 1. 定制点提升为 spec 能力 | 完成 | spec 新增 `hooks.afterMutation`；生成代码输出 `crudhooks.Mutation("<名>")`，实现在 `internal/admin/handler/crud_hooks.go`（手写、装配期注册）。`internal/pkg/crudhooks` 延迟解析 + 未注册告警；自定义 action 走独立 handler + `router/custom_registrars.go` |
 | 2. 校正 country_* 产物 | 完成 | `country_currency` / `country_language` 的缓存失效改为钩子；`getMultTranslations` 移到独立 `CountryLanguageTranslateHandler`；三个模块重新生成后 `crud:check-customized` 均为 0，可逐字节复现 |
 | 3. 生成器新增扩展点 | 完成 | `AdminRouterDeps.CustomRegistrars`（手写 registrar 并入路由）+ `CrudHooks`（触发装配期注册），wire 自动装配 |
+
+
+## 10. 第四批（离线渲染与收口）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| 4.5 离线生成 | 完成 | 实体改为 spec 驱动（`buildSpecEntityStruct`），不再用 `gorm.io/gen` 反查库；`crud:render` 不连库渲染到目录，`remoteSelect`/`remoteSelects` 与 `dataScope.reassignable`（需 admin 列元数据）直接拒绝，其余归属列按 spec 索引声明证明。实测离线产物与在线生成 **10 个文件逐字节一致** |
+| 钩子漏注册 | 完成 | serve 启动时按 spec 校验 `hooks.afterMutation` 是否已注册并告警（`warnUnregisteredMutationHooks`），不再只等首次写操作 |
+| `check-customized --all` | 完成 | 一次检查全部业务模块，支持 `--diff` / `--json`，有定制即非零退出 |
+| spec-only 删除残留菜单 | 完成 | 无 manifest 时按 spec 推导菜单名清理 `admin_rule` 菜单与按钮行，再删 spec，并报告清理数量 |
+| AGENT_BUSINESS 模板 | 完成 | 定制点表格改为 hooks / 自定义 handler / 生成文件手改三类，补 `check-customized --all`、`diagnose`、`crud:list --drift` 等命令 |

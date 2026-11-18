@@ -1,6 +1,7 @@
 package crudgen
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -215,7 +216,7 @@ indexes:
     unique: true
     columns: [seller_id, hotel_id]
 `
-	if err := writeFile(specPath, content); err != nil {
+	if err := os.WriteFile(specPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	opts, err := LoadSpec(specPath)

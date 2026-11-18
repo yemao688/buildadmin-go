@@ -43,6 +43,7 @@ func runServer(_ *cobra.Command, appBootstrap AppBootstrap) {
 	}
 
 	app.ReportUnprotectedRoutes()
+	warnUnregisteredMutationHooks(logger)
 
 	// 启动应用（启动横幅由 app.Run 输出）
 	if err := app.Run(); err != nil {

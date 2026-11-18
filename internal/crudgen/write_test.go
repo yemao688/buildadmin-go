@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRegistrarTemplateRendersAndFormats(t *testing.T) {
@@ -66,7 +68,7 @@ func TestWriteProviderCreatesMissingScaffold(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "model", "provider_scaffold_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	if err := writeProvider("internal/admin/model/provider_scaffold_test", "OwnerModel"); err != nil {
+	if err := writeProvider(nil, "internal/admin/model/provider_scaffold_test", "OwnerModel"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // G304: dir 由测试内 t.TempDir 构造
@@ -83,10 +85,10 @@ func TestWriteProviderSequentialEntriesOnFreshPackage(t *testing.T) {
 	dir := filepath.Join(util.RootPath(), "internal", "admin", "handler", "provider_fresh_seq_test")
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	// 首个条目写入后 gofmt 会把单参数 NewSet 折叠成单行，第二个条目必须仍能合法追加
-	if err := writeProvider("internal/admin/handler/provider_fresh_seq_test", "UserHandler"); err != nil {
+	if err := writeProvider(nil, "internal/admin/handler/provider_fresh_seq_test", "UserHandler"); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeProvider("internal/admin/handler/provider_fresh_seq_test", "UserRegistrar"); err != nil {
+	if err := writeProvider(nil, "internal/admin/handler/provider_fresh_seq_test", "UserRegistrar"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(filepath.Join(dir, "provider.go")) //nolint:gosec // G304: dir 由测试内 t.TempDir 构造
@@ -115,7 +117,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 			if err := os.WriteFile(provider, []byte(original), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if err := writeProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+			if err := writeProvider(nil, "internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
 				t.Fatal(err)
 			}
 			added, err := os.ReadFile(provider) //nolint:gosec // G304: provider 由测试内 t.TempDir 构造
@@ -137,7 +139,7 @@ func TestProviderWriteRoundTripPreservesEOFConvention(t *testing.T) {
 				t.Fatalf("first remove did not normalize provider: got %q, want %q", got, canonical)
 			}
 			for cycle := 0; cycle < 3; cycle++ {
-				if err := writeProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
+				if err := writeProvider(nil, "internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
 					t.Fatal(err)
 				}
 				if err := RemoveProvider("internal/admin/model/provider_eof_test", "OwnerModel"); err != nil {
@@ -168,7 +170,7 @@ func TestRegistrarProviderWriteRoundTrip(t *testing.T) {
 	if err := os.WriteFile(provider, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeProvider("internal/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
+	if err := writeProvider(nil, "internal/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
 		t.Fatal(err)
 	}
 	if err := RemoveProvider("internal/admin/handler/registrar_provider_test", "OwnerRegistrar"); err != nil {
@@ -642,7 +644,7 @@ func TestRenderRelationLoaderAggregatorReturnsLastRelation(t *testing.T) {
 func TestWriteGoFileNormalizesFormattingAndEOF(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "provider.go")
-	if err := writeGoFile(path, "package provider\n\n\nvar ProviderSet = 1\n\n\n"); err != nil {
+	if err := writeGoFile(nil, path, "package provider\n\n\nvar ProviderSet = 1\n\n\n"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := os.ReadFile(path) //nolint:gosec // G304: path 为测试内 t.TempDir 夹具路径
@@ -717,4 +719,19 @@ func TestSpecDefaultGormTag(t *testing.T) {
 			t.Errorf("specDefaultGormTag(%+v) = %q, want %q", tc.field, got, tc.want)
 		}
 	}
+}
+
+// popupForm.vue 的校验规则来自 map；必须排序输出，否则每次生成顺序不同。
+func TestBuildFormValidatorRulesDeterministic(t *testing.T) {
+	t.Parallel()
+	first := buildFormValidatorRules(map[string][]string{
+		"status": {"buildValidatorData({ name: \"number\" })"},
+		"rate":   {"buildValidatorData({ name: \"number\" })"},
+	})
+	second := buildFormValidatorRules(map[string][]string{
+		"rate":   {"buildValidatorData({ name: \"number\" })"},
+		"status": {"buildValidatorData({ name: \"number\" })"},
+	})
+	require.Equal(t, first, second)
+	require.Less(t, strings.Index(first, "rate:"), strings.Index(first, "status:"), "规则按字段名排序输出")
 }

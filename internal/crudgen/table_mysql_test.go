@@ -2,6 +2,7 @@ package crudgen
 
 import (
 	model "buildadmin-go/internal/model"
+	crudmodel "buildadmin-go/internal/pkg/crudmodel"
 	"buildadmin-go/internal/pkg/testutil"
 	"fmt"
 	"strings"
@@ -81,7 +82,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 		t.Parallel()
 		name := newTable(t, "single")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_owner_single` ON `"+name+"` (`admin_id`)").Error)
-		ok, err := buildIndexProver(db, name)("admin_id")
+		ok, err := buildIndexProver(db, name, crudmodel.Table{}, nil)("admin_id")
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -90,7 +91,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 		t.Parallel()
 		name := newTable(t, "leading")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_owner_leading` ON `"+name+"` (`admin_id`, `status`)").Error)
-		ok, err := buildIndexProver(db, name)("admin_id")
+		ok, err := buildIndexProver(db, name, crudmodel.Table{}, nil)("admin_id")
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -99,7 +100,7 @@ func TestDataScopeMySQLIndexProofAndDDL(t *testing.T) {
 		t.Parallel()
 		name := newTable(t, "nonleading")
 		require.NoError(t, db.Exec("CREATE INDEX `idx_status_owner` ON `"+name+"` (`status`, `admin_id`)").Error)
-		ok, err := buildIndexProver(db, name)("admin_id")
+		ok, err := buildIndexProver(db, name, crudmodel.Table{}, nil)("admin_id")
 		require.NoError(t, err)
 		require.False(t, ok)
 	})

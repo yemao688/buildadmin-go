@@ -267,7 +267,7 @@ func buildExcludeParamFields(fields []crudmodel.Field, ds ResolvedDataScope) []s
 	return exclude
 }
 
-func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string), skipFrontend, skipRepo bool) (WebDir, string, error) {
+func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Field, dsConfig *data_scope.Config, getTableName GetTableName, getColumns GetColumns, db *gorm.DB, registrar func(method, path string), skipFrontend, skipRepo bool, sink OutputSink) (WebDir, string, error) {
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return WebDir{}, "", err
 	}
@@ -276,7 +276,7 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 	// 改写后的克隆。
 	fields = slices.Clone(fields)
 	fullTableName := getTableName(table.Name, true)
-	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName))
+	modelData, handlerData, entityFile, repositoryFile, dtoFile, handlerFile, registrarFile, webViewsDir, webLangDir, webTranslate, tableComment, tablePk, tableName, fullTableName, err := prepareGenerationData(table, fields, dsConfig, getTableName, buildIndexProver(db, fullTableName, table, fields))
 	if err != nil {
 		return WebDir{}, "", err
 	}
@@ -305,25 +305,25 @@ func GenerateFileWithRouteRegistrar(table crudmodel.Table, fields []crudmodel.Fi
 
 	// 写入语言包 / index.vue / form.vue（skipFrontend 时整体跳过，写入顺序不变）
 	if !skipFrontend {
-		if err := writeWebLangFiles(langEnData, langZhData, webLangDir); err != nil {
+		if err := writeWebLangFiles(sink, langEnData, langZhData, webLangDir); err != nil {
 			return WebDir{}, "", err
 		}
-		if err := writeWebIndexFile(indexVueData, webViewsDir, handlerFile, tablePk, webTranslate); err != nil {
+		if err := writeWebIndexFile(sink, indexVueData, webViewsDir, handlerFile, tablePk, webTranslate); err != nil {
 			return WebDir{}, "", err
 		}
-		if err := writeWebFormFile(formVueData, webViewsDir, fields, webTranslate); err != nil {
+		if err := writeWebFormFile(sink, formVueData, webViewsDir, fields, webTranslate); err != nil {
 			return WebDir{}, "", err
 		}
 	}
 
 	// 写入模型代码（实体 + 仓库 + DTO）
-	structContent, err := writeModelFiles(db, tablePk, fullTableName, tableName, table, modelData, entityFile, repositoryFile, fields, skipRepo)
+	structContent, err := writeModelFiles(sink, db, tablePk, fullTableName, tableName, table, modelData, entityFile, repositoryFile, fields, skipRepo)
 	if err != nil {
 		return WebDir{}, "", err
 	}
 
 	//写入控制器代码
-	if err := writeHandlerFile(handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
+	if err := writeHandlerFile(sink, handlerData, handlerFile, structContent, dtoFile, registrarFile); err != nil {
 		return WebDir{}, "", err
 	}
 	return webViewsDir, tableComment, err
@@ -506,23 +506,23 @@ func applyWeighSortAndOperateConfig(fieldsMap map[string]string, table crudmodel
 }
 
 // writeWebLangFiles 按固定顺序写入中英文语言包文件（en 先、zh-cn 后）。
-func writeWebLangFiles(langEnData, langZhData map[string]string, webLangDir WebDir) error {
-	if err := writeWebLangFile(langEnData, "en", webLangDir); err != nil {
+func writeWebLangFiles(sink OutputSink, langEnData, langZhData map[string]string, webLangDir WebDir) error {
+	if err := writeWebLangFile(sink, langEnData, "en", webLangDir); err != nil {
 		return err
 	}
-	return writeWebLangFile(langZhData, "zh-cn", webLangDir)
+	return writeWebLangFile(sink, langZhData, "zh-cn", webLangDir)
 }
 
 // writeWebIndexFile 写入 index.vue（表主键与翻译前缀在写入前补全）。
-func writeWebIndexFile(indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo, tablePk, webTranslate string) error {
+func writeWebIndexFile(sink OutputSink, indexVueData IndexVueData, webViewsDir WebDir, handlerFile NameInfo, tablePk, webTranslate string) error {
 	indexVueData.TablePk = tablePk
 	indexVueData.WebTranslate = webTranslate
-	return writeIndexFile(indexVueData, webViewsDir, handlerFile)
+	return writeIndexFile(sink, indexVueData, webViewsDir, handlerFile)
 }
 
 // writeWebFormFile 写入 form.vue。
-func writeWebFormFile(formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
-	return writeFormFile(formVueData, webViewsDir, fields, webTranslate)
+func writeWebFormFile(sink OutputSink, formVueData FormVueData, webViewsDir WebDir, fields []crudmodel.Field, webTranslate string) error {
+	return writeFormFile(sink, formVueData, webViewsDir, fields, webTranslate)
 }
 
 // repositoryImportAlias 为 handler 中选择仓库包的别名：拍平后恒为根包 repository。
@@ -612,10 +612,12 @@ func ownerGoType(field crudmodel.Field) (string, error) {
 // buildIndexProver returns a prover that checks information_schema.STATISTICS for
 // an index on the owner column. It is production-only; tests can supply their
 // own ProveIndex callback.
-func buildIndexProver(db *gorm.DB, fullTableName string) func(string) (bool, error) {
+func buildIndexProver(db *gorm.DB, fullTableName string, table crudmodel.Table, fields []crudmodel.Field) func(string) (bool, error) {
 	return func(column string) (bool, error) {
 		if db == nil {
-			return false, nil
+			// 离线渲染没有数据库可查：按 spec 判断。apply 会物化声明的索引，
+			// 并为归属列自动创建 idx_<owner>，因此这两种情况都算已证明。
+			return specProvesOwnerIndex(table, fields, column), nil
 		}
 		var count int64
 		err := db.Raw(
@@ -2297,4 +2299,26 @@ func getJsonFromAny(data map[string]any) string {
 func isNumeric(s string) bool {
 	_, err := strconv.Atoi(s)
 	return err == nil
+}
+
+// specProvesOwnerIndex 在无数据库时按 spec 证明归属列索引：声明索引的首列
+// （与 information_schema SEQ_IN_INDEX=1 对齐）或生成/apply 自动创建的
+// idx_<owner>（owner 列由 resolveOwnerColumn 推导）。
+func specProvesOwnerIndex(table crudmodel.Table, fields []crudmodel.Field, column string) bool {
+	if owner := resolveOwnerColumn(table.DataScope, fields); owner != "" && strings.EqualFold(owner, column) {
+		return true
+	}
+	for _, index := range table.Indexes {
+		if len(index.Columns) == 0 {
+			continue
+		}
+		first := index.Columns[0]
+		if bracket := strings.IndexByte(first, '('); bracket >= 0 {
+			first = first[:bracket]
+		}
+		if strings.EqualFold(strings.TrimSpace(first), column) {
+			return true
+		}
+	}
+	return false
 }
