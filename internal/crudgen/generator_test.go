@@ -138,6 +138,20 @@ func TestHandlerTemplateChecksCopierCopyErrors(t *testing.T) {
 	if strings.Contains(string(content), "\tcopier.Copy(&data, params)\n") {
 		t.Fatalf("shared TableHandler keeps an unchecked copier.Copy:\n%s", content)
 	}
+	hookData := HandlerData{
+		Namespace: "handler", ClassName: "Demo", ModelImportPath: "buildadmin-go/internal/model",
+		ModelName: "Demo", ModelVar: "demo", PkGoType: "int64", PkJSONName: "id",
+		AfterMutationHook: "currency-cache",
+	}
+	hookRendered, err := render("internal/admin/handler/demo.go", handlerTemp, hookData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`crudhooks "buildadmin-go/internal/pkg/crudhooks"`, `AfterMutation: crudhooks.Mutation("currency-cache"),`} {
+		if !strings.Contains(hookRendered, want) {
+			t.Fatalf("generated handler missing %q:\n%s", want, hookRendered)
+		}
+	}
 	if strings.Contains(handlerTemp, "copier.Copy") {
 		t.Fatal("generated handler template must not call copier; TableHandler owns the copy")
 	}

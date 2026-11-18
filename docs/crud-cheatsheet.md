@@ -62,6 +62,23 @@ dataScope:
 
 登记是自动的（启动时扫 spec），**不要再手抄 owner 表清单**。删除管理员时的转移范围就是这些表。
 
+## 加钩子（写成功后做点什么）
+
+```yaml
+# spec
+hooks:
+  afterMutation: currency-cache
+```
+
+```go
+// internal/admin/handler/crud_hooks.go（手写，生成器不覆盖）
+mustRegisterMutation("currency-cache", func(ctx *gin.Context) {
+    requesttx.InvalidateAfterMutation(ctx, countrySvc.InvalidateCurrencyCache)
+})
+```
+
+名字未注册时是 no-op 且首次触发会打日志。**不要**改生成文件的 `AfterMutation`，重生成会覆盖。自定义 action 放独立 handler + `router/custom_registrars.go`。
+
 ## 加关联下拉
 
 ```yaml

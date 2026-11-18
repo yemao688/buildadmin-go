@@ -2,6 +2,8 @@ name: country_currency
 comment: 全局货币
 type: alter
 generateRelativePath: country_currency
+hooks:
+  afterMutation: currency-cache
 dataScope:
   mode: none
 quickSearchField: [code, name]

@@ -8,6 +8,7 @@ import (
 
 type CountryLanguageContentHandler struct {
 	TableHandler[model.CountryLanguageContent, dto.CountryLanguageContentParam, int64]
+	countryLanguageContentM *repository.CountryLanguageContentRepository
 }
 
 func NewCountryLanguageContentHandler(countryLanguageContentM *repository.CountryLanguageContentRepository) *CountryLanguageContentHandler {
@@ -19,5 +20,6 @@ func NewCountryLanguageContentHandler(countryLanguageContentM *repository.Countr
 				PartialEdit: map[string]bool{},
 			},
 		),
+		countryLanguageContentM: countryLanguageContentM,
 	}
 }

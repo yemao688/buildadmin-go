@@ -60,6 +60,5 @@ func ProvideRegistrars(
 		NewCountryCurrencyRegistrar(countryCurrency),
 		NewCountryLanguageRegistrar(countryLanguage),
 		NewCountryLanguageContentRegistrar(countryLanguageContent),
-		NewCountryLanguageTranslateRegistrar(countryLanguage),
 	}
 }

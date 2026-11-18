@@ -116,6 +116,40 @@ fields:
 	require.Equal(t, &data_scope.InheritRef{Table: "user_order", ByColumn: "order_id"}, opts.Table.DataScope.InheritFrom)
 }
 
+func TestLoadSpecParsesHooks(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: demo
+hooks:
+  afterMutation: currency-cache
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+`)
+	opts, err := LoadSpec(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Table.Hooks == nil || opts.Table.Hooks.AfterMutation != "currency-cache" {
+		t.Fatalf("hooks = %+v", opts.Table.Hooks)
+	}
+}
+
+func TestLoadSpecRejectsInvalidHookName(t *testing.T) {
+	t.Parallel()
+	path := writeSpecTest(t, `name: demo
+hooks:
+  afterMutation: "bad name!"
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+`)
+	if _, err := LoadSpec(path); err == nil || !strings.Contains(err.Error(), "afterMutation") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadSpecAcceptsFieldsMappingShorthand(t *testing.T) {
 	t.Parallel()
 	path := writeSpecTest(t, `name: demo

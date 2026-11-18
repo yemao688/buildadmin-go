@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -14,26 +15,27 @@ import (
 )
 
 type specFile struct {
-	Name                 string         `mapstructure:"name"`
-	Comment              string         `mapstructure:"comment"`
-	Type                 string         `mapstructure:"type"`
-	ModelFile            string         `mapstructure:"modelFile"`
-	ControllerFile       string         `mapstructure:"controllerFile"`
-	WebViewsDir          string         `mapstructure:"webViewsDir"`
-	GenerateRelativePath string         `mapstructure:"generateRelativePath"`
-	DatabaseConnection   string         `mapstructure:"databaseConnection"`
-	IsCommonModel        int            `mapstructure:"isCommonModel"`
-	Rebuild              string         `mapstructure:"rebuild"`
-	QuickSearchField     []string       `mapstructure:"quickSearchField"`
-	DefaultSortField     string         `mapstructure:"defaultSortField"`
-	DefaultSortType      string         `mapstructure:"defaultSortType"`
-	FormFields           *[]string      `mapstructure:"formFields"`
-	ColumnFields         *[]string      `mapstructure:"columnFields"`
-	RegisterOnly         bool           `mapstructure:"registerOnly"`
-	DataScope            *specDataScope `mapstructure:"dataScope"`
-	Indexes              []specIndex    `mapstructure:"indexes"`
-	Fields               []specField    `mapstructure:"fields"`
-	Menu                 *specMenu      `mapstructure:"menu"`
+	Name                 string           `mapstructure:"name"`
+	Comment              string           `mapstructure:"comment"`
+	Type                 string           `mapstructure:"type"`
+	ModelFile            string           `mapstructure:"modelFile"`
+	ControllerFile       string           `mapstructure:"controllerFile"`
+	WebViewsDir          string           `mapstructure:"webViewsDir"`
+	GenerateRelativePath string           `mapstructure:"generateRelativePath"`
+	DatabaseConnection   string           `mapstructure:"databaseConnection"`
+	IsCommonModel        int              `mapstructure:"isCommonModel"`
+	Rebuild              string           `mapstructure:"rebuild"`
+	QuickSearchField     []string         `mapstructure:"quickSearchField"`
+	DefaultSortField     string           `mapstructure:"defaultSortField"`
+	DefaultSortType      string           `mapstructure:"defaultSortType"`
+	FormFields           *[]string        `mapstructure:"formFields"`
+	ColumnFields         *[]string        `mapstructure:"columnFields"`
+	RegisterOnly         bool             `mapstructure:"registerOnly"`
+	Hooks                *crudmodel.Hooks `mapstructure:"hooks"`
+	DataScope            *specDataScope   `mapstructure:"dataScope"`
+	Indexes              []specIndex      `mapstructure:"indexes"`
+	Fields               []specField      `mapstructure:"fields"`
+	Menu                 *specMenu        `mapstructure:"menu"`
 }
 
 type specIndex struct {
@@ -55,6 +57,21 @@ type specMenu struct {
 	Title  string `mapstructure:"title"`
 	Parent int32  `mapstructure:"parent"`
 	Weigh  *int32 `mapstructure:"weigh"`
+}
+
+// hookNamePattern 限定钩子名可用字符：它会出现在生成代码的字符串字面量里，
+// 只允许字母、数字、下划线与连字符。
+var hookNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+
+// validateHooks 校验 spec 声明的钩子名。
+func validateHooks(table crudmodel.Table) error {
+	if table.Hooks == nil || table.Hooks.AfterMutation == "" {
+		return nil
+	}
+	if !hookNamePattern.MatchString(table.Hooks.AfterMutation) {
+		return fmt.Errorf("invalid hooks.afterMutation %q: only letters, digits, underscore and hyphen are allowed", table.Hooks.AfterMutation)
+	}
+	return nil
 }
 
 type specField struct {
@@ -107,6 +124,7 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 		ModelFile: raw.ModelFile, ControllerFile: raw.ControllerFile, WebViewsDir: raw.WebViewsDir,
 		GenerateRelativePath: raw.GenerateRelativePath, DatabaseConnection: raw.DatabaseConnection,
 		IsCommonModel: raw.IsCommonModel, Rebuild: raw.Rebuild, DataScope: dataScope, RegisterOnly: raw.RegisterOnly,
+		Hooks: raw.Hooks,
 	}
 	indexes, err := parseSpecIndexes(raw.Indexes, fields)
 	if err != nil {
@@ -119,6 +137,9 @@ func LoadSpec(path string) (*GenerateOptions, error) {
 	options := &GenerateOptions{Table: table, Fields: fields, Type: typeName}
 	if raw.Menu != nil {
 		options.Menu = &MenuOptions{Title: raw.Menu.Title, Parent: raw.Menu.Parent, Weigh: raw.Menu.Weigh}
+	}
+	if err := validateHooks(table); err != nil {
+		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)
 	}
 	if err := ValidateGenerationInput(table, fields); err != nil {
 		return nil, fmt.Errorf("spec %q validation failed: %w", path, err)

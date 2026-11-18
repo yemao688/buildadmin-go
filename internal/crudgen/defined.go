@@ -260,6 +260,7 @@ type HandlerData struct {
 	ValidateParam       string            //表单参数（DTO 文件内容）
 	ParamTypeOverrides  map[string]string // JSON field name to validation parameter type
 	PartialEditFields   string            // quoted switch fields for partial edits
+	AfterMutationHook   string            // hooks.afterMutation 名称；非空时生成 crudhooks.Mutation(...)
 
 	// 仓库与 DTO 包的导入引用（子包按 <dir>model / <dir>dto 约定别名）。
 	RepoImport    string
@@ -304,6 +305,7 @@ import (
 	{{if .DTOImport}}{{.DTOAlias}} "{{.DTOImport}}"
 	{{end}}model "{{.ModelImportPath}}"
 	{{if .RepoImport}}{{.RepoAlias}} "{{.RepoImport}}"
+	{{end}}{{if .AfterMutationHook}}crudhooks "buildadmin-go/internal/pkg/crudhooks"
 	{{end}})
 
 type {{.ClassName}}Handler struct {
@@ -317,7 +319,8 @@ func New{{.ClassName}}Handler({{.ModelVar}}M *{{.RepoQualifier}}{{.ModelName}}Re
 			{{.ModelVar}}M,
 			TableOptions[model.{{.ClassName}}, {{.DTOQualifier}}{{.ClassName}}Param]{
 				PKJSONName:  "{{.PkJSONName}}",
-				PartialEdit: map[string]bool{ {{.PartialEditFields}} },{{if .Reassignable}}
+				PartialEdit: map[string]bool{ {{.PartialEditFields}} },{{if .AfterMutationHook}}
+				AfterMutation: crudhooks.Mutation("{{.AfterMutationHook}}"),{{end}}{{if .Reassignable}}
 				RestoreAfterCopy: func(params {{.DTOQualifier}}{{.ClassName}}Param, row *model.{{.ClassName}}, original model.{{.ClassName}}) {
 					// admin_id 未传(0)表示不修改归属；0 不是合法 admin id，不会误伤。
 					if params.{{.OwnerGoField}} == 0 {

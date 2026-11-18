@@ -156,6 +156,9 @@ func buildGenerationDataStructures(table crudmodel.Table, fields []crudmodel.Fie
 	handlerData.Attr = map[string]string{}
 	handlerData.ParamTypeOverrides = map[string]string{}
 	handlerData.PartialEditFields = buildPartialEditFields(fields)
+	if table.Hooks != nil {
+		handlerData.AfterMutationHook = table.Hooks.AfterMutation
+	}
 
 	return modelData, handlerData, nil
 }
