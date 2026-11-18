@@ -45,6 +45,7 @@ func registerCommands(rootCmd *cobra.Command, cmdBootstrap CmdBootstrap, appBoot
 		newMigrateCommand(cmdBootstrap),
 		newSetupCommand(),
 		newCrudGenerateCommand(cmdBootstrap),
+		newCrudUpCommand(cmdBootstrap),
 		newCrudDeleteCommand(cmdBootstrap),
 		newCrudApplyCommand(cmdBootstrap),
 		newCrudValidateCommand(),

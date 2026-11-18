@@ -140,14 +140,7 @@ func (h *CrudHandler) Generate(cmd *cobra.Command, args []string) error {
 		opts.SkipMenu = true
 	}
 	opts.AdminID, _ = cmd.Flags().GetInt32("admin-id")
-	opts.RegisterAtomicRoute = func(method, path string) {
-		action := path[strings.LastIndex(path, "/")+1:]
-		middleware.RegisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
-	}
-	opts.UnregisterAtomicRoute = func(method, path string) {
-		action := path[strings.LastIndex(path, "/")+1:]
-		middleware.UnregisterAtomicRoute(middleware.AtomicRoute{Route: path[:strings.LastIndex(path, "/")], Action: action, Method: method})
-	}
+	opts.RegisterAtomicRoute, opts.UnregisterAtomicRoute = atomicRouteHooks()
 	result, err := helper.GenerateFromSpec(h.db, h.config, helper.NewTableStore(h.db, h.config), *opts)
 	if err != nil {
 		return fmt.Errorf("CRUD generation error: %w", err)
@@ -191,13 +184,17 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 	}
 	results, planErr := helper.PlanSpecs(h.db, h.config, store, []string{specPath}, helper.ApplyOptions{AdminID: opts.AdminID})
 	if jsonMode() {
-		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, Warnings: dryRunWarnings}
+		payload := dryRunJSON{Plan: planToJSON(results, specPath, confRef()), Create: plan.Create, Overwrite: plan.Overwrite, NewTable: plan.NewTable, TableMissing: plan.TableMissing, Warnings: dryRunWarnings}
 		if diffMode {
-			diffs, diffErr := h.renderDiffPayload(specPath)
-			if diffErr != nil {
-				return diffErr
+			empty := make([]dryRunDiffJSON, 0)
+			payload.Diffs = &empty
+			if !plan.NewTable && !plan.TableMissing {
+				diffs, diffErr := h.renderDiffPayload(specPath)
+				if diffErr != nil {
+					return diffErr
+				}
+				payload.Diffs = &diffs
 			}
-			payload.Diffs = &diffs
 		}
 		if planErr != nil {
 			if printErr := printJSONError(cmd, payload, planErr); printErr != nil {
@@ -220,7 +217,9 @@ func (h *CrudHandler) planGenerate(cmd *cobra.Command, specPath string) error {
 func (h *CrudHandler) printDryRun(cmd *cobra.Command, specPath string, plan helper.GenerationFilePlan, results []helper.ApplyTableResult, diffMode bool) error {
 	printApplyPlan(cmd, results)
 	if diffMode {
-		if err := h.printRenderedDiff(cmd, specPath); err != nil {
+		if plan.NewTable || plan.TableMissing {
+			cmd.Println("\nno file diffs: the table does not exist yet; all files will be created")
+		} else if err := h.printRenderedDiff(cmd, specPath); err != nil {
 			return err
 		}
 	}

@@ -37,8 +37,8 @@ fields:
 # 1. 改 crud_specs/<table>.yaml
 # 2. 看差量（不写库、不写文件）
 go run ./cmd/server --conf configs/config.yaml crud:diff crud_specs/<table>.yaml
-# 3. 生成代码（type 省略即 auto：表存在走 alter）
-go run ./cmd/server --conf configs/config.yaml crud:generate crud_specs/<table>.yaml
+# 3. 一条命令生成（type 省略即 auto：表存在走 alter）
+go run ./cmd/server --conf configs/config.yaml crud:up crud_specs/<table>.yaml
 ```
 
 - 输出里有 `requires-approval`：属正常变更（默认值、自增、类型扩宽、属性），按提示 `crud:apply <spec> --approve=<类别>` 或交给启动自动迁移（它按"全部已批准"执行）。
