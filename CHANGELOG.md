@@ -1,5 +1,29 @@
 # Changelog
 
+## v3.5.5
+
+> CRUD 生成链的评审闭环与工作流收口批次（#65–#69）：spec 成为唯一事实源、生成前可预览/可审批、全局 `--json` 机器可读、`crud:up` 一条链、业务定制移出生成文件（hooks + 自定义 registrar）、离线渲染与启动钩子校验。无新增迁移版本、既有库无 DDL、无 web 运行时变更。
+
+- **Added（spec 单源）:** 后台设计器生成时把表设计写回 `crud_specs/<table>.yaml`（生成事务内写盘，失败随产物回滚），并保留设计器不建模的键（`menu`、`indexes`、`registerOnly`、`dataScope.reassignable/inheritFrom/readExtraOwners`），`type` 始终丢弃；存量设计器模块用 `crud:export-spec <table>` 从 `crud_log` 补 spec；归属表（`reassignable`/`inheritFrom`）改为启动时按 spec 自动登记。
+- **Added（生成前预览/审批）:** `crud:preview`（自包含只读 HTML）、`crud:generate --dry-run [--diff]`、`crud:apply --plan --html`（只读审批页 + 可复制 `--approve=` 命令）、`crud:check-customized <table>|--all [--diff]`。
+- **Added（机器可读与运维）:** 全局 `--json` 统一 `{ok,data|error}` 信封（`crud:validate/generate/apply --plan/diff/list/preview/export-spec/check-customized`、`migrate --plan/status`、`cascade:sync`、`diagnose`），失败带 `approveCommand`，stdout 只输出一个 JSON 文档；新增 `diagnose [--json] [--strict]`（安装/迁移/spec 差量/归属登记/菜单/`crud_log` 覆盖/前端产物）、`migrate list`（默认只看业务轨，`--all` 三轨）、`migrate status`、`crud:list`、`crud:diff`、`crud:new`、`crud:schema`、`crud:up <spec>`（校验 → 差量 → 定制点 → 生成 → wire/build 一条链）；`crud:diff --write-migration` 为 `rejected` 差量生成 business 迁移骨架（注释含原因与建议 DDL）；`setup --with-test-db` 可选初始化测试库（拒绝与主库同名或非法标识符）。
+- **Changed（行为契约）:** spec 省略 `type` 即 `auto`（表已存在走 alter、不存在走 create）；显式 `type: create` 对已有表是删表重建，CLI 必须 `--allow-rebuild`（`crud:up` 的预检不再被自身产生的 `rejected` 阻断，`--allow-rebuild` 只授权该场景）；`crud:delete` 现在一并删除 `crud_specs/<table>.yaml`，没有成功 manifest 时退化为只删 spec 并清理残留菜单（不 DROP 表），受保护表、非法表名与仍被 `inheritFrom` 引用的父表一律拒绝；`crud:apply` 仍只执行 alter 安全子集，永不删表。
+- **Added（业务定制通道）:** spec `hooks.afterMutation` + 手写 `internal/admin/handler/crud_hooks.go` 注册实现（`internal/pkg/crudhooks`：请求期延迟查找、重名注册报错、未注册 no-op 并告警）；自定义接口/action 用独立 handler + `internal/admin/router/custom_registrars.go`；`country_*` 的缓存失效与 `GetMultTranslations` 已迁出生成文件；`serve` 启动时按 spec 校验钩子是否已注册。
+- **Added（离线渲染）:** 实体改为 spec 驱动（`buildSpecEntityStruct`），移除 `gorm.io/gen` 及三个仅它使用的间接依赖；`crud:render <spec> [--out] [--prefix]` 不连库渲染完整产物到目录（默认 `runtime/offline/<table>/`，仓库不改）；`remoteSelect`/`remoteSelects` 与 `dataScope.reassignable` 因需要远端表（后者是 `admin`）的列元数据会明确拒绝，其余归属列按 spec 的 `indexes` 与生成器自动创建的 `idx_<owner>` 证明。
+- **Fixed（评审阻断）:** 只读预览/离线不再清理父表 repo 的 cascade 锚点（此前 `crud:render`/`crud:check-customized --all` 会静默删除 `CascadeOwners()` 注册条目）；`crud:delete` 的 spec-only 回退补上保护表/路径/子表守卫，并修复提前返回不释放生成锁（server 内 `CrudService.Delete` 不再卡死后续生成）；产物存在但库表缺失时预览按 `tableMissing` 跳过渲染（不再 `generate struct fail`）；实体字段类型/命名恢复与 `gorm.io/gen` 一致（`float→float32`、`blob/binary→[]byte`、`tinyint(1)→bool`、`bool/boolean→bool`、`HTML/CPU/XML/UID` 等缩写）；`--json` 的 `.env` 提示、SQL 日志（`enable_file_log_writer: false`）与 crudgen 警告改走 stderr；`diagnose --json --strict`、`crud:check-customized --json`、`crud:list --json` 失败时正确非零退出；`crud:new` 用 YAML 标量编码 + 临时文件原子替换（注释含冒号不再留下非法 spec）；`popupForm.vue` 校验规则顺序与语言包排序确定化。
+- **Downstream（业务 fork 升级必读）:** 本版无新增迁移版本、既有库无 DDL、无 web 运行时变更（web 仅 6 个 country 语言包排序）。合并后：
+  - **spec 是唯一事实源**：设计器以后会写 `crud_specs/<table>.yaml`，务必提交；此前由设计器生成、没有 spec 的模块先跑 `crud:export-spec <table>` 补齐，否则 `migrate --plan`/`diagnose` 看不到它，归属表也不会自动登记。
+  - **归属登记**：有 spec 的 `reassignable`/`inheritFrom` 表由启动自动登记；`admin_owner_tables_business.go` 只保留**没有 spec** 的手写表。旧的手写条目可保留（注册表按表名去重，不会重复转移），但不应再为新模块手抄。
+  - **重新生成**：先 `crud:check-customized --all` 列出定制点，再 `crud:up <spec>`；生成会覆盖生成文件里的手改。把 `requesttx.InvalidateAfterMutation(...)` 迁到 `hooks.afterMutation` + `crud_hooks.go`，自定义 action 迁到独立 handler + `custom_registrars.go`；`crud:check-customized` 会把仍留在生成文件里的改动列为定制点。
+  - **删除语义**：`crud:delete <table>` 会删除产物、菜单与 `crud_specs/<table>.yaml`；需要保留 spec 时在删除后 `git checkout crud_specs/<table>.yaml`（或事先备份）。从未生成过的表只删 spec 并明确提示「表未 DROP」；`user`/`user_money_log` 等受保护表、非法表名、仍被其它 spec 以 `inheritFrom` 引用的父表会被拒绝。
+  - **`type`**：省略即 `auto`，不要再依赖历史默认 `create`；要对已有表删表重建必须显式 `type: create` + `--allow-rebuild`（`crud:apply`/`migrate` 永远不会删表）。
+  - **`--json`**：只有文档列出的命令支持信封（`crud:new`/`crud:schema`、`setup`、`serve` 与不带 `--plan` 的 `migrate` 不输出）；SQL 日志、`.env` 自动复制提示与 crudgen 警告现在走 stderr，stdout 只留结果，按 stdout 解析的脚本无需再过滤。
+  - **离线预览**：`crud:render` 拒绝 `remoteSelect`/`remoteSelects`/`dataScope.reassignable`（需要远端或 admin 的列元数据）；`inheritFrom` 子表要求父表 repo 的锚点块已存在（与在线生成一致）。
+  - **依赖**：`gorm.io/gen` 与 `gorm.io/datatypes`/`gorm.io/hints`/`gorm.io/plugin/dbresolver` 已从 `go.mod` 移除，合并后跑一次 `go mod tidy`；业务代码不应再 import `gorm.io/gen`（实体由 spec 渲染，产物字段类型与历史一致）。
+  - **测试**：`internal/i18n` 反向守卫改为扫描 `git ls-files`，仓库内 untracked 夹具不再影响结果；业务自建同类守卫可参考。
+- **Docs/测试:** `AGENTS.md`、`docs/crud-generation.md`、`docs/crud-cheatsheet.md`、`docs/business-development.md`、`docs/framework-workflow.md`、`docs/README.md`、`docs/images/screenshots/*`、`docs/templates/AGENT_BUSINESS.md`、`crud_specs/schema.json`；新增/更新 crudgen、commands、crudhooks、i18n 与迁移视图测试。
+- **Verified:** 合并后 `v3` head `c5fd7a9` 的 CI run `44273982896` 两个 job 全绿（Go：gofmt / golangci-lint / build / vet / `go test ./... -count=1` 含 MySQL；web：lint / typecheck / build）；整链 head `c67e566` 的 CI `44195145861` 同样全绿，本地 MySQL 全量（干净副本 + `mysql_test`）54 包 0 失败、43 个 MySQL 门禁用例真实执行。`migrate --plan` 无 `rejected`（仅 country 模块 default 值的 `requires-approval`，启动自动应用）。发布提交只改 `CHANGELOG.md`、`VERSION_FRAMEWORK`、`internal/pkg/version/version.go`。
+
 ## v3.5.4
 
 > 测试稳定性批次：修复 `TestAuditLogServiceResolvesUsernameFallbacks` 并行子测试共享 SQLite 内存库导致的 `SQLITE_LOCKED`（#63）；无产品代码、迁移、`crud_specs`、DDL 与 web 变更。
